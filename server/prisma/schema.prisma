@@ -281,6 +281,10 @@ model User {
   lockedUntil        String? // ISO timestamp; login refused until then
   resetTokenHash     String? // sha256 of the password-reset token
   resetExpires       String? // ISO timestamp the reset token expires
+  // Portal notifications are DERIVED from documents/requests/invoices, not stored rows, so there is
+  // nothing to flag individually. "Mark all read" records a watermark instead: anything older than
+  // this is read. Without it the control could only ever be local state that reset on reload.
+  notifReadAt        String?
 }
 
 model Audit {

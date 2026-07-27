@@ -325,8 +325,9 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   for (const d of docs) {
     const t = new Date(d.expiryDate as string).getTime(); if (isNaN(t)) continue;
     const days = Math.round((t - now) / 86400000);
-    if (days < 0) out.push({ id: "doc-" + d.id, kind: "alert", title: `${d.docType} — ${d.person} is overdue`, meta: `Compliance · ${Math.abs(days)}d overdue`, ts: nowISO, unread: true, cta: "Renew" });
-    else if (days <= 30) out.push({ id: "doc-" + d.id, kind: "refresh", title: `Renewal reminder: ${d.docType} — ${d.person}`, meta: `Compliance · ${days} days left`, ts: nowISO, unread: true, cta: "Renew" });
+    const docKey = new Date(t).toISOString(); // stable: derived from the expiry, not the clock
+    if (days < 0) out.push({ id: "doc-" + d.id, kind: "alert", title: `${d.docType} — ${d.person} is overdue`, meta: `Compliance · ${Math.abs(days)}d overdue`, ts: nowISO, readTs: docKey, unread: true, cta: "Renew" });
+    else if (days <= 30) out.push({ id: "doc-" + d.id, kind: "refresh", title: `Renewal reminder: ${d.docType} — ${d.person}`, meta: `Compliance · ${days} days left`, ts: nowISO, readTs: docKey, unread: true, cta: "Renew" });
   }
   for (const r of reqs) {
     if (r.lastStaffMsgAt && String(r.lastStaffMsgAt) > String(r.clientReadAt || "")) out.push({ id: "req-" + r.id, kind: "check", title: `New reply on ${r.type || "your request"}`, meta: `Support · from your PRO team`, ts: r.lastStaffMsgAt, unread: true, cta: false });
@@ -338,7 +339,25 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
     else out.push({ id: "inv-" + inv.id, kind: "check", title: `Payment received — ${money(inv)}`, meta: `${inv.number}${inv.date ? ` · ${inv.date}` : ""}`, ts: inv.date || nowISO, unread: false, cta: false });
   }
   out.sort((x, y) => String(y.ts).localeCompare(String(x.ts)));
-  res.json(out.slice(0, 30));
+  // Apply the read watermark: anything at or before it has been acknowledged. Derived notifications
+  // have no row to flag, so this is what makes "Mark all read" survive a reload.
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { notifReadAt: true } });
+  const readAt = me?.notifReadAt ?? "";
+  res.json(out.slice(0, 30).map((n) => {
+    const stamp = String((n as any).readTs ?? n.ts);
+    return readAt && stamp <= readAt ? { ...n, unread: false } : n;
+  }));
+});
+
+/** Mark every current notification read, by moving the watermark to now. */
+app.post("/api/portal/notifications/read", requireAuth, requirePortal, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    await prisma.user.update({ where: { id: a.sub }, data: { notifReadAt: new Date().toISOString() } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // Staff: reset a client's portal login password (resets to the default and forces a change on next login).
