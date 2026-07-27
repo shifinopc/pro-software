@@ -5563,15 +5563,19 @@ class Component extends DCLogic {
       const tok = localStorage.getItem('stimespro:token');
       const hdr = {};
       if (tok) hdr.Authorization = 'Bearer ' + tok;
-      fetch(API + '/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => this.setState({ orgSet: v || {} })).catch(() => {});
+      // A FAILED load must leave what we already have alone. These used to resolve to `{}` on a
+      // non-2xx, and `{}` passes a `typeof v === 'object'` guard — so one 401 (this runs more than
+      // once, and can fire before the token is in hand) silently wiped the loaded settings. For
+      // `orgSet` that meant invoices printing with no seller name at all.
+      fetch(API + '/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
       fetch(API + '/api/users', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ usersData: v }); }).catch(() => {});
-      fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
+      fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       fetch(API + '/api/audit', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ auditData: v }); }).catch(() => {});
-      fetch(API + '/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
-      fetch(API + '/api/settings/security', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => { if (v && typeof v === 'object') this.setState({ securityState: v }); }).catch(() => {});
-      fetch(API + '/api/settings/printBranding', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => { if (v && typeof v === 'object') this.setState({ printBranding: v }); }).catch(() => {});
-      fetch(API + '/api/settings/printLayout', { headers: hdr }).then(r => (r.ok ? r.json() : {})).then(v => { if (v && typeof v === 'object') this.setState({ printLayout: v }); }).catch(() => {});
+      fetch(API + '/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
+      fetch(API + '/api/settings/security', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ securityState: v }); }).catch(() => {});
+      fetch(API + '/api/settings/printBranding', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printBranding: v }); }).catch(() => {});
+      fetch(API + '/api/settings/printLayout', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printLayout: v }); }).catch(() => {});
       fetch(API + '/api/settings/roles', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customRoles: v }); }).catch(() => {});
       fetch(API + '/api/workflow/templates', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfTemplates: v }); }).catch(() => {});
       fetch(API + '/api/custom-objects', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customObjects: v }); }).catch(() => {});
@@ -5846,9 +5850,13 @@ class Component extends DCLogic {
       const qrOk = !isQuote && L.zatcaQr && sellerVat && sellerName;
       const qrSvg = qrOk && doc.qrSvg ? doc.qrSvg : '';
 
+      // NOTHING here is invented. A blank seller name prints blank rather than falling back to a
+      // hardcoded "STIMES PRO" — a tax invoice carrying a company name, VAT or CR that nobody
+      // configured is a false legal document, and a gap someone notices is safer than a plausible
+      // wrong value nobody questions.
       const header = b.header
         ? '<div class="hdr"><img src="' + abs(b.header) + '"></div>'
-        : '<div class="band"><div><div class="org">' + esc(sellerName || 'STIMES PRO') + '</div>'
+        : '<div class="band"><div><div class="org">' + esc(sellerName) + '</div>'
           + (sellerLines ? '<div class="orgsub">' + sellerLines + '</div>' : '') + '</div>'
           + '<div style="text-align:right;"><div class="dt">' + esc(title) + '</div>'
           + (bil ? '<div class="dtar">' + titleAr + '</div>' : '')
