@@ -1108,8 +1108,18 @@
             <span onClick="{{ closeClient }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>All clients</span>
             <div style="width:48px; height:48px; border-radius:14px; background:#26074D; color:#fff; font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ cdInitials }}</div>
             <div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:10px;"><h1 style="margin:0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">{{ cdName }}</h1><span style="font-size:10.5px; font-weight:700; color:{{ cdStColor }}; background:{{ cdStBg }}; padding:3px 11px; border-radius:99px;">{{ cdStatus }}</span></div><div style="font-size:12px; color:#8C8899; margin-top:3px;">{{ cdSub }}</div></div>
-            <button onClick="{{ openEditClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit client</button>
+            <div style="display:flex; gap:8px; flex-shrink:0;">
+              <sc-if value="{{ cdCanSuspend }}" hint-placeholder-val="{{ false }}"><button onClick="{{ cdSuspend }}" title="Pause new requests from this client" style="background:#fff; color:#C0353A; border:1px solid #F2C4C6; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#FEF2F2;">Suspend account</button></sc-if>
+              <sc-if value="{{ cdCanRestore }}" hint-placeholder-val="{{ false }}"><button onClick="{{ cdRestore }}" style="background:#0E9355; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.95);">Restore account</button></sc-if>
+              <button onClick="{{ openEditClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit client</button>
+            </div>
           </section>
+          <sc-if value="{{ cdSuspended }}" hint-placeholder-val="{{ false }}">
+            <section style="animation:fadeUp .5s ease both; background:#FEF2F2; border:1px solid #F2C4C6; border-radius:14px; padding:13px 18px; display:flex; align-items:center; gap:12px;">
+              <span style="width:26px; height:26px; border-radius:8px; background:#FEECEC; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg></span>
+              <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:700; color:#8A2A2E;">Account suspended{{ cdSuspendedSince }}</div><div style="font-size:11.5px; color:#B4555A; margin-top:1px;">{{ cdSuspendedReason }} · they can still sign in and see their documents, but cannot file new requests.</div></div>
+            </section>
+          </sc-if>
           <sc-if value="{{ cdGrouped }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .5s ease both; background:linear-gradient(112deg,#FBF7FF,#F3E8FF); border:1px solid #E4CCFF; border-radius:14px; padding:13px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
               <div style="display:flex; align-items:center; gap:9px;"><div style="width:28px; height:28px; border-radius:8px; background:#26074D; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center;">FG</div><div><div style="font-size:12.5px; font-weight:700;">{{ cdGroupName }}</div><div style="font-size:10.5px; color:#8C8899;">{{ cdGroupCount }} companies · {{ cdGroupEmployees }} staff · {{ cdGroupOverdue }} overdue</div></div></div>
@@ -2224,10 +2234,11 @@
                 <span onClick="{{ inv.openDetail }}" style="font-weight:700; color:#7C00FF; font-size:12px; cursor:pointer;">{{ inv.no }}</span>
                 <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.desc }}</div><div style="font-size:10px; color:#A9A6B4;">issued {{ inv.date }}</div></div>
                 <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ inv.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.client }}</span></div>
-                <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if></div>
+                <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if><sc-if value="{{ inv.hasPromise }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#6D5BD0; font-weight:600;">{{ inv.promiseLabel }}</div></sc-if></div>
                 <span style="font-size:10.5px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ inv.status }}</span>
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.pay }}" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Record payment</span></sc-if></sc-if>
+                  <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.extend }}" title="Agree a payment date — pauses chasing" style="font-size:11px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#6D5BD0; color:#6D5BD0;">Extend</span></sc-if></sc-if>
                   <span onClick="{{ inv.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="font-size:11px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</span>
                   <span onClick="{{ inv.openDetail }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Open</span>
                 </div>
@@ -5492,6 +5503,20 @@ class Component extends DCLogic {
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
+    // Suspend / restore a client's billing status.
+    this._companyAction = (id, action, body, okMsg) => {
+      const t2 = localStorage.getItem('stimespro:token');
+      fetch(API + '/api/companies/' + id + '/' + action, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+        body: JSON.stringify(body || {}) })
+        .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.toast((j && j.error && String(j.error).slice(0, 140)) || 'Could not update the account', 'error');
+          this.toast(okMsg);
+          this._opReload('companies', 'companiesData');
+        })
+        .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
     this._opReload = (pathE, key) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/' + pathE, { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
@@ -6804,6 +6829,30 @@ class Component extends DCLogic {
         // Opens the real form pre-filled for this invoice (was an instant full-amount write with a
         // canned method and no reference).
         pay: () => financeApi.openRecordPay(no),
+        // Payment extension: an agreed date pauses dunning and stops this invoice pushing the client
+        // toward a suspension recommendation.
+        promised: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {}; return raw.promisedDate || ''; })(),
+        hasPromise: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
+          return !!raw.promisedDate && new Date(raw.promisedDate).getTime() >= Date.now() - 86400000; })(),
+        promiseLabel: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
+          return raw.promisedDate ? 'Payment agreed for ' + raw.promisedDate : ''; })(),
+        extend: () => {
+          if (!id) return this.toast('That invoice is a sample row — open a real invoice', 'error');
+          const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
+          const when = window.prompt('Agree a payment date for ' + no + '.\n\nChasing pauses until then and this invoice stops counting toward a suspension.\nLeave blank to remove an existing arrangement.\n\nDate (YYYY-MM-DD):', raw.promisedDate || '');
+          if (when === null) return;
+          const t2 = localStorage.getItem('stimespro:token');
+          fetch(API + '/api/invoices/' + id + '/extend', { method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+            body: JSON.stringify(when.trim() ? { promisedDate: when.trim() } : { clear: true }) })
+            .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+            .then(({ ok, j }) => {
+              if (!ok) return this.toast((j && j.error && String(j.error).slice(0, 140)) || 'Could not save the payment date', 'error');
+              this.toast(when.trim() ? 'Chasing paused until ' + when.trim() : 'Payment arrangement removed');
+              this._reloadInvoices && this._reloadInvoices();
+            })
+            .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+        },
         // Branded print via the uploaded header/footer/watermark (Settings → Print Layout).
         print: () => {
           const raw9 = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
@@ -7473,6 +7522,21 @@ class Component extends DCLogic {
       clDetailApi.cd = clRow;
       clDetailApi.cdName = clRow.name; clDetailApi.cdInitials = clRow.initials;
       clDetailApi.cdStatus = clRow.status; clDetailApi.cdStBg = clRow.stBg; clDetailApi.cdStColor = clRow.stColor;
+      // Billing suspension. Restricts new requests only — the client keeps read access to their
+      // compliance data, because withholding it makes them miss deadlines they're relying on us for.
+      const _cdCo = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.id === clRow.realId) || {};
+      const _cdIsSusp = String(_cdCo.status || '') === 'suspended';
+      clDetailApi.cdSuspended = _cdIsSusp;
+      clDetailApi.cdSuspendedReason = _cdCo.suspendedReason || 'Outstanding balance';
+      clDetailApi.cdSuspendedSince = _cdCo.suspendedAt ? ' since ' + String(_cdCo.suspendedAt).slice(0, 10) : '';
+      clDetailApi.cdCanSuspend = canWrite && !!clRow.realId && !_cdIsSusp;
+      clDetailApi.cdCanRestore = canWrite && !!clRow.realId && _cdIsSusp;
+      clDetailApi.cdSuspend = () => {
+        const why = window.prompt('Suspend ' + clRow.name + '?\n\nThey keep read access but cannot file new requests.\nReason (shown to your team and on their banner):', 'Outstanding balance');
+        if (why === null) return;
+        this._companyAction(clRow.realId, 'suspend', { reason: why }, clRow.name + ' suspended — new requests paused');
+      };
+      clDetailApi.cdRestore = () => this._companyAction(clRow.realId, 'restore', {}, clRow.name + ' restored');
       clDetailApi.cdSub = clRow.industry + ' · ' + clRow.city + ' · CR ' + clRow.cr;
       clDetailApi.cdTabs = clTabs.map(t => ({ label: t, active: t === clTab,
         color: t === clTab ? '#7C00FF' : '#6F6C7A', bg: t === clTab ? '#F5EEFF' : 'transparent',

@@ -12,7 +12,7 @@
 import { prisma } from "./db.js";
 import { logActivity, logNotification } from "./auth.js";
 import { startInstance } from "./workflow.js";
-import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue } from "./notify.js";
+import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -428,16 +428,28 @@ export async function resumeParkedTasks(): Promise<ResumeResult> {
 // payments even if the status column hasn't caught up.
 // ─────────────────────────────────────────────────────────────
 export type DunningResult = {
-  scanned: number; markedOverdue: number; chased: number; settledButUnmarked: number; details: string[];
+  scanned: number; markedOverdue: number; chased: number; settledButUnmarked: number;
+  /** Invoices left alone because the client has an agreed payment date still in the future. */
+  onExtension: number;
+  /** Clients whose debt is old enough that a human should consider suspending them. */
+  suspendRecommended: string[];
+  details: string[];
 };
 
 /** Days past due at which we chase. Ascending; each fires once. */
 const DUNNING_LADDER = [1, 7, 14, 30];
+/**
+ * Days past due at which the job RECOMMENDS suspension. It never suspends on its own: a mis-keyed
+ * amount or an unrecorded bank transfer would otherwise cut off a client who has actually paid.
+ */
+const SUSPEND_RECOMMEND_DAYS = 45;
 /** Statuses that mean "money is owed" — a draft has not been released, a paid one is done. */
 const CHASEABLE = new Set(["pending", "unpaid", "sent", "overdue"]);
 
 export async function chaseOverdueInvoices(): Promise<DunningResult> {
-  const out: DunningResult = { scanned: 0, markedOverdue: 0, chased: 0, settledButUnmarked: 0, details: [] };
+  const out: DunningResult = { scanned: 0, markedOverdue: 0, chased: 0, settledButUnmarked: 0, onExtension: 0, suspendRecommended: [], details: [] };
+  /** companyId → worst days-overdue seen, for the suspension recommendation at the end. */
+  const worstByCompany = new Map<string, { name: string; days: number; owed: number; currency: string }>();
 
   const invoices = await prisma.invoice.findMany({
     where: { NOT: { dueDate: null }, status: { in: [...CHASEABLE] } },
@@ -473,6 +485,26 @@ export async function chaseOverdueInvoices(): Promise<DunningResult> {
       logActivity({ type: "finance", message: `Invoice ${inv.number} is overdue (${daysOverdue}d)${inv.clientName ? ` — ${inv.clientName}` : ""}` });
     }
 
+    // An agreed payment date pauses everything below: no chaser, and it does not count toward a
+    // suspension. Chasing a client who has already agreed a date is how you lose one.
+    const promised = parseDate(inv.promisedDate);
+    if (promised !== null && daysUntil(promised) >= 0) {
+      out.onExtension++;
+      out.details.push(`${inv.number}: on extension until ${inv.promisedDate} — not chased`);
+      continue;
+    }
+
+    // Track the worst debt per client for the suspension recommendation.
+    if (inv.companyId) {
+      const prev = worstByCompany.get(inv.companyId);
+      if (!prev || daysOverdue > prev.days) {
+        worstByCompany.set(inv.companyId, {
+          name: inv.clientName ?? inv.company?.name ?? "client",
+          days: daysOverdue, owed: outstanding, currency: inv.currency,
+        });
+      }
+    }
+
     // (b) Chase on the ladder: the highest rung reached that hasn't been sent yet.
     const rung = [...DUNNING_LADDER].reverse().find((d) => daysOverdue >= d);
     if (rung == null) continue;
@@ -497,6 +529,34 @@ export async function chaseOverdueInvoices(): Promise<DunningResult> {
     });
     out.chased++;
     out.details.push(`${inv.number}: ${rung}d rung · ${inv.currency} ${outstanding.toLocaleString()} outstanding`);
+  }
+
+  // Suspension RECOMMENDATION. Deliberately advisory: the job flags, a human decides. Clients already
+  // suspended are skipped so the alert doesn't repeat every hour once someone has acted.
+  for (const [companyId, w] of worstByCompany) {
+    if (w.days < SUSPEND_RECOMMEND_DAYS) continue;
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { status: true } });
+    if (co?.status === "suspended") continue;
+    out.suspendRecommended.push(`${w.name} (${w.days}d, ${w.currency} ${w.owed.toLocaleString()})`);
+    // Once per client per 7-day window, so a long-running debt nags weekly rather than hourly.
+    const bucket = Math.floor(Date.now() / (7 * DAY));
+    const first = await notifyOnce(`suspend-rec:${companyId}:${bucket}`, {
+      type: "overdue",
+      title: `Consider suspending ${w.name}`,
+      message: `${w.currency} ${w.owed.toLocaleString()} unpaid for ${w.days} days, no agreed payment date. Suspend from the client's page, or agree an extension on the invoice.`,
+    });
+    if (first) {
+      await notifyAwait({
+        rule: "Invoice overdue", audience: "staff",
+        subject: `Suspension suggested: ${w.name} — ${w.days}d unpaid`,
+        heading: "A client's balance is old enough to consider suspending",
+        lines: [
+          `<b>${w.name}</b> has ${w.currency} ${w.owed.toLocaleString()} unpaid for <b>${w.days} days</b> with no agreed payment date.`,
+          "Nothing has been restricted — suspending is a manual decision. If they've agreed to pay by a date, set that on the invoice instead and the chasing stops.",
+        ],
+        cta: { label: "Open clients", url: `${process.env.CONSOLE_URL || "https://pro.ionob.in"}/clients` },
+      });
+    }
   }
 
   return out;

@@ -265,7 +265,12 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
     const paidAmount = paidBy.get(inv.id) ?? 0;
     return { ...inv, paidAmount, outstandingAmount: Math.max(0, inv.amount - paidAmount) };
   });
-  res.json({ company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName });
+  res.json({
+    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName,
+    // So the portal can explain the restriction rather than just failing when they try to act.
+    suspended: company.status === "suspended",
+    suspendedReason: company.status === "suspended" ? company.suspendedReason : null,
+  });
 });
 
 // Full data for ONE company in the caller's group. The portal switches companies with this; without
@@ -496,7 +501,7 @@ app.post("/api/portal/change-password", requireAuth, requirePortal, async (req, 
 });
 
 // Portal: add an employee to the authenticated client's own company
-app.post("/api/portal/employees", requireAuth, requirePortal, async (req, res) => {
+app.post("/api/portal/employees", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
   const a = (req as any).auth;
   const vErr = validate("employee", req.body, true);
   if (vErr) return res.status(400).json({ error: vErr });
@@ -545,7 +550,7 @@ app.get("/api/portal/appointments", requireAuth, requirePortal, async (req, res)
   const a = (req as any).auth;
   res.json(await prisma.appointment.findMany({ where: { companyId: a.companyId }, orderBy: { id: "desc" } }));
 });
-app.post("/api/portal/appointments", requireAuth, requirePortal, async (req, res) => {
+app.post("/api/portal/appointments", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
   const a = (req as any).auth;
   try {
     const { type, employee, date, time, clientName } = req.body ?? {};
@@ -588,7 +593,7 @@ app.get("/api/portal/service-requests", requireAuth, requirePortal, async (req, 
   const a = (req as any).auth;
   res.json(await prisma.serviceRequest.findMany({ where: { companyId: a.companyId }, orderBy: { id: "desc" } }));
 });
-app.post("/api/portal/service-requests", requireAuth, requirePortal, async (req, res) => {
+app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
   const a = (req as any).auth;
   try {
     const { type, message, clientName, companyId } = req.body ?? {};
@@ -613,6 +618,84 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, async (req,
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// ── Billing suspension & payment extensions ──────────────────────────
+// Policy: a suspended client can still SIGN IN and SEE everything — documents, expiry dates,
+// invoices. What they lose is the ability to ask for new work. Withholding compliance data would
+// make them miss a visa deadline, which harms the client far more than it pressures them, and the
+// firm carries the consequences of that too.
+// Suspension is never automatic: the dunning job recommends, a human decides.
+
+/** Portal write-guard. Read routes never use this; nor does reporting a payment or replying. */
+async function requireNotSuspended(req: any, res: any, next: any) {
+  const a = req.auth;
+  try {
+    const co = await prisma.company.findUnique({ where: { id: a.companyId }, select: { status: true, suspendedReason: true } });
+    if (co?.status === "suspended") {
+      return res.status(403).json({
+        error: "New requests are paused on this account while there's an outstanding balance. You can still view everything, and telling us about a payment will lift it.",
+        suspended: true, reason: co.suspendedReason ?? null,
+      });
+    }
+    next();
+  } catch { next(); } // a lookup failure must not lock a client out of their own account
+}
+
+app.post("/api/companies/:id/suspend", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!co) return res.status(404).json({ error: "Client not found" });
+  const reason = String((req.body ?? {}).reason ?? "").trim() || "Outstanding balance";
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const company = await prisma.company.update({
+    where: { id: co.id },
+    data: { status: "suspended", suspendedAt: new Date().toISOString(), suspendedReason: reason },
+  });
+  logActivity({ type: "finance", message: `Account suspended: ${co.name} — ${reason}`, user: me?.name ?? "Staff" });
+  await logAudit({ action: "company.suspend", actorId: a.sub, target: co.id, detail: `${co.name} · ${reason}` });
+  res.json({ company });
+});
+
+app.post("/api/companies/:id/restore", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!co) return res.status(404).json({ error: "Client not found" });
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const company = await prisma.company.update({
+    where: { id: co.id },
+    data: { status: "active", suspendedAt: null, suspendedReason: null },
+  });
+  logActivity({ type: "finance", message: `Account restored: ${co.name}`, user: me?.name ?? "Staff" });
+  await logAudit({ action: "company.restore", actorId: a.sub, target: co.id, detail: co.name });
+  res.json({ company });
+});
+
+/** Agree a payment date. Pauses dunning for that invoice and stops it driving a suspension. */
+app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const inv = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+  const { promisedDate, note, clear } = req.body ?? {};
+  if (clear) {
+    const invoice = await prisma.invoice.update({ where: { id: inv.id }, data: { promisedDate: null, promisedNote: null } });
+    await logAudit({ action: "invoice.extend.clear", actorId: a.sub, target: inv.id, detail: inv.number });
+    return res.json({ invoice });
+  }
+  const when = String(promisedDate ?? "").trim();
+  if (!when || isNaN(new Date(when).getTime())) return res.status(400).json({ error: "A valid payment date is required" });
+  if (new Date(when).getTime() < Date.now() - 86400000)
+    return res.status(400).json({ error: "The agreed date is in the past — pick a future date" });
+  const invoice = await prisma.invoice.update({
+    where: { id: inv.id },
+    data: { promisedDate: when, promisedNote: String(note ?? "").trim() || null },
+  });
+  // Clear the ladder rungs already sent so a later slip re-chases from the start rather than being
+  // permanently silenced by rungs consumed before the arrangement was made.
+  await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: `dunning:${inv.id}:` } } });
+  logActivity({ type: "finance", message: `Payment extension on ${inv.number} until ${when}${inv.clientName ? ` — ${inv.clientName}` : ""}` });
+  await logAudit({ action: "invoice.extend", actorId: a.sub, target: inv.id, detail: `${inv.number} → ${when}` });
+  res.json({ invoice });
 });
 
 // ── ZATCA QR for printed tax invoices ────────────────────────────────
@@ -715,7 +798,7 @@ app.post("/api/portal/sign-out-everywhere", requireAuth, requirePortal, async (r
 const EXIT_REASONS = ["resignation", "termination", "end_of_contract", "transfer", "other"];
 
 /** Client-initiated. Opens ONE service request and freezes the employee's renewals immediately. */
-app.post("/api/portal/employees/:id/exit-request", requireAuth, requirePortal, async (req, res) => {
+app.post("/api/portal/employees/:id/exit-request", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
   const a = (req as any).auth;
   const emp = await prisma.employee.findUnique({ where: { id: req.params.id }, include: { company: { select: { name: true } } } });
   if (!emp || emp.companyId !== a.companyId) return res.status(404).json({ error: "Employee not found" });

@@ -41,6 +41,10 @@ model Company {
   email           String?
   phone           String?
   city            String?
+  // Billing suspension. `status` carries "suspended"; these record why and since when so the console
+  // and the client's banner can both explain it rather than just showing a red badge.
+  suspendedAt     String?
+  suspendedReason String?
   customData      Json? // values for admin-defined custom client fields (Form Builder)
   group           ClientGroup?     @relation(fields: [groupId], references: [id])
   groupId         String?
@@ -244,9 +248,15 @@ model Invoice {
   // is recomputed from these on save, so existing single-amount invoices keep working untouched.
   items      Json?    @default("[]")
   notes      String?  @db.Text
+  // Payment extension / promise-to-pay. While `promisedDate` is in the future the dunning job stops
+  // chasing this invoice and it stops counting toward a suspension recommendation — an arrangement
+  // the client has actually agreed should not keep generating reminders.
+  promisedDate String?
+  promisedNote String?
 
   @@index([status])
   @@index([date])
+  @@index([promisedDate])
 }
 
 model User {
