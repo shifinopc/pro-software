@@ -2523,7 +2523,7 @@
             <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">FINANCE &amp; OPERATIONS</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Reports</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Financial and operational insight across the practice</div>
-          </div><button style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Export CSV / PDF</button>
+          </div><button onClick="{{ exportAll }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Export all (CSV)</button>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;">
           <sc-for list="{{ reportStats }}" as="s" hint-placeholder-count="4">
@@ -2575,8 +2575,9 @@
             <div style="display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid #F5F3F9;">
               <div style="width:36px; height:36px; border-radius:11px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ r.color }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"></path></svg></div>
               <div style="flex:1; min-width:0;"><div style="font-size:13.5px; font-weight:700;">{{ r.name }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">{{ r.sub }}</div></div>
+              <span style="font-size:11px; color:#A9A6B4; white-space:nowrap;">{{ r.countLabel }}</span>
               <span style="font-size:10.5px; font-weight:700; color:{{ r.color }}; background:{{ r.bg }}; padding:3px 11px; border-radius:99px;">{{ r.cat }}</span>
-              <div style="display:flex; gap:7px;"><button style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">CSV</button><button style="background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">PDF</button></div>
+              <div style="display:flex; gap:7px;"><button onClick="{{ r.csv }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">CSV</button><button onClick="{{ r.print }}" style="background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Print</button></div>
             </div>
           </sc-for>
         </section>
@@ -5599,6 +5600,58 @@ class Component extends DCLogic {
           this._opReload('employees', 'employeesData');
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
+    // ---- Report export ----
+    // CSV is built here rather than server-side: the rows are already in memory and match exactly what
+    // the screen shows, so an export can never disagree with the view it came from.
+    this._downloadCsv = (title, rows) => {
+      // RFC4180 quoting: wrap every field, double any embedded quote. Without this a client name with
+      // a comma silently shifts every later column.
+      const esc9 = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const body = rows.map(r9 => (Array.isArray(r9) ? r9 : [r9]).map(esc9).join(',')).join('\r\n');
+      // BOM so Excel opens UTF-8 (Arabic client names) correctly instead of mojibake.
+      const blob = new Blob(['﻿' + body], { type: 'text/csv;charset=utf-8;' });
+      const stamp = new Date().toISOString().slice(0, 10);
+      const name = String(title).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name + '-' + stamp + '.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      this.toast(title + ' exported (' + Math.max(0, rows.length - 1) + ' rows)');
+    };
+    // Print a report as a branded table, reusing the letterhead from Settings → Print Layout.
+    this._printTable = (title, rows) => {
+      const b = this.state.printBranding || {};
+      const L = this._printLayoutFor('invoice');
+      const org = this.state.orgSet || {};
+      const abs = (p) => (p ? (this._apiBase || 'http://localhost:4100') + p : '');
+      const esc9 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const head = rows[0] || [];
+      const body = rows.slice(1);
+      const w = window.open('', '_blank');
+      if (!w) return this.toast('Could not open the print view — allow pop-ups for this site', 'error');
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc9(title) + '</title><style>'
+        + '@page{size:' + (L.pageSize || 'A4') + ' landscape;margin:' + (L.margin ?? 18) + 'mm}'
+        + 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0}'
+        + '.band{background:linear-gradient(110deg,#26074D,' + (L.accent || '#7C00FF') + ');color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-end}'
+        + '.band b{font-size:15px}.band span{font-size:10px;opacity:.85}'
+        + 'table{width:100%;border-collapse:collapse;font-size:10px;margin-top:12px}'
+        + 'th{background:#F3EFFA;text-align:left;font-size:9px;letter-spacing:.03em;color:#555}'
+        + 'th,td{padding:6px 8px;border-bottom:1px solid #EEE;vertical-align:top}'
+        + 'tr:nth-child(even) td{background:#FBFAFE}'
+        + '.hdr img,.ftr img{width:100%;display:block}'
+        + '</style></head><body>'
+        + (b.header ? '<div class="hdr"><img src="' + abs(b.header) + '"></div>'
+          : '<div class="band"><b>' + esc9(org.legalName || org.orgName || 'STIMES PRO') + '</b><span>' + esc9(title) + ' · ' + new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' · ' + body.length + ' rows</span></div>')
+        + '<table><thead><tr>' + head.map(h => '<th>' + esc9(h) + '</th>').join('') + '</tr></thead><tbody>'
+        + body.map(r9 => '<tr>' + (Array.isArray(r9) ? r9 : [r9]).map(c9 => '<td>' + esc9(c9) + '</td>').join('') + '</tr>').join('')
+        + '</tbody></table>'
+        + (b.footer ? '<div class="ftr"><img src="' + abs(b.footer) + '"></div>' : '')
+        + '<scr' + 'ipt>(function(){function go(){try{window.focus();window.print();}catch(e){}}'
+        + 'if(document.readyState==="complete")setTimeout(go,150);else window.addEventListener("load",function(){setTimeout(go,150);});})();</scr' + 'ipt>'
+        + '</body></html>');
+      w.document.close();
     };
     // Save or clear a payment arrangement on an invoice.
     this._invoiceExtend = (id, body, okMsg) => {
@@ -9609,6 +9662,8 @@ class Component extends DCLogic {
       ['Revenue · collected', repInv ? fmtCur(repPaid) : 'SAR 1.24M', 'paid', '#0E9355', '#E7F8EF', 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
       ['Outstanding', repInv ? fmtCur(repOutstanding) : 'SAR 210k', 'unpaid', '#C0353A', '#FEECEC', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2'],
       ['Invoices', repInv ? String(repInv.length) : '128', 'total', '#7C00FF', '#F3E8FF', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6'],
+      // Design-sample fallback only: when a staff session is present this row is REPLACED further down
+      // with the live SLA figure (search "SLA on track"), so it stays in step with the SLA Monitor.
       ['On-time SLA', '93%', '+2%', '#B8860B', '#FEF4E2', 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3'],
     ].map(([label, value, delta, color, bg, icon]) => ({ label, value, delta, color, bg, icon }));
     // WIRED: revenue-by-month computed from real invoice dates/amounts (last 12 months).
@@ -9654,15 +9709,83 @@ class Component extends DCLogic {
       if (list3.length && sum3 !== 100) list3[list3.length - 1].pct += 100 - sum3;
       return list3;
     })();
-    const reportList = [
-      ['Revenue & collections', 'Monthly P&L, receivables ageing', 'Finance', '#0E9355', '#E7F8EF'],
-      ['Service performance', 'Volume, turnaround, SLA by service', 'Operations', '#7C00FF', '#F3E8FF'],
-      ['Compliance status', 'Documents by client, expiry pipeline', 'Compliance', '#0284C7', '#E4F4FD'],
-      ['Officer productivity', 'Tasks closed, load, SLA per officer', 'Team', '#B8860B', '#FEF4E2'],
-      ['Client portfolio', 'Revenue & health per client', 'Clients', '#6D5BD0', '#EFEBFF'],
-      ['Government fees', 'Fees paid to authorities, reconciled', 'Finance', '#0E9355', '#E7F8EF'],
-    ].map(([name, sub, cat, color, bg]) => ({ name, sub, cat, color, bg }));
-    const reportsApi = { reportStats, revBars, svcMix, reportList, repCurCode: sysCurCode, revEmpty, revNotEmpty: !revEmpty, revPeakLabel };
+    // ---- Reports: REAL generators ----
+    // This list used to be six literal names with dead CSV/PDF buttons — the screen produced nothing.
+    // Each report now builds its rows from the same live collections the rest of the console reads,
+    // so an export always matches what's on screen.
+    const _rCo = Array.isArray(this.state.companiesData) ? this.state.companiesData : [];
+    const _rInv = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
+    const _rPay = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : [];
+    const _rDoc = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+    const _rEmp = Array.isArray(this.state.employeesData) ? this.state.employeesData : [];
+    const _rReq = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : [];
+    const _coName = (id) => (_rCo.find(c9 => c9.id === id) || {}).name || '—';
+    const _daysOver = (d9) => { const t9 = d9 ? new Date(d9).getTime() : NaN; return Number.isFinite(t9) ? Math.round((Date.now() - t9) / 86400000) : null; };
+    const _owed = (v9) => Math.max(0, (Number(v9.amount) || 0) - _paidFor(v9.id, v9.number));
+    const _band = (d9) => d9 == null ? 'No due date' : d9 <= 0 ? 'Not yet due' : d9 <= 30 ? '1–30 days' : d9 <= 60 ? '31–60 days' : d9 <= 90 ? '61–90 days' : '90+ days';
+
+    const REPORTS = [
+      { name: 'Receivables ageing', sub: 'Every unpaid invoice, bucketed by how late it is', cat: 'Finance', color: '#0E9355', bg: '#E7F8EF',
+        build: () => {
+          const open = _rInv.filter(v9 => !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()) && _owed(v9) > 0);
+          return [['Invoice', 'Client', 'Issued', 'Due', 'Days overdue', 'Ageing band', 'Invoice total', 'Paid', 'Outstanding', 'Agreed payment date'],
+            ...open.sort((a9, b9) => (_daysOver(b9.dueDate) ?? -1) - (_daysOver(a9.dueDate) ?? -1)).map(v9 => {
+              const d9 = _daysOver(v9.dueDate);
+              return [v9.number, v9.clientName || _coName(v9.companyId), v9.date || '', v9.dueDate || '',
+                d9 != null && d9 > 0 ? d9 : 0, _band(d9), Number(v9.amount) || 0, _paidFor(v9.id, v9.number), _owed(v9), v9.promisedDate || ''];
+            })];
+        } },
+      { name: 'Payments received', sub: 'Every receipt logged, with method and reference', cat: 'Finance', color: '#0E9355', bg: '#E7F8EF',
+        build: () => [['Date', 'Client', 'Invoice', 'Amount', 'Method', 'Reference', 'Notes'],
+          ..._rPay.slice().sort((a9, b9) => String(b9.date || '').localeCompare(String(a9.date || '')))
+            .map(p9 => [p9.date || '', p9.clientName || _coName(p9.companyId), p9.invoiceNumber || '', Number(p9.amount) || 0, p9.method || '', p9.reference || '', p9.notes || ''])] },
+      { name: 'Compliance expiry pipeline', sub: 'Documents by expiry date, soonest first', cat: 'Compliance', color: '#0284C7', bg: '#E4F4FD',
+        build: () => [['Document', 'Held for', 'Client', 'Expiry', 'Days left', 'Status', 'Authority', 'Number'],
+          ..._rDoc.slice().sort((a9, b9) => (Number(a9.daysLeft) || 0) - (Number(b9.daysLeft) || 0))
+            .map(d9 => [d9.docType, d9.person, _coName(d9.companyId), d9.expiryDate || 'Not recorded',
+              d9.expiryDate ? (Number(d9.daysLeft) || 0) : '', d9.status, d9.issuingAuthority || '', d9.docNumber || ''])] },
+      { name: 'Sponsored employees', sub: 'Staff per client, including anyone exiting', cat: 'Clients', color: '#6D5BD0', bg: '#EFEBFF',
+        build: () => [['Employee', 'Role', 'Client', 'Iqama expiry', 'Status', 'Exit status', 'Last working day'],
+          ..._rEmp.slice().sort((a9, b9) => String(_coName(a9.companyId)).localeCompare(String(_coName(b9.companyId))))
+            .map(e9 => [e9.name, e9.role || '', _coName(e9.companyId), e9.iqamaExpiry || '',
+              e9.archived ? 'Former' : (e9.status || ''), e9.exitStatus || 'active', e9.exitDate || ''])] },
+      { name: 'Service requests', sub: 'What clients have asked for, and where it stands', cat: 'Operations', color: '#7C00FF', bg: '#F3E8FF',
+        build: () => [['Date', 'Client', 'Type', 'Status', 'Last client message', 'Last reply'],
+          ..._rReq.slice().map(r9 => [r9.date || '', r9.clientName || _coName(r9.companyId), r9.type || '', r9.status || '',
+            (r9.lastClientMsgAt || '').slice(0, 10), (r9.lastStaffMsgAt || '').slice(0, 10)])] },
+      { name: 'Client portfolio', sub: 'Per client: staff, documents and money owed', cat: 'Clients', color: '#6D5BD0', bg: '#EFEBFF',
+        build: () => [['Client', 'Status', 'City', 'Staff', 'Documents', 'Expiring', 'Overdue docs', 'Outstanding'],
+          ..._rCo.map(c9 => {
+            const staff = _rEmp.filter(e9 => e9.companyId === c9.id && !e9.archived).length;
+            const docs = _rDoc.filter(d9 => d9.companyId === c9.id);
+            const owed = _rInv.filter(v9 => v9.companyId === c9.id && !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()))
+              .reduce((s9, v9) => s9 + _owed(v9), 0);
+            return [c9.name, c9.status || '', c9.city || '', staff, docs.length,
+              docs.filter(d9 => d9.status === 'expiring').length, docs.filter(d9 => d9.status === 'overdue').length, owed];
+          })] },
+    ];
+    const reportList = REPORTS.map((r9, i9) => {
+      const rows = r9.build();
+      const count = Math.max(0, rows.length - 1);
+      return { name: r9.name, sub: r9.sub, cat: r9.cat, color: r9.color, bg: r9.bg,
+        countLabel: count + (count === 1 ? ' row' : ' rows'),
+        empty: count === 0,
+        csv: () => count ? this._downloadCsv(r9.name, rows) : this.toast('Nothing to export in ' + r9.name, 'error'),
+        print: () => count ? this._printTable(r9.name, rows) : this.toast('Nothing to print in ' + r9.name, 'error') };
+    });
+    const reportsApi = { reportStats, revBars, svcMix, reportList, repCurCode: sysCurCode, revEmpty, revNotEmpty: !revEmpty, revPeakLabel,
+      // One file with every report stacked — a period pack, rather than six separate downloads.
+      exportAll: () => {
+        const all = [];
+        REPORTS.forEach((r9, i9) => {
+          const rows = r9.build();
+          if (rows.length <= 1) return;
+          if (i9) all.push([]);
+          all.push([r9.name.toUpperCase()], ...rows);
+        });
+        if (!all.length) return this.toast('No data to export yet', 'error');
+        this._downloadCsv('STIMES PRO — all reports', all);
+      } };
 
     // ===== Service Packages =====
     // WIRED: real Package rows from /api/packages. Client counts come from real subscriptions by
