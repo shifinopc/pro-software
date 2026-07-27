@@ -1407,7 +1407,7 @@
                 <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">{{ inv.no }} · issued {{ inv.date }}</div>
               </div>
               <span style="font-size:10.5px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:3px 10px; border-radius:99px; flex-shrink:0;">{{ inv.status }}</span>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; width:92px; text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0;">{{ inv.amount }}</span>
+              <div style="width:150px; text-align:right; flex-shrink:0;"><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if></div>
               <div style="display:flex; gap:7px; flex-shrink:0;">
                 <button style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11.5px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; padding:6px 13px; font-size:11px;" style-hover="border-color:#7C00FF; color:#7C00FF;">PDF</button>
                 <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}">
@@ -3603,7 +3603,7 @@ class Component extends DCLogic {
       && (!_empQ || (e.name + ' ' + e.role).toLowerCase().includes(_empQ)));
 
     // WIRED: invoices from the real API (state.invItems from /me). Newest first.
-    const invStatusMap = { paid: ['Paid', '#E7F8EF', '#0E9355'], overdue: ['Overdue', '#FEECEC', '#C0353A'], pending: ['Unpaid', '#FEF4E2', '#B8860B'], draft: ['Draft', '#F0EDF6', '#6F6C7A'] };
+    const invStatusMap = { paid: ['Paid', '#E7F8EF', '#0E9355'], overdue: ['Overdue', '#FEECEC', '#C0353A'], pending: ['Unpaid', '#FEF4E2', '#B8860B'], draft: ['Draft', '#F0EDF6', '#6F6C7A'], partial: ['Part paid', '#E4F4FD', '#0284C7'] };
     const invFmtDate = (d) => { const t = new Date(d); return isNaN(t.getTime()) ? (d || '—') : t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
     const invoicesFull = (this.state.invItems || [])
       .slice()
@@ -3611,11 +3611,20 @@ class Component extends DCLogic {
       .map((inv) => {
         // Status comes from the SERVER and nowhere else. There used to be a local `invoicesSettled`
         // flag that the fake pay flow set, which showed real unpaid invoices as "Paid".
-        const key = inv.status || 'pending';
+        let key = inv.status || 'pending';
+        // /me now returns what has been received. A client who has part-paid must not be shown the
+        // full amount as still owing — that is the one figure they know first-hand is wrong.
+        const cur = inv.currency || sysCur;
+        const paidAmt = Number(inv.paidAmount) || 0;
+        const owed = inv.outstandingAmount != null ? Number(inv.outstandingAmount) : Math.max(0, Number(inv.amount) - paidAmt);
+        const part = key !== 'paid' && key !== 'draft' && paidAmt > 0 && owed > 0;
+        if (part) key = 'partial';
         const s = invStatusMap[key] || invStatusMap.pending;
         return { no: inv.number, date: invFmtDate(inv.date), desc: inv.services || '—',
-          amount: (inv.currency || sysCur) + ' ' + Number(inv.amount).toLocaleString(),
-          status: s[0], stBg: s[1], stColor: s[2], payable: key !== 'paid' && key !== 'draft' };
+          amount: cur + ' ' + Number(inv.amount).toLocaleString(),
+          outstanding: cur + ' ' + owed.toLocaleString(),
+          hasPart: part, partLabel: part ? cur + ' ' + paidAmt.toLocaleString() + ' received · ' + cur + ' ' + owed.toLocaleString() + ' still owed' : '',
+          status: s[0], stBg: s[1], stColor: s[2], payable: key !== 'paid' && key !== 'draft' && owed > 0 };
       });
 
     // WIRED: recent charges = this client's real PAID invoices (state.invItems from /me); design
@@ -4427,11 +4436,13 @@ class Component extends DCLogic {
       ({ label, select: () => this.setState({ paySelMethod: label }), ...chip(pmSel === label) }));
     // WIRED: real billing summary from state.invItems.
     const _openInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft');
-    const _billOut = _openInv.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    // Net off what has already been received, or the headline "outstanding" overstates the debt.
+    const _owedOn = (i) => i.outstandingAmount != null ? Number(i.outstandingAmount) : Math.max(0, (Number(i.amount) || 0) - (Number(i.paidAmount) || 0));
+    const _billOut = _openInv.reduce((s, i) => s + _owedOn(i), 0);
     const _nextDue = _openInv.filter((i) => i.dueDate).map((i) => i.dueDate).sort()[0];
     // null = "all open invoices" (the default when the modal opens), otherwise the ticked numbers.
     const _paySel = Array.isArray(this.state.paySelInv) ? this.state.paySelInv : null;
-    const _sumFor = (nos) => _openInv.filter(i => nos.includes(i.number || '—')).reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const _sumFor = (nos) => _openInv.filter(i => nos.includes(i.number || '—')).reduce((s, i) => s + _owedOn(i), 0);
     const payApi = {
       billOutstanding: sysCur + ' ' + _billOut.toLocaleString(),
       billOpenCount: _openInv.length,
@@ -4449,7 +4460,7 @@ class Component extends DCLogic {
       payInvoices: _openInv.map(i => {
         const no = i.number || '—';
         const on = _paySel === null ? true : _paySel.includes(no);
-        return { no, desc: i.services || '—', amount: (i.currency || sysCur) + ' ' + Number(i.amount || 0).toLocaleString(),
+        return { no, desc: i.services || '—', amount: (i.currency || sysCur) + ' ' + _owedOn(i).toLocaleString(),
           on, bg: on ? '#F7F3FD' : '#fff', border: on ? '#C9A2FF' : '#EDEBF2',
           boxBg: on ? '#7C00FF' : '#fff', boxBorder: on ? '#7C00FF' : '#DDD9E6',
           toggle: () => { const cur = _paySel === null ? _openInv.map(x => x.number || '—') : _paySel;

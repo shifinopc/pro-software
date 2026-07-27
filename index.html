@@ -2224,7 +2224,7 @@
                 <span onClick="{{ inv.openDetail }}" style="font-weight:700; color:#7C00FF; font-size:12px; cursor:pointer;">{{ inv.no }}</span>
                 <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.desc }}</div><div style="font-size:10px; color:#A9A6B4;">issued {{ inv.date }}</div></div>
                 <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ inv.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.client }}</span></div>
-                <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span>
+                <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if></div>
                 <span style="font-size:10.5px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ inv.status }}</span>
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.pay }}" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Record payment</span></sc-if></sc-if>
@@ -3685,7 +3685,7 @@
           </div>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:13px;">
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AMOUNT RECEIVED *</div><input value="{{ rpAmount }}" onChange="{{ setRpAmount }}" type="number" placeholder="0" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE;"></div>
+          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AMOUNT RECEIVED *</div><input value="{{ rpAmount }}" onChange="{{ setRpAmount }}" type="number" placeholder="0" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE;"><div style="font-size:10px; color:#8C8899; margin-top:4px;">{{ rpOutstandingNote }}</div></div>
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">METHOD</div><div style="position:relative;"><div data-dd onClick="{{ ddRpMethodToggle }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ rpMethodVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddRpMethodOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddRpMethodOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">REFERENCE</div><input value="{{ rpRef }}" onChange="{{ setRpRef }}" placeholder="Bank ref / receipt no." style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE;"></div>
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DATE RECEIVED</div><input value="{{ rpDate }}" onChange="{{ setRpDate }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE;"></div>
@@ -6758,7 +6758,14 @@ class Component extends DCLogic {
 
     // provider-wide invoices — WIRED to /api/invoices (state.invoicesData). Design samples show only
     // when unauthenticated. Real status → display label; amount rendered in the system currency.
-    const invStatusTone = { Paid: ['#E7F8EF', '#0E9355'], Unpaid: ['#FEF4E2', '#B8860B'], Overdue: ['#FEECEC', '#C0353A'], Draft: ['#F3F1F7', '#6F6C7A'], Pending: ['#EFEBFF', '#6D5BD0'] };
+    const invStatusTone = { Paid: ['#E7F8EF', '#0E9355'], Unpaid: ['#FEF4E2', '#B8860B'], Overdue: ['#FEECEC', '#C0353A'], Draft: ['#F3F1F7', '#6F6C7A'], Pending: ['#EFEBFF', '#6D5BD0'], 'Part paid': ['#E4F4FD', '#0284C7'] };
+    // What has actually been received against each invoice. Without this the list showed the FULL
+    // amount as still owing after a part payment, and Record payment pre-filled the full amount
+    // again — so a 2,000 invoice with 1,000 received still asked for 2,000.
+    const _payRows = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : [];
+    const _paidFor = (invId, invNo) => _payRows
+      .filter(p9 => (invId && p9.invoiceId === invId) || (!p9.invoiceId && invNo && p9.invoiceNumber === invNo))
+      .reduce((s9, p9) => s9 + (Number(p9.amount) || 0), 0);
     const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid' };
     const invData = this.state.invoicesData;
     const fmtInvDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(+dt) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
@@ -6776,11 +6783,22 @@ class Component extends DCLogic {
         ['INV-1173', '28 Jun', 'Falcon Trading', 'Trade license amendment', 5400, 'Paid', null],
         ['INV-DRAFT', '—', 'Marina Hospitality', 'Company formation (draft)', 12500, 'Draft', null],
       ]));
+    const _rpLabel = (v9) => v9.no + " · " + v9.client + " · " + (v9.hasPart ? v9.outstanding + " of " + v9.amount + " owed" : v9.amount);
     const invoicesFull = invBase.map((r, i) => {
       let [no, date, client, desc, amount, status, id, cur] = r;
+      // Settlement is decided from the PAYMENTS, exactly as the server does it — never from the
+      // status column alone, which only flips once an invoice is fully covered.
+      const paidNum = _paidFor(id, no);
+      const outstandingNum = Math.max(0, amount - paidNum);
+      if (status !== 'Draft' && status !== 'Paid' && paidNum > 0 && outstandingNum > 0) status = 'Part paid';
       const t = invStatusTone[status] || invStatusTone.Unpaid;
       return { no, date, client, desc, amount: fmtCurAs(cur, amount), amountNum: amount, status, id, cur: cur || sysCurCode,
-        stBg: t[0], stColor: t[1], payable: status === 'Unpaid' || status === 'Overdue',
+        paidNum, outstandingNum,
+        outstanding: fmtCurAs(cur, outstandingNum),
+        // Only shown when something has been received, so a normal unpaid row stays uncluttered.
+        partLabel: paidNum > 0 && outstandingNum > 0 ? fmtCurAs(cur, paidNum) + ' of ' + fmtCurAs(cur, amount) + ' received' : '',
+        hasPart: paidNum > 0 && outstandingNum > 0,
+        stBg: t[0], stColor: t[1], payable: status !== 'Draft' && status !== 'Paid' && outstandingNum > 0,
         initials: String(client).split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         openDetail: () => this.setState({ invDetail: no }),
         // Opens the real form pre-filled for this invoice (was an instant full-amount write with a
@@ -6932,9 +6950,11 @@ class Component extends DCLogic {
       // console" and today's date, with no way to enter a reference or a part payment.
       showRecordPay: !!this.state.rpOpen,
       openRecordPay: (invNo9) => {
-        const row9 = invNo9 ? invoicesFull.find(v9 => v9.no === invNo9) : null;
-        this.setState({ rpOpen: true, rpInv: row9 ? row9.no : (invoicesFull.find(v9 => v9.payable) || {}).no || '',
-          rpAmount: row9 ? String(row9.amountNum) : '', rpMethod: 'Bank transfer',
+        const row9 = invNo9 ? invoicesFull.find(v9 => v9.no === invNo9) : (invoicesFull.find(v9 => v9.payable) || null);
+        // Pre-fill what is STILL OWED, not the invoice total — offering the full amount again after a
+        // part payment is how an invoice ends up paid twice.
+        this.setState({ rpOpen: true, rpInv: row9 ? row9.no : '',
+          rpAmount: row9 ? String(row9.outstandingNum) : '', rpMethod: 'Bank transfer',
           rpRef: '', rpDate: new Date().toISOString().slice(0, 10), rpErr: '' });
       },
       closeRecordPay: () => this.setState({ rpOpen: false }),
@@ -6943,11 +6963,15 @@ class Component extends DCLogic {
       setRpAmount: (e9) => this.setState({ rpAmount: e9.target.value, rpErr: '' }),
       setRpRef: (e9) => this.setState({ rpRef: e9.target.value }),
       setRpDate: (e9) => this.setState({ rpDate: e9.target.value }),
-      ...mkDd('ddRpInv', (invoicesFull.filter(v9 => v9.payable).map(v9 => v9.no + ' · ' + v9.client + ' · ' + v9.amount)).concat(invoicesFull.filter(v9 => v9.payable).length ? [] : ['No unpaid invoices']),
-        (() => { const r9 = invoicesFull.find(v9 => v9.no === this.state.rpInv); return r9 ? r9.no + ' · ' + r9.client + ' · ' + r9.amount : 'No unpaid invoices'; })(),
+      // Every label quotes the OUTSTANDING balance, so a part-paid invoice reads what is still owed.
+      ...mkDd('ddRpInv', (invoicesFull.filter(v9 => v9.payable).map(v9 => _rpLabel(v9))).concat(invoicesFull.filter(v9 => v9.payable).length ? [] : ['No unpaid invoices']),
+        (() => { const r9 = invoicesFull.find(v9 => v9.no === this.state.rpInv); return r9 ? _rpLabel(r9) : 'No unpaid invoices'; })(),
         (v9) => { const no9 = String(v9).split(' · ')[0]; const r9 = invoicesFull.find(x9 => x9.no === no9);
-          this.setState({ rpInv: no9, rpAmount: r9 ? String(r9.amountNum) : '', rpErr: '' }); }),
-      rpInvVal: (() => { const r9 = invoicesFull.find(v9 => v9.no === this.state.rpInv); return r9 ? r9.no + ' · ' + r9.client + ' · ' + r9.amount : 'No unpaid invoices'; })(),
+          this.setState({ rpInv: no9, rpAmount: r9 ? String(r9.outstandingNum) : '', rpErr: '' }); }),
+      rpInvVal: (() => { const r9 = invoicesFull.find(v9 => v9.no === this.state.rpInv); return r9 ? _rpLabel(r9) : 'No unpaid invoices'; })(),
+      // Context line under the amount field: what the invoice was, and what has already landed.
+      rpOutstandingNote: (() => { const r9 = invoicesFull.find(v9 => v9.no === this.state.rpInv);
+        if (!r9) return ''; return r9.hasPart ? r9.partLabel + ' · ' + r9.outstanding + ' still owed' : 'Invoice total ' + r9.amount; })(),
       ...mkDd('ddRpMethod', ['Bank transfer', 'Card', 'Cash', 'Cheque', 'Online portal'], this.state.rpMethod || 'Bank transfer', (v9) => this.setState({ rpMethod: v9 })),
       rpMethodVal: this.state.rpMethod || 'Bank transfer',
       submitRecordPay: () => {
