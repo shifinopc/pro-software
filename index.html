@@ -1887,7 +1887,7 @@
             <sc-for list="{{ queueTabs }}" as="t" hint-placeholder-count="6"><span onClick="{{ t.select }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 15px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}<span style="font-size:10px; font-weight:800; opacity:.75;">{{ t.count }}</span></span></sc-for>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-            <div style="overflow-x:auto;"><div style="min-width:940px;">
+            <div style="overflow-x:auto;"><div style="min-width:1080px;">
               <div style="display:grid; grid-template-columns:90px 1.5fr 1.2fr 118px 1fr 118px 116px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
                 <span>Ref</span><span>Service</span><span>Client</span><span>Stage</span><span>Officer</span><span>SLA</span><span></span>
               </div>
@@ -2227,10 +2227,10 @@
           <sc-for list="{{ invTabs }}" as="t" hint-placeholder-count="6"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }} <span style="opacity:.6; font-size:10.5px;">{{ t.count }}</span></span></sc-for>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-          <div style="overflow-x:auto;"><div style="min-width:940px;">
-            <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 100px 104px 252px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Invoice</span><span>Description</span><span>Client</span><span>Amount</span><span>Status</span><span></span></div>
+          <div style="overflow-x:auto;"><div style="min-width:1080px;">
+            <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 104px 348px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Invoice</span><span>Description</span><span>Client</span><span>Amount</span><span>Status</span><span></span></div>
             <sc-for list="{{ invoicesFull }}" as="inv" hint-placeholder-count="6">
-              <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 100px 104px 252px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+              <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 104px 348px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
                 <span onClick="{{ inv.openDetail }}" style="font-weight:700; color:#7C00FF; font-size:12px; cursor:pointer;">{{ inv.no }}</span>
                 <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.desc }}</div><div style="font-size:10px; color:#A9A6B4;">issued {{ inv.date }}</div></div>
                 <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ inv.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.client }}</span></div>
@@ -6821,7 +6821,7 @@ class Component extends DCLogic {
         paidNum, outstandingNum,
         outstanding: fmtCurAs(cur, outstandingNum),
         // Only shown when something has been received, so a normal unpaid row stays uncluttered.
-        partLabel: paidNum > 0 && outstandingNum > 0 ? fmtCurAs(cur, paidNum) + ' of ' + fmtCurAs(cur, amount) + ' received' : '',
+        partLabel: paidNum > 0 && outstandingNum > 0 ? fmtCurAs(cur, outstandingNum) + ' still due' : '',
         hasPart: paidNum > 0 && outstandingNum > 0,
         stBg: t[0], stColor: t[1], payable: status !== 'Draft' && status !== 'Paid' && outstandingNum > 0,
         initials: String(client).split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
@@ -6835,7 +6835,7 @@ class Component extends DCLogic {
         hasPromise: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
           return !!raw.promisedDate && new Date(raw.promisedDate).getTime() >= Date.now() - 86400000; })(),
         promiseLabel: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
-          return raw.promisedDate ? 'Payment agreed for ' + raw.promisedDate : ''; })(),
+          return raw.promisedDate ? 'Agreed ' + raw.promisedDate : ''; })(),
         extend: () => {
           if (!id) return this.toast('That invoice is a sample row — open a real invoice', 'error');
           const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
