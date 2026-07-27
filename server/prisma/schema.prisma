@@ -1,0 +1,600 @@
+// STIMES PRO — data model (mirrors the frontend built model)
+generator client {
+  provider      = "prisma-client-js"
+  // "native" = your dev OS; the others cover common Linux shared hosts (Debian/Ubuntu, RHEL/CloudLinux)
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model SalesRep {
+  id        String        @id @default(cuid())
+  name      String
+  email     String        @unique
+  companies Company[]
+  groups    ClientGroup[]
+}
+
+model ClientGroup {
+  id         String    @id @default(cuid())
+  name       String
+  contact    String?
+  email      String?
+  salesRep   SalesRep? @relation(fields: [salesRepId], references: [id])
+  salesRepId String?
+  companies  Company[]
+}
+
+model Company {
+  id              String           @id @default(cuid())
+  name            String
+  cr              String
+  industry        String?
+  employees       Int              @default(0)
+  status          String           @default("active")
+  overdue         Int              @default(0)
+  expiring        Int              @default(0)
+  contact         String?
+  email           String?
+  phone           String?
+  city            String?
+  customData      Json? // values for admin-defined custom client fields (Form Builder)
+  group           ClientGroup?     @relation(fields: [groupId], references: [id])
+  groupId         String?
+  salesRep        SalesRep?        @relation(fields: [salesRepId], references: [id])
+  salesRepId      String?
+  employeeList    Employee[]
+  documents       Document[]
+  credentials     SiteCredential[]
+  invoices        Invoice[]
+  tasks           Task[]
+  subscriptions   Subscription[]
+  upgradeRequests UpgradeRequest[]
+
+  @@index([status])
+}
+
+model Package {
+  id            String         @id @default(cuid())
+  name          String
+  tier          String
+  basePrice     Int
+  billingCycle  String         @default("monthly")
+  empMin        Int
+  empMax        Int
+  features      Json
+  serviceIds    Json?          @default("[]") // catalog ServiceItem ids included in this package
+  color         String?
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  scope     String // "group" | "company"
+  refId     String // group id or company id
+  package   Package  @relation(fields: [packageId], references: [id])
+  packageId String
+  price     Int
+  startDate String?
+  endDate   String?
+  daysLeft  Int      @default(0)
+  autoRenew Boolean  @default(true)
+  custom    Boolean  @default(false)
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  // Billing-period marker: the endDate the last recurring invoice was raised for. The renewal job
+  // refuses to invoice the same period twice, which is what stops an hourly tick from billing a
+  // client 24 times a day.
+  lastBilledFor String?
+  lastRenewedAt String?
+
+  @@index([refId, scope])
+}
+
+model Employee {
+  id          String  @id @default(cuid())
+  company     Company @relation(fields: [companyId], references: [id])
+  companyId   String
+  name        String
+  role        String?
+  iqamaExpiry String?
+  status      String  @default("valid")
+  customData  Json? // values for admin-defined custom fields, keyed by CustomField.id
+  archived    Boolean @default(false)
+  history     Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
+  // Offboarding. `archived` stays the FINAL state (every headcount already filters on it); these track
+  // the run-up to it. The moment this leaves "active" the renewal engine stops touching their
+  // documents — renewing the visa of someone who is leaving is the bug this exists to prevent.
+  exitStatus    String  @default("active") // active | exit_requested | exiting | exited
+  exitDate      String? // last working day, as declared by the client
+  exitReason    String? // resignation | termination | end_of_contract | transfer | other
+  exitRequestId String? // the ServiceRequest that tracks the exit
+
+  @@index([companyId, archived])
+  @@index([exitStatus])
+}
+
+// Admin-defined custom fields (no-code Form Builder). entity="employee" for now.
+model CustomField {
+  id        String  @id @default(cuid())
+  entity    String  @default("employee")
+  label     String
+  type      String  @default("text") // text | number | date | dropdown
+  options   Json? // for dropdown: array of strings
+  required  Boolean @default(false)
+  sortOrder Int     @default(0)
+}
+
+model Document {
+  id               String  @id @default(cuid())
+  company          Company @relation(fields: [companyId], references: [id])
+  companyId        String
+  person           String // display label of the subject (employee name OR company name)
+  employeeId       String? // real link when subjectKind = "employee"; null for company-scoped docs
+  docType          String
+  expiryDate       String?
+  status           String  @default("valid")
+  daysLeft         Int     @default(0)
+  customData       Json? // values for the document type's dynamic fields, keyed by field id
+  // Renewal-in-flight pointers, set by the expiry trigger (scheduler). Their real job is IDEMPOTENCY:
+  // the trigger runs hourly, so without these it would file a fresh renewal every hour. Cleared when
+  // the renewal finishes/cancels, which re-arms the document for a future cycle.
+  renewalRunId     String? // WorkflowInstance renewing this doc
+  renewalTaskId    String? // plain Task renewing it (when no workflow is bound to the docType)
+  docNumber        String? // standard fields (all types)
+  issueDate        String?
+  issuingAuthority String?
+  history          Json? // renewal versions: [{ at, by, oldExpiry, newExpiry, oldNumber, newNumber, fee, receipt, note }]
+
+  @@index([status])
+  @@index([expiryDate])
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+// Admin-defined document types with their own dynamic fields + renewal config (no-code).
+model DocumentType {
+  id                  String  @id @default(cuid())
+  name                String  @unique
+  fields              Json?   @default("[]") // array of { id, label, type, options?, required? }
+  prereqs             Json?   @default("[]") // renewal rules: array of { requiresDocType, minMonths }
+  leadDays            Int? // reminder lead time — days before expiry the doc flags "expiring" (default 30)
+  defaultFee          Int? // default renewal fee (SAR)
+  requiresApproval    Boolean @default(false)
+  defaultAssigneeRole String? // role a renewal task defaults to
+  authority           String? // issuing authority (GDRFA, MOHRE, Qiwa…) shown on the type + its docs
+  subjectKind         String  @default("employee") // who the doc belongs to: "employee" (Iqama, visa…) | "company" (CR, GOSI, VAT…)
+}
+
+// Admin-defined custom object/record type (Object Builder) or standalone form (Form Builder), distinguished by `kind`.
+model CustomObject {
+  id       String  @id @default(cuid())
+  name     String
+  icon     String? // optional emoji
+  fields   Json?   @default("[]") // array of { id, label, type, options?, required? }
+  kind     String  @default("object") // "object" | "form"
+  appliesTo String @default("") // form-only: "" standalone | "employee" | "client" → fields feed that record's Add form
+}
+
+// A record for a custom object, keyed field values.
+model CustomRecord {
+  id       String @id @default(cuid())
+  objectId String
+  data     Json?  @default("{}")
+
+  @@index([objectId])
+}
+
+// Admin-designed print/PDF layout (Settings → Configure → Print Layout). The PDF renderer walks
+// `blocks` and draws them, so the output is driven entirely by this record rather than hardcoded.
+model PrintLayout {
+  id        String  @id @default(cuid())
+  name      String
+  target    String  @default("invoice") // which document this layout prints: invoice | document | task
+  isDefault Boolean @default(false)     // the layout used when printing that target
+  blocks    Json?   @default("[]")      // ordered [{ id, type, config }] — see PrintBlock in the app
+  settings  Json?   @default("{}")      // { accent, pageSize, margin }
+}
+
+model Task {
+  id         String   @id @default(cuid())
+  title      String
+  company    Company? @relation(fields: [companyId], references: [id])
+  companyId  String?
+  clientName String?
+  assignee   String?
+  priority   String   @default("medium")
+  dueDate    String?
+  status     String   @default("todo")
+  docType    String?
+  // Government authority this task is submitted to (Qiwa, Muqeem…). The Government Centers screen
+  // buckets its queues by this — it was read there but never written by any form until now.
+  govCenter  String?
+  archived   Boolean  @default(false) // soft-archive; recoverable via the Archived view
+  workflowInstanceId String? // set when creating this task also launched a workflow run
+  complianceDocId    String? // renewal task → the compliance document it renews (cross-link)
+  employeeId         String? // subject when the task/workflow concerns a specific employee (person docs)
+  customData         Json? // values for admin-defined custom task fields (Form Builder → Applies to: Task)
+  // Two-phase prerequisite gating: when set, this (Phase-2) task is PARKED waiting on prerequisite
+  // workflow run(s). { runIds:[...], resumeWorkflowId?, autoResume, reason }. Cleared when it resumes.
+  blockedBy          Json?
+
+  @@index([status])
+  @@index([assignee])
+  @@index([companyId, archived])
+  @@index([govCenter])
+}
+
+model Invoice {
+  id         String   @id @default(cuid())
+  number     String
+  company    Company? @relation(fields: [companyId], references: [id])
+  companyId  String?
+  clientName String?
+  amount     Int
+  currency   String   @default("SAR")
+  status     String   @default("pending")
+  date       String?
+  dueDate    String?
+  services   String?  @db.Text
+  // Line items: [{ name, units, price }]. `amount` stays the source of truth for totals/reports and
+  // is recomputed from these on save, so existing single-amount invoices keep working untouched.
+  items      Json?    @default("[]")
+  notes      String?  @db.Text
+
+  @@index([status])
+  @@index([date])
+}
+
+model User {
+  id                 String  @id @default(cuid())
+  name               String
+  email              String  @unique
+  passwordHash       String?
+  roleId             String  @default("admin")
+  status             String  @default("active")
+  lastActive         String?
+  type               String  @default("staff") // staff | portal
+  companyId          String? // for portal users
+  phone              String?
+  assignedClientIds  Json? // for sales users
+  mustChangePassword Boolean @default(false) // portal users must set their own password on first login
+  tokenVersion       Int     @default(0) // bump to invalidate all previously issued JWTs
+  failedLogins       Int     @default(0) // consecutive failed logins → lockout
+  lockedUntil        String? // ISO timestamp; login refused until then
+  resetTokenHash     String? // sha256 of the password-reset token
+  resetExpires       String? // ISO timestamp the reset token expires
+}
+
+model Audit {
+  id         String  @id @default(cuid())
+  action     String // e.g. login.success, password.change, credential.reveal
+  actorId    String?
+  actorEmail String?
+  target     String? // what was acted on
+  detail     String? @db.Text
+  ip         String?
+  at         String // ISO timestamp
+
+  @@index([at])
+  @@index([actorId])
+  @@index([action])
+}
+
+model UpgradeRequest {
+  id            String   @id @default(cuid())
+  company       Company  @relation(fields: [companyId], references: [id])
+  companyId     String
+  clientName    String
+  fromPackageId String?
+  toPackageId   String?
+  note          String?  @db.Text
+  status        String   @default("pending")
+  date          String?
+
+  @@index([status])
+}
+
+model SiteCredential {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+  label     String
+  url       String
+  username  String?
+  password  String // NOTE: encrypt at rest in production
+  notes     String? @db.Text
+}
+
+model Activity {
+  id      String  @id @default(cuid())
+  type    String
+  message String? @db.Text
+  user    String?
+  time    String?
+  date    String?
+
+  @@index([date])
+}
+
+model ServiceRequest {
+  id         String  @id @default(cuid())
+  companyId  String?
+  clientName String?
+  type       String?
+  message    String? @db.Text // the client's opening message; the thread lives in ServiceRequestMessage
+  status     String  @default("open") // open | resolved | rejected — a client reply reopens it
+  date       String?
+  // Unread is derived from these rather than a per-user read table — two timestamps per side is
+  // enough at this scale and keeps the bell query trivial.
+  lastClientMsgAt String?
+  lastStaffMsgAt  String?
+  staffReadAt     String?
+  clientReadAt    String?
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// One message in a request's thread. `internal` notes are staff-only and are filtered out of every
+// portal response — that filtering is the whole point, so it lives server-side, never in the client.
+model ServiceRequestMessage {
+  id         String  @id @default(cuid())
+  requestId  String
+  authorType String  @default("staff") // "staff" | "client"
+  authorName String?
+  body       String  @db.Text
+  internal   Boolean @default(false)
+  at         String?
+
+  @@index([requestId])
+}
+
+model KanbanCard {
+  id         String  @id @default(cuid())
+  title      String
+  companyId  String?
+  clientName String?
+  assignee   String?
+  priority   String  @default("medium")
+  dueDate    String?
+  column     String  @default("backlog")
+  docType    String?
+  checklist  Json?
+
+  @@index([companyId])
+}
+
+model Notification {
+  id      String  @id @default(cuid())
+  type    String
+  title   String
+  message String? @db.Text
+  time    String?
+  read    Boolean @default(false)
+  // Set by automated jobs so a repeating tick can't repeat a notification. Unique — the insert is the
+  // dedupe (no read-then-write race). Null for human-generated notifications, which may legitimately repeat.
+  dedupeKey String? @unique
+
+  @@index([read])
+}
+
+// ── BPM Workflow engine ──────────────────────────────────────────────
+// A reusable process definition. The DAG lives in `graph` as { nodes:[], edges:[] }.
+// node  = { id, type, label, config }   type: start|task|approval|decision|parallel_split|parallel_join|notify|webhook|delay|end
+// edge  = { id, from, to, label?, condition? }   condition routes decision/approval outcomes (e.g. "approve","reject","<branchKey>","else")
+model WorkflowTemplate {
+  id            String             @id @default(cuid())
+  name          String
+  description   String?            @db.Text
+  trigger       String             @default("manual") // manual | document_expiry | request_intake
+  triggerConfig Json? // { docType, days } etc.
+  entityType    String             @default("generic") // visa | company_formation | ...
+  graph         Json               @default("{\"nodes\":[],\"edges\":[]}")
+  version       Int                @default(1)
+  active        Boolean            @default(false)
+  createdAt     String?
+  instances     WorkflowInstance[]
+}
+
+// A running (or finished) execution of a template over one subject (a visa request, a client, etc.).
+model WorkflowInstance {
+  id          String           @id @default(cuid())
+  template    WorkflowTemplate @relation(fields: [templateId], references: [id])
+  templateId  String
+  title       String
+  companyId   String?
+  clientName  String?
+  variables   Json?            @default("{}") // process variables (country, visaType, passportValid, …) incl. engine bookkeeping keys prefixed with _
+  status      String           @default("running") // running | completed | cancelled | failed
+  startedAt   String?
+  completedAt String?
+  tasks       WorkflowTask[]
+  logs        WorkflowLog[]
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// A unit of human work produced by a task/approval node. The engine waits on these.
+model WorkflowTask {
+  id           String           @id @default(cuid())
+  instance     WorkflowInstance @relation(fields: [instanceId], references: [id])
+  instanceId   String
+  nodeId       String // originating graph node
+  nodeType     String           @default("task") // task | approval
+  title        String
+  assignee     String? // optional specific person
+  assigneeRole String? // role gate — who may complete it
+  status       String           @default("active") // active | done | approved | rejected | skipped
+  priority     String           @default("medium")
+  dueDate      String?
+  slaHours     Int?
+  checklist    Json? // resolved item defs snapshot: [{ key, label, required }] (also accepts legacy [{label,done}])
+  checklistState Json? // per-item runtime state: { [key]: { received, verified, note?, fileRef? } }
+  requireVerification Boolean @default(false) // completion needs each required item received AND verified
+  captures     Json? // [{ var, label, type, options? }] — variables the completer must set
+  outcome      String? // approval: approve|reject ; task with branches: chosen key
+  completedBy  String?
+  completedAt  String?
+  createdAt    String? // when the step became active — for SLA elapsed calc
+  // SLA escalation bookkeeping. `slaState` is the last state the escalator ACTED on, so it only fires
+  // on a real transition (on_track→at_risk→breached) instead of re-notifying every hourly tick.
+  slaState     String? // null (never evaluated) | on_track | at_risk | breached
+  escalatedAt  String?
+
+  @@index([status])
+  @@index([assigneeRole])
+}
+
+// Admin-defined rule that maps instance variables → a document set (dynamic per-client checklists).
+// rows: [{ conditions: [{ var, op, value }], documents: [{ key, label, required }] }] — union of matching rows.
+model ChecklistRule {
+  id   String @id @default(cuid())
+  name String
+  rows Json?  @default("[]")
+}
+
+model WorkflowLog {
+  id         String           @id @default(cuid())
+  instance   WorkflowInstance @relation(fields: [instanceId], references: [id])
+  instanceId String
+  nodeId     String?
+  action     String
+  detail     String?          @db.Text
+  actor      String?
+  at         String
+}
+
+// Org-wide settings (console Settings → General etc.) — one JSON row per area, keyed ("org", …).
+model AppSetting {
+  key   String @id
+  value Json
+}
+
+// ── Operations masters (Government Centers / Appointments / Courier) ──
+model GovCenter {
+  id        String  @id @default(cuid())
+  name      String
+  sub       String? // what it handles
+  color     String?
+  bg        String?
+  officer   String? // default owning officer
+  pending   Int     @default(0)
+  submitted Int     @default(0)
+  approved  Int     @default(0)
+  rejected  Int     @default(0)
+}
+
+model Appointment {
+  id         String  @id @default(cuid())
+  title      String
+  type       String? // Medical test / Biometrics / ...
+  companyId  String?
+  clientName String?
+  employee   String?
+  location   String?
+  date       String?
+  time       String?
+  status     String  @default("scheduled") // Requested | Confirmed | Rescheduled | Attended | No-show | Cancelled
+  notes      String?
+  history    Json?   @default("[]") // audit trail: [{ at, by, event, detail }] from creation onward
+  taskId     String? // optional link to the Task this meeting belongs to (shown on the task)
+  // Client-requested reschedule awaiting STAFF approval: { date, time, note, by, at }.
+  // Approve (console) applies date/time + history; decline just clears it. Null = none pending.
+  pendingReschedule Json?
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model CourierShipment {
+  id         String  @id @default(cuid())
+  ref        String
+  description String?
+  companyId  String?
+  clientName String?
+  carrier    String?
+  direction  String  @default("outbound") // outbound | inbound
+  status     String  @default("in_transit") // preparing | in_transit | delivered | returned
+  eta        String?
+  at         String?
+
+  @@index([companyId])
+}
+
+// ── Money: payments received against invoices; quotations before invoicing ──
+model Payment {
+  id            String  @id @default(cuid())
+  invoiceId     String?
+  invoiceNumber String?
+  companyId     String?
+  clientName    String?
+  amount        Int
+  method        String? // bank transfer / card / cash
+  reference     String?
+  date          String?
+  notes         String?
+
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([date])
+}
+
+model Quotation {
+  id         String  @id @default(cuid())
+  number     String
+  companyId  String?
+  clientName String?
+  service    String?
+  amount     Int     @default(0)
+  // Line items [{ name, units, price }] — mirrors Invoice.items. `amount` stays the total of record.
+  items      Json?   @default("[]")
+  status     String  @default("draft") // draft | sent | approved | rejected | invoiced
+  date       String?
+  validUntil String?
+  notes      String?
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// ── Service catalog (gov fee + service fee per offered service) ──
+model ServiceItem {
+  id         String  @id @default(cuid())
+  name       String
+  govFee     Int     @default(0)
+  serviceFee Int     @default(0)
+  time       String? // "3–5 days"
+  sla        String? // "5 working days"
+  docs       Int     @default(0)
+  included   Boolean @default(true) // included in base plans vs premium
+  docType    String? // document it produces
+  workflowId String? // bound workflow template
+}
+
+// ── API keys (programmatic access) + uploaded file registry ──
+model ApiKey {
+  id         String  @id @default(cuid())
+  name       String
+  prefix     String // first chars shown in lists
+  keyHash    String // sha256 of the full key — full key returned only once at creation
+  createdAt  String
+  lastUsedAt String?
+  revoked    Boolean @default(false)
+}
+
+model FileAsset {
+  id         String @id @default(cuid())
+  kind       String // org-logo | login-logo | document | attachment
+  name       String
+  path       String // public URL path under /files
+  size       Int    @default(0)
+  uploadedBy String?
+  at         String
+
+  @@index([kind])
+}

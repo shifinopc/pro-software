@@ -1,0 +1,202 @@
+/* ─────────────────────────────────────────────────────────────
+   PORTAL SKIN — client-portal-only re-skin to match the reference design.
+   Imported ONLY by portal-main.tsx (after index.css), so it never touches the
+   staff console. Two layers:
+     1. Token overrides — remap the shared Tailwind tokens to the reference's
+        exact violet + purple-tinted neutrals. Because every utility reads
+        var(--…), this recolors the whole portal without fighting Tailwind's
+        important:true (we change the variable, not the rule).
+     2. Utility classes (pf-*) — the reference's structural signatures that
+        aren't token-driven: violet-glow shadows, pill radius, stat tiles.
+        Applied by swapping classes in the portal JSX, screen by screen.
+   Reference palette: primary #7c00ff · deep #26074d · text #1a1523 ·
+   muted #6f6c7a · border #edebf2 · tints #f3e8ff/#ebdbff · glow rgba(124,0,255,.x)
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand — the reference's exact violet */
+  --primary: #7c00ff;
+  --primary-foreground: #ffffff;
+  --ring: #7c00ff;
+
+  /* Surfaces — airy, faintly violet-white */
+  --background: #faf8ff;
+  --card: #ffffff;
+  --popover: #ffffff;
+
+  /* Text — purple-tinted near-blacks/greys from the reference */
+  --foreground: #1a1523;
+  --card-foreground: #1a1523;
+  --popover-foreground: #1a1523;
+  --muted-foreground: #6f6c7a;
+
+  /* Violet tints — pills, accents, hovers */
+  --secondary: #f3e8ff;
+  --secondary-foreground: #5e00c4;
+  --muted: #f5f2fb;
+  --accent: #f3e8ff;
+  --accent-foreground: #7c00ff;
+
+  /* Borders + inputs — solid purple-tinted grey (reference #edebf2) */
+  --border: #ece7f4;
+  --input: transparent;
+  --input-background: #f5eeff;
+  --switch-background: #d9c9f5;
+
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+
+  /* Rounder corners to match the reference's soft cards */
+  --radius: 0.875rem;
+
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-primary: #7c00ff;
+  --sidebar-accent: #f3e8ff;
+  --sidebar-accent-foreground: #7c00ff;
+  --sidebar-border: #ece7f4;
+  --sidebar-ring: #7c00ff;
+
+  /* Named tokens the pf-utilities and screens reference directly */
+  --pf-primary: #7c00ff;
+  --pf-primary-strong: #6900d6;
+  --pf-primary-deep: #26074d;
+  --pf-tint: #f3e8ff;
+  --pf-tint-strong: #ebdbff;
+  --pf-surface: #fcfbfe;
+  --pf-green: #12b76a;
+  --pf-green-bg: #e7f8ef;
+  --pf-amber: #f59e0b;
+  --pf-amber-bg: #fef4e2;
+  --pf-red: #e5484d;
+  --pf-red-bg: #feecec;
+}
+
+/* Page ground — a whisper of violet, like the reference canvas */
+body {
+  background: var(--background);
+}
+
+/* Violet text selection */
+::selection { background: #ebdbff; color: #26074d; }
+
+/* Slim violet scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #d9cdf0 transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: #ddd1f0; border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #c9b6ef; }
+
+/* ── pf utility layer — the reference's structural signatures ──
+   Plain classes (no @apply) so they're independent of Tailwind processing.
+   Use these INSTEAD of a conflicting Tailwind shadow/radius class, not beside
+   it, to avoid equal-specificity !important fights. */
+
+/* Reference shadow scale (exact values from the design):
+   default card = a whisper (0 1px 2px), lift on hover/feature, saturated glow on CTAs. */
+.pf-glow { box-shadow: 0 1px 2px rgba(38, 7, 77, 0.04); }
+.pf-glow-lg { box-shadow: 0 10px 24px rgba(124, 0, 255, 0.09), 0 1px 2px rgba(38, 7, 77, 0.04); }
+.pf-glow-xl { box-shadow: 0 24px 64px rgba(38, 7, 77, 0.30); }
+/* Elevated primary elements (buttons, active nav) — the reference's CTA glow */
+.pf-glow-primary { box-shadow: 0 2px 8px rgba(124, 0, 255, 0.25); }
+.pf-glow-primary:hover { box-shadow: 0 6px 16px rgba(124, 0, 255, 0.32); }
+
+/* Pill — full-round */
+.pf-pill { border-radius: 999px; }
+
+/* Card — the reference's default surface: white, hairline violet border, soft glow */
+.pf-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(124, 0, 255, 0.06), 0 1px 2px rgba(38, 7, 77, 0.04);
+}
+
+/* Tinted feature card — faint violet wash used for hero/summary blocks */
+.pf-card-tint {
+  background: linear-gradient(180deg, #faf5ff 0%, #f6efff 100%);
+  border: 1px solid #ebdbff;
+  border-radius: 18px;
+}
+
+/* Deep violet hero — the reference's package/primary banner (exact gradient) */
+.pf-hero {
+  background: linear-gradient(112deg, #8b17ff 0%, #7c00ff 45%, #5e00c4 100%);
+  color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 12px 32px rgba(124, 0, 255, 0.28);
+}
+/* Darker variant used for the reference's deep banners */
+.pf-hero-deep {
+  background: linear-gradient(125deg, #26074d 0%, #4a1090 60%, #7c00ff 130%);
+  color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(38, 7, 77, 0.30);
+}
+
+/* Icon chip — rounded violet-tinted square behind an icon */
+.pf-chip {
+  background: var(--pf-tint);
+  color: var(--pf-primary);
+  border-radius: 12px;
+}
+
+/* Status pills */
+.pf-badge { border-radius: 999px; font-weight: 600; }
+.pf-badge-green { background: var(--pf-green-bg); color: #0e9355; }
+.pf-badge-amber { background: var(--pf-amber-bg); color: #b8860b; }
+.pf-badge-red   { background: var(--pf-red-bg);   color: #c0353a; }
+.pf-badge-violet{ background: var(--pf-tint);     color: var(--pf-primary); }
+
+/* Subtle top-lit divider used between list rows in the reference */
+.pf-row + .pf-row { border-top: 1px solid #f1ecf9; }
+
+/* ── Scoped component upgrades ──
+   This stylesheet only loads on the portal page, so redefining the portal's
+   own utility combinations here re-skins every card/button/input at once
+   without editing the JSX — and never reaches the staff console.
+   !important is needed only where Tailwind's important:true output competes
+   (box-shadow); everything else wins on the two-class specificity. */
+
+/* Cards: the reference keeps these CLEAN — a hairline violet border + a whisper
+   of shadow (not a glow). Matches the portal's `bg-card … border border-border`. */
+.bg-card.border-border,
+.bg-card.border-border\/70 {
+  box-shadow: 0 1px 2px rgba(38, 7, 77, 0.04) !important;
+}
+/* Softer, rounder corners on the standard card (reference ≈ 18px) */
+.bg-card.rounded-xl { border-radius: 18px; }
+.bg-card.rounded-2xl { border-radius: 20px; }
+.bg-card.rounded-3xl { border-radius: 24px; }
+
+/* Primary buttons: the reference's saturated violet CTA glow */
+button.bg-primary,
+a.bg-primary {
+  box-shadow: 0 2px 8px rgba(124, 0, 255, 0.25) !important;
+}
+button.bg-primary:hover,
+a.bg-primary:hover {
+  box-shadow: 0 6px 16px rgba(124, 0, 255, 0.32) !important;
+}
+
+/* Inputs: rounder fields + a soft violet focus ring like the reference forms */
+.portal-input,
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border-radius: 11px;
+}
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #c9a2ff !important;
+  box-shadow: 0 0 0 3px rgba(124, 0, 255, 0.10) !important;
+}
+
+/* Violet-tinted hover on interactive rows/nav (reference uses faint violet washes) */
+.hover\:bg-muted:hover { background-color: #f5eeff !important; }
+.hover\:bg-secondary:hover { background-color: #ebdbff !important; }
+
+/* Avatars / icon chips that use bg-secondary read as violet tint automatically
+   via the token, but round them a touch more for the reference's soft look. */
+.bg-secondary.rounded-lg { border-radius: 12px; }
