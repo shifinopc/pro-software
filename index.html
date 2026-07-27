@@ -5707,7 +5707,9 @@ class Component extends DCLogic {
       const w = window.open('', '_blank');
       if (!w) return this.toast('Could not open the print view — allow pop-ups for this site', 'error');
       w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + esc9(title) + '</title><style>'
-        + '@page{size:' + (L.pageSize || 'A4') + ' landscape;margin:' + (L.margin ?? 18) + 'mm}'
+        // A report is a plain data table, not a letterhead — it has no artwork to bleed off the page,
+        // so it keeps a real margin however the invoice branding is set (printers clip the last few mm).
+        + '@page{size:' + (L.pageSize || 'A4') + ' landscape;margin:' + Math.max(10, L.margin ?? 10) + 'mm}'
         + 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0}'
         + '.band{background:linear-gradient(110deg,#26074D,' + (L.accent || '#7C00FF') + ');color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-end}'
         + '.band b{font-size:15px}.band span{font-size:10px;opacity:.85}'
@@ -5862,15 +5864,25 @@ class Component extends DCLogic {
         + (doc.vat ? '<div><span>' + lbl('VAT ' + (L.vatRate ?? 15) + '%', 'الضريبة') + '</span><span>' + esc(doc.vat) + '</span></div>' : '')
         + '<div class="g"><span>' + lbl('TOTAL', 'الإجمالي') + '</span><span>' + esc(doc.total) + '</span></div></div>';
 
+      // Artwork (letterhead band, header/footer images, watermark) bleeds the full page width; the
+      // TEXT lives inside .pad. At a 0mm page margin that distinction is what stops "BILL TO" and the
+      // items table from printing right against the paper edge, where every printer clips them.
       const body = (b.watermark ? '<div class="wm"><img src="' + abs(b.watermark) + '"></div>' : '')
-        + header + meta
+        + header
+        + '<div class="pad">' + meta
         + '<table><thead><tr><th>' + lbl('DESCRIPTION', 'الوصف') + '</th><th style="text-align:center;">' + lbl('QTY', 'الكمية') + '</th><th style="text-align:right;">' + lbl('PRICE', 'السعر') + '</th><th style="text-align:right;">' + lbl('AMOUNT', 'المبلغ') + '</th></tr></thead><tbody>' + rows + '</tbody></table>'
         + '<div class="foot">' + (qrSvg ? '<div class="qr" title="ZATCA QR">' + qrSvg + '</div>' : '<div></div>') + totals + '</div>'
         + (doc.notes ? '<div class="notes"><b>' + lbl('Notes', 'ملاحظات') + ':</b> ' + esc(doc.notes) + '</div>' : '')
+        + '</div>'
         + (b.footer ? '<div class="ftr"><img src="' + abs(b.footer) + '"></div>' : '');
 
+      // Text always keeps ~12mm clear of the paper edge. Whatever the page margin doesn't already
+      // provide, .pad makes up — so margin 18 behaves exactly as before, and margin 0 gives a
+      // full-bleed letterhead with readable, unclipped body text.
+      const inset = Math.max(0, 12 - (L.margin ?? 0));
       const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative}'
         + '*{box-sizing:border-box}'
+        + '.pad{padding:0 ' + inset + 'mm ' + inset + 'mm}'
         + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:18px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
         + '.org{font-size:16px;font-weight:700;letter-spacing:.01em}.orgsub{font-size:9.5px;opacity:.85;margin-top:5px;line-height:1.6}'
         + '.dt{font-size:19px;font-weight:700}.dtar{font-size:10px;opacity:.85;margin-top:2px}.dno{font-size:10.5px;opacity:.9;margin-top:6px}'
@@ -5888,12 +5900,12 @@ class Component extends DCLogic {
         + '.tot{width:230px;font-size:11.5px}.tot div{display:flex;justify-content:space-between;padding:4px 0}'
         + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:14px;padding-top:7px;color:' + accent + '}'
         + '.notes{margin-top:16px;font-size:10px;color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:9px}'
-        + (opts && opts.forPrint ? '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 18) + 'mm}' : '');
+        + (opts && opts.forPrint ? '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 0) + 'mm}' : '');
       return { title: title + ' ' + esc(doc.no), css, body, layout: L };
     };
     // Layout settings for a target, with the shipped defaults. Persisted as AppSetting "printLayout"
     // = { invoice: {...}, quotation: {...} } so each document type can be branded separately.
-    this._printLayoutDefaults = { accent: '#7C00FF', pageSize: 'A4', margin: 18, vatRate: 15, zatcaQr: true,
+    this._printLayoutDefaults = { accent: '#7C00FF', pageSize: 'A4', margin: 0, vatRate: 15, zatcaQr: true,
       bilingual: true };
     // Paint the Print Layout designer's sheet with the REAL builder and a sample document, scaled to
     // the on-screen page. This is what makes the designer a true preview instead of a mockup.
@@ -5920,7 +5932,7 @@ class Component extends DCLogic {
         const w = pageW * mm;
         const scale = (host.clientWidth || 430) / w;
         host.innerHTML = '<div style="width:' + w + 'px; transform:scale(' + scale + '); transform-origin:top left; padding:'
-          + (built.layout.margin ?? 18) * mm + 'px; position:relative;"><style>' + built.css + '</style>' + built.body + '</div>';
+          + (built.layout.margin ?? 0) * mm + 'px; position:relative;"><style>' + built.css + '</style>' + built.body + '</div>';
       });
     };
     // Render a real document into any on-screen host, scaled down to fit its width. One helper for
@@ -5939,7 +5951,7 @@ class Component extends DCLogic {
         const mm = 3.7795;
         const w = ((built.layout.pageSize === 'Letter') ? 216 : 210) * mm;
         const scale = (host.clientWidth || 420) / w;
-        const pad = (built.layout.margin ?? 18) * mm;
+        const pad = (built.layout.margin ?? 0) * mm;
         host.innerHTML = '<div data-doc-sheet style="width:' + w + 'px; transform:scale(' + scale
           + '); transform-origin:top left; padding:' + pad + 'px; position:relative; background:#fff;">'
           + '<style>' + built.css + '</style>' + built.body + '</div>';
@@ -6010,7 +6022,7 @@ class Component extends DCLogic {
         const style = document.createElement('style');
         style.id = 'doc-print-page';
         style.textContent = '@page{size:' + (L.pageSize || 'A4') + ';margin:0}'
-          + '#doc-print-host{padding:' + (L.margin ?? 18) + 'mm !important}';
+          + '#doc-print-host{padding:' + (L.margin ?? 0) + 'mm !important}';
         document.head.appendChild(style);
 
         const cleanup = () => {
