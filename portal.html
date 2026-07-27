@@ -3121,7 +3121,7 @@ class Component extends DCLogic {
     const _kActive = _docs.length;
     const _kUpcoming = _docs.filter((d) => d.status === 'expiring' || d.status === 'overdue').length;
     const _kPending = _docs.filter((d) => d.status === 'expiring').length;
-    const _kInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft').length;
+    const _kInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft' && i.status !== 'void').length;
     const kpis = [
       [String(_kActive), 'Tracked documents', I.layers, pal.purple, '#7C00FF'],
       [String(_kUpcoming), 'Upcoming renewals', I.refresh, pal.amber, '#F59E0B'],
@@ -3611,7 +3611,7 @@ class Component extends DCLogic {
       && (!_empQ || (e.name + ' ' + e.role).toLowerCase().includes(_empQ)));
 
     // WIRED: invoices from the real API (state.invItems from /me). Newest first.
-    const invStatusMap = { paid: ['Paid', '#E7F8EF', '#0E9355'], overdue: ['Overdue', '#FEECEC', '#C0353A'], pending: ['Unpaid', '#FEF4E2', '#B8860B'], draft: ['Draft', '#F0EDF6', '#6F6C7A'], partial: ['Part paid', '#E4F4FD', '#0284C7'] };
+    const invStatusMap = { paid: ['Paid', '#E7F8EF', '#0E9355'], overdue: ['Overdue', '#FEECEC', '#C0353A'], pending: ['Unpaid', '#FEF4E2', '#B8860B'], draft: ['Draft', '#F0EDF6', '#6F6C7A'], partial: ['Part paid', '#E4F4FD', '#0284C7'], void: ['Void', '#F3F1F7', '#8C8899'] };
     const invFmtDate = (d) => { const t = new Date(d); return isNaN(t.getTime()) ? (d || '—') : t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
     const invoicesFull = (this.state.invItems || [])
       .slice()
@@ -4444,7 +4444,7 @@ class Component extends DCLogic {
     const payMethods = ['Bank transfer', 'Cash at office', 'Cheque'].map(label =>
       ({ label, select: () => this.setState({ paySelMethod: label }), ...chip(pmSel === label) }));
     // WIRED: real billing summary from state.invItems.
-    const _openInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft');
+    const _openInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft' && i.status !== 'void');
     // Net off what has already been received, or the headline "outstanding" overstates the debt.
     const _owedOn = (i) => i.outstandingAmount != null ? Number(i.outstandingAmount) : Math.max(0, (Number(i.amount) || 0) - (Number(i.paidAmount) || 0));
     const _billOut = _openInv.reduce((s, i) => s + _owedOn(i), 0);

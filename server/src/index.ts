@@ -671,6 +671,74 @@ app.post("/api/companies/:id/restore", requireAuth, requireStaff, requireWriteRo
   res.json({ company });
 });
 
+/**
+ * Void an invoice. It is NEVER deleted — an issued tax document that disappears is worse than one
+ * marked cancelled, and reports/audits need the trail. Refuses when money has already been received
+ * against it: that would leave an orphaned payment and hide real cash.
+ */
+app.post("/api/invoices/:id/void", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const inv = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+  if (String(inv.status) === "void") return res.status(409).json({ error: "This invoice is already void" });
+
+  const paid = await prisma.payment.aggregate({ where: { invoiceId: inv.id }, _sum: { amount: true } });
+  const received = paid._sum.amount ?? 0;
+  if (received > 0)
+    return res.status(409).json({
+      error: `${inv.currency} ${received.toLocaleString()} has already been received against this invoice. Remove or reallocate the payment before voiding it.`,
+    });
+
+  const reason = String((req.body ?? {}).reason ?? "").trim();
+  if (!reason) return res.status(400).json({ error: "A reason is required — it stays on the record" });
+
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const invoice = await prisma.invoice.update({
+    where: { id: inv.id },
+    data: { status: "void", voidedAt: new Date().toISOString(), voidReason: reason },
+  });
+  // Stop it chasing: the ladder rungs and any arrangement are meaningless once it's cancelled.
+  await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: `dunning:${inv.id}:` } } });
+  logActivity({ type: "finance", message: `Invoice ${inv.number} voided — ${reason}`, user: me?.name ?? "Staff" });
+  await logAudit({ action: "invoice.void", actorId: a.sub, target: inv.id, detail: `${inv.number} · ${inv.currency} ${inv.amount} · ${reason}` });
+  res.json({ invoice });
+});
+
+/** Edit an employee's details, appending to the same history[] the exit flow writes. */
+app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const emp = await prisma.employee.findUnique({ where: { id: req.params.id } });
+  if (!emp) return res.status(404).json({ error: "Employee not found" });
+
+  const { name, role, iqamaExpiry } = req.body ?? {};
+  const nextName = String(name ?? "").trim();
+  if (!nextName) return res.status(400).json({ error: "Name is required" });
+  if (iqamaExpiry && isNaN(new Date(String(iqamaExpiry)).getTime()))
+    return res.status(400).json({ error: "That expiry date isn't a valid date" });
+
+  // Record what actually changed, so the history is a diff rather than "edited".
+  const changes: string[] = [];
+  if (nextName !== emp.name) changes.push(`name: ${emp.name} → ${nextName}`);
+  const nextRole = role == null ? emp.role : String(role).trim() || null;
+  if (nextRole !== emp.role) changes.push(`role: ${emp.role ?? "—"} → ${nextRole ?? "—"}`);
+  const nextExpiry = iqamaExpiry == null ? emp.iqamaExpiry : String(iqamaExpiry).trim() || null;
+  if (nextExpiry !== emp.iqamaExpiry) changes.push(`Iqama expiry: ${emp.iqamaExpiry ?? "—"} → ${nextExpiry ?? "—"}`);
+  if (!changes.length) return res.json({ employee: emp, unchanged: true });
+
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const employee = await prisma.employee.update({
+    where: { id: emp.id },
+    data: {
+      name: nextName, role: nextRole, iqamaExpiry: nextExpiry,
+      history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
+        { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],
+    },
+  });
+  logActivity({ type: "client", message: `Employee updated: ${nextName} (${changes.join(", ")})`, user: me?.name ?? "Staff" });
+  await logAudit({ action: "employee.edit", actorId: a.sub, target: emp.id, detail: changes.join(" · ") });
+  res.json({ employee });
+});
+
 /** Agree a payment date. Pauses dunning for that invoice and stops it driving a suspension. */
 app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;

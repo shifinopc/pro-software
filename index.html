@@ -1283,6 +1283,7 @@
                   <sc-if value="{{ e.former }}" hint-placeholder-val="{{ false }}">
                     <span onClick="{{ e.reinstate }}" title="Bring them back — restores the record and resumes renewals" style="font-size:11px; font-weight:700; color:#0E9355; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Reinstate</span>
                   </sc-if>
+                  <sc-if value="{{ e.canEdit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ e.edit }}" style="font-size:11px; font-weight:600; color:#4B4757; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Edit</span></sc-if>
                   <span onClick="{{ e.view }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">View</span>
                 </div>
               </sc-for>
@@ -2234,11 +2235,12 @@
                 <span onClick="{{ inv.openDetail }}" style="font-weight:700; color:#7C00FF; font-size:12px; cursor:pointer;">{{ inv.no }}</span>
                 <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.desc }}</div><div style="font-size:10px; color:#A9A6B4;">issued {{ inv.date }}</div></div>
                 <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ inv.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.client }}</span></div>
-                <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if><sc-if value="{{ inv.hasPromise }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#6D5BD0; font-weight:600;">{{ inv.promiseLabel }}</div></sc-if></div>
+                <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if><sc-if value="{{ inv.hasPromise }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#6D5BD0; font-weight:600;">{{ inv.promiseLabel }}</div></sc-if><sc-if value="{{ inv.isVoid }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#8C8899;">{{ inv.voidNote }}</div></sc-if></div>
                 <span style="font-size:10.5px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ inv.status }}</span>
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.pay }}" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Record payment</span></sc-if></sc-if>
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.extend }}" title="Agree a payment date — pauses chasing" style="font-size:11px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#6D5BD0; color:#6D5BD0;">Extend</span></sc-if></sc-if>
+                  <sc-if value="{{ inv.canVoid }}" hint-placeholder-val="{{ false }}"><span onClick="{{ inv.voidIt }}" title="Cancel this invoice — it stays on file marked void" style="font-size:11px; font-weight:600; color:#8C8899; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#C0353A; color:#C0353A;">Void</span></sc-if>
                   <span onClick="{{ inv.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="font-size:11px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</span>
                   <span onClick="{{ inv.openDetail }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Open</span>
                 </div>
@@ -3676,6 +3678,61 @@
         </div>
         <div data-hidescroll="true" style="flex:1; overflow-y:auto; background:#F3F1F7; padding:20px;">
           <div data-doc-preview style="background:#fff; max-width:700px; margin:0 auto; padding:26px 30px; box-shadow:0 4px 18px rgba(38,7,77,.12); position:relative; min-height:300px;"></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- Void invoice -->
+  <sc-if value="{{ showVoid }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeVoid }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:480px; padding:22px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Void invoice</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Cancels it · the record stays on file for audit</div></div>
+          <div onClick="{{ closeVoid }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div style="margin-top:16px; background:#FBFAFE; border:1px solid #F0EDF6; border-radius:12px; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="min-width:0;"><div style="font-size:13px; font-weight:700;">{{ voNo }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">{{ voClient }}</div></div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; flex-shrink:0;">{{ voAmount }}</div>
+        </div>
+        <div style="margin-top:12px; font-size:11.5px; color:#7A5B12; background:#FFF8E7; border:1px solid #F5E3B8; border-radius:11px; padding:10px 13px; line-height:1.5;">It stops counting as owed, drops out of ageing and chasing, and the client no longer sees it as payable. It is not deleted.</div>
+        <sc-if value="{{ voHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#FEECEC; border:1px solid #F6CFCF; border-radius:10px; padding:9px 12px; font-size:11.5px; color:#C0353A; font-weight:600;">{{ voErr }}</div>
+        </sc-if>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">WHY? *</div>
+        <div style="display:flex; gap:7px; margin-top:8px; flex-wrap:wrap;">
+          <sc-for list="{{ voPresets }}" as="v" hint-placeholder-count="3">
+            <span onClick="{{ v.pick }}" style="font-size:11.5px; font-weight:600; color:{{ v.color }}; background:{{ v.bg }}; border:1px solid {{ v.border }}; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ v.label }}</span>
+          </sc-for>
+        </div>
+        <input value="{{ voReason }}" onChange="{{ setVoReason }}" placeholder="e.g. Raised against the wrong client" style="margin-top:9px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; font-family:'Inter',sans-serif;">
+        <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
+          <button onClick="{{ closeVoid }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ submitVoid }}" style="background:#C0353A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(192,53,58,.25);" style-hover="filter:brightness(.95);">Void {{ voNo }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- Edit employee -->
+  <sc-if value="{{ showEmpEdit }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeEmpEdit }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:480px; padding:22px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Edit employee</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Changes are recorded in their history</div></div>
+          <div onClick="{{ closeEmpEdit }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <sc-if value="{{ eeHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#FEECEC; border:1px solid #F6CFCF; border-radius:10px; padding:9px 12px; font-size:11.5px; color:#C0353A; font-weight:600;">{{ eeErr }}</div>
+        </sc-if>
+        <div style="margin-top:16px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FULL NAME *</div><input value="{{ eeName }}" onChange="{{ setEeName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE; font-family:'Inter',sans-serif;"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:13px;">
+          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ROLE</div><input value="{{ eeRole }}" onChange="{{ setEeRole }}" placeholder="e.g. Site Engineer" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE; font-family:'Inter',sans-serif;"></div>
+          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">IQAMA EXPIRY</div><input type="date" value="{{ eeExpiry }}" onChange="{{ setEeExpiry }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FBFAFE; font-family:'Inter',sans-serif;"></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
+          <button onClick="{{ closeEmpEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ submitEmpEdit }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save changes</button>
         </div>
       </div>
     </div>
@@ -6949,7 +7006,7 @@ class Component extends DCLogic {
 
     // provider-wide invoices — WIRED to /api/invoices (state.invoicesData). Design samples show only
     // when unauthenticated. Real status → display label; amount rendered in the system currency.
-    const invStatusTone = { Paid: ['#E7F8EF', '#0E9355'], Unpaid: ['#FEF4E2', '#B8860B'], Overdue: ['#FEECEC', '#C0353A'], Draft: ['#F3F1F7', '#6F6C7A'], Pending: ['#EFEBFF', '#6D5BD0'], 'Part paid': ['#E4F4FD', '#0284C7'] };
+    const invStatusTone = { Paid: ['#E7F8EF', '#0E9355'], Unpaid: ['#FEF4E2', '#B8860B'], Overdue: ['#FEECEC', '#C0353A'], Draft: ['#F3F1F7', '#6F6C7A'], Pending: ['#EFEBFF', '#6D5BD0'], 'Part paid': ['#E4F4FD', '#0284C7'], Void: ['#F3F1F7', '#8C8899'] };
     // What has actually been received against each invoice. Without this the list showed the FULL
     // amount as still owing after a part payment, and Record payment pre-filled the full amount
     // again — so a 2,000 invoice with 1,000 received still asked for 2,000.
@@ -6957,7 +7014,7 @@ class Component extends DCLogic {
     const _paidFor = (invId, invNo) => _payRows
       .filter(p9 => (invId && p9.invoiceId === invId) || (!p9.invoiceId && invNo && p9.invoiceNumber === invNo))
       .reduce((s9, p9) => s9 + (Number(p9.amount) || 0), 0);
-    const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid' };
+    const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid', void: 'Void' };
     const invData = this.state.invoicesData;
     const fmtInvDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(+dt) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
     // An unpaid invoice past its due date (or >30 days past issue when no due date is set) shows as Overdue.
@@ -6989,7 +7046,9 @@ class Component extends DCLogic {
         // Only shown when something has been received, so a normal unpaid row stays uncluttered.
         partLabel: paidNum > 0 && outstandingNum > 0 ? fmtCurAs(cur, outstandingNum) + ' still due' : '',
         hasPart: paidNum > 0 && outstandingNum > 0,
-        stBg: t[0], stColor: t[1], payable: status !== 'Draft' && status !== 'Paid' && outstandingNum > 0,
+        // A voided invoice is not payable and must not be chased or extended — it no longer exists
+        // as a debt, even though the record stays on file.
+        stBg: t[0], stColor: t[1], payable: status !== 'Draft' && status !== 'Paid' && status !== 'Void' && outstandingNum > 0,
         initials: String(client).split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         openDetail: () => this.setState({ invDetail: no }),
         // Opens the real form pre-filled for this invoice (was an instant full-amount write with a
@@ -7007,6 +7066,13 @@ class Component extends DCLogic {
           const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
           this.setState({ exOpen: id, exDate: raw.promisedDate || '', exNote: raw.promisedNote || '', exErr: '' });
         },
+        // Void: only offered while nothing has been received. A part-paid invoice must be reconciled
+        // first, so the button simply isn't there rather than failing on click.
+        canVoid: canWrite && !!id && status !== 'Paid' && status !== 'Void' && paidNum === 0,
+        voidIt: () => this.setState({ voOpen: id, voNo: no, voAmount: fmtCurAs(cur, amount), voClient: client, voReason: '', voErr: '' }),
+        isVoid: status === 'Void',
+        voidNote: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
+          return raw.voidReason ? 'Voided — ' + raw.voidReason : ''; })(),
         // Branded print via the uploaded header/footer/watermark (Settings → Print Layout).
         print: () => {
           const raw9 = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
@@ -7027,7 +7093,8 @@ class Component extends DCLogic {
         },
       };
     });
-    const invOutstanding = invoicesFull.filter(v => v.payable).reduce((s2, v) => s2 + v.amountNum, 0);
+    // Sum what is still OWED, not the invoice totals — a part-paid invoice was inflating this tile.
+    const invOutstanding = invoicesFull.filter(v => v.payable).reduce((s2, v) => s2 + v.outstandingNum, 0);
     const invPaidYtd = invoicesFull.filter(v => v.status === 'Paid').reduce((s2, v) => s2 + v.amountNum, 0);
     // Payments page stats — computed from real payment rows; design figures only when unauthenticated.
     const _payReal = Array.isArray(payData) ? payData : null;
@@ -7151,13 +7218,70 @@ class Component extends DCLogic {
       // ---- Record payment (real form; used by the Payments screen AND the invoice rows) ----
       // Previously "recording" a payment silently assumed the full amount, method "Recorded in
       // console" and today's date, with no way to enter a reference or a part payment.
+      // ---- Edit employee modal ----
+      showEmpEdit: !!this.state.eeOpen,
+      eeName: this.state.eeName || '', setEeName: (e9) => this.setState({ eeName: e9.target.value, eeErr: '' }),
+      eeRole: this.state.eeRole || '', setEeRole: (e9) => this.setState({ eeRole: e9.target.value }),
+      eeExpiry: this.state.eeExpiry || '', setEeExpiry: (e9) => this.setState({ eeExpiry: e9.target.value, eeErr: '' }),
+      eeErr: this.state.eeErr || '', eeHasErr: !!(this.state.eeErr || ''),
+      closeEmpEdit: () => this.setState({ eeOpen: null, eeErr: '' }),
+      submitEmpEdit: () => {
+        if (!String(this.state.eeName || '').trim()) return this.setState({ eeErr: 'Name is required' });
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/employees/' + this.state.eeOpen + '/edit', { method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+          body: JSON.stringify({ name: this.state.eeName, role: this.state.eeRole, iqamaExpiry: this.state.eeExpiry }) })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            if (!ok) return this.setState({ eeErr: (j9 && j9.error && String(j9.error).slice(0, 160)) || 'Could not save the changes' });
+            this.setState({ eeOpen: null, eeErr: '' });
+            this.toast(j9 && j9.unchanged ? 'Nothing changed' : 'Employee updated');
+            this._opReload('employees', 'employeesData');
+          })
+          .catch(() => this.setState({ eeErr: 'Server unreachable — nothing was saved' }));
+      },
+      // ---- Void invoice modal ----
+      ...(() => {
+        const reason = this.state.voReason != null ? this.state.voReason : '';
+        return {
+          showVoid: !!this.state.voOpen,
+          voNo: this.state.voNo || '', voAmount: this.state.voAmount || '', voClient: this.state.voClient || '',
+          voReason: reason,
+          setVoReason: (e9) => this.setState({ voReason: e9.target.value, voErr: '' }),
+          voErr: this.state.voErr || '', voHasErr: !!(this.state.voErr || ''),
+          voPresets: ['Raised in error', 'Duplicate invoice', 'Wrong client', 'Work cancelled'].map(label => ({
+            label,
+            color: reason === label ? '#fff' : '#6F6C7A',
+            bg: reason === label ? '#7C00FF' : '#fff',
+            border: reason === label ? '#7C00FF' : '#EDEBF2',
+            pick: () => this.setState({ voReason: label, voErr: '' }),
+          })),
+          closeVoid: () => this.setState({ voOpen: null, voErr: '' }),
+          submitVoid: () => {
+            if (!String(reason).trim()) return this.setState({ voErr: 'Give a reason — it stays on the record' });
+            const t2 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/invoices/' + this.state.voOpen + '/void', { method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+              body: JSON.stringify({ reason: String(reason).trim() }) })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                if (!ok) return this.setState({ voErr: (j9 && j9.error && String(j9.error).slice(0, 180)) || 'Could not void the invoice' });
+                const no9 = this.state.voNo;
+                this.setState({ voOpen: null, voErr: '' });
+                this.toast(no9 + ' voided');
+                this._reloadInvoices && this._reloadInvoices();
+              })
+              .catch(() => this.setState({ voErr: 'Server unreachable — nothing changed' }));
+          },
+        };
+      })(),
       // ---- Suspend account modal (was a window.prompt) ----
       // Shows the debt it's based on and, crucially, warns when the client already has an agreed
       // payment date — suspending someone who has arranged to pay is how a good relationship breaks.
       ...(() => {
         const suId = this.state.suOpen || null;
         const rows = suId ? (Array.isArray(invData) ? invData : []).filter(v9 => v9.companyId === suId) : [];
-        const open = rows.filter(v9 => !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()));
+        const open = rows.filter(v9 => !['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase()));
         const owed = open.reduce((s9, v9) => s9 + Math.max(0, (Number(v9.amount) || 0) - _paidFor(v9.id, v9.number)), 0);
         const daysOver = (v9) => { const d9 = v9.dueDate ? new Date(v9.dueDate).getTime() : NaN;
           return Number.isFinite(d9) ? Math.round((Date.now() - d9) / 86400000) : 0; };
@@ -8066,6 +8190,9 @@ class Component extends DCLogic {
           exitAccept: canWrite && !former && ex9 === 'exit_requested',
           exitFinish: canWrite && !former && ex9 === 'exiting',
           exitHint: e9.exitDate ? 'Last day ' + e9.exitDate + (e9.exitReason ? ' · ' + String(e9.exitReason).replace(/_/g, ' ') : '') : '',
+          canEdit: canWrite && !former,
+          edit: () => this.setState({ eeOpen: e9.id, eeName: e9.name || '', eeRole: e9.role || '',
+            eeExpiry: (e9.iqamaExpiry && !isNaN(new Date(e9.iqamaExpiry).getTime())) ? new Date(e9.iqamaExpiry).toISOString().slice(0, 10) : '', eeErr: '' }),
           startExit: () => this._empExit(e9.id, 'exiting', name),
           finishExit: () => this._empExit(e9.id, 'exited', name),
           cancelExit: () => this._empExit(e9.id, 'cancel', name),
@@ -9657,7 +9784,12 @@ class Component extends DCLogic {
     // WIRED: revenue + invoice counts from real invoices (state.invoicesData), in the system currency.
     const repInv = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : null;
     const repPaid = (repInv || []).filter(v => String(v.status).toLowerCase() === 'paid').reduce((s2, v) => s2 + (Number(v.amount) || 0), 0);
-    const repOutstanding = (repInv || []).filter(v => ['pending', 'overdue', 'unpaid'].includes(String(v.status).toLowerCase())).reduce((s2, v) => s2 + (Number(v.amount) || 0), 0);
+    // Was a whitelist of pending/overdue/unpaid — which SILENTLY OMITTED every invoice with status
+    // "sent" (what the create form issues) — and summed the full amount, ignoring part payments.
+    // Now: anything not paid/draft/void, counting only what is still owed.
+    const repOutstanding = (repInv || [])
+      .filter(v => !['paid', 'draft', 'void'].includes(String(v.status).toLowerCase()))
+      .reduce((s2, v) => s2 + Math.max(0, (Number(v.amount) || 0) - _paidFor(v.id, v.number)), 0);
     const reportStats = [
       ['Revenue · collected', repInv ? fmtCur(repPaid) : 'SAR 1.24M', 'paid', '#0E9355', '#E7F8EF', 'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
       ['Outstanding', repInv ? fmtCur(repOutstanding) : 'SAR 210k', 'unpaid', '#C0353A', '#FEECEC', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2'],
@@ -9727,7 +9859,7 @@ class Component extends DCLogic {
     const REPORTS = [
       { name: 'Receivables ageing', sub: 'Every unpaid invoice, bucketed by how late it is', cat: 'Finance', color: '#0E9355', bg: '#E7F8EF',
         build: () => {
-          const open = _rInv.filter(v9 => !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()) && _owed(v9) > 0);
+          const open = _rInv.filter(v9 => !['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase()) && _owed(v9) > 0);
           return [['Invoice', 'Client', 'Issued', 'Due', 'Days overdue', 'Ageing band', 'Invoice total', 'Paid', 'Outstanding', 'Agreed payment date'],
             ...open.sort((a9, b9) => (_daysOver(b9.dueDate) ?? -1) - (_daysOver(a9.dueDate) ?? -1)).map(v9 => {
               const d9 = _daysOver(v9.dueDate);
@@ -9758,7 +9890,7 @@ class Component extends DCLogic {
           ..._rCo.map(c9 => {
             const staff = _rEmp.filter(e9 => e9.companyId === c9.id && !e9.archived).length;
             const docs = _rDoc.filter(d9 => d9.companyId === c9.id);
-            const owed = _rInv.filter(v9 => v9.companyId === c9.id && !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()))
+            const owed = _rInv.filter(v9 => v9.companyId === c9.id && !['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase()))
               .reduce((s9, v9) => s9 + _owed(v9), 0);
             return [c9.name, c9.status || '', c9.city || '', staff, docs.length,
               docs.filter(d9 => d9.status === 'expiring').length, docs.filter(d9 => d9.status === 'overdue').length, owed];
