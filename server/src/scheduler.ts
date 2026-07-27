@@ -17,6 +17,8 @@ export type RecomputeResult = {
   scanned: number;
   changed: number;
   skippedInProgress: number;
+  /** Documents whose expiry is missing or unparseable — tracked, not silently ignored. */
+  undated: number;
   transitions: { docType: string; person: string; from: string; to: string; daysLeft: number }[];
 };
 
@@ -30,14 +32,32 @@ export type RecomputeResult = {
 export async function recomputeCompliance(): Promise<RecomputeResult> {
   const types = await prisma.documentType.findMany({ select: { name: true, leadDays: true } });
   const leadFor = new Map(types.map(t => [t.name, t.leadDays ?? 30]));
-  const docs = await prisma.document.findMany({ where: { expiryDate: { not: null } } });
+  // ALL documents, not just dated ones. An undated document used to be invisible here and keep its
+  // creation-time default of "valid" forever — a compliance system reporting a document it knows
+  // nothing about as compliant. They are now marked "unknown" so a human is asked for the date.
+  const docs = await prisma.document.findMany();
 
   const now = Date.now();
-  const out: RecomputeResult = { scanned: 0, changed: 0, skippedInProgress: 0, transitions: [] };
+  const out: RecomputeResult = { scanned: 0, changed: 0, skippedInProgress: 0, undated: 0, transitions: [] };
 
   for (const d of docs) {
-    const t = new Date(d.expiryDate!).getTime();
-    if (isNaN(t)) continue; // unparseable date — leave it alone rather than guess
+    const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN;
+    if (isNaN(t)) {
+      // Missing or unparseable ("6786786"). We cannot invent an expiry date — the honest state is
+      // "we don't know", and an unparseable string is normalised away so it can't masquerade as one.
+      out.undated++;
+      const inFlight = d.status === "in_progress";
+      const needsFix = !inFlight && (d.status !== "unknown" || (d.expiryDate != null && isNaN(t)));
+      if (needsFix) {
+        await prisma.document.update({
+          where: { id: d.id },
+          data: { status: "unknown", daysLeft: 0, ...(d.expiryDate != null ? { expiryDate: null } : {}) },
+        });
+        out.changed++;
+        out.transitions.push({ docType: d.docType, person: d.person, from: d.status, to: "unknown", daysLeft: 0 });
+      }
+      continue;
+    }
     out.scanned++;
 
     const daysLeft = Math.round((t - now) / DAY);
@@ -82,7 +102,7 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     const moved = compliance.transitions.map(t => `${t.docType} — ${t.person}: ${t.from}→${t.to}`).join("; ");
     await logAudit({
       action: "cron.compliance_recompute",
-      target: `${compliance.changed}/${compliance.scanned} documents`,
+      target: `${compliance.changed}/${compliance.scanned} documents${compliance.undated ? ` · ${compliance.undated} undated` : ""}`,
       detail: [`source=${source}`, moved && `status changes: ${moved}`].filter(Boolean).join(" · ").slice(0, 900),
     });
   }

@@ -4525,8 +4525,11 @@ class Component extends DCLogic {
         const d7 = mine.find(x7 => x7.docType === tn);
         if (!d7) return { label: tn, kind: 'miss', tip: 'Not on file' };
         const st = String(d7.status || 'valid').toLowerCase();
-        const kind = (st === 'overdue' || st === 'expired') ? 'miss' : st === 'expiring' ? 'warn' : 'ok';
-        const tip = d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
+        // 'unknown' = we hold the document but no expiry date. It must NOT render as a green tick:
+        // reporting an undated document as compliant is a false assurance.
+        const kind = (st === 'overdue' || st === 'expired') ? 'miss' : (st === 'expiring' || st === 'unknown') ? 'warn' : 'ok';
+        const tip = st === 'unknown' ? 'On file — no expiry date recorded'
+          : d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
         return { label: tn, kind, tip };
       });
       return {

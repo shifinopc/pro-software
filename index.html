@@ -2096,6 +2096,7 @@
           <div style="display:flex; align-items:center; gap:9px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:8px 16px;"><span style="width:8px; height:8px; border-radius:99px; background:#12B76A;"></span><span style="font-size:12.5px; color:#4B4757;">Valid</span><span style="font-size:13px; font-weight:700;">{{ docChipValid }}</span></div>
           <div style="display:flex; align-items:center; gap:9px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:8px 16px;"><span style="width:8px; height:8px; border-radius:99px; background:#F59E0B;"></span><span style="font-size:12.5px; color:#4B4757;">Expiring</span><span style="font-size:13px; font-weight:700;">{{ docChipExpiring }}</span></div>
           <div style="display:flex; align-items:center; gap:9px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:8px 16px;"><span style="width:8px; height:8px; border-radius:99px; background:#E5484D;"></span><span style="font-size:12.5px; color:#4B4757;">Expired</span><span style="font-size:13px; font-weight:700;">{{ docChipExpired }}</span></div>
+          <sc-if value="{{ docChipUndatedAny }}" hint-placeholder-val="{{ false }}"><div title="Held on file with no expiry date — not tracked for renewal until a date is added" style="display:flex; align-items:center; gap:9px; background:#fff; border:1px solid #DDD9E6; border-radius:99px; padding:8px 16px;"><span style="width:8px; height:8px; border-radius:99px; background:#8C8899;"></span><span style="font-size:12.5px; color:#4B4757;">No expiry date</span><span style="font-size:13px; font-weight:700;">{{ docChipUndated }}</span></div></sc-if>
         </section>
         <sc-if value="{{ docScopeCompany }}" hint-placeholder-val="{{ true }}"><div style="display:flex; flex-direction:column; gap:14px;">
         <div style="display:flex; align-items:center; gap:8px; background:#FBF7FF; border:1px solid #EEE0FF; border-radius:12px; padding:10px 15px;">
@@ -6349,6 +6350,10 @@ class Component extends DCLogic {
       docChipValid: _docsReal ? _docsReal.filter(d9 => d9.status === 'valid').length : 74,
       docChipExpiring: _docsReal ? _docsReal.filter(d9 => d9.status === 'expiring').length : 7,
       docChipExpired: _docsReal ? _docsReal.filter(d9 => ['overdue', 'expired'].includes(String(d9.status))).length : 3,
+      // Documents held with no usable expiry date. They are tracked by nothing until someone adds one,
+      // so they get their own count rather than quietly disappearing from Valid/Expiring/Expired.
+      docChipUndated: _docsReal ? String(_docsReal.filter(d9 => d9.status === 'unknown' || !d9.expiryDate).length) : '0',
+      docChipUndatedAny: _docsReal ? _docsReal.some(d9 => d9.status === 'unknown' || !d9.expiryDate) : false,
     };
 
     const updates = [
@@ -7655,7 +7660,7 @@ class Component extends DCLogic {
       };
 
       // Documents listing (client-scoped)
-      const docStatusTone = { Valid: ['#E7F8EF', '#0E9355'], 'Expiring soon': ['#FEF4E2', '#B8860B'], Expired: ['#FEECEC', '#C0353A'], Processing: ['#EFEBFF', '#6D5BD0'] };
+      const docStatusTone = { Valid: ['#E7F8EF', '#0E9355'], 'Expiring soon': ['#FEF4E2', '#B8860B'], Expired: ['#FEECEC', '#C0353A'], Processing: ['#EFEBFF', '#6D5BD0'], 'No expiry date': ['#F3F1F7', '#6F6C7A'] };
       // WIRED: this client's REAL documents. Was a literal six-row list (Trade License / M. Fernandes
       // / A. Khan) plus six invented folders, shown identically for every client.
       const _cdDocs = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
@@ -7665,6 +7670,8 @@ class Component extends DCLogic {
         if (s7 === 'in_progress') return 'Processing';
         if (s7 === 'overdue' || s7 === 'expired') return 'Expired';
         if (s7 === 'expiring') return 'Expiring soon';
+        // No usable expiry date — say so instead of defaulting to "Valid".
+        if (s7 === 'unknown' || !d7.expiryDate) return 'No expiry date';
         const n7 = Number(d7.daysLeft);
         return Number.isFinite(n7) && n7 < 0 ? 'Expired' : Number.isFinite(n7) && n7 <= 30 ? 'Expiring soon' : 'Valid';
       };
@@ -7685,8 +7692,10 @@ class Component extends DCLogic {
       clDetailApi.cdDocFolders = Object.keys(_cdByType).map(type7 => {
         const rows7 = _cdByType[type7];
         const worst7 = rows7.map(_cdDocStatus);
-        const status = worst7.includes('Expired') ? 'Action needed' : worst7.includes('Expiring soon') ? 'Expiring soon' : 'Up to date';
-        const tone7 = status === 'Action needed' ? ['#C0353A', '#FEECEC'] : status === 'Expiring soon' ? ['#B8860B', '#FEF4E2'] : ['#0E9355', '#E7F8EF'];
+        const status = worst7.includes('Expired') ? 'Action needed' : worst7.includes('Expiring soon') ? 'Expiring soon'
+          : worst7.includes('No expiry date') ? 'Needs a date' : 'Up to date';
+        const tone7 = status === 'Action needed' ? ['#C0353A', '#FEECEC'] : status === 'Expiring soon' ? ['#B8860B', '#FEF4E2']
+          : status === 'Needs a date' ? ['#6F6C7A', '#F3F1F7'] : ['#0E9355', '#E7F8EF'];
         return { label: type7, files: rows7.length, status, color: tone7[0], bg: tone7[1],
           open: () => this.setState({ active: 'Compliance', activeGroup: 'Clients & Compliance', compClientScope: clRow.name }) };
       });
@@ -7990,8 +7999,11 @@ class Component extends DCLogic {
         const d7 = mine.find(x7 => x7.docType === tn);
         if (!d7) return { label: tn, kind: 'miss', tip: 'Not on file' };
         const st = String(d7.status || 'valid').toLowerCase();
-        const kind = (st === 'overdue' || st === 'expired') ? 'miss' : st === 'expiring' ? 'warn' : 'ok';
-        const tip = d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
+        // 'unknown' = we hold the document but no expiry date. It must NOT render as a green tick:
+        // reporting an undated document as compliant is a false assurance.
+        const kind = (st === 'overdue' || st === 'expired') ? 'miss' : (st === 'expiring' || st === 'unknown') ? 'warn' : 'ok';
+        const tip = st === 'unknown' ? 'On file — no expiry date recorded'
+          : d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
         return { label: tn, kind, tip };
       });
       return {
