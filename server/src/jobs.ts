@@ -12,7 +12,7 @@
 import { prisma } from "./db.js";
 import { logActivity, logNotification } from "./auth.js";
 import { startInstance } from "./workflow.js";
-import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised } from "./notify.js";
+import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue } from "./notify.js";
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -409,5 +409,95 @@ export async function resumeParkedTasks(): Promise<ResumeResult> {
       } catch (e: any) { out.details.push(`Phase-2 start FAILED for ${t.title}: ${e?.message ?? e}`); }
     }
   }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// #5 — INVOICE DUNNING
+// An invoice past its due date used to go overdue SILENTLY: "Overdue" was computed in the UI from
+// dueDate and never persisted, so nothing could act on it — no chase to the client, no flag for the
+// team, and reports that read `status` never saw it.
+//
+// This job does two separate things:
+//   a) PERSISTS the overdue status, so the database agrees with what the screens show.
+//   b) Chases the client on a fixed ladder (1 / 7 / 14 / 30 days past due).
+//
+// Idempotency is the whole game here, because the tick runs HOURLY. Each rung is sent at most once
+// per invoice via Notification.dedupeKey — without that a client gets 24 chasers a day.
+// Never chases: drafts (nobody has released them), paid invoices, or anything already settled by
+// payments even if the status column hasn't caught up.
+// ─────────────────────────────────────────────────────────────
+export type DunningResult = {
+  scanned: number; markedOverdue: number; chased: number; settledButUnmarked: number; details: string[];
+};
+
+/** Days past due at which we chase. Ascending; each fires once. */
+const DUNNING_LADDER = [1, 7, 14, 30];
+/** Statuses that mean "money is owed" — a draft has not been released, a paid one is done. */
+const CHASEABLE = new Set(["pending", "unpaid", "sent", "overdue"]);
+
+export async function chaseOverdueInvoices(): Promise<DunningResult> {
+  const out: DunningResult = { scanned: 0, markedOverdue: 0, chased: 0, settledButUnmarked: 0, details: [] };
+
+  const invoices = await prisma.invoice.findMany({
+    where: { NOT: { dueDate: null }, status: { in: [...CHASEABLE] } },
+    include: { company: { select: { name: true } } },
+  });
+
+  for (const inv of invoices) {
+    const due = parseDate(inv.dueDate);
+    if (due === null) continue; // unparseable due date — leave it alone rather than guess
+    out.scanned++;
+
+    const daysOverdue = -daysUntil(due);
+    if (daysOverdue < 1) continue; // not due yet (or due today) — nothing to chase
+
+    // Settlement is decided from the PAYMENTS, not the status column: a part-paid invoice may still
+    // owe money, and a fully-paid one whose status was never flipped must not be chased.
+    const paid = await prisma.payment.aggregate({ where: { invoiceId: inv.id }, _sum: { amount: true } });
+    const outstanding = inv.amount - (paid._sum.amount ?? 0);
+    if (outstanding <= 0) {
+      // Fully covered but still marked unpaid — correct the record instead of chasing.
+      if (inv.status !== "paid") {
+        await prisma.invoice.update({ where: { id: inv.id }, data: { status: "paid" } });
+        out.settledButUnmarked++;
+        out.details.push(`${inv.number}: payments cover it — marked paid`);
+      }
+      continue;
+    }
+
+    // (a) Persist the overdue flag so the DB matches what every screen already shows.
+    if (inv.status !== "overdue") {
+      await prisma.invoice.update({ where: { id: inv.id }, data: { status: "overdue" } });
+      out.markedOverdue++;
+      logActivity({ type: "finance", message: `Invoice ${inv.number} is overdue (${daysOverdue}d)${inv.clientName ? ` — ${inv.clientName}` : ""}` });
+    }
+
+    // (b) Chase on the ladder: the highest rung reached that hasn't been sent yet.
+    const rung = [...DUNNING_LADDER].reverse().find((d) => daysOverdue >= d);
+    if (rung == null) continue;
+
+    const first = await notifyOnce(`dunning:${inv.id}:${rung}`, {
+      type: "overdue",
+      title: `Invoice ${inv.number} overdue ${rung}d${inv.clientName ? ` — ${inv.clientName}` : ""}`,
+      message: `${inv.currency} ${outstanding.toLocaleString()} outstanding · due ${inv.dueDate}`,
+    });
+    if (!first) continue; // this rung already went out — the hourly tick must not repeat it
+
+    await notifyInvoiceOverdue({
+      companyId: inv.companyId,
+      number: inv.number,
+      outstanding,
+      currency: inv.currency,
+      dueDate: inv.dueDate,
+      daysOverdue,
+      // The last rung also alerts the team: at 30 days past due this stops being a reminder.
+      alsoStaff: rung === DUNNING_LADDER[DUNNING_LADDER.length - 1],
+      clientName: inv.clientName ?? inv.company?.name ?? null,
+    });
+    out.chased++;
+    out.details.push(`${inv.number}: ${rung}d rung · ${inv.currency} ${outstanding.toLocaleString()} outstanding`);
+  }
+
   return out;
 }

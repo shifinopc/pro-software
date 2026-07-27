@@ -234,6 +234,51 @@ export function notifyDocumentExpiring(a: { companyId?: string | null; docType?:
   });
 }
 
+/**
+ * Dunning. The tone escalates with the ladder rung rather than sending the same nag four times, and
+ * the amount quoted is what is STILL OUTSTANDING — part payments must be acknowledged, not ignored.
+ */
+export function notifyInvoiceOverdue(a: {
+  companyId?: string | null; number?: string | null; outstanding: number; currency?: string | null;
+  dueDate?: string | null; daysOverdue: number; alsoStaff?: boolean; clientName?: string | null;
+}) {
+  const amt = `${a.currency || "SAR"} ${Number(a.outstanding).toLocaleString()}`;
+  const late = a.daysOverdue === 1 ? "1 day" : `${a.daysOverdue} days`;
+  const firm = a.daysOverdue >= 30;
+  notify({
+    rule: "Invoice overdue",
+    audience: "client",
+    companyId: a.companyId,
+    subject: firm
+      ? `Overdue ${late}: invoice ${a.number ?? ""} — ${amt}`.trim()
+      : `Reminder: invoice ${a.number ?? ""} is ${late} past due`.trim(),
+    heading: firm ? "This invoice is seriously overdue" : "A payment reminder",
+    lines: [
+      `Invoice <b>${esc(a.number ?? "")}</b> was due ${esc(a.dueDate ?? "—")} and is now <b>${esc(late)}</b> past due.`,
+      `Outstanding: <b>${esc(amt)}</b>`,
+      firm
+        ? "Please settle this, or reply to let us know when payment is coming — we'd rather hear from you than chase."
+        : "If you've already paid, tell us in the portal and we'll confirm it against the invoice.",
+    ],
+    cta: { label: "View the invoice", url: `${portalUrl()}/portal/invoices` },
+  });
+  // At the final rung the team needs to know too — this is no longer a routine reminder.
+  if (a.alsoStaff) {
+    notify({
+      rule: "Invoice overdue",
+      audience: "staff",
+      subject: `Unpaid ${late}: ${a.number ?? ""}${a.clientName ? ` — ${a.clientName}` : ""}`.trim(),
+      heading: "An invoice has gone unpaid for 30 days",
+      lines: [
+        `<b>${esc(a.number ?? "")}</b>${a.clientName ? ` — ${esc(a.clientName)}` : ""}`,
+        `Outstanding: <b>${esc(amt)}</b> · due ${esc(a.dueDate ?? "—")}`,
+        "The client has had reminders at 1, 7, 14 and 30 days.",
+      ],
+      cta: { label: "Open invoices", url: `${consoleUrl()}/invoices` },
+    });
+  }
+}
+
 export function notifySlaBreach(a: { title: string; detail: string }) {
   notify({
     rule: "SLA breached",

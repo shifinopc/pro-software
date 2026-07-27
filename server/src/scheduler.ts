@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
-import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks } from "./jobs.js";
+import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices } from "./jobs.js";
 
 const DAY = 86400000;
 
@@ -123,7 +123,16 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     });
   }
 
-  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked };
+  const dunning = await safely("dunning", chaseOverdueInvoices);
+  if ("chased" in dunning && (dunning.chased || dunning.markedOverdue || dunning.settledButUnmarked)) {
+    await logAudit({
+      action: "cron.invoices_chased",
+      target: `${dunning.chased} chased, ${dunning.markedOverdue} marked overdue, ${dunning.settledButUnmarked} auto-settled`,
+      detail: [`source=${source}`, dunning.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning };
 }
 
 let timer: NodeJS.Timeout | null = null;
@@ -143,6 +152,7 @@ export function startScheduler() {
         "started" in r.renewals && r.renewals.started && `renewals ${r.renewals.started}`,
         "escalated" in r.sla && r.sla.escalated.length && `sla ${r.sla.escalated.length}`,
         "renewed" in r.billing && r.billing.renewed && `billed ${r.billing.invoiced}`,
+        "chased" in r.dunning && r.dunning.chased && `chased ${r.dunning.chased}`,
       ].filter(Boolean);
       if (bits.length) console.log(`[cron] ${bits.join(" · ")} (${r.ms}ms)`);
     } catch (e: any) {
