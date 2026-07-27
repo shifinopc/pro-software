@@ -15,6 +15,24 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Printing happens in this page, not a pop-up window: pop-ups get blocked, and a blocked print is
+     a dead button with no explanation. While `printing-doc` is on <body> everything is hidden except
+     the print host. Hidden by VISIBILITY rather than display:none — the app's own root is an ancestor
+     of nothing we print, but display:none on body's children is how you end up printing a blank page. */
+  @media print {
+    body.printing-doc { background:#fff !important; }
+    body.printing-doc * { visibility:hidden !important; }
+    body.printing-doc #inv-print-host,
+    body.printing-doc #inv-print-host * { visibility:visible !important; }
+    /* No `padding` here on purpose — the inset is injected per-print as an ID rule, and @page margin
+       stays 0 so the browser's "Default" margin setting adds nothing on top of it. */
+    body.printing-doc #inv-print-host {
+      position:absolute !important; left:0 !important; top:0 !important;
+      width:100% !important; background:#fff !important;
+    }
+  }
+  /* Kept in the layout (not display:none — that would not print) but out of sight. */
+  #inv-print-host { position:fixed; left:-200vw; top:0; width:210mm; background:#fff; }
   html,body{margin:0;padding:0;background:#FCFBFE;font-family:'Inter',system-ui,sans-serif;color:#1A1523;-webkit-font-smoothing:antialiased;}
   a{color:#7C00FF;text-decoration:none;font-weight:600;} a:hover{color:#5B00BC;}
   *{box-sizing:border-box;}
@@ -4020,20 +4038,31 @@ class Component extends DCLogic {
       const items = Array.isArray(inv.items) && inv.items.length
         ? inv.items.map(it => '<tr><td>' + esc(it.name) + '</td><td style="text-align:center;">' + esc(it.units ?? 1) + '</td><td style="text-align:right;">' + money(it.price) + '</td><td style="text-align:right;">' + money((Number(it.units) || 1) * (Number(it.price) || 0)) + '</td></tr>').join('')
         : '<tr><td colspan="4" style="color:#666;">' + esc(inv.services || 'Professional services') + '</td></tr>';
-      const w = window.open('', '_blank');
-      if (!w) return this.toast('Allow pop-ups to print this invoice');
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Invoice ' + esc(inv.number) + '</title><style>'
-        + '@page{size:A4;margin:18mm}body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0}'
-        + '.band{background:linear-gradient(110deg,#26074D,#7C00FF);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:flex-end}'
-        + '.band b{font-size:16px}.band span{font-size:11px;opacity:.9}'
-        + '.meta{display:flex;justify-content:space-between;margin-top:18px;font-size:11.5px;color:#555}'
-        + '.meta .lb{font-size:8.5px;font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
-        + 'table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:16px}'
-        + 'th{background:#F3EFFA;text-align:left;font-size:9px;color:#555}th,td{padding:8px 10px;border-bottom:1px solid #EEE}'
-        + '.tot{width:250px;margin-left:auto;font-size:11.5px;margin-top:14px}'
-        + '.tot div{display:flex;justify-content:space-between;padding:4px 0}'
-        + '.tot .g{border-top:2px solid #7C00FF;font-weight:700;font-size:14px;padding-top:7px;color:#7C00FF}'
-        + '</style></head><body>'
+      const MARGIN_MM = 18;
+      const old = document.getElementById('inv-print-host');
+      if (old) old.remove();
+      const host = document.createElement('div');
+      host.id = 'inv-print-host';
+      const page = document.createElement('style');
+      page.id = 'inv-print-page';
+      page.textContent = '@page{size:A4;margin:0}#inv-print-host{padding:' + MARGIN_MM + 'mm !important}';
+      document.head.appendChild(page);
+      // Every selector is scoped to #inv-print-host: this <style> now lives in the portal document,
+      // so a bare `table{...}` would restyle the whole app, not just the invoice.
+      const H = '#inv-print-host ';
+      host.innerHTML = ('<style>'
+        + '#inv-print-host{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;background:#fff}'
+        + H + '.band{background:linear-gradient(110deg,#26074D,#7C00FF);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:flex-end;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + H + '.band b{font-size:16px}' + H + '.band span{font-size:11px;opacity:.9}'
+        + H + '.meta{display:flex;justify-content:space-between;margin-top:18px;font-size:11.5px;color:#555}'
+        + H + '.meta .lb{font-size:8.5px;font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
+        + H + 'table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:16px}'
+        + H + 'th{background:#F3EFFA;text-align:left;font-size:9px;color:#555;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+        + H + 'th,' + H + 'td{padding:8px 10px;border-bottom:1px solid #EEE}'
+        + H + '.tot{width:250px;margin-left:auto;font-size:11.5px;margin-top:14px}'
+        + H + '.tot div{display:flex;justify-content:space-between;padding:4px 0}'
+        + H + '.tot .g{border-top:2px solid #7C00FF;font-weight:700;font-size:14px;padding-top:7px;color:#7C00FF}'
+        + '</style>'
         + '<div class="band"><b>' + esc(org) + '</b><span>INVOICE ' + esc(inv.number) + '</span></div>'
         + '<div class="meta"><div><div class="lb">BILL TO</div><div style="font-weight:700;color:#1A1523;font-size:13px;">' + esc(this.state.company || '') + '</div></div>'
         + '<div style="text-align:right;"><div class="lb">ISSUED</div><div>' + esc(inv.date || '—') + '</div>'
@@ -4042,11 +4071,19 @@ class Component extends DCLogic {
         + '<div class="tot"><div><span>Invoice total</span><span>' + money(inv.amount) + '</span></div>'
         + (paidAmt > 0 ? '<div><span>Received</span><span>-' + money(paidAmt) + '</span></div>' : '')
         + '<div class="g"><span>' + (owed > 0 ? 'Amount due' : 'Paid in full') + '</span><span>' + money(owed) + '</span></div></div>'
-        + '<div style="margin-top:20px;font-size:10px;color:#888;">This is your copy. For a stamped original, ask ' + esc(org) + '.</div>'
-        + '<scr' + 'ipt>(function(){function go(){try{window.focus();window.print();}catch(e){}}'
-        + 'if(document.readyState==="complete")setTimeout(go,150);else window.addEventListener("load",function(){setTimeout(go,150);});})();</scr' + 'ipt>'
-        + '</body></html>');
-      w.document.close();
+        + '<div style="margin-top:20px;font-size:10px;color:#888;">This is your copy. For a stamped original, ask ' + esc(org) + '.</div>');
+      document.body.appendChild(host);
+
+      const cleanup = () => {
+        document.body.classList.remove('printing-doc');
+        const h = document.getElementById('inv-print-host'); if (h) h.remove();
+        const s = document.getElementById('inv-print-page'); if (s) s.remove();
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      setTimeout(cleanup, 60000); // never leave the portal stuck in print mode
+      document.body.classList.add('printing-doc');
+      setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
     };
     this._loadSvcItems = () => {
       const tok = credTok(); if (!tok) return;
