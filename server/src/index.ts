@@ -785,6 +785,48 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
   res.json({ invoice });
 });
 
+// ── Invoice approval ─────────────────────────────────────────────────
+// Every invoice is created as a DRAFT and only becomes a real receivable once someone approves it.
+// That is what makes the draft stage safe to edit: nothing has been sent, nothing is owed, and the
+// client has not been told about it. Approval is the single moment the bill becomes real, so it is
+// also the only place the "you have been invoiced" email goes out.
+app.post("/api/invoices/:id/approve", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const inv = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+  if (String(inv.status).toLowerCase() !== "draft")
+    return res.status(409).json({ error: `${inv.number} is already approved` });
+  if (!inv.companyId && !inv.clientName)
+    return res.status(400).json({ error: "Set a client before approving this invoice" });
+  if (!(Number(inv.amount) > 0))
+    return res.status(400).json({ error: "An invoice with no amount cannot be approved" });
+  // Conditional update, not a plain update: read-then-write leaves a window where two clicks both
+  // pass the check above and the client is emailed the same invoice twice. Only the request that
+  // actually flips the row out of `draft` goes on to notify.
+  const claimed = await prisma.invoice.updateMany({ where: { id: inv.id, status: "draft" }, data: { status: "pending" } });
+  if (claimed.count === 0) return res.status(409).json({ error: `${inv.number} is already approved` });
+  const invoice = await prisma.invoice.findUnique({ where: { id: inv.id } });
+  if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+  logActivity({ type: "finance", message: `Invoice ${inv.number} approved${inv.clientName ? ` — ${inv.clientName}` : ""}` });
+  await logAudit({ action: "invoice.approve", actorId: a.sub, target: inv.id, detail: `${inv.number} · ${inv.currency} ${inv.amount}` });
+  notifyInvoiceRaised({ companyId: invoice.companyId, number: invoice.number, amount: invoice.amount, currency: invoice.currency, dueDate: invoice.dueDate });
+  res.json({ invoice });
+});
+
+// An approved invoice is a document the client has been sent; editing it behind their back would
+// make the copy they hold disagree with ours. Corrections go through void + reissue instead.
+// Registered BEFORE the generic /api/invoices CRUD mount so it runs first and falls through on GET.
+app.use("/api/invoices", requireAuth, requireStaff, async (req, res, next) => {
+  if (req.method !== "PUT" && req.method !== "PATCH") return next();
+  const id = req.path.replace(/^\//, "").split("/")[0];
+  if (!id) return next();
+  const inv = await prisma.invoice.findUnique({ where: { id } });
+  if (!inv) return next(); // let the CRUD layer answer 404 in its own shape
+  if (String(inv.status).toLowerCase() !== "draft")
+    return res.status(409).json({ error: `${inv.number} has been approved — void it and reissue to change it` });
+  next();
+});
+
 // ── ZATCA QR for printed tax invoices ────────────────────────────────
 // Saudi e-invoicing mandates a QR carrying a base64 TLV payload with five tags: seller name, seller
 // VAT number, invoice timestamp, invoice total (incl. VAT) and the VAT amount. Rendered server-side

@@ -2283,6 +2283,8 @@
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.pay }}" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Record payment</span></sc-if></sc-if>
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.extend }}" title="Agree a payment date — pauses chasing" style="font-size:11px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#6D5BD0; color:#6D5BD0;">Extend</span></sc-if></sc-if>
+                  <sc-if value="{{ inv.isDraft }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.editDraft }}" title="Drafts can still be changed — an approved invoice can't" style="font-size:11px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit</span></sc-if></sc-if>
+                  <sc-if value="{{ inv.isDraft }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.approve }}" title="Issue this invoice — it becomes payable and the client is emailed" style="font-size:11px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Approve</span></sc-if></sc-if>
                   <sc-if value="{{ inv.canVoid }}" hint-placeholder-val="{{ false }}"><span onClick="{{ inv.voidIt }}" title="Cancel this invoice — it stays on file marked void" style="font-size:11px; font-weight:600; color:#8C8899; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#C0353A; color:#C0353A;">Void</span></sc-if>
                   <span onClick="{{ inv.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="font-size:11px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</span>
                   <span onClick="{{ inv.openDetail }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Open</span>
@@ -4053,10 +4055,9 @@
           <div data-hidescroll="true" style="overflow-y:auto; padding:20px 26px; border-right:1px solid #F0EDF6;">
             <sc-if value="{{ ciErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ciErr }}</div></sc-if>
             <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">① CLIENT</div>
-            <div style="position:relative; margin-top:7px;"><div data-dd onClick="{{ ddCiClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ciClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCiClientOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
+            <div style="position:relative; margin-top:7px;"><div data-dd onClick="{{ ddCiClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ciClientColor }};">{{ ciClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCiClientOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
             <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.06em; margin-top:18px;">② DETAILS</div>
             <div style="display:flex; gap:10px; margin-top:7px;">
-              <div style="flex:1;"><div style="font-size:9.5px; font-weight:700; color:#A9A6B4;">STATUS</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddCiStatusToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ciStatusVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCiStatusOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <div style="flex:1;"><div style="font-size:9.5px; font-weight:700; color:#A9A6B4;">ISSUED</div><input value="{{ ciIssued }}" onChange="{{ setCiIssued }}" type="date" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:12.5px; background:#FCFBFE;"></div>
               <div style="flex:1;"><div style="font-size:9.5px; font-weight:700; color:#A9A6B4;">DUE</div><input value="{{ ciDue }}" onChange="{{ setCiDue }}" type="date" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:12.5px; background:#FCFBFE;"></div>
             </div>
@@ -4078,24 +4079,13 @@
             </div>
             <div style="margin-top:14px;"><div style="font-size:9.5px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea value="{{ ciNotes }}" onChange="{{ setCiNotes }}" placeholder="Printed on the invoice. Terms &amp; footer come from Print Layout." rows="2" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:12px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
           </div>
-          <!-- preview pane -->
+          <!-- preview pane — the REAL document, built by _docHtml exactly as it prints (see _paintCiPreview) -->
           <div data-hidescroll="true" style="overflow-y:auto; background:#F6F4FB; padding:22px;">
-            <div style="background:#fff; border-radius:12px; box-shadow:0 4px 18px rgba(38,7,77,.08); padding:26px; min-height:100%;">
-              <div style="display:flex; align-items:flex-start; justify-content:space-between;"><div><img src="stimes-icon.svg" width="30" height="30" alt=""><div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; margin-top:8px;">STIMES PRO</div><div style="font-size:9px; color:#A9A6B4;">PRO Services · Dubai, UAE</div></div><div style="text-align:right;"><div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; color:#7C00FF;">INVOICE</div><div style="font-size:10.5px; color:#8C8899; margin-top:2px;">{{ ciAutoNo }}</div></div></div>
-              <div style="display:flex; justify-content:space-between; margin-top:22px;"><div><div style="font-size:8.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">BILLED TO</div><div style="font-size:12.5px; font-weight:700; margin-top:3px;">{{ ciPreviewClient }}</div><div style="font-size:10px; color:#8C8899; margin-top:1px;">{{ ciPreviewSubject }}</div></div><div style="text-align:right;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">STATUS</div><div style="font-size:12px; font-weight:700; margin-top:3px;">{{ ciStatusVal }}</div></div></div>
-              <div style="display:flex; justify-content:space-between; font-size:8.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em; border-bottom:1px solid #EDEBF2; padding-bottom:6px; margin-top:20px;"><span>DESCRIPTION</span><span>AMOUNT</span></div>
-              <sc-for list="{{ ciPreviewLines }}" as="p" hint-placeholder-count="1">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:9px 0; border-bottom:1px solid #F5F3F9;"><div style="min-width:0;"><div style="font-size:11.5px; font-weight:600;">{{ p.desc }}</div><div style="font-size:9.5px; color:#A9A6B4;">{{ p.qty }}</div></div><span style="font-size:11.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ p.amount }}</span></div>
-              </sc-for>
-              <sc-if value="{{ ciPreviewEmpty }}" hint-placeholder-val="{{ true }}"><div style="padding:16px 0; font-size:11px; color:#C9C4D6; text-align:center;">Line items appear here…</div></sc-if>
-              <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:11px; color:#6F6C7A;"><span>Subtotal</span><span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ ciSubtotal }}</span></div>
-              <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; color:#6F6C7A;"><span>VAT ({{ ciVatLabel }})</span><span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ ciVatAmt }}</span></div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:10px; border-top:2px solid #26074D;"><span style="font-size:12px; font-weight:700;">TOTAL</span><span style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; color:#7C00FF;">{{ ciTotal }}</span></div>
-              <div style="font-size:9px; color:#B9B5C4; margin-top:16px;">Terms, footer &amp; business details from Print Layout · Configure</div>
-            </div>
+            <div data-ci-preview style="background:#fff; border-radius:12px; box-shadow:0 4px 18px rgba(38,7,77,.08); overflow:hidden; position:relative;"></div>
+            <div style="font-size:9.5px; color:#B9B5C4; margin-top:10px; text-align:center;">Exactly how it prints · Settings → Print Layout</div>
           </div>
         </div>
-        <div style="display:flex; gap:10px; padding:16px 26px; border-top:1px solid #F0EDF6; justify-content:flex-end; align-items:center;"><span style="flex:1; font-size:11px; color:#A9A6B4;">Automation creates drafts · you create pending</span><button onClick="{{ closeCreateInv }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitInvDraft }}" style="background:#fff; color:#7C00FF; border:1px solid #DDD1F5; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF;">Save as draft</button><button onClick="{{ submitInvSend }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save invoice</button></div>
+        <div style="display:flex; gap:10px; padding:16px 26px; border-top:1px solid #F0EDF6; justify-content:flex-end; align-items:center;"><span style="flex:1; font-size:11px; color:#A9A6B4;">Saved as a draft — approve it to issue the invoice</span><button onClick="{{ closeCreateInv }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitInvDraft }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ ciSaveLabel }}</button></div>
       </div>
     </div>
   </sc-if>
@@ -4151,14 +4141,14 @@
 
   <sc-if value="{{ showInvDetail }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeInvDetail }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-hidescroll="true" style="width:100%; max-width:440px; height:100%; background:#fff; box-shadow:-18px 0 50px rgba(38,7,77,.2); overflow-y:auto; animation:slideInRight .28s cubic-bezier(.16,1,.3,1) both; padding:22px 24px;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="width:100%; max-width:560px; height:100%; background:#fff; box-shadow:-18px 0 50px rgba(38,7,77,.2); overflow-y:auto; animation:slideInRight .28s cubic-bezier(.16,1,.3,1) both; padding:22px 24px;">
         <div style="display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid #F0EDF6; padding-bottom:16px;"><div style="flex:1;"><div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700;">{{ idNo }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ idClient }} · issued {{ idDate }}</div></div><span style="font-size:10.5px; font-weight:700; color:{{ idStColor }}; background:{{ idStBg }}; padding:4px 11px; border-radius:99px;">{{ idStatus }}</span><div onClick="{{ closeInvDetail }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
-        <div style="margin-top:18px; border:1px solid #F0EDF6; border-radius:12px; padding:14px 16px;">
-          <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:12.5px; color:#4B4757;">{{ idDesc }}</span><span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ idAmount }}</span></div>
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px; border-top:1px solid #F5F3F9; padding-top:10px;"><span style="font-size:12.5px; font-weight:700;">Total due</span><span style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; color:#7C00FF;">{{ idAmount }}</span></div>
+        <!-- The document itself, built by the same code that prints it — not a summary of it. -->
+        <div style="margin-top:18px; background:#F6F4FB; border-radius:14px; padding:14px;">
+          <div data-inv-preview style="background:#fff; border-radius:8px; box-shadow:0 3px 14px rgba(38,7,77,.10); overflow:hidden; position:relative; min-height:120px;"></div>
         </div>
         <div style="display:flex; gap:10px; margin-top:18px;">
-          <button onClick="{{ idDownloadPdf }}" title="Opens the print view — choose “Save as PDF” as the destination" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Download PDF</button>
+          <button onClick="{{ idDownloadPdf }}" title="Opens the print dialog — choose “Save as PDF” as the destination" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Download PDF</button>
           <sc-if value="{{ idPayable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ payInvDetail }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Record payment</button></sc-if>
         </div>
         <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:22px;">TIMELINE</div>
@@ -5933,6 +5923,30 @@ class Component extends DCLogic {
           + (built.layout.margin ?? 18) * mm + 'px; position:relative;"><style>' + built.css + '</style>' + built.body + '</div>';
       });
     };
+    // Render a real document into any on-screen host, scaled down to fit its width. One helper for
+    // every place that shows a document without printing it: the Print Layout designer, the create
+    // -invoice live preview and the Open drawer — so none of them can drift from what prints.
+    // The page is laid out at true width and scaled with a transform, which keeps the type metrics
+    // and column widths identical to the printed sheet; the host's height is set to the SCALED
+    // height afterwards, because a transform doesn't affect layout and the box would otherwise
+    // reserve the full unscaled height.
+    this._paintDocInto = (sel, kind, doc, opts) => {
+      const host = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      if (!host || !doc) return;
+      return this._prepareDoc(kind, doc).then(d => {
+        if (!host.isConnected) return; // the modal/drawer closed while the QR was in flight
+        const built = this._docHtml(kind, d);
+        const mm = 3.7795;
+        const w = ((built.layout.pageSize === 'Letter') ? 216 : 210) * mm;
+        const scale = (host.clientWidth || 420) / w;
+        const pad = (built.layout.margin ?? 18) * mm;
+        host.innerHTML = '<div data-doc-sheet style="width:' + w + 'px; transform:scale(' + scale
+          + '); transform-origin:top left; padding:' + pad + 'px; position:relative; background:#fff;">'
+          + '<style>' + built.css + '</style>' + built.body + '</div>';
+        const sheet = host.querySelector('[data-doc-sheet]');
+        if (sheet && !(opts && opts.fixedHeight)) host.style.height = Math.ceil(sheet.scrollHeight * scale) + 'px';
+      });
+    };
     // Fetches the ZATCA QR (authenticated) and returns the doc with `qrSvg` attached, so the builder
     // stays synchronous and both the preview and the print window get a working code.
     this._prepareDoc = (kind, doc) => {
@@ -7097,6 +7111,38 @@ class Component extends DCLogic {
           const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
           this.setState({ exOpen: id, exDate: raw.promisedDate || '', exNote: raw.promisedNote || '', exErr: '' });
         },
+        // Draft stage: nothing has been sent and nothing is owed, so the invoice can still be changed.
+        // Approving is the moment it becomes a real receivable and the client is told about it.
+        isDraft: status === 'Draft' && !!id,
+        editDraft: () => {
+          const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
+          // The stored items carry the VAT as its own line (so `amount` stays the grand total) —
+          // strip it back out, or editing would tax the tax.
+          const its = (Array.isArray(raw.items) ? raw.items : []).filter(it9 => !/^VAT\s*\(/i.test(String(it9.name || '')));
+          const vatLine = (Array.isArray(raw.items) ? raw.items : []).find(it9 => /^VAT\s*\(/i.test(String(it9.name || '')));
+          const rate9 = vatLine ? parseInt(String(vatLine.name).replace(/[^0-9]/g, ''), 10) : null;
+          this.setState({
+            createInv: true, ciEditId: id, ciEditNo: raw.number || no,
+            ciClient: raw.clientName || client, ciCur: raw.currency || cur,
+            ciVat: rate9 == null ? null : (CI_VAT_OPTS.find(o9 => parseInt(o9, 10) === rate9) || null),
+            ciLines: its.length ? its.map(it9 => [String(it9.name || ''), String(it9.units ?? 1), String(it9.price ?? '')]) : [['', '1', '']],
+            ciIssued: raw.date || '', ciDue: raw.dueDate || '', ciSubject: raw.services || '',
+            ciNotes: raw.notes || '', ciErr: '',
+          });
+        },
+        approve: () => {
+          if (!id) return this.toast('That invoice is a sample row — open a real invoice', 'error');
+          const tok9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/invoices/' + id + '/approve', {
+            method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => {
+              if (!ok) return this.toast((j9 && j9.error) || 'Could not approve this invoice', 'error');
+              this.toast(no + ' approved — now payable');
+              this._opReload && this._opReload('invoices', 'invoicesData');
+            })
+            .catch(() => this.toast('Cannot reach the server — nothing was approved', 'error'));
+        },
         // Void: only offered while nothing has been received. A part-paid invoice must be reconciled
         // first, so the button simply isn't there rather than failing on click.
         canVoid: canWrite && !!id && status !== 'Paid' && status !== 'Void' && paidNum === 0,
@@ -7104,8 +7150,9 @@ class Component extends DCLogic {
         isVoid: status === 'Void',
         voidNote: (() => { const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
           return raw.voidReason ? 'Voided — ' + raw.voidReason : ''; })(),
-        // Branded print via the uploaded header/footer/watermark (Settings → Print Layout).
-        print: () => {
+        // The document this invoice renders as — shared by the Open drawer's preview and by Print, so
+        // what you look at on screen is byte-for-byte what comes out of the printer.
+        docFor: () => {
           const raw9 = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
           const items9 = (Array.isArray(raw9.items) ? raw9.items : []).map(it9 => ({ name: it9.name, qty: it9.units, price: fmtCurAs(cur, Number(it9.price) || 0), amount: fmtCurAs(cur, (Number(it9.units) || 1) * (Number(it9.price) || 0)) }));
           // A tax invoice must show the VAT breakdown, and the ZATCA QR must carry the same figures.
@@ -7114,14 +7161,16 @@ class Component extends DCLogic {
           const gross9 = Number(amount) || 0;
           const net9 = rate9 > 0 ? gross9 / (1 + rate9 / 100) : gross9;
           const vatAmt9 = gross9 - net9;
-          this._printDocDirect('invoice', { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
+          return { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
             services: desc, notes: raw9.notes,
             subtotal: rate9 > 0 ? fmtCurAs(cur, Math.round(net9 * 100) / 100) : '',
             vat: rate9 > 0 ? fmtCurAs(cur, Math.round(vatAmt9 * 100) / 100) : '',
             total: fmtCurAs(cur, gross9),
             totalNum: gross9.toFixed(2), vatNum: vatAmt9.toFixed(2),
-            stamp: raw9.date ? new Date(raw9.date).toISOString() : new Date().toISOString() });
+            stamp: raw9.date ? new Date(raw9.date).toISOString() : new Date().toISOString() };
         },
+        // Branded print via the uploaded header/footer/watermark (Settings → Print Layout).
+        print: () => this._printDocDirect('invoice', invoicesFull[i].docFor()),
       };
     });
     // Sum what is still OWED, not the invoice totals — a part-paid invoice was inflating this tile.
@@ -7142,7 +7191,9 @@ class Component extends DCLogic {
     const invFilter = this.state.invFilter || 'All';
     const invRows = invoicesFull.filter(v => invFilter === 'All' || v.status === invFilter);
     const invCount = (s2) => invoicesFull.filter(v => v.status === s2).length;
-    const invTabs = ['All', 'Draft', 'Pending', 'Unpaid', 'Overdue', 'Paid'].map(k => ({
+    // No "Pending" tab: INV_STATUS_MAP renders the stored `pending` status as "Unpaid", so that tab
+    // could only ever count zero.
+    const invTabs = ['All', 'Draft', 'Unpaid', 'Part paid', 'Overdue', 'Paid'].map(k => ({
       label: k, count: k === 'All' ? invoicesFull.length : invCount(k),
       select: () => this.setState({ invFilter: k }),
       color: invFilter === k ? '#7C00FF' : '#8C8899', bg: invFilter === k ? '#fff' : 'transparent',
@@ -7162,6 +7213,26 @@ class Component extends DCLogic {
     const ciVatN = Math.round(ciSubtotalN * ciVatRate / 100);
     const ciGrandN = ciSubtotalN + ciVatN;
     const ciAutoNo = 'INV-2026-' + String(4 + (Array.isArray(invData) ? invData.length : (this.state.createdInvoices || []).length)).padStart(3, '0');
+    // The modal's live preview is the REAL document — same builder, layout settings and VAT split as
+    // the printed copy, so what you approve is what the client receives. Stashed on the instance
+    // because _paintCiPreview runs after this render, outside the bindings' scope.
+    this._ciDoc = {
+      no: this.state.ciEditId ? (this.state.ciEditNo || ciAutoNo) : ciAutoNo,
+      client: this.state.ciClient || '—',
+      date: this.state.ciIssued || new Date().toISOString().slice(0, 10),
+      dueDate: this.state.ciDue || '',
+      services: this.state.ciSubject || '',
+      notes: this.state.ciNotes || '',
+      items: ciLines.filter(l => l[0].trim()).map(l => ({
+        name: l[0], qty: l[1] || '1', price: fmtCurAs(ciCur, parseFloat(l[2]) || 0),
+        amount: fmtCurAs(ciCur, (parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)),
+      })),
+      subtotal: ciVatRate > 0 ? fmtCurAs(ciCur, ciSubtotalN) : '',
+      vat: ciVatRate > 0 ? fmtCurAs(ciCur, ciVatN) : '',
+      total: fmtCurAs(ciCur, ciGrandN),
+      totalNum: ciGrandN.toFixed(2), vatNum: ciVatN.toFixed(2),
+      stamp: new Date().toISOString(),
+    };
     const invDetailRow = this.state.invDetail ? invoicesFull.find(v => v.no === this.state.invDetail) : null;
     const financeApi = {
       invoicesFull: invRows, invTabs, invChart,
@@ -7172,19 +7243,24 @@ class Component extends DCLogic {
       payMonthCount: _payThisMonth ? _payThisMonth.length + (_payThisMonth.length === 1 ? ' payment' : ' payments') : '12 payments',
       payYtd: _payThisYear ? fmtCur(_paySum(_payThisYear)) : 'AED 64,200',
       payAvgDays: _payReal ? (_payAvg == null ? '—' : (Math.round(_payAvg * 10) / 10) + ' days') : '6.4 days',
-      showCreateInv: !!this.state.createInv,
-      openCreateInv: () => this.setState({ createInv: true, ciClient: realClientNames ? realClientNames[0] : 'Falcon Technologies', ciLines: [['', '1', '']], ciDue: '', ciIssued: new Date().toISOString().slice(0, 10), ciSubject: '', ciNotes: '', ciErr: '', ciCur: sysCurCode, ciVat: null }),
-      closeCreateInv: () => this.setState({ createInv: false }),
-      ...mkDd('ddCiClient', realClientNames || ['Falcon Technologies', 'Falcon Trading'], this.state.ciClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'), (v) => this.setState({ ciClient: v })),
-      ...mkDd('ddCiStatus', ['Pending', 'Paid', 'Overdue', 'Draft'], this.state.ciStatus || 'Pending', (v) => this.setState({ ciStatus: v })),
+      showCreateInv: (() => {
+        // Repaint the document preview after this render, so it tracks every keystroke.
+        if (this.state.createInv) { clearTimeout(this._ciPaint); this._ciPaint = setTimeout(() => this._paintDocInto('[data-ci-preview]', 'invoice', this._ciDoc), 60); }
+        return !!this.state.createInv;
+      })(),
+      // No client is preselected: the first company in the list is not a sensible default for a bill,
+      // and a pre-filled name is exactly the kind of thing that gets saved without being read.
+      openCreateInv: () => this.setState({ createInv: true, ciEditId: null, ciClient: '', ciLines: [['', '1', '']], ciDue: '', ciIssued: new Date().toISOString().slice(0, 10), ciSubject: '', ciNotes: '', ciErr: '', ciCur: sysCurCode, ciVat: null }),
+      closeCreateInv: () => this.setState({ createInv: false, ciEditId: null }),
+      ...mkDd('ddCiClient', realClientNames || ['Falcon Technologies', 'Falcon Trading'], this.state.ciClient || '', (v) => this.setState({ ciClient: v })),
       ...mkDd('ddCiCur', ['SAR', 'AED', 'QAR', 'INR'], ciCur, (v) => this.setState({ ciCur: v, ciVat: v === 'AED' ? CI_VAT_OPTS[1] : v === 'SAR' ? CI_VAT_OPTS[0] : this.state.ciVat })),
       ...mkDd('ddCiVat', CI_VAT_OPTS, ciVatSel, (v) => this.setState({ ciVat: v })),
       ciCurVal: ciCur, ciVatVal: ciVatSel,
-      ciClientVal: this.state.ciClient || 'Falcon Technologies', ciStatusVal: this.state.ciStatus || 'Pending',
+      ciClientVal: this.state.ciClient || 'Select a client',
+      ciClientColor: this.state.ciClient ? '#1A1523' : '#A9A6B4',
+      ciSaveLabel: this.state.ciEditId ? 'Save changes' : 'Save',
       ciDue: this.state.ciDue || '', ciIssued: this.state.ciIssued || '', ciSubject: this.state.ciSubject || '', ciNotes: this.state.ciNotes || '', ciErr: this.state.ciErr || false,
       ciAutoNo,
-      ciPreviewClient: this.state.ciClient || 'Falcon Technologies',
-      ciPreviewSubject: this.state.ciSubject || '(subject / project)',
       setCiDue: (e) => this.setState({ ciDue: e.target.value }),
       setCiIssued: (e) => this.setState({ ciIssued: e.target.value }),
       setCiSubject: (e) => this.setState({ ciSubject: e.target.value }),
@@ -7197,18 +7273,16 @@ class Component extends DCLogic {
         setPrice: (e) => { const a = ciLines.map(x => [...x]); a[i][2] = e.target.value; this.setState({ ciLines: a }); },
         remove: () => this.setState({ ciLines: ciLines.length > 1 ? ciLines.filter((_, j) => j !== i) : ciLines }),
       })),
-      ciPreviewLines: ciLines.filter(l => l[0].trim()).map(l => ({ desc: l[0], qty: (l[1] || '1') + ' × ' + fmtCurAs(ciCur, parseFloat(l[2]) || 0), amount: fmtCurAs(ciCur, (parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) })),
-      ciPreviewEmpty: !ciLines.some(l => l[0].trim()),
       addCiLine: () => this.setState({ ciLines: [...ciLines, ['', '1', '']] }),
-      ciSubtotal: fmtCurAs(ciCur, ciSubtotalN),
-      ciVatLabel: ciVatRate + '%',
-      ciVatAmt: fmtCurAs(ciCur, ciVatN),
-      ciTotal: fmtCurAs(ciCur, ciGrandN),
-      // WIRED: create invoice → POST /api/invoices. Success toast ONLY on a confirmed 2xx; errors
-      // surface in the modal; the list reloads from the server (no optimistic phantom rows).
-      submitInv: (asDraft) => {
+      // WIRED: create invoice → POST /api/invoices (or PUT when editing a draft). Success toast ONLY
+      // on a confirmed 2xx; errors surface in the modal; the list reloads from the server (no
+      // optimistic phantom rows).
+      // Everything saved here is a DRAFT. An invoice only becomes a receivable — and only reaches the
+      // client — when someone approves it, which is what makes the draft stage safe to edit.
+      submitInv: () => {
         const st = this.state;
         const valid = (st.ciLines || []).filter(l => l[0].trim() && parseFloat(l[2]));
+        if (!st.ciClient) return this.setState({ ciErr: 'Choose the client this invoice is for' });
         if (!valid.length) return this.setState({ ciErr: 'Add at least one item with a price' });
         // Financial-integrity guards: no negative prices/qty, and no absurd magnitudes (an invoice
         // is never a credit note — negatives must go through a dedicated flow).
@@ -7219,33 +7293,33 @@ class Component extends DCLogic {
         const subtotal = valid.reduce((s2, l) => s2 + (parseFloat(l[1]) || 1) * parseFloat(l[2]), 0);
         const vatAmt = Math.round(subtotal * ciVatRate / 100);
         const desc = st.ciSubject || (valid[0][0] + (valid.length > 1 ? ' +' + (valid.length - 1) : ''));
-        const status = (asDraft ? 'Draft' : (st.ciStatus || 'Pending')).toLowerCase();
-        const client = st.ciClient || (realClientNames ? realClientNames[0] : '');
+        const client = st.ciClient;
         const co6 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c6 => c6.name === client);
         const items = valid.map(l => ({ name: l[0].trim(), units: parseFloat(l[1]) || 1, price: parseFloat(l[2]) }));
         if (vatAmt > 0) items.push({ name: 'VAT (' + ciVatRate + '%)', units: 1, price: vatAmt });
+        const editing = st.ciEditId;
+        const no6 = editing ? (st.ciEditNo || ciAutoNo) : ciAutoNo;
         const tok6 = localStorage.getItem('stimespro:token');
         if (!tok6) { // design mode (unauthenticated) keeps the old local preview behavior
-          this.setState({ createdInvoices: [[ciAutoNo, 'Today', client, desc, subtotal + vatAmt, asDraft ? 'Draft' : 'Pending'], ...(st.createdInvoices || [])], createInv: false });
-          return this.toast(asDraft ? 'Invoice saved as draft' : 'Invoice created');
+          this.setState({ createdInvoices: [[no6, 'Today', client, desc, subtotal + vatAmt, 'Draft'], ...(st.createdInvoices || [])], createInv: false });
+          return this.toast('Invoice saved as draft');
         }
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/invoices', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok6 },
-          body: JSON.stringify({ number: ciAutoNo, companyId: co6 ? co6.id : null, clientName: client || null,
-            amount: Math.round(subtotal + vatAmt), currency: ciCur, status: status === 'unpaid' ? 'pending' : status,
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/invoices' + (editing ? '/' + editing : ''), {
+          method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok6 },
+          body: JSON.stringify({ number: no6, companyId: co6 ? co6.id : null, clientName: client || null,
+            amount: Math.round(subtotal + vatAmt), currency: ciCur, status: 'draft',
             date: st.ciIssued || new Date().toISOString().slice(0, 10), dueDate: st.ciDue || null,
             services: desc, items, notes: st.ciNotes || null }) })
           .then(r6 => r6.json().catch(() => ({})).then(j6 => ({ ok: r6.ok, j6 })))
           .then(({ ok, j6 }) => {
             if (!ok) return this.setState({ ciErr: (j6 && j6.error) || 'Could not save the invoice — try again' });
-            this.setState({ createInv: false });
-            this.toast(asDraft ? 'Invoice saved as draft' : 'Invoice ' + (j6.number || ciAutoNo) + ' created');
+            this.setState({ createInv: false, ciEditId: null });
+            this.toast(editing ? 'Draft ' + (j6.number || no6) + ' updated' : 'Draft ' + (j6.number || no6) + ' saved — approve it to issue');
             this._opReload && this._opReload('invoices', 'invoicesData');
           })
           .catch(() => this.setState({ ciErr: 'Cannot reach the server — the invoice was NOT saved' }));
       },
-      submitInvDraft: () => financeApi.submitInv(true),
-      submitInvSend: () => financeApi.submitInv(false),
+      submitInvDraft: () => financeApi.submitInv(),
       // ---- Record payment (real form; used by the Payments screen AND the invoice rows) ----
       // Previously "recording" a payment silently assumed the full amount, method "Recorded in
       // console" and today's date, with no way to enter a reference or a part payment.
@@ -7447,7 +7521,11 @@ class Component extends DCLogic {
           })
           .catch(() => this.setState({ rpErr: 'Server unreachable — nothing was recorded' }));
       },
-      showInvDetail: !!invDetailRow,
+      showInvDetail: (() => {
+        // Paint the real document into the drawer once it has mounted.
+        if (invDetailRow) { clearTimeout(this._idPaint); this._idPaint = setTimeout(() => this._paintDocInto('[data-inv-preview]', 'invoice', invDetailRow.docFor()), 60); }
+        return !!invDetailRow;
+      })(),
       ...(invDetailRow ? {
         idNo: invDetailRow.no, idClient: invDetailRow.client, idDesc: invDetailRow.desc, idAmount: invDetailRow.amount,
         idStatus: invDetailRow.status, idStBg: invDetailRow.stBg, idStColor: invDetailRow.stColor, idDate: invDetailRow.date,
@@ -12172,7 +12250,7 @@ class Component extends DCLogic {
       quickCreateItems: [
         ['Client', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M23 11h-6', '#7C00FF', '#F3E8FF', () => this.setState({ addClient: true, acStep: 'form', quickCreate: false, acCName: '', acEmail: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPkg: 'Prospect / unassigned', acServices: [], acErr2: '' })],
         ['Task', 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', '#6D5BD0', '#EFEBFF', () => this.setState({ active: 'Task List', activeGroup: 'Operations', taskModal: true, ntStep: 1, ntKind: 'plain', ntTitle: '', quickCreate: false })],
-        ['Invoice', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', '#B8860B', '#FEF4E2', () => this.setState({ active: 'Invoices', activeGroup: 'Finance', createInv: true, ciClient: 'Falcon Technologies', ciLines: [['', '1', '']], quickCreate: false })],
+        ['Invoice', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', '#B8860B', '#FEF4E2', () => this.setState({ active: 'Invoices', activeGroup: 'Finance', createInv: true, ciEditId: null, ciClient: '', ciLines: [['', '1', '']], ciIssued: new Date().toISOString().slice(0, 10), ciDue: '', ciSubject: '', ciNotes: '', ciErr: '', quickCreate: false })],
         ['Employee', 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0', '#0284C7', '#E4F4FD', () => this.setState({ empModal: true, quickCreate: false })],
         ['Appointment', 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', '#0E9355', '#E7F8EF', () => this.setState({ bookModal: true, quickCreate: false })],
         ['Renewal', 'M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15', '#0EA5E9', '#E0F2FE', () => this.setState({ active: 'Compliance', activeGroup: 'Clients & Compliance', compFilter: 'Expiring', quickCreate: false })],
