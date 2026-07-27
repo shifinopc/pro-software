@@ -3680,6 +3680,58 @@
     </div>
   </sc-if>
 
+  <!-- Suspend account -->
+  <sc-if value="{{ showSuspend }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeSuspend }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:520px; padding:22px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Suspend account</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Pauses new requests · they keep access to their records</div></div>
+          <div onClick="{{ closeSuspend }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <div style="margin-top:16px; background:#FBFAFE; border:1px solid #F0EDF6; border-radius:12px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div style="min-width:0;"><div style="font-size:13px; font-weight:700;">{{ suName }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">{{ suOpenLabel }}</div></div>
+            <div style="text-align:right; flex-shrink:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#C0353A;">{{ suOutstanding }}</div><div style="font-size:10.5px; color:#8C8899;">{{ suOldestLabel }}</div></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ suHasPromise }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#7A5B12; line-height:1.5;">{{ suPromiseWarn }}</div>
+        </sc-if>
+
+        <div style="margin-top:14px; border:1px solid #F0EDF6; border-radius:12px; overflow:hidden;">
+          <div style="display:flex; gap:9px; padding:10px 13px; background:#F0FDF5; align-items:flex-start;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="M20 6L9 17l-5-5"></path></svg>
+            <span style="font-size:11.5px; color:#0E7A47; line-height:1.5;">They can still sign in, see documents and expiry dates, download invoices, reply to us, and tell us about a payment.</span>
+          </div>
+          <div style="display:flex; gap:9px; padding:10px 13px; background:#FEF2F2; align-items:flex-start; border-top:1px solid #F0EDF6;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0; margin-top:1px;"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            <span style="font-size:11.5px; color:#8A2A2E; line-height:1.5;">They cannot file new service requests, book appointments, add employees or request an exit.</span>
+          </div>
+        </div>
+
+        <sc-if value="{{ suHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#FEECEC; border:1px solid #F6CFCF; border-radius:10px; padding:9px 12px; font-size:11.5px; color:#C0353A; font-weight:600;">{{ suErr }}</div>
+        </sc-if>
+
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">REASON *</div>
+        <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">Shown to your team, and on the client's banner.</div>
+        <div style="display:flex; gap:7px; margin-top:8px; flex-wrap:wrap;">
+          <sc-for list="{{ suPresets }}" as="r" hint-placeholder-count="3">
+            <span onClick="{{ r.pick }}" style="font-size:11.5px; font-weight:600; color:{{ r.color }}; background:{{ r.bg }}; border:1px solid {{ r.border }}; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ r.label }}</span>
+          </sc-for>
+        </div>
+        <input value="{{ suReason }}" onChange="{{ setSuReason }}" placeholder="e.g. Outstanding balance over 60 days" style="margin-top:9px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; font-family:'Inter',sans-serif;">
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:18px; justify-content:flex-end;">
+          <button onClick="{{ closeSuspend }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ submitSuspend }}" style="background:#C0353A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(192,53,58,.25);" style-hover="filter:brightness(.95);">Suspend {{ suShortName }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- Payment extension (promise to pay) -->
   <sc-if value="{{ showExtend }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeExtend }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
@@ -5564,7 +5616,7 @@ class Component extends DCLogic {
         .catch(() => this.setState({ exErr: 'Server unreachable — nothing changed' }));
     };
     // Suspend / restore a client's billing status.
-    this._companyAction = (id, action, body, okMsg) => {
+    this._companyAction = (id, action, body, okMsg, onDone) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/companies/' + id + '/' + action, { method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
@@ -5572,6 +5624,7 @@ class Component extends DCLogic {
         .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
           if (!ok) return this.toast((j && j.error && String(j.error).slice(0, 140)) || 'Could not update the account', 'error');
+          if (onDone) onDone();
           this.toast(okMsg);
           this._opReload('companies', 'companiesData');
         })
@@ -7045,6 +7098,50 @@ class Component extends DCLogic {
       // ---- Record payment (real form; used by the Payments screen AND the invoice rows) ----
       // Previously "recording" a payment silently assumed the full amount, method "Recorded in
       // console" and today's date, with no way to enter a reference or a part payment.
+      // ---- Suspend account modal (was a window.prompt) ----
+      // Shows the debt it's based on and, crucially, warns when the client already has an agreed
+      // payment date — suspending someone who has arranged to pay is how a good relationship breaks.
+      ...(() => {
+        const suId = this.state.suOpen || null;
+        const rows = suId ? (Array.isArray(invData) ? invData : []).filter(v9 => v9.companyId === suId) : [];
+        const open = rows.filter(v9 => !['paid', 'draft'].includes(String(v9.status || '').toLowerCase()));
+        const owed = open.reduce((s9, v9) => s9 + Math.max(0, (Number(v9.amount) || 0) - _paidFor(v9.id, v9.number)), 0);
+        const daysOver = (v9) => { const d9 = v9.dueDate ? new Date(v9.dueDate).getTime() : NaN;
+          return Number.isFinite(d9) ? Math.round((Date.now() - d9) / 86400000) : 0; };
+        const oldest = open.reduce((m9, v9) => Math.max(m9, daysOver(v9)), 0);
+        const promised = open.filter(v9 => v9.promisedDate && new Date(v9.promisedDate).getTime() >= Date.now() - 86400000);
+        const cur9 = open[0] && open[0].currency ? open[0].currency : sysCurCode;
+        const reason = this.state.suReason != null ? this.state.suReason : 'Outstanding balance';
+        const name9 = this.state.suName || '';
+        return {
+          showSuspend: !!suId,
+          suName: name9,
+          suShortName: name9.length > 18 ? name9.slice(0, 16) + '…' : name9,
+          suOpenLabel: open.length ? open.length + (open.length === 1 ? ' unpaid invoice' : ' unpaid invoices') : 'No unpaid invoices',
+          suOutstanding: cur9 + ' ' + owed.toLocaleString('en-US'),
+          suOldestLabel: oldest > 0 ? 'oldest ' + oldest + ' days overdue' : 'nothing overdue',
+          suHasPromise: promised.length > 0,
+          suPromiseWarn: promised.length
+            ? 'This client has agreed to pay ' + promised.map(v9 => v9.number + ' by ' + v9.promisedDate).join(', ') + '. Suspending now overrides that arrangement — consider waiting for the date.'
+            : '',
+          suReason: reason,
+          setSuReason: (e9) => this.setState({ suReason: e9.target.value, suErr: '' }),
+          suErr: this.state.suErr || '', suHasErr: !!(this.state.suErr || ''),
+          suPresets: ['Outstanding balance', 'No response to reminders', 'Payment plan broken'].map(label => ({
+            label,
+            color: reason === label ? '#fff' : '#6F6C7A',
+            bg: reason === label ? '#7C00FF' : '#fff',
+            border: reason === label ? '#7C00FF' : '#EDEBF2',
+            pick: () => this.setState({ suReason: label, suErr: '' }),
+          })),
+          closeSuspend: () => this.setState({ suOpen: null, suErr: '' }),
+          submitSuspend: () => {
+            if (!String(reason).trim()) return this.setState({ suErr: 'Give a reason — the client sees this on their banner' });
+            this._companyAction(suId, 'suspend', { reason: String(reason).trim() },
+              name9 + ' suspended — new requests paused', () => this.setState({ suOpen: null, suErr: '' }));
+          },
+        };
+      })(),
       // ---- Payment extension modal (was a window.prompt) ----
       ...(() => {
         const exId = this.state.exOpen || null;
@@ -7625,11 +7722,7 @@ class Component extends DCLogic {
       clDetailApi.cdSuspendedSince = _cdCo.suspendedAt ? ' since ' + String(_cdCo.suspendedAt).slice(0, 10) : '';
       clDetailApi.cdCanSuspend = canWrite && !!clRow.realId && !_cdIsSusp;
       clDetailApi.cdCanRestore = canWrite && !!clRow.realId && _cdIsSusp;
-      clDetailApi.cdSuspend = () => {
-        const why = window.prompt('Suspend ' + clRow.name + '?\n\nThey keep read access but cannot file new requests.\nReason (shown to your team and on their banner):', 'Outstanding balance');
-        if (why === null) return;
-        this._companyAction(clRow.realId, 'suspend', { reason: why }, clRow.name + ' suspended — new requests paused');
-      };
+      clDetailApi.cdSuspend = () => this.setState({ suOpen: clRow.realId, suName: clRow.name, suReason: 'Outstanding balance', suErr: '' });
       clDetailApi.cdRestore = () => this._companyAction(clRow.realId, 'restore', {}, clRow.name + ' restored');
       clDetailApi.cdSub = clRow.industry + ' · ' + clRow.city + ' · CR ' + clRow.cr;
       clDetailApi.cdTabs = clTabs.map(t => ({ label: t, active: t === clTab,
