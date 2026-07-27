@@ -3680,6 +3680,51 @@
     </div>
   </sc-if>
 
+  <!-- Payment extension (promise to pay) -->
+  <sc-if value="{{ showExtend }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeExtend }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:520px; padding:22px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Agree a payment date</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Pauses chasing until the date · stops this invoice driving a suspension</div></div>
+          <div onClick="{{ closeExtend }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <div style="margin-top:16px; background:#FBFAFE; border:1px solid #F0EDF6; border-radius:12px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div style="min-width:0;"><div style="font-size:13px; font-weight:700;">{{ exInvNo }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">{{ exClient }}</div></div>
+            <div style="text-align:right; flex-shrink:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ exOutstanding }}</div><div style="font-size:10.5px; color:{{ exDueColor }}; font-weight:600;">{{ exDueLabel }}</div></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ exHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; background:#FEECEC; border:1px solid #F6CFCF; border-radius:10px; padding:9px 12px; font-size:11.5px; color:#C0353A; font-weight:600;">{{ exErr }}</div>
+        </sc-if>
+
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">WHEN WILL THEY PAY? *</div>
+        <div style="display:flex; gap:7px; margin-top:8px; flex-wrap:wrap;">
+          <sc-for list="{{ exPresets }}" as="p" hint-placeholder-count="4">
+            <span onClick="{{ p.pick }}" style="font-size:11.5px; font-weight:600; color:{{ p.color }}; background:{{ p.bg }}; border:1px solid {{ p.border }}; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ p.label }}</span>
+          </sc-for>
+        </div>
+        <input type="date" value="{{ exDate }}" onChange="{{ setExDate }}" style="margin-top:9px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; font-family:'Inter',sans-serif;">
+
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">NOTE <span style="color:#C9C4D6;">· OPTIONAL</span></div>
+        <input value="{{ exNote }}" onChange="{{ setExNote }}" placeholder="Who agreed it, and how — e.g. “Called Ahmed, paying after payroll”" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; font-family:'Inter',sans-serif;">
+
+        <div style="margin-top:14px; font-size:11px; color:#8C8899; line-height:1.6; background:#F8F5FD; border-radius:10px; padding:10px 12px;">{{ exEffect }}</div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:18px;">
+          <sc-if value="{{ exHasExisting }}" hint-placeholder-val="{{ false }}">
+            <span onClick="{{ exClear }}" style="font-size:11.5px; font-weight:700; color:#C0353A; cursor:pointer;" style-hover="text-decoration:underline;">Remove arrangement</span>
+          </sc-if>
+          <div style="flex:1;"></div>
+          <button onClick="{{ closeExtend }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ submitExtend }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ exSubmitLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- Record payment modal -->
   <sc-if value="{{ showRecordPay }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeRecordPay }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
@@ -5503,6 +5548,21 @@ class Component extends DCLogic {
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
+    // Save or clear a payment arrangement on an invoice.
+    this._invoiceExtend = (id, body, okMsg) => {
+      const t2 = localStorage.getItem('stimespro:token');
+      fetch(API + '/api/invoices/' + id + '/extend', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+        body: JSON.stringify(body) })
+        .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.setState({ exErr: (j && j.error && String(j.error).slice(0, 140)) || 'Could not save the payment date' });
+          this.setState({ exOpen: null, exErr: '' });
+          this.toast(okMsg);
+          this._reloadInvoices && this._reloadInvoices();
+        })
+        .catch(() => this.setState({ exErr: 'Server unreachable — nothing changed' }));
+    };
     // Suspend / restore a client's billing status.
     this._companyAction = (id, action, body, okMsg) => {
       const t2 = localStorage.getItem('stimespro:token');
@@ -6839,19 +6899,7 @@ class Component extends DCLogic {
         extend: () => {
           if (!id) return this.toast('That invoice is a sample row — open a real invoice', 'error');
           const raw = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
-          const when = window.prompt('Agree a payment date for ' + no + '.\n\nChasing pauses until then and this invoice stops counting toward a suspension.\nLeave blank to remove an existing arrangement.\n\nDate (YYYY-MM-DD):', raw.promisedDate || '');
-          if (when === null) return;
-          const t2 = localStorage.getItem('stimespro:token');
-          fetch(API + '/api/invoices/' + id + '/extend', { method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
-            body: JSON.stringify(when.trim() ? { promisedDate: when.trim() } : { clear: true }) })
-            .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
-            .then(({ ok, j }) => {
-              if (!ok) return this.toast((j && j.error && String(j.error).slice(0, 140)) || 'Could not save the payment date', 'error');
-              this.toast(when.trim() ? 'Chasing paused until ' + when.trim() : 'Payment arrangement removed');
-              this._reloadInvoices && this._reloadInvoices();
-            })
-            .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+          this.setState({ exOpen: id, exDate: raw.promisedDate || '', exNote: raw.promisedNote || '', exErr: '' });
         },
         // Branded print via the uploaded header/footer/watermark (Settings → Print Layout).
         print: () => {
@@ -6997,6 +7045,52 @@ class Component extends DCLogic {
       // ---- Record payment (real form; used by the Payments screen AND the invoice rows) ----
       // Previously "recording" a payment silently assumed the full amount, method "Recorded in
       // console" and today's date, with no way to enter a reference or a part payment.
+      // ---- Payment extension modal (was a window.prompt) ----
+      ...(() => {
+        const exId = this.state.exOpen || null;
+        const row = exId ? invoicesFull.find(v9 => v9.id === exId) : null;
+        const raw = exId ? (Array.isArray(invData) ? invData : []).find(v9 => v9.id === exId) || {} : {};
+        const iso9 = (d9) => new Date(Date.now() + d9 * 86400000).toISOString().slice(0, 10);
+        const chosen = this.state.exDate || '';
+        // Days overdue drives the tone of the context line — an invoice 50 days late reads differently
+        // from one due next week.
+        const dueMs = raw.dueDate ? new Date(raw.dueDate).getTime() : NaN;
+        const overdueBy = Number.isFinite(dueMs) ? Math.round((Date.now() - dueMs) / 86400000) : null;
+        const endOfMonth = (() => { const d9 = new Date(); return new Date(d9.getFullYear(), d9.getMonth() + 1, 0).toISOString().slice(0, 10); })();
+        const presets = [['In 7 days', iso9(7)], ['In 14 days', iso9(14)], ['In 30 days', iso9(30)], ['End of month', endOfMonth]];
+        return {
+          showExtend: !!exId,
+          exInvNo: row ? row.no : '',
+          exClient: row ? row.client : '',
+          exOutstanding: row ? row.outstanding + ' outstanding' : '',
+          exDueLabel: overdueBy == null ? 'No due date'
+            : overdueBy > 0 ? overdueBy + ' days overdue' : 'Due ' + (raw.dueDate || ''),
+          exDueColor: overdueBy != null && overdueBy > 0 ? '#C0353A' : '#8C8899',
+          exDate: chosen,
+          setExDate: (e9) => this.setState({ exDate: e9.target.value, exErr: '' }),
+          exNote: this.state.exNote || '',
+          setExNote: (e9) => this.setState({ exNote: e9.target.value }),
+          exErr: this.state.exErr || '', exHasErr: !!(this.state.exErr || ''),
+          exPresets: presets.map(([label, value]) => ({
+            label,
+            color: chosen === value ? '#fff' : '#6F6C7A',
+            bg: chosen === value ? '#7C00FF' : '#fff',
+            border: chosen === value ? '#7C00FF' : '#EDEBF2',
+            pick: () => this.setState({ exDate: value, exErr: '' }),
+          })),
+          exHasExisting: !!raw.promisedDate,
+          exSubmitLabel: raw.promisedDate ? 'Update date' : 'Agree date',
+          exEffect: chosen
+            ? 'Reminders stop until ' + chosen + '. If it passes unpaid, chasing restarts from the first reminder.'
+            : 'Pick the date the client has agreed to pay.',
+          closeExtend: () => this.setState({ exOpen: null, exErr: '' }),
+          exClear: () => this._invoiceExtend(exId, { clear: true }, 'Payment arrangement removed'),
+          submitExtend: () => {
+            if (!chosen) return this.setState({ exErr: 'Pick the agreed payment date' });
+            this._invoiceExtend(exId, { promisedDate: chosen, note: this.state.exNote || '' }, 'Chasing paused until ' + chosen);
+          },
+        };
+      })(),
       showRecordPay: !!this.state.rpOpen,
       openRecordPay: (invNo9) => {
         const row9 = invNo9 ? invoicesFull.find(v9 => v9.no === invNo9) : (invoicesFull.find(v9 => v9.payable) || null);
