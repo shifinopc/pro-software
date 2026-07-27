@@ -3677,7 +3677,9 @@
           <div onClick="{{ closeDocPrev }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
         <div data-hidescroll="true" style="flex:1; overflow-y:auto; background:#F3F1F7; padding:20px;">
-          <div data-doc-preview style="background:#fff; max-width:700px; margin:0 auto; padding:26px 30px; box-shadow:0 4px 18px rgba(38,7,77,.12); position:relative; min-height:300px;"></div>
+          <!-- Rendered at true page width so the preview is the page, not an approximation of it.
+               Width/padding come from the Print Layout settings via docPrevPageCss. -->
+          <div data-doc-preview style="{{ docPrevPageCss }}"></div>
         </div>
       </div>
     </div>
@@ -5942,6 +5944,30 @@ class Component extends DCLogic {
           const host = document.querySelector('[data-doc-preview]');
           if (!host) { if (tries++ < 20) setTimeout(paint, 40); return; }
           host.innerHTML = '<style>' + built.css + '</style>' + built.body;
+          // Render at TRUE page width, then scale the whole sheet to fit the modal. Letting the sheet
+          // simply shrink would change the text-to-page ratio, so the preview would stop predicting
+          // where content actually breaks on paper.
+          const L = this._printLayoutFor(kind);
+          const mm = 3.7795;
+          const pageW = (L.pageSize === 'Letter' ? 216 : 210) * mm;
+          host.style.width = Math.round(pageW) + 'px';
+          host.style.transformOrigin = 'top center';
+          // Measuring the container while the modal's popIn animation is still running reports a
+          // smaller width, which locked the sheet at ~60%. Fit after the animation settles, and
+          // re-fit on resize so the sheet tracks the window.
+          const fit = () => {
+            const box = host.parentElement;
+            if (!box) return;
+            const scale = Math.min(1, (box.clientWidth - 24) / pageW);
+            host.style.transform = 'scale(' + scale + ')';
+            host.style.marginBottom = scale < 1 ? (-(1 - scale) * host.scrollHeight) + 'px' : '0';
+          };
+          fit();
+          setTimeout(fit, 320);   // after popIn
+          this._docPrevFit = fit;
+          window.removeEventListener('resize', this._docPrevResize || (() => {}));
+          this._docPrevResize = () => { if (document.querySelector('[data-doc-preview]')) fit(); };
+          window.addEventListener('resize', this._docPrevResize);
         };
         setTimeout(paint, 30);
       });
@@ -12449,6 +12475,21 @@ class Component extends DCLogic {
       // In-page branded preview (Print / Download PDF). `docPrevHtml` is injected as raw markup.
       showDocPrev: !!this.state.docPrev,
       docPrevTitle: this.state.docPrev ? this.state.docPrev.title : '',
+      // The preview sheet is the REAL page: A4 (or Letter) at true width with the configured margin,
+      // so what's on screen is what comes out of the printer. It used to be an arbitrary 700px box
+      // with 26/30px padding, which matched no paper size and hid where the content would break.
+      docPrevPageCss: (() => {
+        // renderVals runs BEFORE componentDidMount on the first pass, and that's where the print
+        // helpers are assigned — so compute this only once the preview is actually open.
+        if (!this.state.docPrev || typeof this._printLayoutFor !== 'function') return 'background:#fff; margin:0 auto; position:relative;';
+        const L = this._printLayoutFor(this.state.docPrev.kind);
+        const mm = 3.7795;                                   // CSS px per mm at 96dpi
+        const w = (L.pageSize === 'Letter' ? 216 : 210) * mm; // A4 = 210mm wide
+        const h = (L.pageSize === 'Letter' ? 279 : 297) * mm;
+        return 'background:#fff; width:' + Math.round(w) + 'px; min-height:' + Math.round(h) + 'px;'
+          + ' margin:0 auto; padding:' + Math.round((L.margin ?? 18) * mm) + 'px;'
+          + ' box-shadow:0 4px 18px rgba(38,7,77,.12); position:relative;';
+      })(),
       docPrevHtml: this.state.docPrev ? ('<style>' + this.state.docPrev.css + '</style>' + this.state.docPrev.body) : '',
       closeDocPrev: () => this.setState({ docPrev: null }),
       docPrevPrint: () => { const d = this.state.docPrev; if (d) this._printDoc(d.kind, d.doc); },
