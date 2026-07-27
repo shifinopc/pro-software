@@ -49,7 +49,16 @@
       width:100% !important; min-height:0 !important;
     }
     body.printing-doc .print-hide { display:none !important; }
+    /* The direct-print host: rendered off-screen so nothing flashes, moved onto the page for print.
+       Deliberately no `padding` here — the configured margin is injected per-print as an ID rule so it
+       can beat .print-root above. @page margin stays 0, so this padding is the ONLY inset. */
+    body.printing-doc #doc-print-host {
+      position:absolute !important; left:0 !important; top:0 !important;
+      width:100% !important;
+    }
   }
+  /* Kept in the layout (not display:none — that would not print) but out of sight. */
+  #doc-print-host { position:fixed; left:-200vw; top:0; width:210mm; background:#fff; }
   html,body{margin:0;padding:0;background:#FCFBFE;font-family:'Inter',system-ui,sans-serif;color:#1A1523;-webkit-font-smoothing:antialiased;}
   a{color:#7C00FF;text-decoration:none;font-weight:600;} a:hover{color:#5B00BC;}
   *{box-sizing:border-box;}
@@ -3701,23 +3710,6 @@
     </div>
   </sc-if>
 
-  <!-- Branded document preview (invoice / quotation) — same letterhead the print uses -->
-  <sc-if value="{{ showDocPrev }}" hint-placeholder-val="{{ false }}">
-    <div class="print-root" onClick="{{ closeDocPrev }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:18px; width:100%; max-width:820px; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; overflow:hidden;" data-print-shell>
-        <div class="print-hide" style="display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid #F0EDF6; flex-shrink:0;">
-          <div style="flex:1; min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">{{ docPrevTitle }}</div><div style="font-size:11px; color:#8C8899; margin-top:1px;">Preview with your letterhead · Print to save as PDF</div></div>
-          <button onClick="{{ docPrevPrint }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25); white-space:nowrap;" style-hover="background:#6900D6;">Print / Save PDF</button>
-          <div onClick="{{ closeDocPrev }}" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
-        </div>
-        <div data-hidescroll="true" data-print-scroll style="flex:1; overflow-y:auto; background:#F3F1F7; padding:20px;">
-          <!-- Rendered at true page width so the preview is the page, not an approximation of it.
-               Width/padding come from the Print Layout settings via docPrevPageCss. -->
-          <div data-doc-preview style="{{ docPrevPageCss }}"></div>
-        </div>
-      </div>
-    </div>
-  </sc-if>
 
   <!-- Void invoice -->
   <sc-if value="{{ showVoid }}" hint-placeholder-val="{{ false }}">
@@ -5964,96 +5956,6 @@ class Component extends DCLogic {
       const key = kind === 'quotation' ? 'quotation' : 'invoice';
       return { ...this._printLayoutDefaults, ...(all[key] || {}) };
     };
-    // Opening a new tab for every print made the flow feel like it "didn't work" (and pop-up
-    // blockers ate it). Print/Download now opens an IN-PAGE preview of the branded document; the
-    // Print button inside it is what spawns the print dialog.
-    this._openDocPreview = (kind, doc0) => {
-      this._prepareDoc(kind, doc0).then(doc => {
-        const built = this._docHtml(kind, doc);
-        this.setState({ docPrev: { kind, doc, title: built.title, css: built.css, body: built.body } });
-        // The template can't interpolate raw markup, so the built document is injected into the
-        // preview shell once it exists. Retries briefly because the modal mounts on the next render.
-        let tries = 0;
-        const paint = () => {
-          const host = document.querySelector('[data-doc-preview]');
-          if (!host) { if (tries++ < 20) setTimeout(paint, 40); return; }
-          host.innerHTML = '<style>' + built.css + '</style>' + built.body;
-          // Render at TRUE page width, then scale the whole sheet to fit the modal. Letting the sheet
-          // simply shrink would change the text-to-page ratio, so the preview would stop predicting
-          // where content actually breaks on paper.
-          const L = this._printLayoutFor(kind);
-          const mm = 3.7795;
-          const pageW = (L.pageSize === 'Letter' ? 216 : 210) * mm;
-          host.style.width = Math.round(pageW) + 'px';
-          host.style.transformOrigin = 'top center';
-          // Measuring the container while the modal's popIn animation is still running reports a
-          // smaller width, which locked the sheet at ~60%. Fit after the animation settles, and
-          // re-fit on resize so the sheet tracks the window.
-          const fit = () => {
-            const box = host.parentElement;
-            if (!box) return;
-            const scale = Math.min(1, (box.clientWidth - 24) / pageW);
-            host.style.transform = 'scale(' + scale + ')';
-            host.style.marginBottom = scale < 1 ? (-(1 - scale) * host.scrollHeight) + 'px' : '0';
-          };
-          fit();
-          setTimeout(fit, 320);   // after popIn
-          this._docPrevFit = fit;
-          window.removeEventListener('resize', this._docPrevResize || (() => {}));
-          this._docPrevResize = () => { if (document.querySelector('[data-doc-preview]')) fit(); };
-          window.addEventListener('resize', this._docPrevResize);
-        };
-        setTimeout(paint, 30);
-      });
-    };
-    // Print the preview that's already on screen. `@page` is injected per print because the size and
-    // margin come from Settings → Print Layout and a stylesheet can't read them.
-    this._printCurrentDoc = (kind) => {
-      const L = this._printLayoutFor(kind);
-      const style = document.createElement('style');
-      style.id = 'doc-print-page';
-      style.textContent = '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 18) + 'mm}';
-      document.head.appendChild(style);
-      document.body.classList.add('printing-doc');
-      const cleanup = () => {
-        document.body.classList.remove('printing-doc');
-        const s = document.getElementById('doc-print-page');
-        if (s) s.remove();
-        window.removeEventListener('afterprint', cleanup);
-      };
-      window.addEventListener('afterprint', cleanup);
-      // Safety net: some browsers never fire afterprint if the dialog is dismissed oddly, and the app
-      // must not be left in print mode.
-      setTimeout(cleanup, 60000);
-      setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
-    };
-    this._printDoc = (kind, doc0) => {
-      // The preview already resolved the QR; reuse it so printing doesn't refetch.
-      const doc = doc0;
-      const built = this._docHtml(kind, doc, { forPrint: true });
-      const w = window.open('', '_blank');
-      if (!w) return this.toast('Could not open the print view — allow pop-ups for this site', 'error');
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + built.title + '</title><style>'
-        + built.css
-        // In print the watermark must sit behind the flow and the footer pin to the page bottom.
-        + '.wm{position:fixed;z-index:-1}.ftr{position:fixed;bottom:0;left:0;right:0;}'
-        + '</style></head><body>'
-        + built.body
-        // The print dialog is triggered from INSIDE the document: a document.write() page has often
-        // already fired `load` by the time the parent attaches w.onload, which left the button
-        // looking dead. Waiting on the images too stops a blank letterhead (or QR) in the PDF.
-        + '<scr' + 'ipt>(function(){function go(){try{window.focus();window.print();}catch(e){}}'
-        + 'function ready(){var i=Array.prototype.slice.call(document.images);'
-        + 'var left=i.filter(function(x){return !x.complete;}).length;'
-        + 'if(!left)return setTimeout(go,120);'
-        + 'i.forEach(function(x){if(!x.complete){x.addEventListener("load",done);x.addEventListener("error",done);}});'
-        + 'function done(){if(--left<=0)setTimeout(go,120);}}'
-        + 'if(document.readyState==="complete")ready();else window.addEventListener("load",ready);})();</scr' + 'ipt>'
-        + '</body></html>');
-      w.document.close();
-      // Belt-and-braces: if the inline script was blocked, still try from here.
-      setTimeout(() => { try { if (!w.closed) { w.focus(); w.print(); } } catch (e) { /* user can print manually */ } }, 1200);
-    };
     // Re-fetch custom objects/forms (after a create/save).
     this._reloadObjects = () => {
       const t2 = localStorage.getItem('stimespro:token');
@@ -6072,6 +5974,54 @@ class Component extends DCLogic {
       const h2 = t2 ? { Authorization: 'Bearer ' + t2 } : {};
       fetch(API + '/api/workflow/my-work', { headers: h2 }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myWorkData: v }); }).catch(() => {});
       fetch(API + '/api/workflow/instances', { headers: h2 }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfInstancesData: v }); }).catch(() => {});
+    };
+    // Print an invoice/quotation straight to the browser's print dialog — the dialog IS the preview,
+    // so an in-app preview modal first was a step for nothing.
+    // MARGINS: `@page` margin is 0 and the document supplies its own inset via padding. Setting both
+    // (as this first did) insets the content twice, which is why the content sat in the middle of a
+    // huge white border. With @page at 0, Chrome's "Default" margin setting adds nothing of its own
+    // and the margin configured in Settings → Print Layout is the only one that applies.
+    this._printDocDirect = (kind, doc0) => {
+      this._prepareDoc(kind, doc0).then(doc => {
+        const built = this._docHtml(kind, doc);
+        const L = built.layout;
+        const old = document.getElementById('doc-print-host');
+        if (old) old.remove();
+        const host = document.createElement('div');
+        host.id = 'doc-print-host';
+        host.className = 'print-root';
+        host.innerHTML = '<style>' + built.css + '</style>' + built.body;
+        document.body.appendChild(host);
+
+        const style = document.createElement('style');
+        style.id = 'doc-print-page';
+        style.textContent = '@page{size:' + (L.pageSize || 'A4') + ';margin:0}'
+          + '#doc-print-host{padding:' + (L.margin ?? 18) + 'mm !important}';
+        document.head.appendChild(style);
+
+        const cleanup = () => {
+          document.body.classList.remove('printing-doc');
+          const h = document.getElementById('doc-print-host'); if (h) h.remove();
+          const s = document.getElementById('doc-print-page'); if (s) s.remove();
+          window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        setTimeout(cleanup, 60000); // never leave the app stuck in print mode
+
+        // Wait for the letterhead / QR images, or the first print can come out with blanks where they
+        // should be. Resolves either way — a missing image must not block the dialog.
+        const imgs = Array.prototype.slice.call(host.querySelectorAll('img'));
+        const pending = imgs.filter(i => !i.complete);
+        const go = () => {
+          document.body.classList.add('printing-doc');
+          setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
+        };
+        if (!pending.length) return go();
+        let left = pending.length, done = false;
+        const tick = () => { if (--left <= 0 && !done) { done = true; go(); } };
+        pending.forEach(i => { i.addEventListener('load', tick); i.addEventListener('error', tick); });
+        setTimeout(() => { if (!done) { done = true; go(); } }, 2500);
+      });
     };
     this._hydrateAuthed();
     this._sseConnect();
@@ -7164,7 +7114,7 @@ class Component extends DCLogic {
           const gross9 = Number(amount) || 0;
           const net9 = rate9 > 0 ? gross9 / (1 + rate9 / 100) : gross9;
           const vatAmt9 = gross9 - net9;
-          this._openDocPreview('invoice', { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
+          this._printDocDirect('invoice', { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
             services: desc, notes: raw9.notes,
             subtotal: rate9 > 0 ? fmtCurAs(cur, Math.round(net9 * 100) / 100) : '',
             vat: rate9 > 0 ? fmtCurAs(cur, Math.round(vatAmt9 * 100) / 100) : '',
@@ -12067,7 +12017,7 @@ class Component extends DCLogic {
         print: (ev9) => {
           ev9 && ev9.stopPropagation && ev9.stopPropagation();
           const raw9 = (Array.isArray(qtData) ? qtData : []).find(q9 => q9.id === realId) || {};
-          this._openDocPreview('quotation', { no: id, client: raw9.clientName || title, date: raw9.date || '—', items: items.map(([n9, a9]) => ({ name: n9, amount: a9 })), total, notes: raw9.notes });
+          this._printDocDirect('quotation', { no: id, client: raw9.clientName || title, date: raw9.date || '—', items: items.map(([n9, a9]) => ({ name: n9, amount: a9 })), total, notes: raw9.notes });
         } };
     });
     const qOpen = quoteDefs.find(q => q[0] === this.state.quoteOpen);
@@ -12147,7 +12097,7 @@ class Component extends DCLogic {
       // Was a dead <a href="#">. Prints the quotation through the shared letterhead pipeline.
       qDownloadPdf: () => {
         if (!qOpen) return;
-        this._openDocPreview('quotation', { no: qOpen[0], client: qOpen[1], date: '—',
+        this._printDocDirect('quotation', { no: qOpen[0], client: qOpen[1], date: '—',
           items: (qOpen[3] || []).map(([n9, a9]) => ({ name: n9, amount: a9 })), total: qOpen[4] });
       },
     };
@@ -12527,29 +12477,6 @@ class Component extends DCLogic {
       heroTasksDue: String(_dueToday), heroTasksDueLabel: _dueToday + (_dueToday === 1 ? ' task' : ' tasks') + ' due or overdue', heroSlaRisk: String(_slaRisk), navUnpaidSum: fmtCur(_unpaidSum),
       thrSubTotal: String(thrSubTotal), thrCompTotal: String(thrCompTotal), thrPct: String(thrPct),
       companyFields, employees: employeesAll, ...empScreenApi, invoicesFull, payments, tickets, ticketsEmpty, notifGroups, downloads, prefs, weekDays, renewalRows,
-      // In-page branded preview (Print / Download PDF). `docPrevHtml` is injected as raw markup.
-      showDocPrev: !!this.state.docPrev,
-      docPrevTitle: this.state.docPrev ? this.state.docPrev.title : '',
-      // The preview sheet is the REAL page: A4 (or Letter) at true width with the configured margin,
-      // so what's on screen is what comes out of the printer. It used to be an arbitrary 700px box
-      // with 26/30px padding, which matched no paper size and hid where the content would break.
-      docPrevPageCss: (() => {
-        // renderVals runs BEFORE componentDidMount on the first pass, and that's where the print
-        // helpers are assigned — so compute this only once the preview is actually open.
-        if (!this.state.docPrev || typeof this._printLayoutFor !== 'function') return 'background:#fff; margin:0 auto; position:relative;';
-        const L = this._printLayoutFor(this.state.docPrev.kind);
-        const mm = 3.7795;                                   // CSS px per mm at 96dpi
-        const w = (L.pageSize === 'Letter' ? 216 : 210) * mm; // A4 = 210mm wide
-        const h = (L.pageSize === 'Letter' ? 279 : 297) * mm;
-        return 'background:#fff; width:' + Math.round(w) + 'px; min-height:' + Math.round(h) + 'px;'
-          + ' margin:0 auto; padding:' + Math.round((L.margin ?? 18) * mm) + 'px;'
-          + ' box-shadow:0 4px 18px rgba(38,7,77,.12); position:relative;';
-      })(),
-      docPrevHtml: this.state.docPrev ? ('<style>' + this.state.docPrev.css + '</style>' + this.state.docPrev.body) : '',
-      closeDocPrev: () => this.setState({ docPrev: null }),
-      // Prints the sheet on screen — no second window, no pop-up blocker, and no risk of the printed
-      // copy drifting from the preview, because they are the same DOM.
-      docPrevPrint: () => { const d = this.state.docPrev; if (d) this._printCurrentDoc(d.kind); },
       toastText: this.state.toast || false, dismissToast: () => this.setState({ toast: null }),
       toastIconBg: this.state.toastTone === 'error' ? '#E5484D' : this.state.toastTone === 'warn' ? '#F59E0B' : '#12B76A',
       toastIcon: this.state.toastTone === 'error' ? 'M18 6L6 18M6 6l12 12'
