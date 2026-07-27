@@ -5881,31 +5881,33 @@ class Component extends DCLogic {
       // provide, .pad makes up — so margin 18 behaves exactly as before, and margin 0 gives a
       // full-bleed letterhead with readable, unclipped body text.
       const inset = Math.max(0, 12 - (L.margin ?? 0));
-      // Type scale. Sizes are px on a 96dpi A4, so 13.3px ≈ 10pt — the document used to set body text
-      // at 11.5px (8.6pt) and table headings at 9px (under 7pt), which prints too small to read
-      // comfortably. `fs` applies the Text size setting on top, for anyone who wants it larger still.
+      // Type scale. Sizes are px on a 96dpi A4, so 16px = 12pt body — deliberately generous, because
+      // this document is read off paper and the original 11.5px (8.6pt) body / 9px (under 7pt)
+      // headings were unreadable. There is room: a typical invoice fills ~half of an A4 sheet.
+      // `fs` applies the Text size setting on top and scales EVERYTHING — type, cell padding, QR and
+      // totals width together — so nothing drifts out of proportion at other sizes.
       const fscale = Math.max(60, Math.min(180, Number(L.fontScale) || 100)) / 100;
       const fs = (px) => +(px * fscale).toFixed(2) + 'px';
-      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative;font-size:' + fs(13.3) + '}'
+      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative;font-size:' + fs(16) + '}'
         + '*{box-sizing:border-box}'
         + '.pad{padding:0 ' + inset + 'mm ' + inset + 'mm}'
-        + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:20px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
-        + '.org{font-size:' + fs(19) + ';font-weight:700;letter-spacing:.01em}.orgsub{font-size:' + fs(11) + ';opacity:.88;margin-top:6px;line-height:1.6}'
-        + '.dt{font-size:' + fs(23) + ';font-weight:700}.dtar{font-size:' + fs(12) + ';opacity:.88;margin-top:3px}.dno{font-size:' + fs(12.5) + ';opacity:.92;margin-top:7px}'
-        + '.meta{display:flex;justify-content:space-between;gap:18px;margin-top:20px;font-size:' + fs(12.5) + ';color:#555}'
-        + '.meta .lb{font-size:' + fs(10) + ';font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
-        + '.meta .strong{font-weight:700;color:#1A1523;font-size:' + fs(15) + ';margin-top:4px}.meta .sm{font-size:' + fs(11.5) + ';margin-top:3px}'
+        + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:' + fs(24) + ' ' + fs(28) + ';display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
+        + '.org{font-size:' + fs(23) + ';font-weight:700;letter-spacing:.01em}.orgsub{font-size:' + fs(13) + ';opacity:.88;margin-top:7px;line-height:1.6}'
+        + '.dt{font-size:' + fs(28) + ';font-weight:700}.dtar{font-size:' + fs(14) + ';opacity:.88;margin-top:3px}.dno{font-size:' + fs(15) + ';opacity:.92;margin-top:8px}'
+        + '.meta{display:flex;justify-content:space-between;gap:18px;margin-top:' + fs(24) + ';font-size:' + fs(15) + ';color:#555}'
+        + '.meta .lb{font-size:' + fs(11.5) + ';font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
+        + '.meta .strong{font-weight:700;color:#1A1523;font-size:' + fs(18) + ';margin-top:5px}.meta .sm{font-size:' + fs(13.5) + ';margin-top:3px}'
         + '.meta .pair{display:flex;gap:18px;justify-content:flex-end}'
-        + 'table{width:100%;border-collapse:collapse;font-size:' + fs(13.3) + ';margin-top:18px}'
-        + 'th{background:#F3EFFA;text-align:left;font-size:' + fs(10.5) + ';letter-spacing:.04em;color:#555}'
-        + 'th,td{padding:' + fs(9.5) + ' ' + fs(11) + ';border-bottom:1px solid #EEE}'
-        + '.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:18px}'
-        + '.qr svg{width:' + fs(112) + ';height:' + fs(112) + ';display:block}'
+        + 'table{width:100%;border-collapse:collapse;font-size:' + fs(16) + ';margin-top:' + fs(22) + '}'
+        + 'th{background:#F3EFFA;text-align:left;font-size:' + fs(12.5) + ';letter-spacing:.04em;color:#555}'
+        + 'th,td{padding:' + fs(11.5) + ' ' + fs(13) + ';border-bottom:1px solid #EEE}'
+        + '.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:' + fs(22) + '}'
+        + '.qr svg{width:' + fs(124) + ';height:' + fs(124) + ';display:block}'
         + '.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:0;pointer-events:none}.wm img{max-width:70%;max-height:60%;opacity:.08}'
         + '.hdr img,.ftr img{width:100%;display:block}'
-        + '.tot{width:' + fs(250) + ';font-size:' + fs(13.3) + '}.tot div{display:flex;justify-content:space-between;padding:5px 0}'
-        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(16.5) + ';padding-top:8px;color:' + accent + '}'
-        + '.notes{margin-top:18px;font-size:' + fs(11.5) + ';color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:10px}'
+        + '.tot{width:' + fs(290) + ';font-size:' + fs(16) + '}.tot div{display:flex;justify-content:space-between;padding:6px 0}'
+        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(20) + ';padding-top:9px;color:' + accent + '}'
+        + '.notes{margin-top:' + fs(22) + ';font-size:' + fs(13.5) + ';color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:11px}'
         + (opts && opts.forPrint ? '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 0) + 'mm}' : '');
       return { title: title + ' ' + esc(doc.no), css, body, layout: L };
     };
