@@ -3141,6 +3141,7 @@
                       <div style="display:flex; align-items:center; gap:8px; margin-top:10px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">Accent</span><input type="color" value="{{ plAccent }}" onChange="{{ setPlAccent }}" style="width:28px; height:24px; border:none; background:none; padding:0; cursor:pointer;"></div>
                       <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">Page size</span><sc-for list="{{ plPageSizes }}" as="p" hint-placeholder-count="2"><span onClick="{{ p.select }}" style="font-size:10.5px; font-weight:700; color:{{ p.color }}; background:{{ p.bg }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ p.label }}</span></sc-for></div>
                       <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">Margin (mm)</span><input value="{{ plMargin }}" onChange="{{ setPlMargin }}" inputmode="numeric" style="width:52px; border:1px solid #DDD9E6; border-radius:8px; padding:4px 8px; font-size:11.5px; text-align:right; background:#FCFBFE; font-family:'Inter',sans-serif;"></div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">Text size (%)</span><input value="{{ plFont }}" onChange="{{ setPlFont }}" inputmode="numeric" title="100% ≈ 10pt body text. Scales the whole document." style="width:52px; border:1px solid #DDD9E6; border-radius:8px; padding:4px 8px; font-size:11.5px; text-align:right; background:#FCFBFE; font-family:'Inter',sans-serif;"></div>
                       <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">VAT rate (%)</span><input value="{{ plVat }}" onChange="{{ setPlVat }}" inputmode="decimal" style="width:52px; border:1px solid #DDD9E6; border-radius:8px; padding:4px 8px; font-size:11.5px; text-align:right; background:#FCFBFE; font-family:'Inter',sans-serif;"></div>
                       <div style="display:flex; align-items:center; gap:8px; margin-top:9px;"><span style="font-size:11.5px; color:#6F6C7A; flex:1;">ZATCA QR</span><span onClick="{{ togglePlQr }}" style="font-size:10px; font-weight:700; color:{{ plQrColor }}; background:{{ plQrBg }}; padding:2px 9px; border-radius:99px; cursor:pointer;">{{ plQrLabel }}</span></div>
                       <sc-if value="{{ plQrBlocked }}" hint-placeholder-val="{{ false }}">
@@ -5880,33 +5881,38 @@ class Component extends DCLogic {
       // provide, .pad makes up — so margin 18 behaves exactly as before, and margin 0 gives a
       // full-bleed letterhead with readable, unclipped body text.
       const inset = Math.max(0, 12 - (L.margin ?? 0));
-      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative}'
+      // Type scale. Sizes are px on a 96dpi A4, so 13.3px ≈ 10pt — the document used to set body text
+      // at 11.5px (8.6pt) and table headings at 9px (under 7pt), which prints too small to read
+      // comfortably. `fs` applies the Text size setting on top, for anyone who wants it larger still.
+      const fscale = Math.max(60, Math.min(180, Number(L.fontScale) || 100)) / 100;
+      const fs = (px) => +(px * fscale).toFixed(2) + 'px';
+      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative;font-size:' + fs(13.3) + '}'
         + '*{box-sizing:border-box}'
         + '.pad{padding:0 ' + inset + 'mm ' + inset + 'mm}'
-        + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:18px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
-        + '.org{font-size:16px;font-weight:700;letter-spacing:.01em}.orgsub{font-size:9.5px;opacity:.85;margin-top:5px;line-height:1.6}'
-        + '.dt{font-size:19px;font-weight:700}.dtar{font-size:10px;opacity:.85;margin-top:2px}.dno{font-size:10.5px;opacity:.9;margin-top:6px}'
-        + '.meta{display:flex;justify-content:space-between;gap:18px;margin-top:18px;font-size:11px;color:#555}'
-        + '.meta .lb{font-size:8.5px;font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
-        + '.meta .strong{font-weight:700;color:#1A1523;font-size:13px;margin-top:3px}.meta .sm{font-size:10px;margin-top:2px}'
+        + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:20px 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
+        + '.org{font-size:' + fs(19) + ';font-weight:700;letter-spacing:.01em}.orgsub{font-size:' + fs(11) + ';opacity:.88;margin-top:6px;line-height:1.6}'
+        + '.dt{font-size:' + fs(23) + ';font-weight:700}.dtar{font-size:' + fs(12) + ';opacity:.88;margin-top:3px}.dno{font-size:' + fs(12.5) + ';opacity:.92;margin-top:7px}'
+        + '.meta{display:flex;justify-content:space-between;gap:18px;margin-top:20px;font-size:' + fs(12.5) + ';color:#555}'
+        + '.meta .lb{font-size:' + fs(10) + ';font-weight:700;color:#A9A6B4;letter-spacing:.06em}'
+        + '.meta .strong{font-weight:700;color:#1A1523;font-size:' + fs(15) + ';margin-top:4px}.meta .sm{font-size:' + fs(11.5) + ';margin-top:3px}'
         + '.meta .pair{display:flex;gap:18px;justify-content:flex-end}'
-        + 'table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:16px}'
-        + 'th{background:#F3EFFA;text-align:left;font-size:9px;letter-spacing:.04em;color:#555}'
-        + 'th,td{padding:8px 10px;border-bottom:1px solid #EEE}'
-        + '.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:16px}'
-        + '.qr svg{width:104px;height:104px;display:block}'
+        + 'table{width:100%;border-collapse:collapse;font-size:' + fs(13.3) + ';margin-top:18px}'
+        + 'th{background:#F3EFFA;text-align:left;font-size:' + fs(10.5) + ';letter-spacing:.04em;color:#555}'
+        + 'th,td{padding:' + fs(9.5) + ' ' + fs(11) + ';border-bottom:1px solid #EEE}'
+        + '.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:18px}'
+        + '.qr svg{width:' + fs(112) + ';height:' + fs(112) + ';display:block}'
         + '.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:0;pointer-events:none}.wm img{max-width:70%;max-height:60%;opacity:.08}'
         + '.hdr img,.ftr img{width:100%;display:block}'
-        + '.tot{width:230px;font-size:11.5px}.tot div{display:flex;justify-content:space-between;padding:4px 0}'
-        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:14px;padding-top:7px;color:' + accent + '}'
-        + '.notes{margin-top:16px;font-size:10px;color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:9px}'
+        + '.tot{width:' + fs(250) + ';font-size:' + fs(13.3) + '}.tot div{display:flex;justify-content:space-between;padding:5px 0}'
+        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(16.5) + ';padding-top:8px;color:' + accent + '}'
+        + '.notes{margin-top:18px;font-size:' + fs(11.5) + ';color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:10px}'
         + (opts && opts.forPrint ? '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 0) + 'mm}' : '');
       return { title: title + ' ' + esc(doc.no), css, body, layout: L };
     };
     // Layout settings for a target, with the shipped defaults. Persisted as AppSetting "printLayout"
     // = { invoice: {...}, quotation: {...} } so each document type can be branded separately.
     this._printLayoutDefaults = { accent: '#7C00FF', pageSize: 'A4', margin: 0, vatRate: 15, zatcaQr: true,
-      bilingual: true };
+      bilingual: true, fontScale: 100 };
     // Paint the Print Layout designer's sheet with the REAL builder and a sample document, scaled to
     // the on-screen page. This is what makes the designer a true preview instead of a mockup.
     this._paintPrintPreview = () => {
@@ -11457,6 +11463,9 @@ class Component extends DCLogic {
         color: _plCur.pageSize === label ? '#fff' : '#6F6C7A', bg: _plCur.pageSize === label ? '#7C00FF' : '#F3F1F7',
         select: () => _plSet({ pageSize: label }) })),
       plMargin: String(_plCur.margin), setPlMargin: (e9) => _plSet({ margin: Math.max(0, Math.min(40, parseInt(e9.target.value, 10) || 0)) }),
+      // Clamped to a range that still fits an invoice on the page: below ~60% it is unreadable, above
+      // ~180% the items table starts pushing the totals onto a second sheet.
+      plFont: String(_plCur.fontScale ?? 100), setPlFont: (e9) => _plSet({ fontScale: Math.max(60, Math.min(180, parseInt(e9.target.value, 10) || 100)) }),
       plVat: String(_plCur.vatRate), setPlVat: (e9) => _plSet({ vatRate: Math.max(0, Math.min(100, parseFloat(e9.target.value) || 0)) }),
       plQrLabel: _plCur.zatcaQr ? 'On' : 'Off',
       plQrColor: _plCur.zatcaQr ? '#0E9355' : '#6F6C7A', plQrBg: _plCur.zatcaQr ? '#E7F8EF' : '#F3F1F7',
