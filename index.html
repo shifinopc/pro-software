@@ -204,6 +204,30 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{ dlgShow }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ dlgCancel }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:500; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .15s ease both;">
+      <div onClick="{{ stopClick }}" style="width:430px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); padding:22px 24px; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; gap:12px;">
+          <span style="width:30px; height:30px; border-radius:10px; background:{{ dlgIconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ dlgIconColor }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ dlgIcon }}"></path></svg>
+          </span>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700; color:#1A1523;">{{ dlgTitle }}</div>
+            <sc-if value="{{ dlgHasBody }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px; color:#6F6C7A; margin-top:4px; line-height:1.5; white-space:pre-line;">{{ dlgBody }}</div></sc-if>
+          </div>
+        </div>
+        <sc-if value="{{ dlgIsPrompt }}" hint-placeholder-val="{{ false }}">
+          <input value="{{ dlgValue }}" onInput="{{ setDlgValue }}" placeholder="{{ dlgPlaceholder }}" data-dlg-input="true" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; margin-top:14px; outline:none;">
+        </sc-if>
+        <sc-if value="{{ dlgHasError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#C0353A; margin-top:8px;">{{ dlgError }}</div></sc-if>
+        <div style="display:flex; gap:9px; justify-content:flex-end; margin-top:18px;">
+          <button onClick="{{ dlgCancel }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 17px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">{{ dlgCancelLabel }}</button>
+          <button onClick="{{ dlgAccept }}" style="background:{{ dlgOkBg }}; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer;">{{ dlgOkLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ nfShow }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed; inset:0; z-index:200; background:#FBFAFE; display:flex; align-items:center; justify-content:center; padding:24px;">
       <div style="width:470px; max-width:100%; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 20px 56px rgba(38,7,77,.14); padding:28px 30px;">
@@ -5897,6 +5921,19 @@ class Component extends DCLogic {
     spCurrent: '', spNew: '', spConfirm: '', spMsg: null };
   componentDidMount() {
 
+    // ── In-app confirm / prompt ──────────────────────────────────────────
+    // Replaces window.confirm and window.prompt. Both resolve on a real choice and NEVER return a
+    // truthy fallback on cancel: confirm → false, prompt → null. The reject-document bug came from
+    // prompt(...) || 'Rejected', where cancelling filed the rejection anyway.
+    this._askDialog = (opts) => new Promise((resolve) => {
+      this.setState({ dlg: { ...opts, value: opts.value == null ? '' : String(opts.value), error: '' }, dlgResolve: resolve });
+      // Focus the field so a prompt behaves like the native one it replaces.
+      if (opts.kind === 'prompt') setTimeout(() => { const el = document.querySelector('[data-dlg-input]'); if (el) { el.focus(); el.select && el.select(); } }, 40);
+    });
+    this._confirm = (title, opts) => this._askDialog({ kind: 'confirm', title, ...(opts || {}) });
+    this._prompt = (title, value, opts) => this._askDialog({ kind: 'prompt', title, value, ...(opts || {}) });
+
+
     // ── Load state, per dataset ──────────────────────────────────────────
     // 'loading' | 'ok' | 'empty' | 'denied' | 'expired' | 'offline' | 'error'
     // Written by _load below; read by renderVals so a list can distinguish "nothing here" from
@@ -6725,11 +6762,13 @@ class Component extends DCLogic {
     };
     // Delete a user (confirm first). Portal users lose access; staff accounts are removed.
     this._userDelete = (id, name) => {
-      if (!window.confirm('Delete ' + name + '? This permanently removes the account and cannot be undone.')) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch(API + '/api/users/' + id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else r.json().then(j => this.toast(j.error || 'Could not delete')).catch(() => this.toast('Could not delete')); })
-        .catch(() => this.toast('Server unreachable'));
+      this._confirm('Delete ' + name + '?', { body: 'This permanently removes the account and cannot be undone.', danger: true }).then((ok9) => {
+        if (!ok9) return;
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch(API + '/api/users/' + id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else r.json().then(j => this.toast(j.error || 'Could not delete')).catch(() => this.toast('Could not delete')); })
+          .catch(() => this.toast('Server unreachable'));
+      });
     };
     // Persist custom roles (Settings → Permissions → + Create role) → AppSetting "roles".
     this._saveRoles = (arr) => {
@@ -6763,6 +6802,46 @@ class Component extends DCLogic {
     this._tt = setTimeout(() => this.setState({ toast: null }), t === 'error' ? 4200 : 2600);
   }
   renderVals() {
+
+    // ── In-app dialog bindings ──
+    const _dlg = this.state.dlg || null;
+    const _dlgDone = (result) => {
+      const done = this.state.dlgResolve;
+      this.setState({ dlg: null, dlgResolve: null });
+      if (done) done(result);
+    };
+    const dialogApi = {
+      dlgShow: !!_dlg,
+      dlgTitle: (_dlg && _dlg.title) || '',
+      dlgBody: (_dlg && _dlg.body) || '',
+      dlgHasBody: !!(_dlg && _dlg.body),
+      dlgIsPrompt: !!(_dlg && _dlg.kind === 'prompt'),
+      dlgValue: (_dlg && _dlg.value) || '',
+      dlgPlaceholder: (_dlg && _dlg.placeholder) || '',
+      dlgError: (_dlg && _dlg.error) || '',
+      dlgHasError: !!(_dlg && _dlg.error),
+      dlgOkLabel: (_dlg && _dlg.okLabel) || (_dlg && _dlg.danger ? 'Delete' : 'OK'),
+      dlgCancelLabel: (_dlg && _dlg.cancelLabel) || 'Cancel',
+      // Destructive actions look destructive rather than relying on the wording alone.
+      dlgOkBg: (_dlg && _dlg.danger) ? '#C0353A' : '#7C00FF',
+      dlgIconBg: (_dlg && _dlg.danger) ? '#FEECEC' : '#F3E8FF',
+      dlgIconColor: (_dlg && _dlg.danger) ? '#C0353A' : '#7C00FF',
+      dlgIcon: (_dlg && _dlg.danger)
+        ? 'M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'
+        : (_dlg && _dlg.kind === 'prompt') ? 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z' : 'M12 8v5M12 17h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20',
+      setDlgValue: (e) => this.setState({ dlg: { ..._dlg, value: e.target.value, error: '' } }),
+      dlgCancel: () => _dlgDone(_dlg && _dlg.kind === 'prompt' ? null : false),
+      dlgAccept: () => {
+        if (_dlg && _dlg.kind === 'prompt') {
+          const v = String((_dlg.value == null ? '' : _dlg.value)).trim();
+          // A prompt that must not come back empty says so instead of quietly accepting nothing.
+          if (_dlg.required && !v) return this.setState({ dlg: { ..._dlg, error: _dlg.requiredNote || 'This cannot be empty' } });
+          return _dlgDone(v);
+        }
+        _dlgDone(true);
+      },
+    };
+
     // ── App-level state banner (session expired / server unreachable) ──
     // Expired beats offline: if the token is dead, reconnecting changes nothing until they sign in.
     const _bannerKind = this.state.authExpired ? 'expired' : (this.state.apiOffline ? 'offline' : null);
@@ -9409,11 +9488,13 @@ class Component extends DCLogic {
           // of reveals/edits lives in Settings → Audit.
           histShown: false, histLabel: '', toggleHist: () => {}, history: [],
           remove: () => {
-            if (!window.confirm('Delete the stored credential for "' + c7.label + '"?')) return;
-            const t7 = localStorage.getItem('stimespro:token');
-            fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + c7.id, { method: 'DELETE', headers: t7 ? { Authorization: 'Bearer ' + t7 } : {} })
-              .then(r7 => { if (!r7.ok) return this.toast('Could not delete', 'error'); this.toast('Credential deleted'); this._opReload('credentials', 'credentialsData'); })
-              .catch(() => this.toast('Server unreachable', 'error'));
+            this._confirm('Delete this credential?', { body: 'The stored credential for "' + c7.label + '" will be removed.', danger: true }).then((ok9) => {
+              if (!ok9) return;
+              const t7 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + c7.id, { method: 'DELETE', headers: t7 ? { Authorization: 'Bearer ' + t7 } : {} })
+                .then(r7 => { if (!r7.ok) return this.toast('Could not delete', 'error'); this.toast('Credential deleted'); this._opReload('credentials', 'credentialsData'); })
+                .catch(() => this.toast('Server unreachable', 'error'));
+            });
           },
         };
       });
@@ -11132,11 +11213,13 @@ class Component extends DCLogic {
     const gcDelete = (g9) => {
       const inUse = (_govTasks || []).filter(t9 => t9.govCenter === g9.name).length;
       if (inUse) return this.toast('Cannot delete — ' + inUse + ' active submission' + (inUse === 1 ? '' : 's') + ' reference ' + g9.name);
-      if (!window.confirm('Delete government center "' + g9.name + '"?')) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/gov-centers/' + g9.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r9 => { if (r9.ok) { this.toast('Center deleted'); this._opReload('gov-centers', 'govCentersData'); } else this.toast('Could not delete'); })
-        .catch(() => this.toast('Server unreachable'));
+      this._confirm('Delete government center?', { body: '"' + g9.name + '" will be removed.', danger: true }).then((ok9) => {
+        if (!ok9) return;
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/gov-centers/' + g9.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r9 => { if (r9.ok) { this.toast('Center deleted'); this._opReload('gov-centers', 'govCentersData'); } else this.toast('Could not delete'); })
+          .catch(() => this.toast('Server unreachable'));
+      });
     };
     // Attach manage handlers to the rendered cards (matched by name — defs derive from the same rows).
     govCenters.forEach(gc9 => {
@@ -11319,11 +11402,13 @@ class Component extends DCLogic {
     const _pkgCap = (s9) => String(s9 || '').charAt(0).toUpperCase() + String(s9 || '').slice(1);
     const pkgDelete = (p9, inUse9) => {
       if (inUse9) return this.toast('Cannot delete — ' + inUse9 + ' client' + (inUse9 === 1 ? ' is' : 's are') + ' subscribed to ' + p9.name);
-      if (!window.confirm('Delete package "' + p9.name + '"? This cannot be undone.')) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/packages/' + p9.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r9 => r9.ok ? (this.toast('Package deleted'), this._opReload('packages', 'packagesData')) : r9.json().then(j9 => this.toast(j9.error || 'Could not delete')).catch(() => this.toast('Could not delete')))
-        .catch(() => this.toast('Server unreachable'));
+      this._confirm('Delete package?', { body: '"' + p9.name + '" will be removed. This cannot be undone.', danger: true }).then((ok9) => {
+        if (!ok9) return;
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/packages/' + p9.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r9 => r9.ok ? (this.toast('Package deleted'), this._opReload('packages', 'packagesData')) : r9.json().then(j9 => this.toast(j9.error || 'Could not delete')).catch(() => this.toast('Could not delete')))
+          .catch(() => this.toast('Server unreachable'));
+      });
     };
     const pkgDefs = (_pkgReal
       ? pkgData.map((p9, i9) => {
@@ -11419,18 +11504,21 @@ class Component extends DCLogic {
         const n9 = _deptCount(nm9);
         return { name: nm9, staffLabel: n9 + ' employee' + (n9 === 1 ? '' : 's'), canManage: canWrite,
           rename: () => {
-            const v9 = window.prompt('Rename department', nm9);
-            if (v9 == null) return;
-            const nv9 = v9.trim();
-            if (!nv9) return this.toast('Department name cannot be empty', 'error');
-            if (deptList.some((d9, j9) => j9 !== i9 && d9.toLowerCase() === nv9.toLowerCase())) return this.toast('"' + nv9 + '" already exists', 'error');
-            const next9 = deptList.map((d9, j9) => (j9 === i9 ? nv9 : d9));
-            _deptSave(next9, 'Department renamed');
+            this._prompt('Rename department', nm9, { required: true, requiredNote: 'Department name cannot be empty', okLabel: 'Rename' }).then((v9) => {
+              if (v9 == null) return;
+              const nv9 = v9.trim();
+              if (!nv9) return this.toast('Department name cannot be empty', 'error');
+              if (deptList.some((d9, j9) => j9 !== i9 && d9.toLowerCase() === nv9.toLowerCase())) return this.toast('"' + nv9 + '" already exists', 'error');
+              const next9 = deptList.map((d9, j9) => (j9 === i9 ? nv9 : d9));
+              _deptSave(next9, 'Department renamed');
+            });
           },
           remove: () => {
             if (n9) return this.toast('Cannot delete — ' + n9 + ' employee' + (n9 === 1 ? ' is' : 's are') + ' in ' + nm9, 'error');
-            if (!window.confirm('Delete department "' + nm9 + '"?')) return;
-            _deptSave(deptList.filter((_d9, j9) => j9 !== i9), 'Department deleted');
+            this._confirm('Delete department?', { body: '"' + nm9 + '" will be removed.', danger: true }).then((ok9) => {
+              if (!ok9) return;
+              _deptSave(deptList.filter((_d9, j9) => j9 !== i9), 'Department deleted');
+            });
           } };
       }),
       deptEmpty: deptList.length === 0,
@@ -11577,11 +11665,13 @@ class Component extends DCLogic {
         if (!this.state.dtEditId) return;
         const inUse9 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).filter(d9 => d9.docType === this.state.dtnName).length;
         if (inUse9) return this.toast('Cannot delete — ' + inUse9 + ' document' + (inUse9 === 1 ? '' : 's') + ' use this type', 'error');
-        if (!window.confirm('Delete document type "' + this.state.dtnName + '"?')) return;
-        const t2 = localStorage.getItem('stimespro:token');
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/document-types/' + this.state.dtEditId, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-          .then(r2 => { if (!r2.ok) return this.toast('Could not delete', 'error'); this.setState({ dtNewOpen: false, dtEditId: null }); this.toast('Document type deleted'); this._opReload('document-types', 'docTypesData'); })
-          .catch(() => this.toast('Server unreachable', 'error'));
+        this._confirm('Delete document type?', { body: '"' + this.state.dtnName + '" will be removed.', danger: true }).then((ok9) => {
+          if (!ok9) return;
+          const t2 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/document-types/' + this.state.dtEditId, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+            .then(r2 => { if (!r2.ok) return this.toast('Could not delete', 'error'); this.setState({ dtNewOpen: false, dtEditId: null }); this.toast('Document type deleted'); this._opReload('document-types', 'docTypesData'); })
+            .catch(() => this.toast('Server unreachable', 'error'));
+        });
       },
       dtnName: this.state.dtnName || '', dtnAuthority: this.state.dtnAuthority || '',
       dtnLead: this.state.dtnLead || '30', dtnFee: this.state.dtnFee || '', dtnErr: this.state.dtnErr || false,
@@ -11951,24 +12041,30 @@ class Component extends DCLogic {
         const g3 = _gClone();
         const row3 = gNodesRaw[i3]; if (!row3) return;
         const node3 = g3.nodes.find(n3 => n3.id === row3[0]); if (!node3) return;
-        const label3 = window.prompt('Step label:', node3.label || ''); if (label3 == null) return;
-        if (label3.trim()) node3.label = label3.trim();
-        node3.config = node3.config || {};
-        const ask3 = (q3, key3, num3) => {
-          const v3 = window.prompt(q3, node3.config[key3] == null ? '' : String(node3.config[key3]));
-          if (v3 == null) return;
-          if (!v3.trim()) delete node3.config[key3];
-          else node3.config[key3] = num3 ? (parseInt(v3) || 0) : v3.trim();
-        };
-        const T3 = node3.type;
-        if (T3 === 'task' || T3 === 'approval') { ask3('Assignee role (pro_officer / admin / accountant):', 'assigneeRole'); ask3('SLA hours:', 'slaHours', true); }
-        else if (T3 === 'issue_document') ask3('Document type this issues / renews:', 'docType');
-        else if (T3 === 'charge_fee') { ask3('Invoice amount:', 'amount', true); ask3('Service description:', 'service'); }
-        else if (T3 === 'decision' || T3 === 'branch') ask3('Condition variable (e.g. passportValid):', 'var');
-        else if (T3 === 'notify' || T3 === 'notification') ask3('Notification message:', 'message');
-        else if (T3 === 'delay') ask3('Delay hours:', 'hours', true);
-        else if (T3 === 'webhook') ask3('Webhook URL:', 'url');
-        _gSync(g3); this.toast('Step updated — Save to persist');
+        // Sequential questions. The in-app dialog resolves rather than blocks, so the chain is
+        // awaited — cancelling any step stops the edit there, as the native prompts did.
+        (async () => {
+          const label3 = await this._prompt('Step label:', node3.label || '', { okLabel: 'Next' });
+          if (label3 == null) return;
+          if (label3.trim()) node3.label = label3.trim();
+          node3.config = node3.config || {};
+          const ask3 = async (q3, key3, num3) => {
+            const v3 = await this._prompt(q3, node3.config[key3] == null ? '' : String(node3.config[key3]), { placeholder: 'Leave blank to clear' });
+            if (v3 == null) return false;
+            if (!v3.trim()) delete node3.config[key3];
+            else node3.config[key3] = num3 ? (parseInt(v3) || 0) : v3.trim();
+            return true;
+          };
+          const T3 = node3.type;
+          if (T3 === 'task' || T3 === 'approval') { await ask3('Assignee role (pro_officer / admin / accountant):', 'assigneeRole'); await ask3('SLA hours:', 'slaHours', true); }
+          else if (T3 === 'issue_document') await ask3('Document type this issues / renews:', 'docType');
+          else if (T3 === 'charge_fee') { await ask3('Invoice amount:', 'amount', true); await ask3('Service description:', 'service'); }
+          else if (T3 === 'decision' || T3 === 'branch') await ask3('Condition variable (e.g. passportValid):', 'var');
+          else if (T3 === 'notify' || T3 === 'notification') await ask3('Notification message:', 'message');
+          else if (T3 === 'delay') await ask3('Delay hours:', 'hours', true);
+          else if (T3 === 'webhook') await ask3('Webhook URL:', 'url');
+          _gSync(g3); this.toast('Step updated — Save to persist');
+        })();
       };
     } else { this._wfAddNode = null; this._wfRemoveNode = null; this._wfEditNode = null; }
     const _gSelReal = _gRealNode(gSel);
@@ -12337,11 +12433,13 @@ class Component extends DCLogic {
     const sec = this.state.securityState || {};
     const _keys = Array.isArray(this.state.apiKeysData) ? this.state.apiKeysData.filter(k2 => !k2.revoked) : [];
     const _logoutAll = () => {
-      if (!window.confirm('Sign out of ALL sessions on every device? You stay signed in here.')) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/auth/logout-all', { method: 'POST', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r2 => r2.json()).then(j2 => { if (j2.token) localStorage.setItem('stimespro:token', j2.token); this.toast('All other sessions signed out'); })
-        .catch(() => this.toast('Server unreachable'));
+      this._confirm('Sign out everywhere?', { body: 'Every other session on every device is ended. You stay signed in here.', okLabel: 'Sign out everywhere', danger: true }).then((ok9) => {
+        if (!ok9) return;
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/auth/logout-all', { method: 'POST', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r2 => r2.json()).then(j2 => { if (j2.token) localStorage.setItem('stimespro:token', j2.token); this.toast('All other sessions signed out'); })
+          .catch(() => this.toast('Server unreachable'));
+      });
     };
     // ---- Profile & Settings: Sessions & recent activity (REAL data only) ----
     // We don't track per-device sessions (stateless JWTs), so the honest view is: THIS session
@@ -12362,18 +12460,6 @@ class Component extends DCLogic {
       psBrowser: _psBrowser,
       psActivity, psActivityEmpty: psActivity.length === 0,
       psSignOutAll: _logoutAll,
-    };
-    const _manageKeys = () => {
-      const list2 = _keys.map(k2 => k2.name + ' (' + k2.prefix + ')').join('\n') || 'No keys yet.';
-      const nm2 = window.prompt('API keys:\n' + list2 + '\n\nType a name to CREATE a new key (or Cancel):');
-      if (!nm2 || !nm2.trim()) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/api-keys', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ name: nm2.trim() }) })
-        .then(r2 => r2.json()).then(j2 => {
-          if (!j2.key) return this.toast(j2.error || 'Could not create key');
-          window.prompt('Copy your API key now — it is shown ONCE and never again:', j2.key);
-          this._opReload('api-keys', 'apiKeysData');
-        }).catch(() => this.toast('Server unreachable'));
     };
     // Sign-in policy — stored in AppSetting "security"; the API reads it live (login lockout,
     // password minimums, token lifetime), so a save applies to the very next request.
@@ -12491,11 +12577,13 @@ class Component extends DCLogic {
         }).catch(() => this.setState({ skErr: 'Server unreachable' }));
     };
     const skRevoke = (k2) => {
-      if (!window.confirm('Revoke "' + k2.name + '"? Anything using this key stops working immediately.')) return;
-      const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/api-keys/' + k2.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r2 => { if (r2.ok) { this.toast('Key revoked'); _skReload(); } else this.toast('Could not revoke'); })
-        .catch(() => this.toast('Server unreachable'));
+      this._confirm('Revoke this API key?', { body: '"' + k2.name + '" stops working immediately, and anything using it will start failing.', okLabel: 'Revoke', danger: true }).then((ok9) => {
+        if (!ok9) return;
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/api-keys/' + k2.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r2 => { if (r2.ok) { this.toast('Key revoked'); _skReload(); } else this.toast('Could not revoke'); })
+          .catch(() => this.toast('Server unreachable'));
+      });
     };
     const skKeys = _keys.map(k2 => ({
       name: k2.name, prefix: k2.prefix + '…',
@@ -12793,11 +12881,16 @@ class Component extends DCLogic {
     const _formAppliesKey = selForm ? (_formDraft && _formDraft.appliesTo != null ? _formDraft.appliesTo : (selForm.appliesTo || '')) : '';
     const formAppliesVal = selSysForm ? ('Built-in · ' + selSysForm[1]) : selForm ? (APPLIES_LABEL[_formAppliesKey] || 'Standalone') : 'Employee';
     // WIRED: builder writes — add a field to the selected object/form (persisted), add a record.
-    const _bAddField = (target2) => {
+    const _bAddField = async (target2) => {
       if (!target2 || !target2.id) return this.toast('Select an item from the list first', 'error');
-      const label2 = window.prompt('Field label:'); if (!label2 || !label2.trim()) return;
-      const type2 = (window.prompt('Field type — text / number / date / dropdown:', 'text') || 'text').toLowerCase();
-      const req2 = window.confirm('Required field? OK = required, Cancel = optional');
+      const label2 = await this._prompt('Field label', '', { placeholder: 'e.g. Sponsor ID', required: true, requiredNote: 'A field needs a label', okLabel: 'Next' });
+      if (label2 == null) return;
+      const type2raw = await this._prompt('Field type', 'text', { body: 'One of: text, number, date, dropdown', okLabel: 'Next' });
+      if (type2raw == null) return;
+      const type2 = String(type2raw || 'text').toLowerCase();
+      // Was an OK/Cancel confirm, where Escape silently meant 'optional'. Now it is a real
+      // question with two labelled answers.
+      const req2 = await this._confirm('Is this field required?', { body: 'Required fields must be filled in before the form can be saved.', okLabel: 'Required', cancelLabel: 'Optional' });
       const nf = { id: 'f' + Date.now(), label: label2.trim(), type: ['text', 'number', 'date', 'dropdown'].includes(type2) ? type2 : 'text', required: req2 };
       this._opPut('custom-objects', target2.id, { fields: [...(target2.fields || []), nf] }, () => { this.toast('Field added'); this._reloadObjects(); });
     };
@@ -12948,7 +13041,7 @@ class Component extends DCLogic {
       ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
       permMatrix, permActions,
-      ...stateBannerApi, setNotifRules, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
+      ...dialogApi, ...stateBannerApi, setNotifRules, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 
     // SLA Monitor
@@ -13218,15 +13311,18 @@ class Component extends DCLogic {
           reject: () => {
             // Cancel must cancel. This is a destructive action and prompt() returns null on
             // Escape — the old `|| 'Rejected'` turned that into a confirmation.
-            const answer = (typeof prompt === 'function') ? prompt('Why is "' + it.label + '" being rejected?') : '';
-            if (answer === null) return;
-            const reason = String(answer || '').trim();
-            // A rejection with no reason gives the client nothing to act on, so it is refused
-            // rather than filed under the word 'Rejected'.
-            if (!reason) return this.toast('Give a reason — the client needs to know what to fix', 'error');
-            const n = { ...chk, [it.key]: { ...st, received: false, verified: false, rejected: true, note: reason } };
-            this.setState({ wfChk: { ...wfChk, [selStep.id]: n } });
-            if (selStep._real) this._chkPersist(selStep.id, it.key, 'reject', reason);
+            // Cancel returns null and is respected; a reason is required, and the dialog says so
+            // rather than filing the word 'Rejected' as the explanation.
+            this._prompt('Why is "' + it.label + '" being rejected?', '', {
+              placeholder: 'e.g. Illegible scan, expired copy, wrong document',
+              required: true, requiredNote: 'Give a reason — the client needs to know what to fix',
+              okLabel: 'Reject document', danger: true,
+            }).then((reason) => {
+              if (reason == null) return;
+              const n = { ...chk, [it.key]: { ...st, received: false, verified: false, rejected: true, note: reason } };
+              this.setState({ wfChk: { ...wfChk, [selStep.id]: n } });
+              if (selStep._real) this._chkPersist(selStep.id, it.key, 'reject', reason);
+            });
           },
           setRef: (e) => { const n = { ...chk, [it.key]: { ...st, ref: e.target.value } }; this.setState({ wfChk: { ...wfChk, [selStep.id]: n } }); },
         };
