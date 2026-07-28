@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/auth.js";
 
@@ -23,9 +24,14 @@ async function main() {
   await prisma.user.deleteMany();
 
   // Re-create ONLY the super-admin login. Real staff are added later via Invite User.
-  const pwAdmin = await hashPassword("admin123");
+  // Neither the address nor the password is hardcoded: this repo is public, so a literal here means
+  // every install ships with a super_admin whose credentials anyone can read. Supply both via the
+  // environment, or take the generated password printed once below.
+  const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@example.com";
+  const suppliedPw = process.env.ADMIN_PASSWORD;
+  const adminPw = suppliedPw && suppliedPw.length >= 8 ? suppliedPw : randomBytes(12).toString("base64url");
   await prisma.user.create({
-    data: { name: "Administrator", email: "shifin@ionob.com", roleId: "super_admin", status: "active", lastActive: "Now", type: "staff", passwordHash: pwAdmin },
+    data: { name: "Administrator", email: adminEmail, roleId: "super_admin", status: "active", lastActive: "Now", type: "staff", passwordHash: await hashPassword(adminPw) },
   });
 
   const counts = {
@@ -38,6 +44,11 @@ async function main() {
     employees: await prisma.employee.count(),
   };
   console.log("Clean complete — empty DB, staff logins only:", counts);
+  console.log(`\nSuper admin: ${adminEmail}`);
+  if (!suppliedPw || suppliedPw.length < 8) {
+    console.log(`Generated password: ${adminPw}`);
+    console.log("Shown once — not stored anywhere. Set ADMIN_EMAIL / ADMIN_PASSWORD to choose your own, and change it after signing in.\n");
+  }
 }
 
 main()

@@ -1287,7 +1287,9 @@ app.get("/api/companies", requireAuth, requireStaff, requireReadRole("super_admi
   res.json(await prisma.company.findMany({ take: 500 })); // hard cap: this list was unbounded
 });
 
-// Create a company AND auto-provision a portal login for it (default password "client123").
+// Create a company AND auto-provision a portal login for it. The password is RANDOM per client and
+// shown once (see below) — this comment used to name a shared default that the code stopped using,
+// which in a public repo is just a hint to go and try it.
 app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const vErr = validate("company", req.body, true);
   if (vErr) return res.status(400).json({ error: vErr });

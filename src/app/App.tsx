@@ -185,7 +185,6 @@ const UPGRADE_REQUESTS: UpgradeRequest[] = [
 ];
 
 // Client-portal logins (separate deployment): each client's contact email → their own account only
-const PORTAL_ACCOUNTS: { email: string; password: string; clientId: string }[] = CLIENTS.map(c => ({ email: c.email, password: "client123", clientId: c.id }));
 
 // Domain logic & catalogs moved to ./lib/domain.ts
 import {
@@ -11402,11 +11401,6 @@ function LoginScreen({ onLogin }: { onLogin: (role: Role) => void }) {
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const DEMO_ACCOUNTS: { email: string; password: string; role: Role; name: string; title: string }[] = [
-    { email: "admin@stimes.sa",    password: "admin123",    role: "admin",     name: "Khalid Al-Mutairi", title: "System Admin" },
-    { email: "officer@stimes.sa",  password: "officer123",  role: "pro_officer", name: "Sara Al-Ghamdi",    title: "PRO Officer" },
-    { email: "accounts@stimes.sa", password: "accounts123", role: "accountant",name: "Omar Farouk",        title: "Accountant" },
-  ];
 
   const handleLogin = async () => {
     if (!email.trim() || !password) { setError("Enter your email and password."); return; }
@@ -11427,11 +11421,10 @@ function LoginScreen({ onLogin }: { onLogin: (role: Role) => void }) {
       if (res.status === 401) { setError("Invalid credentials"); setLoading(false); return; }
       throw new Error("server");
     } catch {
-      // Local demo auth is a DEV convenience only — never a backdoor in production builds
-      if ((import.meta as any).env?.DEV) {
-        const match = DEMO_ACCOUNTS.find(a => a.email === email && a.password === password);
-        if (match) { onLogin(match.role); return; }
-      }
+      // The dev-only fallback that used to live here compared the password against a hardcoded list
+      // in this file. It was correctly gated behind import.meta.env.DEV so it never shipped, but the
+      // credentials were still committed to a public repo — and signing in that way only produced a
+      // console with no data behind it, since every screen reads from the API that just failed.
       setError("Cannot reach server — check the API is running"); setLoading(false);
     }
   };
@@ -12304,11 +12297,9 @@ export function ClientPortalApp() {
       if (res.status === 401) { setError("Invalid credentials — check your email and password."); setLoading(false); return; }
       throw new Error("server");
     } catch {
-      // Local demo auth is a DEV convenience only — disabled in production builds
-      if ((import.meta as any).env?.DEV) {
-        const acc = PORTAL_ACCOUNTS.find(a => a.email.toLowerCase() === email.trim().toLowerCase() && a.password === password);
-        if (acc) { setActiveCompanyId(acc.clientId); setSection("overview"); setLoggedClientId(acc.clientId); return; }
-      }
+      // Dev-only credential fallback removed — see the note on the console login. Same reasoning:
+      // the password list was committed to a public repo, and signing in this way gave a portal with
+      // no data behind it anyway.
       setError("Cannot reach server — check the API is running"); setLoading(false);
     }
   };

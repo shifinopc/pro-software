@@ -1,7 +1,23 @@
+import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword, encrypt } from "../src/auth.js";
 
 const prisma = new PrismaClient();
+
+/**
+ * Seed passwords must never be literals in this file: the repo is public, so a hardcoded default
+ * means every install ships with a super_admin whose password anyone can read. Take it from the
+ * environment, or mint a random one and print it ONCE so the operator can capture it.
+ * Printed rather than stored anywhere — this is the only time it is recoverable.
+ */
+const generated: string[] = [];
+function seedPassword(envVar: string, label: string): string {
+  const supplied = process.env[envVar];
+  if (supplied && supplied.length >= 8) return supplied;
+  const pw = randomBytes(12).toString("base64url");
+  generated.push(`  ${label.padEnd(22)} ${pw}      (set ${envVar} to choose your own)`);
+  return pw;
+}
 
 async function main() {
   // Clear in FK-safe order
@@ -93,7 +109,11 @@ async function main() {
 
   // Staff users (hashed passwords)
   const [pwAdmin, pwOfficer, pwAcct, pwSales, pwClient] = await Promise.all([
-    hashPassword("admin123"), hashPassword("officer123"), hashPassword("accounts123"), hashPassword("sales123"), hashPassword("client123"),
+    hashPassword(seedPassword("SEED_ADMIN_PASSWORD", "admin@stimes.sa")),
+    hashPassword(seedPassword("SEED_OFFICER_PASSWORD", "officer@stimes.sa")),
+    hashPassword(seedPassword("SEED_ACCOUNTS_PASSWORD", "accounts@stimes.sa")),
+    hashPassword(seedPassword("SEED_SALES_PASSWORD", "yousef@stimes.sa")),
+    hashPassword(seedPassword("SEED_CLIENT_PASSWORD", "portal logins")),
   ]);
   await prisma.user.createMany({
     data: [
@@ -104,7 +124,7 @@ async function main() {
     ],
   });
 
-  // Portal users — one per company (login with the company's contact email + "client123")
+  // Portal users — one per company (login with the company contact email + the client password above)
   const allCompanies = await prisma.company.findMany();
   await prisma.user.createMany({
     data: allCompanies.filter(c => c.email).map(c => ({
@@ -132,6 +152,11 @@ async function main() {
     users: await prisma.user.count(),
   };
   console.log("Seed complete:", counts);
+  if (generated.length) {
+    console.log("\nGENERATED PASSWORDS — shown once, not stored anywhere:");
+    generated.forEach((l) => console.log(l));
+    console.log("");
+  }
 }
 
 main()
