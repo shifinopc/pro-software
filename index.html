@@ -1686,6 +1686,9 @@
                     <sc-if value="{{ svcShowDeleteBtn }}" hint-placeholder-val="{{ true }}">
                       <button onClick="{{ askSvcDelete }}" style="background:#fff; color:#C0353A; border:1px solid #FBD5D5; font-size:11.5px; font-weight:700; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#FEECEC;">Delete service</button>
                     </sc-if>
+                    <sc-if value="{{ svcDeleteBlocked }}" hint-placeholder-val="{{ false }}">
+                      <button onClick="{{ whySvcBlocked }}" style="background:#F7F6FA; color:#A9A6B4; border:1px solid #EDEBF2; font-size:11.5px; font-weight:700; padding:8px 15px; border-radius:99px; cursor:not-allowed;" style-hover="background:#F0EEF5;">Delete service</button>
+                    </sc-if>
                     <sc-if value="{{ svcDeleteConfirming }}" hint-placeholder-val="{{ false }}">
                       <span style="font-size:11.5px; color:#C0353A; font-weight:600;">Delete for good?</span>
                       <button onClick="{{ svcEditDelete }}" style="background:#C0353A; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="background:#A22B30;">Yes, delete</button>
@@ -9076,10 +9079,13 @@ class Component extends DCLogic {
       svcEditBusy: !!this.state.svcEditBusy,
       svcEditSaveLabel: this.state.svcEditBusy ? 'Saving…' : 'Save changes',
       svcUsageLine: _svcUsageLine,
-      // Two flags rather than one: the runtime's sc-if has no else, so "offer delete" and "confirm
-      // delete" have to be mutually exclusive conditions.
+      // Three mutually exclusive states, because the runtime's sc-if has no else. Delete is ALWAYS
+      // on screen — hiding it when the service is in use just reads as a missing feature, so the
+      // blocked version stays visible and says why when pressed.
       svcShowDeleteBtn: !!(_svcUsage && _svcUsage.canDelete) && this.state.svcDeleteConfirm !== (_sve && _sve.id),
+      svcDeleteBlocked: !!_svcUsage && !_svcUsage.canDelete,
       svcDeleteConfirming: !!(_svcUsage && _svcUsage.canDelete) && this.state.svcDeleteConfirm === (_sve && _sve.id),
+      whySvcBlocked: () => this.toast(_svcUsageLine, 'error'),
       setSvcEditName: (e9) => this.setState({ svcEdit: { ...this.state.svcEdit, name: e9.target.value }, svcEditErr: '' }),
       setSvcEditSla: (e9) => this.setState({ svcEdit: { ...this.state.svcEdit, sla: e9.target.value } }),
       closeSvcEdit: () => this.setState({ svcEdit: null, svcEditErr: '', svcDeleteConfirm: null, svcUsage: null }),
