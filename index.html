@@ -1392,6 +1392,13 @@
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6D5BD0" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
                           <span style="flex:1;">{{ a.name }}</span>
                           <span style="color:#8C8899; font-size:11px;">{{ a.price }} · {{ a.when }}</span>
+                          <sc-if value="{{ a.notConfirming }}" hint-placeholder-val="{{ true }}">
+                            <span onClick="{{ a.askRemove }}" title="Remove this add-on" style="width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2.1" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span>
+                          </sc-if>
+                          <sc-if value="{{ a.confirming }}" hint-placeholder-val="{{ false }}">
+                            <span onClick="{{ a.doRemove }}" style="font-size:10.5px; font-weight:700; color:#fff; background:#C0353A; padding:4px 10px; border-radius:99px; cursor:pointer; white-space:nowrap;">Remove</span>
+                            <span onClick="{{ a.cancelRemove }}" style="font-size:10.5px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:4px 9px; border-radius:99px; cursor:pointer;">Keep</span>
+                          </sc-if>
                         </div>
                       </sc-for>
                     </div>
@@ -3927,6 +3934,18 @@
           <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; flex-shrink:0;">{{ voAmount }}</div>
         </div>
         <div style="margin-top:12px; font-size:11.5px; color:#7A5B12; background:#FFF8E7; border:1px solid #F5E3B8; border-radius:11px; padding:10px 13px; line-height:1.5;">It stops counting as owed, drops out of ageing and chasing, and the client no longer sees it as payable. It is not deleted.</div>
+        <!-- Only for an invoice that paid for a plan add-on: voiding it could mean either thing, so
+             the decision is taken here instead of being inferred. -->
+        <sc-if value="{{ voIsAddon }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; border:1px solid #E4D9FB; background:#FBF9FF; border-radius:12px; padding:12px 14px;">
+            <div style="font-size:11.5px; color:#4B4757; line-height:1.55;">This invoice paid for <b>{{ voAddonName }}</b> on this client's plan. What should happen to the service?</div>
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <span onClick="{{ pickVoKeep }}" style="font-size:11.5px; font-weight:600; color:{{ voKeepColor }}; background:{{ voKeepBg }}; border:1px solid {{ voKeepBorder }}; padding:7px 13px; border-radius:99px; cursor:pointer;">Keep it — I'll re-bill</span>
+              <span onClick="{{ pickVoRemove }}" style="font-size:11.5px; font-weight:600; color:{{ voRemoveColor }}; background:{{ voRemoveBg }}; border:1px solid {{ voRemoveBorder }}; padding:7px 13px; border-radius:99px; cursor:pointer;">Remove it — cancelling</span>
+            </div>
+            <sc-if value="{{ voRemoveOn }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#C0353A; margin-top:9px;">The client loses access to this service and is told.</div></sc-if>
+          </div>
+        </sc-if>
         <sc-if value="{{ voHasErr }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:12px; background:#FEECEC; border:1px solid #F6CFCF; border-radius:10px; padding:9px 12px; font-size:11.5px; color:#C0353A; font-weight:600;">{{ voErr }}</div>
         </sc-if>
@@ -7660,8 +7679,21 @@ class Component extends DCLogic {
       // ---- Void invoice modal ----
       ...(() => {
         const reason = this.state.voReason != null ? this.state.voReason : '';
+        // If this invoice paid for a plan add-on, voiding it is ambiguous: re-billing at a corrected
+        // price, or cancelling the add-on outright. The dialog asks rather than guessing — keeping
+        // it silently hands the service over free, dropping it silently takes it away mid-use.
+        const _voInv = (Array.isArray(this.state.invoicesData) ? this.state.invoicesData : []).find(v9 => v9.id === this.state.voOpen) || null;
+        const _voAddon = _voInv && _voInv.addonServiceId ? _voInv : null;
+        const _voKeep = this.state.voAddonAction !== 'remove';
         return {
           showVoid: !!this.state.voOpen,
+          voIsAddon: !!_voAddon,
+          voAddonName: _voAddon ? String(_voAddon.services || 'the add-on').replace(/ — plan add-on$/, '') : '',
+          voKeepOn: _voKeep, voRemoveOn: !_voKeep,
+          voKeepBg: _voKeep ? '#F3E8FF' : '#fff', voKeepBorder: _voKeep ? '#C9A2FF' : '#EDEBF2', voKeepColor: _voKeep ? '#5B00BC' : '#4B4757',
+          voRemoveBg: !_voKeep ? '#FEECEC' : '#fff', voRemoveBorder: !_voKeep ? '#F3B5B8' : '#EDEBF2', voRemoveColor: !_voKeep ? '#C0353A' : '#4B4757',
+          pickVoKeep: () => this.setState({ voAddonAction: 'keep' }),
+          pickVoRemove: () => this.setState({ voAddonAction: 'remove' }),
           voNo: this.state.voNo || '', voAmount: this.state.voAmount || '', voClient: this.state.voClient || '',
           voReason: reason,
           setVoReason: (e9) => this.setState({ voReason: e9.target.value, voErr: '' }),
@@ -7673,20 +7705,21 @@ class Component extends DCLogic {
             border: reason === label ? '#7C00FF' : '#EDEBF2',
             pick: () => this.setState({ voReason: label, voErr: '' }),
           })),
-          closeVoid: () => this.setState({ voOpen: null, voErr: '' }),
+          closeVoid: () => this.setState({ voOpen: null, voErr: '', voAddonAction: null }),
           submitVoid: () => {
             if (!String(reason).trim()) return this.setState({ voErr: 'Give a reason — it stays on the record' });
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/invoices/' + this.state.voOpen + '/void', { method: 'POST',
               headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
-              body: JSON.stringify({ reason: String(reason).trim() }) })
+              body: JSON.stringify({ reason: String(reason).trim(), addon: _voAddon ? (_voKeep ? 'keep' : 'remove') : undefined }) })
               .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
               .then(({ ok, j9 }) => {
                 if (!ok) return this.setState({ voErr: (j9 && j9.error && String(j9.error).slice(0, 180)) || 'Could not void the invoice' });
                 const no9 = this.state.voNo;
-                this.setState({ voOpen: null, voErr: '' });
-                this.toast(no9 + ' voided');
+                this.setState({ voOpen: null, voErr: '', voAddonAction: null });
+                this.toast(no9 + ' voided' + (j9 && j9.addonRemoved ? ' — add-on removed too' : ''));
                 this._reloadInvoices && this._reloadInvoices();
+                if (j9 && j9.addonRemoved) { this._opReload('subscriptions', 'subscriptionsData'); this._opReload('upgrade-requests', 'upgradeRequestsData'); }
               })
               .catch(() => this.setState({ voErr: 'Server unreachable — nothing changed' }));
           },
@@ -8439,10 +8472,32 @@ class Component extends DCLogic {
       const _cdAddons = (_cdSub && Array.isArray(_cdSub.addons)) ? _cdSub.addons : [];
       clDetailApi.cdAddons = _cdAddons.map(a9 => {
         const when9 = a9 && a9.addedAt ? new Date(a9.addedAt) : null;
+        const nm9 = (a9 && (a9.name || (_cdSiAll.find(x9 => x9.id === a9.serviceId) || {}).name)) || 'Service';
         return {
-          name: (a9 && (a9.name || (_cdSiAll.find(x9 => x9.id === a9.serviceId) || {}).name)) || 'Service',
+          name: nm9,
           price: Number(a9 && a9.price) > 0 ? fmtCur(Number(a9.price)) + ' one-off' : 'No charge',
           when: when9 && !isNaN(+when9) ? 'added ' + when9.toISOString().slice(0, 10) : '',
+          // Approving an add-on was one-way: a mistake could not be undone, and it also blocked the
+          // catalog entry from ever being deleted.
+          confirming: this.state.cdAddonRemove === (a9 && a9.serviceId),
+          notConfirming: this.state.cdAddonRemove !== (a9 && a9.serviceId),
+          askRemove: () => this.setState({ cdAddonRemove: a9 && a9.serviceId }),
+          cancelRemove: () => this.setState({ cdAddonRemove: null }),
+          doRemove: () => {
+            const t9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/remove-addon', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+              body: JSON.stringify({ serviceId: a9 && a9.serviceId, reason: 'removed from the client plan' }),
+            }).then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j: j9 })))
+              .then(({ ok, j }) => {
+                this.setState({ cdAddonRemove: null });
+                if (!ok) return this.toast((j && j.error) || 'Could not remove the add-on', 'error');
+                this.toast('Removed "' + nm9 + '" from this client');
+                this._opReload('subscriptions', 'subscriptionsData');
+                this._opReload('upgrade-requests', 'upgradeRequestsData');
+              })
+              .catch(() => { this.setState({ cdAddonRemove: null }); this.toast('Server unreachable — nothing changed', 'error'); });
+          },
         };
       });
       clDetailApi.cdAddonsShow = clDetailApi.cdAddons.length > 0;

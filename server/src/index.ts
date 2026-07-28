@@ -14,7 +14,7 @@ import { validate } from "./validate.js";
 import { prisma } from "./db.js";
 import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved } from "./notify.js";
+import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved } from "./notify.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, generateTempPassword,
@@ -770,11 +770,57 @@ app.post("/api/invoices/:id/void", requireAuth, requireStaff, requireWriteRole, 
     where: { id: inv.id },
     data: { status: "void", voidedAt: new Date().toISOString(), voidReason: reason },
   });
+
+  // An add-on invoice can be voided for two opposite reasons — re-billing it at a different price,
+  // or cancelling the add-on altogether. Guessing either way is wrong: keeping it silently gives
+  // the service away free, dropping it silently takes a service off a client mid-use. The caller
+  // says which, and `keep` is the default so a plain re-bill behaves as it always did.
+  let addonRemoved = false;
+  if (inv.addonServiceId && (req.body ?? {}).addon === "remove") {
+    addonRemoved = await removeAddonFor(inv.companyId, inv.addonServiceId, a.sub, `invoice ${inv.number} voided — ${reason}`);
+  }
   // Stop it chasing: the ladder rungs and any arrangement are meaningless once it's cancelled.
   await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: `dunning:${inv.id}:` } } });
   logActivity({ type: "finance", message: `Invoice ${inv.number} voided — ${reason}`, user: me?.name ?? "Staff" });
   await logAudit({ action: "invoice.void", actorId: a.sub, target: inv.id, detail: `${inv.number} · ${inv.currency} ${inv.amount} · ${reason}` });
-  res.json({ invoice });
+  res.json({ invoice, addonRemoved });
+});
+
+/**
+ * Take an add-on off a client's subscription. Shared by the "Remove" control on the client's plan
+ * and by voiding the invoice that paid for it, so both routes leave the same state behind.
+ * Returns whether anything was actually removed — callers report honestly rather than claiming it.
+ */
+async function removeAddonFor(companyId: string | null, serviceId: string, actorId: string, why: string) {
+  if (!companyId) return false;
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { groupId: true, name: true } });
+  const subs = await subsFor(companyId, company?.groupId);
+  const target = subs.find(s => Array.isArray(s.addons) && (s.addons as any[]).some(x => x?.serviceId === serviceId));
+  if (!target) return false;
+  const addons = (target.addons as any[]).filter(x => x?.serviceId !== serviceId);
+  const gone = (target.addons as any[]).find(x => x?.serviceId === serviceId);
+  await prisma.subscription.update({ where: { id: target.id }, data: { addons } });
+  // The approved request goes back to being undecided rather than staying "approved" for a service
+  // the client no longer has — otherwise the portal would refuse to let them ask for it again.
+  await prisma.upgradeRequest.updateMany({
+    where: { companyId, kind: "addon", serviceId, status: "approved" },
+    data: { status: "withdrawn" },
+  });
+  logActivity({ type: "finance", message: `Add-on removed: ${gone?.name ?? "service"} for ${company?.name ?? "client"} — ${why}` });
+  await logAudit({ action: "addon.remove", actorId, target: serviceId, detail: `${gone?.name ?? serviceId} · ${company?.name ?? companyId} · ${why}` });
+  notifyAddonRemoved({ companyId, serviceName: gone?.name ?? null });
+  return true;
+}
+
+/** Remove an add-on directly from the client's plan, independent of any invoice. */
+app.post("/api/companies/:id/remove-addon", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const serviceId = String((req.body ?? {}).serviceId ?? "");
+  if (!serviceId) return res.status(400).json({ error: "Which add-on?" });
+  const reason = String((req.body ?? {}).reason ?? "").trim() || "removed by staff";
+  const ok = await removeAddonFor(req.params.id, serviceId, a.sub, reason);
+  if (!ok) return res.status(404).json({ error: "That add-on is not on this client's plan" });
+  res.json({ ok: true });
 });
 
 /** Edit an employee's details, appending to the same history[] the exit flow writes. */
@@ -1405,6 +1451,7 @@ app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, r
         number, companyId: reqRow.companyId, clientName: company?.name ?? reqRow.clientName,
         amount: price, status: "draft", date: today, services: label,
         items: [{ name: label, units: 1, price }],
+        addonServiceId: reqRow.serviceId,
       },
     })] : []),
     prisma.subscription.update({

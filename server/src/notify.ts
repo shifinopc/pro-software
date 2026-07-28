@@ -340,6 +340,25 @@ export function notifyAddonApproved(a: { companyId?: string | null; serviceName?
   });
 }
 
+/** An add-on taken back off the plan — the client loses access, so they are told rather than finding out. */
+export function notifyAddonRemoved(a: { companyId?: string | null; serviceName?: string | null }) {
+  const name = a.serviceName || "A service";
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    inApp: { type: "system", title: `${name} was removed from your plan` },
+    subject: `${name} has been removed from your plan`,
+    heading: "A service was removed from your plan",
+    lines: [
+      `Service: <b>${esc(name)}</b>`,
+      "You will not be charged for it again. If this was not expected, reply to this email and your PRO team will sort it out.",
+      "You can ask for it again from your service catalog at any time.",
+    ],
+    cta: { label: "Open the service catalog", url: `${portalUrl()}/portal/service-catalog` },
+  });
+}
+
 /**
  * The refusal side of the same request. Sent so the catalog card can go back to offering the button
  * instead of leaving the client waiting on a decision that has already been made.
