@@ -594,7 +594,16 @@ app.post("/api/portal/appointments", requireAuth, requirePortal, requireNotSuspe
         history: [{ at: new Date().toISOString(), by: clientName || "Client", event: "Created", detail: `Requested for ${date}${time ? ` ${time}` : ""}` }] },
     });
     logActivity({ type: "client", message: `Appointment requested${clientName ? ` by ${clientName}` : ""}: ${type} · ${date}`, user: clientName ?? "Client" });
-    logNotification({ type: "task", title: `Appointment request${clientName ? ` — ${clientName}` : ""}`, message: `${type} · ${date}${time ? ` ${time}` : ""}` });
+    // Staff got an in-app row but no email, so a booking could sit unseen until someone opened the
+    // bell. The client's own confirmation comes later, when staff actually confirm the slot.
+    notify({
+      rule: "Approval requested", audience: "staff",
+      inApp: { type: "task", title: `Appointment request${clientName ? ` — ${clientName}` : ""}`, message: `${type} · ${date}${time ? ` ${time}` : ""}` },
+      subject: `Appointment requested${clientName ? ` by ${clientName}` : ""}`,
+      heading: "A client has requested an appointment",
+      lines: [`Type: <b>${type}</b>`, `Requested for: <b>${date}${time ? ` ${time}` : ""}</b>`,
+        employee ? `Employee: ${employee}` : "", "Confirm or reschedule it from the Appointments screen."],
+    });
     res.status(201).json(created);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
@@ -616,7 +625,18 @@ app.post("/api/portal/appointments/:id/reschedule-request", requireAuth, require
       history: [...hist, { at: new Date().toISOString(), by: who, event: "Reschedule requested", detail: `${date}${time ? ` ${time}` : ""}${note ? ` · ${note}` : ""}` }],
     } });
     logActivity({ type: "client", message: `Reschedule requested by ${who}: ${appt.type ?? "appointment"} → ${date}${time ? ` ${time}` : ""}`, user: who });
-    logNotification({ type: "task", title: `Reschedule request — ${who}`, message: `${appt.type ?? "Appointment"}: ${appt.date ?? ""} → ${date}${time ? ` ${time}` : ""}` });
+    // A reschedule request only changes the date once STAFF approve it, so it has to reach them.
+    notify({
+      rule: "Approval requested", audience: "staff",
+      inApp: { type: "task", title: `Reschedule request — ${who}`, message: `${appt.type ?? "Appointment"}: ${appt.date ?? ""} → ${date}${time ? ` ${time}` : ""}` },
+      subject: `Reschedule requested by ${who}`,
+      heading: "A client wants to move an appointment",
+      lines: [`Appointment: <b>${appt.type ?? "Appointment"}</b>`,
+        `Currently: ${appt.date ?? "—"}${appt.time ? ` ${appt.time}` : ""}`,
+        `Requested: <b>${date}${time ? ` ${time}` : ""}</b>`,
+        note ? `Note: ${note}` : "",
+        "The date only changes once you approve it."],
+    });
     res.json(updated);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });

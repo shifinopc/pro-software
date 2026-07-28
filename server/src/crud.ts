@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "./db.js";
 import { validate } from "./validate.js";
 import { logActivity, logNotification } from "./auth.js";
-import { notifyInvoiceRaised } from "./notify.js";
+import { notifyInvoiceRaised, notifyAppointmentChanged } from "./notify.js";
 
 // Build a friendly activity line for a newly-created record (persisted feed).
 // Resolves the owning company name so client-scoped records (employees, documents,
@@ -129,11 +129,36 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
     const err = validate(modelName, req.body, false);
     if (err) return res.status(400).json({ error: err });
     try {
-      if (!(await findInScope(req, req.params.id))) return res.status(404).json({ error: "Not found" });
+      const before = await findInScope(req, req.params.id);
+      if (!before) return res.status(404).json({ error: "Not found" });
       const updated = await model.update({ where: { id: req.params.id }, data: sanitize(modelName, req.body) });
       if (modelName === "invoice" && req.body?.status === "paid") {
         logActivity({ type: "finance", message: `Invoice ${updated.number} marked paid` });
         logNotification({ type: "payment", title: `Payment received: ${updated.number}`, message: updated.clientName ?? undefined });
+      }
+      // Staff act on appointments through this generic PUT, so a client could book through the portal
+      // and never hear back. The verb comes from what ACTUALLY changed, compared against the row as it
+      // was — announcing "rescheduled" when only a note was edited would be its own small lie.
+      if (modelName === "appointment") {
+        const stChanged = req.body?.status != null && String(req.body.status) !== String((before as any).status ?? "");
+        const whenChanged =
+          (req.body?.date != null && String(req.body.date) !== String((before as any).date ?? "")) ||
+          (req.body?.time != null && String(req.body.time) !== String((before as any).time ?? ""));
+        const st = String(updated.status ?? "").toLowerCase();
+        // Nothing relevant moved → say nothing. Editing a title or a note must not re-announce the
+        // status the appointment already had; the first version of this checked the CURRENT status
+        // rather than whether it CHANGED, and re-sent "confirmed" on every unrelated edit.
+        const what = !stChanged && !whenChanged ? null
+          : whenChanged ? "rescheduled"
+          : st === "cancelled" ? "cancelled"
+          : st === "confirmed" ? "confirmed"
+          : st === "attended" ? "marked attended"
+          : `set to ${updated.status}`;
+        if (what) {
+          notifyAppointmentChanged({
+            companyId: updated.companyId, type: updated.type, date: updated.date, time: updated.time, what,
+          });
+        }
       }
       res.json(updated);
     } catch (e: any) {

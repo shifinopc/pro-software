@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logActivity, logNotification } from "./auth.js";
-import { startInstance } from "./workflow.js";
+import { startInstance, pickAssignee } from "./workflow.js";
 import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
 
 const DAY = 86400000;
@@ -559,5 +559,80 @@ export async function chaseOverdueInvoices(): Promise<DunningResult> {
     }
   }
 
+  return out;
+}
+
+// ── Unapproved draft invoices ────────────────────────────────────────
+// Subscription billing raises invoices as DRAFTS for a human to release, and the create form does
+// too. Nothing chased a draft that then sat there, so revenue could quietly stall on an invoice
+// nobody remembered to approve — the client is never told, so only staff can notice.
+export type DraftResult = { scanned: number; nudged: number; details: string[] };
+
+/** Days a draft may sit before staff are reminded. Rungs, not a repeat: each fires once. */
+const DRAFT_LADDER = [3, 10, 21];
+
+export async function remindUnapprovedDrafts(): Promise<DraftResult> {
+  const out: DraftResult = { scanned: 0, nudged: 0, details: [] };
+  const drafts = await prisma.invoice.findMany({
+    where: { status: "draft" },
+    include: { company: { select: { name: true } } },
+  });
+
+  for (const inv of drafts) {
+    // `date` is the issue date the draft was raised with; without one there is nothing to age from.
+    const raised = parseDate(inv.date);
+    if (raised === null) continue;
+    out.scanned++;
+    const age = -daysUntil(raised);
+    // Highest rung reached, so a draft that is already 30 days old doesn't replay 3 → 10 → 21.
+    const rung = DRAFT_LADDER.filter(d => age >= d).pop();
+    if (rung == null) continue;
+
+    const who = inv.company?.name ?? inv.clientName ?? "a client";
+    const sent = await notifyOnce(`draft-invoice:${inv.id}:${rung}`, {
+      type: "task",
+      title: `Draft invoice waiting ${age} days: ${inv.number}`,
+      message: `${who} · ${inv.currency} ${inv.amount.toLocaleString()} — approve it to bill, or void it if it isn't owed.`,
+    });
+    if (!sent) continue; // this rung already went out
+
+    out.nudged++;
+    out.details.push(`${inv.number} — ${who} · ${age}d`);
+    await notifyAwait({
+      rule: "Approval requested",
+      audience: "staff",
+      subject: `Draft invoice ${inv.number} has been waiting ${age} days`,
+      heading: "A draft invoice is still unapproved",
+      lines: [
+        `Client: <b>${who}</b>`,
+        `Amount: <b>${inv.currency} ${inv.amount.toLocaleString()}</b>`,
+        `Raised: ${inv.date}`,
+        "Nothing has been billed and the client has not been told. Approve it to issue, or void it if it is not owed.",
+      ],
+    });
+  }
+  return out;
+}
+
+// ── Orphaned (unassigned) workflow steps ─────────────────────────────
+// Auto-assignment happens when a step is CREATED, which leaves two holes: steps created before it
+// existed, and steps created while nobody held the required role. Both sit in a shared pile forever.
+// This re-attempts them each tick, so hiring someone into a role also clears the backlog waiting on it.
+export type AssignResult = { scanned: number; assigned: number; details: string[] };
+
+export async function assignOrphanTasks(): Promise<AssignResult> {
+  const out: AssignResult = { scanned: 0, assigned: 0, details: [] };
+  const orphans = await prisma.workflowTask.findMany({
+    where: { status: "active", assignee: null, NOT: { assigneeRole: null } },
+    select: { id: true, title: true, assigneeRole: true },
+  });
+  for (const t of orphans) {
+    out.scanned++;
+    const who = await pickAssignee(t.assigneeRole!);
+    if (!who) continue; // still nobody in that role — leave it rather than assign the wrong desk
+    await prisma.workflowTask.update({ where: { id: t.id }, data: { assignee: who } });
+    out.assigned++;
+    out.details.push(`${t.title} → ${who}`);
+  }
   return out;
 }

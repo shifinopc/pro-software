@@ -290,3 +290,30 @@ export function notifySlaBreach(a: { title: string; detail: string }) {
     cta: { label: "Open the SLA monitor", url: `${consoleUrl()}/sla-monitor` },
   });
 }
+
+/**
+ * An appointment changed on the STAFF side (confirmed, rescheduled, cancelled, marked attended).
+ * This is the gap that mattered: a client could book through the portal and never hear back, because
+ * staff act on appointments through the generic CRUD, which had no notification of its own.
+ * `what` is the human verb, already decided by the caller from the actual field change.
+ */
+export function notifyAppointmentChanged(a: {
+  companyId?: string | null; type?: string | null; date?: string | null; time?: string | null;
+  what: string; note?: string | null;
+}) {
+  const when = [a.date, a.time].filter(Boolean).join(" ");
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    inApp: { type: "task", title: `Appointment ${a.what}: ${a.type ?? "appointment"}`, message: when || undefined },
+    subject: `Your ${a.type ?? "appointment"} has been ${a.what}`,
+    heading: `Appointment ${a.what}`,
+    lines: [
+      a.type ? `Type: <b>${esc(a.type)}</b>` : "",
+      when ? `When: <b>${esc(when)}</b>` : "",
+      a.note ? esc(a.note) : "",
+    ],
+    cta: { label: "View your appointments", url: `${portalUrl()}/portal/appointments` },
+  });
+}

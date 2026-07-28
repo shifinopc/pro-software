@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
-import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices } from "./jobs.js";
+import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
 
 const DAY = 86400000;
 
@@ -152,7 +152,25 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     });
   }
 
-  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning };
+  const drafts = await safely("drafts", remindUnapprovedDrafts);
+  if ("nudged" in drafts && drafts.nudged) {
+    await logAudit({
+      action: "cron.draft_invoices_nudged",
+      target: `${drafts.nudged} of ${drafts.scanned} drafts still unapproved`,
+      detail: [`source=${source}`, drafts.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  const orphans = await safely("orphan-tasks", assignOrphanTasks);
+  if ("assigned" in orphans && orphans.assigned) {
+    await logAudit({
+      action: "cron.tasks_assigned",
+      target: `${orphans.assigned} of ${orphans.scanned} unassigned steps given an owner`,
+      detail: [`source=${source}`, orphans.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans };
 }
 
 let timer: NodeJS.Timeout | null = null;

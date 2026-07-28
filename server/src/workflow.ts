@@ -60,7 +60,7 @@ async function resolveDynamic(ruleId: string, vars: Record<string, any>): Promis
  * Returns the user's NAME — that is what WorkflowTask.assignee holds and what /my-work matches on.
  * Null when nobody holds the role, which leaves the old unassigned behaviour intact.
  */
-async function pickAssignee(role: string): Promise<string | null> {
+export async function pickAssignee(role: string): Promise<string | null> {
   const candidates = await prisma.user.findMany({
     where: { roleId: role, status: "active", type: "staff" },
     select: { name: true },
