@@ -1591,31 +1591,44 @@
             <div style="flex:1; font-size:12.5px;">Each service maps a <b>document type</b> to a <b>workflow</b> that defines its steps. Edit steps in the Workflow Builder; fields in Document Types.</div>
             <button onClick="{{ openWorkflowNew }}" style="background:#fff; color:#7C00FF; border:none; font-size:11.5px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3E8FF;">Open Workflow Builder</button>
           </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;">
-            <sc-for list="{{ services }}" as="sv" hint-placeholder-count="8">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px; transition:transform .15s, box-shadow .15s, border-color .15s;" style-hover="transform:translateY(-3px); border-color:#DDD1F5; box-shadow:0 10px 24px rgba(124,0,255,.09);">
-                <div style="display:flex; align-items:flex-start; justify-content:space-between;">
-                  <div style="width:36px; height:36px; border-radius:11px; background:{{ sv.iconBg }}; display:flex; align-items:center; justify-content:center;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ sv.iconColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ sv.icon }}"></path></svg>
+          <!-- Listing, not a card grid. Fourteen services scan far better as rows: name, status,
+               plans and workflow line up in columns, so gaps ("no workflow", "not on any plan")
+               read down the page instead of having to be hunted card by card. -->
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
+            <div data-hidescroll="true" style="overflow-x:auto;">
+              <div style="min-width:920px;">
+                <div style="display:grid; grid-template-columns:minmax(220px,1.5fr) 118px minmax(120px,.9fr) minmax(200px,1.4fr) 186px; gap:14px; padding:12px 20px; background:#FAF9FC; border-bottom:1px solid #EDEBF2; font-size:10px; font-weight:800; color:#A9A6B4; letter-spacing:.07em;">
+                  <span>SERVICE</span><span>STATUS</span><span>PLANS</span><span>WORKFLOW</span><span style="text-align:right;">ACTIONS</span>
+                </div>
+                <sc-for list="{{ services }}" as="sv" hint-placeholder-count="8">
+                  <div style="display:grid; grid-template-columns:minmax(220px,1.5fr) 118px minmax(120px,.9fr) minmax(200px,1.4fr) 186px; gap:14px; padding:13px 20px; border-bottom:1px solid #F4F2F8; align-items:center;" style-hover="background:#FBFAFE;">
+                    <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                      <span style="width:32px; height:32px; border-radius:10px; background:{{ sv.iconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ sv.iconColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ sv.icon }}"></path></svg></span>
+                      <div style="min-width:0;">
+                        <div style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sv.name }}</div>
+                        <sc-if value="{{ sv.hasDocType }}" hint-placeholder-val="{{ true }}"><div style="font-size:10.5px; color:#8C8899; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📄 {{ sv.docType }}</div></sc-if>
+                      </div>
+                    </div>
+                    <span style="font-size:9.5px; font-weight:800; letter-spacing:.04em; color:{{ sv.badgeColor }}; background:{{ sv.badgeBg }}; padding:4px 10px; border-radius:99px; width:fit-content;">{{ sv.badge }}</span>
+                    <span title="{{ sv.planTitle }}" style="font-size:11.5px; color:{{ sv.planColor }}; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sv.planLabel }}</span>
+                    <div onClick="{{ sv.editWorkflow }}" style="min-width:0; cursor:pointer;">
+                      <div style="font-size:11.5px; font-weight:700; color:{{ sv.workflowColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sv.workflow }}</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:2px;">{{ sv.stepsLabel }} · {{ sv.docs }} docs · SLA {{ sv.sla }}</div>
+                    </div>
+                    <div style="display:flex; gap:7px; justify-content:flex-end;">
+                      <button onClick="{{ sv.editService }}" style="background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit service</button>
+                      <button onClick="{{ sv.editWorkflow }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit steps</button>
+                    </div>
                   </div>
-                  <span style="font-size:9.5px; font-weight:800; letter-spacing:.04em; color:{{ sv.badgeColor }}; background:{{ sv.badgeBg }}; padding:3px 10px; border-radius:99px;">{{ sv.badge }}</span>
-                </div>
-                <div style="font-size:14px; font-weight:700; margin-top:13px;">{{ sv.name }}</div>
-                <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                  <sc-if value="{{ sv.hasDocType }}" hint-placeholder-val="{{ true }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 8px; border-radius:99px;">📄 {{ sv.docType }}</span></sc-if>
-                  <span title="{{ sv.planTitle }}" style="font-size:9.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:2px 8px; border-radius:99px;">{{ sv.planLabel }}</span>
-                </div>
-                <div onClick="{{ sv.editWorkflow }}" style="margin-top:11px; display:flex; align-items:center; gap:8px; border:1px solid #F0EDF6; border-radius:11px; padding:9px 11px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#FBFAFE;">
-                  <span style="width:26px; height:26px; border-radius:8px; background:#EFEBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6D5BD0" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg></span>
-                  <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:700; color:{{ sv.iconColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sv.workflow }}</div><div style="font-size:9.5px; color:#A9A6B4;">{{ sv.stepsLabel }} · {{ sv.docs }} docs · SLA {{ sv.sla }}</div></div>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
-                </div>
-                <div style="display:flex; gap:7px; margin-top:11px;">
-                  <button onClick="{{ sv.editService }}" style="flex:1; background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit service</button>
-                  <button onClick="{{ sv.editWorkflow }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit steps</button>
-                </div>
+                </sc-for>
+                <sc-if value="{{ servicesEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:44px 24px; text-align:center;">
+                    <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">No services yet</div>
+                    <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Add the services you offer — each one links to the workflow that fulfils it.</div>
+                  </div>
+                </sc-if>
               </div>
-            </sc-for>
+            </div>
           </section>
           <sc-if value="{{ svcNewOpen }}" hint-placeholder-val="{{ false }}">
             <div onClick="{{ closeSvcNew }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; animation:fadeUp .15s ease both;">
@@ -1654,7 +1667,7 @@
             <div onClick="{{ closeSvcEdit }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; animation:fadeUp .15s ease both;">
               <div onClick="{{ stopClick }}" style="width:480px; max-width:92vw; background:#fff; border-radius:20px; box-shadow:0 24px 64px rgba(38,7,77,.28); padding:24px 26px;">
                 <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-                  <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Edit service</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Availability decides whether every plan gets it or clients ask for it as an add-on</div></div>
+                  <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Edit service</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Inclusion is set per plan — this is the service itself</div></div>
                   <div onClick="{{ closeSvcEdit }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
                 <div style="margin-top:16px;">
@@ -8981,7 +8994,10 @@ class Component extends DCLogic {
     const SVC_ICON_BY_NAME = (nm) => /visa/i.test(nm) ? I.stamp : /iqama|id/i.test(nm) ? I.card : /medical/i.test(nm) ? I.check : /gosi|labour|labor/i.test(nm) ? I.users : /register|formation|company|branch/i.test(nm) ? I.building : /vat|tax|invoice/i.test(nm) ? I.invoice : I.fileText;
     const svcDefs = (Array.isArray(siData) && siData.length
       ? siData.map(s2 => [s2.name, SVC_ICON_BY_NAME(s2.name), Number(s2.govFee) || 0, s2.time || '—', s2.sla || '—', Number(s2.docs) || 0, !!s2.included, s2.workflowId || null, s2.id, s2.docType || ''])
-      : (siData ? [] : [
+      // Design samples are for the UNAUTHENTICATED preview only. They used to show whenever the real
+      // catalog had not arrived yet, so every load of this page flashed three invented services —
+      // one of them ("Visa Renewal") not even in the catalog — before the fetch replaced them.
+      : ((siData || _authed) ? [] : [
         ['New Employment Visa', I.stamp, 3200, '5–7 days', '7 working days', 4, true, null, null, 'Employment Visa'],
         ['Visa Renewal', I.refresh, 2400, '3–5 days', '5 working days', 3, true, null, null, 'Employment Visa'],
         ['Medical Test', I.check, 350, '1–2 days', '2 working days', 2, true, null, null, 'Medical Certificate'],
@@ -9048,6 +9064,10 @@ class Component extends DCLogic {
           : plans9.length === _pkgsForSvc.length ? 'On every plan'
           : plans9.length === 1 ? 'On ' + plans9[0]
           : 'On ' + plans9.length + ' plans',
+        // Muted when no plan carries it: not an error (a client can still ask for it), just the
+        // one row where the answer is "nobody gets this by default".
+        planColor: plans9.length ? '#4B4757' : '#A9A6B4',
+        workflowColor: configured ? '#4B4757' : '#B8860B',
         planTitle: plans9.length ? plans9.join(', ') : 'No plan includes this service — clients can still request it as an add-on',
         // Edit used to jump straight to the Workflow Builder, so there was no way to change the
         // service itself — its name, SLA, availability or which workflow it is bound to.
@@ -13055,7 +13075,7 @@ class Component extends DCLogic {
       railLogout: () => this.setState({ railMenu: false, auth: 'login', lPass: '', lError: '', active: 'Dashboard', activeGroup: 'Main' }),
       ...ticketApi, ...bookApi, ...authApi, ...switcherApi, ...headerApi, ...empApi, ...threadApi, ...credApi, ...settingsApi,
       ...groupApi, ...clientsApi, ...payApi, ...docApi, ...empProfileApi, ...notifApi, ...editProfileApi, ...trackApi, ...uploadApi, ...folderApi, ...rdApi,
-      ...wizardApi, ...upgradeApi, services, ...svcNewApi, ...svcEditApi, renewalGroups,
+      ...wizardApi, ...upgradeApi, services, servicesEmpty: Array.isArray(siData) && services.length === 0, ...svcNewApi, ...svcEditApi, renewalGroups,
       ...requestsApi, ...quotesApi, ...planApi, ...mobileApi, ...calApi, ...notifPopApi, ...searchApi, ...apptApi, ...needsTodayApi, ...courierApi,
       ...tasksApi, ...tasksApi2, ...myTasksApi, ...myWorkApi, ...activityApi, ...approvalsApi, ...slaApi, ...slaApi2, ...queueApi, ...complianceApi,
       ...reportsApi, ...financeApi, ...govCentersApi, ...packagesApi, ...countryApi, ...docTypesApi, ...departmentsApi, ...workflowApi, ...settingsAdminApi,
