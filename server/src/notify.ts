@@ -379,3 +379,28 @@ export function notifyAddonRejected(a: { companyId?: string | null; serviceName?
     cta: { label: "Open the service catalog", url: `${portalUrl()}/portal/service-catalog` },
   });
 }
+
+/**
+ * The other end of notifyDocumentExpiring.
+ *
+ * A client was told "your document needs renewing — your PRO team is on it" and then never told it
+ * was done. The renewal completed, a new expiry was filed, and the only way to find out was to go
+ * looking. Closing that loop is the difference between a service and a black box.
+ */
+export function notifyDocumentRenewed(a: { companyId?: string | null; docType?: string | null; person?: string | null; expiryDate?: string | null; docNumber?: string | null }) {
+  const who = a.person ? ` — ${a.person}` : "";
+  notify({
+    rule: "Renewal due ≤ 30 days",
+    audience: "client",
+    companyId: a.companyId,
+    subject: `${a.docType ?? "Document"}${who} has been renewed`,
+    heading: "Your document has been renewed",
+    lines: [
+      `<b>${esc(a.docType ?? "Document")}${esc(who)}</b> is renewed and on file.`,
+      a.expiryDate ? `New expiry: <b>${esc(a.expiryDate)}</b>.` : "",
+      a.docNumber ? `Reference: ${esc(a.docNumber)}.` : "",
+      "No action is needed from you.",
+    ].filter(Boolean),
+    cta: { label: "View your documents", url: `${portalUrl()}/portal/documents` },
+  });
+}

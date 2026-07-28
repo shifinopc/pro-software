@@ -15,9 +15,11 @@ import { prisma } from "./db.js";
 import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved } from "./notify.js";
+import { startDeliveryForQuotation } from "./delivery.js";
+import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
-  requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, generateTempPassword,
+  requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
 
@@ -352,6 +354,16 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
     const docKey = new Date(t).toISOString(); // stable: derived from the expiry, not the clock
     if (days < 0) out.push({ id: "doc-" + d.id, kind: "alert", title: `${d.docType} — ${d.person} is overdue`, meta: `Compliance · ${Math.abs(days)}d overdue`, ts: nowISO, readTs: docKey, unread: true, cta: "Renew" });
     else if (days <= 30) out.push({ id: "doc-" + d.id, kind: "refresh", title: `Renewal reminder: ${d.docType} — ${d.person}`, meta: `Compliance · ${days} days left`, ts: nowISO, readTs: docKey, unread: true, cta: "Renew" });
+    // A completed renewal was invisible here. These notices are derived from the client's own
+    // records, and a renewal changes state without leaving anything for the expiry branches above
+    // to notice — the client was told the renewal had STARTED and never that it finished. The
+    // document's own history is the evidence, so it is read directly.
+    const hist = Array.isArray((d as any).history) ? (d as any).history as any[] : [];
+    const last = hist.length ? hist[hist.length - 1] : null;
+    if (last && last.at) {
+      const ago = (now - new Date(String(last.at)).getTime()) / 86400000;
+      if (ago >= 0 && ago <= 30) out.push({ id: "docren-" + d.id, kind: "check", title: `${d.docType} — ${d.person} has been renewed`, meta: `Compliance · new expiry ${d.expiryDate || "—"}`, ts: String(last.at), key: String(last.at) });
+    }
   }
   for (const r of reqs) {
     if (r.lastStaffMsgAt && String(r.lastStaffMsgAt) > String(r.clientReadAt || "")) out.push({ id: "req-" + r.id, kind: "check", title: `New reply on ${r.type || "your request"}`, meta: `Support · from your PRO team`, ts: r.lastStaffMsgAt, unread: true, cta: false });
@@ -412,7 +424,7 @@ app.post("/api/notifications/read", requireAuth, requireStaff, async (req, res) 
 
 // Staff: reset a client's portal login password (resets to the default and forces a change on next login).
 // Super Admin: log in as another user (impersonation) — no credentials. Audited. Only super_admin.
-app.post("/api/users/:id/login-as", requireAuth, requireStaff, async (req, res) => {
+app.post("/api/users/:id/login-as", requireAuth, requireStaff, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   if (a.role !== "super_admin") return res.status(403).json({ error: "Only a Super Admin can log in as another user" });
   const u = await prisma.user.findUnique({ where: { id: req.params.id } });
@@ -440,7 +452,7 @@ app.post("/api/companies/:id/reset-portal-password", requireAuth, requireStaff, 
 
 // Admin-only: reset ANY user's (staff or portal) password → one-time temp password, forced change on
 // first login. Kills any live sessions (tokenVersion++) and clears lockout.
-app.post("/api/users/:id/reset-password", requireAuth, requireStaff, requireWriteRole, resetLimiter, async (req, res) => {
+app.post("/api/users/:id/reset-password", requireAuth, requireStaff, requireWriteRole, requireHuman, resetLimiter, async (req, res) => {
   const a = (req as any).auth;
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -500,6 +512,13 @@ app.put("/api/portal/quotations/:id", requireAuth, requirePortal, async (req, re
   const verb = want === "changes_requested" ? "sent back with changes" : want;
   logActivity({ type: "finance", message: `Quotation ${q.number} ${verb} by ${q.clientName ?? "client"}`, user: q.clientName ?? "Client" });
   logNotification({ type: "system", title: `Quotation ${verb} — ${q.clientName ?? "client"}`, message: [`${q.number} · ${q.service ?? ""}`.trim(), note].filter(Boolean).join(" — ") });
+  // The client agreeing is the moment the firm is committed, so it is the moment the work is
+  // scheduled. Failing to schedule must not fail their acceptance — the quotation is already
+  // accepted by now, and the notification above is what tells staff either way.
+  if (want === "accepted") {
+    startDeliveryForQuotation(q.id, { actor: q.clientName ?? "Client" })
+      .catch(e => console.error("delivery failed for", q.number, e));
+  }
   res.json(updated);
 });
 
@@ -713,7 +732,7 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
     // Stamp lastClientMsgAt on creation so a brand-new request counts as unread for staff — the
     // opening message is a client message, even though it predates the thread.
     const created = await prisma.serviceRequest.create({
-      data: { companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
+      data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
     });
     logActivity({ type: "client", message: `Service request from ${co?.name ?? clientName ?? "a client"}: ${type ?? "request"}`, user: co?.name ?? clientName ?? "Client" });
     // Tells the staff inbox AND acknowledges to the client by email. Not awaited: SMTP must never
@@ -934,11 +953,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
   if (already) return res.status(409).json({ error: `${q.number} was already invoiced as ${already.number}` });
 
-  const year = new Date().getFullYear();
-  const prefix = `INV-${year}-`;
-  const last = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
-  const next = last.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
-  const number = prefix + String(next).padStart(3, "0");
+  const number = await nextInvoiceNumber();
 
   const today = new Date().toISOString().slice(0, 10);
   const [invoice] = await prisma.$transaction([
@@ -1118,7 +1133,7 @@ app.post("/api/portal/payment-notice", requireAuth, requirePortal, async (req, r
 
   try {
     const created = await prisma.serviceRequest.create({
-      data: { companyId: a.companyId, clientName: company?.name ?? null, type: "Payment notification",
+      data: { number: await nextNumber("request"), companyId: a.companyId, clientName: company?.name ?? null, type: "Payment notification",
         message, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
     });
     logActivity({ type: "client", message: `Payment reported by ${company?.name ?? "a client"}: ${amt.toLocaleString()}`, user: company?.name ?? "Client" });
@@ -1173,12 +1188,14 @@ app.post("/api/portal/employees/:id/exit-request", requireAuth, requirePortal, r
     String(notes ?? "").trim() ? `Notes: ${String(notes).trim()}` : null,
   ].filter(Boolean).join("\n");
 
+  // Resolved before the transaction opens: it reads the same table the transaction writes to.
+  const exitReqNo = await nextNumber("request");
   try {
     // Atomic: the request, the status freeze, and releasing any in-flight renewal must land together.
     // If the freeze were a second call that failed, we'd have an exit on file AND a renewal running.
     const [request] = await prisma.$transaction([
       prisma.serviceRequest.create({
-        data: { companyId: a.companyId, clientName: emp.company?.name ?? null, type: "Employee exit",
+        data: { number: exitReqNo, companyId: a.companyId, clientName: emp.company?.name ?? null, type: "Employee exit",
           message, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
       }),
       prisma.employee.update({
@@ -1466,11 +1483,7 @@ app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, r
     return res.status(409).json({ error: "That service is already on this client's plan" });
   }
 
-  const year = new Date().getFullYear();
-  const prefix = `INV-${year}-`;
-  const existing = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
-  const next = existing.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
-  const number = prefix + String(next).padStart(3, "0");
+  const number = await nextInvoiceNumber();
   const today = new Date().toISOString().slice(0, 10);
   const label = `${reqRow.serviceName ?? "Service"} — plan add-on`;
 
@@ -1558,7 +1571,7 @@ app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_ad
   const creds = await prisma.siteCredential.findMany({ take: 500 }); // hard cap
   res.json(creds.map(({ password, ...rest }: any) => rest));
 });
-app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const c = await prisma.siteCredential.findUnique({ where: { id: req.params.id } });
   if (!c) return res.status(404).json({ error: "Not found" });
@@ -1614,7 +1627,7 @@ app.delete("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, 
 //  • password provided        → active account with that password.
 //  • no password ("invite")   → a random one-time temp password is generated and returned ONCE,
 //                               the account is marked must-change-password. Admin / Super Admin only.
-app.post("/api/users", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.post("/api/users", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const { name, email, roleId, password, assignedClientIds, status, type, mustChangePassword, companyId } = req.body ?? {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Name is required" });
@@ -1654,7 +1667,7 @@ app.post("/api/users", requireAuth, requireStaff, requireWriteRole, async (req, 
 
 // Activate / deactivate (suspend) a user. Deactivating bumps tokenVersion so any live sessions are
 // invalidated immediately AND future logins are blocked (see the status gate in doLogin). Admin only.
-app.put("/api/users/:id/status", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.put("/api/users/:id/status", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const status = String((req.body ?? {}).status || "").toLowerCase();
   if (!["active", "inactive", "suspended"].includes(status)) return res.status(400).json({ error: "status must be active, inactive or suspended" });
@@ -1690,10 +1703,14 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
       : { error: "A positive amount is required" });
   const settled = already + amt >= inv.amount;
 
+  // Outside the transaction: it reads the payments table, and deriving it inside would be reading
+  // the same rows the transaction is about to write to.
+  const receiptNo = await nextNumber("receipt");
   try {
     const [payment] = await prisma.$transaction([
       prisma.payment.create({
         data: {
+          number: receiptNo,
           invoiceId: inv.id, invoiceNumber: inv.number, companyId: inv.companyId, clientName: inv.clientName,
           amount: amt, method: method ? String(method) : null, reference: reference ? String(reference) : null,
           date: date ? String(date) : new Date().toISOString().slice(0, 10), notes: notes ? String(notes) : null,
@@ -1741,7 +1758,6 @@ const entities: [string, string][] = [
   ["notifications", "notification"],
   ["document-types", "documentType"],
   ["custom-objects", "customObject"],
-  ["custom-records", "customRecord"],
   ["gov-centers", "govCenter"],
   ["appointments", "appointment"],
   ["courier-shipments", "courierShipment"],
@@ -1785,21 +1801,34 @@ const scopes: Record<string, ScopeFn> = {
  * exists. Two invoices sharing a number on a tax document is a real problem, and `number` has no
  * unique constraint to catch it.
  */
-const nextInvoiceNumber = async () => {
-  const prefix = `INV-${new Date().getFullYear()}-`;
-  const rows = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
-  const next = rows.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
-  return prefix + String(next).padStart(3, "0");
-};
+const nextInvoiceNumber = () => nextNumber("invoice");
 app.get("/api/invoices/next-number", requireAuth, requireStaff, async (_req, res) => {
   res.json({ number: await nextInvoiceNumber() });
 });
 
 /** Same for quotations, which had the same count-based bug (`QT-` + 339 + how many exist). */
 app.get("/api/quotations/next-number", requireAuth, requireStaff, async (_req, res) => {
-  const rows = await prisma.quotation.findMany({ where: { number: { startsWith: "QT-" } }, select: { number: true } });
-  const next = rows.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(3), 10) || 0), 0) + 1;
-  res.json({ number: "QT-" + String(next).padStart(3, "0") });
+  res.json({ number: await nextNumber("quotation") });
+});
+
+// ── Record sequences: the configured shape of every document reference ──
+// Returns the next number alongside each format so the screen can show what the change will
+// actually produce, rather than a sample the sequence might not agree with.
+app.get("/api/record-sequences", requireAuth, requireStaff, async (_req, res) => {
+  const cfg = await getSequences();
+  const preview: Record<string, string> = {};
+  for (const k of SEQ_KINDS) preview[k] = await nextNumber(k);
+  res.json({ sequences: cfg, next: preview });
+});
+
+app.put("/api/record-sequences", requireAuth, requireStaff, requireWriteRole, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const a = (req as any).auth;
+  const saved = await saveSequences(req.body?.sequences ?? req.body);
+  const preview: Record<string, string> = {};
+  for (const k of SEQ_KINDS) preview[k] = await nextNumber(k);
+  await logAudit({ action: "settings.record_sequences", actorId: a?.sub, detail: SEQ_KINDS.map(k => `${k}=${saved[k].pattern}`).join(" ") });
+  logActivity({ type: "system", message: `Record sequences updated — ${SEQ_KINDS.map(k => `${SEQ_LABEL[k]} ${preview[k]}`).join(", ")}` });
+  res.json({ sequences: saved, next: preview });
 });
 
 /**
@@ -1850,6 +1879,35 @@ app.post("/api/error-reports", reportLimiter, async (req, res) => {
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// ── The inbox for the above ──
+// Reports were being written and emailed and nothing could list them, so the record of what is
+// broken existed only in whoever's mailbox happened to get the alert. Admin-only: a report carries
+// a path, a stack and the reporter's identity.
+app.get("/api/error-reports", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const status = String(req.query.status ?? "").trim();
+  const rows = await prisma.errorReport.findMany({
+    where: status && status !== "all" ? { status } : undefined,
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+  const counts = await prisma.errorReport.groupBy({ by: ["status"], _count: true });
+  res.json({
+    rows,
+    counts: counts.reduce((m, c) => ({ ...m, [c.status]: c._count }), {} as Record<string, number>),
+  });
+});
+
+app.put("/api/error-reports/:id", requireAuth, requireStaff, requireWriteRole, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const a = (req as any).auth;
+  const want = String(req.body?.status ?? "").toLowerCase();
+  if (!["new", "seen", "closed"].includes(want)) return res.status(400).json({ error: "status must be new, seen or closed" });
+  try {
+    const row = await prisma.errorReport.update({ where: { id: req.params.id }, data: { status: want } });
+    await logAudit({ action: "errorreport.status", actorId: a?.sub, target: row.id, detail: want });
+    res.json(row);
+  } catch (e: any) { res.status(404).json({ error: "Not found" }); }
 });
 
 // Read-side relation includes the UI renders directly.
@@ -2072,22 +2130,24 @@ app.post("/api/upload", requireAuth, async (req, res) => {
 });
 
 // ── API keys: list (safe fields), create (full key returned ONCE), revoke ──
-app.get("/api/api-keys", requireAuth, requireStaff, async (_req, res) => {
+app.get("/api/api-keys", requireAuth, requireStaff, requireHuman, async (_req, res) => {
   const rows = await prisma.apiKey.findMany({ orderBy: { createdAt: "desc" } });
-  res.json(rows.map(k => ({ id: k.id, name: k.name, prefix: k.prefix, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, revoked: k.revoked })));
+  res.json(rows.map(k => ({ id: k.id, name: k.name, prefix: k.prefix, scope: k.scope, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, revoked: k.revoked })));
 });
-app.post("/api/api-keys", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.post("/api/api-keys", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const name = String((req.body ?? {}).name || "").trim();
   if (!name) return res.status(400).json({ error: "Key name is required" });
+  // Read unless write is asked for explicitly: the safer of the two is what you get by default.
+  const scope = String((req.body ?? {}).scope || "read").toLowerCase() === "write" ? "write" : "read";
   const raw = "sk_" + crypto.randomBytes(24).toString("base64url");
   const row = await prisma.apiKey.create({
-    data: { name, prefix: raw.slice(0, 10) + "…", keyHash: crypto.createHash("sha256").update(raw).digest("hex"), createdAt: new Date().toISOString() },
+    data: { name, scope, prefix: raw.slice(0, 10) + "…", keyHash: crypto.createHash("sha256").update(raw).digest("hex"), createdAt: new Date().toISOString() },
   });
-  await logAudit({ action: "apikey.create", actorId: a?.sub, target: `${name} (${row.id})`, ip: clientIp(req) });
-  res.status(201).json({ id: row.id, name: row.name, prefix: row.prefix, key: raw }); // raw key: shown once, never stored
+  await logAudit({ action: "apikey.create", actorId: a?.sub, target: `${name} (${row.id})`, detail: `scope=${scope}`, ip: clientIp(req) });
+  res.status(201).json({ id: row.id, name: row.name, prefix: row.prefix, scope: row.scope, key: raw }); // raw key: shown once, never stored
 });
-app.delete("/api/api-keys/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.delete("/api/api-keys/:id", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   try {
     const row = await prisma.apiKey.update({ where: { id: req.params.id }, data: { revoked: true } });
@@ -2097,7 +2157,7 @@ app.delete("/api/api-keys/:id", requireAuth, requireStaff, requireWriteRole, asy
 });
 
 // Sign out everywhere: bump tokenVersion (invalidates every issued JWT) and re-issue THIS session's.
-app.post("/api/auth/logout-all", requireAuth, async (req, res) => {
+app.post("/api/auth/logout-all", requireAuth, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const u = await prisma.user.update({ where: { id: a.sub }, data: { tokenVersion: { increment: 1 } } });
   await logAudit({ action: "auth.logout_all", actorId: u.id, actorEmail: u.email, ip: clientIp(req) });

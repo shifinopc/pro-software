@@ -3,6 +3,8 @@ import { prisma } from "./db.js";
 import { validate } from "./validate.js";
 import { logActivity, logNotification } from "./auth.js";
 import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
+import { startDeliveryForQuotation } from "./delivery.js";
+import { nextNumber } from "./sequence.js";
 
 // Build a friendly activity line for a newly-created record (persisted feed).
 // Resolves the owning company name so client-scoped records (employees, documents,
@@ -168,7 +170,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         const clash = await model.findFirst({ where: { number: String(req.body.number) }, select: { id: true } });
         if (clash) return res.status(409).json({ error: `${req.body.number} already exists — reload and try again` });
       }
-      const created = await model.create({ data: sanitize(modelName, req.body) });
+      // Tasks and receipts are numbered here because they have no dedicated create route — every
+      // one of them arrives through this router. Only filled in when absent, so an import or a
+      // caller supplying its own reference keeps it.
+      const data = sanitize(modelName, req.body);
+      if (modelName === "task" && !data.ref) data.ref = await nextNumber("task");
+      if (modelName === "payment" && !data.number) data.number = await nextNumber("receipt");
+      if (modelName === "serviceRequest" && !data.number) data.number = await nextNumber("request");
+      // Record when a client was taken on, so "Client since" can stop being invented.
+      if (modelName === "company" && !data.createdAt) data.createdAt = new Date().toISOString();
+      const created = await model.create({ data });
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);
       if (act) logActivity(act);
@@ -220,6 +231,27 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
             companyId: updated.companyId, type: updated.type, date: updated.date, time: updated.time, what,
           });
         }
+      }
+      // A quotation reaching `accepted` schedules the work it describes — whether the client
+      // accepted it in the portal or staff recorded the acceptance here. Gated on the TRANSITION,
+      // so re-saving an already-accepted quotation doesn't try again (startDelivery is idempotent
+      // as well, but a no-op is cheaper than a lookup that discovers it).
+      // Reassigning a task told the user "logged to activity" and logged nothing — activityFor()
+      // only runs on create. Either the claim goes or the entry does; the entry is the useful half,
+      // because who a piece of work moved to and when is exactly what someone reconstructs later.
+      if (modelName === "task" && req.body?.assignee != null
+        && String(req.body.assignee) !== String((before as any).assignee ?? "")) {
+        logActivity({
+          type: "task",
+          message: `Task reassigned: ${(updated as any).title} — ${(before as any).assignee || "Unassigned"} → ${(updated as any).assignee || "Unassigned"}`,
+          user: (req as any).auth?.keyName ?? "Staff",
+        });
+      }
+      if (modelName === "quotation"
+        && String(req.body?.status ?? "").toLowerCase() === "accepted"
+        && String((before as any).status ?? "").toLowerCase() !== "accepted") {
+        startDeliveryForQuotation(updated.id, { actor: (req as any).auth?.keyName ?? "Staff" })
+          .catch(e => console.error("delivery failed for", (updated as any).number, e));
       }
       // Turning down an add-on request. Approval has its own route (it needs a price), so this only
       // has to cover the refusal — otherwise the client's card would sit on "Requested" for good.

@@ -12,6 +12,7 @@
 import { prisma } from "./db.js";
 import { logActivity, logNotification } from "./auth.js";
 import { startInstance, pickAssignee } from "./workflow.js";
+import { nextNumber } from "./sequence.js";
 import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
 
 const DAY = 86400000;
@@ -300,7 +301,17 @@ export async function renewSubscriptions(): Promise<BillingResult> {
 
       const next = addCycle(end, s.package.billingCycle);
       const label = who.name;
-      const number = `SUB-${new Date(end).getFullYear()}${String(new Date(end).getMonth() + 1).padStart(2, "0")}-${s.id.slice(-4).toUpperCase()}`;
+      // Recurring invoices used their own shape (SUB-202607-A4B2), so a firm that configured its
+      // invoice format got it applied everywhere EXCEPT the invoices it raises most often.
+      //
+      // Safe to change: the number was never the duplicate-billing guard. That is `lastBilledFor`,
+      // checked a few lines above and written inside the SAME transaction as the invoice, so the
+      // two cannot drift apart. The period this invoice covers is still recorded — in `services`
+      // and on the line item — so nothing is lost by dropping it from the reference.
+      //
+      // Resolved OUTSIDE the transaction below: it reads the invoice table the transaction writes
+      // to, and each loop iteration commits before the next one asks for a number.
+      const number = await nextNumber("invoice");
       // ATOMIC: raising the invoice and advancing the billing period must succeed or fail together.
       // Previously these were two separate writes — a crash (or DB error) between them left the
       // client invoiced with `lastBilledFor` unset, so the next tick billed the SAME period again.

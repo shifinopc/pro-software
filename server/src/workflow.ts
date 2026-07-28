@@ -5,6 +5,8 @@
 // completed via completeTask(), which resumes the frontier from that node.
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { nextNumber } from "./sequence.js";
+import { notifyDocumentRenewed } from "./notify.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
 const nowISO = () => new Date().toISOString();
@@ -244,7 +246,9 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // Fire a draft invoice into the Finance module — "task completion triggers invoice" from the spec.
         const c = node.config ?? {};
         const amount = Number(c.amount) || 0;
-        const number = `WF-${String(Date.now()).slice(-6)}`;
+        // An invoice raised by a workflow is still an invoice, so it follows the configured
+        // sequence rather than a timestamp that collides once every million milliseconds.
+        const number = await nextNumber("invoice");
         try {
           await prisma.invoice.create({ data: { number, companyId: inst.companyId ?? null, clientName: inst.clientName ?? null, amount, currency: c.currency || "SAR", status: "draft", date: nowISO().slice(0, 10), services: c.service ?? node.label ?? "Workflow service" } });
           logActivity({ type: "finance", message: `Draft invoice ${number} (SAR ${amount}) from workflow: ${inst.title}` });
@@ -269,7 +273,11 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         const docType = String(c.docType || vars.docType || node.label || "Document");
         try {
           const tpl = await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId } });
-          const leadDays = (await prisma.documentType.findFirst({ where: { name: docType } }))?.leadDays ?? 30;
+          // The type is already being read for leadDays; take the issuing authority from the same row.
+          // Without it every issued document showed AUTHORITY "—", even though the type knows.
+          const dtRow = await prisma.documentType.findFirst({ where: { name: docType } });
+          const leadDays = dtRow?.leadDays ?? 30;
+          const authority = dtRow?.authority ?? null;
           const statusOf = (exp: string) => { const t = new Date(exp).getTime(); if (isNaN(t)) return { daysLeft: 0, status: "valid" }; const dl = Math.round((t - Date.now()) / 86400000); return { daysLeft: dl, status: dl < 0 ? "overdue" : dl <= leadDays ? "expiring" : "valid" }; };
           const documentId = vars.documentId ? String(vars.documentId) : "";
           if (documentId) {
@@ -298,9 +306,12 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             }
             if (inst.companyId && person) {
               const st = expiry ? statusOf(expiry) : { daysLeft: 0, status: "valid" };
-              await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
+              await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
               await log("document.issued", nodeId, `${docType} (${subjectKind}) for ${person} → ${expiry || "?"}`);
               logActivity({ type: "compliance", message: `${docType} issued for ${person} — expiry ${expiry || "?"}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+              // Close the loop with the client. They were told the renewal had started; nothing
+              // ever told them it finished.
+              notifyDocumentRenewed({ companyId: inst.companyId, docType, person, expiryDate: expiry || null, docNumber: number || null });
             } else {
               // Couldn't attach the new document to an owner. Make this VISIBLE — a silent skip made
               // the run look fully successful even though no document was created.
@@ -359,7 +370,13 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // Give the step an owner. Templates name a ROLE, not a person, so every task landed with
         // assignee null and sat in a shared pile until somebody claimed it. Falls back to null (the
         // old behaviour) when nobody holds the role — better unassigned than assigned to the wrong desk.
-        const assignee = c.assignee || (role ? await pickAssignee(role) : null);
+        // Whoever started the run may have named an owner ("Assign to" on the New task dialog). That
+        // was collected, passed in as a run variable, and then ignored here — every step went to
+        // pickAssignee instead, so work the user assigned to themselves landed on someone else's
+        // desk. Node-level config still wins (a template author was explicit), and APPROVAL steps
+        // are deliberately excluded: routing your own approval to yourself defeats the control.
+        const runAssignee = node.type === "approval" ? null : (typeof vars.assignee === "string" ? vars.assignee.trim() : "");
+        const assignee = c.assignee || (runAssignee && runAssignee !== "Unassigned" ? runAssignee : null) || (role ? await pickAssignee(role) : null);
         await prisma.workflowTask.create({
           data: {
             instanceId: inst.id, nodeId, nodeType: node.type,
@@ -367,7 +384,17 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             assignee,
             assigneeRole: role,
             status: "active",
-            priority: c.priority || "medium",
+            // Same story as `assignee` directly above: the dialog collects a priority, passes it in
+            // as a run variable, and this ignored it — so a task raised as High carried a Medium
+            // step, and the two disagreed on the same screen.
+            //
+            // A node's own priority wins ONLY when it says something. 37 of the 45 configured steps
+            // in this system are set to "medium", which is what the builder writes when nobody chose
+            // — treating that as an author's decision would let a default silently outrank the
+            // person raising the work. Anything else (high/critical/low) was set on purpose and keeps.
+            priority: (c.priority && c.priority !== "medium" ? c.priority : null)
+              || (typeof vars.priority === "string" && vars.priority.trim() ? vars.priority.trim().toLowerCase() : null)
+              || c.priority || "medium",
             dueDate: c.dueDate || null,
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
             checklist: items.length ? items : undefined,
@@ -435,6 +462,26 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   const tpl = await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId } });
   const g = asGraph(tpl?.graph);
 
+  // Reject nonsense dates at the boundary rather than letting them through.
+  //
+  // A step captured "not-a-date" and "31/13/2026" and completed without complaint. Downstream,
+  // issue_document's statusOf() treats an unparseable date as `{ status: "valid" }`, so the run
+  // wrote a document whose expiry printed as "?" — a compliance record with no usable expiry, which
+  // is worse than no record. The value is checked here, once, where it enters the engine.
+  {
+    const node0 = getNode(g, task.nodeId);
+    const caps0: any[] = Array.isArray((node0?.config as any)?.captures) ? (node0!.config as any).captures : [];
+    const supplied = (opts.variables && typeof opts.variables === "object") ? opts.variables as Record<string, any> : {};
+    for (const cap of caps0) {
+      if (!cap || String(cap.type) !== "date") continue;
+      const raw = supplied[cap.var];
+      if (raw === undefined || raw === null || String(raw).trim() === "") continue;
+      const t0 = new Date(String(raw)).getTime();
+      // Also rejects 31/13/2026, which Date parses as Invalid rather than rolling over.
+      if (isNaN(t0)) throw new Error(`${cap.label || cap.var}: "${raw}" is not a valid date`);
+    }
+  }
+
   // Merge captured variables into the instance before routing.
   // IMPORTANT: never let a blank capture wipe an existing value (e.g. passportValid set at start
   // must survive completing a step whose empty capture field would otherwise overwrite it).
@@ -452,7 +499,11 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     data: { status: finalStatus, outcome: opts.outcome ?? null, completedBy: opts.actor ?? null, completedAt: nowISO(),
              checklist: Array.isArray(opts.checklist) ? opts.checklist : task.checklist as any },
   });
-  await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: `${task.nodeType}.${finalStatus}`, detail: task.title, actor: opts.actor ?? null, at: nowISO() } });
+  // The reviewer's note is the reason for the decision — the one thing an audit actually wants to
+  // read back. It was collected in the UI and dropped; now it rides on the log line beside the
+  // step it explains.
+  const _note = String((opts.variables as any)?.decisionNote ?? "").trim();
+  await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: `${task.nodeType}.${finalStatus}`, detail: _note ? `${task.title} — ${_note}` : task.title, actor: opts.actor ?? null, at: nowISO() } });
 
   // Route: approvals branch on approve/reject; tasks branch on outcome if the graph wires one.
   if (task.nodeType === "approval" && opts.outcome === "reject") {
@@ -591,7 +642,15 @@ R.post("/instances/:id/cancel", requireAuth, requireStaff, requireWriteRole, asy
   try {
     const inst = await prisma.workflowInstance.update({ where: { id: req.params.id }, data: { status: "cancelled", completedAt: nowISO() } });
     await prisma.workflowTask.updateMany({ where: { instanceId: inst.id, status: "active" }, data: { status: "skipped" } });
-    await prisma.workflowLog.create({ data: { instanceId: inst.id, action: "instance.cancelled", actor: (req as any).auth?.sub, at: nowISO() } });
+    // Close the task row that describes this run too. Cancelling the workflow while its task stays
+    // open leaves an officer with work in their inbox for something that was called off, and the
+    // two drift apart permanently. `done` is left alone — a finished task is a record, not a
+    // loose end, and a cancellation should not rewrite it.
+    const closed = await prisma.task.updateMany({
+      where: { workflowInstanceId: inst.id, NOT: { status: "done" } },
+      data: { status: "cancelled" },
+    });
+    await prisma.workflowLog.create({ data: { instanceId: inst.id, action: "instance.cancelled", detail: closed.count ? `${closed.count} linked task${closed.count === 1 ? "" : "s"} closed` : null, actor: (req as any).auth?.sub, at: nowISO() } });
     res.json(inst);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
@@ -639,16 +698,39 @@ R.post("/tasks/:id/checklist", requireAuth, requireStaff, async (req, res) => {
     if (itemKey && action) {
       const s = { ...(state[itemKey] || {}) };
       if (fileRef !== undefined) s.fileRef = fileRef; // reference/receipt no. or file id (upload UI later)
-      if (action === "receive") { s.received = true; if (note !== undefined) s.note = note; await logItem("checklist.item.received", `${itemKey}${s.fileRef ? ` · ref ${s.fileRef}` : ""}`); }
+      if (action === "receive") { s.received = true; s.rejected = false; if (note !== undefined) s.note = note; await logItem("checklist.item.received", `${itemKey}${s.fileRef ? ` · ref ${s.fileRef}` : ""}`); }
       else if (action === "unreceive") { s.received = false; s.verified = false; await logItem("checklist.item.unreceived", itemKey); }
-      else if (action === "verify") { s.received = true; s.verified = true; await logItem("checklist.item.verified", itemKey); }
-      else if (action === "reject") { s.received = false; s.verified = false; if (note !== undefined) s.note = note; await logItem("checklist.item.rejected", `${itemKey}${note ? ` — ${note}` : ""}`); }
+      else if (action === "verify") { s.received = true; s.verified = true; s.rejected = false; await logItem("checklist.item.verified", itemKey); }
+      // A rejection is its own state. The server only cleared received/verified, so a document that
+      // was TURNED DOWN was indistinguishable from one that never arrived — the client UI showed a
+      // rejected badge from local state that vanished on reload, and nothing downstream could act on it.
+      else if (action === "reject") { s.received = false; s.verified = false; s.rejected = true; if (note !== undefined) s.note = note; await logItem("checklist.item.rejected", `${itemKey}${note ? ` — ${note}` : ""}`); }
       else if (action === "note") { if (note !== undefined) s.note = note; }
       state[itemKey] = s;
     } else if (checklistState && typeof checklistState === "object") {
       Object.assign(state, checklistState); // bulk partial save
     }
     const updated = await prisma.workflowTask.update({ where: { id: task.id }, data: { checklistState: state } });
+
+    // Surface the block on the task that carries this run, so it stops reading "To do" while its
+    // step cannot advance. Derived from the whole checklist, never from the one item just touched:
+    // un-rejecting the last outstanding document has to clear the flag as well as set it.
+    try {
+      const items = normalizeItems(task.checklist);
+      const rejected = items.filter(it => it.required && (state as any)[it.key]?.rejected)
+        .map(it => it.label || it.key);
+      const linked = await prisma.task.findFirst({ where: { workflowInstanceId: task.instanceId, NOT: { status: "done" } } });
+      if (linked) {
+        const blockedBy = rejected.length
+          ? { reason: `Rejected: ${rejected.join(", ")}`, stepId: task.id, at: nowISO() }
+          : null;
+        const had = !!(linked as any).blockedBy;
+        if (rejected.length || had) {
+          await prisma.task.update({ where: { id: linked.id }, data: { blockedBy: blockedBy as any } });
+        }
+      }
+    } catch { /* the checklist write already succeeded; the flag is a convenience, not the record */ }
+
     res.json(updated);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });

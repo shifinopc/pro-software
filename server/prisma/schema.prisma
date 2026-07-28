@@ -37,6 +37,10 @@ model Company {
   suspendedAt     String?
   suspendedReason String?
   customData      Json? // values for admin-defined custom client fields (Form Builder)
+  // When this client was taken on. Deliberately nullable with NO default: existing rows genuinely
+  // do not know, and stamping them all with the migration date would replace one fabrication
+  // ("Client since 2024", picked from a hardcoded array by row position) with a tidier one.
+  createdAt       String?
   group           ClientGroup?     @relation(fields: [groupId], references: [id])
   groupId         String?
   employeeList    Employee[]
@@ -163,19 +167,11 @@ model CustomObject {
   name     String
   icon     String? // optional emoji
   fields   Json?   @default("[]") // array of { id, label, type, options?, required? }
-  kind     String  @default("object") // "object" | "form"
+  // Only "form" is used. The Object Builder — a no-code record designer whose records had nowhere
+  // to be seen outside the builder itself — was removed; this is the Form Builder's storage now.
+  kind     String  @default("form")
   appliesTo String @default("") // form-only: "" standalone | "employee" | "client" → fields feed that record's Add form
 }
-
-// A record for a custom object, keyed field values.
-model CustomRecord {
-  id       String @id @default(cuid())
-  objectId String
-  data     Json?  @default("{}")
-
-  @@index([objectId])
-}
-
 
 model Task {
   id         String   @id @default(cuid())
@@ -194,16 +190,23 @@ model Task {
   archived   Boolean  @default(false) // soft-archive; recoverable via the Archived view
   workflowInstanceId String? // set when creating this task also launched a workflow run
   complianceDocId    String? // renewal task → the compliance document it renews (cross-link)
+  // The quotation whose acceptance created this task. Also the idempotency key: delivery is started
+  // once per quotation, and "has this quotation any tasks?" is the check that stops a second run.
+  quotationId        String?
   employeeId         String? // subject when the task/workflow concerns a specific employee (person docs)
   customData         Json? // values for admin-defined custom task fields (Form Builder → Applies to: Task)
   // Two-phase prerequisite gating: when set, this (Phase-2) task is PARKED waiting on prerequisite
   // workflow run(s). { runIds:[...], resumeWorkflowId?, autoResume, reason }. Cleared when it resumes.
   blockedBy          Json?
+  // Human-facing reference (TSK-0001) from the configured record sequence. A task was identified
+  // only by its cuid, which nobody can read out over a phone.
+  ref                String?
 
   @@index([status])
   @@index([assignee])
   @@index([companyId, archived])
   @@index([govCenter])
+  @@index([quotationId])
 }
 
 model Invoice {
@@ -328,6 +331,10 @@ model Activity {
 
 model ServiceRequest {
   id         String  @id @default(cuid())
+  // Reference (REQ-0001) from the configured record sequence. Both apps used to display
+  // "SRV-" + the last four characters of the cuid — a label derived from a database id, which
+  // nobody can quote back and which is not unique in any meaningful sense.
+  number     String?
   companyId  String?
   clientName String?
   type       String?
@@ -525,6 +532,9 @@ model CourierShipment {
 // ── Money: payments received against invoices; quotations before invoicing ──
 model Payment {
   id            String  @id @default(cuid())
+  // Receipt number (RCP-2026-001) from the configured record sequence. `reference` is the client's
+  // bank/cheque reference and is a different thing entirely — this is OUR document number.
+  number        String?
   invoiceId     String?
   invoiceNumber String?
   companyId     String?
@@ -587,6 +597,10 @@ model ApiKey {
   name       String
   prefix     String // first chars shown in lists
   keyHash    String // sha256 of the full key — full key returned only once at creation
+  // What the key may do: "read" resolves to pro_officer (GET only), "write" to admin. A key never
+  // resolves to super_admin, and never passes requireHuman — it cannot mint keys, read the
+  // credential vault, or manage users however it is scoped.
+  scope      String  @default("read")
   createdAt  String
   lastUsedAt String?
   revoked    Boolean @default(false)

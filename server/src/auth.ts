@@ -45,7 +45,7 @@ export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
 
 // ── JWT (carries tokenVersion `tv` so a bump invalidates all issued tokens) ──
-export interface AuthPayload { sub: string; type: "staff" | "portal"; role?: string; companyId?: string; tv?: number; }
+export interface AuthPayload { sub: string; type: "staff" | "portal"; role?: string; companyId?: string; tv?: number; apiKey?: boolean; keyName?: string; scope?: string; }
 export const signToken = (payload: AuthPayload, ttlHours = 12) => jwt.sign(payload, JWT_SECRET, { expiresIn: `${ttlHours}h` });
 export const verifyToken = (token: string): AuthPayload => jwt.verify(token, JWT_SECRET) as AuthPayload;
 
@@ -92,9 +92,51 @@ export function decrypt(payload: string): string {
 }
 
 // ── Middleware ──
+// ── API keys as a second credential ──
+// The stored form is a sha256 of the key, so the lookup is by hash — the raw key exists only in the
+// caller's hands and in the one response that created it. `lastUsedAt` is written fire-and-forget:
+// knowing a key is live matters, but a slow write must not sit in front of every request.
+export async function authenticateApiKey(raw: string): Promise<AuthPayload | null> {
+  if (!raw.startsWith("sk_")) return null;
+  const keyHash = crypto.createHash("sha256").update(raw).digest("hex");
+  try {
+    const row = await prisma.apiKey.findFirst({ where: { keyHash, revoked: false } });
+    if (!row) return null;
+    prisma.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date().toISOString() } }).catch(() => {});
+    // Deliberately capped: a "write" key is an admin, never a super_admin, so no key can reach the
+    // things only a named human should do.
+    return { sub: `apikey:${row.id}`, type: "staff", role: row.scope === "write" ? "admin" : "pro_officer", apiKey: true, keyName: row.name, scope: row.scope === "write" ? "write" : "read" };
+  } catch {
+    return null;
+  }
+}
+
+// Routes that must belong to a signed-in person, not a script: issuing further keys, the credential
+// vault, user administration. Without this, one leaked key mints replacements for itself.
+export function requireHuman(req: Request, res: Response, next: NextFunction) {
+  if ((req as any).auth?.apiKey) return res.status(403).json({ error: "This action requires a signed-in user, not an API key" });
+  next();
+}
+
 // Verifies the JWT, then confirms against the DB that the account is still active and the
 // token hasn't been invalidated (tokenVersion bump on password change / disable).
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // An API key is the other way in. Keys were issuable long before anything accepted one, so a key
+  // looked like access and granted none; this is the middleware that makes them mean something.
+  const rawKey = String(req.headers["x-api-key"] ?? "").trim();
+  if (rawKey) {
+    const principal = await authenticateApiKey(rawKey);
+    if (!principal) return res.status(401).json({ error: "Invalid or revoked API key" });
+    // Scope is enforced HERE, on the method, not by mapping the key onto a role. The role model
+    // can't express "read-only" — pro_officer is allowed to create tasks, and should be — so a
+    // read key resolved to a role could still write. One check on the verb, and it cannot.
+    if (principal.scope !== "write" && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+      return res.status(403).json({ error: "This API key is read-only" });
+    }
+    (req as any).auth = principal;
+    return next();
+  }
+
   const h = req.headers.authorization;
   if (!h?.startsWith("Bearer ")) return res.status(401).json({ error: "Missing token" });
   let payload: AuthPayload;
