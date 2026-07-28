@@ -7,7 +7,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import QRCode from "qrcode";
-import { crud, type ScopeFn } from "./crud.js";
+import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
 import { workflowRouter } from "./workflow.js";
 import { validate } from "./validate.js";
@@ -230,7 +230,12 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
   const company = await prisma.company.findUnique({
     where: { id: a.companyId },
-    include: { group: true, employeeList: { where: { archived: false } }, documents: true, invoices: true },
+    // A DRAFT invoice is unreleased — the billing job raises drafts for a human to check, and staff
+    // can still edit or delete one. It must never reach the client, so it is excluded at the SOURCE:
+    // that covers every portal screen at once instead of relying on each list to remember. Voided
+    // invoices ARE sent — a client should see that a bill they were shown has been cancelled — but
+    // they are never payable.
+    include: { group: true, employeeList: { where: { archived: false } }, documents: true, invoices: { where: { NOT: { status: "draft" } } } },
   });
   if (!company) return res.status(404).json({ error: "Company not found" });
   const subscriptions = await subsFor(company.id, company.groupId);
@@ -274,8 +279,14 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
     const paidAmount = paidBy.get(inv.id) ?? 0;
     return { ...inv, paidAmount, outstandingAmount: Math.max(0, inv.amount - paidAmount) };
   });
+  // Same stale-counter problem as the console: company.employees / overdue / expiring are stored
+  // columns nobody recomputes. The client sees their own compliance here, so it has to be counted.
+  const _liveEmp = company.employeeList.length;
+  const _left = (d: { expiryDate: string | null }): number | null => { const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN; return isNaN(t) ? null : Math.ceil((t - Date.now()) / 86_400_000); };
+  const _liveOvd = company.documents.filter(d => { const n = _left(d); return d.status === "overdue" || (n != null && n < 0); }).length;
+  const _liveExp = company.documents.filter(d => { const n = _left(d); return d.status !== "overdue" && n != null && n >= 0 && n <= 30; }).length;
   res.json({
-    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone, orgTimezone,
+    company: { ...company, employees: _liveEmp, overdue: _liveOvd, expiring: _liveExp, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone, orgTimezone,
     // So the portal can explain the restriction rather than just failing when they try to act.
     suspended: company.status === "suspended",
     suspendedReason: company.status === "suspended" ? company.suspendedReason : null,
@@ -289,7 +300,7 @@ app.get("/api/portal/company/:id", requireAuth, requirePortal, async (req, res) 
   if (!(await portalCompanyInScope(a, req.params.id))) return res.status(404).json({ error: "Not found" });
   const company = await prisma.company.findUnique({
     where: { id: req.params.id },
-    include: { group: true, employeeList: { where: { archived: false } }, documents: true, invoices: true },
+    include: { group: true, employeeList: { where: { archived: false } }, documents: true, invoices: { where: { NOT: { status: "draft" } } } },
   });
   if (!company) return res.status(404).json({ error: "Not found" });
   res.json({ ...company, subscriptions: await subsFor(company.id, company.groupId) });
@@ -451,9 +462,23 @@ app.get("/api/portal/service-items", requireAuth, requirePortal, async (_req, re
 app.get("/api/portal/quotations", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
   const rows = await prisma.quotation.findMany({
-    where: { companyId: a.companyId, status: { not: "draft" } },
+    // Two states are internal: `draft` (still being written) and `approved` (signed off but not
+    // yet released). The client sees a quotation only once it has actually been sent.
+    where: { companyId: a.companyId, status: { notIn: ["draft", "approved"] } },
     orderBy: { date: "desc" },
   });
+  res.json(rows);
+});
+
+/**
+ * This client's own payments. The portal used to derive a "payment history" from paid invoices and
+ * label every line "Auto-pay", which was never true — nobody has auto-pay, and a part payment did
+ * not appear at all. These are the real records, so a receipt can name the actual method and
+ * reference.
+ */
+app.get("/api/portal/payments", requireAuth, requirePortal, async (req, res) => {
+  const a = (req as any).auth;
+  const rows = await prisma.payment.findMany({ where: { companyId: a.companyId }, orderBy: { date: "desc" }, take: 200 });
   res.json(rows);
 });
 
@@ -461,13 +486,20 @@ app.get("/api/portal/quotations", requireAuth, requirePortal, async (req, res) =
 app.put("/api/portal/quotations/:id", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
   const want = String(req.body?.status ?? "").toLowerCase();
-  if (!["approved", "rejected"].includes(want)) return res.status(400).json({ error: "status must be approved or rejected" });
+  // The client ACCEPTS, REJECTS, or asks for CHANGES. `approved` is our internal sign-off before
+  // sending and is not something a client can set.
+  if (!["accepted", "rejected", "changes_requested"].includes(want)) return res.status(400).json({ error: "status must be accepted, rejected or changes_requested" });
+  const note = String(req.body?.note ?? "").trim();
+  // A change request with no note leaves staff guessing what to change, so it is required here
+  // rather than optional — the whole point of the state is the message attached to it.
+  if (want === "changes_requested" && !note) return res.status(400).json({ error: "Tell us what needs changing" });
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
   if (!q || q.companyId !== a.companyId) return res.status(404).json({ error: "Not found" });
-  if (q.status === "draft") return res.status(400).json({ error: "This quotation has not been sent yet" });
-  const updated = await prisma.quotation.update({ where: { id: q.id }, data: { status: want } });
-  logActivity({ type: "finance", message: `Quotation ${q.number} ${want} by ${q.clientName ?? "client"}`, user: q.clientName ?? "Client" });
-  logNotification({ type: "system", title: `Quotation ${want} — ${q.clientName ?? "client"}`, message: `${q.number} · ${q.service ?? ""}`.trim() });
+  if (["draft", "approved"].includes(String(q.status))) return res.status(400).json({ error: "This quotation has not been sent yet" });
+  const updated = await prisma.quotation.update({ where: { id: q.id }, data: { status: want, ...(want === "changes_requested" ? { clientNote: note } : {}) } });
+  const verb = want === "changes_requested" ? "sent back with changes" : want;
+  logActivity({ type: "finance", message: `Quotation ${q.number} ${verb} by ${q.clientName ?? "client"}`, user: q.clientName ?? "Client" });
+  logNotification({ type: "system", title: `Quotation ${verb} — ${q.clientName ?? "client"}`, message: [`${q.number} · ${q.service ?? ""}`.trim(), note].filter(Boolean).join(" — ") });
   res.json(updated);
 });
 
@@ -896,7 +928,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   if (!q) return res.status(404).json({ error: "Quotation not found" });
   const st = String(q.status).toLowerCase();
   if (st === "invoiced") return res.status(409).json({ error: `${q.number} has already been invoiced` });
-  if (st !== "approved") return res.status(409).json({ error: `${q.number} is ${st} — only an accepted quotation can be invoiced` });
+  if (st !== "accepted") return res.status(409).json({ error: `${q.number} is ${st} — only a quotation the client accepted can be invoiced` });
   if (!(Number(q.amount) > 0)) return res.status(400).json({ error: "That quotation has no amount to invoice" });
   // Belt and braces: the status check above can't see an invoice raised before `invoiced` was set.
   const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
@@ -1474,9 +1506,11 @@ app.get("/api/companies", requireAuth, requireStaff, requireReadRole("super_admi
   if (a.role === "sales") {
     const u = await prisma.user.findUnique({ where: { id: a.sub } });
     const ids = Array.isArray(u?.assignedClientIds) ? (u!.assignedClientIds as string[]) : [];
-    return res.json(await prisma.company.findMany({ where: { id: { in: ids } }, take: 500 }));
+    return res.json(await withLiveCounts(await prisma.company.findMany({ where: { id: { in: ids } }, take: 500 })));
   }
-  res.json(await prisma.company.findMany({ take: 500 })); // hard cap: this list was unbounded
+  // Live counts here too: this explicit route is registered BEFORE the generic CRUD, so it wins
+  // for /api/companies and would otherwise still serve the stale stored columns.
+  res.json(await withLiveCounts(await prisma.company.findMany({ take: 500 }))); // hard cap: this list was unbounded
 });
 
 // Create a company AND auto-provision a portal login for it. The password is RANDOM per client and
@@ -1743,6 +1777,31 @@ const scopes: Record<string, ScopeFn> = {
   appointments:  salesScope("companyId"),
   "service-requests": salesScope("companyId"),
 };
+/**
+ * The next invoice number, from the one place that knows all of them.
+ *
+ * The console used to build it as `4 + (number of invoices)`, which is not a sequence: delete or
+ * void anything, or start from a non-contiguous set, and it hands back a number that already
+ * exists. Two invoices sharing a number on a tax document is a real problem, and `number` has no
+ * unique constraint to catch it.
+ */
+const nextInvoiceNumber = async () => {
+  const prefix = `INV-${new Date().getFullYear()}-`;
+  const rows = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
+  const next = rows.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
+  return prefix + String(next).padStart(3, "0");
+};
+app.get("/api/invoices/next-number", requireAuth, requireStaff, async (_req, res) => {
+  res.json({ number: await nextInvoiceNumber() });
+});
+
+/** Same for quotations, which had the same count-based bug (`QT-` + 339 + how many exist). */
+app.get("/api/quotations/next-number", requireAuth, requireStaff, async (_req, res) => {
+  const rows = await prisma.quotation.findMany({ where: { number: { startsWith: "QT-" } }, select: { number: true } });
+  const next = rows.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(3), 10) || 0), 0) + 1;
+  res.json({ number: "QT-" + String(next).padStart(3, "0") });
+});
+
 /**
  * A user telling us something went wrong — a dead URL, a crash, or a problem they hit and chose to
  * report. Deliberately accepts UNAUTHENTICATED posts: the screens most worth hearing about are the

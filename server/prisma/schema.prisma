@@ -549,10 +549,19 @@ model Quotation {
   amount     Int     @default(0)
   // Line items [{ name, units, price }] — mirrors Invoice.items. `amount` stays the total of record.
   items      Json?   @default("[]")
-  status     String  @default("draft") // draft | sent | approved | rejected | invoiced
+  // draft    — being written, console only
+  // approved — signed off internally, ready to send; still console only
+  // sent     — released; the first state the client can see
+  // accepted — the CLIENT agreed to it
+  // rejected — the client declined
+  // invoiced — an invoice has been raised from it
+  status     String  @default("draft")
   date       String?
   validUntil String?
   notes      String?
+  // What the client asked to be changed, when they send it back instead of accepting. Kept apart
+  // from `notes`, which is printed ON the quotation — this is correspondence, not document content.
+  clientNote String? @db.Text
 
   @@index([companyId])
   @@index([status])

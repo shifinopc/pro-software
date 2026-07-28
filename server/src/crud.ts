@@ -39,6 +39,60 @@ const sanitize = (modelName: string, body: any) => {
   return Object.fromEntries(Object.entries(body).filter(([k]) => !banned.includes(k)));
 };
 
+/**
+ * Secrets stripped on the way OUT. Blocking writes protected the auth flows but left every bcrypt
+ * hash readable by any session allowed to list users — and `resetTokenHash` is enough to take an
+ * account over while a reset is in flight. A field nobody outside the auth code should ever see
+ * must not be sent, not merely be un-writable.
+ *
+ * `mustChangePassword` stays readable: the UI needs it and it reveals nothing.
+ */
+const SECRET_FIELDS: Record<string, string[]> = {
+  user: ["passwordHash", "resetTokenHash", "resetExpires", "tokenVersion", "failedLogins", "lockedUntil"],
+};
+const redact = (modelName: string, row: any): any => {
+  const secret = SECRET_FIELDS[modelName];
+  if (!secret || row == null || typeof row !== "object") return row;
+  if (Array.isArray(row)) return row.map(r => redact(modelName, r));
+  const out: any = { ...row };
+  for (const k of secret) delete out[k];
+  return out;
+};
+
+/**
+ * Counts that are DERIVED, never stored.
+ *
+ * Company.employees / overdue / expiring are columns that were written once and never recomputed, so
+ * they drifted the moment a document expired or an employee was added — three of four companies were
+ * wrong, and the Clients screen reported "Overdue docs 0" over three overdue documents. Keeping a
+ * denormalised counter in sync means catching every write path, including the hourly scheduler that
+ * flips document statuses; missing one is exactly how this happened.
+ *
+ * So the stored values are ignored on read and replaced with the live truth. Two grouped queries
+ * cover any number of companies, so this does not grow per row.
+ */
+export async function withLiveCounts(rows: any[]): Promise<any[]> {
+  if (!rows.length) return rows;
+  const ids = rows.map(r => r.id).filter(Boolean);
+  if (!ids.length) return rows;
+  const [emps, docs] = await Promise.all([
+    prisma.employee.groupBy({ by: ["companyId"], where: { companyId: { in: ids }, archived: false }, _count: { _all: true } }),
+    prisma.document.findMany({ where: { companyId: { in: ids } }, select: { companyId: true, status: true, expiryDate: true } }),
+  ]);
+  const empBy = new Map(emps.map(e => [e.companyId, e._count._all]));
+  const ovd = new Map<string, number>(), exp = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const d of docs) {
+    if (!d.companyId) continue;
+    const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN;
+    const left = isNaN(t) ? null : Math.ceil((t - Date.now()) / 86_400_000);
+    // `status` can lag behind the calendar, so the date wins where there is one.
+    if (d.status === "overdue" || (left != null && left < 0)) bump(ovd, d.companyId);
+    else if (left != null && left <= 30) bump(exp, d.companyId);
+  }
+  return rows.map(r => ({ ...r, employees: empBy.get(r.id) ?? 0, overdue: ovd.get(r.id) ?? 0, expiring: exp.get(r.id) ?? 0 }));
+}
+
 // Optional row-level scope: returns a Prisma `where` fragment restricting which rows the caller may
 // touch (or null for unrestricted). Without it, a role-scoped list (e.g. sales → assigned clients)
 // is trivially bypassed via /:id, which is exactly the "scoped list, unscoped record" bug class.
@@ -87,7 +141,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       res.setHeader("X-Page-Skip", String(skip));
       // Tell the caller when it is only seeing part of the set, so a silent truncation is detectable.
       if (skip + rows.length < total) res.setHeader("X-Has-More", "true");
-      res.json(rows);
+      res.json(redact(modelName, modelName === "company" ? await withLiveCounts(rows) : rows));
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -97,7 +151,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
     try {
       const item = await findInScope(req, req.params.id);
       if (!item) return res.status(404).json({ error: "Not found" });
-      res.json(item);
+      res.json(redact(modelName, modelName === "company" ? (await withLiveCounts([item]))[0] : item));
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -107,6 +161,13 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
     const err = validate(modelName, req.body, true);
     if (err) return res.status(400).json({ error: err });
     try {
+      // Last line of defence on document numbering. The column has no unique constraint, so without
+      // this two invoices could carry the same number — and on a tax document that is not a cosmetic
+      // clash. Refused rather than silently renumbered: the caller should know its number was stale.
+      if ((modelName === "invoice" || modelName === "quotation") && req.body?.number) {
+        const clash = await model.findFirst({ where: { number: String(req.body.number) }, select: { id: true } });
+        if (clash) return res.status(409).json({ error: `${req.body.number} already exists — reload and try again` });
+      }
       const created = await model.create({ data: sanitize(modelName, req.body) });
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);
@@ -119,7 +180,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (modelName === "invoice" && created.status && created.status !== "draft") {
         notifyInvoiceRaised({ companyId: created.companyId, number: created.number, amount: created.amount, currency: created.currency, dueDate: created.dueDate });
       }
-      res.status(201).json(created);
+      res.status(201).json(redact(modelName, created));
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
@@ -167,7 +228,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         && String((before as any).status ?? "").toLowerCase() !== "rejected") {
         notifyAddonRejected({ companyId: (updated as any).companyId, serviceName: (updated as any).serviceName });
       }
-      res.json(updated);
+      res.json(redact(modelName, updated));
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
