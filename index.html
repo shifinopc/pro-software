@@ -1602,8 +1602,8 @@
                 </div>
                 <div style="font-size:14px; font-weight:700; margin-top:13px;">{{ sv.name }}</div>
                 <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-                  <span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 8px; border-radius:99px;">📄 {{ sv.docType }}</span>
-                  <span style="font-size:9.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:2px 8px; border-radius:99px;">{{ sv.planLabel }}</span>
+                  <sc-if value="{{ sv.hasDocType }}" hint-placeholder-val="{{ true }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 8px; border-radius:99px;">📄 {{ sv.docType }}</span></sc-if>
+                  <span title="{{ sv.planTitle }}" style="font-size:9.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:2px 8px; border-radius:99px;">{{ sv.planLabel }}</span>
                 </div>
                 <div onClick="{{ sv.editWorkflow }}" style="margin-top:11px; display:flex; align-items:center; gap:8px; border:1px solid #F0EDF6; border-radius:11px; padding:9px 11px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#FBFAFE;">
                   <span style="width:26px; height:26px; border-radius:8px; background:#EFEBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6D5BD0" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg></span>
@@ -1662,11 +1662,9 @@
                   <input value="{{ svcEditName }}" onInput="{{ setSvcEditName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
                 </div>
                 <div style="margin-top:13px;">
-                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AVAILABILITY</div>
-                  <div style="position:relative; margin-top:6px;">
-                    <div data-dd onClick="{{ ddSvcEditAvToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ddSvcEditAvVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-                    <sc-if value="{{ ddSvcEditAvOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcEditAvOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
-                  </div>
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ON THESE PLANS</div>
+                  <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; font-size:12.5px; background:#F9F8FC; color:#4B4757; line-height:1.5;">{{ svcEditPlans }}</div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px;">Set per plan in Plan &amp; Billing. A client whose plan leaves it out can ask for it as an add-on.</div>
                 </div>
                 <div style="margin-top:13px;">
                   <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WORKFLOW</div>
@@ -8982,11 +8980,11 @@ class Component extends DCLogic {
     const siData = this.state.serviceItemsData;
     const SVC_ICON_BY_NAME = (nm) => /visa/i.test(nm) ? I.stamp : /iqama|id/i.test(nm) ? I.card : /medical/i.test(nm) ? I.check : /gosi|labour|labor/i.test(nm) ? I.users : /register|formation|company|branch/i.test(nm) ? I.building : /vat|tax|invoice/i.test(nm) ? I.invoice : I.fileText;
     const svcDefs = (Array.isArray(siData) && siData.length
-      ? siData.map(s2 => [s2.name, SVC_ICON_BY_NAME(s2.name), Number(s2.govFee) || 0, s2.time || '—', s2.sla || '—', Number(s2.docs) || 0, !!s2.included, s2.workflowId || null, s2.id])
+      ? siData.map(s2 => [s2.name, SVC_ICON_BY_NAME(s2.name), Number(s2.govFee) || 0, s2.time || '—', s2.sla || '—', Number(s2.docs) || 0, !!s2.included, s2.workflowId || null, s2.id, s2.docType || ''])
       : (siData ? [] : [
-        ['New Employment Visa', I.stamp, 3200, '5–7 days', '7 working days', 4, true, null, null],
-        ['Visa Renewal', I.refresh, 2400, '3–5 days', '5 working days', 3, true, null, null],
-        ['Medical Test', I.check, 350, '1–2 days', '2 working days', 2, true, null, null],
+        ['New Employment Visa', I.stamp, 3200, '5–7 days', '7 working days', 4, true, null, null, 'Employment Visa'],
+        ['Visa Renewal', I.refresh, 2400, '3–5 days', '5 working days', 3, true, null, null, 'Employment Visa'],
+        ['Medical Test', I.check, 350, '1–2 days', '2 working days', 2, true, null, null, 'Medical Certificate'],
       ]));
     const fmtAed = (n) => n ? fmtCur(n) : 'No govt fee';
     const svcPals = [pal.purple, pal.violet, pal.green, pal.amber, pal.sky, pal.rose];
@@ -9014,34 +9012,47 @@ class Component extends DCLogic {
         || _wfTplsForSvc.find(t9 => { const tn9 = String(t9.name).toLowerCase(); return tn9.includes(l9) || l9.includes(tn9.replace(/^demo — /, '')); })
         || _wfTplsForSvc.find(t9 => { const a9 = _wfToks(nm), b9 = _wfToks(t9.name); return a9.length && a9.some(w9 => b9.includes(w9)); })
         || null; };
-    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9, svcId9], i) => {
+    // Which plans list each service. This is the only thing that decides whether a client gets it:
+    // a service is not "an add-on" in its own right — it is simply absent from a given plan, and a
+    // client on that plan can ask for it. So the card reports plan membership rather than pinning a
+    // global label on the service.
+    const _pkgsForSvc = Array.isArray(this.state.packagesData) ? this.state.packagesData : [];
+    const _plansWith = (id9) => !id9 ? [] : _pkgsForSvc.filter(p9 => Array.isArray(p9.serviceIds) && p9.serviceIds.includes(id9)).map(p9 => p9.name);
+    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9, svcId9, docType9], i) => {
       const p = svcPals[i % svcPals.length];
       // A stored workflowId is authoritative; keyword matching is only the fallback for services
       // created before the link existed.
       const tpl9 = _svcReal ? ((wfId9 && _wfTplsForSvc.find(t9 => t9.id === wfId9)) || _wfMatch(name)) : null;
       const meta = _svcReal
-        ? (tpl9 ? ['—', tpl9.name, (tpl9.graph && Array.isArray(tpl9.graph.nodes)) ? tpl9.graph.nodes.length : 0] : ['—', 'Not yet configured', 0])
-        : (svcMeta[name] || ['—', 'Not yet configured', 0]);
+        ? (tpl9 ? [docType9, tpl9.name, (tpl9.graph && Array.isArray(tpl9.graph.nodes)) ? tpl9.graph.nodes.length : 0] : [docType9, 'Not yet configured', 0])
+        : (svcMeta[name] || ['', 'Not yet configured', 0]);
       const configured = meta[2] > 0;
+      const plans9 = _plansWith(svcId9);
       return {
         name, icon, time, docs, price: fmtAed(fee), sla,
-        docType: meta[0], workflow: configured ? meta[1] : 'No workflow linked yet', steps: meta[2], configured, notConfigured: !configured,
+        // The doc-type chip was hardcoded to '—' for every real service, so it always rendered an
+        // empty placeholder even though most catalog rows carry a document type.
+        docType: meta[0] || '', hasDocType: !!meta[0],
+        workflow: configured ? meta[1] : 'No workflow linked yet', steps: meta[2], configured, notConfigured: !configured,
         stepsLabel: configured ? meta[2] + ' steps' : 'No workflow',
-        iconBg: included ? p[0] : '#F3F1F7', iconColor: included ? p[1] : '#A9A6B4',
+        iconBg: p[0], iconColor: p[1],
         opacity: 1,
-        // A service is only "Active" (orderable) once it has a workflow to fulfil it. On-plan but
-        // unconfigured → "Needs setup" (amber), so nothing is orderable with no fulfilment path.
-        // `included: false` used to read "DRAFT / Enterprise only" here, which was never what it
-        // meant and is now plainly wrong: the portal treats it as locked-but-requestable, and a
-        // client can buy it as a per-client add-on. The label says what the flag actually does.
-        badge: !included ? 'ADD-ON ONLY' : (configured ? 'ACTIVE' : 'NEEDS SETUP'),
-        badgeBg: !included ? '#EFEBFF' : (configured ? '#E7F8EF' : '#FEF4E2'),
-        badgeColor: !included ? '#6D5BD0' : (configured ? '#0E9355' : '#B8860B'),
-        planLabel: included ? 'On every plan' : 'By request only',
+        // A service is only "Active" (orderable) once it has a workflow to fulfil it — otherwise
+        // "Needs setup", so nothing is orderable with no fulfilment path. Availability is NOT part
+        // of this: it belongs to the plan, not the service.
+        badge: configured ? 'ACTIVE' : 'NEEDS SETUP',
+        badgeBg: configured ? '#E7F8EF' : '#FEF4E2',
+        badgeColor: configured ? '#0E9355' : '#B8860B',
+        planLabel: !svcId9 ? '—'
+          : plans9.length === 0 ? 'Not on any plan'
+          : plans9.length === _pkgsForSvc.length ? 'On every plan'
+          : plans9.length === 1 ? 'On ' + plans9[0]
+          : 'On ' + plans9.length + ' plans',
+        planTitle: plans9.length ? plans9.join(', ') : 'No plan includes this service — clients can still request it as an add-on',
         // Edit used to jump straight to the Workflow Builder, so there was no way to change the
         // service itself — its name, SLA, availability or which workflow it is bound to.
         editService: () => svcId9
-          ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), included: !!included, wf: (tpl9 && tpl9.name) || _svcWfNone }, svcEditErr: '', svcUsage: null }, () => this._loadSvcUsage(svcId9))
+          ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), wf: (tpl9 && tpl9.name) || _svcWfNone }, svcEditErr: '', svcUsage: null }, () => this._loadSvcUsage(svcId9))
           : this.toast('That is a sample card — add a real service first'),
         editWorkflow: () => this.setState({ active: 'Workflow Builder', activeGroup: 'Admin' }),
         editDocType: () => this.setState({ active: 'Document Types', activeGroup: 'Configure' }),
@@ -9052,10 +9063,9 @@ class Component extends DCLogic {
     // locked, requestable as a per-client add-on. There was no control for it anywhere, so a
     // service could only ever be whatever it was created as.
     const _svcWfNone = 'No workflow yet — link later';
-    const _svcAvail = ['On every plan', 'By request only (add-on)'];
     const _sve = this.state.svcEdit || null;
     const _sveWfSel = _sve ? (_sve.wf || _svcWfNone) : _svcWfNone;
-    const _sveAvSel = _sve ? (_sve.included ? _svcAvail[0] : _svcAvail[1]) : _svcAvail[0];
+    const _svePlans = _sve ? _plansWith(_sve.id) : [];
     const _svcUsage = this.state.svcUsage || null;
     // Ask the server what the service is attached to before offering Delete, so a service that
     // cannot be removed explains why instead of failing on the click.
@@ -9091,10 +9101,9 @@ class Component extends DCLogic {
       closeSvcEdit: () => this.setState({ svcEdit: null, svcEditErr: '', svcDeleteConfirm: null, svcUsage: null }),
       askSvcDelete: () => this.setState({ svcDeleteConfirm: _sve && _sve.id }),
       cancelSvcDelete: () => this.setState({ svcDeleteConfirm: null }),
+      svcEditPlans: _svePlans.length ? _svePlans.join(', ') : 'No plan includes this service yet — clients can still request it as an add-on.',
       ...mkDd('ddSvcEditWf', [_svcWfNone, ..._wfTplsForSvc.map(t9 => t9.name)], _sveWfSel, (v9) => this.setState({ svcEdit: { ...this.state.svcEdit, wf: v9 } })),
       ddSvcEditWfVal: _sveWfSel,
-      ...mkDd('ddSvcEditAv', _svcAvail, _sveAvSel, (v9) => this.setState({ svcEdit: { ...this.state.svcEdit, included: v9 === _svcAvail[0] } })),
-      ddSvcEditAvVal: _sveAvSel,
       svcEditSave: () => {
         const s9 = this.state.svcEdit;
         if (!s9 || this.state.svcEditBusy) return;
@@ -9105,7 +9114,7 @@ class Component extends DCLogic {
         }
         const tpl9 = _wfTplsForSvc.find(t9 => t9.name === (s9.wf || _svcWfNone)) || null;
         this.setState({ svcEditBusy: true });
-        this._opPut('service-items', s9.id, { name: nm9, sla: (s9.sla || '').trim() || null, included: !!s9.included, workflowId: tpl9 ? tpl9.id : null }, () => {
+        this._opPut('service-items', s9.id, { name: nm9, sla: (s9.sla || '').trim() || null, workflowId: tpl9 ? tpl9.id : null }, () => {
           this.setState({ svcEdit: null, svcEditBusy: false, svcUsage: null });
           this.toast('Saved "' + nm9 + '"');
           this._opReload('service-items', 'serviceItemsData');

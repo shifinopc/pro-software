@@ -4983,11 +4983,13 @@ class Component extends DCLogic {
     const _svcIcon = (nm) => /visa|stamp/i.test(nm) ? I.stamp : /renew/i.test(nm) ? I.refresh
       : /id|card/i.test(nm) ? I.card : /medical|test/i.test(nm) ? I.check
       : /labour|labor|gosi|staff/i.test(nm) ? I.users : /licen|company|formation/i.test(nm) ? I.building : I.fileText;
-    // ENTITLEMENT. A service is available if the client's package lists it, OR it was added on for
-    // this client specifically (Subscription.addons — per client, never on the shared Package).
-    // Fallback: when a package has no serviceIds configured — which is every package today — fall
-    // back to the catalog's own `included` flag, so switching to package-gating cannot silently lock
-    // all 14 services for everyone before the packages are set up.
+    // ENTITLEMENT. The plan decides, and nothing else: a service is available if the client's plan
+    // lists it, OR it was added on for this client specifically (Subscription.addons — per client,
+    // never on the shared Package). A service is not "an add-on" in its own right; it is simply
+    // absent from this plan, and the client can ask for it.
+    // This used to fall back to the catalog's global `included` flag when a plan had no service
+    // list. That flag is no longer read — the plans that relied on it now carry the same list
+    // explicitly, so entitlement is identical and editable in Plan & Billing.
     const _subs9 = Array.isArray(this.state.subItems) ? this.state.subItems : [];
     const _pkgSvcIds = new Set();
     const _addonSvcIds = new Set();
@@ -4996,7 +4998,6 @@ class Component extends DCLogic {
       ids9.forEach(id9 => _pkgSvcIds.add(id9));
       (Array.isArray(s9.addons) ? s9.addons : []).forEach(x9 => x9 && x9.serviceId && _addonSvcIds.add(x9.serviceId));
     });
-    const _pkgConfigured = _pkgSvcIds.size > 0;
     // Add-on requests this client already has open, so a locked card can say so instead of offering
     // a button that would only be refused.
     const _pendingAddons = new Set((Array.isArray(this.state.addonReqs) ? this.state.addonReqs : [])
@@ -5004,7 +5005,7 @@ class Component extends DCLogic {
       .map(r9 => r9.serviceId));
     const svcDefs = (Array.isArray(this.state.svcItems) ? this.state.svcItems : [])
       .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', Number(s8.docs) || 0,
-        _addonSvcIds.has(s8.id) || (_pkgConfigured ? _pkgSvcIds.has(s8.id) : s8.included !== false),
+        _addonSvcIds.has(s8.id) || _pkgSvcIds.has(s8.id),
         s8.id, _addonSvcIds.has(s8.id), _pendingAddons.has(s8.id)]);
     const fmtAed = (n) => n ? sysCur + ' ' + n.toLocaleString('en-US') : 'No govt fee';
     const svcPals = [pal.purple, pal.violet, pal.green, pal.amber, pal.sky, pal.rose];

@@ -1317,16 +1317,12 @@ app.post("/api/portal/addon-requests", requireAuth, requirePortal, requireNotSus
 
     const company = await prisma.company.findUnique({ where: { id: a.companyId! } });
     const subs = await subsFor(a.companyId!, company?.groupId);
-    // Already entitled? Then there is nothing to request — via the package, or an earlier add-on.
-    // Same rule the portal draws its locks from, deliberately: while no package has been given a
-    // service list, entitlement falls back to the catalog's own `included` flag. Without that
-    // fallback the API would accept requests for services the portal already shows as included.
-    const anyPkgConfigured = subs.some(s => Array.isArray(s.package?.serviceIds) && (s.package!.serviceIds as string[]).length > 0);
+    // Already entitled? Then there is nothing to request — via the plan, or an earlier add-on.
+    // Same rule the portal draws its locks from: the plan's service list decides, and nothing else.
     const entitled = subs.some(s => {
       const pkgIds = Array.isArray(s.package?.serviceIds) ? (s.package!.serviceIds as string[]) : [];
       const addons = Array.isArray(s.addons) ? (s.addons as any[]) : [];
-      if (addons.some(x => x?.serviceId === svc.id)) return true;
-      return anyPkgConfigured ? pkgIds.includes(svc.id) : svc.included !== false;
+      return pkgIds.includes(svc.id) || addons.some(x => x?.serviceId === svc.id);
     });
     if (entitled) return res.status(409).json({ error: `${svc.name} is already available on your plan` });
 
