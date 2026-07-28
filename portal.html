@@ -357,7 +357,7 @@
         <sc-if value="{{ showCal }}" hint-placeholder-val="{{ false }}">
           <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:300px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:16px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
             <div style="display:flex; align-items:center; justify-content:space-between;">
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">July 2026</span>
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ calMonthLabel }}</span>
               <span onClick="{{ calGoRenewals }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">Open Renewals →</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-top:12px; text-align:center;">
@@ -471,23 +471,25 @@
       <section>
         <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CLIENT PORTAL</div>
         <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:27px; font-weight:700; letter-spacing:-.01em;">Welcome back, {{ companyNameUpper }}</h1>
-        <div style="font-size:12.5px; color:#8C8899; margin-top:5px; letter-spacing:.04em;">DUBAI · TL-784512 — {{ companyStatus }}</div>
+        <div style="font-size:12.5px; color:#8C8899; margin-top:5px; letter-spacing:.04em;">{{ coHeaderLine }}</div>
       </section>
 
       <!-- Alert banner -->
+      <sc-if value="{{ hasAlert }}" hint-placeholder-val="{{ true }}">
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.00s both; background:#FFF9E8; border:1px solid #F5E3AC; border-radius:13px; padding:14px 18px; display:flex; align-items:center; gap:13px;">
         <div style="width:32px; height:32px; border-radius:9px; background:#FDF1CF; display:flex; align-items:center; justify-content:center; flex-shrink:0; animation:pulseBadge 2.6s ease-in-out infinite;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
         </div>
         <div style="flex:1;">
-          <div style="font-size:13.5px; font-weight:700; color:#8A6100;">Your Trade License expires in 12 days</div>
-          <div style="font-size:12px; color:#A98016; margin-top:1px;">Renew before 29 Jul 2026 to avoid DED penalties.</div>
+          <div style="font-size:13.5px; font-weight:700; color:#8A6100;">{{ alertTitle }}</div>
+          <div style="font-size:12px; color:#A98016; margin-top:1px;">{{ alertSub }}</div>
         </div>
         <button style="display:flex; align-items:center; gap:7px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#6900D6;">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"></path></svg>
           Renew Now
         </button>
       </section>
+      </sc-if>
 
       <!-- Package + compliance -->
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px;">
@@ -526,7 +528,7 @@
             <span style="font-family:'Space Grotesk',sans-serif; font-size:42px; font-weight:700; line-height:1; letter-spacing:-.02em; background:linear-gradient(120deg,#7C00FF,#B37DFF); -webkit-background-clip:text; background-clip:text; color:transparent;">{{ complianceScore }}%</span>
             <span style="display:inline-flex; align-items:center; gap:5px; background:#E7F8EF; color:#0E9355; font-size:11px; font-weight:700; padding:3px 10px; border-radius:99px;"><span style="width:5px; height:5px; border-radius:99px; background:#12B76A; animation:pulseDot 2s ease-out infinite;"></span>{{ compBadge }}</span>
           </div>
-          <div style="font-size:11.5px; color:#A9A6B4; margin-top:4px;">Overall score · <span style="color:#12B76A; font-weight:600;">+3 pts</span> this quarter</div>
+          <div style="font-size:11.5px; color:#A9A6B4; margin-top:4px;">Overall score · {{ complianceScore }}% of documents in good standing</div>
           <div style="display:flex; gap:4px; margin-top:14px;">
             <sc-for list="{{ compSegs }}" as="s" hint-placeholder-count="10">
               <div style="flex:1; height:7px; border-radius:99px; background:{{ s.bg }};"></div>
@@ -697,9 +699,9 @@
         <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 12px;">
           <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Renewals in progress</div>
           <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
-            <span style="font-size:11.5px; font-weight:600; color:#7C00FF; background:#fff; padding:4px 12px; border-radius:99px; box-shadow:0 1px 3px rgba(38,7,77,.08); cursor:pointer;">All (27)</span>
-            <span style="font-size:11.5px; font-weight:500; color:#8C8899; padding:4px 12px; border-radius:99px; cursor:pointer;">In review</span>
-            <span style="font-size:11.5px; font-weight:500; color:#8C8899; padding:4px 12px; border-radius:99px; cursor:pointer;">Needs docs</span>
+            <sc-for list="{{ renChips }}" as="c" hint-placeholder-count="3">
+              <span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:{{ c.weight }}; color:{{ c.color }}; background:{{ c.bg }}; padding:4px 12px; border-radius:99px; box-shadow:{{ c.shadow }}; cursor:pointer;">{{ c.label }}</span>
+            </sc-for>
           </div>
         </div>
         <div style="overflow-x:auto;"><div style="min-width:820px;">
@@ -1816,7 +1818,7 @@
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:13px;">
               <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">LANGUAGE</div><div style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; background:#F8F5FD; border-color:#F0EDF6; color:#6F6C7A;">English (UAE)</div></div>
-              <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TIMEZONE</div><div style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; background:#F8F5FD; border-color:#F0EDF6; color:#6F6C7A;">GMT+4 · Dubai</div></div>
+              <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TIMEZONE</div><div style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; background:#F8F5FD; border-color:#F0EDF6; color:#6F6C7A;">{{ orgTimezone }}</div></div>
             </div>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
               <button onClick="{{ saveContact }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save changes</button>
@@ -2000,7 +2002,7 @@
             <span onClick="{{ b.select }}" style="font-size:11.5px; font-weight:600; color:{{ b.color }}; background:{{ b.bg }}; border:1px solid {{ b.border }}; padding:5px 13px; border-radius:99px; cursor:pointer; transition:border-color .12s;">{{ b.label }}</span>
           </sc-for>
         </div>
-        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">DATE · JULY 2026</div>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">DATE · {{ bDateHeading }}</div>
         <div style="display:flex; gap:7px; margin-top:8px;">
           <sc-for list="{{ bDays }}" as="b" hint-placeholder-count="6">
             <div onClick="{{ b.select }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0 7px; border-radius:11px; background:{{ b.bg }}; border:1px solid {{ b.border }}; cursor:pointer; transition:border-color .12s;">
@@ -2221,7 +2223,7 @@
           <div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ acError }}</div>
         </sc-if>
         <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">LEGAL COMPANY NAME *</div>
-        <input value="{{ acName }}" onChange="{{ setAcName }}" placeholder="e.g. Falcon Retail LLC" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
+        <input value="{{ acName }}" onChange="{{ setAcName }}" placeholder="e.g. Acme Trading LLC" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TRADE LICENSE NO. *</div><input value="{{ acLicense }}" onChange="{{ setAcLicense }}" placeholder="TL-000000" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
           <div>
@@ -2750,7 +2752,7 @@
           <div style="margin-top:16px; background:#F8F5FD; border-radius:13px; padding:12px 15px; display:flex; gap:11px;">
             <div style="width:30px; height:30px; border-radius:99px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ proTeamInitials }}</div>
             <div>
-              <div style="font-size:11px; font-weight:700; color:#7C00FF;">NOTE FROM RASHID · 2H AGO</div>
+              <div style="font-size:11px; font-weight:700; color:#7C00FF;">NOTE FROM {{ proTeamUpper }}</div>
               <div style="font-size:12px; color:#4B4757; margin-top:3px; line-height:1.5;">{{ trackNote }}</div>
             </div>
           </div>
@@ -3190,6 +3192,18 @@ class Component extends DCLogic {
       pct: isNaN(parseInt(remaining)) ? 100 : Math.round((1 - parseInt(remaining) / 35) * 100),
       tileBg: color === '#E5484D' ? '#FEECEC' : color === '#F59E0B' ? '#FEF4E2' : color === '#7C00FF' ? '#F3E8FF' : '#F3F1F7',
     }));
+    // The chips above this list were "All (27) / In review / Needs docs": a literal count, and two
+    // stages that exist nowhere in the data. Replaced with the statuses the rows actually carry, and
+    // wired — they were inert, so the filter looked available and did nothing.
+    const renFilter = this.state.renFilter || 'All';
+    const renShown = renewals.filter(r9 => renFilter === 'All' || r9.status === renFilter);
+    const renChips = ['All', 'Expiring', 'Overdue'].map(k9 => {
+      const n9 = k9 === 'All' ? renewals.length : renewals.filter(r9 => r9.status === k9).length;
+      const on9 = renFilter === k9;
+      return { label: k9 + ' (' + n9 + ')', pick: () => this.setState({ renFilter: k9 }),
+        color: on9 ? '#7C00FF' : '#8C8899', bg: on9 ? '#fff' : 'transparent',
+        weight: on9 ? 600 : 500, shadow: on9 ? '0 1px 3px rgba(38,7,77,.08)' : 'none' };
+    });
 
     // WIRED: the client's OWN recent events, composed from records they can already see (requests,
     // invoices, appointments, documents). This was a literal list naming people and reference
@@ -3348,6 +3362,9 @@ class Component extends DCLogic {
       ({ label, select: () => this.setState({ bSlot: label }), ...chip(this.state.bSlot === label) }));
     const bookApi = {
       showBookModal: this.state.bookModal, bTypes, bDays, bSlots,
+      // Heading above the day strip. The days themselves were already real; this label was still a
+      // literal "JULY 2026", so it named the wrong month for most of the year.
+      bDateHeading: _pbDayList[0].toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).toUpperCase(),
       bSummary: this.state.bType + ' · ' + _pbDateLabel + ', ' + this.state.bSlot,
       openBook: () => this.setState({ bookModal: true }),
       closeBook: () => this.setState({ bookModal: false }),
@@ -4167,7 +4184,7 @@ class Component extends DCLogic {
       const tok = credTok(); if (!tok) return;
       fetch(CRED_API + '/api/portal/me', { headers: { Authorization: 'Bearer ' + tok } })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((me) => { const co = (me && me.company) || {}; if (me && me.orgCurrency) this.setState({ sysCur: me.orgCurrency }); if (me && me.orgName) this.setState({ proTeamName: me.orgName }); this.setState({ proTeamPhone: (me && me.orgPhone) || '' });
+        .then((me) => { const co = (me && me.company) || {}; if (me && me.orgCurrency) this.setState({ sysCur: me.orgCurrency }); if (me && me.orgName) this.setState({ proTeamName: me.orgName }); this.setState({ proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '' });
           this.setState({ suspended: !!me.suspended, suspendedReason: me.suspendedReason || null }); this.setState({ empItems: co.employeeList || [], invItems: co.invoices || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} } }); })
         .catch(() => {});
     };
@@ -4208,7 +4225,7 @@ class Component extends DCLogic {
             this._companyCount = (me.groupCompanies || []).length || 1;
             this._contactFirst = co.contact ? String(co.contact).split(' ')[0] : null;
             // No welcome toast on restore — the greeting belongs to a fresh sign-in.
-            this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
+            this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
             this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadSvcItems(); this._chatConnect();
           })
           .catch(() => { try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} });
@@ -4282,6 +4299,40 @@ class Component extends DCLogic {
     const empApi = {
       empCount: (this.state.empItems || []).length,
       coCity: (this.state.coMeta || {}).city || '—',
+      // The dashboard header used to read a literal "DUBAI · TL-784512" — another company's city and
+      // CR number, shown to every client as if it were their own. Blank fields drop out rather than
+      // being padded with a placeholder that looks like a real registration.
+      // The amber banner used to assert "Your Trade License expires in 12 days · Renew before
+      // 29 Jul 2026 to avoid DED penalties" to EVERY client — an invented deadline, for a document
+      // most of them don't hold, citing an authority in the wrong country. It now names the client's
+      // own most urgent document, and is hidden entirely when nothing is due.
+      ...(() => {
+        const d9 = (this.state.docItems || [])
+          .filter(x => x.expiryDate && !isNaN(Number(x.daysLeft)) && Number(x.daysLeft) <= 30)
+          .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft))[0];
+        if (!d9) return { hasAlert: false, alertTitle: '', alertSub: '' };
+        const n9 = Number(d9.daysLeft);
+        const who9 = d9.person && d9.person !== this.state.company ? ' — ' + d9.person : '';
+        return {
+          hasAlert: true,
+          alertTitle: n9 < 0
+            ? `Your ${d9.docType}${who9} expired ${Math.abs(n9)} day${Math.abs(n9) === 1 ? '' : 's'} ago`
+            : `Your ${d9.docType}${who9} expires in ${n9} day${n9 === 1 ? '' : 's'}`,
+          // States the recorded expiry date and nothing more — no invented penalty or authority.
+          alertSub: `Expiry on file: ${d9.expiryDate}. Your PRO team is handling the renewal.`,
+        };
+      })(),
+      // Built as one string, not three bindings with literal separators between them: this company's
+      // cr is "—", which with a template-level " · " left a dangling separator on screen.
+      coHeaderLine: (() => {
+        const m9 = this.state.coMeta || {};
+        const cr9 = String(m9.cr || '').trim();
+        const parts = [String(m9.city || '').toUpperCase(), (cr9 && cr9 !== '—') ? 'CR ' + cr9 : ''].filter(Boolean);
+        // coMeta.status is the company's REAL status from /api/portal/me.
+        const raw9 = String(m9.status || '').trim();
+        const status9 = raw9 ? raw9.charAt(0).toUpperCase() + raw9.slice(1) : '';
+        return parts.join(' · ') + (parts.length && status9 ? ' — ' : '') + status9;
+      })(),
       coIndustry: (this.state.coMeta || {}).industry || 'Company',
       showEmpModal: this.state.empModal, eDocRows,
       eName: this.state.eName, eRole: this.state.eRole, eDept: this.state.eDept,
@@ -5335,6 +5386,9 @@ class Component extends DCLogic {
       showCal: !!this.state.calOpen,
       toggleCal: () => this.setState({ calOpen: !this.state.calOpen }),
       calGoRenewals: () => this.setState({ calOpen: false, active: 'Renewals', activeGroup: 'Main' }),
+      // The grid was made dynamic earlier but its heading was left as a literal "July 2026", so the
+      // popover would name the wrong month from August onwards.
+      calMonthLabel: _calNow.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
       // The same real events the grid dots come from, listed soonest first.
       calItems: Object.keys(calEvents).map(Number).sort((a9, b9) => a9 - b9).slice(0, 4).map(day9 => ({
         color: calEvents[day9][0], label: calEvents[day9][1], when: day9 + ' ' + _calMonAbbr,
@@ -5545,8 +5599,14 @@ class Component extends DCLogic {
       })(),
       isSuspended: !!this.state.suspended,
       proTeam: this.state.proTeamName || "your PRO team",
+      // Was "NOTE FROM RASHID · 2H AGO" — a fictional officer, and a timestamp for a note that is
+      // generated on render and has no time of its own.
+      proTeamUpper: String(this.state.proTeamName || "your PRO team").toUpperCase(),
       // Support phone comes from Settings → General. No number configured → the Call button is
       // hidden rather than showing one nobody answers (it used to be a hardcoded +971 number).
+      // Read-only display of the provider's configured timezone (Settings → General), replacing a
+      // literal "GMT+4 · Dubai" shown to every client regardless of where the firm operates.
+      orgTimezone: this.state.proTeamTz || 'Not set',
       supportPhone: this.state.proTeamPhone || '',
       hasSupportPhone: !!this.state.proTeamPhone,
       callSupport: () => { if (this.state.proTeamPhone) window.location.href = 'tel:' + String(this.state.proTeamPhone).replace(/[^+0-9]/g, ''); },
@@ -5572,7 +5632,7 @@ class Component extends DCLogic {
           grpOverdueLabel: over9 ? over9 + ' overdue' : 'none overdue',
         };
       })(),
-      kpis, donut, renewals, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
+      kpis, donut, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
       // Real figures replacing the hardcoded "27 active", "248/231", "4.2 days" and the literal
       // ticket counts. Numbers are stringified — the template renders a bare 0 as blank otherwise.
       donutTotal: String(donutTotal), donutEmpty,

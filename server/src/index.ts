@@ -256,6 +256,9 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   // Support phone shown in the portal. Blank means the portal hides the Call button rather than
   // printing a number nobody answers — it used to show a hardcoded +971 4 552 8190.
   const orgPhone = String(((orgRow?.value as any)?.phone) || "").trim();
+  // Profile → Timezone displayed a literal "GMT+4 · Dubai" to every client, while the org is
+  // configured for Riyadh. It is a read-only field, so it should read the real setting.
+  const orgTimezone = String(((orgRow?.value as any)?.timezone) || "").trim();
   // Attach what has been received against each invoice. Payment has no Prisma relation to Invoice,
   // so it is aggregated here — without it a client who has part-paid still sees the FULL amount
   // outstanding, which is the one number they know to be wrong.
@@ -270,7 +273,7 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
     return { ...inv, paidAmount, outstandingAmount: Math.max(0, inv.amount - paidAmount) };
   });
   res.json({
-    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone,
+    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone, orgTimezone,
     // So the portal can explain the restriction rather than just failing when they try to act.
     suspended: company.status === "suspended",
     suspendedReason: company.status === "suspended" ? company.suspendedReason : null,
