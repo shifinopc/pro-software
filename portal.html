@@ -1159,6 +1159,14 @@
               </div>
             </sc-for>
           </section>
+          <sc-if value="{{ quotesEmpty }}" hint-placeholder-val="{{ false }}">
+            <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:44px 24px; text-align:center;">
+              <div style="width:46px; height:46px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 15h6M9 11h2"></path></svg></div>
+              <div style="font-size:13.5px; font-weight:700; margin-top:11px;">No quotations yet</div>
+              <div style="font-size:11.5px; color:#8C8899; margin-top:3px; max-width:340px; margin-left:auto; margin-right:auto; line-height:1.6;">When your PRO team prices a service for you, the quotation appears here to approve or decline — no email back-and-forth.</div>
+              <span onClick="{{ openReq }}" style="display:inline-block; margin-top:14px; font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;">Request a service →</span>
+            </section>
+          </sc-if>
         </div></sc-if>
 
         <sc-if value="{{ showPlan }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Plan & Billing">
@@ -3087,9 +3095,22 @@ class Component extends DCLogic {
       layers: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
       settings: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
     };
+    // Sidebar badges were literals — Renewals "8", Quotations "1", Invoices "3" — shown to every
+    // client regardless of their data. The screenshot that exposed this had a "1" on Quotations above
+    // an empty list. Each now counts what NEEDS ATTENTION (the same meaning the Notifications badge
+    // already had), and is false when there is nothing, so no badge is drawn.
+    // Read from state, not from the renewals/invoices/quotes lists further down: this array is
+    // evaluated here, before those exist.
+    const _navCount = (n) => n > 0 ? String(n) : false;
+    const _bRenewals = _navCount((this.state.docItems || [])
+      .filter(d9 => d9.status === 'expiring' || d9.status === 'overdue').length);
+    const _bQuotes = _navCount((this.state.quoteItems || [])
+      .filter(q9 => String(q9.status || '').toLowerCase() === 'sent').length);
+    const _bInvoices = _navCount((this.state.invItems || [])
+      .filter(i9 => !['paid', 'draft', 'void'].includes(String(i9.status || '').toLowerCase())).length);
     const groups = [
-      ['Main', I.grid, [['Dashboard', I.grid], ['My Company', I.building], ['Service Catalog', I.layers], ['My Requests', I.fileText], ['Renewals', I.refresh, '8'], ['Employees', I.users]]],
-      ['Documents & Billing', I.invoice, [['Documents', I.folder], ['Quotations', I.stamp, '1'], ['Invoices', I.invoice, '3'], ['Payments', I.card], ['Plan & Billing', I.shield]]],
+      ['Main', I.grid, [['Dashboard', I.grid], ['My Company', I.building], ['Service Catalog', I.layers], ['My Requests', I.fileText], ['Renewals', I.refresh, _bRenewals], ['Employees', I.users]]],
+      ['Documents & Billing', I.invoice, [['Documents', I.folder], ['Quotations', I.stamp, _bQuotes], ['Invoices', I.invoice, _bInvoices], ['Payments', I.card], ['Plan & Billing', I.shield]]],
       ['Support', I.buoy, [['Support Center', I.buoy], ['Appointments', I.calendar], ['Notifications', I.bell, (this.state.readAll ? 0 : (this.state.notifItems || []).filter((n) => n.unread).length) || false]]],
       ['Account', I.settings, [['Profile & Settings', I.users], ['Credentials', I.shield]]],
     ];
@@ -5288,6 +5309,9 @@ class Component extends DCLogic {
     };
     const quotesApi = {
       quotes, quotesEmpty: quotes.length === 0,
+      // The screen rendered a heading and then nothing at all when the client had no quotations —
+      // indistinguishable from a screen that failed to load.
+      quotesEmpty: quotes.length === 0,
       qHasPending: quotes.some(q => q.status === 'Pending'),
       qPendingTitle: (() => { const p9 = quotes.find(q => q.status === 'Pending'); return p9 ? p9.id + ' · ' + p9.title : ''; })(),
       qPendingMeta: (() => { const p9 = quotes.find(q => q.status === 'Pending'); return p9 ? p9.amount + (p9.meta && p9.meta !== '—' ? ' · ' + p9.meta : '') : ''; })(),
