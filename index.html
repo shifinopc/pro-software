@@ -3011,21 +3011,6 @@
               </div>
             </sc-if>
             <sc-if value="{{ setTabConfigure }}" hint-placeholder-val="{{ false }}">
-              <sc-if value="{{ configIsGrid }}" hint-placeholder-val="{{ true }}">
-              <div>
-                <div style="margin-bottom:14px;"><span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Configure</span><div style="font-size:12px; color:#8C8899; margin-top:2px;">Low-code builders to extend the platform without code</div></div>
-                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;">
-                  <sc-for list="{{ configTools }}" as="c" hint-placeholder-count="6">
-                    <div onClick="{{ c.open }}" style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px; cursor:pointer; transition:transform .15s, border-color .15s, box-shadow .15s;" style-hover="transform:translateY(-3px); border-color:#DDD1F5; box-shadow:0 10px 24px rgba(124,0,255,.09);">
-                      <div style="display:flex; align-items:center; justify-content:space-between;"><div style="width:38px; height:38px; border-radius:11px; background:{{ c.bg }}; display:flex; align-items:center; justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ c.color }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ c.icon }}"></path></svg></div><span style="font-size:10px; font-weight:700; color:{{ c.color }}; background:{{ c.bg }}; padding:3px 10px; border-radius:99px;">{{ c.meta }}</span></div>
-                      <div style="font-size:14px; font-weight:700; margin-top:13px;">{{ c.name }}</div>
-                      <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ c.sub }}</div>
-                      <div style="font-size:11.5px; font-weight:700; color:#7C00FF; margin-top:12px;">Open builder →</div>
-                    </div>
-                  </sc-for>
-                </div>
-              </div>
-              </sc-if>
               <!-- Object Builder -->
               <sc-if value="{{ showObjBuilder }}" hint-placeholder-val="{{ false }}">
                 <div>
@@ -11151,14 +11136,6 @@ class Component extends DCLogic {
       },
     };
     // Configure sub-tools
-    const configTools = [
-      ['Object Builder', 'Define custom data entities', 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5', '#7C00FF', '#F3E8FF', '4 objects'],
-      ['Form Builder', 'Forms bound to entities & tasks', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h4', '#0284C7', '#E4F4FD', '9 forms'],
-      ['Print Layout', 'Document & invoice designer', 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z', '#0E9355', '#E7F8EF', 'A4 canvas'],
-      ['Service Packages', 'Subscription tiers & limits', 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', '#B8860B', '#FEF4E2', '3 tiers'],
-      ['Country Rules', 'Authorities, docs & fees', 'M3 21h18M5 21V7l7-4 7 4v14', '#6D5BD0', '#EFEBFF', '5 countries'],
-      ['Document Types', 'Templates & custom fields', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', '#0284C7', '#E4F4FD', '8 types'],
-    ].map(([name, sub, icon, color, bg, meta]) => ({ name, sub, icon, color, bg, meta }));
     // Notifications rules
     // Notification rules — WIRED: on/off overrides persisted in AppSetting "notifRules" (event→bool).
     const nrState = this.state.notifRulesState || {};
@@ -11613,7 +11590,7 @@ class Component extends DCLogic {
       pbDocTitleAr: printTargetSel === 'quotation' ? 'عرض سعر' : 'فاتورة ضريبية',
       pbDocNoToken: printTargetSel === 'quotation' ? '{quote_no}' : '{invoice_no}',
       printSaveInfo: pbSave,
-      configView, configIsGrid: configView == null,
+      configView,
       showObjBuilder: configView === 'Object Builder', showFormBuilder: configView === 'Form Builder', showPrintLayout: (() => {
         const on = configView === 'Print Layout';
         // Repaint the sheet after this render so the preview always reflects the current settings.
@@ -11621,13 +11598,8 @@ class Component extends DCLogic {
         return on;
       })(),
       objFields, objList, objName, objIcon, formFields, formList, formName, formAppliesVal, printPalette, printFieldCatalog, printTargets, ...builderWriteApi,
-      openConfigTool: null, // set per-card below
       closeConfigView: () => this.setState({ configView: null }),
     };
-    const configTools2 = configTools.map(c => ({ ...c,
-      open: () => this.setState({ configView: ['Object Builder', 'Form Builder', 'Print Layout'].includes(c.name) ? c.name : null,
-        active: ['Service Packages', 'Country Rules', 'Document Types'].includes(c.name) ? c.name : 'Settings',
-        activeGroup: ['Service Packages', 'Country Rules', 'Document Types'].includes(c.name) ? 'Masters' : 'Admin' }) }));
 
     const settingsAdminApi = {
       settingsTabs, setTabGeneral: setTab === 'General', setTabUsers: setTab === 'Users',
@@ -11636,7 +11608,7 @@ class Component extends DCLogic {
       setTabAudit: setTab === 'Audit', setTabBilling: setTab === 'Billing',
       ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
-      permMatrix, permActions, configTools: configTools2,
+      permMatrix, permActions,
       setNotifRules, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...emailApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 
