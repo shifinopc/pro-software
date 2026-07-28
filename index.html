@@ -1035,9 +1035,9 @@
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
           <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px 12px;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Submission queue</div><sc-if value="{{ govShowingAll }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px; color:#A9A6B4;">All authorities</span></sc-if><sc-if value="{{ govShowingAll }}" hint-placeholder-val="{{ false }}"></sc-if><span onClick="{{ govClearFilter }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;">Filtered: {{ govFilterLabel }} · clear</span></div>
           <div style="overflow-x:auto;"><div style="min-width:860px;">
-            <div style="display:grid; grid-template-columns:96px 1.5fr 1.2fr 100px 110px 96px 96px; gap:10px; padding:10px 22px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Ref</span><span>Service</span><span>Client</span><span>Center</span><span>Status</span><span>Officer</span><span>SLA</span></div>
+            <div style="display:grid; grid-template-columns:96px 1.5fr 1.2fr 100px 110px 96px 96px 104px; gap:10px; padding:10px 22px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Ref</span><span>Service</span><span>Client</span><span>Center</span><span>Status</span><span>Officer</span><span>SLA</span><span></span></div>
             <sc-for list="{{ govSubs }}" as="s" hint-placeholder-count="8">
-              <div style="display:grid; grid-template-columns:96px 1.5fr 1.2fr 100px 110px 96px 96px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+              <div style="display:grid; grid-template-columns:96px 1.5fr 1.2fr 100px 110px 96px 96px 104px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
                 <span style="font-weight:700; color:#7C00FF; font-size:12px;">{{ s.ref }}</span>
                 <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.service }}</span>
                 <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.client }}</span>
@@ -1045,6 +1045,10 @@
                 <span style="font-size:10.5px; font-weight:700; color:{{ s.stColor }}; background:{{ s.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ s.status }}</span>
                 <div style="display:flex; align-items:center; gap:6px;"><span style="width:22px; height:22px; border-radius:99px; background:#26074D; color:#fff; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ s.officerInitials }}</span></div>
                 <span style="font-size:11.5px; font-weight:700; color:{{ s.slaColor }};">{{ s.sla }}</span>
+                <div style="display:flex; justify-content:flex-end;">
+                  <sc-if value="{{ s.canReject }}" hint-placeholder-val="{{ false }}"><span onClick="{{ s.reject }}" title="The authority turned this submission back" style="font-size:10.5px; font-weight:600; color:#8C8899; border:1px solid #DDD9E6; padding:5px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#C0353A; color:#C0353A;">Reject</span></sc-if>
+                  <sc-if value="{{ s.isRejected }}" hint-placeholder-val="{{ false }}"><span onClick="{{ s.reopen }}" title="Put it back in the queue after fixing what was wrong" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Reopen</span></sc-if>
+                </div>
               </div>
             </sc-for>
             <sc-if value="{{ govSubsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:30px; text-align:center; font-size:12.5px; color:#A9A6B4;">No submissions for this authority.</div></sc-if>
@@ -9049,7 +9053,7 @@ class Component extends DCLogic {
 
     // ===== Phase 1: Operations data =====
     const prio = { High: ['#FEECEC', '#C0353A'], Medium: ['#FEF4E2', '#B8860B'], Low: ['#EFEBFF', '#6D5BD0'] };
-    const tStatusMap = { 'To do': ['#F3F1F7', '#6F6C7A'], 'In progress': ['#F3E8FF', '#7C00FF'], 'Blocked': ['#FEECEC', '#C0353A'], 'Done': ['#E7F8EF', '#0E9355'] };
+    const tStatusMap = { 'To do': ['#F3F1F7', '#6F6C7A'], 'In progress': ['#F3E8FF', '#7C00FF'], 'Blocked': ['#FEECEC', '#C0353A'], 'Done': ['#E7F8EF', '#0E9355'], 'Rejected': ['#FEECEC', '#C0353A'] };
     // WIRED: 'me' = the signed-in staff account.
     const currentUser = (this.state.meUser && this.state.meUser.name) || 'Rashid';
     // ===== Unified Task model — the single source for Task List + My Tasks =====
@@ -9058,7 +9062,9 @@ class Component extends DCLogic {
     // WIRED: real tasks from /api/tasks (state.tasksData). Design samples only when unauthenticated.
     const tData = this.state.tasksData;
     const TASK_PRIO_CAP = { low: 'Low', medium: 'Medium', high: 'High', critical: 'High' };
-    const TASK_STATUS_CAP = { todo: 'To do', in_progress: 'In progress', review: 'In progress', done: 'Done' };
+    // `rejected` is a real task state (a government authority turned the submission back). Without it
+    // here the fallback rendered a rejected task as "To do" — a wrong status, not just a missing one.
+    const TASK_STATUS_CAP = { todo: 'To do', in_progress: 'In progress', review: 'In progress', done: 'Done', rejected: 'Rejected' };
     const dueInOf = (d) => { if (!d) return 3; const t2 = new Date(d); return isNaN(+t2) ? 3 : Math.round((t2.setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / 86400000); };
     const taskDefs = (Array.isArray(tData) && tData.length
       ? tData.map(t => ({
@@ -9876,7 +9882,7 @@ class Component extends DCLogic {
     const _govCount = (nm, sts) => (_govTasks || []).filter(t2 => t2.govCenter === nm && sts.includes(String(t2.status).toLowerCase())).length;
     const govCenterDefs = (Array.isArray(gcData) && gcData.length
       ? gcData.map(g2 => [g2.name, g2.sub || '—', g2.color || '#7C00FF', g2.bg || '#F3E8FF',
-          _govCount(g2.name, ['todo', 'blocked']), _govCount(g2.name, ['in_progress', 'review']), _govCount(g2.name, ['done']), 0,
+          _govCount(g2.name, ['todo', 'blocked']), _govCount(g2.name, ['in_progress', 'review']), _govCount(g2.name, ['done']), _govCount(g2.name, ['rejected']),
           g2.officer || 'Unassigned'])
       : (_authed ? [] : [
         ['Qiwa', 'Work permits & contracts · MHRSD', '#7C00FF', '#F3E8FF', 5, 3, 12, 1, 'Aisha'],
@@ -9899,23 +9905,37 @@ class Component extends DCLogic {
     });
     const govStatusTone = { Submitted: ['#EFEBFF', '#6D5BD0'], Approved: ['#E7F8EF', '#0E9355'], Rejected: ['#FEECEC', '#C0353A'], Pending: ['#FEF4E2', '#B8860B'], 'In review': ['#E4F4FD', '#0284C7'] };
     const _govTaskSla = (t2) => {
+      // A rejected submission has to go back through the authority, so counting down to the original
+      // due date is meaningless — the work is rework.
+      if (String(t2.status).toLowerCase() === 'rejected') return 'Rework';
       if (String(t2.status).toLowerCase() === 'done') return 'Met';
       const d2 = new Date(t2.dueDate); if (isNaN(+d2)) return '—';
       const left2 = Math.round((d2.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
       return left2 < 0 ? Math.abs(left2) + 'd overdue' : left2 === 0 ? 'Due today' : left2 + 'd left';
     };
-    const _GOV_ST = { todo: 'Pending', blocked: 'Pending', in_progress: 'In review', review: 'In review', done: 'Approved' };
+    const _GOV_ST = { todo: 'Pending', blocked: 'Pending', in_progress: 'In review', review: 'In review', done: 'Approved', rejected: 'Rejected' };
     const govSubsDefs = (_govTasks
-      ? _govTasks.map(t2 => ['TSK-' + String(t2.id).slice(-4).toUpperCase(), t2.title || 'Submission', t2.clientName || coNameById[t2.companyId] || '—', t2.govCenter, _GOV_ST[String(t2.status).toLowerCase()] || 'Pending', t2.assignee || 'Unassigned', _govTaskSla(t2)])
+      ? _govTasks.map(t2 => ['TSK-' + String(t2.id).slice(-4).toUpperCase(), t2.title || 'Submission', t2.clientName || coNameById[t2.companyId] || '—', t2.govCenter, _GOV_ST[String(t2.status).toLowerCase()] || 'Pending', t2.assignee || 'Unassigned', _govTaskSla(t2), t2.id])
       : (_authed ? [] : [
-        ['SUB-4412', 'Work Visa authorization', 'Falcon Technologies', 'Qiwa', 'Submitted', 'Aisha', '2d left'],
-        ['SUB-4409', 'Iqama renewal — M. Fernandes', 'Falcon Technologies', 'Muqeem', 'In review', 'Rashid', 'Due today'],
-        ['SUB-4405', 'GOSI registration — 3 staff', 'Falcon Logistics', 'GOSI', 'Pending', 'Sara', '3d left'],
-        ['SUB-4398', 'Exit-reentry — A. Khan', 'Falcon Trading', 'Muqeem', 'Approved', 'Rashid', 'Met'],
+        ['SUB-4412', 'Work Visa authorization', 'Falcon Technologies', 'Qiwa', 'Submitted', 'Aisha', '2d left', null],
+        ['SUB-4409', 'Iqama renewal — M. Fernandes', 'Falcon Technologies', 'Muqeem', 'In review', 'Rashid', 'Due today', null],
+        ['SUB-4405', 'GOSI registration — 3 staff', 'Falcon Logistics', 'GOSI', 'Pending', 'Sara', '3d left', null],
+        ['SUB-4398', 'Exit-reentry — A. Khan', 'Falcon Trading', 'Muqeem', 'Approved', 'Rashid', 'Met', null],
       ]));
-    const govSubs = govSubsDefs.filter(s2 => govFilter === 'All' || s2[3] === govFilter).map(([ref, service, client, center, status, officer, sla]) => {
+    const govSubs = govSubsDefs.filter(s2 => govFilter === 'All' || s2[3] === govFilter).map(([ref, service, client, center, status, officer, sla, realId]) => {
       const t = govStatusTone[status]; const cen = govCenterDefs.find(c => c[0] === center);
+      // Recording a rejection is what made the "N rejected" figure real: nothing could ever set that
+      // state, so the count was hardcoded 0 and a turned-back submission was indistinguishable from
+      // one nobody had started. Reopening puts it back in the queue as work in progress.
+      const _setSt = (next9, msg9) => () => {
+        if (!realId) return this.toast('That row is a sample — open a real submission', 'error');
+        this._opPut('tasks', realId, { status: next9 }, () => { this.toast(msg9); this._opReload('tasks', 'tasksData'); });
+      };
       return { ref, service, client, center, status, officer, sla, stBg: t[0], stColor: t[1],
+        canReject: canWrite && !!realId && status !== 'Rejected' && status !== 'Approved',
+        isRejected: status === 'Rejected',
+        reject: _setSt('rejected', ref + ' marked rejected'),
+        reopen: _setSt('in_progress', ref + ' reopened — back in review'),
         centerColor: cen ? cen[2] : '#7C00FF', centerBg: cen ? cen[3] : '#F3E8FF',
         officerInitials: officer.slice(0, 2).toUpperCase(),
         slaColor: sla.indexOf('Due today') === 0 || sla === 'Rework' ? '#B8860B' : sla === 'Met' ? '#0E9355' : sla.indexOf('overdue') > -1 ? '#C0353A' : '#6F6C7A' };
