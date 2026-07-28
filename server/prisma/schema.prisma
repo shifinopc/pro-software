@@ -83,6 +83,11 @@ model Subscription {
   // client 24 times a day.
   lastBilledFor String?
   lastRenewedAt String?
+  // Per-client service add-ons: [{ serviceId, name, price, addedAt, by, invoiceId }].
+  // Deliberately HERE and not on Package.serviceIds — a package is shared by every client on that
+  // tier, so unlocking a service there would hand it to all of them. This is the one rule this
+  // feature turns on: entitlement = the package's services ∪ this subscription's add-ons.
+  addons Json? @default("[]")
 
   @@index([refId, scope])
 }
@@ -284,8 +289,16 @@ model UpgradeRequest {
   note          String?  @db.Text
   status        String   @default("pending")
   date          String?
+  // "package" = move the client to another tier (the original flow).
+  // "addon"   = unlock ONE service on top of the tier they already have. Same review queue, so staff
+  //             see both kinds in one place instead of a second inbox.
+  kind        String  @default("package")
+  serviceId   String? // addon only — the ServiceItem being requested
+  serviceName String? // snapshot, so the queue still reads correctly if the catalog item is renamed
+  quotedPrice Int? // addon only — set by staff at approval; the client never sees a price before that
 
   @@index([status])
+  @@index([kind])
 }
 
 model SiteCredential {

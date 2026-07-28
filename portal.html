@@ -1046,7 +1046,7 @@
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; align-items:center; gap:13px; background:linear-gradient(112deg,#8B17FF,#5E00C4); border-radius:16px; padding:14px 20px; color:#fff;">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-            <div style="flex:1; font-size:12.5px;"><b>{{ planName }}</b> includes {{ svcIncludedCount }} service types. Locked services need an upgrade.</div>
+            <div style="flex:1; font-size:12.5px;">You have {{ svcIncludedCount }} of {{ svcTotalCount }} services on <b>{{ planName }}</b>. Anything locked can be added on its own — no need to change plan.</div>
             <button onClick="{{ openUpgrade }}" style="background:#fff; color:#7C00FF; border:none; font-size:11.5px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3E8FF;">Upgrade plan</button>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;">
@@ -2656,6 +2656,31 @@
   </sc-if>
 
   <!-- Upgrade plan modal -->
+  <!-- Ask for ONE locked service on top of the current plan. Deliberately shows no price: staff
+       quote it per client at approval, the same way quotations already work. -->
+  <sc-if value="{{ showAddonAsk }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAddonAsk }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:440px; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-size:10.5px; font-weight:700; color:#6D5BD0; letter-spacing:.1em;">ADD TO MY PLAN</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:3px;">{{ addonName }}</div>
+          </div>
+          <div onClick="{{ closeAddonAsk }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div style="margin-top:14px; background:#F8F5FD; border-radius:13px; padding:12px 15px; font-size:12px; color:#6F6C7A; line-height:1.6;">
+          This service is not on your current plan. Your PRO team will confirm the price and add it for you — <b style="color:#1A1523;">your plan and everyone else's stays unchanged</b>.
+        </div>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">ANYTHING THEY SHOULD KNOW? <span style="color:#B9B5C4; font-weight:600;">(optional)</span></div>
+        <textarea value="{{ addonNote }}" onChange="{{ setAddonNote }}" rows="3" placeholder="e.g. we need this for two new hires starting next month" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea>
+        <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
+          <button onClick="{{ closeAddonAsk }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ submitAddonAsk }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ addonSubmitLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ showUpgrade }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeUpgrade }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:110; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" style="background:#fff; border-radius:22px; width:100%; max-width:420px; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -3930,7 +3955,7 @@ class Component extends DCLogic {
                 const prof = { sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: (me && me.groupCompanies) || [], groupName: (co.group && co.group.name) || '' };
                 if (d.mustChangePassword) return this.setState({ auth: 'change', lError: '', pError: '', nPass: '', cPass: '', company: name || this.state.company, ...prof });
                 this.setState({ auth: 'in', lError: '', company: name || this.state.company, welcomeToast: true, ...prof });
-                this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadSvcItems(); this._chatConnect();
+                this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadSvcItems(); this._chatConnect();
                 clearTimeout(this._wt);
                 this._wt = setTimeout(() => this.setState({ welcomeToast: false }), 5000);
               });
@@ -3959,7 +3984,7 @@ class Component extends DCLogic {
             if (d && d.token) { try { localStorage.setItem('stimespro:portalToken', d.token); } catch (e) {} }
             this._pendingPw = null;
             this.setState({ auth: 'in', pError: '', nPass: '', cPass: '', welcomeToast: true });
-            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadSvcItems(); this._chatConnect();
+            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadSvcItems(); this._chatConnect();
             clearTimeout(this._wt);
             this._wt = setTimeout(() => this.setState({ welcomeToast: false }), 5000);
           })
@@ -4179,6 +4204,15 @@ class Component extends DCLogic {
       document.body.classList.add('printing-doc');
       setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
     };
+    // This client's own add-on requests, so a locked card can show "Requested" instead of a button
+    // the server would only reject as a duplicate.
+    this._loadAddonReqs = () => {
+      const tok = credTok(); if (!tok) return;
+      fetch(CRED_API + '/api/portal/upgrade-requests?kind=addon', { headers: { Authorization: 'Bearer ' + tok } })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((list) => this.setState({ addonReqs: Array.isArray(list) ? list : [] }))
+        .catch(() => {});
+    };
     this._loadSvcItems = () => {
       const tok = credTok(); if (!tok) return;
       fetch(CRED_API + '/api/portal/service-items', { headers: { Authorization: 'Bearer ' + tok } })
@@ -4249,7 +4283,7 @@ class Component extends DCLogic {
             this._contactFirst = co.contact ? String(co.contact).split(' ')[0] : null;
             // No welcome toast on restore — the greeting belongs to a fresh sign-in.
             this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
-            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadSvcItems(); this._chatConnect();
+            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadSvcItems(); this._chatConnect();
           })
           .catch(() => { try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} });
       }
@@ -4546,7 +4580,7 @@ class Component extends DCLogic {
           .then(({ ok, d }) => {
             if (!ok) return this.setState({ cError: (d && d.error) || 'Could not save — try again' });
             this.setState({ credModal: null, cLabel: '', cUrl: '', cUser: '', cPass: '', cNotes: '', cError: '' });
-            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadSvcItems(); this._chatConnect();
+            this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadSvcItems(); this._chatConnect();
           })
           .catch(() => this.setState({ cError: 'Cannot reach the server — try again' }));
       },
@@ -4949,24 +4983,83 @@ class Component extends DCLogic {
     const _svcIcon = (nm) => /visa|stamp/i.test(nm) ? I.stamp : /renew/i.test(nm) ? I.refresh
       : /id|card/i.test(nm) ? I.card : /medical|test/i.test(nm) ? I.check
       : /labour|labor|gosi|staff/i.test(nm) ? I.users : /licen|company|formation/i.test(nm) ? I.building : I.fileText;
+    // ENTITLEMENT. A service is available if the client's package lists it, OR it was added on for
+    // this client specifically (Subscription.addons — per client, never on the shared Package).
+    // Fallback: when a package has no serviceIds configured — which is every package today — fall
+    // back to the catalog's own `included` flag, so switching to package-gating cannot silently lock
+    // all 14 services for everyone before the packages are set up.
+    const _subs9 = Array.isArray(this.state.subItems) ? this.state.subItems : [];
+    const _pkgSvcIds = new Set();
+    const _addonSvcIds = new Set();
+    _subs9.forEach(s9 => {
+      const ids9 = (s9.package && Array.isArray(s9.package.serviceIds)) ? s9.package.serviceIds : [];
+      ids9.forEach(id9 => _pkgSvcIds.add(id9));
+      (Array.isArray(s9.addons) ? s9.addons : []).forEach(x9 => x9 && x9.serviceId && _addonSvcIds.add(x9.serviceId));
+    });
+    const _pkgConfigured = _pkgSvcIds.size > 0;
+    // Add-on requests this client already has open, so a locked card can say so instead of offering
+    // a button that would only be refused.
+    const _pendingAddons = new Set((Array.isArray(this.state.addonReqs) ? this.state.addonReqs : [])
+      .filter(r9 => String(r9.status || '').toLowerCase() === 'pending' && r9.serviceId)
+      .map(r9 => r9.serviceId));
     const svcDefs = (Array.isArray(this.state.svcItems) ? this.state.svcItems : [])
-      .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', Number(s8.docs) || 0, s8.included !== false]);
+      .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', Number(s8.docs) || 0,
+        _addonSvcIds.has(s8.id) || (_pkgConfigured ? _pkgSvcIds.has(s8.id) : s8.included !== false),
+        s8.id, _addonSvcIds.has(s8.id), _pendingAddons.has(s8.id)]);
     const fmtAed = (n) => n ? sysCur + ' ' + n.toLocaleString('en-US') : 'No govt fee';
     const svcPals = [pal.purple, pal.violet, pal.green, pal.amber, pal.sky, pal.rose];
-    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included], i) => {
+    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, svcId, viaAddon, pending], i) => {
       const p = svcPals[i % svcPals.length];
+      // A locked service is no longer a dead end. Rather than only pushing a whole tier upgrade, the
+      // client can ask for THIS service to be added to the plan they already have; staff price it on
+      // approval. Pending requests show their state instead of re-offering the button.
+      const label = pending ? 'Requested — with your PRO team'
+        : included ? 'Request service' : 'Request as add-on';
       return {
         name, icon, time, docs, price: fmtAed(fee),
         iconBg: included ? p[0] : '#F3F1F7', iconColor: included ? p[1] : '#A9A6B4',
         opacity: included ? 1 : .8,
-        badge: included ? 'INCLUDED' : 'UPGRADE', badgeBg: included ? '#E7F8EF' : '#F3F1F7', badgeColor: included ? '#0E9355' : '#8C8899',
-        btnLabel: included ? 'Request service' : '🔒 Upgrade to unlock',
-        btnBg: included ? '#F5EEFF' : '#F3F1F7', btnColor: included ? '#7C00FF' : '#8C8899',
-        request: included
-          ? () => this.setState({ wizard: true, wzStep: 1, wzService: name, wzError: '' })
-          : () => this.setState({ upgradeModal: 'idle' }),
+        // "ADD-ON" distinguishes a service this client had added from one their tier includes.
+        badge: viaAddon ? 'ADD-ON' : included ? 'INCLUDED' : 'NOT ON PLAN',
+        badgeBg: viaAddon ? '#EFEBFF' : included ? '#E7F8EF' : '#F3F1F7',
+        badgeColor: viaAddon ? '#6D5BD0' : included ? '#0E9355' : '#8C8899',
+        btnLabel: label,
+        btnBg: pending ? '#F3F1F7' : included ? '#F5EEFF' : '#EFEBFF',
+        btnColor: pending ? '#8C8899' : included ? '#7C00FF' : '#6D5BD0',
+        request: pending ? () => this.toast('Your PRO team is reviewing this request')
+          : included
+            ? () => this.setState({ wizard: true, wzStep: 1, wzService: name, wzError: '' })
+            : () => this.setState({ addonAsk: { id: svcId, name } }),
       };
     });
+    // Confirm step before filing an add-on request — no price is shown because staff quote it.
+    const _addonAsk = this.state.addonAsk || null;
+    const addonApi = {
+      showAddonAsk: !!_addonAsk,
+      addonName: _addonAsk ? _addonAsk.name : '',
+      addonBusy: !!this.state.addonBusy,
+      addonSubmitLabel: this.state.addonBusy ? 'Sending…' : 'Request this service',
+      addonNote: this.state.addonNote || '',
+      setAddonNote: (e9) => this.setState({ addonNote: e9.target.value }),
+      closeAddonAsk: () => this.setState({ addonAsk: null, addonNote: '', addonBusy: false }),
+      submitAddonAsk: () => {
+        if (!_addonAsk || this.state.addonBusy) return;
+        this.setState({ addonBusy: true });
+        const tok9 = credTok();
+        fetch(CRED_API + '/api/portal/addon-requests', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+          body: JSON.stringify({ serviceId: _addonAsk.id, note: this.state.addonNote || null }) })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            this.setState({ addonBusy: false });
+            if (!ok) return this.toast((j9 && j9.error) || 'Could not send the request', 'error');
+            this.setState({ addonAsk: null, addonNote: '' });
+            this.toast('Requested — your PRO team will confirm the price');
+            this._loadAddonReqs && this._loadAddonReqs();
+          })
+          .catch(() => { this.setState({ addonBusy: false }); this.toast('Cannot reach the server', 'error'); });
+      },
+    };
 
     // wizard state
     const wzStep = this.state.wzStep || 1;
@@ -5102,8 +5195,8 @@ class Component extends DCLogic {
     const _upTiers = Array.isArray(this.state.portalPkgs) ? this.state.portalPkgs : null;
     const _upSel = this.state.upgSel || null;
     const upgradeApi = {
-      svcIncludedCount: svcDefs.filter(s2 => s2[6]).length,
-      svcTotalCount: svcDefs.length,
+      svcIncludedCount: String(svcDefs.filter(s2 => s2[6]).length),
+      svcTotalCount: String(svcDefs.length),
       showUpgrade: !!this.state.upgradeModal,
       upgradeIdle: this.state.upgradeModal === 'idle',
       upgradeSent: this.state.upgradeModal === 'sent',
@@ -5304,7 +5397,7 @@ class Component extends DCLogic {
       const st9 = status === 'Accepted' ? 'approved' : 'rejected';
       if (qOpenRow) {
         fetch(CRED_API + '/api/portal/quotations/' + qOpenRow.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + credTok() }, body: JSON.stringify({ status: st9 }) })
-          .then(r9 => { if (!r9.ok) return this.toast && this.toast('Could not send your decision — try again'); this._loadQuotes && this._loadQuotes(); })
+          .then(r9 => { if (!r9.ok) return this.toast && this.toast('Could not send your decision — try again'); this._loadQuotes && this._loadQuotes(); this._loadAddonReqs(); })
           .catch(() => this.toast && this.toast('Cannot reach the server'));
       }
       this.setState({ quoteStatus: { ...qs, [this.state.quoteOpen]: status } });
@@ -5658,6 +5751,7 @@ class Component extends DCLogic {
           grpOverdueLabel: over9 ? over9 + ' overdue' : 'none overdue',
         };
       })(),
+      ...addonApi,
       kpis, donut, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
       // Real figures replacing the hardcoded "27 active", "248/231", "4.2 days" and the literal
       // ticket counts. Numbers are stringified — the template renders a bare 0 as blank otherwise.

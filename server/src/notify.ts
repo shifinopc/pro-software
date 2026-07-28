@@ -317,3 +317,46 @@ export function notifyAppointmentChanged(a: {
     cta: { label: "View your appointments", url: `${portalUrl()}/portal/appointments` },
   });
 }
+
+/** An add-on the client asked for has been approved and attached to their own plan. */
+export function notifyAddonApproved(a: { companyId?: string | null; serviceName?: string | null; price?: number | null; invoiceNumber?: string | null }) {
+  const name = a.serviceName || "The service";
+  const charged = (a.price ?? 0) > 0;
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    inApp: { type: "system", title: `Add-on approved: ${name}`, message: charged ? (a.invoiceNumber ? `Invoice ${a.invoiceNumber}` : undefined) : "No charge" },
+    subject: `${name} has been added to your plan`,
+    heading: "Your add-on has been approved",
+    lines: [
+      `Service: <b>${esc(name)}</b>`,
+      charged
+        ? `A one-off fee of <b>${Number(a.price).toLocaleString()}</b> will be invoiced.`
+        : "There is no charge for this add-on.",
+      "You can request this service from your catalog from now on.",
+    ],
+    cta: { label: "Open the service catalog", url: `${portalUrl()}/portal/service-catalog` },
+  });
+}
+
+/**
+ * The refusal side of the same request. Sent so the catalog card can go back to offering the button
+ * instead of leaving the client waiting on a decision that has already been made.
+ */
+export function notifyAddonRejected(a: { companyId?: string | null; serviceName?: string | null }) {
+  const name = a.serviceName || "The service";
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    inApp: { type: "system", title: `Add-on not approved: ${name}` },
+    subject: `About your request for ${name}`,
+    heading: "We could not add this to your plan",
+    lines: [
+      `Service: <b>${esc(name)}</b>`,
+      "Your plan is unchanged. Talk to your PRO team if you would still like this service — they can look at other options with you.",
+    ],
+    cta: { label: "Open the service catalog", url: `${portalUrl()}/portal/service-catalog` },
+  });
+}

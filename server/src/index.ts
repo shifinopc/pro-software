@@ -14,7 +14,7 @@ import { validate } from "./validate.js";
 import { prisma } from "./db.js";
 import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised } from "./notify.js";
+import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved } from "./notify.js";
 import {
   hashPassword, verifyPassword, signToken,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, generateTempPassword,
@@ -323,10 +323,14 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   const now = Date.now();
   const nowISO = new Date(now).toISOString();
   const money = (c: any) => `${c.currency || "SAR"} ${Number(c.amount).toLocaleString()}`;
-  const [docs, reqs, invs] = await Promise.all([
+  const [docs, reqs, invs, addonReqs] = await Promise.all([
     prisma.document.findMany({ where: { companyId: a.companyId, NOT: { expiryDate: null } } }),
     prisma.serviceRequest.findMany({ where: { companyId: a.companyId } }),
-    prisma.invoice.findMany({ where: { companyId: a.companyId } }),
+    // A DRAFT invoice has not been released to the client yet — the billing job raises drafts for a
+    // human to check first, so announcing one asks the client to pay a bill nobody has approved.
+    // Voided invoices are gone as far as they are concerned.
+    prisma.invoice.findMany({ where: { companyId: a.companyId, NOT: { status: { in: ["draft", "void"] } } } }),
+    prisma.upgradeRequest.findMany({ where: { companyId: a.companyId, kind: "addon", status: { in: ["approved", "rejected"] } } }),
   ]);
   const out: any[] = [];
   for (const d of docs) {
@@ -344,6 +348,16 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   for (const inv of invs) {
     if (inv.status !== "paid") out.push({ id: "inv-" + inv.id, kind: "invoice", title: `Invoice ${inv.number} issued — ${money(inv)}`, meta: `Billing${inv.dueDate ? ` · due ${inv.dueDate}` : ""}`, ts: inv.date || nowISO, unread: true, cta: "Pay" });
     else out.push({ id: "inv-" + inv.id, kind: "check", title: `Payment received — ${money(inv)}`, meta: `${inv.number}${inv.date ? ` · ${inv.date}` : ""}`, ts: inv.date || nowISO, unread: false, cta: false });
+  }
+  // The decision on an add-on the client asked for. Without this the catalog card just quietly
+  // changes state and nobody is told either way.
+  for (const r of addonReqs) {
+    const nm = r.serviceName || "the service";
+    if (r.status === "approved") {
+      out.push({ id: "adn-" + r.id, kind: "check", title: `${nm} was added to your plan`, meta: r.quotedPrice ? `Add-on · one-off SAR ${Number(r.quotedPrice).toLocaleString()}` : "Add-on · no charge", ts: r.date || nowISO, unread: true, cta: false });
+    } else {
+      out.push({ id: "adn-" + r.id, kind: "alert", title: `We could not add ${nm} to your plan`, meta: "Add-on · talk to your PRO team", ts: r.date || nowISO, unread: true, cta: false });
+    }
   }
   out.sort((x, y) => String(y.ts).localeCompare(String(x.ts)));
   // Apply the read watermark: anything at or before it has been acknowledged. Derived notifications
@@ -1276,6 +1290,136 @@ app.post("/api/portal/upgrade-requests", requireAuth, requirePortal, async (req,
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
+});
+
+/** A client's own upgrade / add-on requests, so the portal can show what is already in review. */
+app.get("/api/portal/upgrade-requests", requireAuth, requirePortal, async (req, res) => {
+  const a = (req as any).auth;
+  const kind = req.query.kind ? String(req.query.kind) : undefined;
+  res.json(await prisma.upgradeRequest.findMany({
+    where: { companyId: a.companyId!, ...(kind ? { kind } : {}) },
+    orderBy: { id: "desc" },
+    take: 100,
+  }));
+});
+
+/**
+ * Client asks for ONE locked service to be added on top of the tier they already have, instead of
+ * being pushed to a whole new package. No price is quoted here — staff set it at approval.
+ */
+app.post("/api/portal/addon-requests", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const { serviceId, note } = req.body ?? {};
+    if (!serviceId) return res.status(400).json({ error: "Pick a service" });
+    const svc = await prisma.serviceItem.findUnique({ where: { id: String(serviceId) } });
+    if (!svc) return res.status(404).json({ error: "That service is no longer in the catalog" });
+
+    const company = await prisma.company.findUnique({ where: { id: a.companyId! } });
+    const subs = await subsFor(a.companyId!, company?.groupId);
+    // Already entitled? Then there is nothing to request — via the package, or an earlier add-on.
+    // Same rule the portal draws its locks from, deliberately: while no package has been given a
+    // service list, entitlement falls back to the catalog's own `included` flag. Without that
+    // fallback the API would accept requests for services the portal already shows as included.
+    const anyPkgConfigured = subs.some(s => Array.isArray(s.package?.serviceIds) && (s.package!.serviceIds as string[]).length > 0);
+    const entitled = subs.some(s => {
+      const pkgIds = Array.isArray(s.package?.serviceIds) ? (s.package!.serviceIds as string[]) : [];
+      const addons = Array.isArray(s.addons) ? (s.addons as any[]) : [];
+      if (addons.some(x => x?.serviceId === svc.id)) return true;
+      return anyPkgConfigured ? pkgIds.includes(svc.id) : svc.included !== false;
+    });
+    if (entitled) return res.status(409).json({ error: `${svc.name} is already available on your plan` });
+
+    // One open request per service — a client clicking twice must not create a second review item.
+    const open = await prisma.upgradeRequest.findFirst({
+      where: { companyId: a.companyId!, kind: "addon", serviceId: svc.id, status: { in: ["pending", "escalated"] } },
+    });
+    if (open) return res.status(409).json({ error: `You have already requested ${svc.name} — it is with your PRO team` });
+
+    const created = await prisma.upgradeRequest.create({
+      data: {
+        companyId: a.companyId!, clientName: company?.name ?? "", kind: "addon",
+        serviceId: svc.id, serviceName: svc.name, note: note ?? null,
+        status: "pending", date: new Date().toISOString().slice(0, 10),
+      },
+    });
+    logActivity({ type: "finance", message: `${company?.name ?? "A client"} requested the add-on "${svc.name}"`, user: company?.name ?? "Client" });
+    notify({
+      rule: "Approval requested", audience: "staff",
+      inApp: { type: "task", title: `Add-on requested — ${company?.name ?? "client"}`, message: svc.name },
+      subject: `Add-on requested: ${svc.name}`,
+      heading: "A client wants a service added to their plan",
+      lines: [`Client: <b>${company?.name ?? "—"}</b>`, `Service: <b>${svc.name}</b>`,
+        note ? `Note: ${note}` : "",
+        "Approve it with a price to unlock the service for this client only and raise the invoice."],
+    });
+    res.status(201).json(created);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/**
+ * Staff approve an add-on with the price they are charging THIS client.
+ * Three things happen together: the service is attached to that client's own subscription, a one-off
+ * draft invoice is raised for the fee, and the client is told. The add-on is written to
+ * Subscription.addons and never to Package.serviceIds — the package is shared by every client on the
+ * tier, so unlocking it there would hand the service to all of them.
+ */
+app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const price = Math.round(Number(req.body?.price));
+  if (!Number.isFinite(price) || price < 0) return res.status(400).json({ error: "Enter the price for this add-on" });
+
+  const reqRow = await prisma.upgradeRequest.findUnique({ where: { id: req.params.id } });
+  if (!reqRow) return res.status(404).json({ error: "Request not found" });
+  if (reqRow.kind !== "addon") return res.status(400).json({ error: "That is a package upgrade, not an add-on" });
+  // Escalated is still undecided — it only means the queue flagged it as waiting too long.
+  if (!["pending", "escalated"].includes(reqRow.status)) return res.status(409).json({ error: `That request is already ${reqRow.status}` });
+  if (!reqRow.serviceId) return res.status(400).json({ error: "The request has no service on it" });
+
+  const company = await prisma.company.findUnique({ where: { id: reqRow.companyId } });
+  const subs = await subsFor(reqRow.companyId, company?.groupId);
+  // Attach to the client's OWN subscription. A group-scoped subscription is shared by sibling
+  // companies, so it is only used when the client has nothing of their own.
+  const target = subs.find(s => s.companyId === reqRow.companyId || (s.scope === "company" && s.refId === reqRow.companyId)) ?? subs[0];
+  if (!target) return res.status(409).json({ error: "That client has no active subscription to attach an add-on to" });
+
+  const addons = Array.isArray(target.addons) ? (target.addons as any[]) : [];
+  if (addons.some(x => x?.serviceId === reqRow.serviceId)) {
+    return res.status(409).json({ error: "That service is already on this client's plan" });
+  }
+
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const existing = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
+  const next = existing.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
+  const number = prefix + String(next).padStart(3, "0");
+  const today = new Date().toISOString().slice(0, 10);
+  const label = `${reqRow.serviceName ?? "Service"} — plan add-on`;
+
+  // Order matters: the invoice must be first so the destructure below picks it up. A zero-priced
+  // add-on raises nothing, so there is no invoice to pick up either.
+  const [maybeInvoice] = await prisma.$transaction([
+    // Draft, like every other invoice: a human releases it.
+    ...(price > 0 ? [prisma.invoice.create({
+      data: {
+        number, companyId: reqRow.companyId, clientName: company?.name ?? reqRow.clientName,
+        amount: price, status: "draft", date: today, services: label,
+        items: [{ name: label, units: 1, price }],
+      },
+    })] : []),
+    prisma.subscription.update({
+      where: { id: target.id },
+      data: { addons: [...addons, { serviceId: reqRow.serviceId, name: reqRow.serviceName, price, addedAt: new Date().toISOString(), by: a.sub }] },
+    }),
+    prisma.upgradeRequest.update({ where: { id: reqRow.id }, data: { status: "approved", quotedPrice: price } }),
+  ]);
+
+  logActivity({ type: "finance", message: `Add-on approved: ${reqRow.serviceName} for ${company?.name ?? "client"}${price > 0 ? ` · ${price}` : " · no charge"}` });
+  await logAudit({ action: "addon.approve", actorId: a.sub, target: reqRow.id, detail: `${reqRow.serviceName} → ${company?.name ?? reqRow.companyId} · ${price}` });
+  notifyAddonApproved({ companyId: reqRow.companyId, serviceName: reqRow.serviceName, price, invoiceNumber: price > 0 ? number : null });
+  res.json({ ok: true, addedTo: target.id, invoice: price > 0 ? (maybeInvoice as any) : null });
 });
 
 // ── Staff data API (authenticated staff; writes require admin/super_admin) ──

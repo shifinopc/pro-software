@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "./db.js";
 import { validate } from "./validate.js";
 import { logActivity, logNotification } from "./auth.js";
-import { notifyInvoiceRaised, notifyAppointmentChanged } from "./notify.js";
+import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
 
 // Build a friendly activity line for a newly-created record (persisted feed).
 // Resolves the owning company name so client-scoped records (employees, documents,
@@ -159,6 +159,13 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
             companyId: updated.companyId, type: updated.type, date: updated.date, time: updated.time, what,
           });
         }
+      }
+      // Turning down an add-on request. Approval has its own route (it needs a price), so this only
+      // has to cover the refusal — otherwise the client's card would sit on "Requested" for good.
+      if (modelName === "upgradeRequest" && (updated as any).kind === "addon"
+        && String(req.body?.status ?? "").toLowerCase() === "rejected"
+        && String((before as any).status ?? "").toLowerCase() !== "rejected") {
+        notifyAddonRejected({ companyId: (updated as any).companyId, serviceName: (updated as any).serviceName });
       }
       res.json(updated);
     } catch (e: any) {

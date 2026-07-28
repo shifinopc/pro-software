@@ -1107,10 +1107,10 @@
           <sc-if value="{{ clUpgradeShow }}" hint-placeholder-val="{{ false }}">
             <sc-for list="{{ clUpgrades }}" as="u" hint-placeholder-count="1">
               <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:linear-gradient(112deg,#FBF7FF,#F3E8FF); border:1px solid #E4CCFF; border-radius:14px; padding:13px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                <span style="font-size:15px;">⬆️</span>
-                <div style="flex:1; min-width:180px;"><div style="font-size:12.5px; font-weight:700;">Upgrade request · {{ u.client }} → {{ u.to }}</div><div style="font-size:11px; color:#8C8899;">{{ u.amount }} · awaiting your approval</div></div>
+                <span style="font-size:15px;">{{ u.icon }}</span>
+                <div style="flex:1; min-width:180px;"><div style="font-size:12.5px; font-weight:700;">{{ u.kindLabel }} · {{ u.client }} → {{ u.to }}</div><div style="font-size:11px; color:#8C8899;">{{ u.amount }} · awaiting your approval</div></div>
                 <button onClick="{{ u.reject }}" style="background:#fff; color:#C0353A; border:1px solid #FBD5D5; font-size:11.5px; font-weight:700; padding:7px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#FEECEC;">Reject</button>
-                <button onClick="{{ u.approve }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:7px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Approve &amp; swap package</button>
+                <button onClick="{{ u.approve }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:7px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ u.approveLabel }}</button>
               </section>
             </sc-for>
           </sc-if>
@@ -5114,6 +5114,28 @@
     </div>
   </sc-if>
 
+  <!-- Pricing an add-on. Deliberately per client: this writes the service onto one
+       subscription and bills it once — the package itself is never edited, so nobody else
+       on the same plan is touched. -->
+  <sc-if value="{{ showAddonQuote }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:90; display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div style="background:#fff; border-radius:18px; width:100%; max-width:420px; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3);">
+        <div style="font-size:10.5px; font-weight:700; color:#6D5BD0; letter-spacing:.1em;">ADD-ON REQUEST</div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:3px;">{{ aqService }}</div>
+        <div style="font-size:12px; color:#8C8899; margin-top:2px;">for {{ aqClient }}</div>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:18px;">ONE-OFF PRICE ({{ aqCur }})</div>
+        <input value="{{ aqPrice }}" onChange="{{ setAqPrice }}" type="number" min="0" step="0.01" placeholder="0.00" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:14px; font-family:'Inter',sans-serif; background:#FCFBFE;">
+        <div style="margin-top:12px; background:#F8F5FD; border-radius:12px; padding:11px 14px; font-size:11.5px; color:#6F6C7A; line-height:1.6;">Unlocks this service for <b style="color:#1A1523;">this client only</b> and raises a draft invoice you can review before sending.</div>
+        <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
+          <button onClick="{{ closeAddonQuote }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <sc-if value="{{ aqPriceOk }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ saveAddonQuote }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ aqSaveLabel }}</button>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- Edit User modal -->
   <sc-if value="{{ showEditUser }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeEditUser }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
@@ -8073,14 +8095,65 @@ class Component extends DCLogic {
     // WIRED: upgrade banner = real pending upgrade requests; decisions persist. Design sample only
     // when unauthenticated.
     const _upgReal = Array.isArray(this.state.upgradeRequestsData) ? this.state.upgradeRequestsData : null;
+    // Two kinds share this queue. kind='addon' asks for ONE locked service on top of the plan the
+    // client already has — approving it needs a price, so it opens the quote box instead of
+    // resolving in one click. Anything else is the old whole-package upgrade.
     const clUpgrades = (_upgReal
-      ? _upgReal.filter(u => ['open', 'pending'].includes(String(u.status).toLowerCase())).map(u => ({
-          id: 'UPG-' + String(u.id).slice(-4).toUpperCase(), client: u.clientName || '—', to: u.note || 'plan upgrade', amount: '', realId: u.id }))
+      // 'escalated' stays on the banner. Escalating means it needs attention sooner, so dropping it
+      // out of view is backwards — an escalated add-on would otherwise never get priced.
+      ? _upgReal.filter(u => ['open', 'pending', 'escalated'].includes(String(u.status).toLowerCase())).map(u => ({
+          id: 'UPG-' + String(u.id).slice(-4).toUpperCase(), client: u.clientName || '—',
+          to: u.kind === 'addon' ? (u.serviceName || 'a service') : (u.note || 'plan upgrade'),
+          isAddon: u.kind === 'addon',
+          icon: u.kind === 'addon' ? '➕' : '⬆️',
+          kindLabel: u.kind === 'addon' ? 'Add-on request' : 'Upgrade request',
+          approveLabel: u.kind === 'addon' ? 'Review & price' : 'Approve & swap package',
+          amount: u.kind === 'addon' ? (u.note ? '“' + u.note + '”' : 'No note') : '',
+          realId: u.id }))
       : (this.state.clUpgradeResolved ? [] : [
-        { id: 'UPG-014', client: 'Zenith Contracting', to: 'Enterprise', amount: 'AED 2,400/mo', realId: null },
+        { id: 'UPG-014', client: 'Zenith Contracting', to: 'Enterprise', amount: 'AED 2,400/mo', realId: null,
+          isAddon: false, icon: '⬆️', kindLabel: 'Upgrade request', approveLabel: 'Approve & swap package' },
       ])).map(u => ({ ...u,
-      approve: () => { if (u.realId) this._opPut('upgrade-requests', u.realId, { status: 'approved' }, () => this._opReload('upgrade-requests', 'upgradeRequestsData')); else this.setState({ clUpgradeResolved: true }); },
+      approve: () => {
+        if (!u.realId) return this.setState({ clUpgradeResolved: true });
+        if (u.isAddon) return this.setState({ addonQuote: { id: u.realId, client: u.client, service: u.to, price: '' } });
+        this._opPut('upgrade-requests', u.realId, { status: 'approved' }, () => this._opReload('upgrade-requests', 'upgradeRequestsData'));
+      },
       reject: () => { if (u.realId) this._opPut('upgrade-requests', u.realId, { status: 'rejected' }, () => this._opReload('upgrade-requests', 'upgradeRequestsData')); else this.setState({ clUpgradeResolved: true }); } }));
+
+    // Quote box for an add-on. The price is per client and never touches the package, so approving
+    // writes the service onto THAT subscription only and raises a one-off draft invoice.
+    const _aq = this.state.addonQuote || null;
+    const addonQuoteApi = {
+      showAddonQuote: !!_aq,
+      aqClient: _aq ? _aq.client : '',
+      aqService: _aq ? _aq.service : '',
+      aqPrice: _aq ? _aq.price : '',
+      aqBusy: !!this.state.addonQuoteBusy,
+      aqSaveLabel: this.state.addonQuoteBusy ? 'Adding…' : 'Approve & add',
+      aqPriceOk: !!(_aq && Number(_aq.price) > 0),
+      aqCur: sysCurCode,
+      setAqPrice: (e) => this.setState({ addonQuote: { ...this.state.addonQuote, price: e.target.value } }),
+      closeAddonQuote: () => this.setState({ addonQuote: null }),
+      saveAddonQuote: () => {
+        const q = this.state.addonQuote;
+        if (!q || !(Number(q.price) > 0) || this.state.addonQuoteBusy) return;
+        this.setState({ addonQuoteBusy: true });
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/upgrade-requests/' + q.id + '/approve-addon', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+          body: JSON.stringify({ price: Number(q.price) }),
+        }).then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+          .then(({ ok, j }) => {
+            if (!ok) { this.setState({ addonQuoteBusy: false }); return this.toast((j && j.error) || 'Could not approve the add-on', 'error'); }
+            this.setState({ addonQuote: null, addonQuoteBusy: false });
+            this._opReload('upgrade-requests', 'upgradeRequestsData');
+            this._reloadInvoices();
+            this.toast('Add-on approved — draft invoice ' + ((j.invoice && j.invoice.number) || 'raised'));
+          })
+          .catch(() => { this.setState({ addonQuoteBusy: false }); this.toast('Server unreachable — nothing changed', 'error'); });
+      },
+    };
 
     // ---- Client detail (7 tabs) ----
     const clTabs = ['Overview', 'Contacts', 'Package', 'Employees', 'Credentials', 'Documents', 'Notes & Files', 'Activity'];
@@ -8511,6 +8584,7 @@ class Component extends DCLogic {
     const acServices = ['Company Formation', 'New Work Visa', 'Iqama Renewal', 'Trade License', 'VAT Registration', 'Labour Cards'];
     const acPickedSvc = this.state.acServices || [];
     const clientsApi = {
+      ...addonQuoteApi,
       clients: clVisible, clStatChips, clStats, clUpgrades, clUpgradeShow: clUpgrades.length > 0, showClientList: !clRow,
       clSearch: this.state.clSearch || '', setClSearch: (e) => this.setState({ clSearch: e.target.value }),
       clientsEmpty: clVisible.length === 0,
@@ -9348,6 +9422,7 @@ class Component extends DCLogic {
       workflow: ['Workflow Approval', '#6D5BD0', '#EFEBFF'],
       service: ['Service Request', '#0284C7', '#E4F4FD'],
       upgrade: ['Package Upgrade', '#B8860B', '#FEF4E2'],
+      'upgrade-addon': ['Plan Add-on', '#7C00FF', '#F3E8FF'],
       access: ['Portal Access', '#0EA5E9', '#E0F2FE'],
     };
     // origin, id, subject, context, client, amount, requestedBy, priority, waiting, [gateRole, sla, elapsed, onApprove, onReject]
@@ -9375,7 +9450,13 @@ class Component extends DCLogic {
           const elapsedH2 = t.createdAt ? Math.max(0, Math.round((Date.now() - new Date(t.createdAt).getTime()) / 3600000)) : 0;
           return ['workflow', t.id.slice(-6).toUpperCase(), t.title || 'Approval step', (t.instance && t.instance.title) || 'Workflow', (t.instance && t.instance.clientName) || '—', '—', 'Workflow · ' + (t.assigneeRole || 'role'), 'High', elapsedH2 + 'h', t.assigneeRole || null, t.slaHours || null, elapsedH2, 'Approve', 'Reject', t.id, 'Pending'];
         }),
-        ...upgData.map(u => ['upgrade', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Package upgrade request', u.note || 'Subscription change', u.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']),
+        // Add-ons live in the same table, so they surface here too — but they must NOT be approved
+        // from this row. Approving here only flips the status; the service would never be attached
+        // and the client would never be billed. The row is labelled for what it is and its Approve
+        // opens the same pricing box the Clients banner uses.
+        ...upgData.map(u => u.kind === 'addon'
+          ? ['upgrade-addon', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Add-on request — ' + (u.serviceName || 'a service'), u.note || 'One service on top of the current plan', u.clientName || '—', u.quotedPrice ? fmtCur(u.quotedPrice) : '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']
+          : ['upgrade', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Package upgrade request', u.note || 'Subscription change', u.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']),
         ...srvData.map(r2 => ['service', 'SRV-' + String(r2.id).slice(-4).toUpperCase(), r2.type || 'Service request', (r2.message || '').slice(0, 60) || 'Client portal', r2.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(r2.lastClientMsgAt || r2.date), null, null, null, null, null, r2.id, AP_ST[String(r2.status).toLowerCase()] || 'Pending']),
       ]
       : (_authed ? [] : [
@@ -9389,8 +9470,14 @@ class Component extends DCLogic {
       const H2 = { 'Content-Type': 'application/json', ...(tok2 ? { Authorization: 'Bearer ' + tok2 } : {}) };
       const API2 = this._apiBase || 'http://localhost:4100';
       let p2;
+      // An add-on approval needs a price and a subscription write, so it goes through the same
+      // pricing box as the Clients banner. Reject/Escalate are plain status changes either way.
+      if (origin === 'upgrade-addon' && val === 'Approved') {
+        const row9 = (Array.isArray(this.state.upgradeRequestsData) ? this.state.upgradeRequestsData : []).find(x9 => x9.id === realId);
+        return this.setState({ addonQuote: { id: realId, client: (row9 && row9.clientName) || 'this client', service: (row9 && row9.serviceName) || 'the service', price: '' } });
+      }
       if (origin === 'workflow') p2 = fetch(API2 + '/api/workflow/tasks/' + realId + '/complete', { method: 'POST', headers: H2, body: JSON.stringify({ outcome: val === 'Approved' ? 'approve' : 'reject' }) });
-      else if (origin === 'upgrade') p2 = fetch(API2 + '/api/upgrade-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val.toLowerCase() }) });
+      else if (origin === 'upgrade' || origin === 'upgrade-addon') p2 = fetch(API2 + '/api/upgrade-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val.toLowerCase() }) });
       else p2 = fetch(API2 + '/api/service-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val === 'Approved' ? 'resolved' : val.toLowerCase() }) });
       p2.then(r2 => { if (!r2.ok) this.toast('Saved locally — server rejected the update'); }).catch(() => this.toast('Server unreachable'));
     };
