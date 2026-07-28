@@ -1279,6 +1279,26 @@
                     </sc-for>
                   </div>
                 </div>
+                <!-- Add-ons sit in their own card on purpose: they are attached to this client's
+                     subscription, not to the package, so nobody else on the tier has them. -->
+                <sc-if value="{{ cdAddonsShow }}" hint-placeholder-val="{{ true }}">
+                  <div style="background:#fff; border:1px solid #E4D9FB; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                      <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Added for this client</div>
+                      <span style="font-size:9.5px; font-weight:800; letter-spacing:.04em; color:#6D5BD0; background:#EFEBFF; padding:3px 10px; border-radius:99px;">{{ cdAddonsCount }}</span>
+                    </div>
+                    <div style="font-size:11px; color:#A9A6B4; margin-top:4px;">On top of the plan — other clients on this package are unaffected.</div>
+                    <div style="display:flex; flex-direction:column; gap:9px; margin-top:12px;">
+                      <sc-for list="{{ cdAddons }}" as="a" hint-placeholder-count="1">
+                        <div style="display:flex; align-items:center; gap:9px; font-size:12px;">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6D5BD0" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+                          <span style="flex:1;">{{ a.name }}</span>
+                          <span style="color:#8C8899; font-size:11px;">{{ a.price }} · {{ a.when }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
                 <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px;">
                   <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Recent invoices</div>
                   <sc-if value="{{ cdPkgInvoicesEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px; color:#A9A6B4; margin-top:11px;">No invoices for this client yet.</div></sc-if>
@@ -8287,6 +8307,20 @@ class Component extends DCLogic {
           ].map(f9 => ({ text: f9 }))
         : [];
       clDetailApi.cdPkgFeaturesEmpty = clDetailApi.cdPkgFeatures.length === 0;
+      // Add-ons this client bought on top of the plan. Deliberately a separate card from "Included
+      // in this plan": these live on THIS subscription, not on the package, and listing them
+      // together would read as though the tier had changed for everyone on it.
+      const _cdAddons = (_cdSub && Array.isArray(_cdSub.addons)) ? _cdSub.addons : [];
+      clDetailApi.cdAddons = _cdAddons.map(a9 => {
+        const when9 = a9 && a9.addedAt ? new Date(a9.addedAt) : null;
+        return {
+          name: (a9 && (a9.name || (_cdSiAll.find(x9 => x9.id === a9.serviceId) || {}).name)) || 'Service',
+          price: Number(a9 && a9.price) > 0 ? fmtCur(Number(a9.price)) + ' one-off' : 'No charge',
+          when: when9 && !isNaN(+when9) ? 'added ' + when9.toISOString().slice(0, 10) : '',
+        };
+      });
+      clDetailApi.cdAddonsShow = clDetailApi.cdAddons.length > 0;
+      clDetailApi.cdAddonsCount = clDetailApi.cdAddons.length + (clDetailApi.cdAddons.length === 1 ? ' add-on' : ' add-ons');
       // Recent invoices: this client's real invoices, newest first.
       const _cdInvTone = { paid: ['#E7F8EF', '#0E9355'], overdue: ['#FEECEC', '#C0353A'] };
       clDetailApi.cdPkgInvoices = (Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [])
