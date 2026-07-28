@@ -191,6 +191,19 @@
 <div style="display:flex; min-height:100vh;" data-screen-label="Client Portal Dashboard">
   <!-- Dead URL. Says what happened in the user's terms, gets them out, and lets them tell us the
        link is broken — a soft redirect gave them none of that. -->
+  <sc-if value="{{ stateBannerShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; top:0; left:0; right:0; z-index:400; display:flex; align-items:center; gap:12px; padding:11px 20px; background:{{ stateBannerBg }}; border-bottom:1px solid {{ stateBannerBorder }}; box-shadow:0 2px 12px rgba(38,7,77,.10); animation:fadeUp .2s ease both;">
+      <span style="width:22px; height:22px; border-radius:99px; background:{{ stateBannerDot }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="{{ stateBannerIcon }}"></path></svg>
+      </span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:700; color:{{ stateBannerFg }};">{{ stateBannerTitle }}</div>
+        <div style="font-size:11.5px; color:{{ stateBannerFg }}; opacity:.8;">{{ stateBannerBody }}</div>
+      </div>
+      <span onClick="{{ stateBannerAct }}" style="font-size:11.5px; font-weight:700; color:#fff; background:{{ stateBannerDot }}; padding:7px 15px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;">{{ stateBannerCta }}</span>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ nfShow }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed; inset:0; z-index:200; background:#FBFAFE; display:flex; align-items:center; justify-content:center; padding:24px;">
       <div style="width:470px; max-width:100%; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 20px 56px rgba(38,7,77,.14); padding:28px 30px;">
@@ -1318,9 +1331,18 @@
                   <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px;">
                     <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Recent activity</div>
                     <div style="display:flex; flex-direction:column; gap:12px; margin-top:13px;">
-                      <div style="display:flex; gap:10px;"><span style="width:7px; height:7px; border-radius:99px; background:#12B76A; margin-top:4px; flex-shrink:0;"></span><div><div style="font-size:12px; font-weight:600;">Visa approved — S. Lim</div><div style="font-size:10px; color:#A9A6B4;">2h ago</div></div></div>
-                      <div style="display:flex; gap:10px;"><span style="width:7px; height:7px; border-radius:99px; background:#0284C7; margin-top:4px; flex-shrink:0;"></span><div><div style="font-size:12px; font-weight:600;">Invoice INV-1187 generated</div><div style="font-size:10px; color:#A9A6B4;">yesterday</div></div></div>
-                      <div style="display:flex; gap:10px;"><span style="width:7px; height:7px; border-radius:99px; background:#7C00FF; margin-top:4px; flex-shrink:0;"></span><div><div style="font-size:12px; font-weight:600;">Credential updated by client</div><div style="font-size:10px; color:#A9A6B4;">2 days ago</div></div></div>
+                      <sc-for list="{{ cdActivity }}" as="ca" hint-placeholder-count="3">
+                        <div style="display:flex; gap:10px;">
+                          <span style="width:7px; height:7px; border-radius:99px; background:{{ ca.color }}; margin-top:4px; flex-shrink:0;"></span>
+                          <div style="min-width:0;">
+                            <div style="font-size:12px; font-weight:600;">{{ ca.title }}</div>
+                            <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ ca.meta }}</div>
+                          </div>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ cdActivityEmpty }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:12px; color:#A9A6B4; padding:6px 0;">Nothing recorded for this client yet.</div>
+                      </sc-if>
                     </div>
                   </div>
                 </div>
@@ -1472,7 +1494,7 @@
                   <div style="position:relative; display:flex; align-items:center; justify-content:space-between;"><div style="display:flex; align-items:center; gap:9px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4"></path></svg><span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Portal access</span></div><span style="font-size:9.5px; font-weight:700; color:#7CFFB0; background:rgba(124,255,176,.16); padding:3px 10px; border-radius:99px;">● Active</span></div>
                   <div style="position:relative; font-size:11px; opacity:.8; margin-top:10px;">PRIMARY LOGIN</div>
                   <div style="position:relative; font-size:13px; font-weight:700; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cd.email }}</div>
-                  <div style="position:relative; display:flex; gap:18px; margin-top:14px;"><div><div style="font-size:9px; opacity:.7; font-weight:700;">LAST LOGIN</div><div style="font-size:12px; font-weight:700; margin-top:2px;">Yesterday</div></div><div><div style="font-size:9px; opacity:.7; font-weight:700;">PORTAL USERS</div><div style="font-size:12px; font-weight:700; margin-top:2px;">3 active</div></div><div><div style="font-size:9px; opacity:.7; font-weight:700;">2FA</div><div style="font-size:12px; font-weight:700; margin-top:2px;">On</div></div></div>
+                  <div style="position:relative; display:flex; gap:18px; margin-top:14px;"><div><div style="font-size:9px; opacity:.7; font-weight:700;">LAST LOGIN</div><div style="font-size:12px; font-weight:700; margin-top:2px;">{{ cdLastLogin }}</div></div><div><div style="font-size:9px; opacity:.7; font-weight:700;">PORTAL USERS</div><div style="font-size:12px; font-weight:700; margin-top:2px;">{{ cdPortalUserCount }}</div></div><div><div style="font-size:9px; opacity:.7; font-weight:700;">ACCESS</div><div style="font-size:12px; font-weight:700; margin-top:2px;">{{ cdAccessState }}</div></div></div>
                 </div>
                 <div style="padding:16px 20px;">
                   <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">PORTAL USERS</div>
@@ -1525,7 +1547,10 @@
                 <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; padding:10px 24px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Document</span><span>Subject</span><span>Authority</span><span>Expiry</span><span>Status</span><span></span></div>
                 <sc-for list="{{ cdDocs }}" as="d" hint-placeholder-count="6">
                   <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; align-items:center; padding:12px 24px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
-                    <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.doc }}</span>
+                    <div style="min-width:0;">
+                      <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.doc }}</div>
+                      <sc-if value="{{ d.docNoShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#A9A6B4; font-family:ui-monospace,monospace;">{{ d.docNo }}</div></sc-if>
+                    </div>
                     <span style="font-size:10px; font-weight:700; color:{{ d.subjColor }}; background:{{ d.subjBg }}; padding:2px 9px; border-radius:99px; width:fit-content;">{{ d.subject }}</span>
                     <span style="color:#8C8899;">{{ d.authority }}</span>
                     <span style="color:#6F6C7A; font-size:12px;">{{ d.expiry }}</span>
@@ -3108,6 +3133,53 @@
         </section>
       </div></sc-if>
 
+      <sc-if value="{{ showProbReports }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Problem Reports">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both;">
+          <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">ADMINISTRATION</div>
+          <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Problem Reports</h1>
+          <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Dead links, crashes and problems reported from the console and the client portal</div>
+        </section>
+        <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both;">
+          <sc-for list="{{ erKpis }}" as="k" hint-placeholder-count="4">
+            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:15px 17px; box-shadow:0 1px 2px rgba(38,7,77,.04);">
+              <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.06em;">{{ k.label }}</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px; color:{{ k.color }}; font-variant-numeric:tabular-nums;">{{ k.value }}</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ k.note }}</div>
+            </div>
+          </sc-for>
+        </section>
+        <section style="display:flex; gap:8px; flex-wrap:wrap; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .06s both;">
+          <sc-for list="{{ erTabs }}" as="t" hint-placeholder-count="4">
+            <span onClick="{{ t.pick }}" style="font-size:12px; font-weight:700; color:{{ t.color }}; background:{{ t.bg }}; border:1px solid {{ t.border }}; padding:7px 15px; border-radius:99px; cursor:pointer;">{{ t.label }}</span>
+          </sc-for>
+        </section>
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .08s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
+          <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:820px;">
+            <div style="display:grid; grid-template-columns:104px 1.6fr 150px 118px 150px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Kind</span><span>What happened</span><span>Who</span><span>Status</span><span style="text-align:right;"></span></div>
+            <sc-if value="{{ erEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:34px 22px; text-align:center; font-size:12.5px; color:#8C8899;">{{ erEmptyText }}</div>
+            </sc-if>
+            <sc-for list="{{ erRows }}" as="r" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:104px 1.6fr 150px 118px 150px; gap:10px; align-items:start; padding:13px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+                <span style="font-size:10.5px; font-weight:700; color:{{ r.kColor }}; background:{{ r.kBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ r.kind }}</span>
+                <div style="min-width:0;">
+                  <div style="font-weight:600; word-break:break-word;">{{ r.what }}</div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; word-break:break-all;">{{ r.where }}</div>
+                  <sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#4B4757; background:#FAF7FE; border-left:2px solid #E4CCFF; padding:5px 9px; border-radius:0 8px 8px 0; margin-top:5px;">{{ r.note }}</div></sc-if>
+                </div>
+                <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.who }}</div><div style="font-size:10.5px; color:#A9A6B4;">{{ r.when }}</div></div>
+                <span style="font-size:10.5px; font-weight:700; color:{{ r.sColor }}; background:{{ r.sBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ r.status }}</span>
+                <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center; flex-wrap:wrap;">
+                  <sc-if value="{{ r.canSeen }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.markSeen }}" style="font-size:11px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Mark seen</span></sc-if>
+                  <sc-if value="{{ r.canClose }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.markClosed }}" style="font-size:11px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;">Close</span></sc-if>
+                  <sc-if value="{{ r.canReopen }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.reopen }}" style="font-size:11px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</span></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div></div>
+        </section>
+      </div></sc-if>
+
       <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Settings">
         <sc-if value="{{ settingsChrome }}" hint-placeholder-val="{{ true }}">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both;">
@@ -3241,40 +3313,86 @@
               </div>
             </sc-if>
             <sc-if value="{{ setTabConfigure }}" hint-placeholder-val="{{ false }}">
-              <!-- Object Builder -->
-              <sc-if value="{{ showObjBuilder }}" hint-placeholder-val="{{ false }}">
+              <!-- Record Sequence -->
+              <sc-if value="{{ showRecordSeq }}" hint-placeholder-val="{{ false }}">
                 <div>
-                <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; margin-bottom:16px;"><div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CONFIGURE</div><h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Object Builder</h1><div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Create custom record types — a no-code database</div></section>
-                  <div style="display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start;">
-                    <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px;">
-                      <div style="display:flex; gap:12px;">
-                        <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">OBJECT NAME</div><input value="{{ objName }}" readonly style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px;"></div>
-                        <div style="width:74px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ICON</div><input value="{{ objIcon }}" readonly style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px; text-align:center;"></div>
-                      </div>
-                      <div style="margin-top:18px;">
-                  <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FIELDS</span><span onClick="{{ objAddField }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">+ Add field</span></div>
-                  <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px;">
-                    <sc-for list="{{ objFields }}" as="f" hint-placeholder-count="4">
-                      <div style="display:flex; align-items:center; gap:11px; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="9" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg>
-                        <span style="font-size:12.5px; font-weight:600; flex:1;">{{ f.label }}</span>
-                        <span style="font-size:9.5px; font-weight:700; color:{{ f.tColor }}; background:{{ f.tBg }}; padding:3px 10px; border-radius:99px;">{{ f.type }}</span>
-                        <span style="font-size:10.5px; font-weight:700; color:{{ f.reqColor }};">{{ f.req }}</span>
-                      </div>
-                    </sc-for>
-                  </div></div>
-                      <div style="display:flex; gap:8px; margin-top:18px;"><button onClick="{{ objSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save object</button><button onClick="{{ objAddRecord }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;">+ Add record</button></div>
-                    </div>
-                    <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px;">
-                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EXISTING OBJECTS</div>
-                      <div style="display:flex; flex-direction:column; gap:8px; margin-top:11px;">
-                        <sc-for list="{{ objList }}" as="o" hint-placeholder-count="4">
-                          <div onClick="{{ o.select }}" style="display:flex; align-items:center; gap:11px; border:1px solid #F0EDF6; border-radius:11px; padding:10px 12px; cursor:pointer;" style-hover="border-color:#DDD1F5;">
-                            <span style="font-size:18px;">{{ o.icon }}</span>
-                            <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:700;">{{ o.name }}</div><div style="font-size:10.5px; color:#A9A6B4;">{{ o.fieldsLabel }} · {{ o.recordsLabel }}</div></div>
-                          </div>
+                <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; margin-bottom:16px;"><div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CONFIGURE</div><h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Record Sequence</h1><div style="font-size:12.5px; color:#8C8899; margin-top:4px;">The reference format for tasks, invoices, quotations and receipts</div></section>
+                  <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px; max-width:1000px;">
+                    <div style="background:#FBF9FE; border:1px solid #F0EDF6; border-radius:13px; padding:13px 15px;">
+                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TOKENS</div>
+                      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:9px;">
+                        <sc-for list="{{ rsTokens }}" as="tk" hint-placeholder-count="6">
+                          <span onClick="{{ tk.copy }}" title="Copy this token" style="display:inline-flex; align-items:baseline; gap:6px; background:#fff; border:1px solid #E4DCF3; border-radius:8px; padding:5px 10px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                            <code style="font-family:ui-monospace,monospace; font-size:11.5px; font-weight:700; color:#7C00FF;">{{ tk.token }}</code>
+                            <span style="font-size:10.5px; color:#8C8899;">{{ tk.means }}</span>
+                          </span>
                         </sc-for>
                       </div>
+                      <div style="font-size:11px; color:#8C8899; margin-top:10px; line-height:1.5;">Anything outside braces is printed as written. The counter is <code style="font-family:ui-monospace,monospace; color:#7C00FF;">{####}</code> &mdash; how many hashes you write is how many digits it pads to.</div>
+                    </div>
+                    <div style="margin-top:6px;">
+                      <div style="display:grid; grid-template-columns:190px 1fr 200px; gap:14px; align-items:center; padding:15px 0; border-bottom:1px solid #F5F3F9;">
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px; font-weight:700;">Task</div>
+                          <div style="font-size:11px; color:#8C8899; margin-top:1px;">Reference on every task and work item</div>
+                        </div>
+                        <input value="{{ rsTaskPattern }}" onInput="{{ setRsTaskPattern }}" spellcheck="false" placeholder="e.g. INV-{YYYY}-{####}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; font-family:ui-monospace,monospace;">
+                        <div style="min-width:0; text-align:right;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ rsTaskNextLabel }}</div>
+                          <div style="font-family:ui-monospace,monospace; font-size:13.5px; font-weight:700; color:#7C00FF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rsTaskNext }}</div>
+                        </div>
+                      </div>
+                      <div style="display:grid; grid-template-columns:190px 1fr 200px; gap:14px; align-items:center; padding:15px 0; border-bottom:1px solid #F5F3F9;">
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px; font-weight:700;">Request</div>
+                          <div style="font-size:11px; color:#8C8899; margin-top:1px;">Reference on client service requests</div>
+                        </div>
+                        <input value="{{ rsRequestPattern }}" onInput="{{ setRsRequestPattern }}" spellcheck="false" placeholder="e.g. REQ-{####}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; font-family:ui-monospace,monospace;">
+                        <div style="min-width:0; text-align:right;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ rsRequestNextLabel }}</div>
+                          <div style="font-family:ui-monospace,monospace; font-size:13.5px; font-weight:700; color:#7C00FF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rsRequestNext }}</div>
+                        </div>
+                      </div>
+                      <div style="display:grid; grid-template-columns:190px 1fr 200px; gap:14px; align-items:center; padding:15px 0; border-bottom:1px solid #F5F3F9;">
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px; font-weight:700;">Invoice</div>
+                          <div style="font-size:11px; color:#8C8899; margin-top:1px;">Printed on the tax invoice</div>
+                        </div>
+                        <input value="{{ rsInvoicePattern }}" onInput="{{ setRsInvoicePattern }}" spellcheck="false" placeholder="e.g. INV-{YYYY}-{####}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; font-family:ui-monospace,monospace;">
+                        <div style="min-width:0; text-align:right;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ rsInvoiceNextLabel }}</div>
+                          <div style="font-family:ui-monospace,monospace; font-size:13.5px; font-weight:700; color:#7C00FF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rsInvoiceNext }}</div>
+                        </div>
+                      </div>
+                      <div style="display:grid; grid-template-columns:190px 1fr 200px; gap:14px; align-items:center; padding:15px 0; border-bottom:1px solid #F5F3F9;">
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px; font-weight:700;">Quotation</div>
+                          <div style="font-size:11px; color:#8C8899; margin-top:1px;">Printed on the quotation</div>
+                        </div>
+                        <input value="{{ rsQuotationPattern }}" onInput="{{ setRsQuotationPattern }}" spellcheck="false" placeholder="e.g. INV-{YYYY}-{####}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; font-family:ui-monospace,monospace;">
+                        <div style="min-width:0; text-align:right;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ rsQuotationNextLabel }}</div>
+                          <div style="font-family:ui-monospace,monospace; font-size:13.5px; font-weight:700; color:#7C00FF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rsQuotationNext }}</div>
+                        </div>
+                      </div>
+                      <div style="display:grid; grid-template-columns:190px 1fr 200px; gap:14px; align-items:center; padding:15px 0; border-bottom:1px solid #F5F3F9;">
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px; font-weight:700;">Receipt</div>
+                          <div style="font-size:11px; color:#8C8899; margin-top:1px;">Printed on the payment receipt</div>
+                        </div>
+                        <input value="{{ rsReceiptPattern }}" onInput="{{ setRsReceiptPattern }}" spellcheck="false" placeholder="e.g. INV-{YYYY}-{####}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FCFBFE; font-family:ui-monospace,monospace;">
+                        <div style="min-width:0; text-align:right;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ rsReceiptNextLabel }}</div>
+                          <div style="font-family:ui-monospace,monospace; font-size:13.5px; font-weight:700; color:#7C00FF; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rsReceiptNext }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap;">
+                      <button onClick="{{ rsSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save sequences</button>
+                      <sc-if value="{{ rsDirty }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px; color:#B8860B; font-weight:600;">Unsaved changes</span></sc-if>
+                    </div>
+                    <div style="font-size:11.5px; color:#8C8899; margin-top:14px; line-height:1.55; border-top:1px solid #F5F3F9; padding-top:13px;">
+                      The counter is derived from the documents that already exist, so there is no stored number to fall out of step. That also means a pattern change &mdash; or a date token rolling over &mdash; starts a fresh run at 1, and everything already issued keeps the reference it was issued with.
                     </div>
                   </div>
                 </div>
@@ -3471,7 +3589,7 @@
                 <div onClick="{{ closeKeysModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; animation:fadeUp .15s ease both;">
                   <div onClick="{{ stopClick }}" style="width:520px; max-width:92vw; max-height:86vh; overflow-y:auto; background:#fff; border-radius:20px; box-shadow:0 24px 64px rgba(38,7,77,.28); padding:24px 26px;">
                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-                      <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">API keys</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Programmatic access to the STIMES PRO API — keys are shown once at creation</div></div>
+                      <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">API keys</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Send the key as an <b>x-api-key</b> header. Shown once at creation — a key is never recoverable afterwards.</div></div>
                       <div onClick="{{ closeKeysModal }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                     </div>
                     <sc-if value="{{ skHasNewKey }}" hint-placeholder-val="{{ false }}">
@@ -3495,6 +3613,11 @@
                     </div>
                     <div style="margin-top:16px;">
                       <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CREATE A KEY</div>
+                      <div style="display:flex; gap:8px; margin-top:8px;">
+                        <div onClick="{{ skPickRead }}" style="flex:1; border:1.5px solid {{ skReadBorder }}; background:{{ skReadBg }}; border-radius:11px; padding:9px 12px; cursor:pointer;"><div style="font-size:12px; font-weight:700; color:{{ skReadColor }};">Read only</div><div style="font-size:10.5px; color:#8C8899; margin-top:1px;">GET requests — cannot change anything</div></div>
+                        <div onClick="{{ skPickWrite }}" style="flex:1; border:1.5px solid {{ skWriteBorder }}; background:{{ skWriteBg }}; border-radius:11px; padding:9px 12px; cursor:pointer;"><div style="font-size:12px; font-weight:700; color:{{ skWriteColor }};">Read &amp; write</div><div style="font-size:10.5px; color:#8C8899; margin-top:1px;">Can create and edit records</div></div>
+                      </div>
+                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:7px;">No key can manage users, issue further keys, or open the credential vault — those need a signed-in person.</div>
                       <div style="display:flex; gap:8px; margin-top:8px;">
                         <input value="{{ skName }}" onInput="{{ setSkName }}" placeholder="Key name — e.g. Zapier, reporting script" style="flex:1; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:12.5px; background:#FCFBFE;">
                         <button onClick="{{ skCreate }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:9px 18px; border-radius:11px; cursor:pointer;" style-hover="background:#6900D6;">Create key</button>
@@ -5290,14 +5413,14 @@
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">LINKED RECORDS</div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
               <sc-if value="{{ wdCompShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">🛡</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdComp }}</div><div style="font-size:10.5px; color:#A9A6B4;">Compliance document — renews when this task closes</div></div></div></sc-if>
-              <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">⚙</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdWf }}</div><div style="font-size:10.5px; color:#A9A6B4;">Workflow instance that launched this task</div></div></div></sc-if>
+              <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openWorkflowRun }}" title="Show this run's steps" style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="font-size:15px;">⚙</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdWf }}</div><div style="font-size:10.5px; color:#A9A6B4;">Workflow instance that launched this task</div></div></div></sc-if>
               <sc-if value="{{ wdEmpShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">👤</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdEmp }}</div><div style="font-size:10.5px; color:#A9A6B4;">Applicant / subject employee</div></div></div></sc-if>
               <sc-if value="{{ wdDocShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">📄</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdDocType }}</div><div style="font-size:10.5px; color:#A9A6B4;">Document type</div></div></div></sc-if>
             </div>
             <sc-if value="{{ wdHasStages }}" hint-placeholder-val="{{ false }}">
               <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">PROCESS · WHO DID WHAT</div>
               <div style="display:flex; flex-direction:column; margin-top:11px; max-height:250px; overflow-y:auto; padding-right:6px; border-bottom:1px solid #F5F3F9;">
-                <sc-for list="{{ wdStages }}" as="s" hint-placeholder-count="5">
+                <sc-for data-wf-stages="true" list="{{ wdStages }}" as="s" hint-placeholder-count="5">
                   <div style="display:flex; gap:11px; position:relative; padding-bottom:14px;">
                     <div style="display:flex; flex-direction:column; align-items:center;"><sc-if value="{{ s.current }}" hint-placeholder-val="{{ false }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1; animation:pulseBadge 1.4s ease-in-out infinite; box-shadow:0 0 0 4px rgba(124,0,255,.15);"></span></sc-if><sc-if value="{{ s.notCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1;"></span></sc-if><div style="width:2px; flex:1; background:#F0EDF6; margin-top:2px;"></div></div>
                     <div style="padding-top:-1px;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div></div>
@@ -5320,7 +5443,9 @@
             </sc-if>
             <div style="display:flex; gap:10px; margin-top:16px; position:sticky; bottom:0; background:#fff; padding:12px 0 4px; border-top:1px solid #F0EDF6; z-index:2;">
               <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:11px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
-              <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:11px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Mark done</button></sc-if>
+              <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:12.5px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
+              <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
+              <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:11px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Mark done</button></sc-if>
             </div>
           </sc-if>
           <!-- Workflow step detail -->
@@ -5338,6 +5463,7 @@
                     </div>
                     <div style="flex:1; min-width:0;"><span style="font-size:12.5px; font-weight:600;">{{ i.label }}</span><span style="color:#C0353A; font-weight:700;">{{ i.reqMark }}</span></div>
                     <span style="font-size:9.5px; font-weight:700; color:{{ i.stateColor }}; background:{{ i.stateBg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ i.stateLabel }}</span>
+                    <sc-if value="{{ i.rejected }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#8C2226; background:#FEECEC; border-left:2px solid #F7C9C9; padding:5px 9px; border-radius:0 8px 8px 0; margin-top:5px;">{{ i.note }}</div></sc-if>
                   </div>
                   <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
                     <input value="{{ i.ref }}" onChange="{{ i.setRef }}" placeholder="Ref / receipt no." style="flex:1; border:1px solid #E4E0EC; border-radius:8px; padding:6px 10px; font-size:11.5px; background:#FBFAFE;">
@@ -5356,6 +5482,9 @@
                   <div style="font-size:11px; font-weight:600; color:#6F6C7A;">{{ c.label }}</div>
                   <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
                     <div style="display:flex; gap:7px; margin-top:6px; flex-wrap:wrap;"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="font-size:11.5px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ o.o }}</span></sc-for></div>
+                  </sc-if>
+                  <sc-if value="{{ c.isDate }}" hint-placeholder-val="{{ false }}">
+                    <input value="{{ c.value }}" onChange="{{ c.set }}" type="date" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FBFAFE; margin-top:6px;">
                   </sc-if>
                   <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ true }}">
                     <input value="{{ c.value }}" onChange="{{ c.set }}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FBFAFE; margin-top:6px;">
@@ -5565,24 +5694,24 @@
           <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
           <div style="display:flex; gap:12px; margin-top:14px;">
             <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div><div style="margin-top:6px; position:relative;">
-              <div data-dd onClick="{{ ddNtClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ntClient }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-              <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtClientOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+              <div data-dd onClick="{{ ddNtClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ ntClientColor }};">{{ ntClientLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+              <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><div style="padding:4px 4px 6px;"><input value="{{ ddNtClientQuery }}" onInput="{{ ddNtClientSetQuery }}" placeholder="{{ ddNtClientPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;"></div><sc-if value="{{ ddNtClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddNtClientOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
             </div></div>
             <sc-if value="{{ ntPersonScoped }}" hint-placeholder-val="{{ false }}">
               <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLICANT *</div><div style="margin-top:6px; position:relative;">
                 <div data-dd onClick="{{ ddNtApplicantToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#6F6C7A;">{{ ntApplicant }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-                <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtApplicantOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+                <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtApplicantOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
               </div></div>
             </sc-if>
           </div>
           <div style="display:flex; gap:12px; margin-top:14px;">
             <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ASSIGN TO</div><div style="margin-top:6px; position:relative;">
               <div data-dd onClick="{{ ddNtAssigneeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1;">{{ ntAssignee }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-              <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtAssigneeOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+              <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtAssigneeOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
             </div></div>
             <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PRIORITY</div><div style="margin-top:6px; position:relative;">
               <div data-dd onClick="{{ ddNtPrioToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1;">{{ ntPrio }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-              <sc-if value="{{ ddNtPrioOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtPrioOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+              <sc-if value="{{ ddNtPrioOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtPrioOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
             </div></div>
           </div>
           <div style="display:flex; gap:12px; margin-top:14px;">
@@ -5590,7 +5719,7 @@
             <sc-if value="{{ ntDerivedDocShow }}" hint-placeholder-val="{{ false }}">
               <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">GOVERNMENT PORTAL *</div><div style="margin-top:6px; position:relative;">
                 <div data-dd onClick="{{ ddNtPortalToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; color:#6F6C7A;">{{ ntPortalRef }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-                <sc-if value="{{ ddNtPortalOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtPortalOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+                <sc-if value="{{ ddNtPortalOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtPortalOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
                 <div style="font-size:9.5px; color:#B9B5C4; margin-top:5px;">Custom field · from Form Builder</div>
               </div></div>
             </sc-if>
@@ -5727,6 +5856,28 @@
   &quot;companyStatus&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Active&quot;, &quot;options&quot;: [&quot;Active&quot;, &quot;Under Review&quot;, &quot;Expiring Soon&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Data&quot;},
   &quot;showFab&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Layout&quot;}
 }">
+// Last six months of real totals. This chart was a hardcoded [38,52,44,61,55,72] — six invented
+// bars, drawn identically for every dataset. `rows` are {date, amount}; the current month is the
+// last bar and is highlighted.
+const sixMonthBars = (rows) => {
+  const now6 = new Date();
+  const buckets = [], labels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d6 = new Date(now6.getFullYear(), now6.getMonth() - i, 1);
+    buckets.push(0); labels.push(d6.toLocaleDateString('en-GB', { month: 'short' }));
+  }
+  (Array.isArray(rows) ? rows : []).forEach(r6 => {
+    const d6 = new Date(r6.date); if (isNaN(+d6)) return;
+    const idx = 5 - ((now6.getFullYear() - d6.getFullYear()) * 12 + (now6.getMonth() - d6.getMonth()));
+    if (idx >= 0 && idx <= 5) buckets[idx] += Number(r6.amount) || 0;
+  });
+  const max6 = Math.max(1, ...buckets);
+  return buckets.map((v6, i) => ({
+    h: Math.max(6, Math.round((v6 / max6) * 100)) + '%', m: labels[i],
+    color: i === 5 ? '#7C00FF' : '#DDD1F5',
+  }));
+};
+
 class Component extends DCLogic {
   state = { active: 'Dashboard', prefs: { email: true, whatsapp: true, renewals: true, statement: false },
     ticketModal: false, tSubject: '', tDesc: '', tCategory: 'Visa & Immigration',
@@ -5745,6 +5896,52 @@ class Component extends DCLogic {
     sContact: 'Ahmed Al Mazrouei', sEmail: 'accounts@falcontech.com', sPhone: '+971 50 224 8190', sSaved: false,
     spCurrent: '', spNew: '', spConfirm: '', spMsg: null };
   componentDidMount() {
+
+    // ── Load state, per dataset ──────────────────────────────────────────
+    // 'loading' | 'ok' | 'empty' | 'denied' | 'expired' | 'offline' | 'error'
+    // Written by _load below; read by renderVals so a list can distinguish "nothing here" from
+    // "could not fetch". Anything that never loads stays undefined, which reads as 'ok' — screens
+    // fed from local state are unaffected.
+    this._setLoad = (key, st) => {
+      const cur = this.state.loadState || {};
+      if (cur[key] === st) return;
+      this.setState({ loadState: { ...cur, [key]: st } });
+    };
+    /**
+     * The one place a fetch failure is interpreted.
+     *
+     * 401 is the session, not the dataset: it is raised globally, because a expired token breaks
+     * every screen at once and telling the user once is the honest treatment.
+     * 403 is scoped to the dataset — a role may legitimately be denied one collection and hold
+     * others, so it must not read as a broken app.
+     */
+    this._load = (path, key, apply) => {
+      const tok = localStorage.getItem('stimespro:token');
+      this._setLoad(key, 'loading');
+      return fetch((this._apiBase || 'http://localhost:4100') + path, { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+        .then((res) => {
+          // 401 with a token in hand means it was rejected — the session died under them.
+          // 401 with no token means they are simply signed out, which is not a fault and must not
+          // be announced as one: logging out deliberately would otherwise raise 'session expired'.
+          if (res.status === 401) { this._setLoad(key, 'expired'); if (tok) this.setState({ authExpired: true }); return null; }
+          if (res.status === 403) { this._setLoad(key, 'denied'); return null; }
+          if (!res.ok) { this._setLoad(key, 'error'); return null; }
+          return res.json().catch(() => { this._setLoad(key, 'error'); return null; });
+        })
+        .then((v) => {
+          if (v == null) return null;
+          const empty = Array.isArray(v) ? v.length === 0 : false;
+          this._setLoad(key, empty ? 'empty' : 'ok');
+          // A stale 401 banner must clear the moment anything succeeds again.
+          if (this.state.authExpired) this.setState({ authExpired: false });
+          apply(v);
+          return v;
+        })
+        // fetch() only rejects when the request never completed — no server, no network, CORS.
+        // That is a different message from "the server said no".
+        .catch(() => { this._setLoad(key, 'offline'); this.setState({ apiOffline: true }); return null; });
+    };
+
     this._mq = window.matchMedia('(max-width: 1020px)');
     const sync = () => { const m = this._mq.matches; if (this.state.isMobile !== m) this.setState({ isMobile: m }); };
     this._mq.addEventListener('change', sync);
@@ -5837,8 +6034,8 @@ class Component extends DCLogic {
       'Employees': 'Clients & Compliance', 'Renewals': 'Clients & Compliance',
       'Invoices': 'Finance', 'Quotations': 'Finance', 'Receipts': 'Finance', 'Reports': 'Finance',
       'Service Catalog': 'Configure', 'Plan & Billing': 'Configure', 'Service Packages': 'Masters', 'Country Rules': 'Configure',
-      'Document Types': 'Configure', 'Departments': 'Configure', 'Object Builder': 'Configure', 'Form Builder': 'Configure', 'Print Layout': 'Configure',
-      'Workflow Builder': 'Admin', 'Profile Settings': 'Admin', 'Settings': 'Admin',
+      'Document Types': 'Configure', 'Departments': 'Configure', 'Record Sequence': 'Configure', 'Form Builder': 'Configure', 'Print Layout': 'Configure',
+      'Workflow Builder': 'Admin', 'Profile Settings': 'Admin', 'Settings': 'Admin', 'Problem Reports': 'Admin',
       // Notifications was missing here, so /notifications soft-404'd to the Dashboard and the screen
       // was only reachable through the bell popover.
       'Notifications': 'Support',
@@ -5898,10 +6095,10 @@ class Component extends DCLogic {
       // once, and can fire before the token is in hand) silently wiped the loaded settings. For
       // `orgSet` that meant invoices printing with no seller name at all.
       fetch(API + '/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
-      fetch(API + '/api/users', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ usersData: v }); }).catch(() => {});
+      this._load('/api/users', 'usersData', (v) => this.setState({ usersData: v }));
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
-      fetch(API + '/api/audit', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ auditData: v }); }).catch(() => {});
+      this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
       fetch(API + '/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
       fetch(API + '/api/settings/security', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ securityState: v }); }).catch(() => {});
       fetch(API + '/api/settings/printBranding', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printBranding: v }); }).catch(() => {});
@@ -5909,28 +6106,33 @@ class Component extends DCLogic {
       fetch(API + '/api/settings/roles', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customRoles: v }); }).catch(() => {});
       fetch(API + '/api/workflow/templates', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfTemplates: v }); }).catch(() => {});
       fetch(API + '/api/custom-objects', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customObjects: v }); }).catch(() => {});
-      fetch(API + '/api/custom-records', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customRecords: v }); }).catch(() => {});
-      fetch(API + '/api/invoices', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ invoicesData: v }); }).catch(() => {});
+      // Both the configured formats and the next number each one would produce, so the screen can
+      // show what the current settings actually yield rather than a sample.
+      fetch(API + '/api/record-sequences', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.sequences) this.setState({ rsSaved: v.sequences, rsNext: v.next || {} }); }).catch(() => {});
+      // Admin-only: a 403 for every other role is expected, and leaves both pieces of state unset
+      // so the nav badge simply doesn't appear.
+      fetch(API + '/api/error-reports', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.rows)) this.setState({ errReportsData: v.rows, errReportCounts: v.counts || {} }); }).catch(() => {});
+      this._load('/api/invoices', 'invoicesData', (v) => this.setState({ invoicesData: v }));
       fetch(API + '/api/document-types', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ docTypesData: v }); }).catch(() => {});
       fetch(API + '/api/settings/countryRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ countryRulesData: v }); }).catch(() => {});
       fetch(API + '/api/settings/departments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ deptData: v }); }).catch(() => {});
-      fetch(API + '/api/companies', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ companiesData: v }); }).catch(() => {});
-      fetch(API + '/api/employees', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ employeesData: v }); }).catch(() => {});
-      fetch(API + '/api/documents', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ documentsData: v }); }).catch(() => {});
-      fetch(API + '/api/tasks', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ tasksData: v }); }).catch(() => {});
-      fetch(API + '/api/service-requests', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ serviceRequestsData: v }); }).catch(() => {});
+      this._load('/api/companies', 'companiesData', (v) => this.setState({ companiesData: v }));
+      this._load('/api/employees', 'employeesData', (v) => this.setState({ employeesData: v }));
+      this._load('/api/documents', 'documentsData', (v) => this.setState({ documentsData: v }));
+      this._load('/api/tasks', 'tasksData', (v) => this.setState({ tasksData: v }));
+      this._load('/api/service-requests', 'serviceRequestsData', (v) => this.setState({ serviceRequestsData: v }));
       fetch(API + '/api/upgrade-requests', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ upgradeRequestsData: v }); }).catch(() => {});
       fetch(API + '/api/activities', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ activitiesData: v }); }).catch(() => {});
-      fetch(API + '/api/workflow/my-work', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myWorkData: v }); }).catch(() => {});
+      this._load('/api/workflow/my-work', 'myWorkData', (v) => this.setState({ myWorkData: v }));
       fetch(API + '/api/subscriptions', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ subscriptionsData: v }); }).catch(() => {});
       fetch(API + '/api/packages', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ packagesData: v }); }).catch(() => {});
       fetch(API + '/api/gov-centers', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ govCentersData: v }); }).catch(() => {});
-      fetch(API + '/api/appointments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ appointmentsData: v }); }).catch(() => {});
-      fetch(API + '/api/courier-shipments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ courierData: v }); }).catch(() => {});
-      fetch(API + '/api/payments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ paymentsData: v }); }).catch(() => {});
+      this._load('/api/appointments', 'appointmentsData', (v) => this.setState({ appointmentsData: v }));
+      this._load('/api/courier-shipments', 'courierData', (v) => this.setState({ courierData: v }));
+      this._load('/api/payments', 'paymentsData', (v) => this.setState({ paymentsData: v }));
       fetch(API + '/api/groups', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ groupsData: v }); }).catch(() => {});
       fetch(API + '/api/auth/my-activity', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myActivityData: v }); }).catch(() => {});
-      fetch(API + '/api/quotations', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ quotationsData: v }); }).catch(() => {});
+      this._load('/api/quotations', 'quotationsData', (v) => this.setState({ quotationsData: v }));
       fetch(API + '/api/service-items', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ serviceItemsData: v }); }).catch(() => {});
       fetch(API + '/api/api-keys', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ apiKeysData: v }); }).catch(() => {});
       // Client site credentials (admin-only read; passwords are never included in the list payload).
@@ -6093,27 +6295,6 @@ class Component extends DCLogic {
           this._opReload('companies', 'companiesData');
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
-    };
-    // Last six months of real totals. This chart was a hardcoded [38,52,44,61,55,72] — six invented
-    // bars, drawn identically for every dataset. `rows` are {date, amount}; the current month is the
-    // last bar and is highlighted.
-    this._sixMonthBars = (rows) => {
-      const now6 = new Date();
-      const buckets = [], labels = [];
-      for (let i = 5; i >= 0; i--) {
-        const d6 = new Date(now6.getFullYear(), now6.getMonth() - i, 1);
-        buckets.push(0); labels.push(d6.toLocaleDateString('en-GB', { month: 'short' }));
-      }
-      (Array.isArray(rows) ? rows : []).forEach(r6 => {
-        const d6 = new Date(r6.date); if (isNaN(+d6)) return;
-        const idx = 5 - ((now6.getFullYear() - d6.getFullYear()) * 12 + (now6.getMonth() - d6.getMonth()));
-        if (idx >= 0 && idx <= 5) buckets[idx] += Number(r6.amount) || 0;
-      });
-      const max6 = Math.max(1, ...buckets);
-      return buckets.map((v6, i) => ({
-        h: Math.max(6, Math.round((v6 / max6) * 100)) + '%', m: labels[i],
-        color: i === 5 ? '#7C00FF' : '#DDD1F5',
-      }));
     };
     this._opReload = (pathE, key) => {
       const t2 = localStorage.getItem('stimespro:token');
@@ -6409,7 +6590,7 @@ class Component extends DCLogic {
     this._reloadMyWork = () => {
       const t2 = localStorage.getItem('stimespro:token');
       const h2 = t2 ? { Authorization: 'Bearer ' + t2 } : {};
-      fetch(API + '/api/workflow/my-work', { headers: h2 }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myWorkData: v }); }).catch(() => {});
+      this._load('/api/workflow/my-work', 'myWorkData', (v) => this.setState({ myWorkData: v }));
       fetch(API + '/api/workflow/instances', { headers: h2 }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfInstancesData: v }); }).catch(() => {});
     };
     // Print an invoice/quotation straight to the browser's print dialog — the dialog IS the preview,
@@ -6493,7 +6674,7 @@ class Component extends DCLogic {
       this._nrT = setTimeout(() => {
         const t2 = localStorage.getItem('stimespro:token');
         fetch(API + '/api/settings/notifRules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(map) })
-          .then(r => { if (r.ok) this.toast('Notification rules saved'); else if (r.status === 401) this.toast('Sign in to the console first'); })
+          .then(r => { if (r.ok) this.toast('Notification rules saved'); else if (r.status === 401) this.toast('Sign in to the console first', 'error'); })
           .catch(() => {});
       }, 500);
     };
@@ -6547,14 +6728,14 @@ class Component extends DCLogic {
       if (!window.confirm('Delete ' + name + '? This permanently removes the account and cannot be undone.')) return;
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/users/' + id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first'); else r.json().then(j => this.toast(j.error || 'Could not delete')).catch(() => this.toast('Could not delete')); })
+        .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else r.json().then(j => this.toast(j.error || 'Could not delete')).catch(() => this.toast('Could not delete')); })
         .catch(() => this.toast('Server unreachable'));
     };
     // Persist custom roles (Settings → Permissions → + Create role) → AppSetting "roles".
     this._saveRoles = (arr) => {
       const t2 = localStorage.getItem('stimespro:token');
       return fetch(API + '/api/settings/roles', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(arr) })
-        .then(r => { if (r.status === 401) { this.toast('Sign in to the console first'); return false; } return r.ok; });
+        .then(r => { if (r.status === 401) { this.toast('Sign in to the console first', 'error'); return false; } return r.ok; });
     };
     // Persist the permissions matrix (debounced) to AppSetting → key "perms".
     this._savePerms = (grid) => {
@@ -6562,7 +6743,7 @@ class Component extends DCLogic {
       this._permT = setTimeout(() => {
         const t2 = localStorage.getItem('stimespro:token');
         fetch(API + '/api/settings/perms', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(grid) })
-          .then(r => { if (r.ok) this.toast('Permissions saved'); else if (r.status === 401) this.toast('Sign in to the console first to save permissions'); })
+          .then(r => { if (r.ok) this.toast('Permissions saved'); else if (r.status === 401) this.toast('Sign in to the console first to save permissions', 'error'); })
           .catch(() => {});
       }, 600);
     };
@@ -6571,12 +6752,46 @@ class Component extends DCLogic {
   // explicitly ('error' | 'warn' | 'ok'); otherwise it is inferred from the wording, which keeps
   // every existing this.toast('Could not …') call honest without touching the call site.
   toast(msg, tone) {
-    const t = tone || (/\b(cannot|can't|could not|couldn't|unable|failed|fail|error|invalid|unreachable|denied|refused|not allowed|no permission|rejected|too short|required|already exists|first)\b/i.test(String(msg)) ? 'error' : 'ok');
+    // Guessing the tone from prose is only safe for words that cannot appear in a success message.
+    // "first" used to be on this list, so "…first step is in My Tasks" — a successful workflow
+    // start — was shown as a red failure. Same trap for "required" and "rejected", which appear in
+    // perfectly good confirmations ("Quotation rejected"). Anything ambiguous now passes `tone`
+    // explicitly at the call site instead.
+    const t = tone || (/\b(cannot|can't|could not|couldn't|unable|failed|error|unreachable|denied|refused|not allowed|no permission)\b/i.test(String(msg)) ? 'error' : 'ok');
     this.setState({ toast: msg, toastTone: t });
     clearTimeout(this._tt);
     this._tt = setTimeout(() => this.setState({ toast: null }), t === 'error' ? 4200 : 2600);
   }
   renderVals() {
+    // ── App-level state banner (session expired / server unreachable) ──
+    // Expired beats offline: if the token is dead, reconnecting changes nothing until they sign in.
+    const _bannerKind = this.state.authExpired ? 'expired' : (this.state.apiOffline ? 'offline' : null);
+    const stateBannerApi = {
+      stateBannerShow: !!_bannerKind,
+      stateBannerBg: _bannerKind === 'expired' ? '#FEF4E2' : '#FEECEC',
+      stateBannerBorder: _bannerKind === 'expired' ? '#F5D9A8' : '#F7C9C9',
+      stateBannerDot: _bannerKind === 'expired' ? '#B8860B' : '#C0353A',
+      stateBannerFg: _bannerKind === 'expired' ? '#7A5A08' : '#8C2226',
+      stateBannerIcon: _bannerKind === 'expired'
+        ? 'M12 8v5M12 17h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20'
+        : 'M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
+      stateBannerTitle: _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
+      stateBannerBody: _bannerKind === 'expired'
+        ? 'You are still seeing the last data loaded. Sign in again to continue.'
+        : 'The last update did not come through, so what you see may be out of date.',
+      stateBannerCta: _bannerKind === 'expired' ? 'Sign in' : 'Retry',
+      stateBannerAct: () => {
+        if (_bannerKind === 'expired') {
+          // Clear the dead token so the app lands on the sign-in screen rather than looping on 401s.
+          try { localStorage.removeItem('stimespro:token'); } catch (e9) {}
+          location.href = '/dashboard';
+        } else {
+          this.setState({ apiOffline: false });
+          location.reload();
+        }
+      },
+    };
+
     // System currency (Settings → General) drives every money display; shared real-data option lists.
     const sysCurCode = String((this.state.orgSet && this.state.orgSet.currency) || 'SAR — Saudi Riyal').split(' ')[0];
     const fmtCur = (n) => sysCurCode + ' ' + Number(n || 0).toLocaleString('en-US');
@@ -6587,6 +6802,11 @@ class Component extends DCLogic {
     const _initials = (name) => String(name || '').replace(/\([^)]*\)/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
     const realClientNames = (Array.isArray(this.state.companiesData) && this.state.companiesData.length) ? this.state.companiesData.map(c2 => c2.name) : null;
     const realStaffNames = (Array.isArray(this.state.usersData) && this.state.usersData.length) ? this.state.usersData.filter(u => u.type !== 'portal').map(u => u.name) : null;
+    // Staff who can actually be given work: signed-up and not disabled. `realStaffNames` includes
+    // invited-but-never-signed-in accounts, which are fine to list in admin screens and wrong to
+    // offer as an assignee.
+    const realActiveStaff = (Array.isArray(this.state.usersData) && this.state.usersData.length)
+      ? this.state.usersData.filter(u => u.type !== 'portal' && u.status === 'active').map(u => u.name) : null;
     const realWfNames = (Array.isArray(this.state.wfTemplates) && this.state.wfTemplates.length) ? this.state.wfTemplates.filter(t => t.active !== false).map(t => t.name) : null;
     const score = this.props.complianceScore ?? 87;
     const status = this.props.companyStatus ?? 'Active';
@@ -6620,17 +6840,24 @@ class Component extends DCLogic {
     const _NAV_HIDE = {
       sales: new Set(['Approvals', 'Requests Queue', 'Government Centers', 'Appointments', 'Courier',
         'Receipts', 'Service Catalog', 'Plan & Billing', 'Country Rules', 'Document Types',
-        'Object Builder', 'Form Builder', 'Print Layout', 'Workflow Builder', 'Settings']),
+        'Record Sequence', 'Form Builder', 'Print Layout', 'Workflow Builder', 'Settings']),
     };
     const _navHidden = (_navRole && _NAV_HIDE[_navRole]) || null;
+    // Badge text, or '' for no badge — the rail renders whatever string it is given.
+    const _newReportCount = (() => {
+      const c = this.state.errReportCounts && this.state.errReportCounts.new;
+      return c > 0 ? String(c) : '';
+    })();
     const groupsAll = [
       ['Overview', I.grid, [['Dashboard', I.grid], ['Activity Timeline', I.clock]]],
       ['Operations', I.check, [['My Tasks', I.check, '8'], ['Task List', I.fileText, '12'], ['Approvals', I.check, '5'], ['SLA Monitor', I.shield, '4'], ['Requests Queue', I.buoy, '14'], ['Government Centers', I.building, '9'], ['Appointments', I.calendar, '6'], ['Courier', I.card, '5']]],
       ['Clients & Compliance', I.building, [['Clients', I.building, '4'], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh, '26']]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp, '1'], ['Invoices', I.invoice, '3'], ['Receipts', I.card], ['Reports', I.layers]]],
-      ['Configure', I.layers, [['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Document Types', I.folder], ['Departments', I.users], ['Object Builder', I.layers], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
-      ['Admin', I.settings, [['Workflow Builder', I.layers], ['Profile Settings', I.users], ['Settings', I.settings]]],
+      ['Configure', I.layers, [['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Document Types', I.folder], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
+      // Problem Reports carries a badge of what is still unread — a report nobody looks at is the
+      // same as no report at all, and the count is the only thing that makes anyone look.
+      ['Admin', I.settings, [['Workflow Builder', I.layers], ['Problem Reports', I.buoy, _newReportCount], ['Profile Settings', I.users], ['Settings', I.settings]]],
     ];
     const groups = _navHidden
       ? groupsAll.map(([t1, i1, items1]) => [t1, i1, items1.filter(([l1]) => !_navHidden.has(l1))]).filter(g1 => g1[2].length)
@@ -6962,19 +7189,19 @@ class Component extends DCLogic {
       }),
       ddBClientToggle: () => this.setState({ openDd: this.state.openDd === 'ddBClient' ? null : 'ddBClient' }),
       ddBClientOpen: this.state.openDd === 'ddBClient',
-      ddBClientOptions: (realClientNames || ['Falcon Technologies', 'Falcon Trading']).map(label => {
-        const on = label === (this.state.bClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'));
+      ddBClientOptions: (realClientNames || []).map(label => {
+        const on = label === (this.state.bClient || (realClientNames ? realClientNames[0] : ''));
         // Switching client invalidates the employee + linked-work picks (they belonged to the old one).
         return { label, active: on, weight: on ? 700 : 500, color: on ? '#7C00FF' : '#1A1523', bg: on ? '#F7F3FD' : 'transparent', pick: () => this.setState({ bClient: label, openDd: null, bApplicant: null, bAgainst: 'Not linked', bAgainstTaskId: null }) };
       }),
-      bClientVal: this.state.bClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'),
-      bSummary: this.state.bType + ' · ' + (this.state.bClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies')) + ' · ' + _bDateLabel + ', ' + this.state.bSlot,
+      bClientVal: this.state.bClient || (realClientNames ? realClientNames[0] : ''),
+      bSummary: this.state.bType + ' · ' + (this.state.bClient || (realClientNames ? realClientNames[0] : '')) + ' · ' + _bDateLabel + ', ' + this.state.bSlot,
       openBook: () => this.setState({ bookModal: true }),
       closeBook: () => this.setState({ bookModal: false }),
       // WIRED: booking creates a real Appointment row (real client list in the dropdown above).
       submitBook: () => {
         const s5 = this.state;
-        const client5 = s5.bClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies');
+        const client5 = s5.bClient || (realClientNames ? realClientNames[0] : '');
         const co5 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c5 => c5.name === client5);
         const mon5 = new Date().toLocaleDateString('en-GB', { month: 'short' });
         const t5 = localStorage.getItem('stimespro:token');
@@ -7282,11 +7509,11 @@ class Component extends DCLogic {
           hasRef: !!(raw9 && raw9.reference),
           printReceipt: () => raw9
             ? this._printDocDirect('receipt', this._receiptFor(raw9))
-            : this.toast('That is a sample row — record a real payment first'),
+            : this.toast('That is a sample row — record a real payment first', 'error'),
           // Read the receipt before committing it to paper — the same document, in a drawer.
           viewReceipt: () => raw9
             ? this.setState({ rcView: raw9.id })
-            : this.toast('That is a sample row — record a real payment first'),
+            : this.toast('That is a sample row — record a real payment first', 'error'),
         };
       });
     // Headline figures + method filter, in the same shape as the invoice list.
@@ -7299,7 +7526,7 @@ class Component extends DCLogic {
       color: payFilter === k ? '#7C00FF' : '#8C8899', bg: payFilter === k ? '#fff' : 'transparent',
       shadow: payFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
-    const payChart = this._sixMonthBars(_payAll);
+    const payChart = sixMonthBars(_payAll);
     // ---- View a receipt (the document, in a drawer) ----
     const _rcRow = this.state.rcView ? _payAll.find(x9 => x9.id === this.state.rcView) : null;
     const receiptViewApi = {
@@ -7773,7 +8000,7 @@ class Component extends DCLogic {
       color: invFilter === k ? '#7C00FF' : '#8C8899', bg: invFilter === k ? '#fff' : 'transparent',
       shadow: invFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
-    const invChart = this._sixMonthBars((Array.isArray(invData) ? invData : [])
+    const invChart = sixMonthBars((Array.isArray(invData) ? invData : [])
       .filter(v6 => !['void', 'draft'].includes(String(v6.status || '').toLowerCase())));
     // create invoice builder — line item = [desc, units, price]. Per-invoice currency + VAT:
     // jurisdiction-correct billing (KSA 15%, UAE 5%, exempt 0%) with VAT persisted as an explicit
@@ -7848,7 +8075,7 @@ class Component extends DCLogic {
           .then(r9 => (r9.ok ? r9.json() : null)).then(j9 => { if (j9 && j9.number) this.setState({ ciNextNo: j9.number }); }).catch(() => {});
       },
       closeCreateInv: () => this.setState({ createInv: false, ciEditId: null }),
-      ...mkDdSearch('ddCiClient', realClientNames || ['Falcon Technologies', 'Falcon Trading'], this.state.ciClient || '', (v) => this.setState({ ciClient: v }), 'Search clients…'),
+      ...mkDdSearch('ddCiClient', realClientNames || [], this.state.ciClient || '', (v) => this.setState({ ciClient: v }), 'Search clients…'),
       // An approved quotation is a price the client has already agreed. Re-typing it into the
       // invoice by hand is how the two end up disagreeing, so picking a client surfaces theirs and
       // one click copies the lines across.
@@ -8311,8 +8538,8 @@ class Component extends DCLogic {
       })(),
       // WIRED: add employee → POST /api/employees; success only on 2xx, list reloads from the server.
       // Employee.companyId is REQUIRED by the schema, so the modal now has a client picker.
-      ...mkDd('ddEmpClient', realClientNames || ['Falcon Technologies'], this.state.eClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'), (v) => this.setState({ eClient: v, eError: '' })),
-      eClientVal: this.state.eClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'),
+      ...mkDd('ddEmpClient', realClientNames || [], this.state.eClient || (realClientNames ? realClientNames[0] : ''), (v) => this.setState({ eClient: v, eError: '' })),
+      eClientVal: this.state.eClient || (realClientNames ? realClientNames[0] : ''),
       submitEmp: () => {
         const st = this.state;
         if (!st.eName.trim()) return this.setState({ eError: 'Full name is required' });
@@ -8475,7 +8702,7 @@ class Component extends DCLogic {
         const API = this._apiBase || 'http://localhost:4100';
         const tok = localStorage.getItem('stimespro:token');
         fetch(API + '/api/users/' + me.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ name, phone }) })
-          .then(r => { if (r.ok) this.setState({ sSaved: true, profileName: name, meUser: { ...me, name, phone } }); else if (r.status === 401) this.toast('Sign in to the console first'); else this.toast('Could not save'); })
+          .then(r => { if (r.ok) this.setState({ sSaved: true, profileName: name, meUser: { ...me, name, phone } }); else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else this.toast('Could not save'); })
           .catch(() => this.toast('Could not save'));
       },
       spCurrent: this.state.spCurrent, spNew: this.state.spNew, spConfirm: this.state.spConfirm,
@@ -8902,6 +9129,33 @@ class Component extends DCLogic {
         initials: _initials(u7.name || u7.email), avBg: _PU_TONE[i7 % _PU_TONE.length],
       }));
       clDetailApi.cdPortalUsersEmpty = _cdPortalUsers.length === 0;
+      // The three stats on the card above were literal text — "Yesterday", "3 active", "2FA On" —
+      // printed over the same list this count comes from, which frequently said nobody had ever
+      // logged in. Counted from the same array so the card cannot contradict itself.
+      clDetailApi.cdPortalUserCount = _cdPortalUsers.length
+        ? _cdPortalUsers.filter(u7 => u7.status !== 'disabled').length + ' active'
+        : 'None yet';
+      // lastActive is only set once a portal user has actually signed in.
+      const _cdLast = _cdPortalUsers.map(u7 => u7.lastActive).filter(Boolean).sort().reverse()[0];
+      // Local formatter on purpose: the shared _psAgo is declared ~3000 lines further down, and a
+      // `const` referenced above its declaration is a temporal dead zone crash, not a hoist.
+      const _cdAgo = (iso) => {
+        const t7 = new Date(iso).getTime();
+        if (isNaN(t7)) return String(iso);
+        const m7 = Math.round((Date.now() - t7) / 60000);
+        if (m7 < 1) return 'just now';
+        if (m7 < 60) return m7 + ' min ago';
+        const h7 = Math.round(m7 / 60);
+        if (h7 < 24) return h7 + 'h ago';
+        const d7 = Math.round(h7 / 24);
+        return d7 === 1 ? 'yesterday' : d7 + ' days ago';
+      };
+      clDetailApi.cdLastLogin = _cdLast ? _cdAgo(_cdLast) : 'Never';
+      // Replaces the "2FA On" claim. The product has no 2FA — Settings says so — and the state that
+      // actually matters here is whether this client can get in at all.
+      clDetailApi.cdAccessState = !_cdPortalUsers.length ? 'Not invited'
+        : (_cdPortalUsers.some(u7 => u7.status === 'active' && u7.lastActive) ? 'In use'
+        : 'Invited, unused');
 
       // ---- Notes & files (persisted on Company.customData.notes) ----
       // The tab was a bare textarea + a dead "Save note" button — nothing was stored or listed.
@@ -8961,7 +9215,14 @@ class Component extends DCLogic {
       clDetailApi.cdScore = _cdScore;
       clDetailApi.cdScoreColor = _cdScore >= 80 ? '#12B76A' : _cdScore >= 60 ? '#B8860B' : '#C0353A';
       clDetailApi.cdCirc = (_cdScore / 100 * 163).toFixed(1);
-      clDetailApi.cdSince = 'Client since ' + (['2021', '2022', '2023', '2024'][clRow.idx % 4]);
+      // Was `['2021','2022','2023','2024'][clRow.idx % 4]` — a year chosen by the client's position
+      // in the list. A company created today read "Client since 2024". Companies now record a real
+      // createdAt; those taken on before that column existed genuinely do not know, and say nothing
+      // rather than inventing a year.
+      const _cdCreated = (_cdCo && _cdCo.createdAt) || null;
+      const _cdYear = _cdCreated ? new Date(_cdCreated).getFullYear() : null;
+      clDetailApi.cdSince = (_cdYear && !isNaN(_cdYear)) ? ('Client since ' + _cdYear) : '';
+      clDetailApi.cdSinceShow = !!(_cdYear && !isNaN(_cdYear));
       // group siblings
       const grouped = clRow.group !== '—';
       clDetailApi.cdGrouped = grouped;
@@ -9018,12 +9279,24 @@ class Component extends DCLogic {
         const n7 = Number(d7.daysLeft);
         return Number.isFinite(n7) && n7 < 0 ? 'Expired' : Number.isFinite(n7) && n7 <= 30 ? 'Expiring soon' : 'Valid';
       };
+      // The document type is the authority on who a document belongs to; the employee link is only
+      // corroboration, and it is frequently absent.
+      const _dtByName = {};
+      (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []).forEach(dt7 => { _dtByName[dt7.name] = dt7; });
+      const _cdCoName = (_cdCo && _cdCo.name) || '';
       clDetailApi.cdDocs = _cdDocs.map(d7 => {
         const status = _cdDocStatus(d7);
         const t = docStatusTone[status] || docStatusTone.Valid;
-        const subject = d7.employeeId ? 'Employee' : 'Company';
+        const dt7 = _dtByName[d7.docType];
+        const subject = dt7 && dt7.subjectKind
+          ? (dt7.subjectKind === 'company' ? 'Company' : 'Employee')
+          // No type on file: a document whose subject IS the company name is the company's;
+          // anything naming a person is that person's, link or no link.
+          : (d7.employeeId || (d7.person && d7.person !== _cdCoName) ? 'Employee' : 'Company');
         return {
-          doc: d7.docType + (d7.employeeId && d7.person ? ' — ' + d7.person : ''),
+          docNo: d7.docNumber || '',
+          docNoShow: !!d7.docNumber,
+          doc: d7.docType + ((subject === 'Employee' && d7.person) ? ' — ' + d7.person : ''),
           subject, authority: d7.issuingAuthority || '—', expiry: d7.expiryDate || '—',
           status, stBg: t[0], stColor: t[1],
           subjBg: subject === 'Company' ? '#E4F4FD' : '#EFEBFF', subjColor: subject === 'Company' ? '#0284C7' : '#6D5BD0' };
@@ -9378,7 +9651,7 @@ class Component extends DCLogic {
         name: e7.name || '—', role: e7.role || '—', avBg: p[0], avColor: p[1],
         initials: String(e7.name || '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         complete: docs.filter(d7 => d7.kind === 'ok').length, total: docs.length,
-        docs: docs.map(({ label, kind, tip }) => ({ label, tip, glyph: glyphMap[kind][0], bg: glyphMap[kind][1], color: glyphMap[kind][2], action: kind === 'miss' ? 'Upload' : 'View' })),
+        docs: docs.map(({ label, kind, tip }) => ({ label, tip, glyph: (glyphMap[kind] || glyphMap.miss || ['—', '#6F6C7A', '#F3F1F7'])[0], bg: (glyphMap[kind] || glyphMap.miss || ['—', '#6F6C7A', '#F3F1F7'])[1], color: (glyphMap[kind] || glyphMap.miss || ['—', '#6F6C7A', '#F3F1F7'])[2], action: kind === 'miss' ? 'Upload' : 'View' })),
       };
     });
     // ---- Upload document modal (type-driven fields) ----
@@ -9439,7 +9712,7 @@ class Component extends DCLogic {
           const body = { companyId: _udCo.id, person: udIsEmployee ? st.udEmployee : _udCo.name, employeeId: emp8 ? emp8.id : null, docType: udType, docNumber: st.udNumber || null, expiryDate: st.udExpiry, status: status8, daysLeft: isNaN(days8) ? 0 : days8 };
           if (filePath) body.customData = { file: filePath };
           fetch(API + '/api/documents', { method: 'POST', headers: H8, body: JSON.stringify(body) })
-            .then(r => { if (r.status === 401) { this.toast('Sign in first'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
+            .then(r => { if (r.status === 401) { this.toast('Sign in first', 'error'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
             .then(v => { if (!v) return; this.setState({ udModal: false, udFile: '', udFileObj: null }); this.toast('Document uploaded to ' + _udCo.name); this._opReload && this._opReload('documents', 'documentsData'); })
             .catch(e => this.setState({ udError: String(e.message || 'Could not upload') }));
         };
@@ -9611,12 +9884,12 @@ class Component extends DCLogic {
         // service itself — its name, SLA, availability or which workflow it is bound to.
         editService: () => svcId9
           ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), wf: (tpl9 && tpl9.name) || _svcWfNone }, svcEditErr: '' })
-          : this.toast('That is a sample row — add a real service first'),
+          : this.toast('That is a sample row — add a real service first', 'error'),
         // Deletability is decided by the server, so the dialog asks it rather than re-deriving the
         // rule here and risking the two drifting apart.
         askDelete: () => svcId9
           ? this.setState({ svcDelAsk: { id: svcId9, name }, svcUsage: null }, () => this._loadSvcUsage(svcId9))
-          : this.toast('That is a sample row — add a real service first'),
+          : this.toast('That is a sample row — add a real service first', 'error'),
         editWorkflow: () => this.setState({ active: 'Workflow Builder', activeGroup: 'Admin' }),
         editDocType: () => this.setState({ active: 'Document Types', activeGroup: 'Configure' }),
       };
@@ -9876,7 +10149,7 @@ class Component extends DCLogic {
 
     // ===== Phase 1: Operations data =====
     const prio = { High: ['#FEECEC', '#C0353A'], Medium: ['#FEF4E2', '#B8860B'], Low: ['#EFEBFF', '#6D5BD0'] };
-    const tStatusMap = { 'To do': ['#F3F1F7', '#6F6C7A'], 'In progress': ['#F3E8FF', '#7C00FF'], 'Blocked': ['#FEECEC', '#C0353A'], 'Done': ['#E7F8EF', '#0E9355'], 'Rejected': ['#FEECEC', '#C0353A'] };
+    const tStatusMap = { 'To do': ['#F3F1F7', '#6F6C7A'], 'In progress': ['#F3E8FF', '#7C00FF'], 'Blocked': ['#FEECEC', '#C0353A'], 'Done': ['#E7F8EF', '#0E9355'], 'Rejected': ['#FEECEC', '#C0353A'], 'Cancelled': ['#F3F1F7', '#8C8899'] };
     // WIRED: 'me' = the signed-in staff account.
     const currentUser = (this.state.meUser && this.state.meUser.name) || 'Rashid';
     // ===== Unified Task model — the single source for Task List + My Tasks =====
@@ -9884,10 +10157,10 @@ class Component extends DCLogic {
     // dueDate(dueIn days), docType, complianceDocId, workflowInstanceId, blockedBy, employeeId, sched
     // WIRED: real tasks from /api/tasks (state.tasksData). Design samples only when unauthenticated.
     const tData = this.state.tasksData;
-    const TASK_PRIO_CAP = { low: 'Low', medium: 'Medium', high: 'High', critical: 'High' };
+    const TASK_PRIO_CAP = { low: 'Low', medium: 'Medium', high: 'High', critical: 'High', urgent: 'High' };
     // `rejected` is a real task state (a government authority turned the submission back). Without it
     // here the fallback rendered a rejected task as "To do" — a wrong status, not just a missing one.
-    const TASK_STATUS_CAP = { todo: 'To do', in_progress: 'In progress', review: 'In progress', done: 'Done', rejected: 'Rejected' };
+    const TASK_STATUS_CAP = { todo: 'To do', in_progress: 'In progress', review: 'In progress', done: 'Done', rejected: 'Rejected', cancelled: 'Cancelled' };
     const dueInOf = (d) => { if (!d) return 3; const t2 = new Date(d); return isNaN(+t2) ? 3 : Math.round((t2.setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / 86400000); };
     const taskDefs = (Array.isArray(tData) && tData.length
       ? tData.map(t => ({
@@ -9919,12 +10192,12 @@ class Component extends DCLogic {
     }));
     const archivedMap = this.state.taskArchivedMap || {};
     const allTasks = [...createdObjs, ...taskDefs].map((t, i) => {
-      const overdue = t.dueIn < 0 && t.status !== 'Done';
+      const overdue = t.dueIn < 0 && t.status !== 'Done' && t.status !== 'Cancelled';
       return {
         ...t, id: 'TSK-' + (2100 + i),
         due: mkDue(t.dueIn), dueColor: overdue ? '#C0353A' : t.dueIn <= 1 && t.status !== 'Done' ? '#B8860B' : '#8C8899',
-        prBg: prio[t.priority][0], prColor: prio[t.priority][1],
-        stBg: tStatusMap[t.status][0], stColor: tStatusMap[t.status][1],
+        prBg: (prio[t.priority] || ['#F3F1F7', '#6F6C7A'])[0], prColor: (prio[t.priority] || ['#F3F1F7', '#6F6C7A'])[1],
+        stBg: (tStatusMap[t.status] || ['#F3F1F7', '#6F6C7A'])[0], stColor: (tStatusMap[t.status] || ['#F3F1F7', '#6F6C7A'])[1],
         initials: t.assignee.slice(0, 2).toUpperCase(),
         docTypeShow: !!t.docType, compShow: !!t.comp, wfShow: !!t.wf, blockedShow: !!t.blocked, empShow: !!t.employee,
         govCenter: t.govCenter || '', govShow: !!t.govCenter,
@@ -9995,7 +10268,9 @@ class Component extends DCLogic {
     })();
 
     // ── Grouped-by-deadline card view (mirrors the Renewals layout): left day-badge + urgency buckets ──
+    const _taskClosedSt = (st) => st === 'Done' || st === 'Cancelled';
     const _taskBadge = (t) => {
+      if (t.status === 'Cancelled') return ['✕', 'VOID', '#F3F1F7', '#8C8899'];
       if (t.status === 'Done') return ['✓', 'DONE', '#E7F8EF', '#0E9355'];
       if (t.status === 'Blocked') return ['⛔', 'BLOCK', '#FEECEC', '#C0353A'];
       const d = t.dueIn;
@@ -10006,6 +10281,7 @@ class Component extends DCLogic {
       return [String(d), 'DAYS', '#E7F8EF', '#0E9355'];
     };
     const _taskDays = (t) => {
+      if (t.status === 'Cancelled') return ['Cancelled', '#8C8899'];
       if (t.status === 'Done') return ['Completed', '#0E9355'];
       if (t.status === 'Blocked') return ['Blocked', '#C0353A'];
       const d = t.dueIn;
@@ -10036,11 +10312,12 @@ class Component extends DCLogic {
     };
     const _taskBucket = (title, color, bg, pred) => { const rows = tasks.filter(pred).sort((a, z) => a.dueIn - z.dueIn).map(_taskRow); return rows.length ? { title, color, bg, count: rows.length, rows } : null; };
     const taskGroups = [
-      _taskBucket('Overdue', '#C0353A', '#FEECEC', t => t.status !== 'Done' && t.dueIn < 0),
-      _taskBucket('Due this week', '#B8860B', '#FEF4E2', t => t.status !== 'Done' && t.dueIn >= 0 && t.dueIn <= 7),
-      _taskBucket('Next 30 days', '#7C00FF', '#F3E8FF', t => t.status !== 'Done' && t.dueIn > 7 && t.dueIn <= 30),
-      _taskBucket('Later', '#0E9355', '#E7F8EF', t => t.status !== 'Done' && t.dueIn > 30),
+      _taskBucket('Overdue', '#C0353A', '#FEECEC', t => !_taskClosedSt(t.status) && t.dueIn < 0),
+      _taskBucket('Due this week', '#B8860B', '#FEF4E2', t => !_taskClosedSt(t.status) && t.dueIn >= 0 && t.dueIn <= 7),
+      _taskBucket('Next 30 days', '#7C00FF', '#F3E8FF', t => !_taskClosedSt(t.status) && t.dueIn > 7 && t.dueIn <= 30),
+      _taskBucket('Later', '#0E9355', '#E7F8EF', t => !_taskClosedSt(t.status) && t.dueIn > 30),
       _taskBucket('Completed', '#6F6C7A', '#F3F1F7', t => t.status === 'Done'),
+      _taskBucket('Cancelled', '#8C8899', '#F3F1F7', t => t.status === 'Cancelled'),
     ].filter(Boolean);
     const tasksApi = {
       tasks, taskTabs, tasksEmpty: tasks.length === 0, taskGroups,
@@ -10058,12 +10335,16 @@ class Component extends DCLogic {
       bulkArchive: () => { this.toast((this.state.taskSel || []).length + ' tasks archived'); this.setState({ taskSel: [] }); },
       bulkExport: () => { this.toast('Exported ' + (this.state.taskSel || []).length + ' tasks to CSV'); },
       showTaskModal: !!this.state.taskModal,
-      openTaskModal: () => this.setState({ taskModal: true, ntStep: 1, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: 'Falcon Technologies', ntApplicant: '', ntAssignee: 'Rashid', ntPrio: 'Medium', ntDue: '', ntPortalRef: '', ntErr: '' }),
+      // The dialog used to open pre-filled with "Falcon Technologies" and an assignee called
+      // "Rashid" — neither of which exists in this system. Left alone, that is what got submitted.
+      // It now opens on the first REAL client and unassigned, and falls back to nothing rather than
+      // to a name someone invented.
+      openTaskModal: () => this.setState({ taskModal: true, ntStep: 1, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntDue: '', ntPortalRef: '', ntErr: '' }),
       closeTaskModal: () => this.setState({ taskModal: false }),
       ntStep: this.state.ntStep || 1, ntStep1: (this.state.ntStep || 1) === 1, ntStep2: (this.state.ntStep || 1) === 2,
       ntStep2Bar: (this.state.ntStep || 1) === 2 ? '#7C00FF' : '#EEE0FF',
       ntTitle: this.state.ntTitle || '', ntDue: this.state.ntDue || '', ntErr: this.state.ntErr || false,
-      ntClient: this.state.ntClient || 'Falcon Technologies', ntAssignee: this.state.ntAssignee || 'Rashid', ntPrio: this.state.ntPrio || 'Medium',
+      ntClient: this.state.ntClient || '', ntClientLabel: this.state.ntClient || 'Select a client', ntClientColor: this.state.ntClient ? '#1A1523' : '#A9A6B4', ntAssignee: this.state.ntAssignee || 'Unassigned', ntPrio: this.state.ntPrio || 'Medium',
       // Step 1 — choose kind of work (searchable + scrollable so it scales to many workflows)
       ntKindQuery: this.state.ntKindQuery || '',
       setNtKindQuery: (e) => this.setState({ ntKindQuery: e.target.value }),
@@ -10093,11 +10374,24 @@ class Component extends DCLogic {
       ntCustomRequired: !ntSel.doc ? false : true,
       setNtTitle: (e) => this.setState({ ntTitle: e.target.value, ntErr: '' }),
       setNtDue: (e) => this.setState({ ntDue: e.target.value }),
-      ...mkDd('ddNtClient', realClientNames || ['Falcon Technologies', 'Falcon Trading'], this.state.ntClient || (realClientNames ? realClientNames[0] : 'Falcon Technologies'), (v) => this.setState({ ntClient: v, ntApplicant: '' })),
+      ...mkDdSearch('ddNtClient', realClientNames || [], this.state.ntClient || '', (v) => this.setState({ ntClient: v, ntApplicant: '' }), 'Search clients…'),
       ...mkDd('ddNtApplicant', ntEmployeesForClient, this.state.ntApplicant || 'Select employee', (v) => this.setState({ ntApplicant: v })),
-      ...mkDd('ddNtAssignee', realStaffNames || ['Rashid', 'Aisha'], this.state.ntAssignee || (realStaffNames ? realStaffNames[0] : 'Rashid'), (v) => this.setState({ ntAssignee: v })),
+      // Unassigned first, and only staff who can actually pick the work up — an invited user who
+      // has never signed in cannot be given a task.
+      ...mkDd('ddNtAssignee', ['Unassigned', ...(realActiveStaff || [])], this.state.ntAssignee || 'Unassigned', (v) => this.setState({ ntAssignee: v })),
       ...mkDd('ddNtPrio', ['Critical', 'High', 'Medium', 'Low'], this.state.ntPrio || 'Medium', (v) => this.setState({ ntPrio: v })),
-      ...mkDd('ddNtPortal', ['GDRFA', 'MOHRE Tasheel', 'ICP', 'DED', 'FTA'], this.state.ntPortalRef || 'Select portal', (v) => this.setState({ ntPortalRef: v })),
+      // The list was GDRFA / MOHRE Tasheel / ICP / DED / FTA — every one of them a UAE authority, in
+      // a product sold for Saudi Arabia. Worse, the value is written to Task.govCenter, which the
+      // Government Centers screen buckets its queues by: a task filed under "GDRFA" lands in a
+      // centre that does not exist, which is why those queues stayed empty.
+      //
+      // Driven from the real Government Centers now, so the value always matches a centre that is
+      // actually configured. The fallback is the Saudi set, used only until they load.
+      ...mkDd('ddNtPortal',
+        ((Array.isArray(this.state.govCentersData) && this.state.govCentersData.length)
+          ? this.state.govCentersData.map(g8 => g8.name)
+          : ['Qiwa', 'Muqeem', 'Absher', 'MHRSD', 'GOSI', 'ZATCA', 'Balady']),
+        this.state.ntPortalRef || 'Select portal', (v) => this.setState({ ntPortalRef: v })),
       // WIRED: a PLAIN task → POST /api/tasks; a WORKFLOW → POST /api/workflow/instances, which starts
       // the real BPM engine (spawns the first step, runs auto nodes, drives it to the end). Both only
       // report success on a confirmed 2xx and reload the relevant views from the server.
@@ -10137,6 +10431,21 @@ class Component extends DCLogic {
             .then(({ ok, j8 }) => {
               if (!ok) return this.setState({ ntErr: (j8 && j8.error) || 'Could not start the workflow — try again' });
               this.setState({ taskModal: false });
+              // The run is the machinery; this is the row a person looks for. Linked by
+              // workflowInstanceId so the list can show "Workflow run attached" and open it.
+              fetch(API8 + '/api/tasks', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok8 },
+                body: JSON.stringify({
+                  title: s2.ntTitle.trim(), companyId: co8 ? co8.id : null, clientName: s2.ntClient || null,
+                  assignee: s2.ntAssignee || 'Unassigned', priority: prMap[s2.ntPrio] || 'medium', status: 'todo',
+                  dueDate: s2.ntDue || null, docType: ntSel.doc || null,
+                  govCenter: (s2.ntPortalRef || '').trim() || null,
+                  workflowInstanceId: (j8 && j8.id) || null,
+                }),
+              }).then(() => this._reloadTasks && this._reloadTasks())
+                // The run started; failing to write its task row must not be reported as a failure
+                // to start the workflow, which would invite the user to start a second one.
+                .catch(() => this.toast('Workflow started, but its task row could not be written', 'warn'));
               this.toast(ntSel.name + ' started — first step is in My Tasks');
               this._reloadMyWork && this._reloadMyWork();
               this._reloadTasks && this._reloadTasks();
@@ -10208,15 +10517,17 @@ class Component extends DCLogic {
         ...upgData.map(u => u.kind === 'addon'
           ? ['upgrade-addon', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Add-on request — ' + (u.serviceName || 'a service'), u.note || 'One service on top of the current plan', u.clientName || '—', u.quotedPrice ? fmtCur(u.quotedPrice) : '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']
           : ['upgrade', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Package upgrade request', u.note || 'Subscription change', u.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']),
-        ...srvData.map(r2 => ['service', 'SRV-' + String(r2.id).slice(-4).toUpperCase(), r2.type || 'Service request', (r2.message || '').slice(0, 60) || 'Client portal', r2.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(r2.lastClientMsgAt || r2.date), null, null, null, null, null, r2.id, AP_ST[String(r2.status).toLowerCase()] || 'Pending']),
+        ...srvData.map(r2 => ['service', r2.number || ('SRV-' + String(r2.id).slice(-4).toUpperCase()), r2.type || 'Service request', (r2.message || '').slice(0, 60) || 'Client portal', r2.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(r2.lastClientMsgAt || r2.date), null, null, null, null, null, r2.id, AP_ST[String(r2.status).toLowerCase()] || 'Pending']),
       ]
       : (_authed ? [] : [
         ['workflow', 'WT-341', 'Approve Golden Visa quotation', 'WF-1063 · Golden Visa', 'Falcon Trading', 'AED 9,800', 'Workflow · Manager', 'High', '6h', 'Manager', 24, 6, 'Issue invoice', 'Revise quotation', null, 'Pending'],
         ['service', 'SRV-210', 'New Employment Visa request', 'Client portal · REQ-2421', 'Falcon Technologies', 'AED 3,360', 'Client portal', 'High', '3h', null, null, null, null, null, null, 'Pending'],
       ]));
     // Persist an approval decision to the right backend per origin.
-    this._apDecide = (origin, realId, val) => {
-      if (!realId) return;
+    this._apDecide = (origin, realId, val, note, rowKey) => {
+      // Without a server id there is nothing to record — say so rather than leaving the row looking
+      // decided. This used to return silently while the optimistic state still read "Approved".
+      if (!realId) { this.toast('This row has no server record yet — nothing was saved', 'error'); return; }
       const tok2 = localStorage.getItem('stimespro:token');
       const H2 = { 'Content-Type': 'application/json', ...(tok2 ? { Authorization: 'Bearer ' + tok2 } : {}) };
       const API2 = this._apiBase || 'http://localhost:4100';
@@ -10227,10 +10538,24 @@ class Component extends DCLogic {
         const row9 = (Array.isArray(this.state.upgradeRequestsData) ? this.state.upgradeRequestsData : []).find(x9 => x9.id === realId);
         return this.setState({ addonQuote: { id: realId, client: (row9 && row9.clientName) || 'this client', service: (row9 && row9.serviceName) || 'the service', price: '' } });
       }
-      if (origin === 'workflow') p2 = fetch(API2 + '/api/workflow/tasks/' + realId + '/complete', { method: 'POST', headers: H2, body: JSON.stringify({ outcome: val === 'Approved' ? 'approve' : 'reject' }) });
+      if (origin === 'workflow') p2 = fetch(API2 + '/api/workflow/tasks/' + realId + '/complete', { method: 'POST', headers: H2, body: JSON.stringify({ outcome: val === 'Approved' ? 'approve' : 'reject', note: note || undefined, variables: note ? { decisionNote: note } : undefined }) });
       else if (origin === 'upgrade' || origin === 'upgrade-addon') p2 = fetch(API2 + '/api/upgrade-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val.toLowerCase() }) });
       else p2 = fetch(API2 + '/api/service-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val === 'Approved' ? 'resolved' : val.toLowerCase() }) });
-      p2.then(r2 => { if (!r2.ok) this.toast('Saved locally — server rejected the update'); }).catch(() => this.toast('Server unreachable'));
+      // Put the row back if the server refused: an optimistic tick that survives a failed write is
+      // how a reviewer ends up believing a decision was recorded when it was not.
+      const _revert = (msg) => {
+        if (rowKey) { const cur = { ...(this.state.apResolved || {}) }; delete cur[rowKey]; this.setState({ apResolved: cur }); }
+        this.toast(msg, 'error');
+      };
+      p2.then(r2 => {
+        if (!r2.ok) return r2.json().catch(() => ({})).then(j2 => _revert((j2 && j2.error) || 'The server rejected that decision — nothing was saved'));
+        this.toast(val === 'Approved' ? 'Approved' : val === 'Rejected' ? 'Rejected' : 'Updated');
+        // Re-read rather than trust the optimistic row. The step is no longer active, so this is
+        // what moves it out of the queue honestly instead of leaving a stale clickable row behind.
+        this._reloadMyWork && this._reloadMyWork();
+        this._reloadTasks && this._reloadTasks();
+        this._load && this._load('/api/service-requests', 'serviceRequestsData', (v9) => this.setState({ serviceRequestsData: v9 }));
+      }).catch(() => _revert('Server unreachable — the decision was not saved'));
     };
     const prMini = { High: ['#FEECEC', '#C0353A'], Medium: ['#FEF4E2', '#B8860B'], Low: ['#EFEBFF', '#6D5BD0'] };
     const approvals = apSources.map(([origin, id, subject, context, client, amount, by, priority, waiting, role, slaHours, elapsedH, onApprove, onReject, realId, realStatus]) => {
@@ -10241,10 +10566,14 @@ class Component extends DCLogic {
       let slaText = '', slaColor = '#8C8899';
       if (slaHours != null) { const remH = slaHours - elapsedH; slaText = remH < 0 ? Math.abs(remH) + 'h over SLA' : remH + 'h to SLA'; slaColor = remH < 0 ? '#C0353A' : remH <= slaHours * 0.25 ? '#B8860B' : '#0E9355'; }
       const reviewing = apReview === id;
-      const setStatus = (val) => { this.setState({ apResolved: { ...apStatus, [id]: val }, apReview: null, apNote: '' }); this._apDecide && this._apDecide(origin, realId, val); };
+      const setStatus = (val) => {
+        const note9 = String(this.state.apNote || '').trim();   // captured BEFORE the state clear below
+        this.setState({ apResolved: { ...apStatus, [id]: val }, apReview: null, apNote: '' });
+        this._apDecide && this._apDecide(origin, realId, val, note9, id);
+      };
       return {
         id, subject, context, client, amount, by, priority, waiting,
-        prBg: prMini[priority][0], prColor: prMini[priority][1],
+        prBg: (prMini[priority] || ['#F3F1F7', '#6F6C7A'])[0], prColor: (prMini[priority] || ['#F3F1F7', '#6F6C7A'])[1],
         typeLabel: t[0], typeColor: t[1], typeBg: t[2], isWorkflow: origin === 'workflow',
         onApprove: onApprove || '', onReject: onReject || '', hasBranch: !!onApprove,
         slaText, slaColor, hasSla: !!slaText,
@@ -10290,7 +10619,7 @@ class Component extends DCLogic {
       return [left8 + 'd left', left8 <= 1 ? 'warn' : 'ok'];
     };
     const queueRaw = (qSrv !== null
-      ? qSrv.map(r2 => { const s8 = _qSla(r2); return ['REQ-' + String(r2.id).slice(-4).toUpperCase(), r2.type || 'Service request', r2.clientName || '—', (r2.message || '—').slice(0, 30), Q_STAGE[String(r2.status).toLowerCase()] || 'New', '—', '—', s8[0], s8[1], r2.id, String(r2.status).toLowerCase(), (String(r2.lastClientMsgAt || '') > String(r2.staffReadAt || ''))]; })
+      ? qSrv.map(r2 => { const s8 = _qSla(r2); return [r2.number || ('REQ-' + String(r2.id).slice(-4).toUpperCase()), r2.type || 'Service request', r2.clientName || '—', (r2.message || '—').slice(0, 30), Q_STAGE[String(r2.status).toLowerCase()] || 'New', '—', '—', s8[0], s8[1], r2.id, String(r2.status).toLowerCase(), (String(r2.lastClientMsgAt || '') > String(r2.staffReadAt || ''))]; })
       : (_authed ? [] : [
         ['REQ-2421', 'New Employment Visa', 'Falcon Technologies', 'J. Okafor', 'New', 'Unassigned', 'AED 3,360', '4h left', 'ok', null, 'open', true],
         ['REQ-2419', 'Trade License Renewal', 'Falcon Trading', '—', 'Accepted', 'Aisha', 'AED 13,125', 'Due today', 'warn', null, 'open', false],
@@ -10656,7 +10985,7 @@ class Component extends DCLogic {
       complianceRows, complianceTabs, complianceSummary, compScore,
       compCirc: Math.round(compScore / 100 * 163), complianceEmpty: complianceRows.length === 0,
       compClientScope,
-      ...mkDd('ddCompScope', ['All clients', ...(Array.isArray(coData) && coData.length ? coData.map(c => c.name) : ['Falcon Technologies', 'Falcon Trading'])], compClientScope, (v) => this.setState({ clientFilter: v })),
+      ...mkDd('ddCompScope', ['All clients', ...(Array.isArray(coData) ? coData.map(c => c.name) : [])], compClientScope, (v) => this.setState({ clientFilter: v })),
       showAddRecord: !!this.state.addRecord,
       // Default to a REAL client (the demo name meant the save always failed the client lookup);
       // the header CLIENT filter wins when one is selected.
@@ -10669,7 +10998,7 @@ class Component extends DCLogic {
       setArHolder: (e) => this.setState({ arHolder: e.target.value }),
       setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
       setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
-      ...mkDd('ddArClient', (Array.isArray(coData) && coData.length ? coData.map(c => c.name) : ['Falcon Technologies', 'Falcon Trading']), this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : 'Falcon Technologies'), (v) => this.setState({ arClient: v })),
+      ...mkDd('ddArClient', (Array.isArray(coData) ? coData.map(c => c.name) : []), this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''), (v) => this.setState({ arClient: v })),
       ...mkDd('ddArType', (Array.isArray(this.state.docTypesData) && this.state.docTypesData.length ? this.state.docTypesData.map(d => d.name) : ['Trade License', 'Emirates ID']), this.state.arType || (Array.isArray(this.state.docTypesData) && this.state.docTypesData[0] ? this.state.docTypesData[0].name : 'Trade License'), (v) => this.setState({ arType: v })),
       arType: this.state.arType || 'Trade License',
       // WIRED: this used to validate the expiry and then just close — the client, type, holder,
@@ -11380,7 +11709,7 @@ class Component extends DCLogic {
     };
     const wfSelType = wfNodeDefs[wfSel][2];
     const wfCfg = {
-      wfCfgTitle: wfNodeDefs[wfSel][0], wfCfgTag: wfTagMap[wfSelType],
+      wfCfgTitle: (wfNodeDefs[wfSel] || ['Step'])[0], wfCfgTag: wfTagMap[wfSelType],
       wfCfgDesc: wfNodeDefs[wfSel][4], wfCfgWaits: wfSelType === 'task' || wfSelType === 'approval',
       wfCfgColor: wfNodeDefs[wfSel][3],
       wfCfgFields: (wfCfgMap[wfSelType] || []).map(([label, value]) => ({ label, value })),
@@ -11432,7 +11761,7 @@ class Component extends DCLogic {
     // so branches survive — no linearisation. Defaults to the template currently on the canvas.
     const wfSaveFlow = () => {
       const tplId = this.state.wfSelectedId || (Array.isArray(wfTpls) && wfTpls[0] ? wfTpls[0].id : null);
-      if (!tplId) return this.toast('Select one of your workflows first');
+      if (!tplId) return this.toast('Select one of your workflows first', 'error');
       const g4 = this.state.wfFlowGraph || wfCanvasGraph;
       if (!g4 || !Array.isArray(g4.nodes) || !g4.nodes.length) return this.toast('Nothing to save yet');
       const API = this._apiBase || 'http://localhost:4100';
@@ -11455,7 +11784,7 @@ class Component extends DCLogic {
     const _wfCanvasActive = !!(_wfCanvasTpl && _wfCanvasTpl.active);
     const wfToggleActive = () => {
       const tpl = _wfCanvasTpl || (Array.isArray(wfTpls) && wfTpls[0]);
-      if (!tpl || !tpl.id) return this.toast('Select one of your workflows first');
+      if (!tpl || !tpl.id) return this.toast('Select one of your workflows first', 'error');
       const next = !tpl.active;
       const API = this._apiBase || 'http://localhost:4100';
       const tok = localStorage.getItem('stimespro:token');
@@ -11654,14 +11983,14 @@ class Component extends DCLogic {
           : [{ label: 'No configuration yet', value: 'Use Edit step to set this node up' }])
         : (wfCfgMap[gSelType] || []).map(([label, value]) => ({ label, value }))),
       wfCfgRemovable: gSelType !== 'trigger' && gSelType !== 'end',
-      wfEditStep: () => this._wfEditNode ? this._wfEditNode(gSel) : this.toast('Select one of your workflows first'),
+      wfEditStep: () => this._wfEditNode ? this._wfEditNode(gSel) : this.toast('Select one of your workflows first', 'error'),
       wfRemoveStep: () => this._wfRemoveNode ? this._wfRemoveNode(gSel) : this.setState({ wfSelNode: 1 }),
     };
 
     const workflowApi = { wfNodes, wfToolbar, wfConnections, wfList, wfSaveFlow, ...wfCanvasMetaApi, ...wfCfg, ...wfNewApi, ...graphApi, ...gCfg };
 
     // ===== Settings (admin console) =====
-    const builderActs = ['Object Builder', 'Form Builder', 'Print Layout'];
+    const builderActs = ['Record Sequence', 'Form Builder', 'Print Layout'];
     const actIsBuilder = builderActs.includes(this.state.active);
     const setTab = actIsBuilder ? 'Configure' : (this.state.setTab || 'General');
     const setTabDefs = [
@@ -11753,7 +12082,7 @@ class Component extends DCLogic {
           headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
           body: JSON.stringify(body),
         });
-        if (r.status === 401) { this.toast('Sign in to the console first — settings need a staff session'); return; }
+        if (r.status === 401) { this.toast('Sign in to the console first — settings need a staff session', 'error'); return; }
         if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'HTTP ' + r.status); }
         const saved = await r.json();
         this.setState({ orgSet: saved, orgDraft: {} });
@@ -11833,7 +12162,7 @@ class Component extends DCLogic {
         const API = this._apiBase || 'http://localhost:4100';
         const tok = localStorage.getItem('stimespro:token');
         fetch(API + '/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body) })
-          .then(r => { if (r.status === 401) { this.toast('Sign in to the console first — creating users needs a staff session'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
+          .then(r => { if (r.status === 401) { this.toast('Sign in to the console first — creating users needs a staff session', 'error'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
           .then(u => { if (!u) return; this.setState({ cuOpen: false, credResult: { title: 'User created', sub: 'Share these sign-in details — the password is shown only once.', name: u.name || st.cuName.trim(), email: u.email || (st.cuEmail || '').trim().toLowerCase(), tempPassword: u.tempPassword || null } }); this._reloadUsers(); })
           .catch(e => this.setState({ cuErr: String(e.message || 'Could not create user') }));
       },
@@ -12154,7 +12483,7 @@ class Component extends DCLogic {
       const nm2 = (this.state.skName || '').trim();
       if (!nm2) return this.setState({ skErr: 'Give the key a name — e.g. "Zapier" or "Reporting script"' });
       const t2 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/api-keys', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ name: nm2 }) })
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/api-keys', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ name: nm2, scope: this.state.skScope === 'write' ? 'write' : 'read' }) })
         .then(r2 => r2.json()).then(j2 => {
           if (!j2.key) return this.setState({ skErr: j2.error || 'Could not create key' });
           this.setState({ skNewKey: j2.key, skName: '', skErr: '' });
@@ -12170,12 +12499,110 @@ class Component extends DCLogic {
     };
     const skKeys = _keys.map(k2 => ({
       name: k2.name, prefix: k2.prefix + '…',
-      meta: [k2.createdAt ? 'created ' + String(k2.createdAt).slice(0, 10) : null, k2.lastUsedAt ? 'last used ' + String(k2.lastUsedAt).slice(0, 10) : 'never used'].filter(Boolean).join(' · '),
+      // What the key can do belongs first: it is the thing you check when deciding to revoke it.
+      meta: [k2.scope === 'write' ? 'read & write' : 'read only',
+        k2.createdAt ? 'created ' + String(k2.createdAt).slice(0, 10) : null,
+        k2.lastUsedAt ? 'last used ' + String(k2.lastUsedAt).slice(0, 10) : 'never used'].filter(Boolean).join(' · '),
       revoke: () => skRevoke(k2),
     }));
+    // Read is the default, and stays selected until write is chosen deliberately.
+    const _skScope = this.state.skScope === 'write' ? 'write' : 'read';
+    const _skPill = (on) => on
+      ? { Border: '#7C00FF', Bg: '#F8F2FF', Color: '#7C00FF' }
+      : { Border: '#DDD9E6', Bg: '#FCFBFE', Color: '#4B4757' };
+    const _skR = _skPill(_skScope === 'read'), _skW = _skPill(_skScope === 'write');
+    // ---- Problem Reports (GET /api/error-reports) ----
+    // Nothing invented: an empty table means nobody has reported anything, and says so.
+    const _erRows = Array.isArray(this.state.errReportsData) ? this.state.errReportsData : [];
+    const _erCounts = this.state.errReportCounts || {};
+    const _erFilter = this.state.erFilter || 'new';
+    const _ER_KIND = {
+      not_found: { label: 'Dead link', color: '#B8860B', bg: '#FEF4E2' },
+      crash: { label: 'Crash', color: '#C0353A', bg: '#FEECEC' },
+      manual: { label: 'Reported', color: '#7C00FF', bg: '#F3E8FF' },
+    };
+    const _ER_STATUS = {
+      new: { label: 'New', color: '#C0353A', bg: '#FEECEC' },
+      seen: { label: 'Seen', color: '#B8860B', bg: '#FEF4E2' },
+      closed: { label: 'Closed', color: '#0E9355', bg: '#E7F8EF' },
+    };
+    const _erAgo = (iso) => {
+      const t9 = new Date(iso).getTime();
+      if (isNaN(t9)) return '';
+      const m9 = Math.round((Date.now() - t9) / 60000);
+      if (m9 < 1) return 'just now';
+      if (m9 < 60) return m9 + ' min ago';
+      const h9 = Math.round(m9 / 60);
+      if (h9 < 24) return h9 + 'h ago';
+      const d9 = Math.round(h9 / 24);
+      return d9 === 1 ? 'yesterday' : d9 + ' days ago';
+    };
+    const _erSetStatus = (row, status) => {
+      const t2 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/error-reports/' + row.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+        body: JSON.stringify({ status }),
+      }).then(r2 => {
+        if (!r2.ok) return this.toast('Could not update that report');
+        // Re-read rather than patch in place: the counts drive the nav badge and would drift.
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/error-reports', { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
+          .then(r3 => (r3.ok ? r3.json() : null))
+          .then(v3 => { if (v3 && Array.isArray(v3.rows)) this.setState({ errReportsData: v3.rows, errReportCounts: v3.counts || {} }); });
+        this.toast(status === 'closed' ? 'Report closed' : status === 'seen' ? 'Marked seen' : 'Report reopened');
+      }).catch(() => this.toast('Server unreachable'));
+    };
+    const erRows = _erRows
+      .filter(r9 => _erFilter === 'all' || String(r9.status || 'new') === _erFilter)
+      .map(r9 => {
+        const k9 = _ER_KIND[r9.kind] || _ER_KIND.manual;
+        const st9 = String(r9.status || 'new');
+        const s9 = _ER_STATUS[st9] || _ER_STATUS.new;
+        return {
+          kind: k9.label, kColor: k9.color, kBg: k9.bg,
+          // The message for a crash, the path for a dead link — whichever actually says something.
+          what: r9.message || (r9.kind === 'not_found' ? 'No screen at that address' : 'Problem reported'),
+          where: [r9.app === 'portal' ? 'Client portal' : 'Console', r9.path].filter(Boolean).join(' · '),
+          note: r9.note || '', hasNote: !!r9.note,
+          who: r9.actorName || (r9.companyId ? 'A client' : 'Signed out'),
+          when: _erAgo(r9.createdAt),
+          status: s9.label, sColor: s9.color, sBg: s9.bg,
+          canSeen: st9 === 'new', canClose: st9 !== 'closed', canReopen: st9 === 'closed',
+          markSeen: () => _erSetStatus(r9, 'seen'),
+          markClosed: () => _erSetStatus(r9, 'closed'),
+          reopen: () => _erSetStatus(r9, 'new'),
+        };
+      });
+    const _erTotal = _erRows.length;
+    const erKpis = [
+      { label: 'Unread', value: String(_erCounts.new || 0), note: 'nobody has looked yet', color: (_erCounts.new || 0) > 0 ? '#C0353A' : '#1A1523' },
+      { label: 'Seen', value: String(_erCounts.seen || 0), note: 'acknowledged, not fixed', color: '#1A1523' },
+      { label: 'Closed', value: String(_erCounts.closed || 0), note: 'dealt with', color: '#1A1523' },
+      { label: 'Dead links', value: String(_erRows.filter(r9 => r9.kind === 'not_found').length), note: 'of ' + _erTotal + ' report' + (_erTotal === 1 ? '' : 's'), color: '#1A1523' },
+    ];
+    const erTabs = [['new', 'Unread'], ['seen', 'Seen'], ['closed', 'Closed'], ['all', 'Everything']].map(([key, label]) => {
+      const on = _erFilter === key;
+      const n = key === 'all' ? _erTotal : (_erCounts[key] || 0);
+      return {
+        label: label + ' · ' + n,
+        color: on ? '#fff' : '#4B4757', bg: on ? '#7C00FF' : '#fff', border: on ? '#7C00FF' : '#DDD9E6',
+        pick: () => this.setState({ erFilter: key }),
+      };
+    });
+    const problemReportsApi = {
+      erRows, erKpis, erTabs,
+      erEmpty: erRows.length === 0,
+      erEmptyText: _erTotal === 0
+        ? 'Nothing has been reported. The Report a problem button in both apps writes here.'
+        : 'No ' + (_erFilter === 'all' ? '' : _erFilter + ' ') + 'reports.',
+    };
     const apiKeysModalApi = {
+      skReadBorder: _skR.Border, skReadBg: _skR.Bg, skReadColor: _skR.Color,
+      skWriteBorder: _skW.Border, skWriteBg: _skW.Bg, skWriteColor: _skW.Color,
+      skPickRead: () => this.setState({ skScope: 'read' }),
+      skPickWrite: () => this.setState({ skScope: 'write' }),
       skOpen: !!this.state.skOpen,
-      openKeysModal: () => this.setState({ skOpen: true, skNewKey: '', skErr: '', skName: '' }),
+      openKeysModal: () => this.setState({ skOpen: true, skNewKey: '', skErr: '', skName: '', skScope: 'read' }),
       closeKeysModal: () => this.setState({ skOpen: false, skNewKey: '' }),
       skKeys, skKeysEmpty: skKeys.length === 0,
       skName: this.state.skName || '',
@@ -12228,23 +12655,93 @@ class Component extends DCLogic {
     const configView = actIsBuilder ? this.state.active : (this.state.configView || null);
     const fTypeColor = { text: ['#7C00FF', '#F3E8FF'], number: ['#0E9355', '#E7F8EF'], date: ['#0284C7', '#E4F4FD'], dropdown: ['#B8860B', '#FEF4E2'], file: ['#6D5BD0', '#EFEBFF'] };
     const mkFields = (rows) => rows.map(([label, type, req]) => ({ label, type, req: req ? 'Required' : 'Optional', reqColor: req ? '#C0353A' : '#A9A6B4', tColor: (fTypeColor[type] || fTypeColor.text)[0], tBg: (fTypeColor[type] || fTypeColor.text)[1] }));
-    // WIRED: Object Builder + Form Builder from /api/custom-objects (kind: object | form).
-    // Records count comes from /api/custom-records grouped by objectId.
+    // WIRED: Form Builder from /api/custom-objects (kind: "form").
     const allObjects = Array.isArray(this.state.customObjects) ? this.state.customObjects : null;
-    const allRecords = Array.isArray(this.state.customRecords) ? this.state.customRecords : [];
-    const recCount = (oid) => allRecords.filter(r => r.objectId === oid).length;
     const APPLIES_LABEL = { '': 'Standalone', employee: 'Employee', client: 'Client', task: 'Task' };
-    // ---- Object Builder ----
-    const objectsRaw = allObjects ? allObjects.filter(o => (o.kind || 'object') === 'object') : null;
-    const objList = (objectsRaw && objectsRaw.length ? objectsRaw : (allObjects ? [] : [{ id: null, name: 'Vehicle', icon: '🚗', fields: [{}, {}, {}] }, { id: null, name: 'Contract', icon: '📄', fields: [{}, {}, {}, {}, {}] }]))
-      .map(o => { const f8 = (o.fields || []).length; const r8 = o.id ? recCount(o.id) : 0; return { id: o.id, name: o.name, icon: o.icon || '📦', fields: f8, records: r8,
-        fieldsLabel: f8 + (f8 === 1 ? ' field' : ' fields'), recordsLabel: r8 + (r8 === 1 ? ' record' : ' records'),
-        select: () => this.setState({ objSel: o.id || o.name }) }; });
-    const selObj = objectsRaw ? (objectsRaw.find(o => (o.id || o.name) === this.state.objSel) || objectsRaw[0]) : null;
-    const objFields = selObj ? mkFields((selObj.fields || []).map(f => [f.label, f.type, f.required]))
-      : mkFields([['Asset name', 'text', true], ['Category', 'dropdown', true], ['Value', 'number', true]]);
-    const objName = selObj ? selObj.name : 'New object';
-    const objIcon = selObj ? (selObj.icon || '📦') : '📦';
+    // ---- Record Sequence (GET/PUT /api/record-sequences) ----
+    // Edits live in state until Save; `rsSaved` is what the server last confirmed, and comparing
+    // the two is what decides whether there is anything to save.
+    const _rsSaved = this.state.rsSaved || null;
+    const _rsDraft = this.state.rsDraft || null;
+    const _rsNext = this.state.rsNext || {};
+    const _RS_FALLBACK = { task: { pattern: 'TSK-{####}' }, request: { pattern: 'REQ-{####}' }, invoice: { pattern: 'INV-{YYYY}-{###}' }, quotation: { pattern: 'QT-{###}' }, receipt: { pattern: 'RCP-{YYYY}-{###}' } };
+    const _rsPattern = (key) => ((_rsDraft && _rsDraft[key]) || (_rsSaved && _rsSaved[key]) || _RS_FALLBACK[key]).pattern;
+    const _rsSet = (key, pattern) => {
+      const base = _rsDraft || JSON.parse(JSON.stringify(_rsSaved || _RS_FALLBACK));
+      this.setState({ rsDraft: { ...base, [key]: { pattern } } });
+    };
+    // Render a pattern the way the server does, so typing shows the effect immediately instead of
+    // waiting for a save. Kept deliberately in step with sequence.ts — same tokens, same padding.
+    const _rsRender = (pattern, n) => {
+      const d9 = new Date();
+      const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      const tok = {
+        YYYY: String(d9.getFullYear()), YY: String(d9.getFullYear()).slice(-2),
+        MM: String(d9.getMonth() + 1).padStart(2, '0'), MMM: MON[d9.getMonth()],
+        DD: String(d9.getDate()).padStart(2, '0'),
+      };
+      return String(pattern || '')
+        .replace(/{([A-Za-z]+)}/g, (m9, k9) => (tok[k9.toUpperCase()] !== undefined ? tok[k9.toUpperCase()] : ''))
+        .replace(/{(#+)}/, (m9, h9) => String(n).padStart(h9.length, '0'));
+    };
+    const _rsDirty = !!(_rsDraft && _rsSaved && JSON.stringify(_rsDraft) !== JSON.stringify(_rsSaved));
+    const recordSeqApi = {
+      rsDirty: _rsDirty,
+      // Clicking a token appends it — quicker than typing braces, and it spells the token correctly.
+      rsTokens: [['{YYYY}', '2026'], ['{YY}', '26'], ['{MM}', 'month'], ['{MMM}', 'JUL'], ['{DD}', 'day'], ['{####}', 'counter']].map(([token, means]) => ({
+        token, means,
+        copy: () => { try { navigator.clipboard.writeText(token); this.toast('Copied ' + token); } catch (e9) { this.toast('Copy it by hand: ' + token); } },
+      })),
+      rsSave: () => {
+        if (!_rsDirty) return this.toast('Nothing to save');
+        const t2 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/record-sequences', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+          body: JSON.stringify({ sequences: _rsDraft }),
+        }).then(r2 => (r2.ok ? r2.json() : null)).then(v2 => {
+          if (!v2 || !v2.sequences) return this.toast('Could not save the sequences', 'error');
+          // The server cleans the pattern (unknown tokens dropped, a missing counter appended), so
+          // take back what it stored rather than assuming the draft was accepted verbatim.
+          this.setState({ rsSaved: v2.sequences, rsNext: v2.next || {}, rsDraft: null });
+          this.toast('Record sequences saved');
+        }).catch(() => this.toast('Server unreachable', 'error'));
+      },
+    };
+    recordSeqApi.rsTaskPattern = _rsPattern('task');
+    recordSeqApi.setRsTaskPattern = (e2) => _rsSet('task', e2.target.value);
+    // Unedited: show the real next number the server computed. Edited: show what the pattern would
+    // produce, labelled so nobody reads a preview as an issued reference.
+    recordSeqApi.rsTaskNext = (_rsSaved && _rsSaved['task'] && _rsSaved['task'].pattern === _rsPattern('task') && _rsNext['task'])
+      ? _rsNext['task'] : _rsRender(_rsPattern('task'), 1);
+    recordSeqApi.rsTaskNextLabel = (_rsSaved && _rsSaved['task'] && _rsSaved['task'].pattern === _rsPattern('task') && _rsNext['task']) ? 'NEXT NUMBER' : 'PREVIEW · AFTER SAVE';
+    recordSeqApi.rsRequestPattern = _rsPattern('request');
+    recordSeqApi.setRsRequestPattern = (e2) => _rsSet('request', e2.target.value);
+    // Unedited: show the real next number the server computed. Edited: show what the pattern would
+    // produce, labelled so nobody reads a preview as an issued reference.
+    recordSeqApi.rsRequestNext = (_rsSaved && _rsSaved['request'] && _rsSaved['request'].pattern === _rsPattern('request') && _rsNext['request'])
+      ? _rsNext['request'] : _rsRender(_rsPattern('request'), 1);
+    recordSeqApi.rsRequestNextLabel = (_rsSaved && _rsSaved['request'] && _rsSaved['request'].pattern === _rsPattern('request') && _rsNext['request']) ? 'NEXT NUMBER' : 'PREVIEW · AFTER SAVE';
+    recordSeqApi.rsInvoicePattern = _rsPattern('invoice');
+    recordSeqApi.setRsInvoicePattern = (e2) => _rsSet('invoice', e2.target.value);
+    // Unedited: show the real next number the server computed. Edited: show what the pattern would
+    // produce, labelled so nobody reads a preview as an issued reference.
+    recordSeqApi.rsInvoiceNext = (_rsSaved && _rsSaved['invoice'] && _rsSaved['invoice'].pattern === _rsPattern('invoice') && _rsNext['invoice'])
+      ? _rsNext['invoice'] : _rsRender(_rsPattern('invoice'), 1);
+    recordSeqApi.rsInvoiceNextLabel = (_rsSaved && _rsSaved['invoice'] && _rsSaved['invoice'].pattern === _rsPattern('invoice') && _rsNext['invoice']) ? 'NEXT NUMBER' : 'PREVIEW · AFTER SAVE';
+    recordSeqApi.rsQuotationPattern = _rsPattern('quotation');
+    recordSeqApi.setRsQuotationPattern = (e2) => _rsSet('quotation', e2.target.value);
+    // Unedited: show the real next number the server computed. Edited: show what the pattern would
+    // produce, labelled so nobody reads a preview as an issued reference.
+    recordSeqApi.rsQuotationNext = (_rsSaved && _rsSaved['quotation'] && _rsSaved['quotation'].pattern === _rsPattern('quotation') && _rsNext['quotation'])
+      ? _rsNext['quotation'] : _rsRender(_rsPattern('quotation'), 1);
+    recordSeqApi.rsQuotationNextLabel = (_rsSaved && _rsSaved['quotation'] && _rsSaved['quotation'].pattern === _rsPattern('quotation') && _rsNext['quotation']) ? 'NEXT NUMBER' : 'PREVIEW · AFTER SAVE';
+    recordSeqApi.rsReceiptPattern = _rsPattern('receipt');
+    recordSeqApi.setRsReceiptPattern = (e2) => _rsSet('receipt', e2.target.value);
+    // Unedited: show the real next number the server computed. Edited: show what the pattern would
+    // produce, labelled so nobody reads a preview as an issued reference.
+    recordSeqApi.rsReceiptNext = (_rsSaved && _rsSaved['receipt'] && _rsSaved['receipt'].pattern === _rsPattern('receipt') && _rsNext['receipt'])
+      ? _rsNext['receipt'] : _rsRender(_rsPattern('receipt'), 1);
+    recordSeqApi.rsReceiptNextLabel = (_rsSaved && _rsSaved['receipt'] && _rsSaved['receipt'].pattern === _rsPattern('receipt') && _rsNext['receipt']) ? 'NEXT NUMBER' : 'PREVIEW · AFTER SAVE';
     // ---- Form Builder ----
     // The FORMS list shows every REAL data-entry form in the system: the built-in modals (defined
     // in code — listed here with their actual fields, read-only) plus admin-created custom forms
@@ -12273,6 +12770,7 @@ class Component extends DCLogic {
     const customFormList = (formsRaw || []).map(o => {
         const applies = APPLIES_LABEL[o.appliesTo || ''] || 'Standalone';
         const note = o.appliesTo ? ('Injected into Add-' + applies) : 'Collects its own submissions';
+
         return { id: o.id, name: o.name, applies, fields: (o.fields || []).length, note,
           aColor: applies === 'Standalone' ? '#6F6C7A' : '#7C00FF', aBg: applies === 'Standalone' ? '#F3F1F7' : '#F3E8FF',
           select: () => this.setState({ formSel: o.id || o.name }) };
@@ -12296,7 +12794,7 @@ class Component extends DCLogic {
     const formAppliesVal = selSysForm ? ('Built-in · ' + selSysForm[1]) : selForm ? (APPLIES_LABEL[_formAppliesKey] || 'Standalone') : 'Employee';
     // WIRED: builder writes — add a field to the selected object/form (persisted), add a record.
     const _bAddField = (target2) => {
-      if (!target2 || !target2.id) return this.toast('Select an item from the list first');
+      if (!target2 || !target2.id) return this.toast('Select an item from the list first', 'error');
       const label2 = window.prompt('Field label:'); if (!label2 || !label2.trim()) return;
       const type2 = (window.prompt('Field type — text / number / date / dropdown:', 'text') || 'text').toLowerCase();
       const req2 = window.confirm('Required field? OK = required, Cancel = optional');
@@ -12304,7 +12802,6 @@ class Component extends DCLogic {
       this._opPut('custom-objects', target2.id, { fields: [...(target2.fields || []), nf] }, () => { this.toast('Field added'); this._reloadObjects(); });
     };
     const builderWriteApi = {
-      objAddField: () => _bAddField(selObj),
       formAddField: () => formIsSystem
         ? this.toast('"' + formName + '" is a built-in form — its fields are fixed in the app. Create a custom form to collect extra data.')
         : _bAddField(selForm),
@@ -12319,21 +12816,11 @@ class Component extends DCLogic {
         || (_formDraft.appliesTo != null && _formDraft.appliesTo !== (selForm.appliesTo || '')))),
       formSave: () => {
         if (formIsSystem) return this.toast('Built-in forms are part of the app — nothing to save here');
-        if (!selForm || !selForm.id) return this.toast('Select a custom form first');
+        if (!selForm || !selForm.id) return this.toast('Select a custom form first', 'error');
         const name9 = String(formName || '').trim();
         if (!name9) return this.toast('Give the form a name', 'error');
         this._opPut('custom-objects', selForm.id, { name: name9, appliesTo: _formAppliesKey, fields: selForm.fields || [] },
           () => { this.setState({ formDraft: null }); this.toast('Form saved'); this._reloadObjects(); });
-      },
-      objSave: () => { if (!selObj || !selObj.id) return this.toast('Select an object first'); this._opPut('custom-objects', selObj.id, { name: selObj.name, icon: selObj.icon, fields: selObj.fields || [] }, () => { this.toast('Object saved'); this._reloadObjects(); }); },
-      objAddRecord: () => {
-        if (!selObj || !selObj.id) return this.toast('Select an object first');
-        const data2 = {};
-        for (const f2 of (selObj.fields || [])) { const v2 = window.prompt(f2.label + (f2.required ? ' *' : '') + ':'); if (v2 == null) return; if (v2.trim()) data2[f2.id] = v2.trim(); }
-        const t2 = localStorage.getItem('stimespro:token');
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/custom-records', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ objectId: selObj.id, data: data2 }) })
-          .then(r2 => { if (r2.ok) { this.toast('Record added'); this._opReload('custom-records', 'customRecords'); } else this.toast('Could not add record'); })
-          .catch(() => this.toast('Server unreachable'));
       },
     };
     const printPalette = [
@@ -12443,13 +12930,13 @@ class Component extends DCLogic {
       pbDocNoToken: printTargetSel === 'quotation' ? '{quote_no}' : '{invoice_no}',
       printSaveInfo: pbSave,
       configView,
-      showObjBuilder: configView === 'Object Builder', showFormBuilder: configView === 'Form Builder', showPrintLayout: (() => {
+      showRecordSeq: configView === 'Record Sequence', showFormBuilder: configView === 'Form Builder', showPrintLayout: (() => {
         const on = configView === 'Print Layout';
         // Repaint the sheet after this render so the preview always reflects the current settings.
         if (on) { clearTimeout(this._plPaint); this._plPaint = setTimeout(() => this._paintPrintPreview(), 60); }
         return on;
       })(),
-      objFields, objList, objName, objIcon, formFields, formList, formName, formAppliesVal, printPalette, printFieldCatalog, printTargets, ...builderWriteApi,
+      formFields, formList, formName, formAppliesVal, printPalette, printFieldCatalog, printTargets, ...builderWriteApi,
       closeConfigView: () => this.setState({ configView: null }),
     };
 
@@ -12461,7 +12948,7 @@ class Component extends DCLogic {
       ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
       permMatrix, permActions,
-      setNotifRules, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...emailApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
+      ...stateBannerApi, setNotifRules, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 
     // SLA Monitor
@@ -12555,7 +13042,10 @@ class Component extends DCLogic {
     }
 
     // Task List summary counters
-    const tCount = (st) => allTasks.filter(t => t.status === st).length;
+    // Counted over the tasks the list below is actually showing. This used to count `allTasks`,
+    // which includes archived ones, so archiving a task left the card reading "To do 3" over a list
+    // of 2 — and the sidebar badge, which does exclude archived, disagreed with the card beside it.
+    const tCount = (st) => visibleTasks.filter(t => t.status === st).length;
     const taskSummary = [
       ['To do', tCount('To do'), '#6F6C7A', '#F3F1F7'],
       ['In progress', tCount('In progress'), '#7C00FF', '#F3E8FF'],
@@ -12595,7 +13085,8 @@ class Component extends DCLogic {
     };
 
     // ===== Unified My Tasks inbox — plain tasks + workflow steps, one queue =====
-    const myRole = 'Manager';
+    // The signed-in user's actual role id (super_admin / pro_officer / …), not a literal.
+    const myRole = (this.state.meUser && this.state.meUser.role) || '';
     const wfDone = this.state.wfDone || {};
     const wfChk = this.state.wfChk || {};
     const wfCap = this.state.wfCap || {};
@@ -12603,10 +13094,11 @@ class Component extends DCLogic {
     const wfStepDefs = (Array.isArray(this.state.myWorkData)
       ? this.state.myWorkData.filter(t2 => t2.status === 'active').map(t2 => ({
           id: t2.id, _real: true, kind: t2.nodeType === 'approval' ? 'approval' : 'workflow',
+          roleId: t2.assigneeRole || null, assigneeName: t2.assignee || null,
           title: t2.title || 'Workflow step', client: (t2.instance && t2.instance.clientName) || '—',
           related: (t2.instance && t2.instance.title) || 'Workflow run',
           role: t2.assigneeRole || (t2.assignee || 'Unassigned'), assignee: t2.assignee || null,
-          priority: (t2.priority || 'medium')[0].toUpperCase() + (t2.priority || 'medium').slice(1),
+          priority: TASK_PRIO_CAP[String(t2.priority || 'medium').toLowerCase()] || 'Medium',
           slaHours: t2.slaHours || 0,
           elapsedH: t2.createdAt ? Math.max(0, (Date.now() - new Date(t2.createdAt).getTime()) / 3600000) : 0,
           requireVerification: !!t2.requireVerification,
@@ -12634,6 +13126,8 @@ class Component extends DCLogic {
       return [String(dueIn), 'DAYS', '#E7F8EF', '#0E9355'];
     };
     const _wkBadgeHours = (remH) => {
+      // null = the step has no SLA. Say so, rather than rendering a sentinel as '41667 DAYS'.
+      if (remH == null) return ['—', 'NO SLA', '#F3F1F7', '#8C8899'];
       const h = Math.round(Math.abs(remH));
       if (remH < 0) return [String(h), 'H OVER', '#FEECEC', '#C0353A'];
       if (remH <= 8) return [String(h), 'HRS', '#FEF4E2', '#B8860B'];
@@ -12642,7 +13136,9 @@ class Component extends DCLogic {
     };
 
     // plain tasks assigned to me, not done, not archived
-    const myPlainRows = allTasks.filter(t => t.assignee === currentUser && t.status !== 'Done' && !t.archived).map(t => {
+    // Closed means closed: Done finished, Cancelled did not happen. Neither is waiting on anyone.
+    const _taskClosed = (st) => st === 'Done' || st === 'Cancelled';
+    const myPlainRows = allTasks.filter(t => t.assignee === currentUser && !_taskClosed(t.status) && !t.archived).map(t => {
       const bucket = t.blockedShow ? 'Blocked' : t.dueIn < 0 ? 'Overdue' : t.dueIn === 0 ? 'Due today' : t.dueIn <= 6 ? 'This week' : 'Later';
       return {
         rowId: t.id, kind: 'task', title: t.title, client: t.client,
@@ -12657,25 +13153,31 @@ class Component extends DCLogic {
       };
     });
     // workflow steps gated to my role or name
-    const myStepRows = wfStepDefs.filter(w => (w.role === myRole || w.assignee === currentUser) && !wfDone[w.id]).map(w => {
-      const remH = w.slaHours - w.elapsedH;
-      const bucket = remH < 0 ? 'Overdue' : remH <= 8 ? 'Due today' : 'This week';
-      const slaTone = remH < 0 ? ['#C0353A', '#FEECEC', Math.abs(Math.round(remH)) + 'h over'] : remH <= w.slaHours * 0.25 ? ['#B8860B', '#FEF4E2', Math.round(remH) + 'h left'] : ['#0E9355', '#E7F8EF', Math.round(remH) + 'h left'];
-      const pr = prio[w.priority];
+    const myStepRows = wfStepDefs.filter(w =>
+      // Mine by name, or unclaimed and waiting on someone with my role.
+      ((w.assigneeName || w.assignee) === currentUser || (!(w.assigneeName || w.assignee) && w.roleId && w.roleId === myRole))
+      && !wfDone[w.id]).map(w => {
+      // No SLA on the step means no deadline to be late against.
+      const hasSla = Number(w.slaHours) > 0;
+      const remH = hasSla ? w.slaHours - w.elapsedH : null;
+      const bucket = !hasSla ? 'Later' : remH < 0 ? 'Overdue' : remH <= 8 ? 'Due today' : 'This week';
+      const slaTone = !hasSla ? ['#8C8899', '#F3F1F7', 'No SLA']
+        : remH < 0 ? ['#C0353A', '#FEECEC', Math.abs(Math.round(remH)) + 'h over'] : remH <= w.slaHours * 0.25 ? ['#B8860B', '#FEF4E2', Math.round(remH) + 'h left'] : ['#0E9355', '#E7F8EF', Math.round(remH) + 'h left'];
+      const pr = prio[w.priority] || ['#F3F1F7', '#6F6C7A'];
       return {
         rowId: w.id, kind: w.kind, title: w.title, client: w.client,
         related: w.related, relatedIcon: '⚙',
-        bucket, sortKey: remH,
-        badge: _wkBadgeHours(remH),
+        bucket, sortKey: hasSla ? remH : 1e6,
+        badge: _wkBadgeHours(hasSla ? remH : null),
         priority: w.priority, prBg: pr[0], prColor: pr[1],
         metric: slaTone[2], metricColor: slaTone[0], slaBg: slaTone[1],
         blocked: '', blockedShow: false,
-        statusChip: w.kind === 'approval' ? 'Awaiting decision' : 'Active step', stBg: kindBadge[w.kind][2], stColor: kindBadge[w.kind][1],
+        statusChip: w.kind === 'approval' ? 'Awaiting decision' : 'Active step', stBg: (kindBadge[w.kind] || ['—', '#6F6C7A', '#F3F1F7'])[2], stColor: (kindBadge[w.kind] || ['—', '#6F6C7A', '#F3F1F7'])[1],
         open: () => this.setState({ workRow: w.id }),
       };
     });
     const allWorkRows = [...myPlainRows, ...myStepRows].map(r => ({
-      ...r, kindLabel: kindBadge[r.kind][0], kindColor: kindBadge[r.kind][1], kindBg: kindBadge[r.kind][2],
+      ...r, kindLabel: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[0], kindColor: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[1], kindBg: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[2],
       badgeNum: r.badge[0], badgeUnit: r.badge[1], badgeBg: r.badge[2], badgeColor: r.badge[3],
     }));
     const myWorkGroups = bucketOrder.map(b => {
@@ -12703,14 +13205,29 @@ class Component extends DCLogic {
           received: !!st.received, verified: !!st.verified, rejected: !!st.rejected,
           rcvBg: st.received ? '#F3E8FF' : '#fff',
           note: st.note || '', ref: st.ref || '',
-          stateLabel: st.rejected ? 'Rejected' : st.verified ? 'Verified' : st.received ? 'Received — needs verify' : 'Not received',
+          // "needs verify" only where verification is actually part of the step.
+          stateLabel: st.rejected ? 'Rejected' : st.verified ? 'Verified'
+            : st.received ? (selStep.requireVerification ? 'Received — needs verify' : 'Received')
+            : 'Not received',
           stateColor: st.rejected ? '#C0353A' : st.verified ? '#0E9355' : st.received ? '#B8860B' : '#A9A6B4',
           stateBg: st.rejected ? '#FEECEC' : st.verified ? '#E7F8EF' : st.received ? '#FEF4E2' : '#F3F1F7',
           showVerify: !!selStep.requireVerification,
           // WIRED: each tick also persists to the engine's audited checklist endpoint for real steps.
           setRcv: () => { const n = { ...chk, [it.key]: { ...st, received: !st.received, verified: st.received ? false : st.verified, rejected: false } }; this.setState({ wfChk: { ...wfChk, [selStep.id]: n } }); if (selStep._real) this._chkPersist(selStep.id, it.key, st.received ? 'unreceive' : 'receive'); },
           verify: () => { const n = { ...chk, [it.key]: { ...st, received: true, verified: true, rejected: false } }; this.setState({ wfChk: { ...wfChk, [selStep.id]: n } }); if (selStep._real) this._chkPersist(selStep.id, it.key, 'verify'); },
-          reject: () => { const reason = (typeof prompt === 'function' && prompt('Reason for rejecting ' + it.label + ':')) || 'Rejected'; const n = { ...chk, [it.key]: { ...st, received: false, verified: false, rejected: true, note: reason } }; this.setState({ wfChk: { ...wfChk, [selStep.id]: n } }); if (selStep._real) this._chkPersist(selStep.id, it.key, 'reject', reason); },
+          reject: () => {
+            // Cancel must cancel. This is a destructive action and prompt() returns null on
+            // Escape — the old `|| 'Rejected'` turned that into a confirmation.
+            const answer = (typeof prompt === 'function') ? prompt('Why is "' + it.label + '" being rejected?') : '';
+            if (answer === null) return;
+            const reason = String(answer || '').trim();
+            // A rejection with no reason gives the client nothing to act on, so it is refused
+            // rather than filed under the word 'Rejected'.
+            if (!reason) return this.toast('Give a reason — the client needs to know what to fix', 'error');
+            const n = { ...chk, [it.key]: { ...st, received: false, verified: false, rejected: true, note: reason } };
+            this.setState({ wfChk: { ...wfChk, [selStep.id]: n } });
+            if (selStep._real) this._chkPersist(selStep.id, it.key, 'reject', reason);
+          },
           setRef: (e) => { const n = { ...chk, [it.key]: { ...st, ref: e.target.value } }; this.setState({ wfChk: { ...wfChk, [selStep.id]: n } }); },
         };
       });
@@ -12719,7 +13236,7 @@ class Component extends DCLogic {
       const notVerified = selStep.requireVerification ? reqItems.filter(i => !(chk[i.key] && chk[i.key].verified)).length : 0;
       const gateOk = notReceived === 0 && notVerified === 0;
       const caps = (selStep.captures || []).map(c => ({
-        var: c.var, label: c.label, type: c.type, isSelect: c.type === 'select', isText: c.type !== 'select',
+        var: c.var, label: c.label, type: c.type, isSelect: c.type === 'select', isDate: c.type === 'date', isText: c.type !== 'select' && c.type !== 'date',
         value: cap[c.var] || '', options: (c.options || '').split(',').map(o => ({ o: o, pick: () => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: o } } }) })),
         set: (e) => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }),
       }));
@@ -12729,7 +13246,13 @@ class Component extends DCLogic {
         wdTitle: selStep.title, wdClient: selStep.client, wdRelated: selStep.related, wdRole: selStep.role,
         wdChecklist: items, wdHasChecklist: (selStep.checklist || []).length > 0,
         wdCounters: notReceived + ' not received · ' + notVerified + ' awaiting verify',
-        wdAllDone: gateOk, wdCompleteBg: gateOk ? '#12B76A' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified'),
+        wdAllDone: gateOk, wdCompleteBg: gateOk ? '#12B76A' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : (() => {
+          // Name the actual blocker. A rejected document is not a missing one, and sending someone
+          // to look for a file they already turned down wastes the trip.
+          const rejected9 = reqItems.filter(i9 => chk[i9.key] && chk[i9.key].rejected).length;
+          if (rejected9) return 'Complete blocked — ' + rejected9 + ' required document' + (rejected9 === 1 ? '' : 's') + ' rejected';
+          return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
+        })(),
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
         wdOnApprove: selStep.onApprove, wdOnReject: selStep.onReject,
         wdSlaText: remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA',
@@ -12792,18 +13315,28 @@ class Component extends DCLogic {
           for (let qi = 0; qi < order2.length; qi++) (adj2[order2[qi].id] || []).forEach(to2 => { const nn = nodes2.find(n2 => n2.id === to2); if (nn && !seen2[nn.id]) { seen2[nn.id] = true; order2.push(nn); } });
           nodes2.forEach(n2 => { if (!seen2[n2.id]) { seen2[n2.id] = true; order2.push(n2); } });
           const tasks2 = Array.isArray(run2.tasks) ? run2.tasks : [];
+          // Nodes the engine actually executed, from the run log. An auto node (notify, issue,
+          // end) leaves a log line but no task; an untaken branch leaves neither.
+          const ranIds2 = {};
+          (Array.isArray(run2.logs) ? run2.logs : []).forEach(l2 => { if (l2 && l2.nodeId) ranIds2[l2.nodeId] = true; });
           const IC2 = { start: '🚀', trigger: '🚀', task: '📝', approval: '✅', decision: '🔀', notify: '🔔', issue_document: '📄', charge_fee: '🧾', delay: '⏳', webhook: '🔗', end: '📦' };
           const fmtAt2 = (a2) => { if (!a2) return '—'; const d3 = new Date(a2); return isNaN(+d3) ? a2 : d3.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
           return order2.map(n2 => {
             const wt2 = tasks2.filter(t3 => t3.nodeId === n2.id).sort((a2, b2) => String(b2.createdAt || '').localeCompare(String(a2.createdAt || '')))[0];
             const st2 = wt2 ? wt2.status : null;
-            const done2 = st2 === 'done' || st2 === 'approved' || (!wt2 && run2.status === 'completed');
+            // Done means this node ran and finished — proven by its own task, or by a log line for
+            // an auto node. A completed run no longer implies every node in the graph completed.
+            const done2 = st2 === 'done' || st2 === 'approved' || (!wt2 && !!ranIds2[n2.id]);
             const cur2 = st2 === 'active';
             const rej2 = st2 === 'rejected';
+            const skipped2 = st2 === 'skipped';
+            // Never reached: no task, no log line. On a finished run that means the path went the
+            // other way; on a live one it simply has not happened yet.
+            const notRun2 = !wt2 && !ranIds2[n2.id];
             return {
               label: n2.label || n2.type,
               who: cur2 ? ((wt2.assignee || wt2.assigneeRole || 'pending') + ' (current)') : done2 ? (wt2 && wt2.completedBy ? wt2.completedBy : '—') : rej2 ? (wt2.completedBy || '—') : (wt2 ? (wt2.assignee || wt2.assigneeRole || 'pending') : 'upcoming'),
-              when: cur2 ? 'in progress' : done2 ? fmtAt2(wt2 && wt2.completedAt) : rej2 ? 'rejected' : '—',
+              when: cur2 ? 'in progress' : done2 ? fmtAt2(wt2 && wt2.completedAt) : rej2 ? 'rejected' : skipped2 ? 'skipped' : (notRun2 && run2.status === 'completed') ? 'not run' : '—',
               dot: rej2 ? '#C0353A' : done2 ? '#12B76A' : cur2 ? '#7C00FF' : '#D8D3E3',
               current: cur2, ic: IC2[n2.type] || '📝',
             };
@@ -12834,10 +13367,53 @@ class Component extends DCLogic {
           name: n, initials: n.slice(0, 2).toUpperCase(),
           pick: () => {
             this.setState({ wdDelegatedTo: n, wdDelegate: false });
-            if (selPlain._id) this._opPut('tasks', selPlain._id, { assignee: n }, () => { this.toast('Reassigned to ' + n); this._reloadTasks(); });
+            if (!selPlain._id) return;
+            this._opPut('tasks', selPlain._id, { assignee: n }, () => {
+              this._reloadTasks();
+              // The task is only the cover sheet. If a workflow is attached, the ACTIVE steps are
+              // the actual work and have to move too, or the new owner sees a task they cannot act
+              // on while the old owner keeps the step.
+              const runId9 = selPlain._wfId;
+              const steps9 = runId9
+                ? (Array.isArray(this.state.myWorkData) ? this.state.myWorkData : []).filter(w9 => w9.instanceId === runId9 && w9.status === 'active')
+                : [];
+              if (!steps9.length) return this.toast('Reassigned to ' + n);
+              const tok9 = localStorage.getItem('stimespro:token');
+              const API9 = this._apiBase || 'http://localhost:4100';
+              Promise.all(steps9.map(w9 => fetch(API9 + '/api/workflow/tasks/' + w9.id + '/reassign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+                body: JSON.stringify({ assignee: n }),
+              }).then(r9 => r9.ok))).then((oks9) => {
+                this._reloadMyWork && this._reloadMyWork();
+                const moved9 = oks9.filter(Boolean).length;
+                // Delegating a step is admin-only. Say so rather than reporting a move that only
+                // half happened — the mismatch is the bug this is fixing.
+                if (moved9 === steps9.length) this.toast('Reassigned to ' + n + ' — task and ' + moved9 + ' workflow step' + (moved9 === 1 ? '' : 's'));
+                else this.toast('Task reassigned, but the workflow step stayed put — delegating a step needs an admin', 'warn');
+              });
+            });
           },
         })),
         closeWorkDrawer: () => this.setState({ workRow: null }),
+        // A task's status is a real field with real values; the drawer just never offered them.
+        wdCanStart: selPlain.status === 'To do',
+        wdCanComplete: selPlain.status !== 'Done' && selPlain.status !== 'Cancelled',
+        wdCanReopen: selPlain.status === 'Done' || selPlain.status === 'Cancelled',
+        startTask: () => {
+          if (selPlain._id) this._opPut('tasks', selPlain._id, { status: 'in_progress' }, () => { this.toast('Moved to In progress'); this._reloadTasks(); });
+        },
+        // Closing a task by mistake was permanent. Reopening returns it to the queue rather than
+        // forcing a duplicate to be created alongside the closed one.
+        reopenTask: () => {
+          if (selPlain._id) this._opPut('tasks', selPlain._id, { status: 'todo' }, () => { this.toast('Reopened'); this._reloadTasks(); });
+        },
+        // #13: the run card was inert. The steps are already loaded here, so send the reader to them.
+        openWorkflowRun: () => {
+          this.toast('Showing the run steps below');
+          const el9 = document.querySelector('[data-wf-stages]');
+          if (el9 && el9.scrollIntoView) el9.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
         markTaskDone: () => {
           // A parked task can't be closed past its prerequisite — resume it first (deliberately).
           if (selPlain.blockedShow) return this.toast('Parked — ' + (selPlain.blocked || 'waiting on prerequisite') + '. Resume it first.');
@@ -13068,12 +13644,12 @@ class Component extends DCLogic {
       showEmployees: act === 'Employees', showDocuments: act === 'Documents', showInvoices: act === 'Invoices',
       showPayments: act === 'Receipts', showAppointments: act === 'Appointments', showSupport: act === 'Support Center', showServices: act === 'Service Catalog',
       showNotifications: act === 'Notifications', showProfileSettings: act === 'Profile & Settings' || act === 'Profile Settings', showCredentials: act === 'Credentials', showGroup: act === 'Group Overview', showClients: act === 'Clients',
-      showWorkflow: act === 'Workflow Builder', showSettings: act === 'Settings' || ['Object Builder', 'Form Builder', 'Print Layout'].includes(act),
+      showWorkflow: act === 'Workflow Builder', showSettings: act === 'Settings' || ['Record Sequence', 'Form Builder', 'Print Layout'].includes(act),
       showRequests: act === 'Requests Queue', showQuotations: act === 'Quotations',
       showTasks: act === 'Task List', showMyTasks: act === 'My Tasks', showApprovals: act === 'Approvals', showSLA: act === 'SLA Monitor', showGovCenters: act === 'Government Centers',
       showActivity: act === 'Activity Timeline', showCompliance: act === 'Compliance', showReports: act === 'Reports', showCourier: act === 'Courier',
       showPackages: act === 'Service Packages' || act === 'Plan & Billing', showCountry: act === 'Country Rules', showDocTypes: act === 'Document Types',
-      showDepartments: act === 'Departments',
+      showDepartments: act === 'Departments', showProbReports: act === 'Problem Reports',
     };
 
     // ---- My Requests ----
@@ -13084,7 +13660,7 @@ class Component extends DCLogic {
       .map(r9 => {
         const st = String(r9.status || 'open').toLowerCase();
         const tone = _RQ_TONE[st] || _RQ_TONE.open;
-        return { id: '#' + String(r9.id || '').slice(-6).toUpperCase(), realId: r9.id,
+        return { id: r9.number || ('#' + String(r9.id || '').slice(-6).toUpperCase()), realId: r9.id,
           subject: [r9.type || 'Request', r9.clientName || coNameById[r9.companyId]].filter(Boolean).join(' — '),
           meta: [r9.date && ('Submitted ' + r9.date), tone[0]].filter(Boolean).join(' · '),
           status: tone[0], stBg: tone[1], stColor: tone[2], cost: '—', sla: '—', pct: tone[0] === 'Completed' ? 100 : 50 };
@@ -13379,7 +13955,7 @@ class Component extends DCLogic {
       // including it would drag the rate down for no reason.
       qtWinRate: _qtDecided ? Math.round((_qtWon.length / _qtDecided) * 100) + '%' : '—',
       qtWinSub: _qtDecided ? _qtWon.length + ' of ' + _qtDecided + ' decided' : 'nothing decided yet',
-      qtChart: this._sixMonthBars(_qtAll.filter(q9 => q9.status !== 'draft')),
+      qtChart: sixMonthBars(_qtAll.filter(q9 => q9.status !== 'draft')),
       // WIRED: full create-quotation modal → POST /api/quotations (status 'sent' → awaits client approval).
       showCreateQuote: (() => {
         // Same repaint hook as the invoice dialog, so the preview tracks every keystroke.
@@ -13785,8 +14361,11 @@ class Component extends DCLogic {
     // with counts computed from the SAME arrays each screen renders, so badge and page agree.
     if (Array.isArray(this.state.companiesData) || Array.isArray(this.state.tasksData)) {
       const _liveBadges = {
-        'My Tasks': (Array.isArray(this.state.myWorkData) ? this.state.myWorkData : []).filter(t9 => t9.status === 'active').length,
-        'Task List': taskDefs.filter(t9 => !t9._archived && t9.status !== 'Done').length,
+        // Count what the My Tasks SCREEN shows, not every active step in the system. /my-work
+        // without scope=personal is the oversight view — for an admin it returns everyone's work —
+        // so this badge read 9 while the screen it points at said "Inbox zero".
+        'My Tasks': allWorkRows.length,
+        'Task List': taskDefs.filter(t9 => !t9._archived && t9.status !== 'Done' && t9.status !== 'Cancelled').length,
         'Approvals': apCount('Pending'),
         'SLA Monitor': slaCols[1].count + slaCols[2].count,
         'Requests Queue': allQueue.filter(q9 => q9.stage === 'New').length,
@@ -13836,7 +14415,22 @@ class Component extends DCLogic {
       railGoProfile: () => this.setState({ railMenu: false, active: 'Profile & Settings', activeGroup: 'Account' }),
       railGoCreds: () => this.setState({ railMenu: false, active: 'Credentials', activeGroup: 'Account' }),
       railGoSupport: () => this.setState({ railMenu: false, active: 'Support Center', activeGroup: 'Support' }),
-      railLogout: () => this.setState({ railMenu: false, auth: 'login', lPass: '', lError: '', active: 'Dashboard', activeGroup: 'Main' }),
+      // Logging out only flipped a local flag to show the sign-in screen — the JWT stayed in
+      // localStorage, so the next navigation re-hydrated the session and the user was signed back
+      // in having entered no credentials. On a shared machine that is not a cosmetic bug: the
+      // person who "logged out" left a working session behind them.
+      //
+      // The token goes, the cached identity goes, and any impersonation token goes with it. Then a
+      // full document load, because clearing storage does not clear the previous user's clients,
+      // tasks and invoices out of the in-memory state this component is holding.
+      railLogout: () => {
+        try {
+          localStorage.removeItem('stimespro:token');
+          localStorage.removeItem('stimespro:user');
+          localStorage.removeItem('stimespro:tokenOrig');
+        } catch (e9) { /* storage disabled — the reload below still drops the in-memory session */ }
+        location.href = '/dashboard';
+      },
       ...ticketApi, ...bookApi, ...authApi, ...switcherApi, ...headerApi, ...empApi, ...threadApi, ...credApi, ...settingsApi,
       ...groupApi, ...clientsApi, ...payApi, ...docApi, ...empProfileApi, ...notifApi, ...editProfileApi, ...trackApi, ...uploadApi, ...folderApi, ...rdApi,
       ...wizardApi, ...upgradeApi, services, servicesEmpty: Array.isArray(siData) && services.length === 0, ...svcNewApi, ...svcEditApi, ...svcDelApi, renewalGroups,

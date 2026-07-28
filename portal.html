@@ -155,6 +155,19 @@
 <div style="display:flex; min-height:100vh;" data-screen-label="Client Portal Dashboard">
   <!-- Dead URL. Says what happened in the user's terms, gets them out, and lets them tell us the
        link is broken — a soft redirect gave them none of that. -->
+  <sc-if value="{{ stateBannerShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; top:0; left:0; right:0; z-index:400; display:flex; align-items:center; gap:12px; padding:11px 20px; background:{{ stateBannerBg }}; border-bottom:1px solid {{ stateBannerBorder }}; box-shadow:0 2px 12px rgba(38,7,77,.10); animation:fadeUp .2s ease both;">
+      <span style="width:22px; height:22px; border-radius:99px; background:{{ stateBannerDot }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="{{ stateBannerIcon }}"></path></svg>
+      </span>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:700; color:{{ stateBannerFg }};">{{ stateBannerTitle }}</div>
+        <div style="font-size:11.5px; color:{{ stateBannerFg }}; opacity:.8;">{{ stateBannerBody }}</div>
+      </div>
+      <span onClick="{{ stateBannerAct }}" style="font-size:11.5px; font-weight:700; color:#fff; background:{{ stateBannerDot }}; padding:7px 15px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;">{{ stateBannerCta }}</span>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ nfShow }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed; inset:0; z-index:200; background:#FBFAFE; display:flex; align-items:center; justify-content:center; padding:24px;">
       <div style="width:470px; max-width:100%; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 20px 56px rgba(38,7,77,.14); padding:28px 30px;">
@@ -592,7 +605,7 @@
           <div style="font-size:13.5px; font-weight:700; color:#8A6100;">{{ alertTitle }}</div>
           <div style="font-size:12px; color:#A98016; margin-top:1px;">{{ alertSub }}</div>
         </div>
-        <button style="display:flex; align-items:center; gap:7px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#6900D6;">
+        <button onClick="{{ goBilling }}" style="display:flex; align-items:center; gap:7px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#6900D6;">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"></path></svg>
           Renew Now
         </button>
@@ -643,23 +656,23 @@
             </sc-for>
           </div>
           <div style="display:flex; flex-direction:column; margin-top:12px; flex:1;">
-            <div style="display:flex; align-items:center; gap:11px; padding:10px 4px; border-bottom:1px solid #F0EDF6; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
+            <div onClick="{{ goOverdue }}" style="display:flex; align-items:center; gap:11px; padding:10px 4px; border-bottom:1px solid #F0EDF6; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
               <div style="width:28px; height:28px; border-radius:9px; background:#FEECEC; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
               </div>
               <span style="flex:1; font-size:12.5px; font-weight:600;">Overdue items</span>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#C0353A;">2</span>
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#C0353A;">{{ cmpOverdue }}</span>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg>
             </div>
-            <div style="display:flex; align-items:center; gap:11px; padding:10px 4px; border-bottom:1px solid #F0EDF6; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
+            <div onClick="{{ goExpiring }}" style="display:flex; align-items:center; gap:11px; padding:10px 4px; border-bottom:1px solid #F0EDF6; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
               <div style="width:28px; height:28px; border-radius:9px; background:#FEF4E2; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2"></path></svg>
               </div>
               <span style="flex:1; font-size:12.5px; font-weight:600;">Expiring ≤ 30 days</span>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#B8860B;">3</span>
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#B8860B;">{{ cmpExpiring }}</span>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg>
             </div>
-            <div style="display:flex; align-items:center; gap:11px; padding:10px 4px; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
+            <div onClick="{{ goEmployees }}" style="display:flex; align-items:center; gap:11px; padding:10px 4px; cursor:pointer; border-radius:8px; transition:background .12s;" style-hover="background:#FAF7FE;">
               <div style="width:28px; height:28px; border-radius:9px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               </div>
@@ -674,7 +687,7 @@
       <!-- KPI cards -->
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.14s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px;">
         <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
-          <div style="background:#fff; border:1px solid #EDEBF2; border-radius:15px; padding:16px 18px; box-shadow:0 1px 2px rgba(38,7,77,.04); cursor:pointer; transition:box-shadow .15s, transform .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(38,7,77,.08);">
+          <div onClick="{{ k.open }}" style="background:#fff; border:1px solid #EDEBF2; border-radius:15px; padding:16px 18px; box-shadow:0 1px 2px rgba(38,7,77,.04); cursor:pointer; transition:box-shadow .15s, transform .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(38,7,77,.08);">
             <div style="display:flex; align-items:flex-start; justify-content:space-between;">
               <div style="width:34px; height:34px; border-radius:10px; background:{{ k.iconBg }}; display:flex; align-items:center; justify-content:center;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ k.iconColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ k.icon }}"></path></svg>
@@ -817,7 +830,7 @@
           <span>Ref</span><span>Service</span><span>Employee</span><span>Department</span><span>Stage</span><span>ETA</span><span></span>
         </div>
         <sc-for list="{{ apps }}" as="a" hint-placeholder-count="5">
-          <div style="display:grid; grid-template-columns:92px 1.5fr 1fr 1fr 116px 74px 64px; gap:10px; align-items:center; padding:12px 24px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer; transition:background .12s;" style-hover="background:#FAF7FE;">
+          <div onClick="{{ a.track }}" style="display:grid; grid-template-columns:92px 1.5fr 1fr 1fr 116px 74px 64px; gap:10px; align-items:center; padding:12px 24px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer; transition:background .12s;" style-hover="background:#FAF7FE;">
             <span style="font-weight:700; color:#7C00FF; font-size:12px;">{{ a.no }}</span>
             <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.service }}</span>
             <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.employee }}</span>
@@ -846,7 +859,7 @@
                   <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.title }}</div>
                   <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ p.sub }} · due {{ p.due }}</div>
                 </div>
-                <button style="background:#F5EEFF; border:none; color:#7C00FF; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer; flex-shrink:0; transition:background .12s;" style-hover="background:#EBDBFF;">{{ p.cta }}</button>
+                <button onClick="{{ p.act }}" style="background:#F5EEFF; border:none; color:#7C00FF; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer; flex-shrink:0; transition:background .12s;" style-hover="background:#EBDBFF;">{{ p.cta }}</button>
               </div>
             </sc-for>
           </div>
@@ -915,7 +928,7 @@
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:11px; margin-top:14px;">
             <sc-for list="{{ docCats }}" as="dcat" hint-placeholder-count="6">
-              <div style="border:1px solid #F0EDF6; border-radius:13px; padding:14px 15px; cursor:pointer; transition:border-color .12s, box-shadow .12s;" style-hover="border-color:#DDD1F5; box-shadow:0 4px 14px rgba(124,0,255,.07);">
+              <div onClick="{{ dcat.open }}" style="border:1px solid #F0EDF6; border-radius:13px; padding:14px 15px; cursor:pointer; transition:border-color .12s, box-shadow .12s;" style-hover="border-color:#DDD1F5; box-shadow:0 4px 14px rgba(124,0,255,.07);">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                   <div style="width:30px; height:30px; border-radius:9px; background:{{ dcat.bg }}; display:flex; align-items:center; justify-content:center;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{ dcat.color }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg>
@@ -3087,6 +3100,52 @@ class Component extends DCLogic {
     sContact: '', sEmail: '', sPhone: '', sSaved: false,
     spCurrent: '', spNew: '', spConfirm: '', spMsg: null };
   componentDidMount() {
+
+    // ── Load state, per dataset ──────────────────────────────────────────
+    // 'loading' | 'ok' | 'empty' | 'denied' | 'expired' | 'offline' | 'error'
+    // Written by _load below; read by renderVals so a list can distinguish "nothing here" from
+    // "could not fetch". Anything that never loads stays undefined, which reads as 'ok' — screens
+    // fed from local state are unaffected.
+    this._setLoad = (key, st) => {
+      const cur = this.state.loadState || {};
+      if (cur[key] === st) return;
+      this.setState({ loadState: { ...cur, [key]: st } });
+    };
+    /**
+     * The one place a fetch failure is interpreted.
+     *
+     * 401 is the session, not the dataset: it is raised globally, because a expired token breaks
+     * every screen at once and telling the user once is the honest treatment.
+     * 403 is scoped to the dataset — a role may legitimately be denied one collection and hold
+     * others, so it must not read as a broken app.
+     */
+    this._load = (path, key, apply) => {
+      const tok = localStorage.getItem('stimespro:portalToken');
+      this._setLoad(key, 'loading');
+      return fetch((this._apiBase || 'http://localhost:4100') + path, { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+        .then((res) => {
+          // 401 with a token in hand means it was rejected — the session died under them.
+          // 401 with no token means they are simply signed out, which is not a fault and must not
+          // be announced as one: logging out deliberately would otherwise raise 'session expired'.
+          if (res.status === 401) { this._setLoad(key, 'expired'); if (tok) this.setState({ authExpired: true }); return null; }
+          if (res.status === 403) { this._setLoad(key, 'denied'); return null; }
+          if (!res.ok) { this._setLoad(key, 'error'); return null; }
+          return res.json().catch(() => { this._setLoad(key, 'error'); return null; });
+        })
+        .then((v) => {
+          if (v == null) return null;
+          const empty = Array.isArray(v) ? v.length === 0 : false;
+          this._setLoad(key, empty ? 'empty' : 'ok');
+          // A stale 401 banner must clear the moment anything succeeds again.
+          if (this.state.authExpired) this.setState({ authExpired: false });
+          apply(v);
+          return v;
+        })
+        // fetch() only rejects when the request never completed — no server, no network, CORS.
+        // That is a different message from "the server said no".
+        .catch(() => { this._setLoad(key, 'offline'); this.setState({ apiOffline: true }); return null; });
+    };
+
     this._mq = window.matchMedia('(max-width: 1020px)');
     const sync = () => { const m = this._mq.matches; if (this.state.isMobile !== m) this.setState({ isMobile: m }); };
     this._mq.addEventListener('change', sync);
@@ -3214,6 +3273,35 @@ class Component extends DCLogic {
     this._pt = setTimeout(() => this.setState({ pToast: null }), t === 'error' ? 4200 : 2800);
   }
   renderVals() {
+    // ── App-level state banner (session expired / server unreachable) ──
+    // Expired beats offline: if the token is dead, reconnecting changes nothing until they sign in.
+    const _bannerKind = this.state.authExpired ? 'expired' : (this.state.apiOffline ? 'offline' : null);
+    const stateBannerApi = {
+      stateBannerShow: !!_bannerKind,
+      stateBannerBg: _bannerKind === 'expired' ? '#FEF4E2' : '#FEECEC',
+      stateBannerBorder: _bannerKind === 'expired' ? '#F5D9A8' : '#F7C9C9',
+      stateBannerDot: _bannerKind === 'expired' ? '#B8860B' : '#C0353A',
+      stateBannerFg: _bannerKind === 'expired' ? '#7A5A08' : '#8C2226',
+      stateBannerIcon: _bannerKind === 'expired'
+        ? 'M12 8v5M12 17h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20'
+        : 'M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
+      stateBannerTitle: _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
+      stateBannerBody: _bannerKind === 'expired'
+        ? 'You are still seeing the last data loaded. Sign in again to continue.'
+        : 'The last update did not come through, so what you see may be out of date.',
+      stateBannerCta: _bannerKind === 'expired' ? 'Sign in' : 'Retry',
+      stateBannerAct: () => {
+        if (_bannerKind === 'expired') {
+          // Clear the dead token so the app lands on the sign-in screen rather than looping on 401s.
+          try { localStorage.removeItem('stimespro:portalToken'); } catch (e9) {}
+          location.href = '/portal/dashboard';
+        } else {
+          this.setState({ apiOffline: false });
+          location.reload();
+        }
+      },
+    };
+
     const sysCur = this.state.sysCur || 'SAR';
     // WIRED: compliance score from real documents — (total − overdue − expiring) / total.
     const score = (() => { const d = this.state.docItems || []; if (!d.length) return 100; const bad = d.filter((x) => x.status === 'overdue' || x.status === 'expiring').length; return Math.max(0, Math.round(((d.length - bad) / d.length) * 100)); })();
@@ -3303,12 +3391,20 @@ class Component extends DCLogic {
     const _kUpcoming = _docs.filter((d) => d.status === 'expiring' || d.status === 'overdue').length;
     const _kPending = _docs.filter((d) => d.status === 'expiring').length;
     const _kInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft' && i.status !== 'void').length;
+    // The compliance panel printed a literal 2 overdue and 3 expiring over whatever the client's
+    // documents actually said. Counted from the same array the KPI cards use, so the two panels on
+    // one screen cannot disagree.
+    const cmpOverdue = _docs.filter((d) => d.status === 'overdue' || d.status === 'expired').length;
+    const cmpExpiring = _docs.filter((d) => d.status === 'expiring').length;
+    // Each card lands on the screen that lists the thing it counts, so the number and the list a
+    // click away are always the same set of records.
+    const _goDocs = () => this.setState({ active: 'Documents', activeGroup: 'Documents & Billing', docScope: 'company', docFolder: null });
     const kpis = [
-      [String(_kActive), 'Tracked documents', I.layers, pal.purple, '#7C00FF'],
-      [String(_kUpcoming), 'Upcoming renewals', I.refresh, pal.amber, '#F59E0B'],
-      [String(_kPending), 'Expiring soon', I.folder, pal.violet, '#6D5BD0'],
-      [String(_kInv), 'Outstanding invoices', I.invoice, pal.red, '#E5484D'],
-    ].map(([value, label, icon, p, dot]) => ({ value, label, icon, iconBg: p[0], iconColor: p[1], dot }));
+      [String(_kActive), 'Tracked documents', I.layers, pal.purple, '#7C00FF', _goDocs],
+      [String(_kUpcoming), 'Upcoming renewals', I.refresh, pal.amber, '#F59E0B', () => this.setState({ active: 'Renewals', activeGroup: 'Main' })],
+      [String(_kPending), 'Expiring soon', I.folder, pal.violet, '#6D5BD0', _goDocs],
+      [String(_kInv), 'Outstanding invoices', I.invoice, pal.red, '#E5484D', () => this.setState({ active: 'Invoices', activeGroup: 'Documents & Billing' })],
+    ].map(([value, label, icon, p, dot, go]) => ({ value, label, icon, iconBg: p[0], iconColor: p[1], dot, open: go }));
 
     // WIRED: renewal status = the client's REAL service requests by stage. Was a fixed six-segment
     // breakdown over a literal "27 active" — a number no client's data ever produced.
@@ -3503,15 +3599,18 @@ class Component extends DCLogic {
         .filter(d8 => ['overdue', 'expired', 'expiring'].includes(String(d8.status || '').toLowerCase())).slice(0, 3)
         .map(d8 => {
           const od = ['overdue', 'expired'].includes(String(d8.status).toLowerCase());
-          return [(od ? 'Renew ' : 'Renewal due: ') + (d8.docType || 'document'), [d8.person, d8.expiryDate && ('expires ' + d8.expiryDate)].filter(Boolean).join(' · '), d8.expiryDate || '—', 'Renew', od ? '#E5484D' : '#F59E0B'];
+          return [(od ? 'Renew ' : 'Renewal due: ') + (d8.docType || 'document'), [d8.person, d8.expiryDate && ('expires ' + d8.expiryDate)].filter(Boolean).join(' · '), d8.expiryDate || '—', 'Renew', od ? '#E5484D' : '#F59E0B',
+            // A document renewal is handled on Renewals, where the client can raise the request.
+            () => this.setState({ active: 'Renewals', activeGroup: 'Main' })];
         }),
       // "Needs your action" filtered only on `!== 'paid'`, so it asked the client to pay invoices
       // that were VOID (cancelled) or DRAFT (never released) — with a live Pay button. Nothing that
       // is not actually owed belongs in an action list.
       ...(Array.isArray(this.state.invItems) ? this.state.invItems : [])
         .filter(v8 => !['paid', 'void', 'draft'].includes(String(v8.status || '').toLowerCase())).slice(0, 2)
-        .map(v8 => ['Pay invoice ' + (v8.number || ''), (v8.currency || 'SAR') + ' ' + Number(v8.amount || 0).toLocaleString('en-US'), v8.dueDate || '—', 'Pay', '#E5484D']),
-    ].map(([title, sub, due, cta, prColor]) => ({ title, sub, due, cta, prColor }));
+        .map(v8 => ['Pay invoice ' + (v8.number || ''), (v8.currency || 'SAR') + ' ' + Number(v8.amount || 0).toLocaleString('en-US'), v8.dueDate || '—', 'Pay', '#E5484D',
+          () => this.setState({ active: 'Invoices', activeGroup: 'Documents & Billing' })]),
+    ].map(([title, sub, due, cta, prColor, act]) => ({ title, sub, due, cta, prColor, act }));
 
     const chip = (on) => ({ color: on ? '#7C00FF' : '#4B4757', bg: on ? '#F3E8FF' : '#fff', border: on ? '#C9A2FF' : '#DDD9E6' });
     const bTypes = ['Medical test', 'Biometrics', 'Document collection', 'Labour office', 'Immigration visit'].map(label =>
@@ -4284,13 +4383,10 @@ class Component extends DCLogic {
     // the employee list, headcount and plan usage all reflect it without a page reload.
     this._reloadMe = () => {
       const tok = credTok(); if (!tok) return;
-      fetch(CRED_API + '/api/portal/me', { headers: { Authorization: 'Bearer ' + tok } })
-        .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((me) => {
-          const co = (me && me.company) || {};
-          this.setState({ empItems: co.employeeList || [], docItems: co.documents || [], invItems: co.invoices || [] });
-        })
-        .catch(() => {});
+      this._load('/api/portal/me', 'portalMe', (me) => {
+        const co = (me && me.company) || {};
+        this.setState({ empItems: co.employeeList || [], docItems: co.documents || [], invItems: co.invoices || [] });
+      });
     };
     // Print a client's own copy of an invoice. The portal doesn't hold the console's Print Layout
     // settings, so this is a clean plain copy under the provider's name rather than a half-branded
@@ -5487,7 +5583,7 @@ class Component extends DCLogic {
       .map(r9 => {
         const st = String(r9.status || 'open').toLowerCase();
         const tone = _RQ_TONE[st] || _RQ_TONE.open;
-        return { id: '#' + String(r9.id || '').slice(-6).toUpperCase(), realId: r9.id,
+        return { id: r9.number || ('#' + String(r9.id || '').slice(-6).toUpperCase()), realId: r9.id,
           subject: [r9.type || 'Request', r9.clientName || ({})[r9.companyId]].filter(Boolean).join(' — '),
           meta: [r9.date && ('Submitted ' + r9.date), tone[0]].filter(Boolean).join(' · '),
           status: tone[0], stBg: tone[1], stColor: tone[2], cost: '—', sla: '—', pct: tone[0] === 'Completed' ? 100 : 50 };
@@ -5922,6 +6018,14 @@ class Component extends DCLogic {
       // thing it names; "Export statement" produces the client's own invoice list as a CSV.
       goRenewals: () => this.setState({ active: 'Renewals', activeGroup: 'Main' }),
       goAppointments: () => this.setState({ active: 'Appointments', activeGroup: 'Main' }),
+      // Dashboard tiles. Every one of these was styled as a link — pointer cursor, hover lift,
+      // chevron — with nothing behind it, so the whole summary screen felt broken.
+      goBilling: () => this.setState({ active: 'Plan & Billing', activeGroup: 'Documents & Billing' }),
+      // The compliance rows count DOCUMENTS, so they land on the document list rather than on
+      // Renewals, which is organised by employee.
+      goOverdue: () => this.setState({ active: 'Documents', activeGroup: 'Documents & Billing', docScope: 'company', docFolder: null }),
+      goExpiring: () => this.setState({ active: 'Documents', activeGroup: 'Documents & Billing', docScope: 'company', docFolder: null }),
+      goEmployees: () => this.setState({ active: 'Employees', activeGroup: 'Main' }),
       goPayments: () => this.setState({ active: 'Payments', activeGroup: 'Documents & Billing' }),
       goRequestAmend: () => this.setState({ wizard: true, wzStep: 1, wzError: '', wzEmployee: null,
         wzNotes: 'Please amend our company details: ' }),
@@ -5955,9 +6059,9 @@ class Component extends DCLogic {
         // seeding a draft there would leave a first-time asker with nowhere to type.)
         const ask = (q) => {
           const text = String(q || '').trim();
-          if (!text) return this.toast('Type your question first');
+          if (!text) return this.toast('Type your question first', 'error');
           const tok = credTok();
-          if (!tok) return this.toast('Sign in first');
+          if (!tok) return this.toast('Sign in first', 'error');
           this.setState({ supQ: '' });
           fetch(CRED_API + '/api/portal/service-requests', { method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
@@ -6025,6 +6129,7 @@ class Component extends DCLogic {
         const soon9 = cs9.reduce((a9, c9) => a9 + (Number((c9.counts || {}).expiring) || 0), 0);
         const over9 = cs9.reduce((a9, c9) => a9 + (Number((c9.counts || {}).overdue) || 0), 0);
         const score9 = docs9 ? Math.round(((docs9 - over9) / docs9) * 100) : 100;
+
     return {
           grpTitle: name9,
           // Used by the "Add company to …" modal title, which was hardcoded "Falcon Group".
@@ -6037,7 +6142,7 @@ class Component extends DCLogic {
       })(),
       ...nfApi,
       ...addonApi,
-      kpis, donut, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
+      ...stateBannerApi, kpis, donut, cmpOverdue, cmpExpiring, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
       // Real figures replacing the hardcoded "27 active", "248/231", "4.2 days" and the literal
       // ticket counts. Numbers are stringified — the template renders a bare 0 as blank otherwise.
       donutTotal: String(donutTotal), donutEmpty,
