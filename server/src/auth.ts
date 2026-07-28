@@ -66,7 +66,7 @@ export async function logActivity(entry: { type: string; message: string; user?:
 // ── Notification (feeds the bell) ──
 export async function logNotification(entry: { type: string; title: string; message?: string }) {
   try {
-    await prisma.notification.create({ data: { type: entry.type, title: entry.title, message: entry.message ?? null, time: "Just now", read: false } });
+    await prisma.notification.create({ data: { type: entry.type, title: entry.title, message: entry.message ?? null, time: "Just now", createdAt: new Date().toISOString(), read: false } });
   } catch { /* non-fatal */ }
 }
 export const clientIp = (req: Request) =>

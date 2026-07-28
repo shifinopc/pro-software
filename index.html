@@ -1898,7 +1898,7 @@
                       <div style="display:flex; align-items:center; gap:6px; margin-top:3px;"><span style="font-size:9px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:1px 7px; border-radius:99px;">{{ i.source }}</span><span style="font-size:10.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.sub }}</span></div>
                       <div style="height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;"><div style="height:100%; width:{{ i.pct }}%; background:{{ i.barColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div></div>
                       <sc-if value="{{ i.canEscalate }}" hint-placeholder-val="{{ false }}"><div style="text-align:right; margin-top:9px;"><span onClick="{{ i.escalate }}" style="font-size:10px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Escalate</span></div></sc-if>
-                      <sc-if value="{{ i.escalated }}" hint-placeholder-val="{{ false }}"><div style="text-align:right; margin-top:9px;"><span style="font-size:10px; font-weight:700; color:#0E9355;">Escalated ✓ · manager notified</span></div></sc-if>
+                      <sc-if value="{{ i.escalated }}" hint-placeholder-val="{{ false }}"><div style="text-align:right; margin-top:9px;"><span style="font-size:10px; font-weight:700; color:#0E9355;">Escalated ✓ · admins notified</span></div></sc-if>
                     </div>
                   </sc-for>
                   <sc-if value="{{ c.empty }}" hint-placeholder-val="{{ false }}">
@@ -3057,8 +3057,14 @@
                   <div style="display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start;">
                     <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px;">
                       <div style="display:flex; gap:12px;">
-                        <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FORM NAME</div><input value="{{ formName }}" readonly style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px;"></div>
-                        <div style="width:150px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLIES TO</div><div style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px; display:flex; align-items:center; gap:6px;"><span style="flex:1;">{{ formAppliesVal }}</span></div></div>
+                        <sc-if value="{{ formIsSystem }}" hint-placeholder-val="{{ false }}">
+                          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FORM NAME</div><input value="{{ formName }}" readonly title="Built-in forms are defined in the app" style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px;"></div>
+                          <div style="width:150px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLIES TO</div><div style="width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#F8F5FD; margin-top:6px; display:flex; align-items:center; gap:6px;"><span style="flex:1;">{{ formAppliesVal }}</span></div></div>
+                        </sc-if>
+                        <sc-if value="{{ formIsCustom }}" hint-placeholder-val="{{ true }}">
+                          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FORM NAME</div><input value="{{ formName }}" onChange="{{ setFormName }}" maxlength="60" placeholder="e.g. Vehicle handover checklist" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; margin-top:6px;"></div>
+                          <div style="width:150px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLIES TO</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddFormAppliesToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:6px; cursor:pointer;"><span style="flex:1;">{{ formAppliesVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddFormAppliesOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddFormAppliesOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+                        </sc-if>
                       </div>
                       <sc-if value="{{ formIsSystem }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:12px; background:#E4F4FD; border-radius:11px; padding:10px 13px; display:flex; align-items:center; gap:9px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 16v-4M12 8h.01"></path></svg><span style="font-size:11.5px; color:#0369A1; font-weight:600;">Built-in form — these are the actual fields the “{{ formName }}” modal collects. They are defined in the app; create a custom form to collect anything extra.</span></div>
@@ -6898,6 +6904,12 @@ class Component extends DCLogic {
     const _N_PAL = { overdue: pal.red, expiring: pal.amber, payment: pal.green, task: pal.purple, client: pal.violet, system: pal.slate };
     const _N_ICON = { overdue: I.alert, expiring: I.refresh, payment: I.invoice, task: I.check, client: I.file, system: I.bell };
     const _nRead = this.state.notifReadMap || {};
+    // Read state is now the SERVER's: a per-user watermark on User.notifReadAt. It can't be the
+    // Notification.read column — those rows are global, so flipping it would mark the bell read for
+    // every colleague at once. Rows written before Notification.createdAt existed have no honest
+    // timestamp, so they count as already read rather than nagging forever.
+    const _nReadAt = (this.state.meUser && this.state.meUser.notifReadAt) || '';
+    const _nWhen = (n8) => n8.createdAt || null;
     // Group by day from the row's own timestamp; anything unparseable falls into "Earlier".
     const _nBucket = (iso) => {
       const t8 = new Date(iso).getTime();
@@ -6911,13 +6923,16 @@ class Component extends DCLogic {
       const type8 = String(n8.type || 'system');
       const p8 = _N_PAL[type8] || pal.slate;
       const title = n8.title || '—';
-      const unread = !n8.read && !_nRead[n8.id] && !this.state.readAll;
+      const when8 = _nWhen(n8);
+      const unread = !!when8 && !n8.read && !_nRead[n8.id] && (!_nReadAt || when8 > _nReadAt);
       const cta = /document|upload/i.test(title) ? 'Upload' : /invoice|payment/i.test(title) ? 'Pay' : /renew|expir/i.test(title) ? 'Renew' : false;
       const dest = /invoice|payment/i.test(title) ? ['Invoices', 'Finance']
         : /renew|expir|licen[cs]e|document/i.test(title) ? ['Compliance', 'Clients & Compliance']
         : /request|client/i.test(title) ? ['Requests Queue', 'Operations'] : ['Task List', 'Operations'];
       return {
-        bucket: _nBucket(n8.time), ts: new Date(n8.time).getTime() || 0,
+        // Group and sort on the real timestamp. `time` is the display string "Just now", so
+        // new Date(time) was NaN and every notification fell into "Earlier" with ts 0.
+        bucket: _nBucket(when8), ts: (when8 ? new Date(when8).getTime() : 0) || 0,
         title, meta: [n8.message, n8.time].filter(Boolean).join(' · ').slice(0, 90),
         icon: _N_ICON[type8] || I.bell, bg: p8[0], color: p8[1], unread, cta,
         weight: unread ? 700 : 600, rowBg: unread ? '#FCFAFF' : 'transparent',
@@ -6946,7 +6961,19 @@ class Component extends DCLogic {
       notifEmpty: notifGroupsFiltered.length === 0,
       notifTabs: [nTab('all', 'All'), nTab('unread', 'Unread', unreadCount || false), nTab('action', 'Action required')],
       unreadLabel: unreadCount ? unreadCount + ' unread · grouped by day' : 'All caught up ✓',
-      markAllRead: () => this.setState({ readAll: true }),
+      // PERSISTS now — this used to be `setState({ readAll: true })`, so the badge came back on reload.
+      markAllRead: () => {
+        const tok9 = localStorage.getItem('stimespro:token');
+        if (!tok9) return this.setState({ readAll: true });
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/notifications/read', {
+          method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(j9 => {
+            if (!j9) return this.toast('Could not mark them read', 'error');
+            this.setState({ meUser: { ...(this.state.meUser || {}), notifReadAt: j9.notifReadAt } });
+          })
+          .catch(() => this.toast('Cannot reach the server', 'error'));
+      },
     };
 
     const downloads = [
@@ -11353,9 +11380,16 @@ class Component extends DCLogic {
     const formFields = selSysForm ? mkFields(selSysForm[2])
       : selForm ? mkFields((selForm.fields || []).map(f => [f.label, f.type, f.required]))
       : mkFields([['Sponsor', 'dropdown', true], ['Profession', 'text', true], ['Joining date', 'date', true]]);
-    const formName = selSysForm ? selSysForm[0] : selForm ? selForm.name : 'New form';
-    const formAppliesVal = selSysForm ? ('Built-in · ' + selSysForm[1]) : selForm ? (APPLIES_LABEL[selForm.appliesTo || ''] || 'Standalone') : 'Employee';
     const formIsSystem = !!selSysForm;
+    // A custom form's name and "applies to" are EDITABLE — they used to render as a readonly input and
+    // a static div, so Save wrote the record's own values back onto itself and toasted "Form saved"
+    // without saving anything the user did. Drafts are held per form id so switching selection can't
+    // carry one form's edit onto another.
+    const _formDraft = (this.state.formDraft && this.state.formDraft.id === (selForm && selForm.id)) ? this.state.formDraft : null;
+    const formName = selSysForm ? selSysForm[0]
+      : selForm ? (_formDraft && _formDraft.name != null ? _formDraft.name : selForm.name) : 'New form';
+    const _formAppliesKey = selForm ? (_formDraft && _formDraft.appliesTo != null ? _formDraft.appliesTo : (selForm.appliesTo || '')) : '';
+    const formAppliesVal = selSysForm ? ('Built-in · ' + selSysForm[1]) : selForm ? (APPLIES_LABEL[_formAppliesKey] || 'Standalone') : 'Employee';
     // WIRED: builder writes — add a field to the selected object/form (persisted), add a record.
     const _bAddField = (target2) => {
       if (!target2 || !target2.id) return this.toast('Select an item from the list first');
@@ -11371,10 +11405,21 @@ class Component extends DCLogic {
         ? this.toast('"' + formName + '" is a built-in form — its fields are fixed in the app. Create a custom form to collect extra data.')
         : _bAddField(selForm),
       formIsSystem, formIsCustom: !formIsSystem,
+      setFormName: (e9) => selForm && this.setState({ formDraft: { ...(_formDraft || {}), id: selForm.id, name: e9.target.value } }),
+      ...mkDd('ddFormApplies', ['Standalone', 'Employee', 'Client', 'Task'], APPLIES_LABEL[_formAppliesKey] || 'Standalone', (v9) => {
+        if (!selForm) return;
+        const key9 = Object.keys(APPLIES_LABEL).find(k9 => APPLIES_LABEL[k9] === v9) || '';
+        this.setState({ formDraft: { ...(_formDraft || {}), id: selForm.id, appliesTo: key9 } });
+      }),
+      formDirty: !!(_formDraft && ((_formDraft.name != null && _formDraft.name !== selForm.name)
+        || (_formDraft.appliesTo != null && _formDraft.appliesTo !== (selForm.appliesTo || '')))),
       formSave: () => {
         if (formIsSystem) return this.toast('Built-in forms are part of the app — nothing to save here');
         if (!selForm || !selForm.id) return this.toast('Select a custom form first');
-        this._opPut('custom-objects', selForm.id, { name: selForm.name, appliesTo: selForm.appliesTo || '', fields: selForm.fields || [] }, () => { this.toast('Form saved'); this._reloadObjects(); });
+        const name9 = String(formName || '').trim();
+        if (!name9) return this.toast('Give the form a name', 'error');
+        this._opPut('custom-objects', selForm.id, { name: name9, appliesTo: _formAppliesKey, fields: selForm.fields || [] },
+          () => { this.setState({ formDraft: null }); this.toast('Form saved'); this._reloadObjects(); });
       },
       objSave: () => { if (!selObj || !selObj.id) return this.toast('Select an object first'); this._opPut('custom-objects', selObj.id, { name: selObj.name, icon: selObj.icon, fields: selObj.fields || [] }, () => { this.toast('Object saved'); this._reloadObjects(); }); },
       objAddRecord: () => {
@@ -11528,13 +11573,13 @@ class Component extends DCLogic {
       ? this.state.documentsData.filter(d2 => d2.status !== 'valid' || (Number(d2.daysLeft) || 99) <= 30).slice(0, 20).map(d2 => [
           d2.docType + (d2.person && !(coNameById[d2.companyId] === d2.person) ? ' — ' + d2.person : ''),
           (coNameById[d2.companyId] || '—') + (d2.issuingAuthority ? ' · ' + d2.issuingAuthority : ''),
-          Number(d2.daysLeft) || 0])
+          Number(d2.daysLeft) || 0, d2.id])
       : (_authed ? [] : [
-        ['Trade License', 'Falcon Trading · DED', 4],
-        ['Establishment card', 'Falcon Technologies · ICP', -2],
-      ])).map(([label, sub, daysLeft]) => {
+        ['Trade License', 'Falcon Trading · DED', 4, null],
+        ['Establishment card', 'Falcon Technologies · ICP', -2, null],
+      ])).map(([label, sub, daysLeft, docId]) => {
       const tone = daysLeft < 0 ? 'breach' : daysLeft <= 7 ? 'risk' : 'on';
-      return { label, sub, tone, source: 'Compliance', kind: 'doc',
+      return { label, sub, tone, source: 'Compliance', kind: 'doc', docId,
         when: daysLeft < 0 ? Math.abs(daysLeft) + 'd overdue' : daysLeft + 'd left',
         pct: Math.min(Math.max((30 - daysLeft) / 30 * 100, 6), 100) };
     });
@@ -11542,28 +11587,55 @@ class Component extends DCLogic {
     const slaWorkflowSteps = (Array.isArray(this.state.myWorkData)
       ? this.state.myWorkData.filter(t2 => t2.slaHours && t2.createdAt && t2.status === 'active').map(t2 => [
           t2.title || 'Workflow step', ((t2.instance && t2.instance.clientName) || '—') + ' · workflow',
-          Number(t2.slaHours), Math.max(0, (Date.now() - new Date(t2.createdAt).getTime()) / 3600000)])
+          Number(t2.slaHours), Math.max(0, (Date.now() - new Date(t2.createdAt).getTime()) / 3600000), t2.id, t2.escalatedAt])
       : (_authed ? [] : [
-        ['Emirates ID biometrics', 'Falcon Technologies · ICP', 48, 40],
-        ['Labour card × 3 submission', 'Falcon Logistics · MOHRE', 24, 19],
-      ])).map(([label, sub, slaHours, elapsedH]) => {
+        ['Emirates ID biometrics', 'Falcon Technologies · ICP', 48, 40, null, null],
+        ['Labour card × 3 submission', 'Falcon Logistics · MOHRE', 24, 19, null, null],
+      ])).map(([label, sub, slaHours, elapsedH, taskId, escAt]) => {
       const remH = slaHours - elapsedH;
       const tone = remH < 0 ? 'breach' : remH <= slaHours * 0.25 ? 'risk' : 'on';
-      return { label, sub, tone, source: 'Workflow', kind: 'step',
+      return { label, sub, tone, source: 'Workflow', kind: 'step', taskId, escAt,
         when: remH < 0 ? Math.abs(Math.round(remH)) + 'h overdue' : Math.round(remH) + 'h left',
         pct: Math.min(elapsedH / slaHours * 100, 110) };
     });
     const slaMerged = [...slaComplianceDocs, ...slaWorkflowSteps];
     const slaEsc = this.state.slaEsc || {};
+    // Which compliance documents have already been escalated. A Document has no escalatedAt column,
+    // so the escalation's notification (dedupeKey "sla-esc:doc:<id>") is the durable record — which
+    // also makes the server's unique index the thing that prevents a double escalation.
+    const _escDocs = {};
+    (Array.isArray(this.state.notificationsData) ? this.state.notificationsData : []).forEach(n9 => {
+      const k9 = String(n9.dedupeKey || '');
+      if (k9.indexOf('sla-esc:doc:') === 0) _escDocs[k9.slice('sla-esc:doc:'.length)] = true;
+    });
     const slaCols = ['on', 'risk', 'breach'].map(k => {
       const [title, color, bg] = TONE[k];
       const items = slaMerged.filter(m => m.tone === k)
         .sort((a, z) => a.pct - z.pct)  // most urgent (highest elapsed) — reverse for breach; keep asc for time-left feel
         .map(m => {
-          const escd = !!slaEsc[m.label];
-          return { ...m, barColor: color, canEscalate: k !== 'on' && !escd, escalated: escd,
+          // Escalated state is the SERVER's, not the browser's: a workflow step carries escalatedAt,
+          // and a compliance document is recognised by the notification the escalation wrote. The old
+          // version only set local state while the row claimed "manager notified".
+          const escd = !!m.escAt || !!_escDocs[m.docId] || !!slaEsc[m.label];
+          return { ...m, barColor: color, canEscalate: k !== 'on' && !escd && canWrite, escalated: escd,
             escLabel: escd ? 'Escalated ✓' : 'Escalate',
-            escalate: () => this.setState({ slaEsc: { ...slaEsc, [m.label]: true } }) };
+            escalate: () => {
+              if (!m.taskId && !m.docId) return this.toast('That row is a sample — escalate a real item', 'error');
+              const tok9 = localStorage.getItem('stimespro:token');
+              // Optimistic only for the button label; the truth is re-read from the server below.
+              this.setState({ slaEsc: { ...slaEsc, [m.label]: true } });
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/sla/escalate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok9 },
+                body: JSON.stringify(m.taskId ? { taskId: m.taskId } : { docId: m.docId }) })
+                .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+                .then(({ ok, j9 }) => {
+                  if (!ok) { this.setState({ slaEsc: { ...slaEsc, [m.label]: false } }); return this.toast((j9 && j9.error) || 'Could not escalate', 'error'); }
+                  this.toast('Escalated — the admins have been notified');
+                  this._reloadMyWork && this._reloadMyWork();
+                  this._opReload && this._opReload('notifications', 'notificationsData');
+                })
+                .catch(() => { this.setState({ slaEsc: { ...slaEsc, [m.label]: false } }); this.toast('Cannot reach the server — nothing was escalated', 'error'); });
+            } };
         });
       // within at-risk/breach, show closest-to/over deadline first
       if (k !== 'on') items.sort((a, z) => z.pct - a.pct);
@@ -12505,7 +12577,8 @@ class Component extends DCLogic {
     const notifPopApi = {
       showNotifPop: !!this.state.notifPop,
       toggleNotifPop: () => togglePop('notifPop'),
-      notifBadge: this.state.readAll ? false : (_notifs ? (_notifs.filter(n2 => !n2.read).length || false) : 5),
+      // Same watermark the Notifications screen uses, so the header badge and the list agree.
+      notifBadge: unreadCount || false,
       notifRecent: _notifRecent || (notifGroups.length ? notifGroups[0].items.concat(notifGroups.length > 1 ? notifGroups[1].items : []).slice(0, 4) : []),
       notifGoAll: () => this.setState({ notifPop: false, active: 'Notifications', activeGroup: 'Support' }),
     };

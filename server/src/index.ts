@@ -123,7 +123,8 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
   const a = (req as any).auth;
   const user = await prisma.user.findUnique({ where: { id: a.sub } });
   if (!user) return res.status(404).json({ error: "Not found" });
-  res.json({ id: user.id, name: user.name, email: user.email, role: user.roleId, type: user.type, companyId: user.companyId, phone: user.phone ?? null });
+  // notifReadAt: the console bell compares each notification's createdAt against this watermark.
+  res.json({ id: user.id, name: user.name, email: user.email, role: user.roleId, type: user.type, companyId: user.companyId, phone: user.phone ?? null, notifReadAt: user.notifReadAt ?? null });
 });
 
 // Change own password (staff OR portal). Bumps tokenVersion → all other sessions are logged out.
@@ -355,6 +356,22 @@ app.post("/api/portal/notifications/read", requireAuth, requirePortal, async (re
   try {
     await prisma.user.update({ where: { id: a.sub }, data: { notifReadAt: new Date().toISOString() } });
     res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/**
+ * Staff bell: mark everything read by moving THIS user's watermark.
+ * Deliberately not `notification.read = true`: Notification rows are global, so flipping the column
+ * would mark the bell read for every colleague at once. The watermark is per user.
+ */
+app.post("/api/notifications/read", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const at = new Date().toISOString();
+    await prisma.user.update({ where: { id: a.sub }, data: { notifReadAt: at } });
+    res.json({ ok: true, notifReadAt: at });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
@@ -783,6 +800,60 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
   logActivity({ type: "finance", message: `Payment extension on ${inv.number} until ${when}${inv.clientName ? ` — ${inv.clientName}` : ""}` });
   await logAudit({ action: "invoice.extend", actorId: a.sub, target: inv.id, detail: `${inv.number} → ${when}` });
   res.json({ invoice });
+});
+
+// ── Manual SLA escalation ────────────────────────────────────────────
+// The SLA Monitor's "Escalate" used to be a setState that flipped the row to "Escalated ✓ · manager
+// notified" — nobody was notified and the flag died on reload. This does what the hourly escalateSla
+// job does for an automatic breach: raise the task's priority, stamp escalatedAt, and tell the
+// admins. Persistence comes from those columns (and, for a compliance document, from the
+// notification's dedupeKey) rather than from browser state, so a reload shows the truth.
+app.post("/api/sla/escalate", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const { taskId, docId, label, note } = req.body ?? {};
+  const who = (await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }))
+    ?? { name: null, email: null };
+  const byLine = `Escalated by ${who.name || who.email || "a staff user"}${note ? ` — ${note}` : ""}`;
+
+  if (taskId) {
+    const t = await prisma.workflowTask.findUnique({ where: { id: taskId }, include: { instance: { select: { clientName: true } } } });
+    if (!t) return res.status(404).json({ error: "That step no longer exists — refresh the board" });
+    if (t.status !== "active") return res.status(409).json({ error: "That step is already closed" });
+    if (t.escalatedAt) return res.status(409).json({ error: "Already escalated" });
+    const stamp = new Date().toISOString();
+    await prisma.workflowTask.update({ where: { id: t.id }, data: { priority: "urgent", escalatedAt: stamp, slaState: "breached" } });
+    const title = `Escalated: ${t.title}${t.instance?.clientName ? ` (${t.instance.clientName})` : ""}`;
+    await logAudit({ action: "sla.escalate", actorId: a.sub, target: t.id, detail: `${t.title}${note ? ` · ${note}` : ""}` });
+    notify({ rule: "SLA breached", audience: "staff",
+      inApp: { type: "overdue", title, message: byLine },
+      subject: title, heading: "A step has been escalated",
+      lines: [byLine, `Step: <b>${t.title}</b>`, "Priority raised to urgent. Open the SLA Monitor to reassign or re-prioritise."] });
+    return res.json({ ok: true, escalatedAt: stamp, priority: "urgent" });
+  }
+
+  if (docId) {
+    const d = await prisma.document.findUnique({ where: { id: docId } });
+    if (!d) return res.status(404).json({ error: "That document no longer exists — refresh the board" });
+    const title = `Escalated: ${d.docType} — ${d.person}`;
+    // dedupeKey doubles as the persisted "already escalated" flag for documents, which have no
+    // escalatedAt column of their own.
+    try {
+      await prisma.notification.create({
+        data: { type: "overdue", title, message: byLine, time: "Just now", createdAt: new Date().toISOString(), read: false, dedupeKey: `sla-esc:doc:${d.id}` },
+      });
+    } catch {
+      return res.status(409).json({ error: "Already escalated" });
+    }
+    await logAudit({ action: "sla.escalate", actorId: a.sub, target: d.id, detail: `${d.docType} — ${d.person}${note ? ` · ${note}` : ""}` });
+    notify({ rule: "SLA breached", audience: "staff",
+      subject: title, heading: "A compliance document has been escalated",
+      lines: [byLine, `Document: <b>${d.docType} — ${d.person}</b>`,
+        d.expiryDate ? `Expiry: ${d.expiryDate}` : "No expiry date recorded.",
+        "Open Compliance to act on this document."] });
+    return res.json({ ok: true });
+  }
+
+  return res.status(400).json({ error: "Nothing to escalate" });
 });
 
 // ── Invoice approval ─────────────────────────────────────────────────

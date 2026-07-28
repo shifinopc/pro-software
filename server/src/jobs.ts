@@ -33,7 +33,7 @@ const fmtDisplay = (ms: number) =>
 async function notifyOnce(key: string, entry: { type: string; title: string; message?: string }) {
   try {
     await prisma.notification.create({
-      data: { type: entry.type, title: entry.title, message: entry.message ?? null, time: "Just now", read: false, dedupeKey: key },
+      data: { type: entry.type, title: entry.title, message: entry.message ?? null, time: "Just now", createdAt: nowISO(), read: false, dedupeKey: key },
     });
     return true;
   } catch {

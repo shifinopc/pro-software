@@ -392,6 +392,10 @@ model Notification {
   title   String
   message String? @db.Text
   time    String?
+  // Real ISO timestamp. `time` is only a display string (everything said "Just now" forever) and the
+  // id is a cuid, so there was nothing to compare a per-user read watermark against. Nullable because
+  // rows written before this existed have no honest value — those are treated as already read.
+  createdAt String?
   read    Boolean @default(false)
   // Set by automated jobs so a repeating tick can't repeat a notification. Unique — the insert is the
   // dedupe (no read-then-write race). Null for human-generated notifications, which may legitimately repeat.
