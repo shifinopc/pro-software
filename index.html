@@ -5944,16 +5944,10 @@ class Component extends DCLogic {
         totalNum: '4485.00', vatNum: '585.00', stamp: '2026-08-01T09:00:00Z',
         notes: 'Sample preview — your real documents use this exact layout.',
       };
-      this._prepareDoc(kind, sample).then(doc => {
-        const built = this._docHtml(kind, doc);
-        // The sheet is ~430px wide standing in for a 210mm page, so render at page width and scale down.
-        const pageW = (built.layout.pageSize === 'Letter') ? 216 : 210;
-        const mm = 3.7795;
-        const w = pageW * mm;
-        const scale = (host.clientWidth || 430) / w;
-        host.innerHTML = '<div style="width:' + w + 'px; transform:scale(' + scale + '); transform-origin:top left; padding:'
-          + (built.layout.margin ?? 0) * mm + 'px; position:relative;"><style>' + built.css + '</style>' + built.body + '</div>';
-      });
+      // Delegates to the shared painter rather than repeating the injection: this copy is what leaked
+      // the document stylesheet into the app. `fixedHeight` because the designer's sheet already has
+      // a fixed A4 aspect-ratio box and must not be resized to its content.
+      return this._paintDocInto(host, kind, sample, { fixedHeight: true });
     };
     // Render a real document into any on-screen host, scaled down to fit its width. One helper for
     // every place that shows a document without printing it: the Print Layout designer, the create
@@ -5962,6 +5956,24 @@ class Component extends DCLogic {
     // and column widths identical to the printed sheet; the host's height is set to the SCALED
     // height afterwards, because a transform doesn't affect layout and the box would otherwise
     // reserve the full unscaled height.
+    // Confine the document stylesheet to the preview it belongs to.
+    // _docHtml writes selectors for a standalone PAGE — `body{font-family:Segoe UI…}`, bare `table`,
+    // `th`, `td`. That is right when printing, where the host IS the document, and wrong the moment
+    // the same CSS is injected into the live app: the bare rules applied to the whole console, which
+    // is why opening Print Layout changed the sidebar font and restyled every table on screen.
+    this._scopeCss = (css, root) => String(css).split('}').map(chunk => {
+      const i = chunk.indexOf('{');
+      if (i < 0) return '';
+      const sels = chunk.slice(0, i), body = chunk.slice(i + 1);
+      // @page and friends mean nothing on screen and can't be scoped — drop them.
+      if (sels.trim().charAt(0) === '@') return '';
+      const scoped = sels.split(',').map(s => {
+        const t = s.trim();
+        if (!t) return '';
+        return t === 'body' ? root : root + ' ' + t;
+      }).filter(Boolean).join(',');
+      return scoped ? scoped + '{' + body + '}' : '';
+    }).join('');
     this._paintDocInto = (sel, kind, doc, opts) => {
       const host = typeof sel === 'string' ? document.querySelector(sel) : sel;
       if (!host || !doc) return;
@@ -5974,7 +5986,7 @@ class Component extends DCLogic {
         const pad = (built.layout.margin ?? 0) * mm;
         host.innerHTML = '<div data-doc-sheet style="width:' + w + 'px; transform:scale(' + scale
           + '); transform-origin:top left; padding:' + pad + 'px; position:relative; background:#fff;">'
-          + '<style>' + built.css + '</style>' + built.body + '</div>';
+          + '<style>' + this._scopeCss(built.css, '[data-doc-sheet]') + '</style>' + built.body + '</div>';
         const sheet = host.querySelector('[data-doc-sheet]');
         if (sheet && !(opts && opts.fixedHeight)) host.style.height = Math.ceil(sheet.scrollHeight * scale) + 'px';
       });
