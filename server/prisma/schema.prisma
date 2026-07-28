@@ -591,3 +591,24 @@ model FileAsset {
 
   @@index([kind])
 }
+
+// Something a user hit that they could not act on: a dead URL, a crash, or a problem they chose to
+// report by hand. Deliberately relation-free — a report must be storable even when the context it
+// came from is partial (signed out, unknown company, a screen that failed before it had data).
+model ErrorReport {
+  id        String  @id @default(cuid())
+  kind      String  @default("manual") // not_found | crash | manual
+  app       String  @default("console") // console | portal
+  path      String?
+  message   String? @db.Text
+  detail    String? @db.Text // stack or extra context
+  userAgent String? @db.Text
+  actorId   String?
+  actorName String?
+  companyId String?
+  note      String? @db.Text // what the user typed
+  status    String  @default("new") // new | seen | closed
+  createdAt String?
+
+  @@index([status])
+}

@@ -16,7 +16,7 @@ import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved } from "./notify.js";
 import {
-  hashPassword, verifyPassword, signToken,
+  hashPassword, verifyPassword, signToken, verifyToken,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, generateTempPassword,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
@@ -27,6 +27,8 @@ app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HST
 
 // Throttle auth endpoints to blunt brute-force (per IP).
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts — try again later" } });
+// Generous but bounded: a broken screen can fire several reports in a row, a bot should not.
+const reportLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many reports — try again later" } });
 const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests — try again later" } });
 
 // Allow the console + portal origins (local dev and live). Override with CORS_ORIGINS in .env
@@ -1694,6 +1696,56 @@ const scopes: Record<string, ScopeFn> = {
   appointments:  salesScope("companyId"),
   "service-requests": salesScope("companyId"),
 };
+/**
+ * A user telling us something went wrong — a dead URL, a crash, or a problem they hit and chose to
+ * report. Deliberately accepts UNAUTHENTICATED posts: the screens most worth hearing about are the
+ * ones that failed before a session existed, and a report nobody can file is a report we never get.
+ * Rate-limited and length-capped instead, and the identity is taken from the token when there is
+ * one rather than from the body, so a report cannot claim to be from someone else.
+ */
+// notify.ts keeps its escaper private, and these lines carry text a user typed.
+const htmlSafe = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+app.post("/api/error-reports", reportLimiter, async (req, res) => {
+  const cap = (v: unknown, n: number) => (v == null ? null : String(v).slice(0, n));
+  const b = req.body ?? {};
+  let actorId: string | null = null, actorName: string | null = null, companyId: string | null = null;
+  const raw = String(req.headers.authorization ?? "").replace(/^Bearer /, "");
+  if (raw) {
+    try {
+      const a: any = verifyToken(raw);
+      actorId = a.sub ?? null;
+      companyId = a.companyId ?? null;
+      const u = a.sub ? await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }) : null;
+      actorName = u?.name ?? u?.email ?? null;
+    } catch { /* an expired token is not a reason to drop the report */ }
+  }
+  try {
+    const kind = ["not_found", "crash", "manual"].includes(String(b.kind)) ? String(b.kind) : "manual";
+    const row = await prisma.errorReport.create({
+      data: {
+        kind, app: String(b.app) === "portal" ? "portal" : "console",
+        path: cap(b.path, 500), message: cap(b.message, 2000), detail: cap(b.detail, 8000),
+        userAgent: cap(req.headers["user-agent"], 500), note: cap(b.note, 2000),
+        actorId, actorName, companyId, createdAt: new Date().toISOString(),
+      },
+    });
+    const who = actorName ?? (companyId ? "a client" : "someone signed out");
+    const what = kind === "not_found" ? `Dead link: ${row.path ?? "?"}` : kind === "crash" ? `Crash: ${row.message ?? "unknown error"}` : `Problem reported on ${row.path ?? "?"}`;
+    logActivity({ type: "system", message: `${what} — reported by ${who}` });
+    notify({
+      rule: "Approval requested", audience: "staff",
+      inApp: { type: "alert", title: what, message: `Reported by ${who}` },
+      subject: `STIMES PRO — ${what}`,
+      heading: "Someone reported a problem",
+      lines: [`Where: <b>${htmlSafe(row.path ?? "—")}</b>`, `Who: ${htmlSafe(who)}`,
+        row.note ? `They said: ${htmlSafe(row.note)}` : "", row.message ? `Error: ${htmlSafe(row.message)}` : ""],
+    });
+    res.status(201).json({ ok: true, id: row.id });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // Read-side relation includes the UI renders directly.
 const includes: Record<string, Record<string, any>> = {
   subscriptions: { package: true },

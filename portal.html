@@ -6,6 +6,75 @@
 <!-- Serve React / ReactDOM / Babel from local /vendor instead of unpkg.com (offline-safe). -->
 <script>window.__resources=Object.assign(window.__resources||{},{'https://unpkg.com/react@18.3.1/umd/react.production.min.js':'/vendor/react.production.min.js','https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js':'/vendor/react-dom.production.min.js','https://unpkg.com/@babel/standalone@7.29.0/babel.min.js':'/vendor/babel.min.js'});</script>
 <script src="/support.js"></script>
+<script>
+(function () {
+  var APP = "portal";
+  var API = (window.STIMES_API || 'http://localhost:4100');
+  var shown = false;
+  function token() {
+    try { return localStorage.getItem(APP === 'portal' ? 'stimespro:portalToken' : 'stimespro:token'); } catch (e) { return null; }
+  }
+  // Exposed so the app itself can file a report (the 404 screen and the "Report a problem" menu
+  // item both call this) without duplicating the request.
+  window.__stimesReport = function (payload) {
+    var t = token();
+    return fetch(API + '/api/error-reports', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, t ? { Authorization: 'Bearer ' + t } : {}),
+      body: JSON.stringify(Object.assign({ app: APP, path: location.pathname + location.search }, payload || {}))
+    }).then(function (r) { return r.ok; }).catch(function () { return false; });
+  };
+  function el(tag, style, text) {
+    var n = document.createElement(tag);
+    if (style) n.setAttribute('style', style);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function overlay(message, detail) {
+    if (shown) return;
+    shown = true;
+    var wrap = el('div', 'position:fixed;inset:0;z-index:2147483647;background:#FBFAFE;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,system-ui,sans-serif;');
+    var card = el('div', 'width:460px;max-width:100%;background:#fff;border:1px solid #EDEBF2;border-radius:20px;box-shadow:0 24px 64px rgba(38,7,77,.18);padding:26px 28px;');
+    card.appendChild(el('div', 'font-size:10.5px;font-weight:700;color:#C0353A;letter-spacing:.1em;', 'SOMETHING BROKE'));
+    card.appendChild(el('div', "font-family:'Space Grotesk',Inter,sans-serif;font-size:19px;font-weight:700;margin-top:4px;color:#1A1523;", 'This screen stopped working'));
+    card.appendChild(el('div', 'font-size:12.5px;color:#6F6C7A;margin-top:8px;line-height:1.6;', 'Nothing you did caused this and nothing was lost. Reloading usually fixes it. If it keeps happening, send us a report so we can look.'));
+    var tech = el('div', 'margin-top:14px;background:#F9F8FC;border-radius:11px;padding:10px 13px;font-size:11px;color:#8C8899;font-family:ui-monospace,Menlo,monospace;word-break:break-word;max-height:88px;overflow:auto;', String(message || 'Unknown error'));
+    card.appendChild(tech);
+    var lbl = el('div', 'font-size:10.5px;font-weight:700;color:#A9A6B4;letter-spacing:.06em;margin-top:16px;', 'WHAT WERE YOU DOING? (OPTIONAL)');
+    card.appendChild(lbl);
+    var note = el('textarea', "margin-top:6px;width:100%;box-sizing:border-box;border:1px solid #DDD9E6;border-radius:11px;padding:10px 13px;font-size:12.5px;font-family:inherit;background:#FCFBFE;resize:vertical;");
+    note.rows = 2;
+    card.appendChild(note);
+    var row = el('div', 'display:flex;gap:9px;justify-content:flex-end;margin-top:16px;');
+    var send = el('button', 'background:#7C00FF;color:#fff;border:none;font-size:12.5px;font-weight:700;padding:10px 20px;border-radius:99px;cursor:pointer;', 'Send report');
+    var reload = el('button', 'background:#fff;color:#4B4757;border:1px solid #DDD9E6;font-size:12.5px;font-weight:600;padding:10px 20px;border-radius:99px;cursor:pointer;', 'Reload the page');
+    reload.onclick = function () { location.reload(); };
+    send.onclick = function () {
+      send.disabled = true; send.textContent = 'Sending…';
+      window.__stimesReport({ kind: 'crash', message: String(message || ''), detail: String(detail || ''), note: note.value || null })
+        .then(function (ok) {
+          send.textContent = ok ? 'Report sent — thank you' : 'Could not send';
+          send.setAttribute('style', 'background:' + (ok ? '#E7F8EF' : '#FEECEC') + ';color:' + (ok ? '#0E9355' : '#C0353A') + ';border:none;font-size:12.5px;font-weight:700;padding:10px 20px;border-radius:99px;');
+        });
+    };
+    row.appendChild(send); row.appendChild(reload);
+    card.appendChild(row);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+  }
+  window.addEventListener('error', function (e) {
+    if (!e || !e.message) return;
+    // Asset 404s and extension noise are not app crashes.
+    if (e.target && e.target !== window && e.target.tagName) return;
+    overlay(e.message, e.error && e.error.stack);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    overlay((r && r.message) || String(r), r && r.stack);
+  });
+})();
+</script>
+
 </head>
 <body>
 <x-dc>
@@ -84,6 +153,45 @@
 </style>
 </helmet>
 <div style="display:flex; min-height:100vh;" data-screen-label="Client Portal Dashboard">
+  <!-- Dead URL. Says what happened in the user's terms, gets them out, and lets them tell us the
+       link is broken — a soft redirect gave them none of that. -->
+  <sc-if value="{{ nfShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:200; background:#FBFAFE; display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div style="width:470px; max-width:100%; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 20px 56px rgba(38,7,77,.14); padding:28px 30px;">
+        <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center;">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+        </div>
+        <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.1em; margin-top:15px;">PAGE NOT FOUND</div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; margin-top:4px;">There's nothing at this address</div>
+        <div style="font-size:12.5px; color:#6F6C7A; margin-top:8px; line-height:1.6;">The link may be out of date, or the page may have been renamed. Nothing is wrong with your account.</div>
+        <div style="margin-top:13px; background:#F9F8FC; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8C8899; font-family:ui-monospace,Menlo,monospace; word-break:break-all;">{{ nfPath }}</div>
+        <sc-if value="{{ nfCanReport }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">WHERE DID THIS LINK COME FROM? <span style="font-weight:600; color:#B9B5C4;">(optional)</span></div>
+          <textarea value="{{ nfNote }}" onInput="{{ setNfNote }}" rows="2" placeholder="e.g. a link in an email from you" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea>
+        </sc-if>
+        <div style="display:flex; gap:9px; margin-top:16px; flex-wrap:wrap;">
+          <sc-if value="{{ nfCanReport }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ nfReport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Report this link</button>
+          </sc-if>
+          <sc-if value="{{ nfReported }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:12px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:10px 16px; border-radius:99px;">Reported — thank you</span>
+          </sc-if>
+          <div style="flex:1;"></div>
+          <button onClick="{{ nfHome }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Back to my dashboard</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <!-- Held while a stored session is being checked, so a returning client never sees the sign-in
+       form flash before their own portal loads. -->
+  <sc-if value="{{ showRestoring }}" hint-placeholder-val="{{ false }}">
+    <div style="width:100%; min-height:100vh; background:#FBFAFE; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;">
+      <div style="width:44px; height:44px; border-radius:14px; background:linear-gradient(135deg,#8B17FF,#5E00C4); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 22px rgba(124,0,255,.25);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+      </div>
+      <div style="font-size:12px; color:#A9A6B4;">Opening your portal…</div>
+    </div>
+  </sc-if>
   <!-- ===== Auth: Login ===== -->
   <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
     <div data-screen-label="Login" style="width:100%; min-height:100vh; position:relative; overflow:hidden; background:#FBFAFE; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px;">
@@ -2937,7 +3045,7 @@
             </sc-if>
           </div>
           <div style="border-top:1px solid #F0EDF6; padding:10px 12px; display:flex; align-items:flex-end; gap:8px; flex-shrink:0;">
-            <textarea value="{{ chatDraft }}" onInput="{{ setChatDraft }}" onKeyDown="{{ chatKey }}" placeholder="Write a message…" rows="1" style="flex:1; min-width:0; resize:none; max-height:90px; border:1px solid #DDD9E6; border-radius:14px; padding:9px 12px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FCFBFE; color:#1A1523;">{{ chatDraft }}</textarea>
+            <textarea value="{{ chatDraft }}" onInput="{{ setChatDraft }}" onKeyDown="{{ chatKey }}" placeholder="Write a message…" rows="1" style="flex:1; min-width:0; resize:none; max-height:90px; border:1px solid #DDD9E6; border-radius:14px; padding:9px 12px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FCFBFE; color:#1A1523;"></textarea>
             <button onClick="{{ chatSend }}" title="Send" style="width:36px; height:36px; border-radius:99px; background:{{ chatSendBg }}; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
             </button>
@@ -2957,7 +3065,11 @@ class Component extends DCLogic {
   state = { active: 'Dashboard', prefs: { email: true, whatsapp: true, renewals: true, statement: false },
     ticketModal: false, tSubject: '', tDesc: '', tCategory: 'Visa & Immigration',
     bookModal: false, bType: 'Medical test', bDay: '21', bSlot: '9:30 AM', booked: [],
-    auth: 'login', lEmail: '', lPass: '', lShow: false, lError: '',
+    // 'restoring' while a stored token is being checked. Starting at 'login' meant every reload of
+    // a signed-in session painted the sign-in form for as long as /api/portal/me took to answer —
+    // a client watching their own portal flash "please log in" at them on every refresh.
+    auth: (() => { try { return localStorage.getItem('stimespro:portalToken') ? 'restoring' : 'login'; } catch (e) { return 'login'; } })(),
+    lEmail: '', lPass: '', lShow: false, lError: '',
     nPass: '', cPass: '', nShow: false, pError: '',
     empModal: false, eName: '', eRole: '', eDept: 'Engineering', eVisaQuota: '1', eJoinDate: '', eError: '',
     eDocs: [{ type: 'Passport', expiry: '' }],
@@ -3057,8 +3169,11 @@ class Component extends DCLogic {
       } else if (!label && path0 !== '/portal' && path0 !== '/portal/') {
         // Soft 404: unknown or deep portal URLs (e.g. /portal/employees/<id>) normalize to the
         // current screen instead of silently keeping a bogus address.
-        history.replaceState(null, '', '/portal/' + slug(this.state.active || 'Dashboard'));
-        this.toast && this.toast('Page not found — showing ' + (this.state.active || 'Dashboard'));
+        // Its own screen rather than a redirect plus a toast: the toast is gone in a second and
+        // gives the client no way to tell us the link is broken.
+        this.setState({ notFound: location.pathname });
+      } else if (bySlug[(/^\/portal\/([a-z0-9-]+)\/?$/.exec(location.pathname) || [])[1]]) {
+        this.setState({ notFound: null });
       }
     };
     window.addEventListener('popstate', this._routeApply);
@@ -3926,6 +4041,7 @@ class Component extends DCLogic {
     const s = this.state;
     const authApi = {
       showLogin: s.auth === 'login', showChangePw: s.auth === 'change', showPortal: s.auth === 'in',
+      showRestoring: s.auth === 'restoring',
       lEmail: s.lEmail, lPass: s.lPass, lError: s.lError || false,
       lPassType: s.lShow ? 'text' : 'password', lEyeIcon: s.lShow ? EYE_OFF : EYE,
       setLEmail: (e) => this.setState({ lEmail: e.target.value, lError: '' }),
@@ -4270,7 +4386,9 @@ class Component extends DCLogic {
       // WIRED: session restore — a valid stored token logs the client straight back in on refresh.
       // Invalid/expired tokens are dropped so the user gets a clean login screen.
       let _tok = null; try { _tok = localStorage.getItem('stimespro:portalToken'); } catch (e) {}
-      if (_tok && this.state.auth === 'login' && !this._rsToken) {
+      // 'restoring' is the state a stored token now boots into; 'login' is kept for the case where
+      // a token appears without one (nothing does that today, but the guard costs nothing).
+      if (_tok && (this.state.auth === 'restoring' || this.state.auth === 'login') && !this._rsToken) {
         const API = window.STIMES_API || 'http://localhost:4100';
         fetch(API + '/api/portal/me', { headers: { Authorization: 'Bearer ' + _tok } })
           .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -4285,7 +4403,9 @@ class Component extends DCLogic {
             this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
             this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadSvcItems(); this._chatConnect();
           })
-          .catch(() => { try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} });
+          // Bad or expired token: drop it and fall through to the sign-in form. Without flipping auth
+          // back the page would sit on the restoring splash forever.
+          .catch(() => { try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} this.setState({ auth: 'login' }); });
       }
     }
     // ---- Custom dropdown helper ----
@@ -5034,6 +5154,27 @@ class Component extends DCLogic {
       };
     });
     // Confirm step before filing an add-on request — no price is shown because staff quote it.
+    // ---- Dead URL ----
+    const _nf = this.state.notFound || null;
+    const nfApi = {
+      nfShow: !!_nf,
+      nfPath: _nf || '',
+      nfNote: this.state.nfNote || '',
+      nfCanReport: !!_nf && !this.state.nfReported,
+      nfReported: !!this.state.nfReported,
+      setNfNote: (e9) => this.setState({ nfNote: e9.target.value }),
+      nfReport: () => {
+        const send9 = window.__stimesReport;
+        if (!send9) return this.toast && this.toast('Could not send the report');
+        send9({ kind: 'not_found', path: _nf, message: 'No screen matches this address', note: this.state.nfNote || null })
+          .then((ok9) => this.setState({ nfReported: !!ok9, nfNote: '' }));
+      },
+      nfHome: () => {
+        history.replaceState(null, '', '/portal/dashboard');
+        this.setState({ notFound: null, nfReported: false, nfNote: '', active: 'Dashboard', activeGroup: 'Main' });
+      },
+    };
+
     const _addonAsk = this.state.addonAsk || null;
     const addonApi = {
       showAddonAsk: !!_addonAsk,
@@ -5742,7 +5883,7 @@ class Component extends DCLogic {
         const soon9 = cs9.reduce((a9, c9) => a9 + (Number((c9.counts || {}).expiring) || 0), 0);
         const over9 = cs9.reduce((a9, c9) => a9 + (Number((c9.counts || {}).overdue) || 0), 0);
         const score9 = docs9 ? Math.round(((docs9 - over9) / docs9) * 100) : 100;
-        return {
+    return {
           grpTitle: name9,
           // Used by the "Add company to …" modal title, which was hardcoded "Falcon Group".
           grpTitleName: name9,
@@ -5752,6 +5893,7 @@ class Component extends DCLogic {
           grpOverdueLabel: over9 ? over9 + ' overdue' : 'none overdue',
         };
       })(),
+      ...nfApi,
       ...addonApi,
       kpis, donut, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
       // Real figures replacing the hardcoded "27 active", "248/231", "4.2 days" and the literal

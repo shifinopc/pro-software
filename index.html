@@ -7,6 +7,75 @@
      party runtime dependency). The Make runtime reads window.__resources[cdnUrl] → local URL. -->
 <script>window.__resources=Object.assign(window.__resources||{},{'https://unpkg.com/react@18.3.1/umd/react.production.min.js':'/vendor/react.production.min.js','https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js':'/vendor/react-dom.production.min.js','https://unpkg.com/@babel/standalone@7.29.0/babel.min.js':'/vendor/babel.min.js'});</script>
 <script src="/support.js"></script>
+<script>
+(function () {
+  var APP = "console";
+  var API = (window.STIMES_API || 'http://localhost:4100');
+  var shown = false;
+  function token() {
+    try { return localStorage.getItem(APP === 'portal' ? 'stimespro:portalToken' : 'stimespro:token'); } catch (e) { return null; }
+  }
+  // Exposed so the app itself can file a report (the 404 screen and the "Report a problem" menu
+  // item both call this) without duplicating the request.
+  window.__stimesReport = function (payload) {
+    var t = token();
+    return fetch(API + '/api/error-reports', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, t ? { Authorization: 'Bearer ' + t } : {}),
+      body: JSON.stringify(Object.assign({ app: APP, path: location.pathname + location.search }, payload || {}))
+    }).then(function (r) { return r.ok; }).catch(function () { return false; });
+  };
+  function el(tag, style, text) {
+    var n = document.createElement(tag);
+    if (style) n.setAttribute('style', style);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function overlay(message, detail) {
+    if (shown) return;
+    shown = true;
+    var wrap = el('div', 'position:fixed;inset:0;z-index:2147483647;background:#FBFAFE;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,system-ui,sans-serif;');
+    var card = el('div', 'width:460px;max-width:100%;background:#fff;border:1px solid #EDEBF2;border-radius:20px;box-shadow:0 24px 64px rgba(38,7,77,.18);padding:26px 28px;');
+    card.appendChild(el('div', 'font-size:10.5px;font-weight:700;color:#C0353A;letter-spacing:.1em;', 'SOMETHING BROKE'));
+    card.appendChild(el('div', "font-family:'Space Grotesk',Inter,sans-serif;font-size:19px;font-weight:700;margin-top:4px;color:#1A1523;", 'This screen stopped working'));
+    card.appendChild(el('div', 'font-size:12.5px;color:#6F6C7A;margin-top:8px;line-height:1.6;', 'Nothing you did caused this and nothing was lost. Reloading usually fixes it. If it keeps happening, send us a report so we can look.'));
+    var tech = el('div', 'margin-top:14px;background:#F9F8FC;border-radius:11px;padding:10px 13px;font-size:11px;color:#8C8899;font-family:ui-monospace,Menlo,monospace;word-break:break-word;max-height:88px;overflow:auto;', String(message || 'Unknown error'));
+    card.appendChild(tech);
+    var lbl = el('div', 'font-size:10.5px;font-weight:700;color:#A9A6B4;letter-spacing:.06em;margin-top:16px;', 'WHAT WERE YOU DOING? (OPTIONAL)');
+    card.appendChild(lbl);
+    var note = el('textarea', "margin-top:6px;width:100%;box-sizing:border-box;border:1px solid #DDD9E6;border-radius:11px;padding:10px 13px;font-size:12.5px;font-family:inherit;background:#FCFBFE;resize:vertical;");
+    note.rows = 2;
+    card.appendChild(note);
+    var row = el('div', 'display:flex;gap:9px;justify-content:flex-end;margin-top:16px;');
+    var send = el('button', 'background:#7C00FF;color:#fff;border:none;font-size:12.5px;font-weight:700;padding:10px 20px;border-radius:99px;cursor:pointer;', 'Send report');
+    var reload = el('button', 'background:#fff;color:#4B4757;border:1px solid #DDD9E6;font-size:12.5px;font-weight:600;padding:10px 20px;border-radius:99px;cursor:pointer;', 'Reload the page');
+    reload.onclick = function () { location.reload(); };
+    send.onclick = function () {
+      send.disabled = true; send.textContent = 'Sending…';
+      window.__stimesReport({ kind: 'crash', message: String(message || ''), detail: String(detail || ''), note: note.value || null })
+        .then(function (ok) {
+          send.textContent = ok ? 'Report sent — thank you' : 'Could not send';
+          send.setAttribute('style', 'background:' + (ok ? '#E7F8EF' : '#FEECEC') + ';color:' + (ok ? '#0E9355' : '#C0353A') + ';border:none;font-size:12.5px;font-weight:700;padding:10px 20px;border-radius:99px;');
+        });
+    };
+    row.appendChild(send); row.appendChild(reload);
+    card.appendChild(row);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+  }
+  window.addEventListener('error', function (e) {
+    if (!e || !e.message) return;
+    // Asset 404s and extension noise are not app crashes.
+    if (e.target && e.target !== window && e.target.tagName) return;
+    overlay(e.message, e.error && e.error.stack);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e && e.reason;
+    overlay((r && r.message) || String(r), r && r.stack);
+  });
+})();
+</script>
+
 </head>
 <body>
 <x-dc>
@@ -120,6 +189,35 @@
 </style>
 </helmet>
 <div style="display:flex; min-height:100vh;" data-screen-label="Client Portal Dashboard">
+  <!-- Dead URL. Says what happened in the user's terms, gets them out, and lets them tell us the
+       link is broken — a soft redirect gave them none of that. -->
+  <sc-if value="{{ nfShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:200; background:#FBFAFE; display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div style="width:470px; max-width:100%; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 20px 56px rgba(38,7,77,.14); padding:28px 30px;">
+        <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center;">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+        </div>
+        <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.1em; margin-top:15px;">PAGE NOT FOUND</div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; margin-top:4px;">There's nothing at this address</div>
+        <div style="font-size:12.5px; color:#6F6C7A; margin-top:8px; line-height:1.6;">The link may be out of date, or the page may have been renamed. Nothing is wrong with your account.</div>
+        <div style="margin-top:13px; background:#F9F8FC; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8C8899; font-family:ui-monospace,Menlo,monospace; word-break:break-all;">{{ nfPath }}</div>
+        <sc-if value="{{ nfCanReport }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">WHERE DID THIS LINK COME FROM? <span style="font-weight:600; color:#B9B5C4;">(optional)</span></div>
+          <textarea value="{{ nfNote }}" onInput="{{ setNfNote }}" rows="2" placeholder="e.g. a link in an email from you" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea>
+        </sc-if>
+        <div style="display:flex; gap:9px; margin-top:16px; flex-wrap:wrap;">
+          <sc-if value="{{ nfCanReport }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ nfReport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Report this link</button>
+          </sc-if>
+          <sc-if value="{{ nfReported }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:12px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:10px 16px; border-radius:99px;">Reported — thank you</span>
+          </sc-if>
+          <div style="flex:1;"></div>
+          <button onClick="{{ nfHome }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Back to the dashboard</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
   <!-- ===== Auth: Login ===== -->
   <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
     <div data-screen-label="Login" style="width:100%; min-height:100vh; position:relative; overflow:hidden; background:#FBFAFE; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px;">
@@ -1436,7 +1534,7 @@
               <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Notes &amp; files</div>
               <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">Internal notes — visible to staff only, never to the client</div>
               <sc-if value="{{ cdCanNote }}" hint-placeholder-val="{{ true }}">
-                <textarea value="{{ cdNoteDraft }}" onChange="{{ setCdNote }}" placeholder="Add an internal note about this client…" rows="3" style="width:100%; margin-top:12px; border:1px solid #DDD9E6; border-radius:12px; padding:11px 13px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FBFAFE; resize:vertical;">{{ cdNoteDraft }}</textarea>
+                <textarea value="{{ cdNoteDraft }}" onChange="{{ setCdNote }}" placeholder="Add an internal note about this client…" rows="3" style="width:100%; margin-top:12px; border:1px solid #DDD9E6; border-radius:12px; padding:11px 13px; font-size:12.5px; font-family:'Inter',sans-serif; background:#FBFAFE; resize:vertical;"></textarea>
                 <button onClick="{{ saveCdNote }}" style="margin-top:10px; background:#0F172A; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;">Save note</button>
               </sc-if>
               <div style="display:flex; flex-direction:column; gap:9px; margin-top:16px;">
@@ -4986,7 +5084,7 @@
         </div>
         <div style="margin-top:14px;">
           <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FEATURES SHOWN TO THE CLIENT — ONE PER LINE</div>
-          <textarea onChange="{{ setPkFeatures }}" placeholder="Priority renewals&#10;Dedicated PRO officer&#10;SLA · 3 days" style="width:100%; min-height:74px; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; resize:vertical; font-family:inherit;">{{ pkFeatures }}</textarea>
+          <textarea value="{{ pkFeatures }}" onChange="{{ setPkFeatures }}" placeholder="Priority renewals&#10;Dedicated PRO officer&#10;SLA · 3 days" style="width:100%; min-height:74px; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; resize:vertical; font-family:inherit;"></textarea>
         </div>
         <div style="display:flex; gap:10px; margin-top:22px; justify-content:flex-end;"><button onClick="{{ closePkgNew }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitPkgNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ pkSubmitLabel }}</button></div>
       </div>
@@ -5657,10 +5755,12 @@ class Component extends DCLogic {
         this.setState(st);
         this._routeSilent = false;
       } else if (!label && path0 !== '/') {
-        // Soft 404: an unknown or deep URL no longer silently masquerades as a valid page —
-        // normalize the address bar to the dashboard and tell the user what happened.
-        history.replaceState(null, '', '/' + slug(this.state.active || 'Dashboard'));
-        this.toast && this.toast('Page not found — showing ' + (this.state.active || 'Dashboard'));
+        // A dead URL gets its own screen. It used to redirect and fire a toast, which is gone in a
+        // second and leaves no way to say "this link is broken" — so a bad link nobody could report
+        // stayed broken.
+        this.setState({ notFound: path0 });
+      } else if (label) {
+        this.setState({ notFound: null });
       }
     };
     window.addEventListener('popstate', this._routeApply);
@@ -8610,7 +8710,7 @@ class Component extends DCLogic {
         const url = c7.url || '';
         const domain = String(url).replace(/^https?:\/\//, '').split('/')[0] || '—';
         const shown = cdCredReveal[c7.id];
-        return {
+    return {
           label: c7.label, domain, user: c7.username || '—', notes: c7.notes || '', url, initial: (c7.label || '?')[0].toUpperCase(),
           updated: 'stored securely', changedByClient: false, notChangedByClient: true,
           revealed: !!shown, passShown: shown ? (cdCredPass[c7.id] || '') : '•••••••••',
@@ -8694,7 +8794,28 @@ class Component extends DCLogic {
     const acStep = this.state.acStep || 'form';
     const acServices = ['Company Formation', 'New Work Visa', 'Iqama Renewal', 'Trade License', 'VAT Registration', 'Labour Cards'];
     const acPickedSvc = this.state.acServices || [];
+    // ---- Dead URL ----
+    const _nf = this.state.notFound || null;
+    const nfApi = {
+      nfShow: !!_nf,
+      nfPath: _nf || '',
+      nfNote: this.state.nfNote || '',
+      nfCanReport: !!_nf && !this.state.nfReported,
+      nfReported: !!this.state.nfReported,
+      setNfNote: (e9) => this.setState({ nfNote: e9.target.value }),
+      nfReport: () => {
+        const send9 = window.__stimesReport;
+        if (!send9) return this.toast && this.toast('Could not send the report');
+        send9({ kind: 'not_found', path: _nf, message: 'No screen matches this address', note: this.state.nfNote || null })
+          .then((ok9) => this.setState({ nfReported: !!ok9, nfNote: '' }));
+      },
+      nfHome: () => {
+        history.replaceState(null, '', '/dashboard');
+        this.setState({ notFound: null, nfReported: false, nfNote: '', active: 'Dashboard', activeGroup: 'Main' });
+      },
+    };
     const clientsApi = {
+      ...nfApi,
       ...addonQuoteApi,
       clients: clVisible, clStatChips, clStats, clUpgrades, clUpgradeShow: clUpgrades.length > 0, showClientList: !clRow,
       clSearch: this.state.clSearch || '', setClSearch: (e) => this.setState({ clSearch: e.target.value }),
