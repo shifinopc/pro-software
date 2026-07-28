@@ -253,6 +253,9 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   // The portal used to name a fictional officer ("Rashid Al Mansoori") as the client's PRO contact.
   // There is no per-client officer in the model, so the honest label is the provider's own name.
   const orgName = String(((orgRow?.value as any)?.orgName) || "your PRO team");
+  // Support phone shown in the portal. Blank means the portal hides the Call button rather than
+  // printing a number nobody answers — it used to show a hardcoded +971 4 552 8190.
+  const orgPhone = String(((orgRow?.value as any)?.phone) || "").trim();
   // Attach what has been received against each invoice. Payment has no Prisma relation to Invoice,
   // so it is aggregated here — without it a client who has part-paid still sees the FULL amount
   // outstanding, which is the one number they know to be wrong.
@@ -267,7 +270,7 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
     return { ...inv, paidAmount, outstandingAmount: Math.max(0, inv.amount - paidAmount) };
   });
   res.json({
-    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName,
+    company: { ...company, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone,
     // So the portal can explain the restriction rather than just failing when they try to act.
     suspended: company.status === "suspended",
     suspendedReason: company.status === "suspended" ? company.suspendedReason : null,
