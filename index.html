@@ -590,14 +590,16 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
               MONTHLY RECURRING REVENUE
             </div>
-            <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); padding:3px 12px; border-radius:99px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"></path></svg>{{ revenue.mom }}</span>
+            <sc-if value="{{ revenue.hasMom }}" hint-placeholder-val="{{ true }}"><span title="Change in collections vs last month" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); padding:3px 12px; border-radius:99px;"><sc-if value="{{ revenue.momUp }}" hint-placeholder-val="{{ true }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ revenue.momColor }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"></path></svg></sc-if><sc-if value="{{ revenue.momDown }}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="{{ revenue.momColor }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></sc-if>{{ revenue.mom }}</span></sc-if>
           </div>
           <div style="font-family:'Space Grotesk',sans-serif; font-size:34px; font-weight:700; letter-spacing:-.02em; margin-top:12px; position:relative;">{{ revenue.mrr }}</div>
           <div style="display:flex; align-items:flex-end; gap:5px; height:52px; margin-top:14px; position:relative;">
             <sc-for list="{{ revenue.spark }}" as="b" hint-placeholder-count="12">
-              <div style="flex:1; height:{{ b.h }}%; border-radius:4px 4px 2px 2px; background:{{ b.current }}; transform-origin:bottom; animation:barGrow .7s cubic-bezier(.16,1,.3,1) .35s both;"></div>
+              <div title="{{ b.tip }}" style="flex:1; height:{{ b.h }}%; border-radius:4px 4px 2px 2px; background:{{ b.current }}; transform-origin:bottom; animation:barGrow .7s cubic-bezier(.16,1,.3,1) .35s both;"></div>
             </sc-for>
           </div>
+          <!-- Says what the bars actually are: the headline is MRR, the bars are collections. -->
+          <div style="font-size:9.5px; opacity:.7; margin-top:7px; letter-spacing:.04em; position:relative;">{{ revenue.sparkLabel }}</div>
           <div style="display:flex; gap:10px; margin-top:18px; position:relative;">
             <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:11px 14px;">
               <div style="font-size:9.5px; font-weight:700; letter-spacing:.05em; opacity:.75;">COLLECTED</div>
@@ -12096,7 +12098,35 @@ class Component extends DCLogic {
     const greetName = String((this.state.meUser && this.state.meUser.name) || this.state.profileName || 'there').split(' ')[0].toUpperCase();
 
     // ===== Agency operations dashboard data =====
-    const revSpark = [58, 64, 61, 70, 68, 76, 74, 82, 88, 92, 96, 100].map((h, i) => ({ h, current: i === 11 ? '#fff' : 'rgba(255,255,255,.35)' }));
+    // WIRED: money actually COLLECTED per month, from real payment rows — this was a fixed rising
+    // 12-value array (58…100) rendered unconditionally, so every tenant saw an invented revenue trend
+    // sitting directly under their real MRR figure, which is what made it convincing.
+    // Payment.date comes in two shapes ("2026-05-15" and "15 Jul 2026"); Date parses both.
+    const _revPays = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : null;
+    const _revNow = new Date();
+    const _revMonths = [];
+    for (let i2 = 11; i2 >= 0; i2--) {
+      const d2 = new Date(_revNow.getFullYear(), _revNow.getMonth() - i2, 1);
+      _revMonths.push({ label: d2.toLocaleDateString('en-GB', { month: 'short' }), y: d2.getFullYear(), m: d2.getMonth(), total: 0 });
+    }
+    (_revPays || []).forEach(p2 => {
+      const d2 = new Date(p2.date); if (isNaN(+d2)) return;
+      const idx2 = 11 - ((_revNow.getFullYear() - d2.getFullYear()) * 12 + (_revNow.getMonth() - d2.getMonth()));
+      if (idx2 >= 0 && idx2 <= 11) _revMonths[idx2].total += Number(p2.amount) || 0;
+    });
+    const _revMax = Math.max(1, ..._revMonths.map(m2 => m2.total));
+    // A month with nothing collected keeps a 2% stub so the bar row still reads as a 12-month axis
+    // rather than looking like missing data.
+    const revSpark = (_revPays
+      ? _revMonths.map((m2, i2) => ({ h: m2.total ? Math.max(6, Math.round(m2.total / _revMax * 100)) : 2,
+          current: i2 === 11 ? '#fff' : 'rgba(255,255,255,.35)',
+          tip: m2.label + ' · ' + fmtCur(m2.total) + ' collected' }))
+      : [58, 64, 61, 70, 68, 76, 74, 82, 88, 92, 96, 100].map((h, i) => ({ h, current: i === 11 ? '#fff' : 'rgba(255,255,255,.35)', tip: '' })));
+    // Month-on-month change in collections. The chip used to render a green up-arrow next to an EMPTY
+    // string — an "up" signal with no number behind it. Shown only when last month had something to
+    // compare against, and the arrow now follows the actual direction.
+    const _revThis = _revMonths[11].total, _revPrev = _revMonths[10].total;
+    const _revMom = (_revPays && _revPrev > 0) ? Math.round((_revThis - _revPrev) / _revPrev * 100) : null;
     // WIRED: dashboard ops stats / pipeline / team workload / revenue from real data.
     const _dueToday = _dTasks ? _dTasks.filter(t2 => !t2.archived && t2.status !== 'done' && t2.dueDate && new Date(t2.dueDate).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0)).length : 23;
     const _apWaiting = (Array.isArray(this.state.myWorkData) ? this.state.myWorkData.filter(t2 => t2.nodeType === 'approval' && t2.status === 'active').length : 0) + (_dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : 5);
@@ -12146,7 +12176,13 @@ class Component extends DCLogic {
     const _mrr = _subs ? _subs.reduce((a2, s2) => a2 + (s2.package && s2.package.billingCycle === 'yearly' ? Math.round((Number(s2.price) || 0) / 12) : (Number(s2.price) || 0)), 0) : null;
     const _collected = _dInv ? _dInv.filter(v2 => String(v2.status).toLowerCase() === 'paid').reduce((a2, v2) => a2 + (Number(v2.amount) || 0), 0) : null;
     const revenue = {
-      mrr: _mrr != null ? fmtCur(_mrr) : (_authed ? fmtCur(0) : 'SAR 128,400'), mom: '',
+      mrr: _mrr != null ? fmtCur(_mrr) : (_authed ? fmtCur(0) : 'SAR 128,400'),
+      mom: _revMom == null ? '' : (_revMom > 0 ? '+' : '') + _revMom + '%',
+      hasMom: _revMom != null,
+      momUp: (_revMom || 0) >= 0,
+      momDown: (_revMom || 0) < 0,
+      momColor: (_revMom || 0) >= 0 ? '#4ADE80' : '#FCA5A5',
+      sparkLabel: _revPays ? 'Collected · last 12 months' : '',
       collected: _collected != null ? fmtCur(_collected) : (_authed ? fmtCur(0) : 'SAR 82,150'), outstanding: fmtCur(_unpaidSum),
       collectedPct: (_collected != null && (_collected + _unpaidSum) > 0) ? Math.round(_collected / (_collected + _unpaidSum) * 100) : (_authed ? 0 : 64), spark: revSpark,
     };
