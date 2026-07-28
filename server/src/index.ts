@@ -555,11 +555,6 @@ app.post("/api/portal/employees", requireAuth, requirePortal, requireNotSuspende
   }
 });
 
-// Portal: read admin-defined custom employee fields (so the portal's Add Employee form renders them)
-app.get("/api/portal/custom-fields", requireAuth, requirePortal, async (_req, res) => {
-  res.json(await prisma.customField.findMany({ where: { entity: "employee" }, orderBy: { sortOrder: "asc" } }));
-});
-
 // Portal: read the entity-bound Form Builder forms (kind=form) so the portal Add-Employee form mirrors the console.
 app.get("/api/portal/custom-objects", requireAuth, requirePortal, async (_req, res) => {
   res.json(await prisma.customObject.findMany({ where: { kind: "form" } }));
@@ -1492,17 +1487,13 @@ const entities: [string, string][] = [
   ["documents", "document"],
   ["invoices", "invoice"],
   ["users", "user"],
-  ["sales-reps", "salesRep"],
   ["upgrade-requests", "upgradeRequest"],
   ["service-requests", "serviceRequest"],
-  ["kanban", "kanbanCard"],
   ["activities", "activity"],
   ["notifications", "notification"],
-  ["custom-fields", "customField"],
   ["document-types", "documentType"],
   ["custom-objects", "customObject"],
   ["custom-records", "customRecord"],
-  ["print-layouts", "printLayout"],
   ["gov-centers", "govCenter"],
   ["appointments", "appointment"],
   ["courier-shipments", "courierShipment"],
@@ -1516,7 +1507,6 @@ const entities: [string, string][] = [
 const readRole: Record<string, string[]> = {
   companies:     ["super_admin", "admin", "pro_officer", "sales"],
   groups:        ["super_admin", "admin", "pro_officer", "sales"],
-  "sales-reps":  ["super_admin", "admin", "pro_officer", "sales"],
   users:         ["super_admin", "admin"],
 };
 // Row-level scope for the `sales` role: it may only touch its assigned clients. GET /api/companies

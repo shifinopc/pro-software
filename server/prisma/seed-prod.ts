@@ -44,7 +44,6 @@ async function main() {
   await prisma.employee.deleteMany();
   await prisma.company.deleteMany();
   await prisma.clientGroup.deleteMany();
-  await prisma.salesRep.deleteMany();
   await prisma.package.deleteMany();
   await prisma.documentType.deleteMany();
   await prisma.govCenter.deleteMany();

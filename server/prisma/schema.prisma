@@ -10,21 +10,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model SalesRep {
-  id        String        @id @default(cuid())
-  name      String
-  email     String        @unique
-  companies Company[]
-  groups    ClientGroup[]
-}
 
 model ClientGroup {
   id         String    @id @default(cuid())
   name       String
   contact    String?
   email      String?
-  salesRep   SalesRep? @relation(fields: [salesRepId], references: [id])
-  salesRepId String?
   companies  Company[]
 }
 
@@ -48,8 +39,6 @@ model Company {
   customData      Json? // values for admin-defined custom client fields (Form Builder)
   group           ClientGroup?     @relation(fields: [groupId], references: [id])
   groupId         String?
-  salesRep        SalesRep?        @relation(fields: [salesRepId], references: [id])
-  salesRepId      String?
   employeeList    Employee[]
   documents       Document[]
   credentials     SiteCredential[]
@@ -106,7 +95,7 @@ model Employee {
   role        String?
   iqamaExpiry String?
   status      String  @default("valid")
-  customData  Json? // values for admin-defined custom fields, keyed by CustomField.id
+  customData  Json? // values for admin-defined custom employee fields (Form Builder / CustomObject)
   archived    Boolean @default(false)
   history     Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
   // Offboarding. `archived` stays the FINAL state (every headcount already filters on it); these track
@@ -121,16 +110,6 @@ model Employee {
   @@index([exitStatus])
 }
 
-// Admin-defined custom fields (no-code Form Builder). entity="employee" for now.
-model CustomField {
-  id        String  @id @default(cuid())
-  entity    String  @default("employee")
-  label     String
-  type      String  @default("text") // text | number | date | dropdown
-  options   Json? // for dropdown: array of strings
-  required  Boolean @default(false)
-  sortOrder Int     @default(0)
-}
 
 model Document {
   id               String  @id @default(cuid())
@@ -192,16 +171,6 @@ model CustomRecord {
   @@index([objectId])
 }
 
-// Admin-designed print/PDF layout (Settings → Configure → Print Layout). The PDF renderer walks
-// `blocks` and draws them, so the output is driven entirely by this record rather than hardcoded.
-model PrintLayout {
-  id        String  @id @default(cuid())
-  name      String
-  target    String  @default("invoice") // which document this layout prints: invoice | document | task
-  isDefault Boolean @default(false)     // the layout used when printing that target
-  blocks    Json?   @default("[]")      // ordered [{ id, type, config }] — see PrintBlock in the app
-  settings  Json?   @default("{}")      // { accent, pageSize, margin }
-}
 
 model Task {
   id         String   @id @default(cuid())
@@ -374,20 +343,6 @@ model ServiceRequestMessage {
   @@index([requestId])
 }
 
-model KanbanCard {
-  id         String  @id @default(cuid())
-  title      String
-  companyId  String?
-  clientName String?
-  assignee   String?
-  priority   String  @default("medium")
-  dueDate    String?
-  column     String  @default("backlog")
-  docType    String?
-  checklist  Json?
-
-  @@index([companyId])
-}
 
 model Notification {
   id      String  @id @default(cuid())

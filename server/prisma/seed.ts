@@ -16,7 +16,6 @@ async function main() {
   await prisma.employee.deleteMany();
   await prisma.company.deleteMany();
   await prisma.clientGroup.deleteMany();
-  await prisma.salesRep.deleteMany();
   await prisma.package.deleteMany();
   await prisma.user.deleteMany();
 
@@ -30,19 +29,11 @@ async function main() {
     ],
   });
 
-  // Sales reps
-  await prisma.salesRep.createMany({
-    data: [
-      { id: "sr1", name: "Yousef Al-Harbi", email: "yousef@stimes.sa" },
-      { id: "sr2", name: "Reem Al-Sudairi", email: "reem@stimes.sa" },
-    ],
-  });
-
   // Groups
   await prisma.clientGroup.createMany({
     data: [
-      { id: "grp1", name: "Al-Ghamdi Group", contact: "Abdullah Al-Ghamdi", email: "group@alghamdi.sa", salesRepId: "sr1" },
-      { id: "grp2", name: "Otaibi Industries", contact: "Mohammed Al-Otaibi", email: "corp@otaibi.sa", salesRepId: "sr2" },
+      { id: "grp1", name: "Al-Ghamdi Group", contact: "Abdullah Al-Ghamdi", email: "group@alghamdi.sa" },
+      { id: "grp2", name: "Otaibi Industries", contact: "Mohammed Al-Otaibi", email: "corp@otaibi.sa" },
       { id: "grp3", name: "AlFuturo Group", contact: "Tariq Al-Dosari", email: "hq@alfuturo.sa" },
     ],
   });
@@ -50,13 +41,13 @@ async function main() {
   // Companies
   await prisma.company.createMany({
     data: [
-      { id: "cl1", name: "Global Tech LLC", cr: "1010123456", industry: "Technology", employees: 45, status: "active", overdue: 8, expiring: 12, contact: "Abdullah Al-Ghamdi", email: "abdullah@globaltech.sa", phone: "+966 50 123 4567", city: "Riyadh", groupId: "grp1", salesRepId: "sr1" },
+      { id: "cl1", name: "Global Tech LLC", cr: "1010123456", industry: "Technology", employees: 45, status: "active", overdue: 8, expiring: 12, contact: "Abdullah Al-Ghamdi", email: "abdullah@globaltech.sa", phone: "+966 50 123 4567", city: "Riyadh", groupId: "grp1" },
       { id: "cl2", name: "SkyBridge Corp", cr: "1010234567", industry: "Logistics", employees: 23, status: "active", overdue: 2, expiring: 5, contact: "Sarah Mitchell", email: "sarah@skybridge.com", phone: "+966 55 234 5678", city: "Jeddah" },
       { id: "cl3", name: "TechVault Arabia", cr: "1010345678", industry: "Fintech", employees: 67, status: "active", overdue: 15, expiring: 23, contact: "Mohammed Al-Otaibi", email: "mo@techvault.sa", phone: "+966 56 345 6789", city: "Riyadh", groupId: "grp2" },
       { id: "cl4", name: "Meridian Services", cr: "1010456789", industry: "Consulting", employees: 12, status: "suspended", overdue: 0, expiring: 3, contact: "Layla Hassan", email: "layla@meridian.com", phone: "+966 54 456 7890", city: "Dammam" },
       { id: "cl5", name: "AlFuturo Holdings", cr: "1010567890", industry: "Investment", employees: 89, status: "active", overdue: 4, expiring: 8, contact: "Tariq Al-Dosari", email: "tariq@alfuturo.sa", phone: "+966 50 567 8901", city: "Riyadh", groupId: "grp3" },
-      { id: "cl6", name: "Nexus Digital Arabia", cr: "1010678901", industry: "Technology", employees: 31, status: "active", overdue: 3, expiring: 6, contact: "Omar Bin Sultan", email: "omar@nexusdigital.sa", phone: "+966 55 678 9012", city: "Riyadh", groupId: "grp1", salesRepId: "sr1" },
-      { id: "cl7", name: "Arabian Horizons Co.", cr: "1010789012", industry: "Hospitality", employees: 54, status: "active", overdue: 1, expiring: 9, contact: "Nadia Al-Farsi", email: "nadia@horizons.sa", phone: "+966 56 789 0123", city: "Jeddah", salesRepId: "sr2" },
+      { id: "cl6", name: "Nexus Digital Arabia", cr: "1010678901", industry: "Technology", employees: 31, status: "active", overdue: 3, expiring: 6, contact: "Omar Bin Sultan", email: "omar@nexusdigital.sa", phone: "+966 55 678 9012", city: "Riyadh", groupId: "grp1" },
+      { id: "cl7", name: "Arabian Horizons Co.", cr: "1010789012", industry: "Hospitality", employees: 54, status: "active", overdue: 1, expiring: 9, contact: "Nadia Al-Farsi", email: "nadia@horizons.sa", phone: "+966 56 789 0123", city: "Jeddah" },
       { id: "cl8", name: "Gulf Dynamics Ltd", cr: "1010890123", industry: "Engineering", employees: 112, status: "active", overdue: 6, expiring: 14, contact: "Faisal Al-Shehri", email: "faisal@gulfdynamics.sa", phone: "+966 54 890 1234", city: "Dammam", groupId: "grp2" },
       { id: "cl9", name: "Riyadh Ventures", cr: "1010901234", industry: "Investment", employees: 18, status: "inactive", overdue: 0, expiring: 1, contact: "Hessa Al-Qasem", email: "hessa@rvc.sa", phone: "+966 50 901 2345", city: "Riyadh", groupId: "grp3" },
       { id: "cl10", name: "ProLink Solutions", cr: "1010012345", industry: "IT Services", employees: 38, status: "active", overdue: 2, expiring: 7, contact: "Khaled Mansour", email: "khaled@prolink.sa", phone: "+966 55 012 3456", city: "Riyadh" },
