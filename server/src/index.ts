@@ -1702,6 +1702,74 @@ const scopes: Record<string, ScopeFn> = {
 const includes: Record<string, Record<string, any>> = {
   subscriptions: { package: true },
 };
+
+/**
+ * Deleting a catalog service, with the references checked first.
+ *
+ * The generic CRUD delete would drop the row and leave dangling ids behind: a package still listing
+ * it in serviceIds, a client still carrying it as a paid add-on, a request waiting to be priced. The
+ * service is a name and an id that other records point at by id — nothing in the schema enforces
+ * that, so it is enforced here. Registered BEFORE the generic router so this handler wins.
+ *
+ * Anything still in flight (an open request for the service) counts as in use: withdrawing a service
+ * out from under a client who is waiting on it is worse than refusing the delete.
+ */
+app.delete("/api/service-items/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const id = req.params.id;
+  const svc = await prisma.serviceItem.findUnique({ where: { id } });
+  if (!svc) return res.status(404).json({ error: "Not found" });
+
+  const [packages, subs, openReqs] = await Promise.all([
+    prisma.package.findMany({ select: { id: true, name: true, serviceIds: true } }),
+    prisma.subscription.findMany({ select: { id: true, companyId: true, addons: true } }),
+    prisma.upgradeRequest.findMany({
+      where: { kind: "addon", serviceId: id, status: { in: ["pending", "escalated"] } },
+      select: { clientName: true },
+    }),
+  ]);
+
+  const inPackages = packages.filter(p => Array.isArray(p.serviceIds) && (p.serviceIds as string[]).includes(id));
+  const subsWith = subs.filter(s => Array.isArray(s.addons) && (s.addons as any[]).some(x => x?.serviceId === id));
+  const clientNames = subsWith.length
+    ? (await prisma.company.findMany({ where: { id: { in: subsWith.map(s => s.companyId).filter(Boolean) as string[] } }, select: { name: true } })).map(c => c.name)
+    : [];
+
+  const blockers: string[] = [];
+  if (inPackages.length) blockers.push(`${inPackages.length === 1 ? "the plan" : "the plans"} ${inPackages.map(p => p.name).join(", ")}`);
+  if (subsWith.length) blockers.push(`${subsWith.length} client ${subsWith.length === 1 ? "plan" : "plans"} as a paid add-on${clientNames.length ? ` (${clientNames.slice(0, 3).join(", ")}${clientNames.length > 3 ? "…" : ""})` : ""}`);
+  if (openReqs.length) blockers.push(`${openReqs.length} open add-on ${openReqs.length === 1 ? "request" : "requests"}`);
+
+  if (blockers.length) {
+    return res.status(409).json({
+      error: `"${svc.name}" is still in use — remove it from ${blockers.join(" and ")} first.`,
+      blockers: { packages: inPackages.map(p => p.name), clients: clientNames, openRequests: openReqs.length },
+    });
+  }
+
+  await prisma.serviceItem.delete({ where: { id } });
+  logActivity({ type: "client", message: `Catalog service removed: ${svc.name}` });
+  await logAudit({ action: "service-item.delete", actorId: (req as any).auth.sub, target: id, detail: svc.name });
+  res.status(204).end();
+});
+
+/**
+ * Which packages / clients / open requests a service is attached to. The console asks before
+ * offering Delete, so a service that cannot be removed says why instead of failing on the click.
+ */
+app.get("/api/service-items/:id/usage", requireAuth, requireStaff, async (req, res) => {
+  const id = req.params.id;
+  const [packages, subs, openReqs] = await Promise.all([
+    prisma.package.findMany({ select: { name: true, serviceIds: true } }),
+    prisma.subscription.findMany({ select: { companyId: true, addons: true } }),
+    prisma.upgradeRequest.count({ where: { kind: "addon", serviceId: id, status: { in: ["pending", "escalated"] } } }),
+  ]);
+  const inPackages = packages.filter(p => Array.isArray(p.serviceIds) && (p.serviceIds as string[]).includes(id)).map(p => p.name);
+  const subsWith = subs.filter(s => Array.isArray(s.addons) && (s.addons as any[]).some(x => x?.serviceId === id));
+  const clients = subsWith.length
+    ? (await prisma.company.findMany({ where: { id: { in: subsWith.map(s => s.companyId).filter(Boolean) as string[] } }, select: { name: true } })).map(c => c.name)
+    : [];
+  res.json({ packages: inPackages, clients, openRequests: openReqs, canDelete: !inPackages.length && !clients.length && !openReqs });
+});
 for (const [path, modelName] of entities) {
   const guards: any[] = [requireAuth, requireStaff];
   if (readRole[path]) guards.push(requireReadRole(...readRole[path]));

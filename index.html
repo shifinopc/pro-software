@@ -1591,8 +1591,8 @@
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg>
                 </div>
                 <div style="display:flex; gap:7px; margin-top:11px;">
-                  <button onClick="{{ sv.editWorkflow }}" style="flex:1; background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit steps</button>
-                  <button onClick="{{ sv.editDocType }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Doc type</button>
+                  <button onClick="{{ sv.editService }}" style="flex:1; background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit service</button>
+                  <button onClick="{{ sv.editWorkflow }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:8px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit steps</button>
                 </div>
               </div>
             </sc-for>
@@ -1624,6 +1624,57 @@
                 <div style="display:flex; justify-content:flex-end; gap:9px; margin-top:20px;">
                   <button onClick="{{ closeSvcNew }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
                   <button onClick="{{ svcNewSubmit }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create service</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <!-- Edit a catalog service. "Edit" used to jump to the Workflow Builder, so the service
+               itself — its name, SLA, availability, bound workflow — could never be changed. -->
+          <sc-if value="{{ svcEditOpen }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSvcEdit }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; animation:fadeUp .15s ease both;">
+              <div onClick="{{ stopClick }}" style="width:480px; max-width:92vw; background:#fff; border-radius:20px; box-shadow:0 24px 64px rgba(38,7,77,.28); padding:24px 26px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+                  <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Edit service</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Availability decides whether every plan gets it or clients ask for it as an add-on</div></div>
+                  <div onClick="{{ closeSvcEdit }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                </div>
+                <div style="margin-top:16px;">
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SERVICE NAME *</div>
+                  <input value="{{ svcEditName }}" onInput="{{ setSvcEditName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
+                </div>
+                <div style="margin-top:13px;">
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AVAILABILITY</div>
+                  <div style="position:relative; margin-top:6px;">
+                    <div data-dd onClick="{{ ddSvcEditAvToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ddSvcEditAvVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                    <sc-if value="{{ ddSvcEditAvOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcEditAvOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                  </div>
+                </div>
+                <div style="margin-top:13px;">
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WORKFLOW</div>
+                  <div style="position:relative; margin-top:6px;">
+                    <div data-dd onClick="{{ ddSvcEditWfToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddSvcEditWfVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                    <sc-if value="{{ ddSvcEditWfOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcEditWfOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                  </div>
+                </div>
+                <div style="margin-top:13px;">
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SLA</div>
+                  <input value="{{ svcEditSla }}" onInput="{{ setSvcEditSla }}" placeholder="5 working days" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
+                </div>
+                <sc-if value="{{ svcEditHasErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#C0353A; margin-top:12px; line-height:1.5;">{{ svcEditErr }}</div></sc-if>
+                <div style="margin-top:16px; border-top:1px solid #F0EDF6; padding-top:14px;">
+                  <div style="font-size:11px; color:#8C8899; line-height:1.5;">{{ svcUsageLine }}</div>
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:12px; flex-wrap:wrap;">
+                    <sc-if value="{{ svcShowDeleteBtn }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ askSvcDelete }}" style="background:#fff; color:#C0353A; border:1px solid #FBD5D5; font-size:11.5px; font-weight:700; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#FEECEC;">Delete service</button>
+                    </sc-if>
+                    <sc-if value="{{ svcDeleteConfirming }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:11.5px; color:#C0353A; font-weight:600;">Delete for good?</span>
+                      <button onClick="{{ svcEditDelete }}" style="background:#C0353A; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="background:#A22B30;">Yes, delete</button>
+                      <button onClick="{{ cancelSvcDelete }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11.5px; font-weight:600; padding:8px 12px; border-radius:99px; cursor:pointer;">Keep</button>
+                    </sc-if>
+                    <div style="flex:1;"></div>
+                    <button onClick="{{ closeSvcEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+                    <button onClick="{{ svcEditSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ svcEditSaveLabel }}</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8926,7 +8977,7 @@ class Component extends DCLogic {
         || _wfTplsForSvc.find(t9 => { const tn9 = String(t9.name).toLowerCase(); return tn9.includes(l9) || l9.includes(tn9.replace(/^demo — /, '')); })
         || _wfTplsForSvc.find(t9 => { const a9 = _wfToks(nm), b9 = _wfToks(t9.name); return a9.length && a9.some(w9 => b9.includes(w9)); })
         || null; };
-    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9], i) => {
+    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9, svcId9], i) => {
       const p = svcPals[i % svcPals.length];
       // A stored workflowId is authoritative; keyword matching is only the fallback for services
       // created before the link existed.
@@ -8941,16 +8992,101 @@ class Component extends DCLogic {
         stepsLabel: configured ? meta[2] + ' steps' : 'No workflow',
         iconBg: included ? p[0] : '#F3F1F7', iconColor: included ? p[1] : '#A9A6B4',
         opacity: 1,
-        // A service is only "Active" (orderable) once it has a workflow to fulfil it. Included but
+        // A service is only "Active" (orderable) once it has a workflow to fulfil it. On-plan but
         // unconfigured → "Needs setup" (amber), so nothing is orderable with no fulfilment path.
-        badge: !included ? 'DRAFT' : (configured ? 'ACTIVE' : 'NEEDS SETUP'),
-        badgeBg: !included ? '#FEF4E2' : (configured ? '#E7F8EF' : '#FEF4E2'),
-        badgeColor: !included ? '#B8860B' : (configured ? '#0E9355' : '#B8860B'),
-        planLabel: included ? 'All plans' : 'Enterprise only',
+        // `included: false` used to read "DRAFT / Enterprise only" here, which was never what it
+        // meant and is now plainly wrong: the portal treats it as locked-but-requestable, and a
+        // client can buy it as a per-client add-on. The label says what the flag actually does.
+        badge: !included ? 'ADD-ON ONLY' : (configured ? 'ACTIVE' : 'NEEDS SETUP'),
+        badgeBg: !included ? '#EFEBFF' : (configured ? '#E7F8EF' : '#FEF4E2'),
+        badgeColor: !included ? '#6D5BD0' : (configured ? '#0E9355' : '#B8860B'),
+        planLabel: included ? 'On every plan' : 'By request only',
+        // Edit used to jump straight to the Workflow Builder, so there was no way to change the
+        // service itself — its name, SLA, availability or which workflow it is bound to.
+        editService: () => svcId9
+          ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), included: !!included, wf: (tpl9 && tpl9.name) || _svcWfNone }, svcEditErr: '', svcUsage: null }, () => this._loadSvcUsage(svcId9))
+          : this.toast('That is a sample card — add a real service first'),
         editWorkflow: () => this.setState({ active: 'Workflow Builder', activeGroup: 'Admin' }),
         editDocType: () => this.setState({ active: 'Document Types', activeGroup: 'Configure' }),
       };
     });
+    // ---- Edit / delete a catalog service ----
+    // Availability is the same `included` flag the portal reads: true = on every plan, false =
+    // locked, requestable as a per-client add-on. There was no control for it anywhere, so a
+    // service could only ever be whatever it was created as.
+    const _svcWfNone = 'No workflow yet — link later';
+    const _svcAvail = ['On every plan', 'By request only (add-on)'];
+    const _sve = this.state.svcEdit || null;
+    const _sveWfSel = _sve ? (_sve.wf || _svcWfNone) : _svcWfNone;
+    const _sveAvSel = _sve ? (_sve.included ? _svcAvail[0] : _svcAvail[1]) : _svcAvail[0];
+    const _svcUsage = this.state.svcUsage || null;
+    // Ask the server what the service is attached to before offering Delete, so a service that
+    // cannot be removed explains why instead of failing on the click.
+    this._loadSvcUsage = (id9) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/service-items/' + id9 + '/usage', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.json() : null)).then(v9 => { if (v9) this.setState({ svcUsage: v9 }); }).catch(() => {});
+    };
+    const _svcUsageLine = !_svcUsage ? 'Checking where this service is used…'
+      : _svcUsage.canDelete ? 'Not on any plan and no client is using it — this service can be deleted.'
+      : 'In use, so it cannot be deleted: ' + [
+          _svcUsage.packages.length ? 'on ' + _svcUsage.packages.join(', ') : '',
+          _svcUsage.clients.length ? _svcUsage.clients.length + ' client' + (_svcUsage.clients.length === 1 ? ' has' : 's have') + ' it as an add-on' : '',
+          _svcUsage.openRequests ? _svcUsage.openRequests + ' open add-on request' + (_svcUsage.openRequests === 1 ? '' : 's') : '',
+        ].filter(Boolean).join(' · ') + '.';
+    const svcEditApi = {
+      svcEditOpen: !!_sve,
+      svcEditName: _sve ? _sve.name : '',
+      svcEditSla: _sve ? _sve.sla : '',
+      svcEditErr: this.state.svcEditErr || '', svcEditHasErr: !!(this.state.svcEditErr || ''),
+      svcEditBusy: !!this.state.svcEditBusy,
+      svcEditSaveLabel: this.state.svcEditBusy ? 'Saving…' : 'Save changes',
+      svcUsageLine: _svcUsageLine,
+      // Two flags rather than one: the runtime's sc-if has no else, so "offer delete" and "confirm
+      // delete" have to be mutually exclusive conditions.
+      svcShowDeleteBtn: !!(_svcUsage && _svcUsage.canDelete) && this.state.svcDeleteConfirm !== (_sve && _sve.id),
+      svcDeleteConfirming: !!(_svcUsage && _svcUsage.canDelete) && this.state.svcDeleteConfirm === (_sve && _sve.id),
+      setSvcEditName: (e9) => this.setState({ svcEdit: { ...this.state.svcEdit, name: e9.target.value }, svcEditErr: '' }),
+      setSvcEditSla: (e9) => this.setState({ svcEdit: { ...this.state.svcEdit, sla: e9.target.value } }),
+      closeSvcEdit: () => this.setState({ svcEdit: null, svcEditErr: '', svcDeleteConfirm: null, svcUsage: null }),
+      askSvcDelete: () => this.setState({ svcDeleteConfirm: _sve && _sve.id }),
+      cancelSvcDelete: () => this.setState({ svcDeleteConfirm: null }),
+      ...mkDd('ddSvcEditWf', [_svcWfNone, ..._wfTplsForSvc.map(t9 => t9.name)], _sveWfSel, (v9) => this.setState({ svcEdit: { ...this.state.svcEdit, wf: v9 } })),
+      ddSvcEditWfVal: _sveWfSel,
+      ...mkDd('ddSvcEditAv', _svcAvail, _sveAvSel, (v9) => this.setState({ svcEdit: { ...this.state.svcEdit, included: v9 === _svcAvail[0] } })),
+      ddSvcEditAvVal: _sveAvSel,
+      svcEditSave: () => {
+        const s9 = this.state.svcEdit;
+        if (!s9 || this.state.svcEditBusy) return;
+        const nm9 = (s9.name || '').trim();
+        if (!nm9) return this.setState({ svcEditErr: 'Service name is required' });
+        if (svcDefs.find(d9 => d9[8] !== s9.id && String(d9[0]).toLowerCase() === nm9.toLowerCase())) {
+          return this.setState({ svcEditErr: 'Another service is already named "' + nm9 + '"' });
+        }
+        const tpl9 = _wfTplsForSvc.find(t9 => t9.name === (s9.wf || _svcWfNone)) || null;
+        this.setState({ svcEditBusy: true });
+        this._opPut('service-items', s9.id, { name: nm9, sla: (s9.sla || '').trim() || null, included: !!s9.included, workflowId: tpl9 ? tpl9.id : null }, () => {
+          this.setState({ svcEdit: null, svcEditBusy: false, svcUsage: null });
+          this.toast('Saved "' + nm9 + '"');
+          this._opReload('service-items', 'serviceItemsData');
+        });
+      },
+      svcEditDelete: () => {
+        const s9 = this.state.svcEdit;
+        if (!s9) return;
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/service-items/' + s9.id, { method: 'DELETE', headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+          .then(r9 => r9.status === 204 ? { ok: true, j: {} } : r9.json().catch(() => ({})).then(j9 => ({ ok: false, j: j9 })))
+          .then(({ ok, j }) => {
+            if (!ok) return this.setState({ svcDeleteConfirm: null, svcEditErr: j.error || 'Could not delete this service' });
+            this.setState({ svcEdit: null, svcDeleteConfirm: null, svcUsage: null });
+            this.toast('Deleted "' + s9.name + '"');
+            this._opReload('service-items', 'serviceItemsData');
+          })
+          .catch(() => this.setState({ svcDeleteConfirm: null, svcEditErr: 'Server unreachable — nothing changed' }));
+      },
+    };
+
     // ---- New catalog service (standard modal: name + linked workflow → POST /api/service-items) ----
     const _svcWfNames = ['No workflow yet — link later', ..._wfTplsForSvc.map(t9 => t9.name)];
     const _svcWfSel = this.state.svcNewWf || _svcWfNames[0];
@@ -12870,7 +13006,7 @@ class Component extends DCLogic {
       railLogout: () => this.setState({ railMenu: false, auth: 'login', lPass: '', lError: '', active: 'Dashboard', activeGroup: 'Main' }),
       ...ticketApi, ...bookApi, ...authApi, ...switcherApi, ...headerApi, ...empApi, ...threadApi, ...credApi, ...settingsApi,
       ...groupApi, ...clientsApi, ...payApi, ...docApi, ...empProfileApi, ...notifApi, ...editProfileApi, ...trackApi, ...uploadApi, ...folderApi, ...rdApi,
-      ...wizardApi, ...upgradeApi, services, ...svcNewApi, renewalGroups,
+      ...wizardApi, ...upgradeApi, services, ...svcNewApi, ...svcEditApi, renewalGroups,
       ...requestsApi, ...quotesApi, ...planApi, ...mobileApi, ...calApi, ...notifPopApi, ...searchApi, ...apptApi, ...needsTodayApi, ...courierApi,
       ...tasksApi, ...tasksApi2, ...myTasksApi, ...myWorkApi, ...activityApi, ...approvalsApi, ...slaApi, ...slaApi2, ...queueApi, ...complianceApi,
       ...reportsApi, ...financeApi, ...govCentersApi, ...packagesApi, ...countryApi, ...docTypesApi, ...departmentsApi, ...workflowApi, ...settingsAdminApi,
