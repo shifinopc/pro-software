@@ -53,6 +53,32 @@ async function resolveDynamic(ruleId: string, vars: Record<string, any>): Promis
   }
   return Object.values(out);
 }
+/**
+ * Choose who a new step belongs to: the ACTIVE staff member holding that role with the fewest open
+ * tasks. Least-loaded rather than plain round-robin, because a round robin keeps handing work to
+ * someone already buried. Ties break on name so the result is deterministic (and testable).
+ * Returns the user's NAME — that is what WorkflowTask.assignee holds and what /my-work matches on.
+ * Null when nobody holds the role, which leaves the old unassigned behaviour intact.
+ */
+async function pickAssignee(role: string): Promise<string | null> {
+  const candidates = await prisma.user.findMany({
+    where: { roleId: role, status: "active", type: "staff" },
+    select: { name: true },
+  });
+  if (!candidates.length) return null;
+  const names = candidates.map(c => c.name).filter(Boolean) as string[];
+  if (!names.length) return null;
+  const load = await prisma.workflowTask.groupBy({
+    by: ["assignee"],
+    where: { status: "active", assignee: { in: names } },
+    _count: { _all: true },
+  });
+  const byName = new Map(load.map(l => [l.assignee as string, l._count._all]));
+  return names
+    .map(n => ({ n, c: byName.get(n) ?? 0 }))
+    .sort((a, b) => (a.c - b.c) || a.n.localeCompare(b.n))[0].n;
+}
+
 // The effective checklist for a task node at runtime: dynamic rule (if configured) else the node's own list.
 async function resolveChecklist(config: any, vars: Record<string, any>): Promise<ChecklistItem[]> {
   const c = config ?? {};
@@ -329,12 +355,17 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         const c = node.config ?? {};
         // Snapshot the effective checklist (dynamic rule → variables, else static) so later template edits don't change in-flight runs.
         const items = await resolveChecklist(c, vars);
+        const role = c.assigneeRole || c.approverRole || null;
+        // Give the step an owner. Templates name a ROLE, not a person, so every task landed with
+        // assignee null and sat in a shared pile until somebody claimed it. Falls back to null (the
+        // old behaviour) when nobody holds the role — better unassigned than assigned to the wrong desk.
+        const assignee = c.assignee || (role ? await pickAssignee(role) : null);
         await prisma.workflowTask.create({
           data: {
             instanceId: inst.id, nodeId, nodeType: node.type,
             title: c.title || node.label || (node.type === "approval" ? "Approval" : "Task"),
-            assignee: c.assignee || null,
-            assigneeRole: c.assigneeRole || c.approverRole || null,
+            assignee,
+            assigneeRole: role,
             status: "active",
             priority: c.priority || "medium",
             dueDate: c.dueDate || null,

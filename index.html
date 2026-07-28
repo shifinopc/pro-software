@@ -685,16 +685,16 @@
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <div>
               <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Throughput</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">Submitted vs completed · last 12 months</div>
+              <div style="font-size:12px; color:#8C8899; margin-top:1px;">Submitted vs completed · {{ thrRangeLabel }}</div>
             </div>
             <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
-              <span style="font-size:11.5px; font-weight:600; color:#7C00FF; background:#fff; padding:4px 12px; border-radius:99px; box-shadow:0 1px 3px rgba(38,7,77,.08); cursor:pointer;">12M</span>
-              <span style="font-size:11.5px; font-weight:500; color:#8C8899; padding:4px 12px; border-radius:99px; cursor:pointer;">6M</span>
-              <span style="font-size:11.5px; font-weight:500; color:#8C8899; padding:4px 12px; border-radius:99px; cursor:pointer;">30D</span>
+              <sc-for list="{{ thrChips }}" as="c" hint-placeholder-count="3">
+                <span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:{{ c.weight }}; color:{{ c.color }}; background:{{ c.bg }}; padding:4px 12px; border-radius:99px; box-shadow:{{ c.shadow }}; cursor:pointer;">{{ c.label }}</span>
+              </sc-for>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:16px; margin-top:14px;">
-            <div><div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; line-height:1;">{{ thrSubTotal }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:3px;">submitted · 12 mo</div></div>
+            <div><div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; line-height:1;">{{ thrSubTotal }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:3px;">{{ thrTotalLabel }}</div></div>
             <div style="width:1px; height:28px; background:#F0EDF6;"></div>
             <div><div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; line-height:1; color:#12B76A;">{{ thrCompTotal }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:3px;">completed · {{ thrPct }}%</div></div>
           </div>
@@ -1994,6 +1994,8 @@
                 <div style="display:flex; align-items:baseline; justify-content:space-between; margin-top:13px; border-top:1px solid #F5F3F9; padding-top:11px;">
                   <span style="font-size:10.5px; color:#A9A6B4; font-weight:600;">TOTAL</span>
                   <div style="display:flex; align-items:center; gap:8px;">
+                    <sc-if value="{{ q.canInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.convert }}" title="Raise a draft invoice from this accepted quotation" style="font-size:10.5px; font-weight:700; color:#fff; background:#7C00FF; padding:4px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Invoice</span></sc-if>
+                    <sc-if value="{{ q.isInvoiced }}" hint-placeholder-val="{{ false }}"><span title="Already invoiced" style="font-size:10.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:4px 11px; border-radius:99px;">Invoiced ✓</span></sc-if>
                     <span onClick="{{ q.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="font-size:10.5px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:4px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</span>
                     <span style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ q.amount }}</span>
                   </div>
@@ -2723,6 +2725,12 @@
           </div><button onClick="{{ openCountryNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add country</button>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; flex-direction:column; gap:12px;">
+          <sc-if value="{{ countriesEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+              <div style="font-size:14px; font-weight:700;">No countries set up yet</div>
+              <div style="font-size:12.5px; color:#8C8899; margin-top:5px; max-width:420px; margin-left:auto; margin-right:auto; line-height:1.6;">Add the countries you operate in, with their government portals and currency, so document types and fees can be organised per country.</div>
+            </div>
+          </sc-if>
           <sc-for list="{{ countries }}" as="c" hint-placeholder-count="5">
             <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 22px;">
               <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -2731,7 +2739,7 @@
                   <div style="display:flex; align-items:center; gap:9px;"><span style="font-size:14.5px; font-weight:700;">{{ c.name }}</span><span style="font-size:9.5px; font-weight:700; color:{{ c.stColor }}; background:{{ c.stBg }}; padding:2px 9px; border-radius:99px;">{{ c.status }}</span></div>
                   <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ c.clients }} clients · {{ c.docs }} document types · currency {{ c.currency }}</div>
                 </div>
-                <button style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Configure</button>
+                <button onClick="{{ c.configure }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Configure</button>
               </div>
               <div style="display:flex; align-items:center; gap:8px; margin-top:13px; flex-wrap:wrap;">
                 <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PORTALS</span>
@@ -4862,11 +4870,11 @@
   <sc-if value="{{ showCountryNew }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeCountryNew }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
-        <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Add country</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">Per-country authorities, docs, fees & timelines</div></div><div onClick="{{ closeCountryNew }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
+        <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ cnTitle }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:1px;">Per-country authorities, docs, fees & timelines</div></div><div onClick="{{ closeCountryNew }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
         <sc-if value="{{ cnErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ cnErr }}</div></sc-if>
         <div style="display:flex; gap:12px; margin-top:16px;"><div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COUNTRY NAME *</div><input value="{{ cnName }}" onChange="{{ setCnName }}" placeholder="e.g. Kuwait" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div><div style="width:74px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">FLAG</div><input value="{{ cnFlag }}" onChange="{{ setCnFlag }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; text-align:center;"></div><div style="width:100px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CURRENCY</div><input value="{{ cnCurrency }}" onChange="{{ setCnCurrency }}" placeholder="KWD" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div></div>
         <div style="margin-top:14px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PORTALS (COMMA-SEPARATED)</div><input value="{{ cnPortals }}" onChange="{{ setCnPortals }}" placeholder="PACI, MOI, Sahel" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div>
-        <div style="display:flex; gap:10px; margin-top:22px; justify-content:flex-end;"><button onClick="{{ closeCountryNew }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitCountryNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Add country</button></div>
+        <div style="display:flex; gap:10px; margin-top:22px; justify-content:flex-end;"><button onClick="{{ closeCountryNew }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitCountryNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ cnSaveLabel }}</button></div>
       </div>
     </div>
   </sc-if>
@@ -6738,21 +6746,49 @@ class Component extends DCLogic {
     }
 
     // WIRED: throughput = real workflow runs — started (submitted) vs completed per month.
+    // The 12M / 6M / 30D chips are REAL now: they were three styled spans with no onClick at all,
+    // while 12M was hard-styled as the selected one. 30D buckets by day instead of by month.
     const _wfInst = Array.isArray(this.state.wfInstancesData) ? this.state.wfInstancesData : null;
+    const thrRange = this.state.thrRange || '12M';
+    const _thrDaily = thrRange === '30D';
+    const _thrSlots = _thrDaily ? 30 : (thrRange === '6M' ? 6 : 12);
     const _thr = (() => {
       const now4 = new Date(); const tm4 = [], sub4 = [], comp4 = [];
-      for (let i = 11; i >= 0; i--) { const d4 = new Date(now4.getFullYear(), now4.getMonth() - i, 1); tm4.push(d4.toLocaleDateString('en-GB', { month: 'short' })); sub4.push(0); comp4.push(0); }
+      for (let i = _thrSlots - 1; i >= 0; i--) {
+        const d4 = _thrDaily ? new Date(now4.getFullYear(), now4.getMonth(), now4.getDate() - i)
+          : new Date(now4.getFullYear(), now4.getMonth() - i, 1);
+        tm4.push(_thrDaily ? String(d4.getDate()) : d4.toLocaleDateString('en-GB', { month: 'short' }));
+        sub4.push(0); comp4.push(0);
+      }
       if (_wfInst) _wfInst.forEach(inst4 => {
-        const idxOf = (ds4) => { const d4 = new Date(ds4); if (isNaN(+d4)) return -1; return 11 - ((now4.getFullYear() - d4.getFullYear()) * 12 + (now4.getMonth() - d4.getMonth())); };
-        const si = idxOf(inst4.startedAt); if (si >= 0 && si <= 11) sub4[si]++;
-        if (inst4.status === 'completed') { const ci = idxOf(inst4.completedAt || inst4.startedAt); if (ci >= 0 && ci <= 11) comp4[ci]++; }
+        const idxOf = (ds4) => {
+          const d4 = new Date(ds4); if (isNaN(+d4)) return -1;
+          if (_thrDaily) {
+            const a5 = new Date(now4.getFullYear(), now4.getMonth(), now4.getDate());
+            const b5 = new Date(d4.getFullYear(), d4.getMonth(), d4.getDate());
+            return (_thrSlots - 1) - Math.round((a5 - b5) / 86400000);
+          }
+          return (_thrSlots - 1) - ((now4.getFullYear() - d4.getFullYear()) * 12 + (now4.getMonth() - d4.getMonth()));
+        };
+        const si = idxOf(inst4.startedAt); if (si >= 0 && si < _thrSlots) sub4[si]++;
+        if (inst4.status === 'completed') { const ci = idxOf(inst4.completedAt || inst4.startedAt); if (ci >= 0 && ci < _thrSlots) comp4[ci]++; }
       });
       return { tm4, sub4, comp4 };
     })();
-    const tm = _wfInst ? _thr.tm4 : ['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul'];
+    const thrChips = ['12M', '6M', '30D'].map(k4 => ({
+      label: k4, sel: thrRange === k4,
+      color: thrRange === k4 ? '#7C00FF' : '#8C8899',
+      bg: thrRange === k4 ? '#fff' : 'transparent',
+      weight: thrRange === k4 ? 600 : 500,
+      shadow: thrRange === k4 ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
+      pick: () => this.setState({ thrRange: k4 }),
+    }));
+    const thrRangeLabel = thrRange === '30D' ? 'last 30 days' : thrRange === '6M' ? 'last 6 months' : 'last 12 months';
+    const thrTotalLabel = thrRange === '30D' ? 'submitted · 30 d' : thrRange === '6M' ? 'submitted · 6 mo' : 'submitted · 12 mo';
+    const tm = _wfInst ? _thr.tm4 : ['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul'].slice(-_thrSlots);
     const _thrMax = Math.max(1, ..._thr.sub4);
-    const tSub = _wfInst ? _thr.sub4.map(v4 => Math.round(v4 / _thrMax * 88)) : [38, 45, 42, 55, 50, 62, 58, 68, 64, 75, 70, 88];
-    const tComp = _wfInst ? _thr.comp4.map(v4 => Math.round(v4 / _thrMax * 88)) : [30, 36, 35, 46, 42, 54, 50, 60, 57, 68, 63, 78];
+    const tSub = _wfInst ? _thr.sub4.map(v4 => Math.round(v4 / _thrMax * 88)) : [38, 45, 42, 55, 50, 62, 58, 68, 64, 75, 70, 88].slice(-_thrSlots);
+    const tComp = _wfInst ? _thr.comp4.map(v4 => Math.round(v4 / _thrMax * 88)) : [30, 36, 35, 46, 42, 54, 50, 60, 57, 68, 63, 78].slice(-_thrSlots);
     const thrSubTotal = _wfInst ? _thr.sub4.reduce((a4, b4) => a4 + b4, 0) : 742;
     const thrCompTotal = _wfInst ? _thr.comp4.reduce((a4, b4) => a4 + b4, 0) : 689;
     const thrPct = thrSubTotal ? Math.round(thrCompTotal / thrSubTotal * 100) : 0;
@@ -10231,18 +10267,26 @@ class Component extends DCLogic {
       ['India', '🇮🇳', 'INR', 6, ['MEA', 'Passport Seva'], 8, 'Draft'],
     ];
     const crData = this.state.countryRulesData;
-    const countryBase = (crData && Array.isArray(crData.countries)) ? crData.countries : CR_DEFAULT;
-    const countryDefs = countryBase.map(([name, flag, currency, clients, portals, docs, status]) => ({
+    // CR_DEFAULT is the DESIGN preview only. A signed-in tenant with nothing saved sees an empty
+    // list, not four invented countries with invented client counts.
+    const countryBase = (crData && Array.isArray(crData.countries)) ? crData.countries : (_authed ? [] : CR_DEFAULT);
+    const countryDefs = countryBase.map(([name, flag, currency, clients, portals, docs, status], ci9) => ({
       name, flag, currency, clients, docs,
       portals: portals.map(p => ({ name: p })), portalCount: portals.length,
       status, stColor: status === 'Primary' ? '#7C00FF' : status === 'Active' ? '#0E9355' : '#B8860B',
       stBg: status === 'Primary' ? '#F3E8FF' : status === 'Active' ? '#E7F8EF' : '#FEF4E2',
+      // "Configure" had no onClick at all. It now reopens the same modal in edit mode.
+      configure: () => this.setState({ cnOpen: true, cnEditIdx: ci9, cnName: name, cnFlag: flag,
+        cnCurrency: currency, cnPortals: portals.join(', '), cnStatus: status, cnErr: '' }),
     }));
     const countryNewApi = {
       showCountryNew: !!this.state.cnOpen,
       cnName: this.state.cnName || '', cnFlag: this.state.cnFlag || '', cnCurrency: this.state.cnCurrency || '', cnPortals: this.state.cnPortals || '', cnErr: this.state.cnErr || false,
-      openCountryNew: () => this.setState({ cnOpen: true, cnName: '', cnFlag: '🏳️', cnCurrency: '', cnPortals: '', cnErr: '' }),
-      closeCountryNew: () => this.setState({ cnOpen: false }),
+      cnIsEdit: this.state.cnEditIdx != null,
+      cnTitle: this.state.cnEditIdx != null ? 'Configure country' : 'Add country',
+      cnSaveLabel: this.state.cnEditIdx != null ? 'Save changes' : 'Add country',
+      openCountryNew: () => this.setState({ cnOpen: true, cnEditIdx: null, cnName: '', cnFlag: '🏳️', cnCurrency: '', cnPortals: '', cnStatus: 'Draft', cnErr: '' }),
+      closeCountryNew: () => this.setState({ cnOpen: false, cnEditIdx: null }),
       setCnName: (e) => this.setState({ cnName: e.target.value, cnErr: '' }),
       setCnFlag: (e) => this.setState({ cnFlag: e.target.value }),
       setCnCurrency: (e) => this.setState({ cnCurrency: e.target.value }),
@@ -10250,17 +10294,23 @@ class Component extends DCLogic {
       submitCountryNew: () => {
         const name = (this.state.cnName || '').trim();
         if (!name) return this.setState({ cnErr: 'Country name is required' });
+        const idx9 = this.state.cnEditIdx;
         const portals = (this.state.cnPortals || '').split(',').map(p => p.trim()).filter(Boolean);
-        const row = [name, this.state.cnFlag || '🏳️', (this.state.cnCurrency || '—').toUpperCase(), 0, portals, 0, 'Draft'];
-        const next = { countries: [row, ...countryBase] };
-        this.setState({ countryRulesData: next, cnOpen: false });
-        this.toast('Country added');
+        const prev9 = idx9 != null ? countryBase[idx9] : null;
+        // Editing keeps the derived counts (clients / doc types) — they are not typed in this form,
+        // so rebuilding the row from scratch would silently zero them.
+        const row = [name, this.state.cnFlag || '🏳️', (this.state.cnCurrency || '—').toUpperCase(),
+          prev9 ? prev9[3] : 0, portals, prev9 ? prev9[5] : 0, this.state.cnStatus || (prev9 ? prev9[6] : 'Draft')];
+        const list9 = idx9 != null ? countryBase.map((r9, i9) => (i9 === idx9 ? row : r9)) : [row, ...countryBase];
+        const next = { countries: list9 };
+        this.setState({ countryRulesData: next, cnOpen: false, cnEditIdx: null });
+        this.toast(idx9 != null ? 'Country updated' : 'Country added');
         const API = this._apiBase || 'http://localhost:4100';
         const tok = localStorage.getItem('stimespro:token');
         fetch(API + '/api/settings/countryRules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(next) }).catch(() => {});
       },
     };
-    const countryApi = { countries: countryDefs, ...countryNewApi };
+    const countryApi = { countries: countryDefs, countriesEmpty: countryDefs.length === 0, ...countryNewApi };
 
     // ===== Document Types =====
     const docTypeDefs = [
@@ -12182,17 +12232,35 @@ class Component extends DCLogic {
     const QT_BACK = { 'Pending': 'sent', 'Accepted': 'approved', 'Rejected': 'rejected', 'Changes requested': 'sent' };
     const qtData = this.state.quotationsData;
     const quoteDefs = (Array.isArray(qtData)
-      ? qtData.map(q2 => [q2.number || q2.id, [q2.service || 'Quotation', q2.clientName].filter(Boolean).join(' — '), [q2.date ? 'Sent ' + q2.date : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', [[q2.service || 'Service', fmtCur(q2.amount)]], fmtCur(q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending'])
+      ? qtData.map(q2 => [q2.number || q2.id, [q2.service || 'Quotation', q2.clientName].filter(Boolean).join(' — '), [q2.date ? 'Sent ' + q2.date : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', [[q2.service || 'Service', fmtCur(q2.amount)]], fmtCur(q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
       : (_authed ? [] : [
-        ['QT-338', 'Labour card renewal × 3', 'Sent 15 Jul · expires 22 Jul', [['MOHRE fees × 3', 'AED 1,800']], 'AED 2,000', null, 'Pending'],
-        ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted'],
+        ['QT-338', 'Labour card renewal × 3', 'Sent 15 Jul · expires 22 Jul', [['MOHRE fees × 3', 'AED 1,800']], 'AED 2,000', null, 'Pending', 'sent'],
+        ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted', 'approved'],
       ]));
     const qStatusOf = (id, def) => qs[id] || def;
     const qChipMap = { 'Pending': ['#FEF4E2', '#B8860B'], 'Accepted': ['#E7F8EF', '#0E9355'], 'Rejected': ['#FEECEC', '#C0353A'], 'Changes requested': ['#F3E8FF', '#7C00FF'] };
-    const quotes = quoteDefs.map(([id, title, meta, items, total, realId, realSt], i) => {
+    const quotes = quoteDefs.map(([id, title, meta, items, total, realId, realSt, rawSt], i) => {
       const status = qStatusOf(id, realSt || 'Pending');
       const chip = qChipMap[status];
       return { id, title, meta, amount: total, status, stBg: chip[0], stColor: chip[1],
+        // An accepted quotation can be turned into an invoice; QT_ST maps both `approved` and
+        // `invoiced` to "Accepted", so the RAW status is what decides which control to show.
+        canInvoice: canWrite && !!realId && rawSt === 'approved',
+        isInvoiced: rawSt === 'invoiced',
+        convert: (ev9) => {
+          ev9 && ev9.stopPropagation && ev9.stopPropagation();
+          const tok9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + realId + '/convert', {
+            method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => {
+              if (!ok) return this.toast((j9 && j9.error) || 'Could not raise the invoice', 'error');
+              this.toast('Draft ' + ((j9.invoice && j9.invoice.number) || 'invoice') + ' raised — approve it to issue');
+              this._opReload && this._opReload('quotations', 'quotationsData');
+              this._opReload && this._opReload('invoices', 'invoicesData');
+            })
+            .catch(() => this.toast('Cannot reach the server — no invoice was raised', 'error'));
+        },
         open: () => this.setState({ quoteOpen: id }),
         // Branded print (uploaded header/footer/watermark from Settings → Print Layout).
         print: (ev9) => {
@@ -12658,6 +12726,7 @@ class Component extends DCLogic {
       opsStats, pipeSteps, team, revenue, clientHealth, receivables, dashRequests, ...dashNav,
       heroTasksDue: String(_dueToday), heroTasksDueLabel: _dueToday + (_dueToday === 1 ? ' task' : ' tasks') + ' due or overdue', heroSlaRisk: String(_slaRisk), navUnpaidSum: fmtCur(_unpaidSum),
       thrSubTotal: String(thrSubTotal), thrCompTotal: String(thrCompTotal), thrPct: String(thrPct),
+      thrChips, thrRangeLabel, thrTotalLabel,
       companyFields, employees: employeesAll, ...empScreenApi, invoicesFull, payments, tickets, ticketsEmpty, notifGroups, downloads, prefs, weekDays, renewalRows,
       toastText: this.state.toast || false, dismissToast: () => this.setState({ toast: null }),
       toastIconBg: this.state.toastTone === 'error' ? '#E5484D' : this.state.toastTone === 'warn' ? '#F59E0B' : '#12B76A',

@@ -802,6 +802,46 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
   res.json({ invoice });
 });
 
+// ── Quotation → invoice ──────────────────────────────────────────────
+// An accepted quotation used to be a dead end: the only row action was Print, so someone retyped the
+// figures into the invoice form with nothing linking the two. This raises the invoice from the
+// quotation's own line items, as a DRAFT — the same lifecycle every other invoice follows, so it
+// still has to be approved before the client is billed.
+app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+  if (!q) return res.status(404).json({ error: "Quotation not found" });
+  const st = String(q.status).toLowerCase();
+  if (st === "invoiced") return res.status(409).json({ error: `${q.number} has already been invoiced` });
+  if (st !== "approved") return res.status(409).json({ error: `${q.number} is ${st} — only an accepted quotation can be invoiced` });
+  if (!(Number(q.amount) > 0)) return res.status(400).json({ error: "That quotation has no amount to invoice" });
+  // Belt and braces: the status check above can't see an invoice raised before `invoiced` was set.
+  const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
+  if (already) return res.status(409).json({ error: `${q.number} was already invoiced as ${already.number}` });
+
+  const year = new Date().getFullYear();
+  const prefix = `INV-${year}-`;
+  const last = await prisma.invoice.findMany({ where: { number: { startsWith: prefix } }, select: { number: true } });
+  const next = last.reduce((m, r) => Math.max(m, parseInt(String(r.number).slice(prefix.length), 10) || 0), 0) + 1;
+  const number = prefix + String(next).padStart(3, "0");
+
+  const today = new Date().toISOString().slice(0, 10);
+  const [invoice] = await prisma.$transaction([
+    prisma.invoice.create({
+      data: {
+        number, companyId: q.companyId, clientName: q.clientName,
+        amount: q.amount, status: "draft", date: today,
+        services: q.service ?? null, items: q.items ?? [], notes: q.notes ?? null,
+        quotationId: q.id,
+      },
+    }),
+    prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } }),
+  ]);
+  logActivity({ type: "finance", message: `Invoice ${number} raised from quotation ${q.number}${q.clientName ? ` — ${q.clientName}` : ""}` });
+  await logAudit({ action: "quotation.convert", actorId: a.sub, target: q.id, detail: `${q.number} → ${number}` });
+  res.status(201).json({ invoice });
+});
+
 // ── Manual SLA escalation ────────────────────────────────────────────
 // The SLA Monitor's "Escalate" used to be a setState that flipped the row to "Escalated ✓ · manager
 // notified" — nobody was notified and the flag died on reload. This does what the hourly escalateSla
