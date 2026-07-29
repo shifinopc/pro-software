@@ -1,0 +1,126 @@
+# STIMES PRO — standalone Docker stack.
+#
+#   Console   https://pro.ionob.in
+#   Portal    https://cp.ionob.in
+#   API       https://proapi.ionob.in
+#
+# Self-contained: its own compose project, its own database, its own volumes, its own private
+# network. Nothing here reads or writes anything belonging to another stack on the box.
+#
+# The ONE thing it shares is the `web` network, and only to be reachable: a single process can bind
+# :80/:443, and Traefik already does. Joining `web` is how a container asks Traefik to route to it —
+# it does not modify Traefik, and removing this stack leaves Traefik exactly as it was. If you would
+# rather it not touch that network at all, see "Running without the shared proxy" in README.md.
+#
+#   cd ~/stimespro
+#   git clone https://github.com/shifinopc/pro-software.git app
+#   cp app/stack/.env.example .env
+#   docker compose -f app/stack/docker-compose.yml --env-file .env up -d --build
+#
+name: stimespro
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    # utf8mb4 throughout: client names and document text are Arabic as often as English.
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - internal          # deliberately NOT on web — the database is never publicly reachable
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}
+      # Both REQUIRED — the API refuses to start in production with the dev defaults.
+      # CRED_KEY encrypts the client credential vault: change it later and every stored
+      # credential becomes permanently unreadable.
+      JWT_SECRET: ${JWT_SECRET}
+      CRED_KEY: ${CRED_KEY}
+      # Used to build links in outbound email, so these must be the public URLs.
+      CONSOLE_URL: https://pro.ionob.in
+      PORTAL_URL: https://cp.ionob.in
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NODE_ENV: production
+      PORT: 4100
+    volumes:
+      # Client document uploads. Without this they are destroyed by the next `up --build`.
+      - uploads:/app/uploads-files
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stimespro-api.rule=Host(`proapi.ionob.in`)"
+      - "traefik.http.routers.stimespro-api.entrypoints=websecure"
+      - "traefik.http.routers.stimespro-api.tls.certresolver=le"
+      - "traefik.http.services.stimespro-api.loadbalancer.server.port=4100"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+      args:
+        # Compiled into the HTML as window.STIMES_API — changing it needs a rebuild, not a restart.
+        API_URL: https://proapi.ionob.in
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      # One container serves both front ends; nginx picks by Host header.
+      - "traefik.http.routers.stimespro-web.rule=Host(`pro.ionob.in`) || Host(`cp.ionob.in`)"
+      - "traefik.http.routers.stimespro-web.entrypoints=websecure"
+      - "traefik.http.routers.stimespro-web.tls.certresolver=le"
+      - "traefik.http.services.stimespro-web.loadbalancer.server.port=80"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+networks:
+  # Created and owned by the reverse-proxy stack. Declared external so this compose file joins it
+  # and never creates, alters or removes it.
+  web:
+    external: true
+  # Private to this project. `name:` is pinned so it reads as stimespro_internal rather than being
+  # prefixed unpredictably.
+  internal:
+    name: stimespro_internal
+
+volumes:
+  db_data:
+    name: stimespro_db_data
+  uploads:
+    name: stimespro_uploads
