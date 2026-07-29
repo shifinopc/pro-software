@@ -1,10 +1,23 @@
 packages:
   - '.'
 verifyDepsBeforeRun: false
+
+# pnpm 11 will not run a dependency's install script unless it is named here, and it EXITS
+# NON-ZERO when it skips one — so an unanswered entry below fails the whole build
+# (ERR_PNPM_IGNORED_BUILDS), not just that one package. These placeholders were left as
+# "set this to true or false" by `pnpm install`, which is why a clean container build died
+# here while local installs — already approved interactively — did not.
+#
+# All three are genuinely required, not conveniences:
+#   @tailwindcss/oxide  native binary, invoked by the tailwind vite plugin
+#   esbuild             native binary, vite's transform pipeline
+#   core-js             its postinstall is only a donation notice, but skipping it still
+#                       trips the non-zero exit above
 allowBuilds:
-  '@tailwindcss/oxide': set this to true or false
-  core-js: set this to true or false
-  esbuild: set this to true or false
+  '@tailwindcss/oxide': true
+  core-js: true
+  esbuild: true
 onlyBuiltDependencies:
   - '@tailwindcss/oxide'
+  - core-js
   - esbuild

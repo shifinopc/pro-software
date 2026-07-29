@@ -13,9 +13,14 @@ ARG API_URL=https://proapi.ionob.in
 
 # pnpm, not npm: the repo root ships pnpm-lock.yaml and no package-lock.json, so `npm ci` would
 # fail outright here. (server/ is the opposite — it has package-lock.json, which is why the API
-# image uses npm.) corepack ships with Node 22 and pins pnpm without a global install.
+# image uses npm.) corepack ships with Node 22 and honours the `packageManager` pin in
+# package.json, so the container installs with the same pnpm as local — leave it unpinned and
+# corepack fetches whatever is newest, which is how a build reproducible today breaks tomorrow.
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml is NOT optional here: pnpm 11 keeps its settings there, including the
+# allowBuilds approvals for the native binaries below. Omit it and the install fails with
+# ERR_PNPM_IGNORED_BUILDS, having silently skipped linking esbuild and @tailwindcss/oxide.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
