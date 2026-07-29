@@ -73,6 +73,11 @@ services:
     volumes:
       # Client document uploads. Without this they are destroyed by the next `up --build`.
       - uploads:/app/uploads-files
+      # Identity documents — passport scans, permits, whatever a client attaches to a request. This
+      # folder is deliberately NOT served by the web server; it is reachable only through
+      # /api/files/:id, which checks who is asking. It needs its own volume for exactly the same
+      # reason as the one above: without it, a rebuild destroys real client records.
+      - uploads_private:/app/uploads-private
     networks:
       - web
       - internal
@@ -124,3 +129,5 @@ volumes:
     name: stimespro_db_data
   uploads:
     name: stimespro_uploads
+  uploads_private:
+    name: stimespro_uploads_private

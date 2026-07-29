@@ -6,7 +6,7 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
 import { nextNumber } from "./sequence.js";
-import { notifyDocumentRenewed } from "./notify.js";
+import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
 const nowISO = () => new Date().toISOString();
@@ -87,7 +87,44 @@ async function resolveChecklist(config: any, vars: Record<string, any>): Promise
   if (c.checklistSource === "dynamic" && c.checklistRuleId) {
     try { const dyn = await resolveDynamic(c.checklistRuleId, vars); if (dyn.length) return dyn; } catch { /* fall back to static */ }
   }
+  // Inherit the documents the SERVICE asks for — the same list the client's request form used. One
+  // definition, so a collect step cannot drift from what the client was actually asked to upload,
+  // and the ticks below can line up with the files that already arrived.
+  if (c.checklistSource === "service") {
+    try {
+      const svc = vars.serviceId
+        ? await prisma.serviceItem.findUnique({ where: { id: String(vars.serviceId) } })
+        : (vars.serviceName ? await prisma.serviceItem.findFirst({ where: { name: String(vars.serviceName) } }) : null);
+      const req: any[] = Array.isArray(svc?.requiredDocs) ? (svc!.requiredDocs as any[]) : [];
+      const items = req.filter(d => d && d.key && d.label).map(d => ({ key: String(d.key), label: String(d.label), required: d.required !== false }));
+      if (items.length) return items;
+    } catch { /* fall through to the node's own list rather than creating a step with nothing on it */ }
+  }
   return normalizeItems(c.checklist);
+}
+
+/**
+ * Tick off what the client already sent.
+ *
+ * The whole point of asking for documents at request time is that nobody asks twice. Without this
+ * the collect step opens with every box empty, so the officer either re-requests papers that are
+ * sitting in the request or ticks them by hand from memory — and a required-item gate would block
+ * completion over a document that arrived days ago.
+ *
+ * Only keys that MATCH are ticked; an "other" upload has no box to tick and stays an attachment.
+ */
+async function preTickFromRequest(requestId: string | undefined, items: ChecklistItem[]): Promise<Record<string, any>> {
+  const state: Record<string, any> = {};
+  if (!requestId || !items.length) return state;
+  try {
+    const files = await prisma.requestAttachment.findMany({ where: { requestId: String(requestId) } });
+    for (const it of items) {
+      const f = files.find(x => x.docKey === it.key);
+      // Not verified — a human still has to look at it. Received is a fact; verified is a judgement.
+      if (f) state[it.key] = { received: true, verified: false, fileRef: f.path, note: `Sent by the client: ${f.name ?? "file"}` };
+    }
+  } catch { /* an unreadable attachment table must not stop the step being created */ }
+  return state;
 }
 
 /**
@@ -249,6 +286,32 @@ async function finalizeInstance(inst: any, result: string, nodeId?: string | nul
   await prisma.workflowInstance.update({ where: { id: inst.id }, data: { status: "completed", completedAt: inst.completedAt, variables: vars } });
   await log("instance.completed", `${label ?? "End"} · ${result}`);
   logActivity({ type: "task", message: `Workflow ${result}: ${inst.title}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+
+  // Close the client's request when the work it started has finished. Without this every completed
+  // job needs a second, manual close, and the queue slowly fills with requests that are actually
+  // done — which is how a client ends up chasing something that was delivered last week.
+  // A rejected outcome is NOT resolved: the run ended, the client's request did not succeed.
+  try {
+    const linked = await prisma.serviceRequest.findFirst({ where: { workflowInstanceId: inst.id } });
+    if (linked && String(linked.status).toLowerCase() === "accepted") {
+      const done = result !== "rejected";
+      const reason = linked.rejectedReason || "The process could not be completed";
+      await prisma.serviceRequest.update({
+        where: { id: linked.id },
+        data: done ? { status: "resolved" } : { status: "rejected", rejectedReason: reason },
+      });
+      logNotification({
+        type: "task",
+        title: done ? `Request completed — ${linked.clientName ?? "client"}` : `Request could not be completed — ${linked.clientName ?? "client"}`,
+        message: `${linked.number ?? "Request"} · ${inst.title}`,
+      });
+      // Close the loop the client can see. The acceptance message promised they could follow this
+      // in the portal; the last thing it owes them is being told when it ends.
+      const serviceName = String(vars.serviceName || linked.type || "") || null;
+      if (done) notifyRequestCompleted({ companyId: linked.companyId ?? null, number: linked.number ?? null, serviceName });
+      else notifyRequestRejected({ companyId: linked.companyId ?? null, number: linked.number ?? null, serviceName, reason });
+    }
+  } catch { /* the run is finished either way; a link that cannot be updated must not undo that */ }
   // Update the linked subject. subjectKind = "company" → the run concerns the client itself
   // (CR/GOSI/VAT); otherwise it's an employee (Iqama/visa) — update that person + history.
   try {
@@ -481,7 +544,10 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             dueDate: c.dueDate || null,
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
             checklist: items.length ? items : undefined,
-            checklistState: {},
+            // Pre-ticked with whatever the client already uploaded against this request. `requestId`
+            // is put on the run by acceptServiceRequest, so this only fires for work that began as a
+            // client request — a renewal started by the scheduler has nothing to inherit.
+            checklistState: await preTickFromRequest(vars.requestId, items),
             requireVerification: !!c.requireVerification,
             captures: await resolveCaptures(c, vars),
             createdAt: nowISO(),

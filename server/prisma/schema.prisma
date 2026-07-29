@@ -193,6 +193,9 @@ model Task {
   // The quotation whose acceptance created this task. Also the idempotency key: delivery is started
   // once per quotation, and "has this quotation any tasks?" is the check that stops a second run.
   quotationId        String?
+  // The client request whose acceptance created this task. Same role as quotationId above: the
+  // provenance of the work, and the idempotency key that stops a request being accepted twice.
+  requestId          String?
   employeeId         String? // subject when the task/workflow concerns a specific employee (person docs)
   customData         Json? // values for admin-defined custom task fields (Form Builder → Applies to: Task)
   // Two-phase prerequisite gating: when set, this (Phase-2) task is PARKED waiting on prerequisite
@@ -207,6 +210,7 @@ model Task {
   @@index([companyId, archived])
   @@index([govCenter])
   @@index([quotationId])
+  @@index([requestId])
 }
 
 model Invoice {
@@ -339,8 +343,20 @@ model ServiceRequest {
   clientName String?
   type       String?
   message    String? @db.Text // the client's opening message; the thread lives in ServiceRequestMessage
-  status     String  @default("open") // open | resolved | rejected — a client reply reopens it
+  // open | accepted | resolved | rejected — a client reply reopens it.
+  //
+  // `accepted` exists because "approve" used to write "resolved": the vocabulary said the work was
+  // FINISHED at the moment it was agreed, and there was no state for the part in between, which is
+  // where a request spends nearly all of its life.
+  status     String  @default("open")
   date       String?
+  // What accepting this request produced. Null while open; both set together when work starts, and
+  // workflowInstanceId stays null when the service has no template bound (ten of fourteen today).
+  taskId             String?
+  workflowInstanceId String?
+  serviceItemId      String? // the catalogue service that was agreed — may differ from the typed `type`
+  acceptedAt         String?
+  rejectedReason     String? // shown to the client; rejecting used to say nothing at all
   // Unread is derived from these rather than a per-user read table — two timestamps per side is
   // enough at this scale and keeps the bell query trivial.
   lastClientMsgAt String?
@@ -354,6 +370,27 @@ model ServiceRequest {
 
 // One message in a request's thread. `internal` notes are staff-only and are filtered out of every
 // portal response — that filtering is the whole point, so it lives server-side, never in the client.
+// A file the client attached to a request, against the document it is meant to be.
+//
+// The attachment used to be a LINE OF TEXT: the uploader glued "Attachment: http://…/files/x.pdf"
+// onto the end of the request message. So nothing knew which document a file was, several files
+// could not be told apart, and the workflow's collect step could not tick anything off — the officer
+// asked the client again for papers already sitting in the request.
+//
+// `docKey` matches a key in ServiceItem.requiredDocs; "other" holds the extras the client adds.
+model RequestAttachment {
+  id        String  @id @default(cuid())
+  requestId String
+  docKey    String  @default("other")
+  label     String?
+  path      String // /files/<name>
+  name      String? // the client's own filename, for display
+  size      Int     @default(0)
+  at        String?
+
+  @@index([requestId])
+}
+
 model ServiceRequestMessage {
   id         String  @id @default(cuid())
   requestId  String
@@ -589,6 +626,14 @@ model ServiceItem {
   included   Boolean @default(true) // included in base plans vs premium
   docType    String? // document it produces
   workflowId String? // bound workflow template
+  // WHAT THE CLIENT MUST SUPPLY — the single source of truth, read by the portal request wizard
+  // (one upload slot per entry) AND by a workflow collect step configured checklistSource:"service".
+  // Four places used to claim this knowledge and none agreed: a hardcoded sentence in the portal
+  // ("passport copy, photo, existing permit") shown for all fourteen services, a `docs` COUNT nobody
+  // derived, each step's own checklist, and ChecklistRule. Empty means "not configured yet" and the
+  // portal falls back to a free-form box — it does NOT mean "no documents needed".
+  // [{ key, label, required, hint }]
+  requiredDocs Json? @default("[]")
 }
 
 // ── API keys (programmatic access) + uploaded file registry ──
@@ -610,9 +655,16 @@ model FileAsset {
   id         String @id @default(cuid())
   kind       String // org-logo | login-logo | document | attachment
   name       String
-  path       String // public URL path under /files
+  // Where to fetch it. Branding assets keep a public /files/<random> path so an <img> tag can load
+  // them without a token. Anything holding a person's identity documents is stored OUTSIDE the
+  // served folder and its path is /api/files/<id>, which checks who is asking — see `private`.
+  path       String
   size       Int    @default(0)
   uploadedBy String?
+  // Who the file belongs to. Set for client uploads; null for staff/branding uploads, which only
+  // staff may read. This is the whole basis of the access check on /api/files/:id.
+  companyId  String?
+  private    Boolean @default(false)
   at         String
 
   @@index([kind])

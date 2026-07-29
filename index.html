@@ -186,6 +186,14 @@
     [style*="grid-template-columns:1fr 1fr"],[style*="grid-template-columns: 1fr 1fr"],
     [style*="grid-template-columns:repeat(2"],[style*="grid-template-columns: repeat(2"]{grid-template-columns:1fr !important;}
   }
+  /* Two-panel edit dialog: the record on the left, its list on the right. Columns live here rather
+     than in a style attribute so the query below can actually win — an inline value outranks a class. */
+  .split-modal{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;min-height:0;}
+  .split-modal-side{border-left:1px solid #F0EDF6;}
+  @media (max-width:820px){
+    .split-modal{grid-template-columns:1fr;}
+    .split-modal-side{border-left:none;border-top:1px solid #F0EDF6;}
+  }
 </style>
 </helmet>
 <div style="display:flex; min-height:100vh;" data-screen-label="Client Portal Dashboard">
@@ -1817,6 +1825,7 @@
                     <div data-dd onClick="{{ ddSvcWfToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddSvcWfVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
                     <sc-if value="{{ ddSvcWfOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcWfOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
                   </div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px;">The linked workflow starts by itself the moment you accept a client request for this service. With none linked, accepting still creates a task — there are just no tracked steps behind it.</div>
                 </div>
                 <div style="margin-top:13px;">
                   <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SLA</div>
@@ -1835,33 +1844,65 @@
                itself — its name, SLA, availability, bound workflow — could never be changed. -->
           <sc-if value="{{ svcEditOpen }}" hint-placeholder-val="{{ false }}">
             <div onClick="{{ closeSvcEdit }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; animation:fadeUp .15s ease both;">
-              <div onClick="{{ stopClick }}" style="width:480px; max-width:92vw; background:#fff; border-radius:20px; box-shadow:0 24px 64px rgba(38,7,77,.28); padding:24px 26px;">
-                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+              <!-- Two panels, not one long column. Stacking the document list under four fields made
+                   the dialog taller than the screen, so saving meant scrolling to find the button. -->
+              <div onClick="{{ stopClick }}" style="width:900px; max-width:94vw; max-height:90vh; background:#fff; border-radius:20px; box-shadow:0 24px 64px rgba(38,7,77,.28); display:flex; flex-direction:column; overflow:hidden;">
+                <div style="padding:20px 24px 15px; border-bottom:1px solid #F0EDF6; display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
                   <div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Edit service</div><div style="font-size:12px; color:#8C8899; margin-top:3px;">Inclusion is set per plan — this is the service itself</div></div>
                   <div onClick="{{ closeSvcEdit }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
-                <div style="margin-top:16px;">
-                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SERVICE NAME *</div>
-                  <input value="{{ svcEditName }}" onInput="{{ setSvcEditName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
-                </div>
-                <div style="margin-top:13px;">
-                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ON THESE PLANS</div>
-                  <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; font-size:12.5px; background:#F9F8FC; color:#4B4757; line-height:1.5;">{{ svcEditPlans }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px;">Set per plan in Plan &amp; Billing. A client whose plan leaves it out can ask for it as an add-on.</div>
-                </div>
-                <div style="margin-top:13px;">
-                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WORKFLOW</div>
-                  <div style="position:relative; margin-top:6px;">
-                    <div data-dd onClick="{{ ddSvcEditWfToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddSvcEditWfVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-                    <sc-if value="{{ ddSvcEditWfOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcEditWfOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                <div class="split-modal" data-hidescroll="true" style="flex:1; overflow-y:auto;">
+                  <div style="padding:18px 22px 20px 24px; display:flex; flex-direction:column; gap:13px;">
+                    <div>
+                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SERVICE NAME *</div>
+                      <input value="{{ svcEditName }}" onInput="{{ setSvcEditName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
+                    </div>
+                    <div>
+                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ON THESE PLANS</div>
+                      <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; font-size:12.5px; background:#F9F8FC; color:#4B4757; line-height:1.5;">{{ svcEditPlans }}</div>
+                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px;">Set per plan in Plan &amp; Billing. A client whose plan leaves it out can ask for it as an add-on.</div>
+                    </div>
+                    <div>
+                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WORKFLOW</div>
+                      <div style="position:relative; margin-top:6px;">
+                        <div data-dd onClick="{{ ddSvcEditWfToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddSvcEditWfVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                        <sc-if value="{{ ddSvcEditWfOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSvcEditWfOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                      </div>
+                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Starts by itself when you accept a client request for this service. With none linked, accepting still creates a task — there are just no tracked steps behind it.</div>
+                    </div>
+                    <div>
+                      <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SLA</div>
+                      <input value="{{ svcEditSla }}" onInput="{{ setSvcEditSla }}" placeholder="5 working days" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
+                    </div>
+                  </div>
+                  <!-- What the client must supply. One list, read by the portal request form (one
+                       upload slot each) and by any workflow step set to inherit it. Only THIS list
+                       scrolls, and only once it outgrows the panel. -->
+                  <div class="split-modal-side" style="padding:18px 24px 20px 22px; background:#FCFBFE; display:flex; flex-direction:column; min-height:0;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <div style="flex:1; font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENTS THE CLIENT MUST SUPPLY</div>
+                      <div onClick="{{ svcEditAddDoc }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">+ Add document</div>
+                    </div>
+                    <sc-if value="{{ svcEditDocsEmpty }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:9px; border:1px dashed #DDD9E6; border-radius:11px; padding:13px; font-size:11.5px; color:#8C8899; line-height:1.55; background:#fff;">Nothing listed yet. Until you add one, the client's request form shows a single free-form upload box and the workflow cannot tick anything off for them.</div>
+                    </sc-if>
+                    <div data-hidescroll="true" style="flex:1; min-height:0; max-height:44vh; overflow-y:auto; display:flex; flex-direction:column; gap:7px; margin-top:9px;">
+                      <sc-for list="{{ svcEditDocs }}" as="d" hint-placeholder-count="2">
+                        <div style="border:1px solid #EDEBF2; border-radius:11px; padding:9px 10px; background:#fff; flex-shrink:0;">
+                          <div style="display:flex; align-items:center; gap:7px;">
+                            <input value="{{ d.label }}" onInput="{{ d.setLabel }}" placeholder="e.g. Passport copy" style="flex:1; min-width:0; border:1px solid #DDD9E6; border-radius:9px; padding:7px 10px; font-size:12.5px; background:#fff;">
+                            <div onClick="{{ d.toggleReq }}" style="font-size:10px; font-weight:700; padding:6px 10px; border-radius:99px; background:{{ d.reqBg }}; color:{{ d.reqColor }}; cursor:pointer; white-space:nowrap;">{{ d.reqLabel }}</div>
+                            <div onClick="{{ d.remove }}" title="Remove" style="width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#A9A6B4; flex-shrink:0;" style-hover="background:#FEECEC; color:#C0353A;">✕</div>
+                          </div>
+                          <input value="{{ d.hint }}" onInput="{{ d.setHint }}" placeholder="Note for the client — e.g. photo page, colour scan" style="margin-top:6px; width:100%; border:1px solid #EDEBF2; border-radius:9px; padding:6px 10px; font-size:11.5px; background:#fff; color:#6F6C7A;">
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:9px; line-height:1.5;">Required documents block the client from submitting without them. Optional ones don't.</div>
                   </div>
                 </div>
-                <div style="margin-top:13px;">
-                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SLA</div>
-                  <input value="{{ svcEditSla }}" onInput="{{ setSvcEditSla }}" placeholder="5 working days" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
-                </div>
-                <sc-if value="{{ svcEditHasErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#C0353A; margin-top:12px; line-height:1.5;">{{ svcEditErr }}</div></sc-if>
-                <div style="display:flex; justify-content:flex-end; gap:9px; margin-top:20px;">
+                <div style="border-top:1px solid #F0EDF6; padding:13px 24px 15px; display:flex; align-items:center; justify-content:flex-end; gap:9px;">
+                  <sc-if value="{{ svcEditHasErr }}" hint-placeholder-val="{{ false }}"><div style="flex:1; font-size:11.5px; color:#C0353A; line-height:1.5;">{{ svcEditErr }}</div></sc-if>
                   <button onClick="{{ closeSvcEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
                   <button onClick="{{ svcEditSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ svcEditSaveLabel }}</button>
                 </div>
@@ -2083,7 +2124,18 @@
             </sc-for>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:flex; flex-direction:column; gap:11px;">
-            <sc-for list="{{ approvals }}" as="a" hint-placeholder-count="5">
+            <!-- Grouped by state, newest first within each group. The flat list mixed decided rows
+                 in with the undecided ones in whatever order the sources happened to load. -->
+            <sc-for list="{{ approvalGroups }}" as="g" hint-placeholder-count="2">
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div style="display:flex; align-items:center; gap:9px; margin-top:5px;">
+                <span style="width:9px; height:9px; border-radius:99px; background:{{ g.color }}; flex-shrink:0;"></span>
+                <span style="font-size:11.5px; font-weight:700; color:#1A1523; letter-spacing:.02em;">{{ g.label }}</span>
+                <span style="font-size:10px; font-weight:700; color:{{ g.color }}; background:{{ g.bg }}; padding:2px 9px; border-radius:99px;">{{ g.countLabel }}</span>
+                <span style="font-size:10.5px; color:#A9A6B4;">{{ g.note }}</span>
+                <span style="flex:1; height:1px; background:#F0EDF6;"></span>
+              </div>
+            <sc-for list="{{ g.items }}" as="a" hint-placeholder-count="3">
               <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden; display:flex;">
                 <div style="width:4px; background:{{ a.stColor }}; flex-shrink:0;"></div>
                 <div style="flex:1; min-width:0;">
@@ -2124,6 +2176,8 @@
                   </sc-if>
                 </div>
               </div>
+            </sc-for>
+            </div>
             </sc-for>
             <sc-if value="{{ approvalsEmpty }}" hint-placeholder-val="{{ false }}">
               <div style="background:#fff; border:1px dashed #DDD1F5; border-radius:18px; padding:48px 24px; text-align:center;">
@@ -5497,6 +5551,28 @@
           <span style="font-size:10.5px; font-weight:700; color:{{ qtStColor }}; background:{{ qtStBg }}; padding:4px 11px; border-radius:99px; flex-shrink:0;">{{ qtStage }}</span>
           <div onClick="{{ closeQThread }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
+        <!-- What the client sent, and what is still outstanding. Before this the files arrived as a
+             URL glued onto the end of the request message, so nobody could tell which document was
+             which and the officer re-asked for papers that were already here. -->
+        <sc-if value="{{ qAttShow }}" hint-placeholder-val="{{ false }}">
+          <div style="border-bottom:1px solid #F0EDF6; padding:12px 22px; background:#FCFBFE;">
+            <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENTS · {{ qAttCount }}</div>
+            <div style="display:flex; flex-direction:column; gap:5px; margin-top:7px;">
+              <sc-for list="{{ qAttFiles }}" as="f" hint-placeholder-count="2">
+                <div onClick="{{ f.open }}" style="display:flex; align-items:center; gap:8px; border:1px solid #EDEBF2; border-radius:10px; padding:7px 10px; background:#fff; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#FCFAFF;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+                  <span style="flex:1; min-width:0;">
+                    <span style="display:block; font-size:12px; font-weight:600; color:#1A1523; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.name }}</span>
+                    <span style="display:block; font-size:10px; color:#A9A6B4; margin-top:1px;">{{ f.meta }}</span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ qAttMissingShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:7px; font-size:11px; color:#B8860B; background:#FEF9EF; border-radius:9px; padding:7px 10px; line-height:1.5;">Still to come: <b>{{ qAttMissingLine }}</b></div>
+            </sc-if>
+          </div>
+        </sc-if>
         <div data-hidescroll="true" style="flex:1; overflow-y:auto; padding:18px 22px; display:flex; flex-direction:column; gap:12px; background:#FBFAFE;">
           <sc-for list="{{ qThreadMsgs }}" as="m" hint-placeholder-count="3">
             <div style="display:flex; flex-direction:{{ m.dir }}; align-items:flex-end; gap:9px;">
@@ -10288,7 +10364,7 @@ class Component extends DCLogic {
     const siData = this.state.serviceItemsData;
     const SVC_ICON_BY_NAME = (nm) => /visa/i.test(nm) ? I.stamp : /iqama|id/i.test(nm) ? I.card : /medical/i.test(nm) ? I.check : /gosi|labour|labor/i.test(nm) ? I.users : /register|formation|company|branch/i.test(nm) ? I.building : /vat|tax|invoice/i.test(nm) ? I.invoice : I.fileText;
     const svcDefs = (Array.isArray(siData) && siData.length
-      ? siData.map(s2 => [s2.name, SVC_ICON_BY_NAME(s2.name), Number(s2.govFee) || 0, s2.time || '—', s2.sla || '—', Number(s2.docs) || 0, !!s2.included, s2.workflowId || null, s2.id, s2.docType || ''])
+      ? siData.map(s2 => [s2.name, SVC_ICON_BY_NAME(s2.name), Number(s2.govFee) || 0, s2.time || '—', s2.sla || '—', (Array.isArray(s2.requiredDocs) && s2.requiredDocs.length) || Number(s2.docs) || 0, !!s2.included, s2.workflowId || null, s2.id, s2.docType || '', Array.isArray(s2.requiredDocs) ? s2.requiredDocs : []])
       // Design samples are for the UNAUTHENTICATED preview only. They used to show whenever the real
       // catalog had not arrived yet, so every load of this page flashed three invented services —
       // one of them ("Visa Renewal") not even in the catalog — before the fetch replaced them.
@@ -10329,7 +10405,7 @@ class Component extends DCLogic {
     // global label on the service.
     const _pkgsForSvc = Array.isArray(this.state.packagesData) ? this.state.packagesData : [];
     const _plansWith = (id9) => !id9 ? [] : _pkgsForSvc.filter(p9 => Array.isArray(p9.serviceIds) && p9.serviceIds.includes(id9)).map(p9 => p9.name);
-    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9, svcId9, docType9], i) => {
+    const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, wfId9, svcId9, docType9, reqDocs9], i) => {
       const p = svcPals[i % svcPals.length];
       // A stored workflowId is authoritative; keyword matching is only the fallback for services
       // created before the link existed.
@@ -10367,7 +10443,9 @@ class Component extends DCLogic {
         // Edit used to jump straight to the Workflow Builder, so there was no way to change the
         // service itself — its name, SLA, availability or which workflow it is bound to.
         editService: () => svcId9
-          ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), wf: (tpl9 && tpl9.name) || _svcWfNone }, svcEditErr: '' })
+          // Copy the document rows, never hand the state the live array: editing a row would
+          // otherwise mutate the loaded catalogue in place and Cancel would keep the edit.
+          ? this.setState({ svcEdit: { id: svcId9, name, sla: sla === '—' ? '' : (sla || ''), wf: (tpl9 && tpl9.name) || _svcWfNone, docs: (reqDocs9 || []).map(d9 => ({ ...d9 })) }, svcEditErr: '' })
           : this.toast('That is a sample row — add a real service first', 'error'),
         // Deletability is decided by the server, so the dialog asks it rather than re-deriving the
         // rule here and risking the two drifting apart.
@@ -10398,6 +10476,8 @@ class Component extends DCLogic {
           _svcUsage.clients.length ? _svcUsage.clients.length + ' client' + (_svcUsage.clients.length === 1 ? ' has' : 's have') + ' it as an add-on' : '',
           _svcUsage.openRequests ? _svcUsage.openRequests + ' open add-on request' + (_svcUsage.openRequests === 1 ? '' : 's') : '',
         ].filter(Boolean).join(' · ') + '.';
+    const _sveDocs = (_sve && Array.isArray(_sve.docs)) ? _sve.docs : [];
+    const _sveSetDoc = (i9, patch9) => this.setState({ svcEdit: { ...this.state.svcEdit, docs: _sveDocs.map((d9, j9) => j9 === i9 ? { ...d9, ...patch9 } : d9) } });
     const svcEditApi = {
       svcEditOpen: !!_sve,
       svcEditName: _sve ? _sve.name : '',
@@ -10411,6 +10491,22 @@ class Component extends DCLogic {
       svcEditPlans: _svePlans.length ? _svePlans.join(', ') : 'No plan includes this service yet — clients can still request it as an add-on.',
       ...mkDd('ddSvcEditWf', [_svcWfNone, ..._wfTplsForSvc.map(t9 => t9.name)], _sveWfSel, (v9) => this.setState({ svcEdit: { ...this.state.svcEdit, wf: v9 } })),
       ddSvcEditWfVal: _sveWfSel,
+      // ---- Required documents: what the client must supply for THIS service ----
+      // The key is minted once, when the row is added, and never re-derived from the label. A
+      // Document Type editor that regenerated ids on every save already orphaned its stored data
+      // once; here a changed key would orphan a client's uploaded file and a running step's tick.
+      svcEditDocs: _sveDocs.map((d9, i9) => ({
+        label: d9.label || '', hint: d9.hint || '',
+        reqLabel: d9.required === false ? 'Optional' : 'Required',
+        reqBg: d9.required === false ? '#F3F1F7' : '#EFEBFF',
+        reqColor: d9.required === false ? '#8C8899' : '#6D5BD0',
+        setLabel: (e9) => _sveSetDoc(i9, { label: e9.target.value }),
+        setHint: (e9) => _sveSetDoc(i9, { hint: e9.target.value }),
+        toggleReq: () => _sveSetDoc(i9, { required: d9.required === false }),
+        remove: () => this.setState({ svcEdit: { ...this.state.svcEdit, docs: _sveDocs.filter((_x, j9) => j9 !== i9) } }),
+      })),
+      svcEditDocsEmpty: _sveDocs.length === 0,
+      svcEditAddDoc: () => this.setState({ svcEdit: { ...this.state.svcEdit, docs: [..._sveDocs, { key: 'doc_' + Date.now().toString(36), label: '', required: true, hint: '' }] } }),
       svcEditSave: () => {
         const s9 = this.state.svcEdit;
         if (!s9 || this.state.svcEditBusy) return;
@@ -10420,8 +10516,14 @@ class Component extends DCLogic {
           return this.setState({ svcEditErr: 'Another service is already named "' + nm9 + '"' });
         }
         const tpl9 = _wfTplsForSvc.find(t9 => t9.name === (s9.wf || _svcWfNone)) || null;
+        // A row with no label is a row the client would see as a blank upload slot, so it is dropped
+        // rather than saved. `docs` (the count on the card) is derived here so the chip can stop
+        // being a number somebody typed and disagreed with the actual list.
+        const docs9 = (Array.isArray(s9.docs) ? s9.docs : [])
+          .filter(d9 => String(d9.label || '').trim())
+          .map(d9 => ({ key: d9.key, label: String(d9.label).trim(), required: d9.required !== false, hint: String(d9.hint || '').trim() || undefined }));
         this.setState({ svcEditBusy: true });
-        this._opPut('service-items', s9.id, { name: nm9, sla: (s9.sla || '').trim() || null, workflowId: tpl9 ? tpl9.id : null }, () => {
+        this._opPut('service-items', s9.id, { name: nm9, sla: (s9.sla || '').trim() || null, workflowId: tpl9 ? tpl9.id : null, requiredDocs: docs9, docs: docs9.length }, () => {
           this.setState({ svcEdit: null, svcEditBusy: false });
           this.toast('Saved "' + nm9 + '"');
           this._opReload('service-items', 'serviceItemsData');
@@ -11064,9 +11166,25 @@ class Component extends DCLogic {
     // steps. Row: [origin, id, subject, context, client, amount, by, priority, waiting, role, slaHours, elapsedH, onApprove, onReject, realId, realStatus]
     // How long a decision has been sitting. Service/upgrade rows previously passed a literal '—',
     // so every approval read "waiting —" no matter how old it was.
+    // When a row was RAISED, as a number, so the list can be ordered newest-first.
+    //
+    // The `date` column cannot be sorted on: the portal writes "Just now" for a service request and
+    // "Today" for a package upgrade — display strings, not dates. So a real timestamp is taken where
+    // one exists, and otherwise decoded from the cuid, whose first block is the creation time in
+    // base36. Guarded to a sane range so a legacy non-cuid id (companies carry `cl1784…`) falls
+    // through to 0 rather than sorting the row to some year in the far future.
+    const _apCuidTs = (id9) => {
+      if (typeof id9 !== 'string' || id9[0] !== 'c' || id9.length < 9) return 0;
+      const t9 = parseInt(id9.slice(1, 9), 36);
+      return (t9 > 1577836800000 && t9 < 4102444800000) ? t9 : 0; // 2020 → 2100
+    };
+    const _apTs = (iso9, id9) => {
+      const t9 = iso9 ? new Date(iso9).getTime() : NaN;
+      return (!isNaN(t9) && t9 > 0) ? t9 : _apCuidTs(id9);
+    };
     const _apWaited = (iso) => {
-      const t0 = new Date(iso).getTime();
-      if (!iso || isNaN(t0)) return '—';
+      const t0 = typeof iso === 'number' ? iso : new Date(iso).getTime();
+      if (!iso || isNaN(t0) || !t0) return '—';
       const mins = Math.max(0, Math.round((Date.now() - t0) / 60000));
       if (mins < 60) return mins + 'm';
       const h = Math.round(mins / 60);
@@ -11077,21 +11195,24 @@ class Component extends DCLogic {
     const srvData = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : null;
     const upgData = Array.isArray(this.state.upgradeRequestsData) ? this.state.upgradeRequestsData : [];
     const mwData = Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [];
-    const AP_ST = { open: 'Pending', pending: 'Pending', approved: 'Approved', resolved: 'Approved', rejected: 'Rejected', escalated: 'Escalated' };
+    // 'accepted' → Approved. Without it an accepted request stayed "Pending" here and offered its
+    // Approve button again; the server refuses the second one (409, a task already exists), so the
+    // only thing the row achieved was telling the officer a decision had not been made.
+    const AP_ST = { open: 'Pending', pending: 'Pending', accepted: 'Approved', approved: 'Approved', resolved: 'Approved', rejected: 'Rejected', escalated: 'Escalated' };
     const apSources = (srvData !== null
       ? [
         ...mwData.filter(t => t.nodeType === 'approval' && t.status === 'active').map(t => {
           const elapsedH2 = t.createdAt ? Math.max(0, Math.round((Date.now() - new Date(t.createdAt).getTime()) / 3600000)) : 0;
-          return ['workflow', t.id.slice(-6).toUpperCase(), t.title || 'Approval step', (t.instance && t.instance.title) || 'Workflow', (t.instance && t.instance.clientName) || '—', '—', 'Workflow · ' + (t.assigneeRole || 'role'), 'High', elapsedH2 + 'h', t.assigneeRole || null, t.slaHours || null, elapsedH2, 'Approve', 'Reject', t.id, 'Pending'];
+          return ['workflow', t.id.slice(-6).toUpperCase(), t.title || 'Approval step', (t.instance && t.instance.title) || 'Workflow', (t.instance && t.instance.clientName) || '—', '—', 'Workflow · ' + (t.assigneeRole || 'role'), 'High', elapsedH2 + 'h', t.assigneeRole || null, t.slaHours || null, elapsedH2, 'Approve', 'Reject', t.id, 'Pending', _apTs(t.createdAt, t.id)];
         }),
         // Add-ons live in the same table, so they surface here too — but they must NOT be approved
         // from this row. Approving here only flips the status; the service would never be attached
         // and the client would never be billed. The row is labelled for what it is and its Approve
         // opens the same pricing box the Clients banner uses.
         ...upgData.map(u => u.kind === 'addon'
-          ? ['upgrade-addon', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Add-on request — ' + (u.serviceName || 'a service'), u.note || 'One service on top of the current plan', u.clientName || '—', u.quotedPrice ? fmtCur(u.quotedPrice) : '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']
-          : ['upgrade', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Package upgrade request', u.note || 'Subscription change', u.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(u.date), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending']),
-        ...srvData.map(r2 => ['service', r2.number || ('SRV-' + String(r2.id).slice(-4).toUpperCase()), r2.type || 'Service request', (r2.message || '').slice(0, 60) || 'Client portal', r2.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(r2.lastClientMsgAt || r2.date), null, null, null, null, null, r2.id, AP_ST[String(r2.status).toLowerCase()] || 'Pending']),
+          ? ['upgrade-addon', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Add-on request — ' + (u.serviceName || 'a service'), u.note || 'One service on top of the current plan', u.clientName || '—', u.quotedPrice ? fmtCur(u.quotedPrice) : '—', 'Client portal', 'Medium', _apWaited(_apTs(u.date, u.id)), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending', _apTs(u.date, u.id)]
+          : ['upgrade', 'UPG-' + String(u.id).slice(-4).toUpperCase(), 'Package upgrade request', u.note || 'Subscription change', u.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(_apTs(u.date, u.id)), null, null, null, null, null, u.id, AP_ST[String(u.status).toLowerCase()] || 'Pending', _apTs(u.date, u.id)]),
+        ...srvData.map(r2 => ['service', r2.number || ('SRV-' + String(r2.id).slice(-4).toUpperCase()), r2.type || 'Service request', (r2.message || '').slice(0, 60) || 'Client portal', r2.clientName || '—', '—', 'Client portal', 'Medium', _apWaited(_apTs(r2.lastClientMsgAt || r2.date, r2.id)), null, null, null, null, null, r2.id, AP_ST[String(r2.status).toLowerCase()] || 'Pending', _apTs(r2.lastClientMsgAt || r2.date, r2.id)]),
       ]
       : (_authed ? [] : [
         ['workflow', 'WT-341', 'Approve Golden Visa quotation', 'WF-1063 · Golden Visa', 'Falcon Trading', 'AED 9,800', 'Workflow · Manager', 'High', '6h', 'Manager', 24, 6, 'Issue invoice', 'Revise quotation', null, 'Pending'],
@@ -11114,7 +11235,34 @@ class Component extends DCLogic {
       }
       if (origin === 'workflow') p2 = fetch(API2 + '/api/workflow/tasks/' + realId + '/complete', { method: 'POST', headers: H2, body: JSON.stringify({ outcome: val === 'Approved' ? 'approve' : 'reject', note: note || undefined, variables: note ? { decisionNote: note } : undefined }) });
       else if (origin === 'upgrade' || origin === 'upgrade-addon') p2 = fetch(API2 + '/api/upgrade-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val.toLowerCase() }) });
-      else p2 = fetch(API2 + '/api/service-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val === 'Approved' ? 'resolved' : val.toLowerCase() }) });
+      // A client request is no longer a status flip. Approving it CREATES the work — a task, and the
+      // bound workflow when the service has one — because "approved" used to write "resolved" and
+      // leave nothing behind: no task, no owner, no record that anything was ever done.
+      else if (val === 'Approved') p2 = fetch(API2 + '/api/service-requests/' + realId + '/accept', { method: 'POST', headers: H2, body: JSON.stringify({}) })
+        .then(r9 => {
+          if (r9.ok) {
+            r9.json().then(j9 => {
+              // Say what was created, and say plainly when there is no process behind it — ten of the
+              // fourteen services have no workflow bound, and a bare "approved" would hide that.
+              this.toast(j9.workflowInstanceId
+                ? ('Work started — ' + (j9.taskRef || 'task') + ' · ' + (j9.serviceName || 'request') + ' workflow running')
+                : ((j9.taskRef || 'Task') + ' created — ' + (j9.matched ? ('no workflow is bound to ' + j9.serviceName) : 'this request matches no catalogue service')), j9.workflowInstanceId ? 'success' : 'warn');
+              this._reloadTasks && this._reloadTasks();
+              this._reloadMyWork && this._reloadMyWork();
+            });
+            // Marked so the generic "Approved" below does not fire on top of the message above —
+            // two toasts for one action, the second one less informative than the first.
+            try { r9._handled = true; } catch (e9) { /* frozen Response — the extra toast is harmless */ }
+          }
+          return r9;
+        });
+      // Rejecting now needs a reason, and it is written where the client can read it.
+      else if (val === 'Rejected') p2 = this._prompt('Why is this being rejected?', '', { required: true, requiredNote: 'The client sees this — say why', okLabel: 'Reject request', placeholder: 'e.g. the passport copy is unreadable' })
+        .then(reason9 => {
+          if (reason9 == null) return { ok: false, _cancelled: true, json: () => Promise.resolve({ error: 'Cancelled — nothing was saved' }) };
+          return fetch(API2 + '/api/service-requests/' + realId + '/reject', { method: 'POST', headers: H2, body: JSON.stringify({ reason: reason9 }) });
+        });
+      else p2 = fetch(API2 + '/api/service-requests/' + realId, { method: 'PUT', headers: H2, body: JSON.stringify({ status: val.toLowerCase() }) });
       // Put the row back if the server refused: an optimistic tick that survives a failed write is
       // how a reviewer ends up believing a decision was recorded when it was not.
       const _revert = (msg) => {
@@ -11123,7 +11271,7 @@ class Component extends DCLogic {
       };
       p2.then(r2 => {
         if (!r2.ok) return r2.json().catch(() => ({})).then(j2 => _revert((j2 && j2.error) || 'The server rejected that decision — nothing was saved'));
-        this.toast(val === 'Approved' ? 'Approved' : val === 'Rejected' ? 'Rejected' : 'Updated');
+        if (!r2._handled) this.toast(val === 'Approved' ? 'Approved' : val === 'Rejected' ? 'Rejected' : 'Updated');
         // Re-read rather than trust the optimistic row. The step is no longer active, so this is
         // what moves it out of the queue honestly instead of leaving a stale clickable row behind.
         this._reloadMyWork && this._reloadMyWork();
@@ -11132,7 +11280,7 @@ class Component extends DCLogic {
       }).catch(() => _revert('Server unreachable — the decision was not saved'));
     };
     const prMini = { High: ['#FEECEC', '#C0353A'], Medium: ['#FEF4E2', '#B8860B'], Low: ['#EFEBFF', '#6D5BD0'] };
-    const approvals = apSources.map(([origin, id, subject, context, client, amount, by, priority, waiting, role, slaHours, elapsedH, onApprove, onReject, realId, realStatus]) => {
+    const approvals = apSources.map(([origin, id, subject, context, client, amount, by, priority, waiting, role, slaHours, elapsedH, onApprove, onReject, realId, realStatus, ts9]) => {
       const st = apStatus[id] || realStatus || 'Pending';
       const chipMap = { Approved: ['#E7F8EF', '#0E9355'], Rejected: ['#FEECEC', '#C0353A'], Escalated: ['#F3E8FF', '#7C00FF'], Pending: ['#FEF4E2', '#B8860B'] };
       const chip = chipMap[st];
@@ -11146,7 +11294,7 @@ class Component extends DCLogic {
         this._apDecide && this._apDecide(origin, realId, val, note9, id);
       };
       return {
-        id, subject, context, client, amount, by, priority, waiting,
+        id, subject, context, client, amount, by, priority, waiting, ts: ts9 || 0,
         prBg: (prMini[priority] || ['#F3F1F7', '#6F6C7A'])[0], prColor: (prMini[priority] || ['#F3F1F7', '#6F6C7A'])[1],
         typeLabel: t[0], typeColor: t[1], typeBg: t[2], isWorkflow: origin === 'workflow',
         onApprove: onApprove || '', onReject: onReject || '', hasBranch: !!onApprove,
@@ -11169,7 +11317,31 @@ class Component extends DCLogic {
       ['Approved', apCount('Approved'), '#0E9355', '#E7F8EF'],
       ['Rejected', apCount('Rejected'), '#C0353A', '#FEECEC'],
     ].map(([label, count, color, bg]) => ({ label, count, color, bg }));
-    const approvalsApi = { approvals, approvalsPending: apCount('Pending'), approvalSummary, ...apNoteApi };
+    // Grouped by state, newest first inside each group.
+    //
+    // The list arrived in source order — every workflow step, then every upgrade, then every service
+    // request — so decided rows sat among the undecided ones and a request filed this morning could
+    // appear below one settled last week. What needs a decision now comes first; what has already
+    // been decided is kept below as a record, rather than mixed in.
+    const AP_GROUPS = [
+      ['Pending', '#B8860B', '#FEF4E2', 'Waiting on a decision'],
+      ['Escalated', '#7C00FF', '#F3E8FF', 'Passed up for a second opinion'],
+      ['Approved', '#0E9355', '#E7F8EF', 'Already agreed'],
+      ['Rejected', '#C0353A', '#FEECEC', 'Turned down'],
+    ];
+    // Sorted on the SAME timestamp the row displays as "waiting", so the order and the label can
+    // never disagree. Deliberately not bumped by our own replies — a staff message is not new input,
+    // and letting it lift the row to the top would reward answering over deciding.
+    const _apByTs = (x9, y9) => (y9.ts || 0) - (x9.ts || 0);
+    const approvalGroups = AP_GROUPS
+      .map(([label, color, bg, note]) => {
+        const items9 = approvals.filter(a9 => a9.status === label).sort(_apByTs);
+        return { label, color, bg, note, items: items9, count: items9.length, countLabel: items9.length === 1 ? '1 item' : items9.length + ' items' };
+      })
+      .filter(g9 => g9.count > 0);
+    // The dashboard widget renders this flat list: pending first, then newest.
+    const approvalsFlat = [...approvals].sort((x9, y9) => (x9.pending === y9.pending ? 0 : x9.pending ? -1 : 1) || _apByTs(x9, y9));
+    const approvalsApi = { approvals: approvalsFlat, approvalGroups, approvalsPending: apCount('Pending'), approvalSummary, ...apNoteApi };
 
     // ===== Requests Queue (provider) =====
     const qStageMap = {
@@ -11180,11 +11352,15 @@ class Component extends DCLogic {
     // WIRED: real client service requests from /api/service-requests. open→New, resolved/rejected→Ready
     // (the resolved/rejected chip overlays via qStatusMap-style state).
     const qSrv = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : null;
-    const Q_STAGE = { open: 'New', resolved: 'Ready', rejected: 'Ready' };
+    // 'accepted' is new — without it an accepted request fell back to 'New' and the queue said
+    // nobody had touched something a task and a workflow had already been created for.
+    const Q_STAGE = { open: 'New', accepted: 'Accepted', resolved: 'Ready', rejected: 'Ready' };
     // SLA column: 7-day standard from the submitted date — overdue turns red, near-due amber, resolved = Met.
     const _qSla = (r2) => {
       const st8 = String(r2.status).toLowerCase();
-      if (st8 !== 'open') return ['Met', 'ok'];
+      // Accepted is not finished — the clock is still running on it. Only a closed request has an
+      // SLA that can be called met.
+      if (st8 !== 'open' && st8 !== 'accepted') return ['Met', 'ok'];
       const d8 = new Date(r2.date);
       if (isNaN(+d8)) return ['—', 'ok'];
       const left8 = 7 - Math.floor((Date.now() - d8.getTime()) / 86400000);
@@ -11217,7 +11393,7 @@ class Component extends DCLogic {
         // Opening the thread fetches the REAL conversation; a successful fetch also clears any local
         // echoes for this request — the server copy is now the single source, so leftovers would
         // render every message twice (once ISO-stamped, once "just now").
-        accept: () => { this.setState({ qThread: id, qRead: { ...qRead, [id]: true }, qReply: '', qInternal: false }); if (realId) { const t2 = localStorage.getItem('stimespro:token'); fetch((this._apiBase || 'http://localhost:4100') + '/api/service-requests/' + realId + '/messages', { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} }).then(r2 => (r2.ok ? r2.json() : null)).then(v2 => { if (Array.isArray(v2)) { const qe2 = { ...(this.state.qExtra || {}) }; delete qe2[id]; this.setState({ qMsgs: { ...(this.state.qMsgs || {}), [id]: v2 }, qExtra: qe2 }); } }).catch(() => {}); } } };
+        accept: () => { this.setState({ qThread: id, qRead: { ...qRead, [id]: true }, qReply: '', qInternal: false }); if (realId) { const t2 = localStorage.getItem('stimespro:token'); fetch((this._apiBase || 'http://localhost:4100') + '/api/service-requests/' + realId + '/messages', { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} }).then(r2 => (r2.ok ? r2.json() : null)).then(v2 => { if (Array.isArray(v2)) { const qe2 = { ...(this.state.qExtra || {}) }; delete qe2[id]; this.setState({ qMsgs: { ...(this.state.qMsgs || {}), [id]: v2 }, qExtra: qe2 }); } }).catch(() => {}); this._loadQAtt && this._loadQAtt(id, realId); } } };
     });
     const queueRows = allQueue.filter(q => qFilter === 'All' || q.stage === qFilter);
     const queueTabs = ['All', 'New', 'Accepted', 'Docs', 'Processing', 'Ready'].map(k => ({
@@ -11241,6 +11417,26 @@ class Component extends DCLogic {
     const qSel = this.state.qThread;
     const qSelRow = allQueue.find(q => q.id === qSel);
     // Human-friendly timestamps: server messages carry ISO strings; local echoes say "just now".
+    // ---- What the client actually sent with the request ----
+    // Fetched when the thread opens. The server also reports what is STILL MISSING against the
+    // service's own required list, so the officer is not left comparing a pile of files by eye.
+    this._loadQAtt = (key9, realId9) => {
+      if (!realId9) return;
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/service-requests/' + realId9 + '/attachments', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.json() : null))
+        .then(v9 => { if (v9) this.setState({ qAtt: { ...(this.state.qAtt || {}), [key9]: v9 } }); })
+        .catch(() => {});
+    };
+    // A client document is served from a route that checks who is asking, so it cannot be a plain
+    // href — an <a> carries no Authorization header. Fetch it, then hand the browser a blob.
+    this._openFile = (p9, name9) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + p9, { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.blob() : Promise.reject(new Error('denied'))))
+        .then(b9 => { const u9 = URL.createObjectURL(b9); window.open(u9, '_blank'); setTimeout(() => URL.revokeObjectURL(u9), 60000); })
+        .catch(() => this.toast('Could not open ' + (name9 || 'that file'), 'error'));
+    };
     const _qWhen = (at2) => {
       const t9 = new Date(at2).getTime();
       if (isNaN(t9)) return at2 || '—';
@@ -11303,6 +11499,25 @@ class Component extends DCLogic {
       showQThread: !!qSel,
       qtId: qSel, qtService: qSelRow ? qSelRow.service : '', qtClient: qSelRow ? qSelRow.client : '',
       qtStage: qSelRow ? qSelRow.stage : '', qtStBg: qSelRow ? qSelRow.stBg : '#fff', qtStColor: qSelRow ? qSelRow.stColor : '#000',
+      ...(() => {
+        const a9 = (this.state.qAtt || {})[qSel] || null;
+        const files9 = a9 && Array.isArray(a9.files) ? a9.files : [];
+        const miss9 = a9 && Array.isArray(a9.missing) ? a9.missing : [];
+        const kb9 = (n9) => n9 >= 1048576 ? (n9 / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n9 / 1024)) + ' KB';
+        return {
+          // Only shown once the fetch has answered — an empty strip while loading reads as "the
+          // client sent nothing", which is a different statement from "we don't know yet".
+          qAttShow: !!a9 && (files9.length > 0 || miss9.length > 0),
+          qAttCount: files9.length + (files9.length === 1 ? ' document' : ' documents'),
+          qAttFiles: files9.map(f9 => ({
+            name: f9.name || f9.label || 'Document',
+            meta: [f9.label || f9.docKey, kb9(f9.size || 0)].filter(Boolean).join(' · '),
+            open: () => this._openFile(f9.path, f9.name),
+          })),
+          qAttMissingShow: miss9.length > 0,
+          qAttMissingLine: miss9.map(m9 => m9.label).join(', '),
+        };
+      })(),
       qThreadMsgs, qReply, qInternal,
       qInternalBg: qInternal ? '#FEF4E2' : '#fff', qInternalColor: qInternal ? '#B8860B' : '#8C8899', qInternalBorder: qInternal ? '#FBE2B8' : '#DDD9E6',
       qSendLabel: qInternal ? 'Add internal note' : 'Send reply', qInternal: qInternal ? 'ON' : 'OFF',
@@ -12864,6 +13079,15 @@ class Component extends DCLogic {
             await ask3('SLA hours:', 'slaHours', true);
             // Only tasks collect data; an approval is a decision, not a form.
             if (T3 === 'task') {
+              // Which documents this step has to collect. "The service's own list" is the one the
+              // client was asked to upload at request time, so whatever they already sent arrives
+              // pre-ticked with the file attached — nobody asks twice.
+              await pick3('Which documents must this step collect?', 'checklistSource', [
+                { label: "The service's own list", value: 'service',
+                  desc: 'The documents configured on the service — already ticked off if the client uploaded them' },
+                { label: 'A client-specific rule', value: 'dynamic', desc: 'Resolved from a checklist rule and the run\'s variables' },
+                { label: 'None', value: '', desc: 'This step collects no documents' },
+              ], { body: 'Resolved when the step is created, so editing the service later leaves in-flight steps alone.' });
               const recorded3 = await pick3('What should this step record?', 'captureSource', [
                 { label: "The document's own fields", value: 'document_type',
                   desc: 'Asks for whatever is configured on that document type — one step serves every type' },

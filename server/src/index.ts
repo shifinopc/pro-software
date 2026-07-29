@@ -14,8 +14,8 @@ import { validate } from "./validate.js";
 import { prisma } from "./db.js";
 import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved } from "./notify.js";
-import { startDeliveryForQuotation } from "./delivery.js";
+import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected } from "./notify.js";
+import { startDeliveryForQuotation, acceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
@@ -367,8 +367,12 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   }
   for (const r of reqs) {
     if (r.lastStaffMsgAt && String(r.lastStaffMsgAt) > String(r.clientReadAt || "")) out.push({ id: "req-" + r.id, kind: "check", title: `New reply on ${r.type || "your request"}`, meta: `Support · from your PRO team`, ts: r.lastStaffMsgAt, unread: true, cta: false });
+    // Acceptance had no branch here, so the one status the client most wants to see — someone has
+    // picked this up — arrived only by email, and there is no SMTP configured. Now it shows.
+    else if (r.status === "accepted") out.push({ id: "req-" + r.id, kind: "refresh", title: `${r.type || "Request"} — we've started work`, meta: `Support · accepted${r.acceptedAt ? ` ${String(r.acceptedAt).slice(0, 10)}` : ""}`, ts: r.acceptedAt || r.date || nowISO, unread: true, cta: false });
     else if (r.status === "resolved") out.push({ id: "req-" + r.id, kind: "check", title: `${r.type || "Request"} resolved`, meta: `Support · ${r.date || ""}`, ts: r.lastStaffMsgAt || r.date || nowISO, unread: false, cta: false });
-    else if (r.status === "rejected") out.push({ id: "req-" + r.id, kind: "alert", title: `${r.type || "Request"} needs your attention`, meta: `Support · ${r.date || ""}`, ts: r.date || nowISO, unread: false, cta: false });
+    // Carry the reason. "Needs your attention" with nothing attached is the silence this replaces.
+    else if (r.status === "rejected") out.push({ id: "req-" + r.id, kind: "alert", title: `${r.type || "Request"} could not be processed`, meta: `Support · ${r.rejectedReason || r.date || ""}`, ts: r.date || nowISO, unread: true, cta: false });
   }
   for (const inv of invs) {
     if (inv.status !== "paid") out.push({ id: "inv-" + inv.id, kind: "invoice", title: `Invoice ${inv.number} issued — ${money(inv)}`, meta: `Billing${inv.dueDate ? ` · due ${inv.dueDate}` : ""}`, ts: inv.date || nowISO, unread: true, cta: "Pay" });
@@ -715,12 +719,47 @@ app.post("/api/portal/appointments/:id/reschedule-request", requireAuth, require
 // Portal: read the client's own service requests (so they persist across reloads)
 app.get("/api/portal/service-requests", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
-  res.json(await prisma.serviceRequest.findMany({ where: { companyId: a.companyId }, orderBy: { id: "desc" } }));
+  const rows = await prisma.serviceRequest.findMany({ where: { companyId: a.companyId }, orderBy: { id: "desc" } });
+
+  // Attach progress for the requests that started a workflow, so the portal's PROGRESS column has
+  // something to show. It has existed since the portal was built and has never been fed by anything.
+  //
+  // Progress is counted over the template's ACTIONABLE nodes — the steps a person works — not over
+  // every node in the graph: counting start, end and decision nodes would tell a client their job is
+  // 30% done because the engine passed through two invisible markers.
+  const runIds = rows.map(r => r.workflowInstanceId).filter(Boolean) as string[];
+  const progress: Record<string, { done: number; total: number; current: string | null; runStatus: string }> = {};
+  if (runIds.length) {
+    const runs = await prisma.workflowInstance.findMany({
+      where: { id: { in: runIds } },
+      include: { tasks: true, template: { select: { graph: true } } },
+    });
+    for (const run of runs) {
+      const nodes: any[] = ((run.template?.graph as any)?.nodes ?? []).filter((n: any) => n?.type === "task" || n?.type === "approval");
+      const total = nodes.length || run.tasks.length;
+      const done = run.tasks.filter(t => ["done", "approved"].includes(String(t.status))).length;
+      const active = run.tasks.find(t => String(t.status) === "active");
+      progress[run.id] = {
+        // A finished run reads as complete even if a branch left some nodes unvisited — the client
+        // asked whether their job is done, not how many boxes the graph happens to contain.
+        done: run.status === "completed" ? total : Math.min(done, total),
+        total,
+        current: active?.title ?? null,
+        runStatus: run.status,
+      };
+    }
+  }
+  // Internal ids are never sent to a client: the run id is machinery, and the portal only needs to
+  // know how far along it is.
+  res.json(rows.map(({ workflowInstanceId, taskId, serviceItemId, ...r }) => ({
+    ...r,
+    progress: workflowInstanceId ? (progress[workflowInstanceId] ?? null) : null,
+  })));
 });
 app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
   const a = (req as any).auth;
   try {
-    const { type, message, clientName, companyId } = req.body ?? {};
+    const { type, message, clientName, companyId, attachments } = req.body ?? {};
     // A group login can file for any company in its group, so honour an explicit companyId — but only
     // after checking it is actually in scope, never straight from the request body.
     let target = a.companyId;
@@ -734,6 +773,29 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
     const created = await prisma.serviceRequest.create({
       data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
     });
+    // Attach the uploaded files to the request, AGAINST the document each one is meant to be.
+    // The client sends file ids, never paths: an id is checked against what this account actually
+    // uploaded, so nobody can attach another company's file by quoting its URL.
+    const wanted = Array.isArray(attachments) ? attachments.slice(0, 25) : [];
+    if (wanted.length) {
+      const ids = wanted.map((x: any) => String(x?.fileId ?? "")).filter(Boolean);
+      const owned = await prisma.fileAsset.findMany({ where: { id: { in: ids }, uploadedBy: a.sub } });
+      const byId = new Map(owned.map(f => [f.id, f]));
+      const rows = wanted
+        .map((x: any) => ({ x, f: byId.get(String(x?.fileId ?? "")) }))
+        .filter(({ f }) => !!f)
+        .map(({ x, f }) => ({
+          requestId: created.id,
+          docKey: String(x.key || "other").slice(0, 60),
+          label: x.label ? String(x.label).slice(0, 120) : null,
+          path: f!.path, name: f!.name, size: f!.size,
+          at: new Date().toISOString(),
+        }));
+      if (rows.length) await prisma.requestAttachment.createMany({ data: rows });
+      // Say it plainly rather than silently dropping: a file that did not attach is one the client
+      // believes they sent.
+      if (rows.length < ids.length) console.warn(`[requests] ${ids.length - rows.length} attachment(s) on ${created.number} referenced files this account does not own`);
+    }
     logActivity({ type: "client", message: `Service request from ${co?.name ?? clientName ?? "a client"}: ${type ?? "request"}`, user: co?.name ?? clientName ?? "Client" });
     // Tells the staff inbox AND acknowledges to the client by email. Not awaited: SMTP must never
     // hold up the client's response.
@@ -941,6 +1003,78 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
 // figures into the invoice form with nothing linking the two. This raises the invoice from the
 // quotation's own line items, as a DRAFT — the same lifecycle every other invoice follows, so it
 // still has to be approved before the client is billed.
+/**
+ * What the client actually sent with a request, and what is still missing.
+ *
+ * `missing` is computed against the service's own required list rather than left to the officer to
+ * work out from a pile of files: chasing a client for a document that arrived three days ago is the
+ * failure this whole feature exists to stop.
+ */
+app.get("/api/service-requests/:id/attachments", requireAuth, requireStaff, async (req, res) => {
+  const rq = await prisma.serviceRequest.findUnique({ where: { id: req.params.id } });
+  if (!rq) return res.status(404).json({ error: "Not found" });
+  const files = await prisma.requestAttachment.findMany({ where: { requestId: rq.id }, orderBy: { at: "asc" } });
+  // Match on the agreed service where one was chosen, else on the typed name.
+  const svc = rq.serviceItemId
+    ? await prisma.serviceItem.findUnique({ where: { id: rq.serviceItemId } })
+    : await prisma.serviceItem.findFirst({ where: { name: String(rq.type ?? "") } });
+  const required: any[] = Array.isArray(svc?.requiredDocs) ? (svc!.requiredDocs as any[]) : [];
+  const have = new Set(files.map(f => f.docKey));
+  res.json({
+    files,
+    required,
+    missing: required.filter(d => d && d.required !== false && !have.has(d.key)).map(d => ({ key: d.key, label: d.label })),
+  });
+});
+
+// Accept a client request and turn it into work. See delivery.ts for why this mirrors quotation
+// delivery so exactly: they are two doors into the same thing, and behaving differently at one of
+// them is how a client's request quietly becomes nobody's job.
+app.post("/api/service-requests/:id/accept", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const { serviceItemId, assignee, dueDate } = req.body ?? {};
+    const out = await acceptServiceRequest(req.params.id, {
+      actor: a?.email ?? a?.sub,
+      serviceItemId: serviceItemId ? String(serviceItemId) : null,
+      assignee: assignee ? String(assignee) : null,
+      dueDate: dueDate ? String(dueDate) : null,
+    });
+    await logAudit({ action: "request.accepted", actorId: a?.sub, target: req.params.id, detail: [out.taskRef, out.serviceName, out.workflowInstanceId ? "run started" : "no run"].filter(Boolean).join(" · ") });
+    res.json(out);
+  } catch (e: any) {
+    // "Already accepted" is a conflict, not a server fault — the console shows it as a plain message.
+    const msg = String(e?.message ?? e);
+    res.status(/already accepted/i.test(msg) ? 409 : 400).json({ error: msg });
+  }
+});
+
+// Rejecting used to be a bare status flip with nothing recorded and nothing the client could read.
+// The reason is required, and it is written where the portal can show it.
+app.post("/api/service-requests/:id/reject", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const reason = String((req.body ?? {}).reason ?? "").trim();
+  if (!reason) return res.status(400).json({ error: "A reason is required — the client sees it" });
+  try {
+    const rq = await prisma.serviceRequest.findUnique({ where: { id: req.params.id } });
+    if (!rq) return res.status(404).json({ error: "Request not found" });
+    const done = await prisma.task.findFirst({ where: { requestId: rq.id } });
+    if (done) return res.status(409).json({ error: `Work has already started for this request (${done.ref ?? done.title})` });
+    const out = await prisma.serviceRequest.update({ where: { id: rq.id }, data: { status: "rejected", rejectedReason: reason } });
+    await logAudit({ action: "request.rejected", actorId: a?.sub, target: rq.id, detail: reason.slice(0, 200) });
+    logActivity({ type: "client", message: `Request ${rq.number ?? ""} rejected — ${reason}`.trim(), user: a?.email });
+    // The reason is required precisely so it can be sent — a decline the client only discovers by
+    // refreshing the portal is the thing this replaces.
+    notifyRequestRejected({
+      companyId: rq.companyId ?? null,
+      number: rq.number ?? null,
+      serviceName: String(rq.type ?? "") || null,
+      reason,
+    });
+    res.json(out);
+  } catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+});
+
 app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
@@ -2092,6 +2226,12 @@ app.put("/api/settings/:key", requireAuth, requireStaff, requireWriteRole, async
 // base64 JSON (no multipart dependency); size is capped by the 6mb JSON body limit.
 const FILES_DIR = path.resolve(process.cwd(), "uploads-files");
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
+// NOT served by express.static — reachable only through GET /api/files/:id, which checks the caller.
+const PRIVATE_FILES_DIR = path.resolve(process.cwd(), "uploads-private");
+if (!fs.existsSync(PRIVATE_FILES_DIR)) fs.mkdirSync(PRIVATE_FILES_DIR, { recursive: true });
+// Kinds that carry a person's identity papers. Everything else (logos, print headers) stays public
+// because an <img> tag cannot send a token.
+const PRIVATE_KINDS = new Set(["document", "attachment"]);
 // User-uploaded files are served on the API origin. Neutralize active content: a per-response CSP
 // blocks all sub-resource loads + sandboxes the document, and nosniff stops content-type guessing.
 // SVGs still render inside <img> (scripts never execute there); a direct hit can't run script or
@@ -2120,13 +2260,54 @@ app.post("/api/upload", requireAuth, async (req, res) => {
   const safeExt = (extMatch ? extMatch[0] : ".png").toLowerCase();
   const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
   if (!buf.length || buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "File must be under 4 MB" });
-  const fname = `${(kind || "file").replace(/[^a-z0-9-]/gi, "")}-${Date.now()}${safeExt}`;
-  fs.writeFileSync(path.join(FILES_DIR, fname), buf);
+  // A person's identity papers do not go in a publicly served folder. Branding does — an <img> tag
+  // carries no Authorization header, so a logo behind auth simply would not render.
+  const isPrivate = PRIVATE_KINDS.has(String(kind || ""));
+  // Random, not `${kind}-${Date.now()}`. A millisecond timestamp is guessable inside a known window,
+  // so the old names let anyone walk the folder and pull other clients' passport scans.
+  const fname = `${crypto.randomBytes(16).toString("hex")}${safeExt}`;
+  fs.writeFileSync(path.join(isPrivate ? PRIVATE_FILES_DIR : FILES_DIR, fname), buf);
   const asset = await prisma.fileAsset.create({
-    data: { kind: String(kind || "file"), name: String(name || fname), path: "/files/" + fname, size: buf.length, uploadedBy: a?.sub ?? null, at: new Date().toISOString() },
+    data: {
+      kind: String(kind || "file"), name: String(name || fname),
+      // A private file is addressed by id through a route that checks the caller, never by a path
+      // anyone holding the URL can fetch.
+      path: isPrivate ? "" : "/files/" + fname,
+      size: buf.length, uploadedBy: a?.sub ?? null,
+      companyId: a?.type === "portal" ? (a.companyId ?? null) : null,
+      private: isPrivate,
+      at: new Date().toISOString(),
+    },
   });
-  await logAudit({ action: "file.upload", actorId: a?.sub, target: asset.path, detail: `${asset.kind} · ${buf.length}b`, ip: clientIp(req) });
-  res.status(201).json({ id: asset.id, path: asset.path, name: asset.name });
+  // Stored separately from `path` so the private route can find the file on disk without the URL
+  // ever naming it. Written after create because the name is keyed to the asset id.
+  if (isPrivate) {
+    fs.renameSync(path.join(PRIVATE_FILES_DIR, fname), path.join(PRIVATE_FILES_DIR, asset.id + safeExt));
+    await prisma.fileAsset.update({ where: { id: asset.id }, data: { path: "/api/files/" + asset.id } });
+  }
+  const outPath = isPrivate ? "/api/files/" + asset.id : asset.path;
+  await logAudit({ action: "file.upload", actorId: a?.sub, target: outPath, detail: `${asset.kind} · ${buf.length}b${isPrivate ? " · private" : ""}`, ip: clientIp(req) });
+  res.status(201).json({ id: asset.id, path: outPath, name: asset.name });
+});
+
+/**
+ * Read a private file. Staff may read any; a portal client may read only files belonging to their
+ * own company. The file never sits in the served folder, so this check cannot be walked around by
+ * guessing a URL — which is exactly what `/files/document-<timestamp>.png` allowed.
+ */
+app.get("/api/files/:id", requireAuth, async (req, res) => {
+  const a = (req as any).auth;
+  const asset = await prisma.fileAsset.findUnique({ where: { id: req.params.id } });
+  if (!asset) return res.status(404).json({ error: "Not found" });
+  if (!asset.private) return res.redirect(asset.path); // public asset, nothing to gate
+  if (a?.type === "portal" && asset.companyId !== a.companyId) return res.status(404).json({ error: "Not found" });
+  const onDisk = fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(asset.id));
+  if (!onDisk) return res.status(404).json({ error: "The file is no longer on the server" });
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+  // Named for the human, not for the disk: the client sees "passport.pdf", not a cuid.
+  res.setHeader("Content-Disposition", `inline; filename="${String(asset.name || onDisk).replace(/[^\w. -]/g, "_")}"`);
+  res.sendFile(path.join(PRIVATE_FILES_DIR, onDisk));
 });
 
 // ── API keys: list (safe fields), create (full key returned ONCE), revoke ──

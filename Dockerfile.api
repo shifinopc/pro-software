@@ -28,8 +28,10 @@ RUN npx prisma generate && npm run build
 
 # Uploaded documents live here and are served at /files/<name>. Declared so it is obvious this path
 # MUST be a volume — without one, every client's uploads are destroyed by the next image rebuild.
-RUN mkdir -p /app/uploads-files
-VOLUME ["/app/uploads-files"]
+# uploads-private/ holds identity documents and is NOT served: it is reachable only through
+# /api/files/:id, which checks who is asking. Same volume rule, same reason.
+RUN mkdir -p /app/uploads-files /app/uploads-private
+VOLUME ["/app/uploads-files", "/app/uploads-private"]
 
 COPY docker/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
 RUN chmod +x /usr/local/bin/api-entrypoint.sh

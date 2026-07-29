@@ -15,6 +15,7 @@ import { prisma } from "./db.js";
 import { startInstance } from "./workflow.js";
 import { nextNumber } from "./sequence.js";
 import { logActivity, logNotification } from "./auth.js";
+import { notifyRequestAccepted } from "./notify.js";
 
 const nowISO = () => new Date().toISOString();
 
@@ -146,4 +147,151 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     ].filter(Boolean).join(" · "),
   });
   return out;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CLIENT REQUEST → WORK
+//
+// The same journey as above, through the other door. Approving a request in the queue used to write
+// one word — `status: "resolved"` — and that was the whole of it: no task, no run, no owner, and no
+// link to anything. The client was told their request was finished at the moment it was agreed,
+// while the work existed only in the memory of whoever had read it.
+//
+// Rules, deliberately the same as delivery so the two doors behave alike:
+//   · idempotent — keyed on Task.requestId, so a double-click cannot double-book anyone
+//   · a request matching no catalogue service STILL becomes a task, titled in the client's own
+//     words. Three of the five most recent requests are free text; refusing them would mean the
+//     ones people actually send are the ones the system ignores.
+//   · a workflow that will not start costs the request its run, not its task
+// ──────────────────────────────────────────────────────────────────────────────
+export interface AcceptResult {
+  taskId: string;
+  taskRef: string | null;
+  workflowInstanceId: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
+  matched: boolean;
+  failure?: string;
+}
+
+export async function acceptServiceRequest(
+  requestId: string,
+  opts: { actor?: string; serviceItemId?: string | null; assignee?: string | null; dueDate?: string | null } = {},
+): Promise<AcceptResult> {
+  const rq = await prisma.serviceRequest.findUnique({ where: { id: requestId } });
+  if (!rq) throw new Error("Request not found");
+  if (String(rq.status).toLowerCase() === "rejected") throw new Error("That request was rejected — reopen it before accepting");
+
+  // Idempotency, checked on the work rather than the status: a status can be edited by hand, a task
+  // cannot appear twice by accident.
+  const already = await prisma.task.findFirst({ where: { requestId: rq.id } });
+  if (already) throw new Error(`Already accepted — ${already.ref ?? already.title} exists for this request`);
+
+  const services = await prisma.serviceItem.findMany({
+    select: { id: true, name: true, sla: true, time: true, docType: true, workflowId: true },
+  });
+  // An explicit choice from the Accept dialog always wins: the officer looked at it, the matcher only
+  // guessed. Falling back to the guess keeps the API usable without the dialog.
+  const svc = (opts.serviceItemId ? services.find(s => s.id === opts.serviceItemId) : null)
+    ?? matchService(String(rq.type ?? ""), services);
+
+  const label = svc?.name ?? String(rq.type ?? "").trim() ?? "";
+  const title = `${label || "Client request"} — ${rq.clientName ?? "Client"}`;
+
+  const task = await prisma.task.create({
+    data: {
+      ref: await nextNumber("task"),
+      title,
+      companyId: rq.companyId ?? null,
+      clientName: rq.clientName ?? null,
+      // Unassigned by default, as delivery does: naming an owner puts work in someone's queue
+      // without telling them, and a bound workflow routes its own steps by role anyway.
+      assignee: (opts.assignee ?? "").trim() || "Unassigned",
+      priority: "medium",
+      status: "todo",
+      dueDate: opts.dueDate || dueDateFrom(svc?.sla, svc?.time) || "",
+      docType: svc?.docType ?? null,
+      requestId: rq.id,
+    },
+  });
+
+  let runId: string | null = null;
+  let failure: string | undefined;
+  // Described to the client below. Only filled in when a run actually starts, so the acceptance
+  // email never promises a process that failed to launch.
+  let stepCount = 0;
+  let firstStep: string | null = null;
+  if (svc?.workflowId) {
+    try {
+      const run = await startInstance(svc.workflowId, {
+        title,
+        companyId: rq.companyId ?? null,
+        clientName: rq.clientName ?? null,
+        variables: {
+          serviceId: svc.id, serviceName: svc.name,
+          requestId: rq.id, requestNumber: rq.number ?? null,
+          ...(svc.docType ? { docType: svc.docType } : {}),
+          _trigger: "request_intake", _acceptedAt: nowISO(),
+        },
+      });
+      runId = run?.id ?? null;
+      if (runId) {
+        await prisma.task.update({ where: { id: task.id }, data: { workflowInstanceId: runId } });
+        // Count the human steps in the TEMPLATE, not the tasks created so far: the engine
+        // materialises a step only when the token reaches it, so "tasks" is 1 on a seven-step run.
+        const tpl = await prisma.workflowTemplate.findUnique({ where: { id: svc.workflowId } }).catch(() => null);
+        const nodes: any[] = Array.isArray((tpl?.graph as any)?.nodes) ? (tpl!.graph as any).nodes : [];
+        stepCount = nodes.filter(n => n?.type === "task" || n?.type === "approval").length;
+        firstStep = (run?.tasks ?? []).find((t: any) => t.status === "active")?.title ?? null;
+      }
+    } catch (e: any) {
+      // The task stands on its own. A template that will not start is a configuration problem, not a
+      // reason for the client's work to go missing.
+      failure = String(e?.message ?? e);
+    }
+  }
+
+  await prisma.serviceRequest.update({
+    where: { id: rq.id },
+    data: {
+      status: "accepted",
+      taskId: task.id,
+      workflowInstanceId: runId,
+      serviceItemId: svc?.id ?? null,
+      acceptedAt: nowISO(),
+    },
+  });
+
+  logActivity({
+    type: "task",
+    message: `Request ${rq.number ?? ""} accepted — ${title}${runId ? " (workflow started)" : ""}`.trim(),
+    user: opts.actor ?? "System",
+  });
+  logNotification({
+    type: "task",
+    title: `Work started — ${rq.clientName ?? "client"}`,
+    // Say plainly when there is no process behind the task. Ten of fourteen services have no
+    // template bound, and a bare "task created" would hide that this one is a to-do, not a flow.
+    message: [
+      `${rq.number ?? "Request"} · ${task.ref ?? title}`,
+      runId ? "workflow started" : (svc ? `no workflow bound to ${svc.name}` : "not in the service catalogue"),
+      failure ? `workflow failed: ${failure}` : null,
+    ].filter(Boolean).join(" · "),
+  });
+
+  // The client's side of the same moment. Until now acceptance was visible only to staff — the
+  // client's request simply changed colour in the portal one day with nothing to say why.
+  notifyRequestAccepted({
+    companyId: rq.companyId ?? null,
+    number: rq.number ?? null,
+    serviceName: svc?.name ?? String(rq.type ?? "") ?? null,
+    hasWorkflow: !!runId,
+    steps: stepCount,
+    firstStep,
+  });
+
+  return {
+    taskId: task.id, taskRef: task.ref ?? null, workflowInstanceId: runId,
+    serviceId: svc?.id ?? null, serviceName: svc?.name ?? null, matched: !!svc, failure,
+  };
 }

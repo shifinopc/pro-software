@@ -404,3 +404,64 @@ export function notifyDocumentRenewed(a: { companyId?: string | null; docType?: 
     cta: { label: "View your documents", url: `${portalUrl()}/portal/documents` },
   });
 }
+
+// ── Request lifecycle ─────────────────────────────────────────────────────────
+// A client used to hear exactly once about a request they raised: the acknowledgement. Whether it
+// was taken on, what was happening to it, and whether it finished were all invisible unless they
+// went looking. These three close that gap at the moments a person actually wants to be told.
+
+/** Accepted: the firm has committed, and work now exists. */
+export function notifyRequestAccepted(a: {
+  companyId?: string | null; number?: string | null; serviceName?: string | null;
+  hasWorkflow?: boolean; steps?: number | null; firstStep?: string | null;
+}) {
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    subject: `We've started work on your request${a.number ? ` ${a.number}` : ""}`,
+    heading: "Your request has been accepted",
+    lines: [
+      a.serviceName ? `Service: <b>${esc(a.serviceName)}</b>` : "",
+      // Only promise steps when there are steps. Ten of fourteen services have no workflow bound, and
+      // telling a client to expect a tracked process that does not exist is a promise nobody kept.
+      a.hasWorkflow && a.steps
+        ? `We'll take it through ${a.steps} step${a.steps === 1 ? "" : "s"}${a.firstStep ? `, starting with <b>${esc(a.firstStep)}</b>` : ""}. You can follow it in your portal.`
+        : "Your PRO team is handling it and will keep you updated here.",
+    ],
+    cta: { label: "Track it in your portal", url: `${portalUrl()}/portal/my-requests` },
+  });
+}
+
+/** Finished: said once, when the work is genuinely complete. */
+export function notifyRequestCompleted(a: { companyId?: string | null; number?: string | null; serviceName?: string | null }) {
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    subject: `Completed${a.number ? `: request ${a.number}` : ": your request"}`,
+    heading: "Your request is complete",
+    lines: [
+      a.serviceName ? `Service: <b>${esc(a.serviceName)}</b>` : "",
+      "Any documents issued are in your portal under Documents.",
+    ],
+    cta: { label: "See the result", url: `${portalUrl()}/portal/my-requests` },
+  });
+}
+
+/** Declined: carries the reason, because a refusal with no explanation is just a silence. */
+export function notifyRequestRejected(a: { companyId?: string | null; number?: string | null; serviceName?: string | null; reason: string }) {
+  notify({
+    rule: "Request status change",
+    audience: "client",
+    companyId: a.companyId,
+    subject: `About your request${a.number ? ` ${a.number}` : ""}`,
+    heading: "We could not proceed with this request",
+    lines: [
+      a.serviceName ? `Service: <b>${esc(a.serviceName)}</b>` : "",
+      `<span style="white-space:pre-wrap;">${esc(a.reason)}</span>`,
+      "Reply in your portal if you'd like us to look again.",
+    ],
+    cta: { label: "Reply in your portal", url: `${portalUrl()}/portal/my-requests` },
+  });
+}

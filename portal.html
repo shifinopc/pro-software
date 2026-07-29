@@ -1251,7 +1251,7 @@
                   <span style="font-size:10.5px; font-weight:700; color:{{ rq.stColor }}; background:{{ rq.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ rq.status }}</span>
                   <div style="min-width:0;">
                     <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><div style="width:{{ rq.pct }}%; height:100%; background:{{ rq.stColor }};"></div></div>
-                    <div style="font-size:10px; color:#A9A6B4; margin-top:3px;">{{ rq.pct }}% · SLA {{ rq.sla }}</div>
+                    <div style="font-size:10px; color:#A9A6B4; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ rq.progressLine }}</div>
                   </div>
                   <span style="text-align:right; font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ rq.cost }}</span>
                   <div style="display:flex; justify-content:flex-end;"><span onClick="{{ rq.open }}" title="Open this request" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span></div>
@@ -2749,7 +2749,7 @@
                 </div>
               </sc-for>
             </div>
-            <div style="font-size:10.5px; color:#A9A6B4; margin-top:9px;">🔒 Locked services aren't in your plan — <span onClick="{{ openUpgrade }}" style="color:#7C00FF; font-weight:700; cursor:pointer;">upgrade to unlock</span></div>
+            <div style="font-size:10.5px; color:#A9A6B4; margin-top:9px;">🔒 Locked services aren't on your plan — tap one to ask for it on its own, or <span onClick="{{ openUpgrade }}" style="color:#7C00FF; font-weight:700; cursor:pointer;">change plan</span></div>
           </sc-if>
           <sc-if value="{{ wz2 }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SELECT COMPANY</div>
@@ -2776,12 +2776,38 @@
           </sc-if>
           <sc-if value="{{ wz4 }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">UPLOAD DOCUMENTS</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:5px;">Required for {{ wzServiceName }}: passport copy, photo, existing permit (if any). You can also add them later.</div>
-            <label style="margin-top:10px; display:flex; align-items:center; gap:11px; border:1.5px dashed {{ wzFileBorder }}; border-radius:12px; background:{{ wzFileBg }}; padding:14px; cursor:pointer;" style-hover="background:#F5EEFF;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ wzFileColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-              <span style="font-size:12.5px; font-weight:600; color:{{ wzFileColor }}; flex:1;">{{ wzFileLabel }}</span>
-              <input type="file" multiple onChange="{{ wzSetFile }}" style="display:none;">
-            </label>
+            <!-- One slot per document the service actually asks for. The old version showed a single
+                 box under a hardcoded sentence naming passport/photo/permit for ALL fourteen
+                 services, and its handler kept only the FIRST file while the label said "3 files". -->
+            <sc-if value="{{ wzHasDocList }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:11.5px; color:#8C8899; margin-top:5px;">{{ wzServiceName }} needs the documents below. Anything marked optional can wait.</div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+                <sc-for list="{{ wzDocSlots }}" as="d" hint-placeholder-count="3">
+                  <label style="display:flex; align-items:center; gap:11px; border:1.5px {{ d.borderStyle }} {{ d.border }}; border-radius:12px; background:{{ d.bg }}; padding:11px 13px; cursor:pointer;" style-hover="background:#F5EEFF;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ d.color }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                    <span style="flex:1; min-width:0;">
+                      <span style="display:block; font-size:12.5px; font-weight:700; color:#1A1523;">{{ d.label }}<span style="font-weight:600; color:{{ d.tagColor }};">{{ d.tag }}</span></span>
+                      <span style="display:block; font-size:10.5px; color:{{ d.subColor }}; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.sub }}</span>
+                    </span>
+                    <input type="file" onChange="{{ d.pick }}" style="display:none;">
+                    <sc-if value="{{ d.hasFile }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.clear }}" style="font-size:11px; font-weight:700; color:#A9A6B4; padding:4px 7px; border-radius:7px; cursor:pointer;" style-hover="background:#FEECEC; color:#C0353A;">Remove</span></sc-if>
+                  </label>
+                </sc-for>
+              </div>
+              <sc-if value="{{ wzMissingShow }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:9px; font-size:11.5px; color:#B8860B; background:#FEF9EF; border-radius:10px; padding:9px 12px; line-height:1.5;">Still needed before you can send: <b>{{ wzMissingLine }}</b></div>
+              </sc-if>
+            </sc-if>
+            <!-- No list configured on the service yet: one honest free-form box, and it now keeps
+                 every file the client picks rather than the first one. -->
+            <sc-if value="{{ wzNoDocList }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#8C8899; margin-top:5px;">Attach anything relevant to {{ wzServiceName }}. Your PRO team will ask if something else is needed.</div>
+              <label style="margin-top:10px; display:flex; align-items:center; gap:11px; border:1.5px dashed {{ wzFileBorder }}; border-radius:12px; background:{{ wzFileBg }}; padding:14px; cursor:pointer;" style-hover="background:#F5EEFF;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ wzFileColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                <span style="font-size:12.5px; font-weight:600; color:{{ wzFileColor }}; flex:1;">{{ wzFileLabel }}</span>
+                <input type="file" multiple onChange="{{ wzSetFile }}" style="display:none;">
+              </label>
+            </sc-if>
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">NOTES FOR YOUR PRO</div>
             <textarea value="{{ wzNotes }}" onChange="{{ wzSetNotes }}" rows="3" placeholder="Anything we should know…" style="margin-top:7px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; font-family:'Inter',sans-serif; resize:vertical;"></textarea>
           </sc-if>
@@ -5402,7 +5428,7 @@ class Component extends DCLogic {
       .filter(r9 => String(r9.status || '').toLowerCase() === 'pending' && r9.serviceId)
       .map(r9 => r9.serviceId));
     const svcDefs = (Array.isArray(this.state.svcItems) ? this.state.svcItems : [])
-      .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', Number(s8.docs) || 0,
+      .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', (Array.isArray(s8.requiredDocs) && s8.requiredDocs.length) || Number(s8.docs) || 0,
         _addonSvcIds.has(s8.id) || _pkgSvcIds.has(s8.id),
         s8.id, _addonSvcIds.has(s8.id), _pendingAddons.has(s8.id)]);
     const fmtAed = (n) => n ? sysCur + ' ' + n.toLocaleString('en-US') : 'No govt fee';
@@ -5427,7 +5453,7 @@ class Component extends DCLogic {
         btnColor: pending ? '#8C8899' : included ? '#7C00FF' : '#6D5BD0',
         request: pending ? () => this.toast('Your PRO team is reviewing this request')
           : included
-            ? () => this.setState({ wizard: true, wzStep: 1, wzService: name, wzError: '' })
+            ? () => this.setState({ wizard: true, wzStep: 1, wzService: name, wzError: '', wzPicked: {}, wzFileObjs: null, wzFile: null })
             : () => this.setState({ addonAsk: { id: svcId, name } }),
       };
     });
@@ -5487,9 +5513,23 @@ class Component extends DCLogic {
     const svcDef = svcDefs.find(s2 => s2[0] === wzService);
     const wzGov = svcDef ? svcDef[2] : 0;
     const stepNames = ['Service', 'Company', 'Employee', 'Documents', 'Review'];
+    // What THIS service asks the client for. Configured once per service in the console; empty means
+    // nobody has configured it yet, not that no documents are needed — so the step falls back to a
+    // free-form box rather than implying the client owes nothing.
+    const _wzSvcRow = (Array.isArray(this.state.svcItems) ? this.state.svcItems : []).find(s2 => s2.name === wzService);
+    const _wzReq = (Array.isArray(_wzSvcRow && _wzSvcRow.requiredDocs) ? _wzSvcRow.requiredDocs : []).filter(d2 => d2 && d2.key && d2.label);
+    const _wzPicked = this.state.wzPicked || {};
+    const _wzMissing = _wzReq.filter(d2 => d2.required !== false && !_wzPicked[d2.key]);
+    const _wzPickedCount = _wzReq.filter(d2 => !!_wzPicked[d2.key]).length;
+    const _wzFreeCount = Array.isArray(this.state.wzFileObjs) ? this.state.wzFileObjs.length : 0;
+    const _wzSummary = _wzReq.length
+      ? (_wzPickedCount ? _wzPickedCount + ' of ' + _wzReq.length + ' attached' : 'None attached — PRO will request')
+      : (_wzFreeCount ? _wzFreeCount + (_wzFreeCount === 1 ? ' file' : ' files') + ' attached' : 'None attached — PRO will request');
     const wizardApi = {
       showWizard: !!this.state.wizard,
-      openWizard: () => this.setState({ wizard: true, wzStep: 1, wzError: '', wzBusy: false, wzEmployee: null }),
+      // Clear the picked files too: reopening the wizard with the last request's attachments still
+      // in state would silently re-send someone else's documents against a different service.
+      openWizard: () => this.setState({ wizard: true, wzStep: 1, wzError: '', wzBusy: false, wzEmployee: null, wzPicked: {}, wzFileObjs: null, wzFile: null }),
       closeWizard: () => this.setState({ wizard: false }),
       wzSteps: stepNames.map((label, i) => ({
         label,
@@ -5502,17 +5542,29 @@ class Component extends DCLogic {
       wzBack: () => this.setState({ wzStep: Math.max(1, wzStep - 1) }),
       wzNext: () => {
         if (wzStep === 1 && !wzService) return;
-        this.setState({ wzStep: Math.min(5, wzStep + 1) });
+        // A required document is required. Letting it through to Review would file a request the
+        // officer has to bounce back, which costs the client a day and the firm a phone call.
+        if (wzStep === 4 && _wzMissing.length) {
+          return this.setState({ wzError: 'Attach ' + _wzMissing.map(d2 => d2.label).join(', ') + ' to continue' });
+        }
+        this.setState({ wzStep: Math.min(5, wzStep + 1), wzError: '' });
       },
-      wzServices: svcDefs.map(([name, , , , , , included]) => ({
+      // A locked row here used to push the whole-tier upgrade box, while the cards behind this modal
+      // — and the banner directly above it — offered the same service as a per-client add-on. One
+      // screen, two different answers to "can I have this?". The wizard now does what the cards do.
+      wzServices: svcDefs.map(([name, , , , , , included, svcId9, , pending9]) => ({
         name, locked: !included,
         active: name === wzService,
         color: included ? '#1A1523' : '#A9A6B4',
         border: name === wzService ? '#7C00FF' : '#EDEBF2',
         bg: name === wzService ? '#F7F3FD' : '#fff',
-        cursor: included ? 'pointer' : 'not-allowed',
+        // Not "not-allowed": asking for it IS allowed, it just files a different kind of request.
+        cursor: 'pointer',
         opacity: included ? 1 : .65,
-        pick: included ? () => this.setState({ wzService: name }) : () => this.setState({ upgradeModal: 'idle' }),
+        pick: included ? () => this.setState({ wzService: name })
+          : pending9 ? () => this.toast('Your PRO team is already reviewing your request for ' + name)
+          // Close the wizard first — the add-on ask is its own modal and would otherwise stack.
+          : () => this.setState({ wizard: false, addonAsk: { id: svcId9, name } }),
       })),
       wzCompanies: companyDefs.map(([name, , , tileBg, tileColor]) => ({
         name, tileBg, tileColor,
@@ -5539,9 +5591,37 @@ class Component extends DCLogic {
       wzFileColor: this.state.wzFile ? '#0E9355' : '#7C00FF',
       wzFileBg: this.state.wzFile ? '#F0FDF5' : '#FAF5FF',
       wzFileBorder: this.state.wzFile ? '#A6E5C3' : '#C9A2FF',
-      wzFileSummary: this.state.wzFile || 'None attached — PRO will request',
-      // Keep the File itself, not just its name — the attachment has to be uploaded on submit.
-      wzSetFile: (ev) => { const fs = ev.target.files; if (fs && fs.length) this.setState({ wzFile: fs.length > 1 ? fs.length + ' files' : fs[0].name, wzFileObj: fs[0] }); },
+      wzFileSummary: _wzSummary,
+      // Keep the FILES, plural. This used to store fs[0] and label it "3 files" — the client was
+      // told three documents had been sent and one was uploaded.
+      wzSetFile: (ev) => { const fs = ev.target.files; if (fs && fs.length) this.setState({ wzFile: fs.length > 1 ? fs.length + ' files' : fs[0].name, wzFileObjs: Array.from(fs) }); },
+      // ---- One slot per required document ----
+      wzHasDocList: _wzReq.length > 0,
+      wzNoDocList: _wzReq.length === 0,
+      wzDocSlots: _wzReq.map(d9 => {
+        const got9 = _wzPicked[d9.key] || null;
+        const optional9 = d9.required === false;
+        return {
+          label: d9.label,
+          tag: optional9 ? '  ·  optional' : '',
+          tagColor: '#A9A6B4',
+          // The hint when nothing is attached, the filename once something is. One line, so the row
+          // always answers the only question being asked of it: is this one done?
+          sub: got9 ? got9.name : (d9.hint || (optional9 ? 'Attach if you have it' : 'Required')),
+          subColor: got9 ? '#0E9355' : (optional9 ? '#A9A6B4' : '#8C8899'),
+          border: got9 ? '#A6E5C3' : (optional9 ? '#EDEBF2' : '#C9A2FF'),
+          borderStyle: got9 ? 'solid' : 'dashed',
+          bg: got9 ? '#F0FDF5' : (optional9 ? '#FCFBFE' : '#FAF5FF'),
+          color: got9 ? '#0E9355' : '#7C00FF',
+          hasFile: !!got9,
+          // Clear the error with the fix. "Attach X to continue" left on screen after X was attached
+          // tells the client they are still blocked when they are not.
+          pick: (ev9) => { const f9 = ev9.target.files && ev9.target.files[0]; if (f9) this.setState({ wzPicked: { ...(this.state.wzPicked || {}), [d9.key]: f9 }, wzError: '' }); },
+          clear: (ev9) => { if (ev9 && ev9.stopPropagation) ev9.stopPropagation(); const n9 = { ...(this.state.wzPicked || {}) }; delete n9[d9.key]; this.setState({ wzPicked: n9 }); },
+        };
+      }),
+      wzMissingShow: _wzMissing.length > 0,
+      wzMissingLine: _wzMissing.map(d9 => d9.label).join(', '),
       wzGovFee: fmtAed(wzGov),
       // Government/disbursement fees are outside VAT scope, and the PRO service is included in the
       // plan (zero taxable). So VAT here is 0 and the total is the government fee only — was
@@ -5571,41 +5651,57 @@ class Component extends DCLogic {
         const tok2 = localStorage.getItem('stimespro:portalToken') || localStorage.getItem('stimespro:token');
         const H2 = { 'Content-Type': 'application/json', ...(tok2 ? { Authorization: 'Bearer ' + tok2 } : {}) };
 
-        const send = (filePath) => {
+        // attached = [{ key, label, fileId }] that actually reached the server; failed = labels that
+        // did not. Both are reported, because a document the client believes they sent and the
+        // office never received is the worst of the three possible outcomes.
+        const send = (attached, failed) => {
           const message2 = [
             'Service requested: ' + st2.wzService,
             emp2 ? 'For employee: ' + emp2 : 'Company-level request',
             (st2.wzNotes || '').trim() ? 'Notes: ' + st2.wzNotes.trim() : null,
-            filePath ? 'Attachment: ' + API2 + filePath : (st2.wzFile ? 'Client selected ' + st2.wzFile + ' but the upload failed — please request it' : null),
+            attached.length ? attached.length + (attached.length === 1 ? ' document attached' : ' documents attached') : null,
+            failed.length ? 'Could not upload: ' + failed.join(', ') + ' — please request these' : null,
           ].filter(Boolean).join('\n');
           fetch(API2 + '/api/portal/service-requests', { method: 'POST', headers: H2,
             body: JSON.stringify({ type: st2.wzService, message: message2, clientName: coName2,
-              companyId: picked2 ? picked2.id : undefined }) })
+              companyId: picked2 ? picked2.id : undefined, attachments: attached }) })
             .then(r2 => r2.json().catch(() => ({})).then(j2 => ({ ok: r2.ok, j2 })))
             .then(({ ok, j2 }) => {
               this.setState({ wzBusy: false });
               if (!ok) return this.setState({ wzError: (j2 && j2.error && String(j2.error).slice(0, 160)) || 'Could not submit the request' });
-              this.setState({ wizard: false, wzService: null, wzStep: 1, wzFile: null, wzFileObj: null, wzNotes: '', wzEmployee: null, wzError: '' });
-              this.toast('Request sent to ' + (this.state.proTeamName || 'your PRO team'));
+              this.setState({ wizard: false, wzService: null, wzStep: 1, wzFile: null, wzFileObjs: null, wzPicked: {}, wzNotes: '', wzEmployee: null, wzError: '' });
+              this.toast(failed.length
+                ? 'Request sent, but ' + failed.length + ' file' + (failed.length === 1 ? '' : 's') + ' would not upload'
+                : 'Request sent to ' + (this.state.proTeamName || 'your PRO team'), failed.length ? 'warn' : 'success');
               this._loadReqs && this._loadReqs();
             })
             .catch(() => this.setState({ wzBusy: false, wzError: 'Server unreachable — nothing was submitted' }));
         };
 
         this.setState({ wzBusy: true, wzError: '' });
-        const f2 = st2.wzFileObj;
-        if (!f2) return send(null);
-        // Upload the attachment first so the PRO team actually receives it — the old flow kept only
-        // the file NAME in state and threw the file away.
-        const rd2 = new FileReader();
-        rd2.onload = () => {
-          fetch(API2 + '/api/upload', { method: 'POST', headers: H2, body: JSON.stringify({ name: f2.name, data: String(rd2.result) }) })
-            .then(r2 => (r2.ok ? r2.json() : null))
-            .then(j2 => send(j2 && j2.path))
-            .catch(() => send(null)); // the request still goes; the message says the upload failed
-        };
-        rd2.onerror = () => send(null);
-        rd2.readAsDataURL(f2);
+        // Every picked file, each carrying the document it answers. Free-form files (a service with
+        // no configured list) go in under "other".
+        const jobs2 = _wzReq.filter(d2 => _wzPicked[d2.key]).map(d2 => ({ key: d2.key, label: d2.label, file: _wzPicked[d2.key] }));
+        if (!_wzReq.length && Array.isArray(st2.wzFileObjs)) {
+          st2.wzFileObjs.forEach(f9 => jobs2.push({ key: 'other', label: f9.name, file: f9 }));
+        }
+        if (!jobs2.length) return send([], []);
+
+        const readAsDataUrl = (f9) => new Promise((ok9, no9) => {
+          const rd9 = new FileReader();
+          rd9.onload = () => ok9(String(rd9.result));
+          rd9.onerror = () => no9(new Error('read failed'));
+          rd9.readAsDataURL(f9);
+        });
+        // Sequential on purpose: several 4 MB scans as base64 in parallel is a lot of memory on a
+        // phone, and the order files arrive in does not matter.
+        const attached2 = [], failed2 = [];
+        jobs2.reduce((chain9, j9) => chain9.then(() => readAsDataUrl(j9.file)
+          .then(data9 => fetch(API2 + '/api/upload', { method: 'POST', headers: H2, body: JSON.stringify({ name: j9.file.name, data: data9 }) }))
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(v9 => { if (v9 && v9.id) attached2.push({ key: j9.key, label: j9.label, fileId: v9.id }); else failed2.push(j9.label); })
+          .catch(() => { failed2.push(j9.label); })), Promise.resolve())
+          .then(() => send(attached2, failed2));
       },
     };
     // WIRED: real tiers from /api/portal/packages; "Request upgrade" files a REAL upgrade request
@@ -5675,15 +5771,38 @@ class Component extends DCLogic {
 
     // ---- My Requests ----
     // WIRED: real service requests (was a hardcoded #SRV-* list).
-    const _RQ_TONE = { open: ['In progress', '#F3E8FF', '#7C00FF'], resolved: ['Completed', '#E7F8EF', '#0E9355'], rejected: ['Closed', '#F3F1F7', '#6F6C7A'] };
+    // `open` reads as "Submitted" now, not "In progress": nothing is in progress until someone has
+    // accepted it, and telling a client work had started when it had not was the portal's half of the
+    // same problem the console had. `accepted` is the state where work genuinely exists.
+    const _RQ_TONE = {
+      open: ['Submitted', '#FEF4E2', '#B8860B'],
+      accepted: ['In progress', '#F3E8FF', '#7C00FF'],
+      resolved: ['Completed', '#E7F8EF', '#0E9355'],
+      rejected: ['Declined', '#FEECEC', '#C0353A'],
+    };
     const baseRequests = (Array.isArray(this.state.reqItems) ? this.state.reqItems : [])
       .map(r9 => {
         const st = String(r9.status || 'open').toLowerCase();
         const tone = _RQ_TONE[st] || _RQ_TONE.open;
+        // Real progress from the attached run. `pct` used to be the literal 50 for everything that
+        // was not finished — a bar that moved only twice in a job's life, and told the client nothing.
+        const pg = r9.progress || null;
+        const pct = st === 'resolved' ? 100
+          : (pg && pg.total) ? Math.round((pg.done / pg.total) * 100)
+          : st === 'accepted' ? 0 : 0;
         return { id: r9.number || ('#' + String(r9.id || '').slice(-6).toUpperCase()), realId: r9.id,
           subject: [r9.type || 'Request', r9.clientName || ({})[r9.companyId]].filter(Boolean).join(' — '),
           meta: [r9.date && ('Submitted ' + r9.date), tone[0]].filter(Boolean).join(' · '),
-          status: tone[0], stBg: tone[1], stColor: tone[2], cost: '—', sla: '—', pct: tone[0] === 'Completed' ? 100 : 50 };
+          status: tone[0], stBg: tone[1], stColor: tone[2], cost: '—', sla: '—', pct,
+          // What the client actually wants to read: which step, out of how many, and its name.
+          // Without a run there is no step list, so it says what it honestly knows instead.
+          progressLine: pg && pg.total
+            ? ('Step ' + Math.min(pg.done + 1, pg.total) + ' of ' + pg.total + (pg.current ? ' · ' + pg.current : ''))
+            : st === 'resolved' ? 'Completed'
+            : st === 'accepted' ? 'Accepted — with your PRO team'
+            : st === 'rejected' ? (r9.rejectedReason || 'Declined')
+            : 'Waiting to be picked up',
+          rejectedReason: r9.rejectedReason || '' };
       });
     const createdReqs = [];
     const rqFilter = this.state.rqFilter || 'all';
@@ -5703,7 +5822,11 @@ class Component extends DCLogic {
         }
       },
     }));
-    const requestRows = allReqs.filter(rq => rqFilter === 'all' || (rqFilter === 'progress' && rq.status !== 'Completed') || (rqFilter === 'done' && rq.status === 'Completed'));
+    // "In progress" means still live — anything not finished and not declined. The old test was
+    // `!== 'Completed'`, which filed declined requests under work in progress.
+    const requestRows = allReqs.filter(rq => rqFilter === 'all'
+      || (rqFilter === 'progress' && rq.status !== 'Completed' && rq.status !== 'Declined')
+      || (rqFilter === 'done' && rq.status === 'Completed'));
     const rqTab = (key, label, count) => ({
       label, count: count || false,
       select: () => this.setState({ rqFilter: key }),
