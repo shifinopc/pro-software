@@ -108,10 +108,12 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
   }
 
   const renewals = await safely("renewals", triggerRenewals);
-  if ("started" in renewals && (renewals.started || renewals.released)) {
+  // `held` counts too: a tick that started nothing because every candidate was waiting on a
+  // prerequisite is a real outcome, and logging nothing would read as "the trigger did not run".
+  if ("started" in renewals && (renewals.started || renewals.released || renewals.held)) {
     await logAudit({
       action: "cron.renewals_triggered",
-      target: `${renewals.started} started, ${renewals.released} released`,
+      target: `${renewals.started} started, ${renewals.released} released${renewals.held ? `, ${renewals.held} held on prerequisites` : ""}`,
       detail: [`source=${source}`, renewals.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
@@ -188,6 +190,7 @@ export function startScheduler() {
       const bits = [
         r.compliance.changed && `compliance ${r.compliance.changed}/${r.compliance.scanned}`,
         "started" in r.renewals && r.renewals.started && `renewals ${r.renewals.started}`,
+        "held" in r.renewals && r.renewals.held && `held ${r.renewals.held}`,
         "escalated" in r.sla && r.sla.escalated.length && `sla ${r.sla.escalated.length}`,
         "renewed" in r.billing && r.billing.renewed && `billed ${r.billing.invoiced}`,
         "chased" in r.dunning && r.dunning.chased && `chased ${r.dunning.chased}`,

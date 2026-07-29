@@ -55,10 +55,47 @@ const raisePriority = (current: string, target: string) =>
 // Strictly OPT-IN: a docType with no bound active template is never auto-renewed. That's deliberate —
 // implicit triggering would mass-file renewals across every document the moment this shipped.
 // ─────────────────────────────────────────────────────────────
-export type RenewalResult = { considered: number; started: number; released: number; skipped: number; skippedExiting: number; details: string[] };
+export type RenewalResult = { considered: number; started: number; released: number; skipped: number; skippedExiting: number; held: number; details: string[] };
+
+/**
+ * Renewal prerequisites for one document, from its type's `prereqs` rules.
+ *
+ * Returns every rule that is NOT satisfied. Reads the whole list — the Compliance screen historically
+ * looked only at prereqs[0], so a second rule was configurable but never enforced.
+ *
+ * A company-scoped requirement (Trade License, Commercial Register…) belongs to the client rather than
+ * to the person, so it must not be filtered by `person` — otherwise it could never be satisfied for an
+ * employee-scoped document.
+ */
+async function unmetPrereqs(dt: any, d: any): Promise<{ need: string; months: number; why: string; docId: string | null }[]> {
+  const rules: any[] = Array.isArray(dt?.prereqs) ? dt.prereqs : [];
+  if (!rules.length) return [];
+  const out: { need: string; months: number; why: string; docId: string | null }[] = [];
+  for (const r of rules) {
+    const need = String(r?.requiresDocType ?? "").trim();
+    if (!need) continue;
+    const months = Math.max(0, Number(r?.minMonths) || 0);
+    const needDt = await prisma.documentType.findFirst({ where: { name: need } });
+    const byCompany = needDt?.subjectKind === "company";
+    const req = await prisma.document.findFirst({
+      where: { docType: need, companyId: d.companyId, ...(byCompany ? {} : { person: d.person }) },
+    });
+    if (!req) { out.push({ need, months, why: "not on file", docId: null }); continue; }
+    // parseDate returns epoch MILLISECONDS, not a Date — compare against getTime(), not the object.
+    const exp = parseDate(req.expiryDate);
+    if (exp === null) { out.push({ need, months, why: "no expiry recorded", docId: req.id }); continue; }
+    const limit = new Date();
+    limit.setMonth(limit.getMonth() + months);
+    if (exp < limit.getTime()) {
+      const left = daysUntil(exp);
+      out.push({ need, months, why: left < 0 ? `expired ${Math.abs(left)}d ago` : `only ${left}d left`, docId: req.id });
+    }
+  }
+  return out;
+}
 
 export async function triggerRenewals(): Promise<RenewalResult> {
-  const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, details: [] };
+  const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, held: 0, details: [] };
 
   // Re-arm documents whose renewal is over (finished, cancelled, or the run was deleted). Without this
   // a stuck pointer would block that document from ever auto-renewing again.
@@ -104,6 +141,28 @@ export async function triggerRenewals(): Promise<RenewalResult> {
       const daysLeft = daysUntil(exp);
       if (daysLeft > lead) continue; // hasn't crossed its lead time yet
       out.considered++;
+
+      // Renewal prerequisites. This path used to ignore them entirely: the gate lived only on the
+      // Compliance "Start renewal" button, so the SAME renewal was gated or not purely by which way it
+      // began. Nothing is started while a requirement is unmet.
+      //
+      // HELD, not parked: parking belongs on a Task row, and this path creates only a workflow run —
+      // there is nothing here to hold. Leaving `renewalRunId` unclaimed means the next tick simply
+      // reconsiders the document, so the renewal starts by itself the hour after the prerequisite is
+      // satisfied. Nothing has to remember to come back for it.
+      const unmet = await unmetPrereqs(dt, d);
+      if (unmet.length) {
+        out.held++;
+        out.details.push(`HELD ${docType} — ${d.person}: ${unmet.map(u => `${u.need} ${u.why}`).join("; ")}`);
+        // Keyed on the document plus what it is waiting for, so it is announced once — but announced
+        // again if the reason changes. A silent hold is indistinguishable from a broken trigger.
+        await notifyOnce(`renewal-held:${d.id}:${unmet.map(u => u.need).join(",")}`, {
+          type: "alert",
+          title: `Renewal held: ${docType} — ${d.person}`,
+          message: `Waiting on ${unmet.map(u => `${u.need} (${u.why})`).join(", ")} — starts automatically once met`,
+        });
+        continue;
+      }
 
       try {
         // Hand the engine everything issue_document needs to RENEW (not re-issue): documentId makes it
@@ -393,9 +452,27 @@ export async function resumeParkedTasks(): Promise<ResumeResult> {
     out.scanned++;
 
     let met = false;
-    if (bb.prereqDocId) {
-      const doc = await prisma.document.findUnique({ where: { id: String(bb.prereqDocId) } }).catch(() => null);
-      met = !!doc && String(doc.status).toLowerCase() === "valid";
+    // The park records what it needs and for how long. Match on the RULE — document present and still
+    // carrying the required period — not merely on status "valid", which is a weaker test: a document
+    // reads valid with three weeks left while the prerequisite asks for six months, and this job would
+    // have released the hold the console refuses to release. Older parks carry no rule; they fall back
+    // to the status test so nothing already in flight is stranded.
+    const needType: string = String(bb.requiresDocType ?? bb.waiting ?? "").trim();
+    const needMonths = Number(bb.minMonths);
+    if (bb.prereqDocId || needType) {
+      const doc = bb.prereqDocId
+        ? await prisma.document.findUnique({ where: { id: String(bb.prereqDocId) } }).catch(() => null)
+        : await prisma.document.findFirst({ where: { docType: needType, companyId: t.companyId ?? undefined } }).catch(() => null);
+      if (doc) {
+        if (needMonths >= 0) {
+          const exp = parseDate(doc.expiryDate);
+          const limit = new Date();
+          limit.setMonth(limit.getMonth() + needMonths);
+          met = exp !== null && exp >= limit.getTime();
+        } else {
+          met = String(doc.status).toLowerCase() === "valid";
+        }
+      }
     } else if (Array.isArray(bb.runIds) && bb.runIds.length) {
       const runs = await prisma.workflowInstance.findMany({ where: { id: { in: bb.runIds.map(String) } } });
       // A deleted run can't block forever; only a still-running one holds the park.

@@ -89,6 +89,75 @@ async function resolveChecklist(config: any, vars: Record<string, any>): Promise
   }
   return normalizeItems(c.checklist);
 }
+
+/**
+ * Which run variable a Document Type field feeds. `issue_document` reads these names when it writes
+ * the renewed document back to Compliance, so a field marked "Expiry date" on the type lands in the
+ * variable the issue step actually looks at — and the renewal updates the expiry instead of silently
+ * keeping last year's.
+ */
+const FIELD_PURPOSE_VAR: Record<string, string> = {
+  expiry: "newExpiry",
+  number: "docNumber",
+  issue: "issueDate",
+  fee: "fee",
+  receipt: "receipt",
+};
+
+/**
+ * Capture fields for a step.
+ *
+ * Static by default. With `captureSource: "document_type"` the step instead inherits the fields
+ * configured on the DOCUMENT TYPE the run is about (vars.docType) — so one generic step asks for
+ * Iqama Number / New Expiry Date on an Iqama run and for the work-visa fields on a work-visa run,
+ * without a template per document type.
+ *
+ * Resolved once, at step creation, and stored on the task: a later edit to the type must not change
+ * what an in-flight step is asking for, the same rule the checklist snapshot follows.
+ */
+/**
+ * Which document a STEP is about.
+ *
+ * A workflow routinely touches several documents — onboarding collects a passport, a medical and an
+ * insurance card, each with its own fields — so the document cannot be a property of the run. It is a
+ * property of the step. Defaults to the run's own document, which is what a single-document flow like
+ * a renewal wants and means those templates need no configuration at all.
+ */
+function stepDocType(config: any, vars: Record<string, any>): string {
+  const c = config ?? {};
+  if (c.docTypeSource === "specific" && String(c.docType ?? "").trim()) return String(c.docType).trim();
+  return String(vars.docType ?? "").trim();
+}
+
+async function resolveCaptures(config: any, vars: Record<string, any>): Promise<any[] | undefined> {
+  const c = config ?? {};
+  if (c.captureSource === "document_type") {
+    const docType = stepDocType(c, vars);
+    if (docType) {
+      const dt = await prisma.documentType.findFirst({ where: { name: docType } }).catch(() => null);
+      const fields: any[] = Array.isArray(dt?.fields) ? (dt!.fields as any[]) : [];
+      const out = fields
+        // A file upload is not a variable — it has nowhere to go in the run's data.
+        .filter(f => f && f.label && String(f.type) !== "file")
+        .map(f => ({
+          // slug(label), not f.id: the Document Type editor regenerates field ids on every save, so
+          // an id would rename the variable each time the type was edited and quietly orphan whatever
+          // had already been captured under the old name.
+          var: FIELD_PURPOSE_VAR[String(f.purpose ?? "")] || slug(String(f.label)),
+          label: f.label,
+          type: String(f.type) === "dropdown" ? "select" : (f.type || "text"),
+          // Carried so completion can write the value into the right column of the document itself
+          // rather than guessing from the variable name. Blank purpose → a custom field.
+          purpose: String(f.purpose ?? ""),
+          fieldId: f.id || slug(String(f.label)),
+          ...(Array.isArray(f.options) && f.options.length ? { options: f.options } : {}),
+          required: !!f.required,
+        }));
+      if (out.length) return out;
+    }
+  }
+  return Array.isArray(c.captures) ? c.captures : undefined;
+}
 // Runtime state for a task, deriving from legacy {label,done} checklist if no checklistState exists yet.
 function effectiveState(task: any): Record<string, any> {
   if (task.checklistState && typeof task.checklistState === "object" && Object.keys(task.checklistState).length) return { ...task.checklistState };
@@ -370,13 +439,27 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // Give the step an owner. Templates name a ROLE, not a person, so every task landed with
         // assignee null and sat in a shared pile until somebody claimed it. Falls back to null (the
         // old behaviour) when nobody holds the role — better unassigned than assigned to the wrong desk.
-        // Whoever started the run may have named an owner ("Assign to" on the New task dialog). That
-        // was collected, passed in as a run variable, and then ignored here — every step went to
-        // pickAssignee instead, so work the user assigned to themselves landed on someone else's
-        // desk. Node-level config still wins (a template author was explicit), and APPROVAL steps
-        // are deliberately excluded: routing your own approval to yourself defeats the control.
+        // Whoever started the run may have named an owner ("Assign to" on the New task dialog). It
+        // used to be collected and then ignored, so work you assigned to yourself landed on someone
+        // else's desk; the fix for that made it beat everything, which is the opposite mistake — one
+        // field on a creation dialog cannot express per-step intent, but it outranked the per-step
+        // roles that can. A single choice of "Administrator" therefore routed the PRO-officer steps,
+        // the accountant steps and the government steps all to one person, and the roles configured
+        // in the builder became decorative.
+        //
+        // Specific beats general:
+        //   1. the node's own assignee — a template author naming a person outright
+        //   2. the node's ROLE — configured per step, so it decides who that step belongs to
+        //   3. the run-level "Assign to" — the case owner, for steps that name no role
+        //   4. unassigned — visible to the whole role pool rather than on the wrong desk
+        //
+        // APPROVAL steps still ignore the run assignee entirely: routing your own approval to
+        // yourself defeats the control.
         const runAssignee = node.type === "approval" ? null : (typeof vars.assignee === "string" ? vars.assignee.trim() : "");
-        const assignee = c.assignee || (runAssignee && runAssignee !== "Unassigned" ? runAssignee : null) || (role ? await pickAssignee(role) : null);
+        const ownerFallback = runAssignee && runAssignee !== "Unassigned" ? runAssignee : null;
+        const assignee = c.assignee
+          || (role ? await pickAssignee(role) : null)
+          || ownerFallback;
         await prisma.workflowTask.create({
           data: {
             instanceId: inst.id, nodeId, nodeType: node.type,
@@ -400,7 +483,7 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             checklist: items.length ? items : undefined,
             checklistState: {},
             requireVerification: !!c.requireVerification,
-            captures: Array.isArray(c.captures) ? c.captures : undefined,
+            captures: await resolveCaptures(c, vars),
             createdAt: nowISO(),
           },
         });
@@ -470,7 +553,13 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   // is worse than no record. The value is checked here, once, where it enters the engine.
   {
     const node0 = getNode(g, task.nodeId);
-    const caps0: any[] = Array.isArray((node0?.config as any)?.captures) ? (node0!.config as any).captures : [];
+    // Read the captures the TASK was created with, not the node's config. They are the same thing for
+    // a statically configured step, but a step inheriting its fields from the document type has none
+    // on the node — so validating against the node would skip every dynamic field, and a bad date
+    // would sail through into issue_document exactly as it used to.
+    const caps0: any[] = Array.isArray(task.captures)
+      ? (task.captures as any[])
+      : (Array.isArray((node0?.config as any)?.captures) ? (node0!.config as any).captures : []);
     const supplied = (opts.variables && typeof opts.variables === "object") ? opts.variables as Record<string, any> : {};
     for (const cap of caps0) {
       if (!cap || String(cap.type) !== "date") continue;
@@ -492,6 +581,92 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     }
   }
   (inst as any).variables = vars;
+
+  // Write what was captured onto the DOCUMENT this step is about.
+  //
+  // Run variables are flat, so they cannot hold two documents at once: a passport step and an Iqama
+  // step would both write `newExpiry` and the second would silently overwrite the first. A workflow
+  // that touches several documents therefore has to put each value on its own document row, which is
+  // where the data belongs anyway — it shows up in Compliance the moment the step is completed,
+  // instead of only if an Issue/renew node happens to run later in the flow.
+  try {
+    const node1 = getNode(g, task.nodeId);
+    const caps1: any[] = Array.isArray(task.captures) ? (task.captures as any[]) : [];
+    const docType1 = stepDocType(node1?.config, vars);
+    const suppliedAny = caps1.some(c => {
+      const v = (opts.variables ?? {})[c?.var];
+      return v !== undefined && v !== null && String(v).trim() !== "";
+    });
+    if (docType1 && caps1.length && suppliedAny && inst.companyId) {
+      const dt1 = await prisma.documentType.findFirst({ where: { name: docType1 } });
+      const byCompany = (dt1?.subjectKind ?? "employee") === "company";
+      const employeeId = byCompany ? null : (vars.employeeId ? String(vars.employeeId) : null);
+      let person = byCompany ? (inst.clientName || "Company") : String(vars.applicant ?? vars.employee ?? "");
+      if (!byCompany && !person && employeeId) {
+        const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
+        if (emp) person = emp.name;
+      }
+
+      if (person) {
+        const existing = await prisma.document.findFirst({
+          where: { docType: docType1, companyId: inst.companyId, ...(employeeId ? { employeeId } : { person }) },
+        });
+
+        // Purposed fields land in the document's own columns; everything else is a custom field of
+        // that type, keyed by field id the way customData already is.
+        const val = (purpose: string) => {
+          const cap = caps1.find(c => String(c?.purpose ?? "") === purpose);
+          const raw = cap ? (opts.variables ?? {})[cap.var] : undefined;
+          return raw === undefined || raw === null || String(raw).trim() === "" ? null : String(raw).trim();
+        };
+        const expiry = val("expiry"), number = val("number"), issue = val("issue");
+        const custom: Record<string, any> = { ...((existing?.customData as any) ?? {}) };
+        for (const cap of caps1) {
+          if (String(cap?.purpose ?? "")) continue;
+          const raw = (opts.variables ?? {})[cap.var];
+          if (raw !== undefined && raw !== null && String(raw).trim() !== "") custom[cap.fieldId || cap.var] = raw;
+        }
+
+        const lead = dt1?.leadDays ?? 30;
+        const effExpiry = expiry ?? existing?.expiryDate ?? null;
+        const t1 = effExpiry ? new Date(effExpiry).getTime() : NaN;
+        const daysLeft = isNaN(t1) ? (existing?.daysLeft ?? 0) : Math.round((t1 - Date.now()) / 86400000);
+        const status = isNaN(t1) ? (existing?.status ?? "valid") : daysLeft < 0 ? "overdue" : daysLeft <= lead ? "expiring" : "valid";
+
+        if (existing) {
+          const hist = Array.isArray(existing.history) ? (existing.history as any[]) : [];
+          // Only record a version when something a person would recognise actually moved.
+          if ((expiry && expiry !== existing.expiryDate) || (number && number !== existing.docNumber)) {
+            hist.unshift({ at: nowISO(), by: opts.actor ?? "workflow", oldExpiry: existing.expiryDate ?? undefined, newExpiry: expiry ?? existing.expiryDate,
+              oldNumber: existing.docNumber ?? undefined, newNumber: number ?? existing.docNumber, note: `Recorded on "${task.title}"` });
+          }
+          await prisma.document.update({
+            where: { id: existing.id },
+            data: { expiryDate: effExpiry, docNumber: number ?? existing.docNumber, issueDate: issue ?? existing.issueDate,
+              customData: custom, status, daysLeft, history: hist },
+          });
+          await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.updated", detail: `${docType1} for ${person} → ${expiry ?? "expiry unchanged"}`, actor: opts.actor ?? "engine", at: nowISO() } });
+          logActivity({ type: "compliance", message: `${docType1} updated for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        } else {
+          // Create if absent: onboarding records a document that has never existed before, and
+          // refusing to would mean the captured details had nowhere to go.
+          await prisma.document.create({
+            data: { companyId: inst.companyId, person, employeeId, docType: docType1, expiryDate: effExpiry,
+              issueDate: issue, docNumber: number, issuingAuthority: dt1?.authority ?? null,
+              customData: custom, status, daysLeft },
+          });
+          await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.created", detail: `${docType1} for ${person} → ${expiry ?? "no expiry"}`, actor: opts.actor ?? "engine", at: nowISO() } });
+          logActivity({ type: "compliance", message: `${docType1} filed for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        }
+      }
+    }
+  } catch (e: any) {
+    // Completing the step must not fail because the write-back did — the officer did their part. But
+    // it must not vanish either: a step that reports success while the document was never updated is
+    // the failure mode this whole feature exists to remove.
+    await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.write_failed", detail: String(e?.message ?? e).slice(0, 400), actor: "engine", at: nowISO() } }).catch(() => {});
+    logActivity({ type: "alert", message: `⚠ "${task.title}" completed but its document could not be updated — ${String(e?.message ?? e).slice(0, 160)}` });
+  }
 
   const finalStatus = task.nodeType === "approval" ? (opts.outcome === "reject" ? "rejected" : "approved") : "done";
   await prisma.workflowTask.update({
@@ -774,12 +949,36 @@ R.delete("/checklist-rules/:id", requireAuth, requireStaff, requireWriteRole, as
 // Delegate a workflow step to a specific person (admin only). Clears the role gate so the named person owns it.
 R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
-  if (a.role !== "admin" && a.role !== "super_admin") return res.status(403).json({ error: "Only an admin can delegate tasks" });
+  const isAdmin = a.role === "admin" || a.role === "super_admin";
   try {
     const { assignee } = req.body ?? {};
-    const t = await prisma.workflowTask.update({ where: { id: req.params.id }, data: { assignee: assignee || null, assigneeRole: null } });
-    await logAudit({ action: "workflow.task_reassign", actorId: a.sub, target: `${t.title} (${t.id})`, detail: `→ ${assignee || "unassigned"}` });
-    logActivity({ type: "task", message: `Workflow step "${t.title}" delegated to ${assignee || "unassigned"}` });
+    const cur = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!cur) return res.status(404).json({ error: "Step not found" });
+
+    // CLAIMING is not delegating. A step left to a role sits in a shared queue that every holder of
+    // that role can see, and taking one out of it is ordinary work — requiring an admin for that
+    // would mean nobody could ever pick up their own team's queue. It is allowed only in the one
+    // shape that cannot move work onto anybody else:
+    //   • the step is currently unclaimed,
+    //   • it is queued to a role the caller actually holds,
+    //   • and they are assigning it to THEMSELVES.
+    // Anything else — moving a step to another person, or off someone who already has it — is
+    // delegation and stays admin-only.
+    const me = await prisma.user.findUnique({ where: { id: a.sub } });
+    const claimingSelf = !!me?.name && assignee === me.name && !cur.assignee && !!cur.assigneeRole && cur.assigneeRole === a.role;
+    if (!isAdmin && !claimingSelf) {
+      return res.status(403).json({ error: "Only an admin can delegate a step — you can claim unassigned work for your own role" });
+    }
+
+    // A claim keeps assigneeRole so the step still reads as role-owned work; a delegation clears it,
+    // because the point of naming a person is to take it out of the role queue entirely.
+    const t = await prisma.workflowTask.update({
+      where: { id: req.params.id },
+      data: claimingSelf && !isAdmin ? { assignee } : { assignee: assignee || null, assigneeRole: null },
+    });
+    const verb = claimingSelf && !isAdmin ? "claimed by" : "delegated to";
+    await logAudit({ action: claimingSelf && !isAdmin ? "workflow.task_claim" : "workflow.task_reassign", actorId: a.sub, target: `${t.title} (${t.id})`, detail: `→ ${assignee || "unassigned"}` });
+    logActivity({ type: "task", message: `Workflow step "${t.title}" ${verb} ${assignee || "unassigned"}` });
     res.json(t);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
