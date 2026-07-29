@@ -3259,9 +3259,13 @@ class Component extends DCLogic {
     }
     // Migrate old #/screen links, honor a clean deep link, else stamp the default screen's path.
     const hm = /^#\/([a-z0-9-]+)/.exec(location.hash || '');
+    // …but only for a signed-in client. Stamping unconditionally rewrote the address bar to
+    // /portal/dashboard while the sign-in card was on screen.
+    let _bootTok = null;
+    try { _bootTok = localStorage.getItem('stimespro:portalToken'); } catch (e) { _bootTok = null; }
     if (hm && bySlug[hm[1]]) { history.replaceState(null, '', '/portal/' + hm[1]); this._routeApply(); }
     else if (/^\/portal\/[a-z0-9-]+\/?$/.test(location.pathname)) this._routeApply();
-    else history.replaceState(null, '', '/portal/' + slug(this.state.active));
+    else if (_bootTok) history.replaceState(null, '', '/portal/' + slug(this.state.active));
   }
   // The portal had NO toast method — every `this.toast && this.toast(...)` in here was a silent no-op,
   // so confirmations and failures alike went nowhere. Same shape as the console's: the tone is inferred
@@ -4187,6 +4191,12 @@ class Component extends DCLogic {
           .then(({ ok, d }) => {
             if (!ok || !d.token) return this.setState({ lError: (d && d.error) || 'Invalid credentials — check your email and password' });
             try { localStorage.setItem('stimespro:portalToken', d.token); } catch (e) {}
+            // Boot no longer stamps a path while signed out, so sign-in does it. `slug` is a local of
+            // componentDidMount and not visible here, hence the inline form. Deep links are left alone.
+            if (!/^\/portal\/[a-z0-9-]+\/?$/.test(location.pathname)) {
+              const p9 = String(this.state.active).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+              history.replaceState(null, '', '/portal/' + p9);
+            }
             this._pendingPw = s.lPass; // change-password screen needs the current password
             fetch(API + '/api/portal/me', { headers: { Authorization: 'Bearer ' + d.token } })
               .then((r2) => (r2.ok ? r2.json() : null)).catch(() => null)
