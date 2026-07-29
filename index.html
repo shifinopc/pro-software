@@ -774,7 +774,7 @@
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Requests pipeline</span>
-            <span style="font-size:11.5px; color:#A9A6B4;">75 in flight</span>
+            <span style="font-size:11.5px; color:#A9A6B4;">{{ pipeInFlight }}</span>
           </div>
           <div style="display:flex; flex-direction:column; gap:13px; margin-top:18px; flex:1; justify-content:center;">
             <sc-for list="{{ pipeSteps }}" as="p" hint-placeholder-count="5">
@@ -839,8 +839,8 @@
             <sc-for list="{{ trendBars }}" as="t" hint-placeholder-count="12">
               <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; height:100%;">
                 <div style="position:relative; width:100%; max-width:30px; flex:1; background:{{ t.trackBg }}; border-radius:9px; overflow:visible;">
-                  <sc-if value="{{ t.current }}" hint-placeholder-val="{{ false }}">
-                    <div style="position:absolute; bottom:calc({{ t.sub }}% + 10px); left:50%; transform:translateX(-50%); background:#26074D; color:#fff; font-size:10px; font-weight:600; padding:5px 9px; border-radius:8px; white-space:nowrap; box-shadow:0 4px 12px rgba(38,7,77,.3); z-index:2; animation:bob 3s ease-in-out 1.4s infinite;">68 sub · 63 done<div style="position:absolute; top:100%; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#26074D;"></div></div>
+                  <sc-if value="{{ t.showTip }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute; bottom:calc({{ t.sub }}% + 10px); left:50%; transform:translateX(-50%); background:#26074D; color:#fff; font-size:10px; font-weight:600; padding:5px 9px; border-radius:8px; white-space:nowrap; box-shadow:0 4px 12px rgba(38,7,77,.3); z-index:2; animation:bob 3s ease-in-out 1.4s infinite;">{{ t.subN }} sub · {{ t.compN }} done<div style="position:absolute; top:100%; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#26074D;"></div></div>
                   </sc-if>
                   <div style="position:absolute; bottom:0; left:0; right:0; height:{{ t.sub }}%; background:{{ t.barBg }}; border-radius:9px; transform-origin:bottom; animation:barGrow .8s cubic-bezier(.16,1,.3,1) .3s both;" style-hover="filter:brightness(1.08);"></div>
                   <div style="position:absolute; bottom:calc({{ t.comp }}% - 4px); left:50%; transform:translateX(-50%); width:8px; height:8px; border-radius:99px; background:#12B76A; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.15); z-index:1; animation:popIn .4s cubic-bezier(.34,1.56,.64,1) 1s both;"></div>
@@ -7479,10 +7479,20 @@ class Component extends DCLogic {
     const thrSubTotal = _wfInst ? _thr.sub4.reduce((a4, b4) => a4 + b4, 0) : 742;
     const thrCompTotal = _wfInst ? _thr.comp4.reduce((a4, b4) => a4 + b4, 0) : 689;
     const thrPct = thrSubTotal ? Math.round(thrCompTotal / thrSubTotal * 100) : 0;
+    // Raw counts for the tooltip. tSub/tComp are bar HEIGHTS — percentages of the tallest month —
+    // so they cannot be shown as numbers. On the placeholder path there are no counts to show, and
+    // the heights double as stand-in figures.
+    const tSubN = _wfInst ? _thr.sub4 : tSub;
+    const tCompN = _wfInst ? _thr.comp4 : tComp;
     const trendBars = tm.map((m, i) => {
-      const current = i === 11;
+      // Last slot, not index 11: at 6M or 30D the list is 6 or 30 long, so hardcoding 11 left the
+      // current period unhighlighted and the tooltip unrendered on every range except 12M.
+      const current = i === tm.length - 1;
       return {
         m, current, sub: tSub[i], comp: tComp[i],
+        subN: tSubN[i], compN: tCompN[i],
+        // Nothing submitted this period means nothing worth pointing at.
+        showTip: current && tSubN[i] > 0,
         trackBg: current ? '#F3E8FF' : '#F6F3FB',
         barBg: current ? 'linear-gradient(180deg,#9B3DFF,#7C00FF)' : 'linear-gradient(180deg,#D9C2FA,#B37DFF)',
         labelColor: current ? '#7C00FF' : '#A9A6B4',
@@ -13658,6 +13668,9 @@ class Component extends DCLogic {
     ]);
     const pipeMax = Math.max(1, ...pipeline.map(p => p[1]));
     const pipeSteps = pipeline.map(([label, count, color]) => ({ label, count, color, pct: Math.round(count / pipeMax * 100) }));
+    // The header used to read a literal "75 in flight" — the sum of the signed-out demo figures,
+    // so a freshly deployed instance with an empty database still claimed 75 live requests.
+    const pipeInFlight = pipeline.reduce((a, p) => a + p[1], 0) + ' in flight';
 
     // Team workload: real staff + their open-task counts.
     const _staffUsers = Array.isArray(this.state.usersData) ? this.state.usersData.filter(u => u.type !== 'portal' && u.status === 'active') : null;
@@ -14503,7 +14516,7 @@ class Component extends DCLogic {
     return {
       ...emptyStatesApi,
       railGroups, panelGroups, activeGroupTitle: activeDef[0], activeLabel: act, trendBars, greeting, greetName,
-      opsStats, pipeSteps, team, revenue, clientHealth, receivables, dashRequests, ...dashNav,
+      opsStats, pipeSteps, pipeInFlight, team, revenue, clientHealth, receivables, dashRequests, ...dashNav,
       heroTasksDue: String(_dueToday), heroTasksDueLabel: _dueToday + (_dueToday === 1 ? ' task' : ' tasks') + ' due or overdue', heroSlaRisk: String(_slaRisk), navUnpaidSum: fmtCur(_unpaidSum),
       thrSubTotal: String(thrSubTotal), thrCompTotal: String(thrCompTotal), thrPct: String(thrPct),
       thrChips, thrRangeLabel, thrTotalLabel,
