@@ -9546,6 +9546,7 @@ class Component extends DCLogic {
       setEcEmail: (e) => this.setState({ ecEmail: e.target.value }),
       setEcPhone: (e) => this.setState({ ecPhone: e.target.value }),
       ...mkDd('ddEcStatus', ['Prospect', 'Onboarding', 'Active', 'Suspended', 'Inactive'], this.state.ecStatus || 'Active', (v) => this.setState({ ecStatus: v })),
+      ecStatusVal: this.state.ecStatus || 'Active',
       saveEditClient: () => { if (!(this.state.ecName || '').trim()) return this.setState({ ecErr: 'Name is required' }); this.setState({ editClient: false, ecSaved: true }); },
     };
 
@@ -10921,7 +10922,9 @@ class Component extends DCLogic {
       renewApi.crAssigneeVal = this.state.crAssignee || 'Rashid';
       renewApi.crWorkflowVal = this.state.crWorkflow || 'None — plain task';
       Object.assign(renewApi, mkDd('ddCrAssignee', ['Unassigned'].concat(realStaffNames || ['Rashid', 'Aisha']), this.state.crAssignee || 'Unassigned', (v) => this.setState({ crAssignee: v })));
+      renewApi.crAssigneeVal = this.state.crAssignee || 'Unassigned';
       Object.assign(renewApi, mkDd('ddCrWorkflow', ['None — plain task'].concat(realWfNames || []), this.state.crWorkflow || 'None — plain task', (v) => this.setState({ crWorkflow: v })));
+      renewApi.crWorkflowVal = this.state.crWorkflow || 'None — plain task';
       renewApi.closeCompRenew = () => this.setState({ compRenew: null });
       renewApi.crParked = crRow.hasPrereq && (this.state.crPrereqMode || 'update') === 'workflow';
       renewApi.crConfirmLabel = renewApi.crParked ? 'Start Phase-1 & park renewal' : 'Start renewal';
@@ -11080,7 +11083,9 @@ class Component extends DCLogic {
       setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
       setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
       ...mkDd('ddArClient', (Array.isArray(coData) ? coData.map(c => c.name) : []), this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''), (v) => this.setState({ arClient: v })),
+      arClientVal: this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : 'Select a client'),
       ...mkDd('ddArType', (Array.isArray(this.state.docTypesData) && this.state.docTypesData.length ? this.state.docTypesData.map(d => d.name) : ['Trade License', 'Emirates ID']), this.state.arType || (Array.isArray(this.state.docTypesData) && this.state.docTypesData[0] ? this.state.docTypesData[0].name : 'Trade License'), (v) => this.setState({ arType: v })),
+      arTypeVal: this.state.arType || ((Array.isArray(this.state.docTypesData) && this.state.docTypesData[0]) ? this.state.docTypesData[0].name : 'Select a document type'),
       arType: this.state.arType || 'Trade License',
       // WIRED: this used to validate the expiry and then just close — the client, type, holder,
       // authority and expiry the user typed were all discarded and no record was ever created.
@@ -11905,7 +11910,9 @@ class Component extends DCLogic {
       closeWfNew: () => this.setState({ wfNewOpen: false }),
       setWfnName: (e) => this.setState({ wfnName: e.target.value, wfnErr: '' }),
       ...mkDd('ddWfnTrigger', wfTriggerOpts, this.state.wfnTrigger || 'Manual / staff-initiated', (v) => this.setState({ wfnTrigger: v })),
+      wfnTrigger: this.state.wfnTrigger || 'Manual / staff-initiated',
       ...mkDd('ddWfnEntity', wfEntityOpts, this.state.wfnEntity || 'visa', (v) => this.setState({ wfnEntity: v })),
+      wfnEntity: this.state.wfnEntity || 'visa',
       wfnDocExpiry: (this.state.wfnTrigger || 'Manual / staff-initiated') === 'Document expiry',
       submitWfNew: () => {
         const name = (this.state.wfnName || '').trim();
