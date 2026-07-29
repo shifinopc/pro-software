@@ -917,13 +917,6 @@
                 <span style="font-size:10px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:2px 8px; border-radius:99px; width:54px; text-align:center;">{{ inv.status }}</span>
               </div>
             </sc-for>
-            <sc-if value="{{ invoicesEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
-                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
-                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No invoices yet</div>
-                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Billing for PRO services and government fees will show up here.</div>
-              </div>
-            </sc-if>
           </div>
           <sc-if value="{{ hasOutstanding }}" hint-placeholder-val="{{ true }}"><button style="margin-top:12px; width:100%; background:linear-gradient(110deg,#7C00FF 40%,#A55BFF 50%,#7C00FF 60%); background-size:200% 100%; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25); animation:shimmer 3.5s linear infinite;" style-hover="background:#6900D6;" onClick="{{ openPay }}">Pay outstanding balance</button></sc-if>
         </div>
@@ -954,13 +947,6 @@
                 <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ dcat.countLabel }}</div>
               </div>
             </sc-for>
-            <sc-if value="{{ docCatsEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
-                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
-                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No documents yet</div>
-                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Anything your PRO team files for you appears here, tracked to its expiry.</div>
-              </div>
-            </sc-if>
           </div>
         </div>
 
@@ -1175,14 +1161,16 @@
               </div>
             </div>
           </sc-for>
-            <sc-if value="{{ renewalsEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
-                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
-                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">Nothing due</div>
-                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">No documents are expiring and none are in renewal right now.</div>
-              </div>
-            </sc-if>
           </sc-for>
+          <!-- OUTSIDE both loops. Placed inside the outer sc-for it rendered zero times for an empty
+               list — an empty state that only appears when there is something to show. -->
+          <sc-if value="{{ renewalsEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+              <div style="width:46px; height:46px; border-radius:14px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+              <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">Nothing due</div>
+              <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">No documents are expiring and none are in renewal right now.</div>
+            </div>
+          </sc-if>
         </section>
       </div></sc-if>
       <sc-if value="{{ showServices }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Service Catalog">
@@ -1269,6 +1257,13 @@
                   <div style="display:flex; justify-content:flex-end;"><span onClick="{{ rq.open }}" title="Open this request" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span></div>
                 </div>
               </sc-for>
+            <sc-if value="{{ requestRowsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:40px 24px; text-align:center;">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:13px;">No requests yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Start one from the Service Catalog and it will be tracked here end to end.</div>
+              </div>
+            </sc-if>
             </div></div>
           </section>
         </div></sc-if>
@@ -1412,13 +1407,6 @@
                       <span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ p.amount }}</span>
                     </div>
                   </sc-for>
-            <sc-if value="{{ paymentsEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
-                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
-                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No payments yet</div>
-                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Every settled invoice appears here with its method and reference.</div>
-              </div>
-            </sc-if>
                 </div>
               </div>
             </div>
@@ -1507,6 +1495,13 @@
               <div style="display:flex; align-items:center; gap:5px; margin-top:13px; font-size:11px; font-weight:700; color:#7C00FF;">Open folder <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></div>
             </div>
           </sc-for>
+            <sc-if value="{{ docCatsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:40px 24px; text-align:center;">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:13px;">No documents yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Anything your PRO team files for you appears here, tracked to its expiry.</div>
+              </div>
+            </sc-if>
         </section></sc-if>
         <sc-if value="{{ showDocFolder }}" hint-placeholder-val="{{ false }}"><section style="animation:fadeUp .4s ease both; display:flex; flex-direction:column; gap:14px;">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -1596,6 +1591,13 @@
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;"><span onClick="{{ inv.print }}" title="Print — or choose “Save as PDF”" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span><sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><span onClick="{{ inv.pay }}" style="font-size:11px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Pay now</span></sc-if></div>
               </div>
             </sc-for>
+            <sc-if value="{{ invoicesEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:40px 24px; text-align:center;">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:13px;">No invoices yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Billing for PRO services and government fees will show up here.</div>
+              </div>
+            </sc-if>
           </div></div>
         </section>
       </div></sc-if>
@@ -1670,6 +1672,13 @@
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;"><span onClick="{{ p.printReceipt }}" title="Print this receipt" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span></div>
               </div>
             </sc-for>
+            <sc-if value="{{ paymentsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:40px 24px; text-align:center;">
+                <div style="width:44px; height:44px; border-radius:13px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h20v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zM2 11h20"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:13px;">No payments yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Every settled invoice appears here with its method and reference.</div>
+              </div>
+            </sc-if>
           </div></div>
         </section>
       </div></sc-if>
@@ -6108,7 +6117,12 @@ class Component extends DCLogic {
       // screen that had failed to load.
       servicesEmpty: services.length === 0,
       docCatsEmpty: docCats.length === 0,
-      invoicesEmpty: invoices.length === 0,
+      // The Invoices PAGE renders invoicesFull; `invoices` is the dashboard's short list. Keyed off
+      // the wrong one, the page's empty state would appear and disappear on the dashboard's data.
+      invoicesEmpty: invoicesFull.length === 0,
+      // Respects the All / In progress / Completed filter, so "no results" is honest about the tab
+      // you are on rather than claiming the account is empty.
+      requestRowsEmpty: requestRows.length === 0,
       renewalsEmpty: renewalGroups.length === 0,
       ...requestsApi, ...chatApi, ...quotesApi, ...planApi, ...mobileApi, ...calApi, ...notifPopApi,
       ...pageFlags, showDashboard,
