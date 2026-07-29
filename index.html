@@ -4880,12 +4880,20 @@
           <div style="text-align:center; padding:8px 0 4px;">
             <div style="width:52px; height:52px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#12B76A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
             <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:14px;">Client created</div>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Portal login provisioned. Hand this one-time password to the client.</div>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ acDoneSub }}</div>
           </div>
-          <div style="margin-top:18px; background:#FFF9EF; border:1px solid #FBE2B8; border-radius:14px; padding:16px 18px; text-align:center;">
-            <div style="font-size:10px; font-weight:700; color:#B8860B; letter-spacing:.06em;">ONE-TIME PASSWORD — SHOWN ONCE</div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:.08em; margin-top:8px;">{{ acTempPw }}</div>
-          </div>
+          <sc-if value="{{ acHasTempPw }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:18px; background:#FFF9EF; border:1px solid #FBE2B8; border-radius:14px; padding:16px 18px; text-align:center;">
+              <div style="font-size:10px; font-weight:700; color:#B8860B; letter-spacing:.06em;">ONE-TIME PASSWORD — SHOWN ONCE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:.08em; margin-top:8px; user-select:all;">{{ acTempPw }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ acNoTempPw }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:18px; background:#FBFAFE; border:1px dashed #E4E0EC; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:12px; font-weight:700; color:#4B4757;">No portal login was created</div>
+              <div style="font-size:11.5px; color:#8C8899; margin-top:3px; line-height:1.5;">The client has no email address, or one already belongs to another user. Add an email on the client, then use <b>Reset portal password</b> to issue their sign-in.</div>
+            </div>
+          </sc-if>
           <sc-if value="{{ acHandedOver }}" hint-placeholder-val="{{ false }}"><div style="text-align:center; font-size:11.5px; font-weight:700; color:#0E9355; margin-top:12px;">✓ Marked as handed over</div></sc-if>
           <div style="display:flex; gap:10px; margin-top:18px;">
             <button onClick="{{ acMarkHanded }}" style="flex:1; background:#F5EEFF; color:#7C00FF; border:none; font-size:12.5px; font-weight:700; padding:11px 0; border-radius:12px; cursor:pointer;" style-hover="background:#EBDBFF;">Copy &amp; mark handed over</button>
@@ -9911,9 +9919,28 @@ class Component extends DCLogic {
       ...mkDd('ddAcPkg', ['Prospect / unassigned', ...((Array.isArray(this.state.packagesData) ? this.state.packagesData : []).map(p2 => p2.name + ' — ' + sysCurCode + ' ' + Number(p2.basePrice || 0).toLocaleString('en-US') + '/mo'))], this.state.acPkg || 'Prospect / unassigned', (v) => this.setState({ acPkg: v })),
       acPkgVal: this.state.acPkg || 'Prospect / unassigned',
       acProvisionsPortal: (this.state.acEmail || '').includes('@'),
-      acTempPw: 'Zq4$8vKp',
+      // The REAL one-time password the server generated, captured from the create response. This was
+      // the literal 'Zq4$8vKp' — the same string shown for every client ever created, under the words
+      // "ONE-TIME PASSWORD — SHOWN ONCE". The server had generated a real one and returned it; the
+      // console threw it away and printed the constant, so the password handed to a client was never
+      // that client's password and the portal correctly rejected it.
+      acTempPw: this.state.acTempPw || '—',
+      // A password only comes back when the client was given an email AND no user already held it.
+      // Saying so beats showing a blank where a credential should be.
+      acHasTempPw: !!this.state.acTempPw,
+      acNoTempPw: !this.state.acTempPw,
+      acDoneSub: this.state.acTempPw
+        ? 'Portal login provisioned. Hand this one-time password to the client.'
+        : 'The client is saved, but no portal sign-in was issued.',
       acHandedOver: !!this.state.acHandedOver,
-      acMarkHanded: () => this.setState({ acHandedOver: true }),
+      // The button says "Copy & mark handed over" but only ever did the second half — the password
+      // was never put on the clipboard, so it had to be transcribed from the screen by eye.
+      acMarkHanded: () => {
+        const pw9 = this.state.acTempPw;
+        if (pw9) { try { navigator.clipboard.writeText(pw9); this.toast('Password copied — marked as handed over'); } catch (e) { this.toast('Marked as handed over'); } }
+        else this.toast('Marked as handed over');
+        this.setState({ acHandedOver: true });
+      },
       submitAddClient: () => {
         if (!(this.state.acCName || '').trim()) return this.setState({ acErr2: 'Company name is required' });
         const dup = clDefs.some(c => c[0].toLowerCase() === this.state.acCName.trim().toLowerCase());
@@ -9949,7 +9976,9 @@ class Component extends DCLogic {
           .then(({ ok, j7 }) => {
             if (!ok) return this.setState({ acErr2: (j7 && j7.error) || 'Could not create the client — try again' });
             const finish7 = (subOk7) => {
-              this.setState({ acStep: 'done', acHandedOver: false });
+              // Keep the password the SERVER generated. It is returned once and is unrecoverable
+              // afterwards — only re-issuable through Reset portal password.
+              this.setState({ acStep: 'done', acHandedOver: false, acTempPw: (j7 && j7.portalTempPassword) || null });
               this.toast('Client ' + st.acCName.trim() + ' created' + (pkgRow7 ? (subOk7 ? ' on ' + pkgRow7.name : ' — but the subscription could not be created') : ''), pkgRow7 && !subOk7 ? 'error' : undefined);
               this._opReload && this._opReload('companies', 'companiesData');
               if (subOk7) this._opReload && this._opReload('subscriptions', 'subscriptionsData');

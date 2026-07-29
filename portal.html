@@ -631,7 +631,7 @@
           <div style="margin-top:20px; position:relative;">
             <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; opacity:.9;"><span>Employees under sponsorship</span><span>{{ planUsage }}</span></div>
             <div style="height:7px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; margin-top:7px;">
-              <div style="height:100%; width:84%; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) .3s both;"></div>
+              <div style="height:100%; width:{{ planUsagePct }}; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) .3s both;"></div>
             </div>
             <div style="font-size:11.5px; opacity:.75; margin-top:7px;">{{ planSlots }}</div>
           </div>
@@ -649,7 +649,7 @@
             <span style="font-family:'Space Grotesk',sans-serif; font-size:42px; font-weight:700; line-height:1; letter-spacing:-.02em; background:linear-gradient(120deg,#7C00FF,#B37DFF); -webkit-background-clip:text; background-clip:text; color:transparent;">{{ complianceScore }}%</span>
             <span style="display:inline-flex; align-items:center; gap:5px; background:#E7F8EF; color:#0E9355; font-size:11px; font-weight:700; padding:3px 10px; border-radius:99px;"><span style="width:5px; height:5px; border-radius:99px; background:#12B76A; animation:pulseDot 2s ease-out infinite;"></span>{{ compBadge }}</span>
           </div>
-          <div style="font-size:11.5px; color:#A9A6B4; margin-top:4px;">Overall score · {{ complianceScore }}% of documents in good standing</div>
+          <div style="font-size:11.5px; color:#A9A6B4; margin-top:4px;">{{ compSubline }}</div>
           <div style="display:flex; gap:4px; margin-top:14px;">
             <sc-for list="{{ compSegs }}" as="s" hint-placeholder-count="10">
               <div style="flex:1; height:7px; border-radius:99px; background:{{ s.bg }};"></div>
@@ -849,7 +849,9 @@
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:20px 22px; box-shadow:0 1px 2px rgba(38,7,77,.04);">
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Needs your action</span>
-            <span style="font-size:10.5px; font-weight:700; color:#fff; background:#E5484D; padding:1px 8px; border-radius:99px;">4</span>
+            <sc-if value="{{ actionsCount }}" hint-placeholder-val="{{ 4 }}">
+              <span style="font-size:10.5px; font-weight:700; color:#fff; background:#E5484D; padding:1px 8px; border-radius:99px;">{{ actionsCount }}</span>
+            </sc-if>
           </div>
           <div style="display:flex; flex-direction:column; gap:9px; margin-top:13px;">
             <sc-for list="{{ actions }}" as="p" hint-placeholder-count="4">
@@ -859,9 +861,15 @@
                   <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.title }}</div>
                   <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ p.sub }} · due {{ p.due }}</div>
                 </div>
-                <button onClick="{{ p.act }}" style="background:#F5EEFF; border:none; color:#7C00FF; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer; flex-shrink:0; transition:background .12s;" style-hover="background:#EBDBFF;">{{ p.cta }}</button>
+                <button onClick="{{ p.act }}" data-act-cta="1" style="background:#F5EEFF; border:none; color:#7C00FF; font-size:11.5px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer; flex-shrink:0; transition:background .12s;" style-hover="background:#EBDBFF;">{{ p.cta }}</button>
               </div>
             </sc-for>
+            <sc-if value="{{ actionsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:10px; border:1px dashed #E4E0EC; border-radius:12px; padding:14px; background:#FBFAFE;">
+                <span style="font-size:15px; color:#0E9355;">✓</span>
+                <span style="font-size:12px; color:#8C8899;">Nothing needs you — no documents expiring and no invoices due.</span>
+              </div>
+            </sc-if>
           </div>
         </div>
 
@@ -909,6 +917,13 @@
                 <span style="font-size:10px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:2px 8px; border-radius:99px; width:54px; text-align:center;">{{ inv.status }}</span>
               </div>
             </sc-for>
+            <sc-if value="{{ invoicesEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No invoices yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Billing for PRO services and government fees will show up here.</div>
+              </div>
+            </sc-if>
           </div>
           <sc-if value="{{ hasOutstanding }}" hint-placeholder-val="{{ true }}"><button style="margin-top:12px; width:100%; background:linear-gradient(110deg,#7C00FF 40%,#A55BFF 50%,#7C00FF 60%); background-size:200% 100%; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25); animation:shimmer 3.5s linear infinite;" style-hover="background:#6900D6;" onClick="{{ openPay }}">Pay outstanding balance</button></sc-if>
         </div>
@@ -939,6 +954,13 @@
                 <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ dcat.countLabel }}</div>
               </div>
             </sc-for>
+            <sc-if value="{{ docCatsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No documents yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Anything your PRO team files for you appears here, tracked to its expiry.</div>
+              </div>
+            </sc-if>
           </div>
         </div>
 
@@ -1116,18 +1138,18 @@
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;">
           <div style="position:relative; overflow:hidden; border-radius:16px; background:linear-gradient(112deg,#E5484D,#B93036); color:#fff; padding:16px 20px;">
             <div style="font-size:11px; font-weight:700; letter-spacing:.08em; opacity:.85;">OVERDUE / EXPIRED</div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">2</div>
-            <div style="font-size:11.5px; opacity:.85; margin-top:2px;">Vehicle reg · Ejari</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">{{ cmpOverdue }}</div>
+            <div style="font-size:11.5px; opacity:.85; margin-top:2px;">{{ cmpOverdueNames }}</div>
           </div>
           <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:16px 20px;">
             <div style="font-size:11px; font-weight:700; color:#B8860B; letter-spacing:.08em;">EXPIRING ≤ 30 DAYS</div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">3</div>
-            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">License · Visa · Emirates ID</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">{{ cmpExpiring }}</div>
+            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">{{ cmpExpiringNames }}</div>
           </div>
           <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:16px 20px;">
             <div style="font-size:11px; font-weight:700; color:#0E9355; letter-spacing:.08em;">VALID</div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">3</div>
-            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">Labour · Insurance · Est. card</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; margin-top:5px;">{{ cmpValid }}</div>
+            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">{{ cmpValidNames }}</div>
           </div>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; flex-direction:column; gap:8px;">
@@ -1153,6 +1175,13 @@
               </div>
             </div>
           </sc-for>
+            <sc-if value="{{ renewalsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">Nothing due</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">No documents are expiring and none are in renewal right now.</div>
+              </div>
+            </sc-if>
           </sc-for>
         </section>
       </div></sc-if>
@@ -1187,6 +1216,13 @@
                 <button onClick="{{ sv.request }}" style="margin-top:13px; width:100%; background:{{ sv.btnBg }}; color:{{ sv.btnColor }}; border:none; font-size:11.5px; font-weight:700; padding:9px 0; border-radius:99px; cursor:pointer; transition:filter .12s;" style-hover="filter:brightness(.95);">{{ sv.btnLabel }}</button>
               </div>
             </sc-for>
+            <sc-if value="{{ servicesEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No services yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Your PRO team publishes the catalog — ask them to add the services you need.</div>
+              </div>
+            </sc-if>
           </section>
         </div></sc-if>
         <sc-if value="{{ showRequests }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="My Requests">
@@ -1328,12 +1364,12 @@
                 <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); border-radius:14px; padding:12px 14px;">
                   <div style="font-size:9.5px; font-weight:700; letter-spacing:.06em; opacity:.8;">VISA SLOTS</div>
                   <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:3px;">{{ planSlotsUsed }}<span style="font-size:11px; opacity:.7;">/{{ planSlotsMax }}</span></div>
-                  <div style="height:4px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; margin-top:7px;"><div style="height:100%; width:84%; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) both;"></div></div>
+                  <div style="height:4px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; margin-top:7px;"><div style="height:100%; width:{{ planUsagePct }}; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) both;"></div></div>
                 </div>
                 <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); border-radius:14px; padding:12px 14px;">
                   <div style="font-size:9.5px; font-weight:700; letter-spacing:.06em; opacity:.8;">SERVICES</div>
                   <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:3px;">{{ svcIncludedCount }}<span style="font-size:11px; opacity:.7;">/{{ svcTotalCount }}</span></div>
-                  <div style="height:4px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; margin-top:7px;"><div style="height:100%; width:47%; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) .1s both;"></div></div>
+                  <div style="height:4px; background:rgba(255,255,255,.25); border-radius:99px; overflow:hidden; margin-top:7px;"><div style="height:100%; width:{{ svcUsagePct }}; background:#fff; border-radius:99px; animation:slideRight 1s cubic-bezier(.16,1,.3,1) .1s both;"></div></div>
                 </div>
                 <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2); border-radius:14px; padding:12px 14px;">
                   <div style="font-size:9.5px; font-weight:700; letter-spacing:.06em; opacity:.8;">SUPPORT</div>
@@ -1376,6 +1412,13 @@
                       <span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ p.amount }}</span>
                     </div>
                   </sc-for>
+            <sc-if value="{{ paymentsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:44px 24px; text-align:center;">
+                <div style="width:46px; height:46px; border-radius:14px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg></div>
+                <div style="font-family:&#39;Space Grotesk&#39;,sans-serif; font-size:15px; font-weight:700; margin-top:14px;">No payments yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px;">Every settled invoice appears here with its method and reference.</div>
+              </div>
+            </sc-if>
                 </div>
               </div>
             </div>
@@ -3319,7 +3362,7 @@ class Component extends DCLogic {
 
     const sysCur = this.state.sysCur || 'SAR';
     // WIRED: compliance score from real documents — (total − overdue − expiring) / total.
-    const score = (() => { const d = this.state.docItems || []; if (!d.length) return 100; const bad = d.filter((x) => x.status === 'overdue' || x.status === 'expiring').length; return Math.max(0, Math.round(((d.length - bad) / d.length) * 100)); })();
+    const score = (() => { const d = this.state.docItems || []; if (!d.length) return null; const bad = d.filter((x) => x.status === 'overdue' || x.status === 'expiring').length; return Math.max(0, Math.round(((d.length - bad) / d.length) * 100)); })();
     const status = this.props.companyStatus ?? 'Active';
     const I = {
       grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
@@ -3411,6 +3454,18 @@ class Component extends DCLogic {
     // one screen cannot disagree.
     const cmpOverdue = _docs.filter((d) => d.status === 'overdue' || d.status === 'expired').length;
     const cmpExpiring = _docs.filter((d) => d.status === 'expiring').length;
+    // The three tiles above the renewals list printed 2 / 3 / 3 with UAE sample captions ("Vehicle reg
+    // · Ejari", "Emirates ID") baked into the markup — figures a Saudi client had no way to reconcile
+    // with anything on the page. The counts existed here already; only the tiles never used them.
+    const cmpValid = _docs.filter((d) => String(d.status || '').toLowerCase() === 'valid').length;
+    const _cmpNames = (pred) => {
+      const names = _docs.filter(pred).map(d => d.docType).filter(Boolean);
+      const uniq = [...new Set(names)];
+      return uniq.length ? uniq.slice(0, 3).join(' · ') + (uniq.length > 3 ? ' +' + (uniq.length - 3) : '') : 'None';
+    };
+    const cmpOverdueNames = _cmpNames(d => d.status === 'overdue' || d.status === 'expired');
+    const cmpExpiringNames = _cmpNames(d => d.status === 'expiring');
+    const cmpValidNames = _cmpNames(d => String(d.status || '').toLowerCase() === 'valid');
     // Each card lands on the screen that lists the thing it counts, so the number and the list a
     // click away are always the same set of records.
     const _goDocs = () => this.setState({ active: 'Documents', activeGroup: 'Documents & Billing', docScope: 'company', docFolder: null });
@@ -3626,6 +3681,11 @@ class Component extends DCLogic {
         .map(v8 => ['Pay invoice ' + (v8.number || ''), (v8.currency || 'SAR') + ' ' + Number(v8.amount || 0).toLocaleString('en-US'), v8.dueDate || '—', 'Pay', '#E5484D',
           () => this.setState({ active: 'Invoices', activeGroup: 'Documents & Billing' })]),
     ].map(([title, sub, due, cta, prColor, act]) => ({ title, sub, due, cta, prColor, act }));
+    // The badge was the literal "4" in the markup while this list was already real, so a client with
+    // nothing outstanding was told four things needed them and shown an empty box. Worse than a wrong
+    // number: it sends someone hunting for work that does not exist.
+    const actionsCount = actions.length;
+    const actionsEmpty = actions.length === 0;
 
     const chip = (on) => ({ color: on ? '#7C00FF' : '#4B4757', bg: on ? '#F3E8FF' : '#fff', border: on ? '#C9A2FF' : '#DDD9E6' });
     const bTypes = ['Medical test', 'Biometrics', 'Document collection', 'Labour office', 'Immigration visit'].map(label =>
@@ -5548,6 +5608,9 @@ class Component extends DCLogic {
     const upgradeApi = {
       svcIncludedCount: String(svcDefs.filter(s2 => s2[6]).length),
       svcTotalCount: String(svcDefs.length),
+      // Both bars on the Plan card were fixed widths — 84% and 47% — beside labels reading 0/∞ and
+      // 0/0. They now follow the numbers next to them, and an empty catalogue reads empty.
+      svcUsagePct: (svcDefs.length ? Math.max(3, Math.round((svcDefs.filter(s2 => s2[6]).length / svcDefs.length) * 100)) : 0) + '%',
       showUpgrade: !!this.state.upgradeModal,
       upgradeIdle: this.state.upgradeModal === 'idle',
       upgradeSent: this.state.upgradeModal === 'sent',
@@ -5845,6 +5908,10 @@ class Component extends DCLogic {
       planPrice: _sub ? sysCur + ' ' + Number(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)).toLocaleString() : '—',
       planUsage: _empN + ' / ' + (_empMax || '∞'),
       planSlotsUsed: String(_empN), planSlotsMax: _empMax ? String(_empMax) : '∞',
+      // The bar was a hardcoded width:84%, so a plan with nothing on it read as nearly full while the
+      // label beside it said 0 / 25. Unlimited shows empty rather than pretending to a proportion of
+      // infinity. A used slot is always at least a sliver, so "some" never renders as "none".
+      planUsagePct: (_empMax ? (_empN ? Math.max(3, Math.min(100, Math.round((_empN / _empMax) * 100))) : 0) : 0) + '%',
       planSidePct: _empMax ? Math.min(100, Math.round(_empN / _empMax * 100)) : 0,
       planSlots: _empMax ? (Math.max(0, _empMax - _empN) + ' visa slot' + (_empMax - _empN === 1 ? '' : 's') + ' remaining on this plan.') : 'Unlimited employees on this plan.',
       planRenewLine: (_sub ? (sysCur + ' ' + Number(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)).toLocaleString()) : '—') + (_pkg && _pkg.billingCycle === 'yearly' ? '/yr' : '/mo') + ((_sub && _sub.endDate) ? ' · renews ' + _sub.endDate : ''),
@@ -6036,6 +6103,13 @@ class Component extends DCLogic {
       ...ticketApi, ...bookApi, ...authApi, ...switcherApi, ...empApi, ...reqApi, ...threadApi, ...credApi, ...settingsApi,
       ...groupApi, ...payApi, ...docApi, ...empProfileApi, ...notifApi, ...editProfileApi, ...trackApi, ...uploadApi, ...folderApi, ...rdApi,
       ...wizardApi, ...upgradeApi, services, renewalGroups,
+      // Empty states: every one of these screens rendered its header, filter chips and table
+      // headings over nothing at all, so a new client could not tell an empty account from a
+      // screen that had failed to load.
+      servicesEmpty: services.length === 0,
+      docCatsEmpty: docCats.length === 0,
+      invoicesEmpty: invoices.length === 0,
+      renewalsEmpty: renewalGroups.length === 0,
       ...requestsApi, ...chatApi, ...quotesApi, ...planApi, ...mobileApi, ...calApi, ...notifPopApi,
       ...pageFlags, showDashboard,
       radar, radarPath, ridges, scatter,
@@ -6167,19 +6241,27 @@ class Component extends DCLogic {
       })(),
       ...nfApi,
       ...addonApi,
-      ...stateBannerApi, kpis, donut, cmpOverdue, cmpExpiring, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, appointments, ...apptPageApi, bars, invoices, docCats, updates,
+      ...stateBannerApi, kpis, donut, cmpOverdue, cmpExpiring, cmpValid,
+      cmpOverdueNames, cmpExpiringNames, cmpValidNames, renewals: renShown, renChips, activities, activitiesEmpty, apps, actions, actionsCount, actionsEmpty, appointments, ...apptPageApi, bars, invoices, docCats, updates,
       // Real figures replacing the hardcoded "27 active", "248/231", "4.2 days" and the literal
       // ticket counts. Numbers are stringified — the template renders a bare 0 as blank otherwise.
       donutTotal: String(donutTotal), donutEmpty,
       trendTotal: String(trendTotal), trendChips, trendRangeLabel,
       nextRenewalDue, nextRenewalWhat,
       tkOpen, tkWaiting, tkResolved,
-      complianceScore: score, companyStatus: status,
-      compDash: (score / 100 * 276.5).toFixed(1),
-      compColor: score >= 80 ? '#12B76A' : score >= 60 ? '#F59E0B' : '#E5484D',
-      compBadge: score >= 80 ? 'Good standing' : score >= 60 ? 'Needs attention' : 'At risk',
+      // A client with no documents on file scored 100% and read "Good standing" — a perfect mark
+      // for having nothing tracked, which is the most misleading thing a compliance screen can say.
+      // No data is its own state, distinct from good and from bad.
+      complianceScore: score == null ? '—' : score, companyStatus: status,
+      compDash: ((score == null ? 0 : score) / 100 * 276.5).toFixed(1),
+      compColor: score == null ? '#A9A6B4' : score >= 80 ? '#12B76A' : score >= 60 ? '#F59E0B' : '#E5484D',
+      compBadge: score == null ? 'Not tracked yet' : score >= 80 ? 'Good standing' : score >= 60 ? 'Needs attention' : 'At risk',
+      compSubline: score == null ? 'No documents on file yet — nothing to score.' : ('Overall score · ' + score + '% of documents in good standing'),
+      // score can be null (nothing tracked). Comparing against null coerces it to 0 and happens to
+      // render an empty bar, which is right — but by accident. Stated outright instead.
       compSegs: Array.from({length: 10}, (_, i) => ({
-        bg: (i + 1) * 10 <= score ? 'linear-gradient(90deg,#9B3DFF,#7C00FF)' : (i * 10 < score ? '#D9C2FA' : '#F0EDF6'),
+        bg: score == null ? '#F0EDF6'
+          : (i + 1) * 10 <= score ? 'linear-gradient(90deg,#9B3DFF,#7C00FF)' : (i * 10 < score ? '#D9C2FA' : '#F0EDF6'),
       })),
       showFab: this.props.showFab ?? true,
     };
