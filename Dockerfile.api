@@ -1,0 +1,42 @@
+# STIMES PRO — API (Express + Prisma + MySQL)
+#
+# Debian rather than Alpine on purpose: prisma/schema.prisma declares
+# binaryTargets ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]. Alpine is musl and would
+# need "linux-musl-openssl-3.0.x" adding to that list — a schema change to suit the base image,
+# which is the wrong way round. bookworm-slim matches a target that is already there.
+#
+# Single stage, deliberately. The entrypoint runs `prisma db push` and the operator runs the seed
+# through `tsx`, and both are devDependencies — a runtime stage carrying only production deps could
+# start the API but could not create or seed the database it needs.
+FROM node:22-bookworm-slim
+
+# openssl: Prisma's query engine links against it. ca-certificates: outbound TLS (SMTP).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependencies first so a code-only change does not reinstall them.
+COPY server/package*.json ./
+RUN npm ci
+
+COPY server/ ./
+
+# Generate the client and compile to dist/. Both are build-time so a container restart is instant.
+RUN npx prisma generate && npm run build
+
+# Uploaded documents live here and are served at /files/<name>. Declared so it is obvious this path
+# MUST be a volume — without one, every client's uploads are destroyed by the next image rebuild.
+RUN mkdir -p /app/uploads-files
+VOLUME ["/app/uploads-files"]
+
+COPY docker/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
+RUN chmod +x /usr/local/bin/api-entrypoint.sh
+
+ENV NODE_ENV=production
+ENV PORT=4100
+EXPOSE 4100
+
+ENTRYPOINT ["/usr/local/bin/api-entrypoint.sh"]
+CMD ["node", "dist/index.js"]
