@@ -6122,6 +6122,19 @@ class Component extends DCLogic {
     if (hm && bySlug[hm[1]]) { history.replaceState(null, '', '/' + hm[1]); this._routeApply(); }
     else if (/^\/[a-z0-9-]+\/?$/.test(location.pathname)) this._routeApply();
     else if (_bootTok) history.replaceState(null, '', '/' + slug(this.state.active));
+    // Signed out, the address bar must not advertise an app screen at all — arriving straight at
+    // /dashboard (a bookmark, or the browser autocompleting a previous visit) left the URL naming a
+    // screen behind the login wall. Remember where they were headed, clean the address, and let
+    // doLogin put it back, so the deep link still works without ever being displayed signed out.
+    if (!_bootTok) {
+      const dm = /^\/([a-z0-9-]+)\/?$/.exec(location.pathname || '');
+      // /reset?token=… is the password-reset link from email; rewriting it would strip the token.
+      // Unknown slugs are left alone so a genuinely broken link still reaches the not-found screen.
+      if (dm && bySlug[dm[1]] && !/^\/reset\b/.test(location.pathname)) {
+        this._afterLogin = '/' + dm[1];
+        history.replaceState(null, '', '/');
+      }
+    }
     // WIRED: org-wide settings (Settings → General) from the backend. Uses the staff JWT the React
     // console stores under stimespro:token; without one the GET 401s and the design defaults show.
     const API = window.STIMES_API || 'http://localhost:4100';
@@ -7833,9 +7846,12 @@ class Component extends DCLogic {
             this.setState({ auth: 'in', lError: '', lPass: '' });
             // Boot no longer stamps a path while signed out, so sign-in has to do it — otherwise the
             // address bar stays on `/` after landing on the dashboard. A deep link is left alone.
-            // `slug` is a local of componentDidMount, not visible here — inlined rather than hoisted
-            // so this stays a one-liner that cannot drift from the router's own rule.
-            if (!/^\/[a-z0-9-]+\/?$/.test(location.pathname)) {
+            // Restore the screen they originally asked for, else stamp the one they landed on.
+            // `slug` is a local of componentDidMount, not visible here — hence the inline form.
+            const want9 = this._afterLogin;
+            this._afterLogin = null;
+            if (want9) { history.replaceState(null, '', want9); this._routeApply && this._routeApply(); }
+            else if (!/^\/[a-z0-9-]+\/?$/.test(location.pathname)) {
               const p9 = String(this.state.active).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
               history.replaceState(null, '', '/' + p9);
             }

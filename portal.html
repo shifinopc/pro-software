@@ -3266,6 +3266,17 @@ class Component extends DCLogic {
     if (hm && bySlug[hm[1]]) { history.replaceState(null, '', '/portal/' + hm[1]); this._routeApply(); }
     else if (/^\/portal\/[a-z0-9-]+\/?$/.test(location.pathname)) this._routeApply();
     else if (_bootTok) history.replaceState(null, '', '/portal/' + slug(this.state.active));
+    // Signed out, don't leave an app screen in the address bar — arriving straight at
+    // /portal/dashboard (bookmark or browser autocomplete) named a screen behind the login wall.
+    // Held in memory and restored by doLogin, so the deep link survives without being displayed.
+    if (!_bootTok) {
+      const dm = /^\/portal\/([a-z0-9-]+)\/?$/.exec(location.pathname || '');
+      // /reset?token=… is the reset link from email; rewriting it would strip the token.
+      if (dm && bySlug[dm[1]] && !/^\/reset\b/.test(location.pathname)) {
+        this._afterLogin = '/portal/' + dm[1];
+        history.replaceState(null, '', '/');
+      }
+    }
   }
   // The portal had NO toast method — every `this.toast && this.toast(...)` in here was a silent no-op,
   // so confirmations and failures alike went nowhere. Same shape as the console's: the tone is inferred
@@ -4191,9 +4202,13 @@ class Component extends DCLogic {
           .then(({ ok, d }) => {
             if (!ok || !d.token) return this.setState({ lError: (d && d.error) || 'Invalid credentials — check your email and password' });
             try { localStorage.setItem('stimespro:portalToken', d.token); } catch (e) {}
-            // Boot no longer stamps a path while signed out, so sign-in does it. `slug` is a local of
-            // componentDidMount and not visible here, hence the inline form. Deep links are left alone.
-            if (!/^\/portal\/[a-z0-9-]+\/?$/.test(location.pathname)) {
+            // Boot no longer stamps a path while signed out, so sign-in does it — restoring the screen
+            // they originally asked for if there was one. `slug` is a local of componentDidMount and
+            // not visible here, hence the inline form.
+            const want9 = this._afterLogin;
+            this._afterLogin = null;
+            if (want9) { history.replaceState(null, '', want9); this._routeApply && this._routeApply(); }
+            else if (!/^\/portal\/[a-z0-9-]+\/?$/.test(location.pathname)) {
               const p9 = String(this.state.active).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
               history.replaceState(null, '', '/portal/' + p9);
             }
