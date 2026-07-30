@@ -15,8 +15,10 @@ import { prisma } from "./db.js";
 import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected } from "./notify.js";
-import { startDeliveryForQuotation, acceptServiceRequest } from "./delivery.js";
+import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
+import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
+import { figuresFromAmount } from "./money.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
@@ -251,9 +253,9 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
     subscriptions: await subsFor(c.id, c.groupId),
     counts: {
       employees: await prisma.employee.count({ where: { companyId: c.id } }),
-      documents: await prisma.document.count({ where: { companyId: c.id } }),
-      overdue: await prisma.document.count({ where: { companyId: c.id, status: "overdue" } }),
-      expiring: await prisma.document.count({ where: { companyId: c.id, status: "expiring" } }),
+      documents: await prisma.document.count({ where: { companyId: c.id, supersededAt: null } }),
+      overdue: await prisma.document.count({ where: { companyId: c.id, status: "overdue", supersededAt: null } }),
+      expiring: await prisma.document.count({ where: { companyId: c.id, status: "expiring", supersededAt: null } }),
     },
   })));
   // Org-wide display currency (Settings → General) so the portal renders money in the same unit.
@@ -279,7 +281,12 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   const paidBy = new Map(paidRows.map((r) => [r.invoiceId, r._sum.amount ?? 0]));
   const invoices = (company.invoices ?? []).map((inv) => {
     const paidAmount = paidBy.get(inv.id) ?? 0;
-    return { ...inv, paidAmount, outstandingAmount: Math.max(0, inv.amount - paidAmount) };
+    // From the stored total, not `amount`: that column is whole riyals and cannot hold halala, so an
+    // invoice of 287.50 reported 288 outstanding — the client was shown, and asked to pay, half a
+    // riyal more than the invoice says. Falls back to `amount` only for rows issued before the
+    // minor-unit columns existed.
+    const total = inv.totalMinor != null ? inv.totalMinor / 100 : inv.amount;
+    return { ...inv, paidAmount, outstandingAmount: Math.max(0, total - paidAmount) };
   });
   // Same stale-counter problem as the console: company.employees / overdue / expiring are stored
   // columns nobody recomputes. The client sees their own compliance here, so it has to be counted.
@@ -339,7 +346,7 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   const nowISO = new Date(now).toISOString();
   const money = (c: any) => `${c.currency || "SAR"} ${Number(c.amount).toLocaleString()}`;
   const [docs, reqs, invs, addonReqs] = await Promise.all([
-    prisma.document.findMany({ where: { companyId: a.companyId, NOT: { expiryDate: null } } }),
+    prisma.document.findMany({ where: { companyId: a.companyId, supersededAt: null, NOT: { expiryDate: null } } }),
     prisma.serviceRequest.findMany({ where: { companyId: a.companyId } }),
     // A DRAFT invoice has not been released to the client yet — the billing job raises drafts for a
     // human to check first, so announcing one asks the client to pay a bill nobody has approved.
@@ -619,9 +626,13 @@ app.post("/api/portal/employees", requireAuth, requirePortal, requireNotSuspende
   const vErr = validate("employee", req.body, true);
   if (vErr) return res.status(400).json({ error: vErr });
   try {
-    const { name, role, iqamaExpiry, status, customData } = req.body ?? {};
+    const { name, role, iqamaExpiry, status, customData, govId } = req.body ?? {};
     const created = await prisma.employee.create({
-      data: { companyId: a.companyId, name: String(name || ""), role: role ?? null, iqamaExpiry: iqamaExpiry ?? null, status: status ?? "valid", customData: customData ?? undefined },
+      // Coded on this path too. A client adding staff through the portal must not create people the
+      // office cannot tell apart from the ones it already has.
+      data: { companyId: a.companyId, name: String(name || ""), code: await nextNumber("employee", { companyId: a.companyId }),
+              govId: govId ? String(govId).trim() : null,
+              role: role ?? null, iqamaExpiry: iqamaExpiry ?? null, status: status ?? "valid", customData: customData ?? undefined },
     });
     res.status(201).json(created);
   } catch (e: any) {
@@ -1004,6 +1015,30 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
 // quotation's own line items, as a DRAFT — the same lifecycle every other invoice follows, so it
 // still has to be approved before the client is billed.
 /**
+ * Are this document type's prerequisites met for a given subject?
+ *
+ * ONE evaluator, on the server. The console carried its own copy of these rules for the New-task
+ * dialog, so the same requirement could be judged two ways: the dialog let work start while the
+ * nightly job held it, or the reverse. Attribute rules would have had to be written twice to match.
+ *
+ * Body: { docType, employeeId?, companyId? }  →  { unmet: [{ need, months, why }] }
+ */
+app.post("/api/prereq-check", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { docType, employeeId, companyId } = req.body ?? {};
+    const dt = await prisma.documentType.findFirst({ where: { name: String(docType ?? "") } });
+    if (!dt) return res.json({ unmet: [], note: "No such document type" });
+    // The evaluator reads the SUBJECT off this shape, the same way it does for a real document.
+    const subject = {
+      companyId: companyId ? String(companyId) : null,
+      employeeId: employeeId ? String(employeeId) : null,
+      person: employeeId ? (await prisma.employee.findUnique({ where: { id: String(employeeId) }, select: { name: true } }))?.name ?? "" : "",
+    };
+    res.json({ unmet: await unmetPrereqs(dt, subject) });
+  } catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+});
+
+/**
  * What the client actually sent with a request, and what is still missing.
  *
  * `missing` is computed against the service's own required list rather than left to the officer to
@@ -1025,6 +1060,17 @@ app.get("/api/service-requests/:id/attachments", requireAuth, requireStaff, asyn
     required,
     missing: required.filter(d => d && d.required !== false && !have.has(d.key)).map(d => ({ key: d.key, label: d.label })),
   });
+});
+
+// What accepting would do. Read-only, so it needs no write role: an officer who can see the queue
+// should be able to see what a decision entails, whether or not they are the one allowed to take it.
+app.get("/api/service-requests/:id/accept-preview", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const svcId = req.query.serviceItemId ? String(req.query.serviceItemId) : null;
+    res.json(await previewAcceptServiceRequest(req.params.id, svcId));
+  } catch (e: any) {
+    res.status(404).json({ error: String(e?.message ?? e) });
+  }
 });
 
 // Accept a client request and turn it into work. See delivery.ts for why this mirrors quotation
@@ -1082,7 +1128,10 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const st = String(q.status).toLowerCase();
   if (st === "invoiced") return res.status(409).json({ error: `${q.number} has already been invoiced` });
   if (st !== "accepted") return res.status(409).json({ error: `${q.number} is ${st} — only a quotation the client accepted can be invoiced` });
-  if (!(Number(q.amount) > 0)) return res.status(400).json({ error: "That quotation has no amount to invoice" });
+  // Read the stored total where there is one: `amount` is whole riyals, so a quotation under SAR 0.50
+  // rounds to 0 there and would be refused despite having a real figure.
+  const qGross = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
+  if (!(qGross > 0)) return res.status(400).json({ error: "That quotation has no amount to invoice" });
   // Belt and braces: the status check above can't see an invoice raised before `invoiced` was set.
   const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
   if (already) return res.status(409).json({ error: `${q.number} was already invoiced as ${already.number}` });
@@ -1094,7 +1143,18 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     prisma.invoice.create({
       data: {
         number, companyId: q.companyId, clientName: q.clientName,
-        amount: q.amount, status: "draft", date: today,
+        // The quotation's own figures, carried across exactly. Re-deriving from `q.amount` would
+        // reintroduce the rounding the quotation had already resolved, and the invoice would then
+        // bill a different subtotal from the quotation the client accepted. Older quotations have no
+        // stored figures, so those still fall back to splitting the amount — see money.ts.
+        ...(q.totalMinor != null
+          ? {
+              subtotalMinor: q.subtotalMinor, vatMinor: q.vatMinor,
+              totalMinor: q.totalMinor, vatRateBp: q.vatRateBp,
+              amount: Math.round(q.totalMinor / 100),
+            }
+          : await figuresFromAmount(q.amount)),
+        status: "draft", date: today,
         services: q.service ?? null, items: q.items ?? [], notes: q.notes ?? null,
         quotationId: q.id,
       },
@@ -1628,7 +1688,7 @@ app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, r
     ...(price > 0 ? [prisma.invoice.create({
       data: {
         number, companyId: reqRow.companyId, clientName: company?.name ?? reqRow.clientName,
-        amount: price, status: "draft", date: today, services: label,
+        ...(await figuresFromAmount(price)), status: "draft", date: today, services: label,
         items: [{ name: label, units: 1, price }],
         addonServiceId: reqRow.serviceId,
       },

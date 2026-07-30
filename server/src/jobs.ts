@@ -14,6 +14,7 @@ import { logActivity, logNotification } from "./auth.js";
 import { startInstance, pickAssignee } from "./workflow.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
+import { figuresFromAmount } from "./money.js";
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -67,32 +68,132 @@ export type RenewalResult = { considered: number; started: number; released: num
  * to the person, so it must not be filtered by `person` — otherwise it could never be satisfied for an
  * employee-scoped document.
  */
-async function unmetPrereqs(dt: any, d: any): Promise<{ need: string; months: number; why: string; docId: string | null }[]> {
+/** Whole years between a date of birth and today. Derived, never stored — a stored age is wrong within a year. */
+export function ageFrom(dob?: string | null): number | null {
+  if (!dob) return null;
+  const b = new Date(dob);
+  if (isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
+/** The attributes a rule may test, and where each one lives. One resolver, so nothing reads a fact
+ *  from a second place and disagrees with the first. */
+export const PREREQ_ATTRS = ["age", "nationality"] as const;
+export type PrereqAttr = (typeof PREREQ_ATTRS)[number];
+export const ATTR_LABEL: Record<PrereqAttr, string> = { age: "Age", nationality: "Nationality" };
+
+/**
+ * Evaluate one attribute rule against an employee.
+ *
+ * MISSING DATA IS NEITHER A PASS NOR A FAIL. With no date of birth on file, "is this person over 21"
+ * has no true answer, and a silent pass on an age check is the kind of thing that reaches a government
+ * portal before anyone notices. It reports "cannot check" and the requirement stays unmet, which holds
+ * the work until a human supplies the fact.
+ */
+export function evalAttrRule(r: any, emp: any): { ok: boolean; label: string; why: string } {
+  const attr = String(r?.attr ?? "") as PrereqAttr;
+  const op = String(r?.op ?? "gte");
+  const want = r?.value;
+  const label = ATTR_LABEL[attr] ?? attr ?? "Attribute";
+
+  if (!PREREQ_ATTRS.includes(attr)) return { ok: false, label, why: `is configured with an attribute this system does not know ("${attr}")` };
+  if (!emp) return { ok: false, label, why: "cannot be checked — this document is not linked to an employee record" };
+
+  if (attr === "age") {
+    const age = ageFrom(emp.dob);
+    if (age === null) return { ok: false, label, why: "cannot be checked — no date of birth on file" };
+    const n = Number(want);
+    if (!Number.isFinite(n)) return { ok: false, label, why: "has no number to compare against" };
+    const ok = op === "lte" ? age <= n : op === "lt" ? age < n : op === "gt" ? age > n : op === "eq" ? age === n : age >= n;
+    const word = op === "lte" ? "at most" : op === "lt" ? "under" : op === "gt" ? "over" : op === "eq" ? "exactly" : "at least";
+    return { ok, label, why: ok ? `is ${age}` : `is ${age} — this needs ${word} ${n}` };
+  }
+
+  // nationality: a set test, because the real rules are "one of these" rather than a single value.
+  const have = String(emp.nationality ?? "").trim();
+  if (!have) return { ok: false, label, why: "cannot be checked — no nationality on file" };
+  const list = String(want ?? "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+  if (!list.length) return { ok: false, label, why: "has no value to compare against" };
+  const hit = list.includes(have.toLowerCase());
+  const ok = op === "ne" ? !hit : hit;
+  const pretty = String(want).trim();
+  return { ok, label, why: ok ? `is ${have}` : (op === "ne" ? `is ${have} — this excludes ${pretty}` : `is ${have} — this needs one of ${pretty}`) };
+}
+
+/**
+ * ONE rule, evaluated once, in one place.
+ *
+ * Used by unmetPrereqs (the gate) AND by resumeParkedTasks (the release). They used to hold separate
+ * logic, so a park could lift on a rule the gate would still refuse — and when attribute rules arrived
+ * the park did not know about them at all, meaning an unmet age requirement could not hold anything.
+ * The park now stores the raw rules and hands them back to this function.
+ *
+ * `subject` is anything carrying { companyId, employeeId?, person? } — a Document, a Task, or the
+ * shape the /api/prereq-check route builds for a hypothetical one.
+ */
+export async function evalOneRule(r: any, subject: { companyId?: string | null; employeeId?: string | null; person?: string | null }, emp?: any):
+  Promise<{ ok: true } | { ok: false; need: string; months: number; why: string; docId: string | null; rule: any }> {
+  // ── Attribute rules: a fact about the PERSON, not another document ──
+  // Rules could only ever say "another document, valid N months". A minimum-age requirement is a real
+  // thing a government portal asks for, and there was nothing on the row to compare against.
+  if (String(r?.kind ?? "") === "attribute") {
+    const who = emp !== undefined ? emp
+      : subject.employeeId ? await prisma.employee.findUnique({ where: { id: String(subject.employeeId) } }).catch(() => null) : null;
+    const res = evalAttrRule(r, who);
+    return res.ok ? { ok: true } : { ok: false, need: res.label, months: 0, why: res.why, docId: null, rule: r };
+  }
+
+  const need = String(r?.requiresDocType ?? r?.docType ?? "").trim();
+  if (!need) return { ok: true }; // a rule naming nothing cannot be unmet
+  const months = Math.max(0, Number(r?.minMonths) || 0);
+  const needDt = await prisma.documentType.findFirst({ where: { name: need } }).catch(() => null);
+  const byCompany = needDt?.subjectKind === "company";
+  // Matched on the EMPLOYEE where one is known — two people can share a name, and clearing a
+  // requirement with someone else's document is a false pass that looks like diligence.
+  const doc = await prisma.document.findFirst({
+    where: {
+      docType: need, companyId: subject.companyId ?? undefined, supersededAt: null,
+      ...(byCompany ? {} : (subject.employeeId ? { employeeId: subject.employeeId } : (subject.person ? { person: subject.person } : {}))),
+    },
+    orderBy: [{ expiryDate: "desc" }],
+  }).catch(() => null);
+
+  if (!doc) {
+    // On file under the name but not linked to this person: a different sentence, and an actionable one.
+    if (!byCompany && subject.employeeId && subject.person) {
+      const loose = await prisma.document.count({ where: { docType: need, companyId: subject.companyId ?? undefined, supersededAt: null, person: subject.person } }).catch(() => 0);
+      if (loose) return { ok: false, need, months, why: "is on file but not linked to this employee", docId: null, rule: r };
+    }
+    return { ok: false, need, months, why: "is not on file", docId: null, rule: r };
+  }
+  const exp = parseDate(doc.expiryDate);
+  if (exp === null) return { ok: false, need, months, why: "has no expiry date recorded", docId: doc.id, rule: r };
+  const limit = new Date();
+  limit.setMonth(limit.getMonth() + months);
+  if (exp < limit.getTime()) {
+    const left = daysUntil(exp);
+    return { ok: false, need, months, why: left < 0 ? `expired ${Math.abs(left)}d ago` : `has only ${left}d left`, docId: doc.id, rule: r };
+  }
+  return { ok: true };
+}
+
+export async function unmetPrereqs(dt: any, d: any): Promise<{ need: string; months: number; why: string; docId: string | null; rule?: any }[]> {
   const rules: any[] = Array.isArray(dt?.prereqs) ? dt.prereqs : [];
   if (!rules.length) return [];
-  const out: { need: string; months: number; why: string; docId: string | null }[] = [];
+  const out: { need: string; months: number; why: string; docId: string | null; rule?: any }[] = [];
+  // The employee this document belongs to, loaded once for every attribute rule below.
+  const emp = d.employeeId ? await prisma.employee.findUnique({ where: { id: String(d.employeeId) } }).catch(() => null) : null;
   for (const r of rules) {
-    const need = String(r?.requiresDocType ?? "").trim();
-    if (!need) continue;
-    const months = Math.max(0, Number(r?.minMonths) || 0);
-    const needDt = await prisma.documentType.findFirst({ where: { name: need } });
-    const byCompany = needDt?.subjectKind === "company";
-    const req = await prisma.document.findFirst({
-      where: { docType: need, companyId: d.companyId, ...(byCompany ? {} : { person: d.person }) },
-    });
-    if (!req) { out.push({ need, months, why: "not on file", docId: null }); continue; }
-    // parseDate returns epoch MILLISECONDS, not a Date — compare against getTime(), not the object.
-    const exp = parseDate(req.expiryDate);
-    if (exp === null) { out.push({ need, months, why: "no expiry recorded", docId: req.id }); continue; }
-    const limit = new Date();
-    limit.setMonth(limit.getMonth() + months);
-    if (exp < limit.getTime()) {
-      const left = daysUntil(exp);
-      out.push({ need, months, why: left < 0 ? `expired ${Math.abs(left)}d ago` : `only ${left}d left`, docId: req.id });
-    }
+    const res = await evalOneRule(r, { companyId: d.companyId, employeeId: d.employeeId, person: d.person }, emp);
+    if (!res.ok) out.push({ need: res.need, months: res.months, why: res.why, docId: res.docId, rule: res.rule });
   }
   return out;
 }
+
 
 export async function triggerRenewals(): Promise<RenewalResult> {
   const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, held: 0, details: [] };
@@ -130,7 +231,9 @@ export async function triggerRenewals(): Promise<RenewalResult> {
     const lead = Number(cfg.days) > 0 ? Number(cfg.days) : (dt?.leadDays ?? 30);
 
     const docs = await prisma.document.findMany({
-      where: { docType, renewalRunId: null, NOT: { expiryDate: null } },
+      // A superseded row is history, not something to renew — renewing it would create a second
+      // live document of the same type, which is the state this whole rule exists to prevent.
+      where: { docType, renewalRunId: null, supersededAt: null, NOT: { expiryDate: null } },
       include: { company: { select: { name: true } } },
     });
 
@@ -254,7 +357,7 @@ export async function escalateSla(): Promise<SlaResult> {
 
   // ── Documents: expiry IS the deadline ──
   const docs = await prisma.document.findMany({
-    where: { NOT: { expiryDate: null } },
+    where: { supersededAt: null, NOT: { expiryDate: null } },
     include: { company: { select: { name: true } } },
   });
   for (const d of docs) {
@@ -380,7 +483,8 @@ export async function renewSubscriptions(): Promise<BillingResult> {
           prisma.invoice.create({
             data: {
               number, companyId: who.companyId, clientName: label,
-              amount: s.price, currency: "SAR", status: "draft", // DRAFT: a human releases it
+              // Figures frozen at issue rather than re-derived at print time — see money.ts.
+              ...(await figuresFromAmount(s.price)), currency: "SAR", status: "draft", // DRAFT: a human releases it
               date: new Date().toISOString().slice(0, 10),
               dueDate: new Date(next).toISOString().slice(0, 10),
               services: `${s.package.name} — ${s.package.billingCycle} subscription (${fmtDisplay(end)} → ${fmtDisplay(next)})`,
@@ -452,25 +556,38 @@ export async function resumeParkedTasks(): Promise<ResumeResult> {
     out.scanned++;
 
     let met = false;
-    // The park records what it needs and for how long. Match on the RULE — document present and still
-    // carrying the required period — not merely on status "valid", which is a weaker test: a document
-    // reads valid with three weeks left while the prerequisite asks for six months, and this job would
-    // have released the hold the console refuses to release. Older parks carry no rule; they fall back
-    // to the status test so nothing already in flight is stranded.
-    const needType: string = String(bb.requiresDocType ?? bb.waiting ?? "").trim();
-    const needMonths = Number(bb.minMonths);
-    if (bb.prereqDocId || needType) {
-      const doc = bb.prereqDocId
-        ? await prisma.document.findUnique({ where: { id: String(bb.prereqDocId) } }).catch(() => null)
-        : await prisma.document.findFirst({ where: { docType: needType, companyId: t.companyId ?? undefined } }).catch(() => null);
-      if (doc) {
-        if (needMonths >= 0) {
-          const exp = parseDate(doc.expiryDate);
-          const limit = new Date();
-          limit.setMonth(limit.getMonth() + needMonths);
-          met = exp !== null && exp >= limit.getTime();
-        } else {
-          met = String(doc.status).toLowerCase() === "valid";
+    // EVERY rule the park is waiting on, not just the first one.
+    //
+    // A park used to hold a single `prereqDocId`, while the dialog reported all the unmet rules — so
+    // satisfying the first one resumed the task with the second still outstanding. `needs` carries the
+    // whole list; the single-rule shape is still read so nothing already parked is stranded.
+    // The RAW rules the park is waiting on, whichever kind they are. Older parks carry the single
+    // document shape and are read into the same list, so nothing already parked behaves differently.
+    const needs: any[] = Array.isArray(bb.needs) && bb.needs.length
+      ? bb.needs.filter(Boolean)
+      : (() => {
+          const t0 = String(bb.requiresDocType ?? bb.waiting ?? "").trim();
+          return t0 ? [{ requiresDocType: t0, minMonths: Number(bb.minMonths) || 0, docId: bb.prereqDocId ?? null }] : [];
+        })();
+
+    if (needs.length) {
+      const unmet: string[] = [];
+      // ONE evaluator, shared with the gate that created the park. A second copy here is how a park
+      // came to lift on a rule the gate would still refuse — and it knew nothing about attribute rules,
+      // so an unmet age requirement could not hold anything.
+      const emp = t.employeeId ? await prisma.employee.findUnique({ where: { id: t.employeeId } }).catch(() => null) : null;
+      for (const need of needs) {
+        const res = await evalOneRule(need, { companyId: t.companyId, employeeId: t.employeeId, person: emp?.name ?? null }, emp);
+        if (!res.ok) unmet.push(`${res.need}${res.months ? ` (${res.months}m)` : ""}`);
+      }
+      met = unmet.length === 0;
+      // Progress is worth recording even when the hold stands: "2 of 3 met" is the difference between
+      // a task that is moving and one that is stuck, and nothing said which before.
+      if (!met && needs.length > 1) {
+        const line = `${needs.length - unmet.length} of ${needs.length} met — still waiting on ${unmet.join(", ")}`;
+        if (String(bb.progress ?? "") !== line) {
+          await prisma.task.update({ where: { id: t.id }, data: { blockedBy: { ...bb, needs, progress: line } as any } });
+          out.details.push(`${t.title}: ${line}`);
         }
       }
     } else if (Array.isArray(bb.runIds) && bb.runIds.length) {

@@ -3396,6 +3396,16 @@ class Component extends DCLogic {
     };
 
     const sysCur = this.state.sysCur || 'SAR';
+    // Money, in one place.
+    //
+    // The portal had no shared formatter — nineteen separate `toLocaleString()` calls, each allowed
+    // 0–3 decimal places — and every invoice figure read `amount`, a whole-number column that cannot
+    // hold halala. So an invoice of 287.50 was shown to the client as "SAR 288" here while the PDF in
+    // their inbox said 287.50. They pay from this screen, so this was the number that was wrong.
+    const _money = (n, code) => (code || sysCur) + ' ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // The stored minor units are the figure of record; `amount` is only the fallback for rows issued
+    // before those columns existed. Mirrors _docTotal in the console — the two must agree.
+    const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
     // WIRED: compliance score from real documents — (total − overdue − expiring) / total.
     const score = (() => { const d = this.state.docItems || []; if (!d.length) return null; const bad = d.filter((x) => x.status === 'overdue' || x.status === 'expiring').length; return Math.max(0, Math.round(((d.length - bad) / d.length) * 100)); })();
     const status = this.props.companyStatus ?? 'Active';
@@ -3589,7 +3599,7 @@ class Component extends DCLogic {
           meta: ['Request', w9.label].filter(Boolean).join(' · '), icon: I.file, p: pal.purple, ts: w9.ts }); });
       (this.state.invItems || []).forEach(i9 => { const w9 = _actWhen(i9.date);
         out9.push({ title: 'Invoice ' + (i9.number || '') + (String(i9.status) === 'paid' ? ' paid' : ' issued'),
-          meta: [sysCur + ' ' + Number(i9.amount || 0).toLocaleString('en-US'), w9.label].filter(Boolean).join(' · '),
+          meta: [_money(_docTotal(i9)), w9.label].filter(Boolean).join(' · '),
           icon: I.invoice, p: String(i9.status) === 'paid' ? pal.green : pal.purple, ts: w9.ts }); });
       (this.state.apptItems || []).forEach(a9 => { const w9 = _actWhen(a9.date);
         out9.push({ title: (a9.type || 'Appointment') + ' — ' + (a9.status || 'Requested'),
@@ -3680,7 +3690,7 @@ class Component extends DCLogic {
       return a === b || a.includes(b) || b.includes(a);
     }) : null;
     const rdFeeTime = rd
-      ? [_rdSvc && Number(_rdSvc.govFee) > 0 ? sysCur + ' ' + Number(_rdSvc.govFee).toLocaleString() : 'Quoted before we start',
+      ? [_rdSvc && Number(_rdSvc.govFee) > 0 ? _money(_rdSvc.govFee) : 'Quoted before we start',
          (_rdSvc && (_rdSvc.time || _rdSvc.sla)) || 'Confirmed when we quote']
       : ['', ''];
     const rdApi = {
@@ -3713,7 +3723,7 @@ class Component extends DCLogic {
       // is not actually owed belongs in an action list.
       ...(Array.isArray(this.state.invItems) ? this.state.invItems : [])
         .filter(v8 => !['paid', 'void', 'draft'].includes(String(v8.status || '').toLowerCase())).slice(0, 2)
-        .map(v8 => ['Pay invoice ' + (v8.number || ''), (v8.currency || 'SAR') + ' ' + Number(v8.amount || 0).toLocaleString('en-US'), v8.dueDate || '—', 'Pay', '#E5484D',
+        .map(v8 => ['Pay invoice ' + (v8.number || ''), _money(_docTotal(v8), v8.currency), v8.dueDate || '—', 'Pay', '#E5484D',
           () => this.setState({ active: 'Invoices', activeGroup: 'Documents & Billing' })]),
     ].map(([title, sub, due, cta, prColor, act]) => ({ title, sub, due, cta, prColor, act }));
     // The badge was the literal "4" in the markup while this list was already real, so a client with
@@ -3837,7 +3847,7 @@ class Component extends DCLogic {
     const invColor = (st) => st === 'paid' ? ['Paid', '#E7F8EF', '#0E9355'] : st === 'overdue' ? ['Overdue', '#FEECEC', '#C0353A'] : st === 'draft' ? ['Draft', '#F0EDF6', '#6F6C7A'] : st === 'void' ? ['Void', '#F3F1F7', '#8C8899'] : ['Unpaid', '#FEF4E2', '#B8860B'];
     const invoices = (this.state.invItems || [])
       .slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 4)
-      .map((inv) => { const c = invColor(inv.status); const t = new Date(inv.date); return { no: inv.number, date: isNaN(t.getTime()) ? (inv.date || '—') : t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }), amount: (inv.currency || sysCur) + ' ' + Number(inv.amount).toLocaleString(), status: c[0], stBg: c[1], stColor: c[2] }; });
+      .map((inv) => { const c = invColor(inv.status); const t = new Date(inv.date); return { no: inv.number, date: isNaN(t.getTime()) ? (inv.date || '—') : t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }), amount: _money(_docTotal(inv), inv.currency), status: c[0], stBg: c[1], stColor: c[2] }; });
 
     // WIRED: document categories grouped from real documents, worst expiry first.
     const _catPals = [pal.purple, pal.violet, pal.red, pal.green, pal.amber, pal.slate];
@@ -4107,9 +4117,9 @@ class Component extends DCLogic {
         if (part) key = 'partial';
         const s = invStatusMap[key] || invStatusMap.pending;
         return { no: inv.number, date: invFmtDate(inv.date), desc: inv.services || '—',
-          amount: cur + ' ' + Number(inv.amount).toLocaleString(),
-          outstanding: cur + ' ' + owed.toLocaleString(),
-          hasPart: part, partLabel: part ? cur + ' ' + paidAmt.toLocaleString() + ' received · ' + cur + ' ' + owed.toLocaleString() + ' still owed' : '',
+          amount: _money(_docTotal(inv), cur),
+          outstanding: _money(owed, cur),
+          hasPart: part, partLabel: part ? _money(paidAmt, cur) + ' received · ' + _money(owed, cur) + ' still owed' : '',
           status: s[0], stBg: s[1], stColor: s[2], payable: !isVoid && key !== 'paid' && key !== 'draft' && owed > 0,
           // Both buttons were dead. PDF prints a branded copy; Pay now opens the payment form with
           // this invoice already ticked, rather than the whole outstanding balance.
@@ -4127,19 +4137,19 @@ class Component extends DCLogic {
           const inv = (this.state.invItems || []).find(v => v.id === p.invoiceId || v.number === p.invoiceNumber) || null;
           const paidAmt = _payReal.filter(x => (p.invoiceId && x.invoiceId === p.invoiceId) || (!p.invoiceId && p.invoiceNumber && x.invoiceNumber === p.invoiceNumber))
             .reduce((s, x) => s + (Number(x.amount) || 0), 0);
-          const owed = inv ? Math.max(0, (Number(inv.amount) || 0) - paidAmt) : 0;
+          const owed = inv ? Math.max(0, _docTotal(inv) - paidAmt) : 0;
           return {
             date: invFmtDate(p.date),
             ref: (p.invoiceNumber || p.reference || '—') + (inv && inv.services ? ' · ' + inv.services : ''),
             method: p.method || 'Payment',
-            amount: ((inv && inv.currency) || sysCur) + ' ' + Number(p.amount || 0).toLocaleString(),
+            amount: _money(p.amount, inv && inv.currency),
             status: 'Completed',
             printReceipt: () => this._printReceipt(p, inv, paidAmt, owed),
           };
         })
       : [
-        ['28 Jun', 'INV-1173 · Trade license amendment', 'Bank transfer', sysCur + ' 5,400', 'Completed'],
-        ['15 May', 'INV-1152 · Monthly PRO plan', 'Bank transfer', sysCur + ' 1,450', 'Completed'],
+        ['28 Jun', 'INV-1173 · Trade license amendment', 'Bank transfer', _money(5400), 'Completed'],
+        ['15 May', 'INV-1152 · Monthly PRO plan', 'Bank transfer', _money(1450), 'Completed'],
       ].map(([date, ref, method, amount, status]) => ({ date, ref, method, amount, status, printReceipt: () => this.toast('This is a sample row') })));
     const paymentsEmpty = !!_payReal && _payReal.length === 0;
 
@@ -4514,7 +4524,7 @@ class Component extends DCLogic {
     this._printInvoice = (inv, paidAmt, owed) => {
       const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const cur = inv.currency || this.state.sysCur || 'SAR';
-      const money = (n) => cur + ' ' + Number(n || 0).toLocaleString();
+      const money = (n) => cur + ' ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const org = this.state.proTeamName || 'Your PRO team';
       const items = Array.isArray(inv.items) && inv.items.length
         ? inv.items.map(it => '<tr><td>' + esc(it.name) + '</td><td style="text-align:center;">' + esc(it.units ?? 1) + '</td><td style="text-align:right;">' + money(it.price) + '</td><td style="text-align:right;">' + money((Number(it.units) || 1) * (Number(it.price) || 0)) + '</td></tr>').join('')
@@ -4549,7 +4559,7 @@ class Component extends DCLogic {
         + '<div style="text-align:right;"><div class="lb">ISSUED</div><div>' + esc(inv.date || '—') + '</div>'
         + (inv.dueDate ? '<div class="lb" style="margin-top:6px;">DUE</div><div>' + esc(inv.dueDate) + '</div>' : '') + '</div></div>'
         + '<table><thead><tr><th>DESCRIPTION</th><th style="text-align:center;">QTY</th><th style="text-align:right;">PRICE</th><th style="text-align:right;">AMOUNT</th></tr></thead><tbody>' + items + '</tbody></table>'
-        + '<div class="tot"><div><span>Invoice total</span><span>' + money(inv.amount) + '</span></div>'
+        + '<div class="tot"><div><span>Invoice total</span><span>' + money(_docTotal(inv)) + '</span></div>'
         + (paidAmt > 0 ? '<div><span>Received</span><span>-' + money(paidAmt) + '</span></div>' : '')
         + '<div class="g"><span>' + (owed > 0 ? 'Amount due' : 'Paid in full') + '</span><span>' + money(owed) + '</span></div></div>'
         + '<div style="margin-top:20px;font-size:10px;color:#888;">This is your copy. For a stamped original, ask ' + esc(org) + '.</div>');
@@ -4565,7 +4575,7 @@ class Component extends DCLogic {
     this._printReceipt = (pay, inv, paidAmt, owed) => {
       const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const cur = (inv && inv.currency) || this.state.sysCur || 'SAR';
-      const money = (n) => cur + ' ' + Number(n || 0).toLocaleString();
+      const money = (n) => cur + ' ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const org = this.state.proTeamName || 'Your PRO team';
       const MARGIN_MM = 18;
       const old = document.getElementById('inv-print-host');
@@ -4597,7 +4607,7 @@ class Component extends DCLogic {
         + '<div style="text-align:right;"><div class="lb">RECEIVED ON</div><div>' + esc(pay.date || '—') + '</div></div></div>'
         + (rows ? '<table><thead><tr><th>DETAILS</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' : '')
         + '<div class="tot">'
-        + (inv ? '<div><span>Invoice total</span><span>' + money(inv.amount) + '</span></div>' : '')
+        + (inv ? '<div><span>Invoice total</span><span>' + money(_docTotal(inv)) + '</span></div>' : '')
         + (inv && paidAmt > Number(pay.amount || 0) ? '<div><span>Received to date</span><span>' + money(paidAmt) + '</span></div>' : '')
         + (inv && owed > 0 ? '<div><span>Balance due</span><span>' + money(owed) + '</span></div>' : '')
         + '<div class="g"><span>RECEIVED</span><span>' + money(pay.amount) + '</span></div></div>'
@@ -5133,22 +5143,22 @@ class Component extends DCLogic {
     // WIRED: real billing summary from state.invItems.
     const _openInv = (this.state.invItems || []).filter((i) => i.status !== 'paid' && i.status !== 'draft' && i.status !== 'void');
     // Net off what has already been received, or the headline "outstanding" overstates the debt.
-    const _owedOn = (i) => i.outstandingAmount != null ? Number(i.outstandingAmount) : Math.max(0, (Number(i.amount) || 0) - (Number(i.paidAmount) || 0));
+    const _owedOn = (i) => i.outstandingAmount != null ? Number(i.outstandingAmount) : Math.max(0, _docTotal(i) - (Number(i.paidAmount) || 0));
     const _billOut = _openInv.reduce((s, i) => s + _owedOn(i), 0);
     const _nextDue = _openInv.filter((i) => i.dueDate).map((i) => i.dueDate).sort()[0];
     // null = "all open invoices" (the default when the modal opens), otherwise the ticked numbers.
     const _paySel = Array.isArray(this.state.paySelInv) ? this.state.paySelInv : null;
     const _sumFor = (nos) => _openInv.filter(i => nos.includes(i.number || '—')).reduce((s, i) => s + _owedOn(i), 0);
     const payApi = {
-      billOutstanding: sysCur + ' ' + _billOut.toLocaleString(),
+      billOutstanding: _money(_billOut),
       // Stringified: the Make runtime renders a bare number as blank.
       billOpenCount: String(_openInv.length),
       // Only offer "Pay outstanding" when there's actually a balance due.
       hasOutstanding: _billOut > 0,
       noOutstanding: _billOut <= 0,
-      billPaidYtd: (()=>{ const paid=(this.state.invItems||[]).filter(v=>String(v.status).toLowerCase()==='paid'); return sysCur+' '+paid.reduce((a,v)=>a+(Number(v.amount)||0),0).toLocaleString(); })(),
+      billPaidYtd: (()=>{ const paid=(this.state.invItems||[]).filter(v=>String(v.status).toLowerCase()==='paid'); return _money(paid.reduce((a,v)=>a+_docTotal(v),0)); })(),
       billPaidCount: (()=>{ const n=(this.state.invItems||[]).filter(v=>String(v.status).toLowerCase()==='paid').length; return n+(n===1?' invoice':' invoices'); })(),
-      billCredit: sysCur+' 0',
+      billCredit: _money(0),
       billNextDue: (() => { if (!_nextDue) return '—'; const t = new Date(_nextDue); return isNaN(t.getTime()) ? _nextDue : t.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); })(),
       showPayModal: payStage !== 'closed',
       payIdle: payStage === 'idle', payDone: payStage === 'done',
@@ -5157,7 +5167,7 @@ class Component extends DCLogic {
       payInvoices: _openInv.map(i => {
         const no = i.number || '—';
         const on = _paySel === null ? true : _paySel.includes(no);
-        return { no, desc: i.services || '—', amount: (i.currency || sysCur) + ' ' + _owedOn(i).toLocaleString(),
+        return { no, desc: i.services || '—', amount: _money(_owedOn(i), i.currency),
           on, bg: on ? '#F7F3FD' : '#fff', border: on ? '#C9A2FF' : '#EDEBF2',
           boxBg: on ? '#7C00FF' : '#fff', boxBorder: on ? '#7C00FF' : '#DDD9E6',
           toggle: () => { const cur = _paySel === null ? _openInv.map(x => x.number || '—') : _paySel;
@@ -5431,7 +5441,7 @@ class Component extends DCLogic {
       .map(s8 => [s8.name, _svcIcon(s8.name), Number(s8.govFee) || 0, s8.time || '—', s8.sla || '—', (Array.isArray(s8.requiredDocs) && s8.requiredDocs.length) || Number(s8.docs) || 0,
         _addonSvcIds.has(s8.id) || _pkgSvcIds.has(s8.id),
         s8.id, _addonSvcIds.has(s8.id), _pendingAddons.has(s8.id)]);
-    const fmtAed = (n) => n ? sysCur + ' ' + n.toLocaleString('en-US') : 'No govt fee';
+    const fmtAed = (n) => n ? _money(n) : 'No govt fee';
     const svcPals = [pal.purple, pal.violet, pal.green, pal.amber, pal.sky, pal.rose];
     const services = svcDefs.map(([name, icon, fee, time, sla, docs, included, svcId, viaAddon, pending], i) => {
       const p = svcPals[i % svcPals.length];
@@ -5626,9 +5636,9 @@ class Component extends DCLogic {
       // Government/disbursement fees are outside VAT scope, and the PRO service is included in the
       // plan (zero taxable). So VAT here is 0 and the total is the government fee only — was
       // incorrectly charging VAT on the disbursement.
-      wzVat: sysCur + ' 0',
+      wzVat: _money(0),
       wzVatNote: 'gov. fees exempt',
-      wzTotal: sysCur + ' ' + Math.round(wzGov).toLocaleString('en-US'),
+      wzTotal: _money(wzGov),
       wzSla: svcDef ? svcDef[4] : '—',
       wzError: this.state.wzError || '', wzHasError: !!(this.state.wzError || ''),
       wzBusy: !!this.state.wzBusy,
@@ -5729,7 +5739,7 @@ class Component extends DCLogic {
         const on9 = _upSel === p9.id;
         return {
           name: p9.name, nameUpper: String(p9.name || '').toUpperCase(),
-          desc: [(Array.isArray(p9.features) && p9.features.length ? p9.features.slice(0, 2).join(' · ') : null), (p9.empMax ? (Number(p9.empMax) >= 9999 ? 'unlimited' : p9.empMax) + ' visa slots' : null), sysCur + ' ' + Number(p9.basePrice || 0).toLocaleString('en-US') + '/mo'].filter(Boolean).join(' · '),
+          desc: [(Array.isArray(p9.features) && p9.features.length ? p9.features.slice(0, 2).join(' · ') : null), (p9.empMax ? (Number(p9.empMax) >= 9999 ? 'unlimited' : p9.empMax) + ' visa slots' : null), _money(p9.basePrice) + '/mo'].filter(Boolean).join(' · '),
           border: on9 ? '#7C00FF' : '#EDEBF2', bg: on9 ? 'linear-gradient(112deg,#FBF7FF,#F5EEFF)' : '#fff',
           selected: on9,
           pick: () => this.setState({ upgSel: p9.id, upgErr: '' }),
@@ -5923,7 +5933,7 @@ class Component extends DCLogic {
     // WIRED: the client's REAL quotations (/api/portal/quotations). This screen previously showed a
     // hardcoded QT-338/331/325 list to EVERY client — invented amounts for work they never ordered.
     const _qRows = Array.isArray(this.state.quoteItems) ? this.state.quoteItems : [];
-    const _qMoney = (n9) => sysCur + ' ' + Number(n9 || 0).toLocaleString('en-US');
+    const _qMoney = (n9) => _money(n9);
     const _qLabel = { sent: 'Pending', accepted: 'Accepted', rejected: 'Rejected', invoiced: 'Invoiced', changes_requested: 'Changes requested' };
     const qChipMap = { 'Pending': ['#FEF4E2', '#B8860B'], 'Accepted': ['#E7F8EF', '#0E9355'], 'Rejected': ['#FEECEC', '#C0353A'], 'Invoiced': ['#E4F4FD', '#0284C7'], 'Changes requested': ['#F3E8FF', '#7C00FF'] };
     const quotes = _qRows.map(r9 => {
@@ -5957,7 +5967,7 @@ class Component extends DCLogic {
     const _qtAccepted = _qRows.filter(q9 => ['accepted', 'invoiced'].includes(String(q9.status)));
     const _daysTo = (d9) => { const t9 = new Date(d9); return isNaN(+t9) ? null : Math.ceil((t9 - Date.now()) / 864e5); };
     const _qtExpiring = _qtPending.filter(q9 => { const n9 = _daysTo(q9.validUntil); return n9 != null && n9 >= 0 && n9 <= 14; });
-    const _qtMoney = (n9) => sysCur + ' ' + Number(n9 || 0).toLocaleString('en-US');
+    const _qtMoney = (n9) => _money(n9);
     // Six months of quoted value, same chart the console draws.
     const _qtBars = (() => {
       const now9 = new Date(); const buckets = [], labels = [];
@@ -6037,7 +6047,7 @@ class Component extends DCLogic {
     const planApi = {
       planName: _pkg ? _pkg.name : 'No active plan',
       planNameUpper: (_pkg ? _pkg.name : 'No active plan').toUpperCase(),
-      planPrice: _sub ? sysCur + ' ' + Number(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)).toLocaleString() : '—',
+      planPrice: _sub ? _money(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)) : '—',
       planUsage: _empN + ' / ' + (_empMax || '∞'),
       planSlotsUsed: String(_empN), planSlotsMax: _empMax ? String(_empMax) : '∞',
       // The bar was a hardcoded width:84%, so a plan with nothing on it read as nearly full while the
@@ -6046,7 +6056,7 @@ class Component extends DCLogic {
       planUsagePct: (_empMax ? (_empN ? Math.max(3, Math.min(100, Math.round((_empN / _empMax) * 100))) : 0) : 0) + '%',
       planSidePct: _empMax ? Math.min(100, Math.round(_empN / _empMax * 100)) : 0,
       planSlots: _empMax ? (Math.max(0, _empMax - _empN) + ' visa slot' + (_empMax - _empN === 1 ? '' : 's') + ' remaining on this plan.') : 'Unlimited employees on this plan.',
-      planRenewLine: (_sub ? (sysCur + ' ' + Number(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)).toLocaleString()) : '—') + (_pkg && _pkg.billingCycle === 'yearly' ? '/yr' : '/mo') + ((_sub && _sub.endDate) ? ' · renews ' + _sub.endDate : ''),
+      planRenewLine: (_sub ? _money(_sub.price != null ? _sub.price : (_pkg ? _pkg.basePrice : 0)) : '—') + (_pkg && _pkg.billingCycle === 'yearly' ? '/yr' : '/mo') + ((_sub && _sub.endDate) ? ' · renews ' + _sub.endDate : ''),
       planRenews: (_sub && _sub.endDate) ? _sub.endDate : '—',
       planBilling: _pkg && _pkg.billingCycle ? (_pkg.billingCycle.charAt(0).toUpperCase() + _pkg.billingCycle.slice(1)) : '—',
       planUpgradeStatus: this.state.upgradeModal === 'sent' || this.state.upgradeRequested ? 'Enterprise — requested' : 'No upgrade requested',

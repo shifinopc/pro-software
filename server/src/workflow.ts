@@ -7,6 +7,8 @@ import { Router } from "express";
 import { prisma } from "./db.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
+import { validateGraph } from "./workflow-validate.js";
+import { figuresForFee } from "./money.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
 const nowISO = () => new Date().toISOString();
@@ -356,6 +358,12 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
     if (!node) continue;
 
     switch (node.type) {
+      // `trigger` is what the create dialog seeds and what the Builder canvas shows; `start` is what
+      // this engine and the authoring spec call it. Runs only ever worked by accident: entryNodes()
+      // falls back to "any node with no incoming edge", which happened to be this one, and the switch
+      // logged it as an unknown type on the way past. Draw a single edge into it and the run would
+      // have had no entry point at all.
+      case "trigger":
       case "start":
         queue.push(...nextTargets(g, nodeId));
         break;
@@ -374,18 +382,44 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         queue.push(...nextTargets(g, nodeId));
         break;
 
+      // ALIASES, not a rename. The Builder writes `charge_fee` and older graphs carry `invoice` or
+      // `create_invoice`, none of which this switch knew — so an invoice step drawn in the Builder fell
+      // to `default:`, logged "unknown type", and the run walked on. The document was renewed and the
+      // client was never billed, with nothing on screen to say a step had been dropped.
+      // Renaming the stored type would have quietly rewritten templates already saved; accepting every
+      // spelling fixes the existing ones too.
+      case "charge_fee":
+      case "invoice":
+      case "create_invoice":
       case "draft_invoice": {
         // Fire a draft invoice into the Finance module — "task completion triggers invoice" from the spec.
         const c = node.config ?? {};
         const amount = Number(c.amount) || 0;
+        // Whether the configured fee is what the client pays or what we charge before tax. Absent
+        // means inclusive: that is how this amount has always been read, and defaulting the other way
+        // would raise the price of every flow already in use without anyone asking for it.
+        const includesVat = c.feeIncludesVat !== false;
+        const figures = await figuresForFee(amount, includesVat);
         // An invoice raised by a workflow is still an invoice, so it follows the configured
         // sequence rather than a timestamp that collides once every million milliseconds.
         const number = await nextNumber("invoice");
+        const label = c.service ?? node.label ?? "Workflow service";
         try {
-          await prisma.invoice.create({ data: { number, companyId: inst.companyId ?? null, clientName: inst.clientName ?? null, amount, currency: c.currency || "SAR", status: "draft", date: nowISO().slice(0, 10), services: c.service ?? node.label ?? "Workflow service" } });
-          logActivity({ type: "finance", message: `Draft invoice ${number} (SAR ${amount}) from workflow: ${inst.title}` });
+          await prisma.invoice.create({ data: {
+            number, companyId: inst.companyId ?? null, clientName: inst.clientName ?? null,
+            ...figures,
+            currency: c.currency || "SAR", status: "draft", date: nowISO().slice(0, 10),
+            services: label,
+            // This was the only one of the four invoice creators that stored no line items, so its tax
+            // invoice printed a description with QTY, PRICE and AMOUNT all blank. The line is priced
+            // from the SUBTOTAL rather than the configured figure, so the lines and the subtotal agree
+            // whichever way the VAT question was answered — printing a 2,000 line above a 1,739.13
+            // subtotal is the mismatch this whole area was just fixed to end.
+            items: [{ name: label, units: 1, price: figures.subtotalMinor / 100 }],
+          } });
+          logActivity({ type: "finance", message: `Draft invoice ${number} (SAR ${(figures.totalMinor / 100).toFixed(2)}) from workflow: ${inst.title}` });
         } catch { /* non-fatal */ }
-        await log("draft_invoice", nodeId, `${number} · SAR ${amount}`);
+        await log("draft_invoice", nodeId, `${number} · SAR ${(figures.totalMinor / 100).toFixed(2)}${includesVat ? " (fee incl. VAT)" : ` (SAR ${amount} + VAT)`}`);
         queue.push(...nextTargets(g, nodeId));
         break;
       }
@@ -458,11 +492,27 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
       }
 
-      case "delay":
-        // No scheduler yet — record the intended wait and pass straight through.
-        await log("delay", nodeId, `${node.config?.hours ?? node.config?.days ?? "?"} (skipped — scheduler pending)`);
-        queue.push(...nextTargets(g, nodeId));
+      // A REAL pause. This used to log the intended wait and continue immediately, so a step that
+      // said "wait 3 days then chase" chased instantly — the palette promised something the engine
+      // did not do. The wait is recorded on the instance and the hourly tick resumes it; hours is as
+      // fine-grained as this needs to be, since nothing here waits in minutes.
+      case "delay": {
+        const c = node.config ?? {};
+        const hours = Number(c.hours) > 0 ? Number(c.hours) : (Number(c.days) > 0 ? Number(c.days) * 24 : 0);
+        if (!hours) {
+          // Nothing to wait for. Passing straight through is right, but it is not a pause and the run
+          // should not claim it was one.
+          await log("delay.skipped", nodeId, `${node.label ?? "Delay"} — no duration set, so nothing was waited for`);
+          queue.push(...nextTargets(g, nodeId));
+          break;
+        }
+        const until = new Date(Date.now() + hours * 3600_000).toISOString();
+        vars._delays = vars._delays || {};
+        vars._delays[nodeId] = until;
+        await log("delay.waiting", nodeId, `${node.label ?? "Delay"} — resumes ${until} (${hours}h)`);
+        // Deliberately NOT queued onward: the frontier stops here and resumeDueDelays() picks it up.
         break;
+      }
 
       case "decision": {
         const key = evalDecision(node, vars);
@@ -471,11 +521,16 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
       }
 
+      // `split` / `join` are what the Builder palette saves; `parallel_*` is what this engine and the
+      // authoring spec call them. Aliased rather than renamed — your templates already contain two of
+      // each, and every one of them was being skipped silently.
+      case "split":
       case "parallel_split":
         await log("parallel_split", nodeId, node.label);
         queue.push(...nextTargets(g, nodeId));
         break;
 
+      case "join":
       case "parallel_join": {
         const need = inDegree(g, nodeId);
         const got = (vars._joins[nodeId] ?? 0) + 1;
@@ -543,6 +598,18 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
               || c.priority || "medium",
             dueDate: c.dueDate || null,
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
+            // Snapshotted, not read live from the template — a step someone is mid-way through must
+            // keep the brief it was given.
+            instructions: (typeof c.instructions === "string" && c.instructions.trim()) ? c.instructions.trim() : null,
+            // The authority this step is done at, snapshotted for the same reason. This is what the
+            // Government Centers queue groups by, so a step that names one appears in that portal's
+            // list of work the moment it becomes active.
+            govCenter: (typeof c.govCenter === "string" && c.govCenter.trim()) ? c.govCenter.trim() : null,
+            // Snapshotted like everything else on the step. "The run's own document" resolves now, so
+            // the rule cannot drift if the run's variables change later.
+            verifyRule: String(c.verifyDocType ?? "").trim()
+              ? { docType: (c.verifyDocType === "_run" ? String(vars.docType ?? "").trim() : String(c.verifyDocType).trim()), minMonths: Math.max(0, Number(c.verifyMinMonths) || 0) }
+              : undefined,
             checklist: items.length ? items : undefined,
             // Pre-ticked with whatever the client already uploaded against this request. `requestId`
             // is put on the run by acceptServiceRequest, so this only fires for work that began as a
@@ -564,7 +631,11 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
 
       default:
-        await log("node.skipped", nodeId, `unknown type ${node.type}`);
+        // Carried into the run's visible timeline, not just this table. A step the engine does not
+        // recognise is dropped and the run still reports success — which is how an unbilled renewal
+        // looked exactly like a billed one. The label is included because "unknown type charge_fee"
+        // means nothing to the person reading it; "Raise invoice" does.
+        await log("node.skipped", nodeId, `${node.label || "Step"} — the engine does not recognise "${node.type}", so it was skipped`);
         queue.push(...nextTargets(g, nodeId));
     }
   }
@@ -574,10 +645,47 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
 }
 
 // Find the entry node: an explicit start node, else any node with no incoming edge.
+// Both spellings count as explicit — see the `trigger` case above. Without this the fallback was
+// doing the work, and the fallback only holds while nothing points at the start node.
 function entryNodes(g: Graph): string[] {
-  const start = g.nodes.filter(n => n.type === "start");
+  const start = g.nodes.filter(n => n.type === "start" || n.type === "trigger");
   if (start.length) return start.map(n => n.id);
   return g.nodes.filter(n => inDegree(g, n.id) === 0).map(n => n.id);
+}
+
+/**
+ * What running this template would produce, without producing it.
+ *
+ * Lives here, beside the engine, and walks with the engine's own `entryNodes`/`nextTargets` rather
+ * than a second copy of the traversal — a preview that disagrees with what actually happens is worse
+ * than no preview. `steps` counts the nodes that wait for a person, which is the same filter the
+ * acceptance path uses to tell the client how many steps to expect.
+ *
+ * `firstStep` is the first waiting step reachable from the entry, breadth-first. It is a description
+ * of the graph, not a promise about branching: a decision could route elsewhere at runtime.
+ */
+export async function describeTemplate(templateId: string): Promise<{
+  name: string; steps: number; firstStep: string | null; hasSteps: boolean;
+} | null> {
+  const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId } }).catch(() => null);
+  if (!tpl) return null;
+  const g = asGraph(tpl.graph);
+  const waits = (n: any) => n?.type === "task" || n?.type === "approval";
+
+  let firstStep: string | null = null;
+  const seen = new Set<string>();
+  const queue = [...entryNodes(g)];
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const node = getNode(g, id);
+    if (!node) continue;
+    if (waits(node)) { firstStep = node.label || node.type || "Step"; break; }
+    queue.push(...nextTargets(g, id));
+  }
+
+  return { name: tpl.name, steps: g.nodes.filter(waits).length, firstStep, hasSteps: g.nodes.length > 0 };
 }
 
 export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any }) {
@@ -602,6 +710,140 @@ export async function startInstance(templateId: string, opts: { title?: string; 
   return prisma.workflowInstance.findUnique({ where: { id: inst.id }, include: { tasks: true, logs: true } });
 }
 
+/**
+ * The document a step has to check, and whether it passes.
+ *
+ * Shared by the route the drawer reads and by completeTask, so what the officer is shown and what the
+ * server enforces cannot disagree — a gate that only exists in the UI is not a gate.
+ *
+ * Reads the LIVE document (most life left first), so a superseded row cannot satisfy a requirement.
+ */
+export async function evalVerifyRule(task: { verifyRule?: any; instanceId: string }): Promise<null | {
+  docType: string; minMonths: number; ok: boolean; why: string;
+  document: null | { id: string; docNumber: string | null; expiryDate: string | null; daysLeft: number; person: string; filePath: string | null };
+}> {
+  const rule: any = task.verifyRule;
+  const docType = String(rule?.docType ?? "").trim();
+  if (!docType) return null;
+  const minMonths = Math.max(0, Number(rule?.minMonths) || 0);
+  const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId } });
+  const vars: any = (inst?.variables && typeof inst.variables === "object") ? inst.variables : {};
+  const employeeId = vars.employeeId ? String(vars.employeeId) : null;
+  const person = String(vars.person ?? vars.applicant ?? "").trim();
+  const dt = await prisma.documentType.findFirst({ where: { name: docType } });
+  const byCompany = dt?.subjectKind === "company";
+  // Matched on the EMPLOYEE where the run knows one. A gate that resolves by name would show the
+  // officer someone else's passport and let them pass a check on it — which is worse than no gate,
+  // because it produces a record of a verification that never happened.
+  const doc = await prisma.document.findFirst({
+    where: {
+      docType, companyId: inst?.companyId ?? undefined, supersededAt: null,
+      ...(byCompany ? {} : (employeeId ? { employeeId } : (person ? { person } : {}))),
+    },
+    orderBy: [{ expiryDate: "desc" }],
+  });
+  // Linked run, nothing linked to it, but the name matches something. Report it as unlinked rather
+  // than reaching for the name — this is the case where two same-name people diverge.
+  if (!doc && !byCompany && employeeId && person) {
+    const loose = await prisma.document.findFirst({ where: { docType, companyId: inst?.companyId ?? undefined, supersededAt: null, person }, orderBy: [{ expiryDate: "desc" }] });
+    if (loose) return { docType, minMonths, ok: false, document: null,
+      why: `A ${docType} is on file under the name "${person}" but is not linked to this employee record. Link it on the document before this step can be completed.` };
+  }
+  const shape = (d: typeof doc) => d ? {
+    id: d.id, docNumber: d.docNumber ?? null, expiryDate: d.expiryDate ?? null, person: d.person,
+    daysLeft: d.expiryDate && !isNaN(new Date(d.expiryDate).getTime()) ? Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / 86400000) : 0,
+    filePath: (() => { const cd: any = d.customData ?? {}; const f = cd.filePath || cd.file; return typeof f === "string" && f.startsWith("/") ? f : null; })(),
+  } : null;
+
+  if (!doc) return { docType, minMonths, ok: false, why: `No ${docType} is on file for this ${byCompany ? "client" : "person"}.`, document: null };
+  const t = doc.expiryDate ? new Date(doc.expiryDate).getTime() : NaN;
+  if (isNaN(t)) return { docType, minMonths, ok: false, why: `The ${docType} on file has no expiry date recorded.`, document: shape(doc) };
+  const limit = new Date(); limit.setMonth(limit.getMonth() + minMonths);
+  const days = Math.ceil((t - Date.now()) / 86400000);
+  if (t < limit.getTime()) {
+    return { docType, minMonths, ok: false, document: shape(doc),
+      why: days < 0
+        ? `The ${docType} expired ${Math.abs(days)} days ago; this step needs at least ${minMonths} month${minMonths === 1 ? "" : "s"} left.`
+        : `The ${docType} has ${days} days left; this step needs at least ${minMonths} month${minMonths === 1 ? "" : "s"}.` };
+  }
+  return { docType, minMonths, ok: true, why: `${docType} has ${days} days left.`, document: shape(doc) };
+}
+
+/**
+ * Retire documents that a newer one has replaced.
+ *
+ * Kept rather than deleted — the old number and expiry are the only record of what the person held
+ * before, and a compliance system that forgets that has no audit trail. Every reader filters on
+ * `supersededAt: null`, so exactly one document of a type is authoritative for a subject.
+ */
+async function supersede(rows: { id: string; docNumber?: string | null; expiryDate?: string | null }[], byId: string, docType: string, person: string, instanceId?: string, nodeId?: string | null) {
+  for (const r of rows) {
+    if (r.id === byId) continue;
+    await prisma.document.update({ where: { id: r.id }, data: { supersededAt: nowISO(), supersededById: byId } });
+    if (instanceId) {
+      await prisma.workflowLog.create({ data: { instanceId, nodeId: nodeId ?? null, action: "document.superseded",
+        detail: `${docType} for ${person}: ${r.docNumber ?? "no number"} (exp ${r.expiryDate ?? "none"}) replaced`, actor: "engine", at: nowISO() } }).catch(() => {});
+    }
+    logActivity({ type: "compliance", message: `${docType} for ${person}: an older record (${r.docNumber ?? "no number"}) was superseded` });
+  }
+}
+
+/** Is this instance parked on a `delay` node? Its waits live in variables._delays as { nodeId: ISO }. */
+function hasPendingDelay(inst: any): boolean {
+  const d = (inst?.variables as any)?._delays;
+  return !!d && typeof d === "object" && Object.keys(d).length > 0;
+}
+
+/**
+ * Resume every run whose delay has come due. Called by the hourly tick.
+ *
+ * Idempotent: the wait is DELETED from the instance before the frontier advances, so a tick that
+ * overlaps the previous one cannot advance the same pause twice. A run whose template has since lost
+ * the node is released rather than left parked for good.
+ */
+export async function resumeDueDelays(): Promise<{ waiting: number; resumed: number; details: string[] }> {
+  const out = { waiting: 0, resumed: 0, details: [] as string[] };
+  const running = await prisma.workflowInstance.findMany({ where: { status: "running" } });
+  const now = Date.now();
+  for (const inst of running) {
+    const vars: any = (inst.variables && typeof inst.variables === "object") ? inst.variables : {};
+    const delays: Record<string, string> = vars._delays || {};
+    const nodeIds = Object.keys(delays);
+    if (!nodeIds.length) continue;
+    const due = nodeIds.filter(id => { const t = new Date(delays[id]).getTime(); return !isNaN(t) && t <= now; });
+    out.waiting += nodeIds.length - due.length;
+    if (!due.length) continue;
+
+    const tpl = await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId } });
+    const g = asGraph(tpl?.graph);
+    for (const nodeId of due) {
+      delete delays[nodeId];
+      vars._delays = delays;
+      // Cleared FIRST, so a failure below cannot leave a wait that fires again every hour.
+      await prisma.workflowInstance.update({ where: { id: inst.id }, data: { variables: vars } });
+      await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId, action: "delay.resumed", detail: "the wait is over", actor: "engine", at: nowISO() } });
+      const targets = nextTargets(g, nodeId);
+      if (!targets.length) {
+        out.details.push(`${inst.title}: waited at ${nodeId} and had nowhere to go — closing`);
+        await finalizeInstance({ ...inst, variables: vars }, String(vars._result || "completed").toLowerCase(), nodeId, "After delay");
+        out.resumed++;
+        continue;
+      }
+      await runFrontier({ ...inst, variables: vars }, g, targets);
+      out.resumed++;
+      out.details.push(`${inst.title}: resumed after delay`);
+    }
+    // Same zombie guard as completeTask: a resumed run that produced no work and no end node must not
+    // be left running with nothing open.
+    const fresh = await prisma.workflowInstance.findUnique({ where: { id: inst.id } });
+    if (fresh && fresh.status === "running" && !hasPendingDelay(fresh)) {
+      const open = await prisma.workflowTask.count({ where: { instanceId: inst.id, status: "active" } });
+      if (open === 0) await finalizeInstance(fresh, String((fresh.variables as any)?._result || "completed").toLowerCase(), null, "Auto-close after delay");
+    }
+  }
+  return out;
+}
+
 export async function completeTask(taskId: string, opts: { actor?: string; outcome?: string; checklist?: any; variables?: any }) {
   const task = await prisma.workflowTask.findUnique({ where: { id: taskId } });
   if (!task) throw new Error("Task not found");
@@ -610,6 +852,14 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   if (!inst) throw new Error("Instance not found");
   const tpl = await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId } });
   const g = asGraph(tpl?.graph);
+
+  // The document gate, enforced HERE and not only in the drawer. A check that lives in the UI is a
+  // suggestion: anything calling the API directly walks straight past it. No override — a control any
+  // officer can wave through is not a control, which is the same stance the renewal prerequisite takes.
+  {
+    const v = await evalVerifyRule(task);
+    if (v && !v.ok) throw new Error(v.why);
+  }
 
   // Reject nonsense dates at the boundary rather than letting them through.
   //
@@ -674,9 +924,35 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       }
 
       if (person) {
+        // The LIVE document of this type for this subject, most life left first. A subject could hold
+        // two of the same type, and this used to take whichever the database returned — so a renewal
+        // could update the wrong passport and leave the real one untouched.
         const existing = await prisma.document.findFirst({
-          where: { docType: docType1, companyId: inst.companyId, ...(employeeId ? { employeeId } : { person }) },
+          where: { docType: docType1, companyId: inst.companyId, supersededAt: null, ...(employeeId ? { employeeId } : { person }) },
+          orderBy: [{ expiryDate: "desc" }],
         });
+        // Anything else still live for the same subject and type is history the moment this step
+        // records the current one. Kept, not deleted: the old number and expiry are the audit trail.
+        //
+        // SUPERSEDING REQUIRES A LINKED EMPLOYEE. Two people can share a name, and retiring a document
+        // is destructive-ish — it takes a real record out of every list that matters. Matching on a
+        // name would let one Mohammed Ali's renewal retire the other one's passport. With no
+        // employeeId, nothing is superseded and the duplicate is reported instead of resolved by guess.
+        const canSupersede = !!employeeId || dt1?.subjectKind === "company";
+        const alsoLive = canSupersede
+          ? await prisma.document.findMany({
+              where: { docType: docType1, companyId: inst.companyId, supersededAt: null,
+                ...(employeeId ? { employeeId } : {}), ...(existing ? { NOT: { id: existing.id } } : {}) },
+            })
+          : [];
+        if (!canSupersede) {
+          const others = await prisma.document.count({ where: { docType: docType1, companyId: inst.companyId, supersededAt: null, person, ...(existing ? { NOT: { id: existing.id } } : {}) } });
+          if (others) {
+            await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.supersede_skipped",
+              detail: `${others} other live ${docType1} for the name "${person}" — this run has no linked employee, so nothing was retired on a name match`, actor: "engine", at: nowISO() } }).catch(() => {});
+            logActivity({ type: "alert", message: `⚠ ${docType1} for "${person}": ${others} duplicate left in place — the run is not linked to an employee record, and a name is not enough to retire someone's document` });
+          }
+        }
 
         // Purposed fields land in the document's own columns; everything else is a custom field of
         // that type, keyed by field id the way customData already is.
@@ -711,16 +987,18 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
             data: { expiryDate: effExpiry, docNumber: number ?? existing.docNumber, issueDate: issue ?? existing.issueDate,
               customData: custom, status, daysLeft, history: hist },
           });
+          await supersede(alsoLive, existing.id, docType1, person, inst.id, task.nodeId);
           await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.updated", detail: `${docType1} for ${person} → ${expiry ?? "expiry unchanged"}`, actor: opts.actor ?? "engine", at: nowISO() } });
           logActivity({ type: "compliance", message: `${docType1} updated for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
         } else {
           // Create if absent: onboarding records a document that has never existed before, and
           // refusing to would mean the captured details had nowhere to go.
-          await prisma.document.create({
+          const made = await prisma.document.create({
             data: { companyId: inst.companyId, person, employeeId, docType: docType1, expiryDate: effExpiry,
               issueDate: issue, docNumber: number, issuingAuthority: dt1?.authority ?? null,
               customData: custom, status, daysLeft },
           });
+          await supersede(alsoLive, made.id, docType1, person, inst.id, task.nodeId);
           await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.created", detail: `${docType1} for ${person} → ${expiry ?? "no expiry"}`, actor: opts.actor ?? "engine", at: nowISO() } });
           logActivity({ type: "compliance", message: `${docType1} filed for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
         }
@@ -766,7 +1044,9 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   const fresh = await prisma.workflowInstance.findUnique({ where: { id: inst.id } });
   if (fresh && fresh.status === "running") {
     const open = await prisma.workflowTask.count({ where: { instanceId: inst.id, status: "active" } });
-    if (open === 0) {
+    // A run waiting on a delay has no open task BY DESIGN — it is not a zombie. Without this check the
+    // net would close the instance the moment it reached the pause, which is the opposite of waiting.
+    if (open === 0 && !hasPendingDelay(fresh)) {
       const r = String((fresh.variables as any)?._result || "completed").toLowerCase();
       await finalizeInstance(fresh, r, null, "Auto-close");
     }
@@ -785,7 +1065,7 @@ R.get("/templates", requireAuth, requireStaff, async (_req, res) => {
 R.get("/templates/:id", requireAuth, requireStaff, async (req, res) => {
   const t = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id }, include: { instances: { select: { id: true, status: true } } } });
   if (!t) return res.status(404).json({ error: "Not found" });
-  res.json(t);
+  res.json({ ...t, validation: validateGraph(t.graph, t) });
 });
 R.post("/templates", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
@@ -797,7 +1077,7 @@ R.post("/templates", requireAuth, requireStaff, requireWriteRole, async (req, re
               graph: graph ?? { nodes: [], edges: [] }, active: !!active, createdAt: nowISO() },
     });
     logActivity({ type: "task", message: `Workflow template created: ${t.name}` });
-    res.status(201).json(t);
+    res.status(201).json({ ...t, validation: validateGraph(t.graph, t) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
@@ -813,7 +1093,9 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     if (active !== undefined) data.active = !!active;
     if (version !== undefined) data.version = version;
     const t = await prisma.workflowTemplate.update({ where: { id: req.params.id }, data });
-    res.json(t);
+    // Told on the way out, every time, whatever changed. Never blocking: a half-built template is a
+    // normal thing to leave the Builder holding. The point is that "saved" stops implying "will work".
+    res.json({ ...t, validation: validateGraph(t.graph, t) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.delete("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
@@ -916,6 +1198,15 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   const insts = await prisma.workflowInstance.findMany({ where: { id: { in: instIds } }, select: { id: true, title: true, clientName: true } });
   const imap = Object.fromEntries(insts.map(i => [i.id, i]));
   res.json(mine.map(t => ({ ...t, instance: imap[t.instanceId] })));
+});
+/**
+ * The document this step has to check, and the verdict — the same call completeTask makes, so the
+ * drawer can never show a green light the server would refuse.
+ */
+R.get("/tasks/:id/verify", requireAuth, requireStaff, async (req, res) => {
+  const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+  res.json(await evalVerifyRule(task) ?? { docType: null });
 });
 R.get("/tasks", requireAuth, requireStaff, async (req, res) => {
   const where: any = {};

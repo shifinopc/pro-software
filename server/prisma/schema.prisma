@@ -101,6 +101,27 @@ model Employee {
   company     Company @relation(fields: [companyId], references: [id])
   companyId   String
   name        String
+  // WHAT MAKES THIS PERSON THIS PERSON.
+  //
+  // The row carried nothing unique but the name, so two employees called Mohammed Ali were
+  // indistinguishable — to a picker, to a report, and to every piece of code that matched a document
+  // to a person by name. `code` is the handle a human quotes; `govId` is the number the government
+  // knows them by. Both optional because rows exist that predate them and a blank code must not stop
+  // anyone working.
+  //
+  // The code is unique WITHIN A CLIENT, not across the firm — see @@unique below. Each client numbers
+  // its own staff from 1, so two clients both having an EMP-0002 is normal and must not be blocked.
+  // An invoice number is the opposite case and stays firm-wide unique.
+  code        String?
+  govId       String? // Iqama / national ID / passport no. — whatever identifies them officially
+  // Facts a PREREQUISITE can test. A rule could only ever say "another document, valid N months",
+  // because there was nothing else on the row to compare against — a minimum-age rule needs a date.
+  //
+  // Nationality previously lived in `customData["cf-nat"]`, a Form Builder field. It is a column now
+  // and that field was retired from the employee form: two places to type the same fact means the rule
+  // reads one while the user fills the other, and the check silently passes on an empty value.
+  dob         String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
+  nationality String?
   role        String?
   iqamaExpiry String?
   status      String  @default("valid")
@@ -115,6 +136,9 @@ model Employee {
   exitReason    String? // resignation | termination | end_of_contract | transfer | other
   exitRequestId String? // the ServiceRequest that tracks the exit
 
+  // Per client, not per system: each client numbers its own staff, so EMP-0002 may exist at several
+  // clients at once. Still a real constraint — one client cannot issue the same code twice.
+  @@unique([companyId, code])
   @@index([companyId, archived])
   @@index([exitStatus])
 }
@@ -140,6 +164,19 @@ model Document {
   issueDate        String?
   issuingAuthority String?
   history          Json? // renewal versions: [{ at, by, oldExpiry, newExpiry, oldNumber, newNumber, fee, receipt, note }]
+  // ONE LIVE DOCUMENT PER TYPE PER SUBJECT.
+  //
+  // A person could hold two passports with different numbers and expiries, and nothing decided which
+  // one counted: the prerequisite check, the renewal trigger and the compliance score each ran
+  // findFirst and got whichever the database returned first. So the same passport could satisfy a
+  // requirement on one screen and fail it on another.
+  //
+  // Superseded rows are KEPT — the old number and expiry are the audit trail — but every reader
+  // filters them out, so exactly one document of a type is authoritative for a subject at a time.
+  supersededAt     String? // ISO; null = this is the live one
+  supersededById   String? // the document that replaced it, when there is one
+
+  @@index([supersededAt])
 
   @@index([status])
   @@index([expiryDate])
@@ -219,7 +256,25 @@ model Invoice {
   company    Company? @relation(fields: [companyId], references: [id])
   companyId  String?
   clientName String?
+  // Whole currency units. DERIVED from totalMinor on every write and kept because reports, the dunning
+  // job, the invoice list and the portal all read it — changing its meaning would touch every one of
+  // them. `*Minor` below is what the DOCUMENT says; this is a convenience with a single writer.
   amount     Int
+  // WHAT THE INVOICE SAYS, FROZEN AT ISSUE.
+  //
+  // These were computed on the fly at print time instead: the stored total was treated as VAT-inclusive
+  // and divided back out. Two consequences, both wrong on a tax document —
+  //   · VAT was rounded to whole riyals on save, so re-dividing could not return the original figure:
+  //     lines of SAR 250 at 15% saved as 288, then printed a subtotal of SAR 250.43.
+  //   · No rate was stored, so changing the Print Layout VAT rate reprinted every past invoice with
+  //     different numbers — including the figures inside its ZATCA QR.
+  //
+  // Minor units (halala) because SAR carries two decimals and `amount Int` could not hold them, which
+  // is where the rounding came from in the first place. Integer arithmetic throughout: exact, no floats.
+  subtotalMinor  Int? // 25000 = SAR 250.00
+  vatMinor       Int?
+  totalMinor     Int?
+  vatRateBp      Int? // basis points: 1500 = 15.00%. Frozen at issue, never re-read from settings.
   currency   String   @default("SAR")
   status     String   @default("pending")
   date       String?
@@ -473,6 +528,17 @@ model WorkflowTask {
   priority     String           @default("medium")
   dueDate      String?
   slaHours     Int?
+  // What the person doing this step is supposed to do. SNAPSHOTTED from the node when the step is
+  // created, for the same reason the checklist is: editing the template must not rewrite the
+  // instructions someone is already working from. There was no field for this at all, so
+  // "Verify passport validity" was the entire brief a new officer got.
+  instructions String?            @db.Text
+  // A document this step must SEE and CHECK before it can be completed: { docType, minMonths }.
+  // Snapshotted at creation like the checklist and the instructions, so editing the template cannot
+  // change the rule someone is already being held to. Steps could collect a document type's fields
+  // and write them back, but could never look at an existing document and refuse — so "verify the
+  // passport has six months left" was a label, not a control.
+  verifyRule   Json?
   checklist    Json? // resolved item defs snapshot: [{ key, label, required }] (also accepts legacy [{label,done}])
   checklistState Json? // per-item runtime state: { [key]: { received, verified, note?, fileRef? } }
   requireVerification Boolean @default(false) // completion needs each required item received AND verified
@@ -485,9 +551,15 @@ model WorkflowTask {
   // on a real transition (on_track→at_risk→breached) instead of re-notifying every hourly tick.
   slaState     String? // null (never evaluated) | on_track | at_risk | breached
   escalatedAt  String?
+  // Which authority this step is carried out at, snapshotted from the node like the instructions.
+  // The portal used to live only on the parent Task — one value per case — so a cancellation that
+  // runs through Qiwa, Muqeem and GOSI could name just one of them, and the Government Centers queue
+  // could only ever list whole cases rather than the jobs waiting at each authority.
+  govCenter    String?
 
   @@index([status])
   @@index([assigneeRole])
+  @@index([govCenter])
 }
 
 // Admin-defined rule that maps instance variables → a document set (dynamic per-client checklists).
@@ -594,6 +666,14 @@ model Quotation {
   clientName String?
   service    String?
   amount     Int     @default(0)
+  // Same minor-unit figures as Invoice, and for the same reason: `amount Int` cannot hold halala, so
+  // the gross used to be rounded to a whole riyal on save and the RATE reverse-engineered at print
+  // time — which printed "VAT 20%" on a SAR 10 line. Frozen here at issue, and carried straight
+  // through to the invoice on convert so the two documents cannot disagree.
+  subtotalMinor Int? // 25000 = SAR 250.00
+  vatMinor      Int?
+  totalMinor    Int?
+  vatRateBp     Int? // basis points: 1500 = 15.00%
   // Line items [{ name, units, price }] — mirrors Invoice.items. `amount` stays the total of record.
   items      Json?   @default("[]")
   // draft    — being written, console only

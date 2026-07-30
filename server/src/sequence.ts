@@ -20,8 +20,8 @@
 // rolled over naturally starts a new run.
 import { prisma } from "./db.js";
 
-export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt";
-export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt"];
+export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt" | "employee";
+export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt", "employee"];
 
 export interface SeqConfig { pattern: string }
 
@@ -32,19 +32,23 @@ export const SEQ_DEFAULTS: Record<SeqKind, SeqConfig> = {
   invoice: { pattern: "INV-{YYYY}-{###}" },
   quotation: { pattern: "QT-{###}" },
   receipt: { pattern: "RCP-{YYYY}-{###}" },
+  // An employee needs something unique that is not their name: two people called Mohammed Ali were
+  // indistinguishable to every picker, document and report in the system.
+  employee: { pattern: "EMP-{####}" },
 };
 
 export const SEQ_LABEL: Record<SeqKind, string> = {
-  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt",
+  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt", employee: "Employee code",
 };
 
 /** Which model and column each sequence numbers. */
-const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment"; field: "ref" | "number" }> = {
+const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment" | "employee"; field: "ref" | "number" | "code" }> = {
   task: { model: "task", field: "ref" },
   request: { model: "serviceRequest", field: "number" },
   invoice: { model: "invoice", field: "number" },
   quotation: { model: "quotation", field: "number" },
   receipt: { model: "payment", field: "number" },
+  employee: { model: "employee", field: "code" },
 };
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -138,13 +142,28 @@ function matcher(pattern: string, now: Date): RegExp {
   return new RegExp("^" + parts.map(escapeRe).join(`(\\d{${width},})`) + "$");
 }
 
-export async function nextNumber(kind: SeqKind, now = new Date()): Promise<string> {
+/**
+ * Sequences that count PER CLIENT rather than across the firm.
+ *
+ * An invoice number must be unique in the business — two clients cannot both hold INV-2026-004. An
+ * employee code is the opposite: each client numbers its own staff, so EMP-0002 existing at two
+ * different clients is normal and must not be blocked. Uniqueness is enforced per company in the
+ * schema (`@@unique([companyId, code])`) to match.
+ */
+const COMPANY_SCOPED: Partial<Record<SeqKind, true>> = { employee: true };
+
+export async function nextNumber(kind: SeqKind, opts: { now?: Date; companyId?: string | null } = {}): Promise<string> {
+  const now = opts.now ?? new Date();
   const cfg = (await getSequences())[kind];
   const { model, field } = TARGET[kind];
   const re = matcher(cfg.pattern, now);
-  // No `where`: the field is nullable on task/payment but required on invoice/quotation, so a null
-  // filter is a type error on half of them. The regex rejects nulls and foreign formats anyway.
-  const rows = await (prisma[model] as any).findMany({ select: { [field]: true } });
+  // Scoped to the client for per-client sequences, so each one starts at 1 and stays independent.
+  // Without the scope every client's staff shared one running counter, and the second client's first
+  // employee would have been EMP-0005 for no reason a human could explain.
+  const where = (COMPANY_SCOPED[kind] && opts.companyId) ? { where: { companyId: opts.companyId } } : {};
+  // No `where` on the FIELD: it is nullable on task/payment but required on invoice/quotation, so a
+  // null filter is a type error on half of them. The regex rejects nulls and foreign formats anyway.
+  const rows = await (prisma[model] as any).findMany({ ...where, select: { [field]: true } });
   const next = rows.reduce((m: number, r: any) => {
     const hit = re.exec(String(r[field] ?? ""));
     return hit ? Math.max(m, parseInt(hit[1], 10) || 0) : m;

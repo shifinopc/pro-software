@@ -10,6 +10,7 @@
 import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
 import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
+import { resumeDueDelays } from "./workflow.js";
 
 const DAY = 86400000;
 
@@ -35,7 +36,9 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
   // ALL documents, not just dated ones. An undated document used to be invisible here and keep its
   // creation-time default of "valid" forever — a compliance system reporting a document it knows
   // nothing about as compliant. They are now marked "unknown" so a human is asked for the date.
-  const docs = await prisma.document.findMany();
+  // Superseded rows keep their old status as history; recomputing them would resurrect an expired
+  // passport into the overdue counters after it had already been replaced.
+  const docs = await prisma.document.findMany({ where: { supersededAt: null } });
 
   const now = Date.now();
   const out: RecomputeResult = { scanned: 0, changed: 0, skippedInProgress: 0, undated: 0, transitions: [] };
@@ -133,6 +136,17 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
       action: "cron.parked_resumed",
       target: `${parked.resumed} task(s) resumed`,
       detail: [`source=${source}`, parked.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // Workflow `delay` nodes. The engine parks the run; this is what wakes it. Before this the node
+  // logged its intended wait and continued immediately, so nothing in the product ever actually waited.
+  const delays = await safely("delays", resumeDueDelays);
+  if ("resumed" in delays && delays.resumed) {
+    await logAudit({
+      action: "cron.delays_resumed",
+      target: `${delays.resumed} run(s) resumed after a delay${delays.waiting ? `, ${delays.waiting} still waiting` : ""}`,
+      detail: [`source=${source}`, delays.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
 

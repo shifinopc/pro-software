@@ -79,20 +79,37 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
   if (!ids.length) return rows;
   const [emps, docs] = await Promise.all([
     prisma.employee.groupBy({ by: ["companyId"], where: { companyId: { in: ids }, archived: false }, _count: { _all: true } }),
-    prisma.document.findMany({ where: { companyId: { in: ids } }, select: { companyId: true, status: true, expiryDate: true } }),
+    prisma.document.findMany({ where: { companyId: { in: ids }, supersededAt: null }, select: { companyId: true, status: true, expiryDate: true } }),
   ]);
   const empBy = new Map(emps.map(e => [e.companyId, e._count._all]));
   const ovd = new Map<string, number>(), exp = new Map<string, number>();
+  // Two more counts, because the dashboard's health bar had nothing real to divide by. It read
+  // `Company.documents`, a field that does not exist on the model — so `Array.isArray(undefined)` was
+  // false, the document list was always empty, and every client scored the hardcoded 100% fallback.
+  // A client could show 100% with an overdue document listed beside it on the same row.
+  const tot = new Map<string, number>(), unk = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   for (const d of docs) {
     if (!d.companyId) continue;
+    bump(tot, d.companyId);
     const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN;
     const left = isNaN(t) ? null : Math.ceil((t - Date.now()) / 86_400_000);
     // `status` can lag behind the calendar, so the date wins where there is one.
     if (d.status === "overdue" || (left != null && left < 0)) bump(ovd, d.companyId);
     else if (left != null && left <= 30) bump(exp, d.companyId);
+    // No usable expiry at all. Counted separately and NOT treated as healthy: "we don't know when this
+    // expires" is not the same claim as "this is in good standing", and a compliance score that
+    // rounded it up to healthy is the more dangerous of the two readings.
+    else if (left == null) bump(unk, d.companyId);
   }
-  return rows.map(r => ({ ...r, employees: empBy.get(r.id) ?? 0, overdue: ovd.get(r.id) ?? 0, expiring: exp.get(r.id) ?? 0 }));
+  return rows.map(r => ({
+    ...r,
+    employees: empBy.get(r.id) ?? 0,
+    overdue: ovd.get(r.id) ?? 0,
+    expiring: exp.get(r.id) ?? 0,
+    documents: tot.get(r.id) ?? 0,
+    undated: unk.get(r.id) ?? 0,
+  }));
 }
 
 // Optional row-level scope: returns a Prisma `where` fragment restricting which rows the caller may
@@ -177,6 +194,10 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (modelName === "task" && !data.ref) data.ref = await nextNumber("task");
       if (modelName === "payment" && !data.number) data.number = await nextNumber("receipt");
       if (modelName === "serviceRequest" && !data.number) data.number = await nextNumber("request");
+      // Every new employee gets a code, because a name is not an identity: two people called Mohammed
+      // Ali were indistinguishable to every picker and to every piece of code matching a document to a
+      // person. Only filled when absent, so an import carrying the client's own codes keeps them.
+      if (modelName === "employee" && !data.code) data.code = await nextNumber("employee", { companyId: data.companyId });
       // Record when a client was taken on, so "Client since" can stop being invented.
       if (modelName === "company" && !data.createdAt) data.createdAt = new Date().toISOString();
       const created = await model.create({ data });

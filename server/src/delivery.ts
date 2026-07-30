@@ -12,7 +12,7 @@
 //     classify than silently drop something the client is paying for.
 //   · a broken workflow template costs that ONE line its run, not the whole delivery.
 import { prisma } from "./db.js";
-import { startInstance } from "./workflow.js";
+import { startInstance, describeTemplate } from "./workflow.js";
 import { nextNumber } from "./sequence.js";
 import { logActivity, logNotification } from "./auth.js";
 import { notifyRequestAccepted } from "./notify.js";
@@ -174,6 +174,54 @@ export interface AcceptResult {
   failure?: string;
 }
 
+/**
+ * What accepting this request would do, before anyone commits to it.
+ *
+ * Answered here rather than in the console so it goes through the SAME service matcher and the same
+ * engine description that acceptance uses — a preview derived from a second guess would be a new way
+ * to be wrong. It also returns the catalogue, because the match is only a guess and an officer shown
+ * a wrong service needs to be able to correct it rather than just read about it.
+ */
+export async function previewAcceptServiceRequest(requestId: string, serviceItemId?: string | null) {
+  const rq = await prisma.serviceRequest.findUnique({ where: { id: requestId } });
+  if (!rq) throw new Error("Request not found");
+
+  const services = await prisma.serviceItem.findMany({
+    select: { id: true, name: true, sla: true, time: true, docType: true, workflowId: true },
+    orderBy: { name: "asc" },
+  });
+  const chosen = serviceItemId ? services.find(s => s.id === serviceItemId) ?? null : null;
+  const svc = chosen ?? matchService(String(rq.type ?? ""), services);
+  const desc = svc?.workflowId ? await describeTemplate(svc.workflowId) : null;
+
+  // Already accepted is checked on the work, exactly as acceptance does, so the dialog can say so
+  // instead of offering a button that will fail.
+  const already = await prisma.task.findFirst({ where: { requestId: rq.id }, select: { ref: true, title: true } });
+
+  return {
+    requestNumber: rq.number ?? null,
+    requestType: rq.type ?? null,
+    clientName: rq.clientName ?? null,
+    alreadyAccepted: already ? (already.ref ?? already.title ?? "a task") : null,
+    rejected: String(rq.status).toLowerCase() === "rejected",
+    // Whether the service was chosen by the officer or guessed from the request text — the officer
+    // should know which, because a guess is worth checking and a choice is not.
+    serviceId: svc?.id ?? null,
+    serviceName: svc?.name ?? null,
+    matched: !!svc,
+    guessed: !!svc && !chosen,
+    dueDate: dueDateFrom(svc?.sla, svc?.time) || null,
+    docType: svc?.docType ?? null,
+    hasWorkflow: !!svc?.workflowId,
+    templateName: desc?.name ?? null,
+    steps: desc?.steps ?? 0,
+    firstStep: desc?.firstStep ?? null,
+    // An empty template is bound but cannot run — worth saying before the click, not after.
+    templateEmpty: !!svc?.workflowId && !!desc && !desc.hasSteps,
+    services: services.map(s => ({ id: s.id, name: s.name, hasWorkflow: !!s.workflowId })),
+  };
+}
+
 export async function acceptServiceRequest(
   requestId: string,
   opts: { actor?: string; serviceItemId?: string | null; assignee?: string | null; dueDate?: string | null } = {},
@@ -239,10 +287,13 @@ export async function acceptServiceRequest(
         await prisma.task.update({ where: { id: task.id }, data: { workflowInstanceId: runId } });
         // Count the human steps in the TEMPLATE, not the tasks created so far: the engine
         // materialises a step only when the token reaches it, so "tasks" is 1 on a seven-step run.
-        const tpl = await prisma.workflowTemplate.findUnique({ where: { id: svc.workflowId } }).catch(() => null);
-        const nodes: any[] = Array.isArray((tpl?.graph as any)?.nodes) ? (tpl!.graph as any).nodes : [];
-        stepCount = nodes.filter(n => n?.type === "task" || n?.type === "approval").length;
-        firstStep = (run?.tasks ?? []).find((t: any) => t.status === "active")?.title ?? null;
+        // Asked of the engine so the number quoted here and the one the Accept preview showed the
+        // officer beforehand cannot come from two different rules.
+        const desc = await describeTemplate(svc.workflowId);
+        stepCount = desc?.steps ?? 0;
+        // The real run's active task, where the preview could only read the graph. Same value in
+        // practice; this one is the truth because the token has actually arrived.
+        firstStep = (run?.tasks ?? []).find((t: any) => t.status === "active")?.title ?? desc?.firstStep ?? null;
       }
     } catch (e: any) {
       // The task stands on its own. A template that will not start is a configuration problem, not a
