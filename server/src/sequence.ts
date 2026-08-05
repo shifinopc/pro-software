@@ -20,8 +20,8 @@
 // rolled over naturally starts a new run.
 import { prisma } from "./db.js";
 
-export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt" | "employee";
-export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt", "employee"];
+export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt" | "employee" | "courier";
+export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt", "employee", "courier"];
 
 export interface SeqConfig { pattern: string }
 
@@ -35,20 +35,24 @@ export const SEQ_DEFAULTS: Record<SeqKind, SeqConfig> = {
   // An employee needs something unique that is not their name: two people called Mohammed Ali were
   // indistinguishable to every picker, document and report in the system.
   employee: { pattern: "EMP-{####}" },
+  // Shipments were numbered `CR- + Date.now().slice(-5)` — a timestamp pretending to be a sequence,
+  // which collides and sorts meaninglessly. Same scheme as everything else now.
+  courier: { pattern: "CR-{####}" },
 };
 
 export const SEQ_LABEL: Record<SeqKind, string> = {
-  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt", employee: "Employee code",
+  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt", employee: "Employee code", courier: "Courier shipment",
 };
 
 /** Which model and column each sequence numbers. */
-const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment" | "employee"; field: "ref" | "number" | "code" }> = {
+const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment" | "employee" | "courierShipment"; field: "ref" | "number" | "code" }> = {
   task: { model: "task", field: "ref" },
   request: { model: "serviceRequest", field: "number" },
   invoice: { model: "invoice", field: "number" },
   quotation: { model: "quotation", field: "number" },
   receipt: { model: "payment", field: "number" },
   employee: { model: "employee", field: "code" },
+  courier: { model: "courierShipment", field: "ref" },
 };
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];

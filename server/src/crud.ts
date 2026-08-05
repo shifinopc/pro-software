@@ -6,6 +6,35 @@ import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } fr
 import { startDeliveryForQuotation } from "./delivery.js";
 import { nextNumber } from "./sequence.js";
 
+/**
+ * The market this installation operates in, for records created without one stated.
+ *
+ * Deliberately a single named constant rather than a literal sprinkled through the create paths: the
+ * product is Saudi-only today, and the point of the country columns is that it will not always be.
+ * When a second market opens this becomes an org setting and only this line changes.
+ */
+export const HOME_COUNTRY = "SA";
+
+/**
+ * Configuration that belongs to a market rather than to the firm.
+ *
+ * Sequences, roles and print layout are firm-wide and stay unmarked. These five describe how work is
+ * done in a particular country, so a second country pack must be able to keep them apart — otherwise
+ * an Emirates ID document type is offered to a Saudi client.
+ */
+export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "workforceBand"];
+
+/**
+ * Configuration that can be RETIRED instead of deleted.
+ *
+ * Uninstalling a pack must not remove a row that real records point at — a document type with
+ * documents captured under it, an authority a stored credential belongs to. Those are retired: hidden
+ * everywhere, still readable, so old records keep their meaning. Includes workflowTemplate, which the
+ * workflow router serves rather than this helper — it filters separately.
+ */
+export const RETIREABLE = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "govCenter", "workforceBand"];
+
+
 // Build a friendly activity line for a newly-created record (persisted feed).
 // Resolves the owning company name so client-scoped records (employees, documents,
 // tasks, subscriptions) surface in that client's Activity tab, which matches on the
@@ -150,7 +179,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       const page = asInt(q.page, 1, 1, 1_000_000);
       const skip = q.skip != null ? asInt(q.skip, 0, 0, 10_000_000) : (page - 1) * take;
 
-      const where = w ? { where: w } : {};
+      // Retired configuration is hidden from every list by default.
+      //
+      // A pack uninstall retires rather than deletes anything real records depend on, and a row that is
+      // "retired" but still offered in every picker is not retired at all — it is just labelled. One
+      // filter here covers every collection served by this helper, which is why they all go through it.
+      // `?includeRetired=1` is the escape hatch for a screen that genuinely wants the history.
+      const wantRetired = String(q.includeRetired ?? "") === "1";
+      const retiredFilter = (!wantRetired && RETIREABLE.includes(modelName)) ? { retired: false } : {};
+      const merged = { ...(w ?? {}), ...retiredFilter };
+      const where = Object.keys(merged).length ? { where: merged } : {};
       const [total, rows] = await Promise.all([
         model.count({ ...where }),
         model.findMany({ ...where, ...(include ? { include } : {}), skip, take }),
@@ -200,6 +238,21 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (modelName === "employee" && !data.code) data.code = await nextNumber("employee", { companyId: data.companyId });
       // Record when a client was taken on, so "Client since" can stop being invented.
       if (modelName === "company" && !data.createdAt) data.createdAt = new Date().toISOString();
+      // Which country's law a client is judged under. Backfilling existing rows was only half the job:
+      // without this, the client added tomorrow arrives with no country and quietly drops out of
+      // anything that filters by one. Named in a single place so that when a second market opens this
+      // becomes an org setting rather than a value hunted through the codebase.
+      if (modelName === "company" && !data.country) data.country = HOME_COUNTRY;
+      // Configuration belongs to a market too. Without this, a document type or template created after
+      // a second country pack is installed has no country and shows up in every client's pickers
+      // regardless of where they operate — the same "backfilled but not defaulted" gap that had to be
+      // fixed twice already today, once for clients and once for government centers.
+      if (COUNTRY_SCOPED_CONFIG.includes(modelName) && !data.country) data.country = HOME_COUNTRY;
+      // An employee counts toward one country's workforce — their employer's unless stated otherwise.
+      if (modelName === "employee" && !data.workCountry && data.companyId) {
+        const co = await prisma.company.findUnique({ where: { id: data.companyId }, select: { country: true } }).catch(() => null);
+        data.workCountry = co?.country ?? HOME_COUNTRY;
+      }
       const created = await model.create({ data });
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);

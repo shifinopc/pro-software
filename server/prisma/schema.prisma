@@ -32,6 +32,33 @@ model Company {
   email           String?
   phone           String?
   city            String?
+  // Which country's law this client operates under. ISO 3166-1 alpha-2.
+  //
+  // Nothing in the product had a concept of country: every rule, document type and threshold was
+  // implicitly Saudi. That is fine for one market and is the first thing in the way of a second one,
+  // because there is nowhere to hang "this client is judged by UAE rules, not Saudi ones". Nullable
+  // so existing rows are valid; backfilled to SA, which is what every one of them is.
+  country         String?
+  // Workforce nationalisation — Saudization here, Emiratisation next door, the same shape either way.
+  //
+  // The RATIO is computed from employee records and never stored: a stored percentage is wrong the
+  // moment somebody is hired. The BAND is the opposite — it is not ours to compute. Its thresholds
+  // are published per economic activity and per size bracket, so calculating one here would mean
+  // inventing a table and announcing "Green" while the official portal says otherwise. It is recorded
+  // instead: read on the portal, written down, dated, with the ratio AT THAT MOMENT captured beside it
+  // so drift since is measurable. `workforceBandNote` says where it was read.
+  workforceBand        String?
+  workforceBandAt      String?
+  workforceBandNote    String?
+  workforceBandRatioBp Int?
+  /// The last band the SYSTEM computed for this client, and when it noticed.
+  ///
+  /// Separate from workforceBand (what a human read on the portal): this is how a CHANGE is detected
+  /// at all. Without it every tick would either re-announce the same band forever or announce nothing,
+  /// and "this client dropped out of Green" — the one thing worth interrupting somebody for — could
+  /// never be said.
+  workforceBandSeen   String?
+  workforceBandSeenAt String?
   // Billing suspension. `status` carries "suspended"; these record why and since when so the console
   // and the client's banner can both explain it rather than just showing a red badge.
   suspendedAt     String?
@@ -56,6 +83,30 @@ model Company {
 
 model Package {
   id            String         @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
+  // country pack installed, an unmarked row appears in every client's pickers regardless of the
+  // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
+  country       String?
   name          String
   tier          String
   basePrice     Int
@@ -66,6 +117,8 @@ model Package {
   serviceIds    Json?          @default("[]") // catalog ServiceItem ids included in this package
   color         String?
   subscriptions Subscription[]
+
+  @@index([packKey])
 }
 
 model Subscription {
@@ -121,7 +174,20 @@ model Employee {
   // and that field was retired from the employee form: two places to type the same fact means the rule
   // reads one while the user fills the other, and the check silently passes on an empty value.
   dob         String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
+  // ISO 3166-1 alpha-2, NOT free text. It was a text box with the placeholder "e.g. Saudi", which
+  // invites "Saudi", "Saudi Arabian", "KSA" and "saudi" as four different countries. A nationality
+  // that four spellings can hide behind is fine as a label and useless as something to count, and a
+  // workforce quota that misses a spelling under-reports — the dangerous direction. Comparisons go
+  // through resolveCountry(), so a rule written as "Saudi" still matches a row stored as "SA".
   nationality String?
+  // Which country's workforce this person counts toward. Usually the employer's, but a group with
+  // entities in two countries needs to say which one — an employee counts once, not everywhere.
+  workCountry String?
+  // Facts a workforce-quota calculation needs and the row did not carry. All nullable: a percentage
+  // computed from incomplete data must report how much it could see rather than quietly assume.
+  salary         Int?    // monthly, in minor units — see money.ts for why money is never a float
+  employmentType String? // full_time | part_time — part-time counts fractionally in some regimes
+  jobCategory    String? // skilled | unskilled | … — some regimes count only part of the workforce
   role        String?
   iqamaExpiry String?
   status      String  @default("valid")
@@ -187,6 +253,30 @@ model Document {
 // Admin-defined document types with their own dynamic fields + renewal config (no-code).
 model DocumentType {
   id                  String  @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
+  // country pack installed, an unmarked row appears in every client's pickers regardless of the
+  // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
+  country       String?
   name                String  @unique
   fields              Json?   @default("[]") // array of { id, label, type, options?, required? }
   prereqs             Json?   @default("[]") // renewal rules: array of { requiresDocType, minMonths }
@@ -196,6 +286,8 @@ model DocumentType {
   defaultAssigneeRole String? // role a renewal task defaults to
   authority           String? // issuing authority (GDRFA, MOHRE, Qiwa…) shown on the type + its docs
   subjectKind         String  @default("employee") // who the doc belongs to: "employee" (Iqama, visa…) | "company" (CR, GOSI, VAT…)
+
+  @@index([packKey])
 }
 
 // Admin-defined custom object/record type (Object Builder) or standalone form (Form Builder), distinguished by `kind`.
@@ -375,6 +467,13 @@ model SiteCredential {
   username  String?
   password  String // NOTE: encrypt at rest in production
   notes     String? @db.Text
+  // Which government portal this login is for, so a step that names an authority can point straight
+  // at the right credential instead of leaving the officer to search the vault by client and guess
+  // from the label. DECLARED, not inferred: matching "Qiwa" against a free-text label is the same
+  // guess-presented-as-fact that had the Services list showing workflows it would never run.
+  govCenter String?
+
+  @@index([govCenter])
 }
 
 model Activity {
@@ -483,6 +582,30 @@ model Notification {
 // edge  = { id, from, to, label?, condition? }   condition routes decision/approval outcomes (e.g. "approve","reject","<branchKey>","else")
 model WorkflowTemplate {
   id            String             @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
+  // country pack installed, an unmarked row appears in every client's pickers regardless of the
+  // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
+  country       String?
   name          String
   description   String?            @db.Text
   trigger       String             @default("manual") // manual | document_expiry | request_intake
@@ -493,6 +616,8 @@ model WorkflowTemplate {
   active        Boolean            @default(false)
   createdAt     String?
   instances     WorkflowInstance[]
+
+  @@index([packKey])
 }
 
 // A running (or finished) execution of a template over one subject (a visa request, a client, etc.).
@@ -564,10 +689,72 @@ model WorkflowTask {
 
 // Admin-defined rule that maps instance variables → a document set (dynamic per-client checklists).
 // rows: [{ conditions: [{ var, op, value }], documents: [{ key, label, required }] }] — union of matching rows.
+/// A nationalisation band for one country — Nitaqat's Platinum/Green/Yellow/Red, Emiratisation's
+/// equivalents, whatever a market calls them.
+///
+/// These are CONFIGURATION, not code. They were four names hard-coded in the console, which meant the
+/// band could only ever be a fact somebody read off a government portal and typed in — the app had no
+/// way to work it out, and a second country could not have different bands at all.
+///
+/// With the thresholds recorded here the ratio decides the band directly. The thresholds are the
+/// firm's own data: whoever enters them is asserting what the regulator publishes, which is a very
+/// different thing from this codebase guessing at them.
+///
+/// Carries the same provenance columns as every other config model so a band set travels in a country
+/// pack and can be upgraded, retired and uninstalled like anything else.
+model WorkforceBand {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  /// Text and background, so a band reads the same everywhere it appears.
+  color        String?
+  bg           String?
+  /// Inclusive floor and exclusive ceiling, in BASIS POINTS — 3333 = 33.33%. Integers for the same
+  /// reason money is: a percentage held as a float puts a client on the wrong side of a boundary.
+  /// `maxBp` null means "and above", so the top band needs no invented upper limit.
+  minBp        Int
+  maxBp        Int?
+  /// Lowest first. Two bands that overlap are a configuration error the editor refuses to save.
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
 model ChecklistRule {
   id   String @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
+  // country pack installed, an unmarked row appears in every client's pickers regardless of the
+  // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
+  country       String?
   name String
   rows Json?  @default("[]")
+
+  @@index([packKey])
 }
 
 model WorkflowLog {
@@ -590,7 +777,32 @@ model AppSetting {
 // ── Operations masters (Government Centers / Appointments / Courier) ──
 model GovCenter {
   id        String  @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
   name      String
+  // Which country's authority this is. Country Rules used to hold its own typed list of portals
+  // ("MOL, Absher, Muqeem, Qiwa") beside this table, and the two already disagreed — this one is
+  // real, because the step picker, the Government Centers queue and the credential link all read it.
+  // With a country on the row, that screen can show the true list instead of keeping a second one.
+  country   String?
   sub       String? // what it handles
   color     String?
   bg        String?
@@ -599,6 +811,8 @@ model GovCenter {
   submitted Int     @default(0)
   approved  Int     @default(0)
   rejected  Int     @default(0)
+
+  @@index([packKey])
 }
 
 model Appointment {
@@ -634,8 +848,18 @@ model CourierShipment {
   status     String  @default("in_transit") // preparing | in_transit | delivered | returned
   eta        String?
   at         String?
+  // What is in the envelope, and what it belongs to.
+  //
+  // A shipment used to be a bare row: a reference, a carrier and a status. So a renewed passport went
+  // out and the document had no idea where it was — "where is that passport" could only be answered by
+  // remembering which shipment it was in. Appointments already carried a taskId; courier was the one
+  // left out of the chain.
+  documentId String?
+  taskId     String?
 
   @@index([companyId])
+  @@index([documentId])
+  @@index([taskId])
 }
 
 // ── Money: payments received against invoices; quotations before invoicing ──
@@ -697,6 +921,30 @@ model Quotation {
 // ── Service catalog (gov fee + service fee per offered service) ──
 model ServiceItem {
   id         String  @id @default(cuid())
+  // Provenance, for rows that came from a country pack.
+  //
+  // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
+  // row instead of creating a second one, and an upgrade can find what it is upgrading. Deliberately
+  // INDEXED rather than @unique: a unique constraint is the change Prisma refuses without
+  // --accept-data-loss, which crash-looped the live API earlier today. The installer enforces
+  // uniqueness itself, and pays for that with a check rather than an outage.
+  //
+  // packModified means a human has edited this since it was installed, so an upgrade must show a diff
+  // Retired by a pack uninstall, NOT deleted.
+  //
+  // A document type with documents captured under it cannot be removed — the documents would lose the
+  // definition of their own fields, which is the orphaning this codebase has already been bitten by.
+  // So uninstall retires what real records depend on: gone from every picker, still readable, so a
+  // two-year-old Iqama still renders with its fields intact.
+  retired      Boolean @default(false)
+  // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
+  // country pack installed, an unmarked row appears in every client's pickers regardless of the
+  // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
+  country       String?
   name       String
   govFee     Int     @default(0)
   serviceFee Int     @default(0)
@@ -714,6 +962,8 @@ model ServiceItem {
   // portal falls back to a free-form box — it does NOT mean "no documents needed".
   // [{ key, label, required, hint }]
   requiredDocs Json? @default("[]")
+
+  @@index([packKey])
 }
 
 // ── API keys (programmatic access) + uploaded file registry ──

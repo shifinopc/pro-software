@@ -14,14 +14,29 @@ import { prisma } from "./db.js";
 
 export type InvoiceFigures = { subtotalMinor: number; vatMinor: number; totalMinor: number; vatRateBp: number; amount: number };
 
+/**
+ * The KSA standard rate, used when Print Layout has never been saved.
+ *
+ * This is not a guess for its own sake: the console's Print Layout screen already DISPLAYS 15 as its
+ * default, so a fresh install showed "VAT rate 15" while this function returned 0 and every invoice
+ * was issued with no VAT at all. Since the rate is now frozen onto each invoice, that would have been
+ * permanent rather than something a later settings change could correct. The two defaults have to be
+ * the same number or the screen is lying about what will be billed.
+ */
+const DEFAULT_VAT_RATE = 15;
+
 /** The configured VAT rate as basis points (1500 = 15.00%). Read once per invoice, then frozen on it. */
 export async function currentVatRateBp(): Promise<number> {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: "printLayout" } });
-    const rate = Number(((row?.value ?? {}) as any)?.invoice?.vatRate) || 0;
-    return Math.round(rate * 100);
+    const raw = ((row?.value ?? {}) as any)?.invoice?.vatRate;
+    // Distinguish "never configured" from "deliberately zero-rated". A plain `|| DEFAULT` would
+    // silently overwrite a considered 0% with 15%, which is the more expensive mistake of the two.
+    const unset = raw === undefined || raw === null || raw === "";
+    const rate = unset ? DEFAULT_VAT_RATE : Number(raw);
+    return Math.round((Number.isFinite(rate) ? rate : DEFAULT_VAT_RATE) * 100);
   } catch {
-    return 0;
+    return Math.round(DEFAULT_VAT_RATE * 100);
   }
 }
 

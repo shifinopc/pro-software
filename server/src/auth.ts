@@ -149,6 +149,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || user.status !== "active") return res.status(401).json({ error: "Account inactive" });
     if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) return res.status(401).json({ error: "Session expired — please sign in again" });
+
+    // Suspending a client shuts every one of its portal users out, including sessions already open.
+    //
+    // DERIVED from the company on each request, never copied onto the user rows. Copying would mean
+    // restoring the client blanket-reactivates people who were deactivated individually for unrelated
+    // reasons — and it would need a second write to stay true, which is how two fields that mean the
+    // same thing start disagreeing. Staff are unaffected: they are not "under" a client.
+    if (payload.type === "portal" && user.companyId) {
+      const co = await prisma.company.findUnique({ where: { id: user.companyId }, select: { status: true, suspendedReason: true } });
+      if (co?.status === "suspended") {
+        return res.status(403).json({
+          error: "This account is suspended. Please contact us to restore access.",
+          suspended: true, reason: co.suspendedReason ?? null,
+        });
+      }
+    }
     (req as any).auth = payload;
     next();
   } catch {

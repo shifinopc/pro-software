@@ -119,6 +119,30 @@ The schema is re-pushed on start; the volumes are untouched.
 - **No SMTP means silent no-ops** across invoice email, renewal notices and portal invitations.
 - **Never `prisma migrate deploy`.** Parts of this schema were added with `db push` and have no
   migration files, so it would produce an incomplete database.
+- **A schema change Prisma calls risky will crash-loop the API, and the fix is manual.** The
+  entrypoint runs a plain `prisma db push`. Prisma refuses some additive-looking changes without
+  `--accept-data-loss` — adding a unique constraint is the usual one, because it *would* fail if
+  duplicates existed. The push exits non-zero, the container dies, Docker restarts it, and it fails
+  again. The API is down for the whole loop.
+
+  This is on purpose: the entrypoint is not permissive, so a deploy can never quietly drop a column.
+  The cost is that this class of change needs a person. When `docker logs stimespro-api-1` shows
+  *"Use the --accept-data-loss flag"*, **check the data first**, then apply that one push by hand:
+
+  ```bash
+  # 1. Prove the change is safe. For a unique constraint, that means: are there duplicates?
+  docker exec stimespro-db-1 mysql -u root -p"$DB_ROOT_PASSWORD" -N -B stimespro -e \
+    'select companyId, code, count(*) from Employee where code is not null group by 1,2 having count(*) > 1;'
+
+  # 2. Only if that returns nothing, apply it once.
+  docker compose -f app/stack/docker-compose.yml --env-file .env \
+    run --rm --no-deps --entrypoint sh api -c 'npx prisma db push --accept-data-loss'
+
+  # 3. Restart. The entrypoint's own push now reports "already in sync".
+  docker compose -f app/stack/docker-compose.yml --env-file .env restart api
+  ```
+
+  Back up before step 2, every time — see the volumes note above.
 
 ## Migrating existing data
 
@@ -135,3 +159,23 @@ docker compose -p stimespro restart api      # entrypoint re-pushes the schema o
 
 Copy the old `uploads-files/` into the `stimespro_uploads` volume too, or every uploaded document
 404s.
+
+## Country packs: the volume shadows the image
+
+`packs:/app/packs` is a named volume so a pack uploaded through the console survives a rebuild.
+Docker seeds a **new** named volume from the image, so the first deploy gets the packs that were
+built in. After that the volume wins: **packs added to the repo later will NOT appear on the server**,
+because the volume already has content and Docker never re-seeds it.
+
+That is the right trade (an uploaded update must not be destroyed by a deploy), but it means there is
+exactly one way to publish a new country version to a running server:
+
+- **Country Rules → Add country → Upload a pack file**, or `POST /api/packs/upload`.
+
+If you ever do need to force the image's copies back in:
+
+```bash
+docker compose -p stimespro stop api && docker volume rm stimespro_packs && docker compose -p stimespro up -d api
+```
+
+That deletes every uploaded pack. Export anything you want to keep first.

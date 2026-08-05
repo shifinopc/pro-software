@@ -11,7 +11,9 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logActivity, logNotification } from "./auth.js";
+import { workforceFor, bandsFor } from "./workforce.js";
 import { startInstance, pickAssignee } from "./workflow.js";
+import { sameCountry, countryNationality } from "./countries.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
 import { figuresFromAmount } from "./money.js";
@@ -114,14 +116,21 @@ export function evalAttrRule(r: any, emp: any): { ok: boolean; label: string; wh
   }
 
   // nationality: a set test, because the real rules are "one of these" rather than a single value.
+  //
+  // Both sides go through the country resolver, so a rule written as "Saudi" matches an employee
+  // stored as "SA" — and "KSA" matches both. Nationality is stored as an ISO code now, and a rule is
+  // free text an admin typed; comparing those two directly would have quietly stopped every
+  // nationality rule from ever matching, which is a failure that looks exactly like a passing check.
   const have = String(emp.nationality ?? "").trim();
   if (!have) return { ok: false, label, why: "cannot be checked — no nationality on file" };
-  const list = String(want ?? "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+  const list = String(want ?? "").split(",").map((s: string) => s.trim()).filter(Boolean);
   if (!list.length) return { ok: false, label, why: "has no value to compare against" };
-  const hit = list.includes(have.toLowerCase());
+  const hit = list.some((w: string) => sameCountry(w, have));
   const ok = op === "ne" ? !hit : hit;
   const pretty = String(want).trim();
-  return { ok, label, why: ok ? `is ${have}` : (op === "ne" ? `is ${have} — this excludes ${pretty}` : `is ${have} — this needs one of ${pretty}`) };
+  // Report the readable name, not the stored code: "is IN — this needs one of Saudi" helps nobody.
+  const haveLabel = countryNationality(have);
+  return { ok, label, why: ok ? `is ${haveLabel}` : (op === "ne" ? `is ${haveLabel} — this excludes ${pretty}` : `is ${haveLabel} — this needs one of ${pretty}`) };
 }
 
 /**
@@ -220,7 +229,9 @@ export async function triggerRenewals(): Promise<RenewalResult> {
     })).map((e) => e.id),
   );
 
-  const templates = await prisma.workflowTemplate.findMany({ where: { active: true, trigger: "document_expiry" } });
+  // retired: false as well as active — a retired template is refused by startInstance anyway, so
+  // without this the job would pick it up every hour and log the same refusal forever.
+  const templates = await prisma.workflowTemplate.findMany({ where: { active: true, retired: false, trigger: "document_expiry" } });
   for (const tpl of templates) {
     const cfg = (tpl.triggerConfig ?? {}) as any;
     const docType = String(cfg.docType ?? "").trim();
@@ -838,6 +849,90 @@ export async function assignOrphanTasks(): Promise<AssignResult> {
     await prisma.workflowTask.update({ where: { id: t.id }, data: { assignee: who } });
     out.assigned++;
     out.details.push(`${t.title} → ${who}`);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────
+// #9 — WORKFORCE BANDS
+// A client falls out of its nationalisation band, or gets close to falling out of it.
+//
+// Everything needed for this already existed — the ratio, the configured thresholds, how far the next
+// band is — and nothing watched it. A number nobody is looking at is not a control; the whole point of
+// computing a band is that somebody hears about it when it moves.
+
+export type WorkforceAlertResult = { checked: number; dropped: number; improved: number; nearEdge: number; details: string[] };
+
+/**
+ * How close to the floor of the current band counts as "about to fall out".
+ *
+ * Percentage points, not a percentage OF the ratio: regulators publish bands in points, so a warning
+ * expressed the same way is one a person can act on without converting anything.
+ */
+const BAND_EDGE_POINTS = 2;
+
+export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
+  const out: WorkforceAlertResult = { checked: 0, dropped: 0, improved: 0, nearEdge: 0, details: [] };
+  const companies = await prisma.company.findMany({
+    where: { NOT: { country: null } },
+    select: { id: true, name: true, country: true, workforceBandSeen: true },
+  });
+
+  for (const co of companies) {
+    const w = await workforceFor(co.id);
+    // No staff, or no thresholds configured for the country: there is no band to have an opinion
+    // about, and inventing one would raise an alert for a compliance position that does not exist.
+    if (!w || !w.total || !w.computedBand) continue;
+    out.checked++;
+
+    const bands = await bandsFor(co.country);
+    const rank = (name: string) => bands.findIndex(b => b.name === name);
+    const now = w.computedBand.name;
+    const was = co.workforceBandSeen;
+    const pct = (bp: number) => (bp / 100).toFixed(2) + "%";
+
+    if (was && was !== now) {
+      const fell = rank(now) >= 0 && rank(was) >= 0 && rank(now) < rank(was);
+      if (fell) {
+        out.dropped++;
+        out.details.push(`${co.name}: ${was} → ${now}`);
+        // Keyed on the transition, not the clock: the same fall is announced once, but a client that
+        // recovers and falls again is a new event and says so.
+        await notifyOnce(`wf-drop:${co.id}:${was}->${now}`, {
+          type: "compliance",
+          title: `${co.name} dropped from ${was} to ${now}`,
+          message: `Nationalisation is ${pct(w.ratioMinBp)} — ${w.nationals} of ${w.total} counted toward ${w.countryLabel}.`,
+        });
+        logActivity({ type: "compliance", message: `${co.name}: workforce band fell from ${was} to ${now} (${pct(w.ratioMinBp)})` });
+      } else {
+        // Improving is not an alert. It is worth recording, not worth interrupting anybody for.
+        out.improved++;
+        logActivity({ type: "compliance", message: `${co.name}: workforce band improved from ${was} to ${now} (${pct(w.ratioMinBp)})` });
+      }
+    }
+
+    if (was !== now) {
+      await prisma.company.update({ where: { id: co.id }, data: { workforceBandSeen: now, workforceBandSeenAt: nowISO() } });
+    }
+
+    // Close to the floor of the band it is currently in. Skipped for the lowest band — there is
+    // nothing below it to fall into, so "about to drop" would be a warning about nothing.
+    const band = bands.find(b => b.name === now);
+    const isLowest = band ? !bands.some(b => b.minBp < band.minBp) : true;
+    if (band && !isLowest) {
+      const margin = w.ratioMinBp - band.minBp;
+      if (margin >= 0 && margin <= BAND_EDGE_POINTS * 100) {
+        out.nearEdge++;
+        out.details.push(`${co.name}: ${pct(margin)} above the ${now} floor`);
+        // The key carries the band AND the whole-point margin, so it re-fires if the gap narrows
+        // further but not on every tick while it sits still.
+        await notifyOnce(`wf-edge:${co.id}:${now}:${Math.floor(margin / 100)}`, {
+          type: "compliance",
+          title: `${co.name} is close to falling out of ${now}`,
+          message: `${pct(w.ratioMinBp)} against a ${pct(band.minBp)} floor — ${pct(margin)} of headroom. One departure could move it.`,
+        });
+      }
+    }
   }
   return out;
 }

@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
-import { triggerRenewals, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
+import { triggerRenewals, checkWorkforceBands, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
 
 const DAY = 86400000;
@@ -150,6 +150,17 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     });
   }
 
+  // Nationalisation bands. Everything this needs already existed — the ratio, the thresholds, the
+  // distance to the next band — and nothing watched it. A number nobody looks at is not a control.
+  const wfBands = await safely("workforce", checkWorkforceBands);
+  if ("checked" in wfBands && (wfBands.dropped || wfBands.nearEdge)) {
+    await logAudit({
+      action: "cron.workforce_bands",
+      target: `${wfBands.dropped} dropped, ${wfBands.nearEdge} close to the edge`,
+      detail: [`source=${source}`, wfBands.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
   const billing = await safely("billing", renewSubscriptions);
   if ("renewed" in billing && (billing.renewed || billing.lapsed)) {
     await logAudit({
@@ -186,7 +197,9 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     });
   }
 
-  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans };
+  // Every job that ran belongs in the result. A job missing from here ran invisibly — the tick
+  // response is the only place anyone can see what the hourly pass actually did.
+  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans, workforce: wfBands };
 }
 
 let timer: NodeJS.Timeout | null = null;

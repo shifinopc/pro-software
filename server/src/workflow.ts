@@ -496,6 +496,46 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
       // said "wait 3 days then chase" chased instantly — the palette promised something the engine
       // did not do. The wait is recorded on the instance and the hourly tick resumes it; hours is as
       // fine-grained as this needs to be, since nothing here waits in minutes.
+      // Send the paperwork somewhere, as a step of the flow.
+      //
+      // The last thing that happens to a renewed passport is that it goes back to the client, and that
+      // was the one part no workflow could express: an officer raised the shipment by hand on another
+      // screen, and the envelope had no connection to the document inside it. Raising it here links
+      // both automatically, so the document can answer where it is.
+      case "courier":
+      case "dispatch": {
+        const c = node.config ?? {};
+        const direction = String(c.direction ?? "").toLowerCase() === "inbound" ? "inbound" : "outbound";
+        const ref = await nextNumber("courier");
+        // The document this run has been working on — set by an earlier issue/renew step. Null is a
+        // normal outcome (a flow that ships something other than a tracked document); the shipment is
+        // still created, it just carries no document link.
+        const documentId = typeof vars.documentId === "string" && vars.documentId ? vars.documentId : null;
+        // The case file this run belongs to, so the shipment shows on the task as well.
+        const owningTask = await prisma.task.findFirst({ where: { workflowInstanceId: inst.id }, select: { id: true } }).catch(() => null);
+        try {
+          await prisma.courierShipment.create({ data: {
+            ref,
+            description: c.description || node.label || (direction === "inbound" ? "Document collection" : "Document delivery"),
+            companyId: inst.companyId ?? null,
+            clientName: inst.clientName ?? null,
+            carrier: c.carrier || null,
+            direction,
+            // Not "in transit": nobody has handed it to a courier yet. Claiming otherwise would put a
+            // parcel on the board that does not exist.
+            status: "preparing",
+            eta: c.eta || null,
+            at: nowISO().slice(0, 10),
+            documentId,
+            taskId: owningTask?.id ?? null,
+          } });
+          logActivity({ type: "operations", message: `Courier ${ref} raised by workflow: ${inst.title}` });
+        } catch { /* a shipment that cannot be raised must not strand the run */ }
+        await log("courier.raised", nodeId, `${ref} · ${direction}${c.carrier ? ` · ${c.carrier}` : ""}${documentId ? " · linked to the document" : " · no document linked"}`);
+        queue.push(...nextTargets(g, nodeId));
+        break;
+      }
+
       case "delay": {
         const c = node.config ?? {};
         const hours = Number(c.hours) > 0 ? Number(c.hours) : (Number(c.days) > 0 ? Number(c.days) * 24 : 0);
@@ -691,6 +731,11 @@ export async function describeTemplate(templateId: string): Promise<{
 export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any }) {
   const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId } });
   if (!tpl) throw new Error("Template not found");
+  // A retired template must not start new work. Hiding it from the lists is not enough: a service
+  // binding, the nightly expiry job and the accept-a-request path all start runs by ID and would
+  // happily keep using one long after it was uninstalled. Existing runs are left alone — retiring is
+  // about stopping NEW work, not abandoning work already under way.
+  if (tpl.retired) throw new Error(`"${tpl.name}" has been retired and cannot start new work`);
   const g = asGraph(tpl.graph);
   if (!g.nodes.length) throw new Error("This workflow has no steps yet");
   const inst = await prisma.workflowInstance.create({
@@ -1059,8 +1104,16 @@ export const workflowRouter = Router();
 const R = workflowRouter;
 
 // Templates (design-time) — admin/super_admin only for writes
-R.get("/templates", requireAuth, requireStaff, async (_req, res) => {
-  res.json(await prisma.workflowTemplate.findMany({ orderBy: { name: "asc" } }));
+R.get("/templates", requireAuth, requireStaff, async (req, res) => {
+  // Templates are served here rather than by the generic CRUD helper, so the retired filter that
+  // covers every other collection does NOT reach them. Without this line a workflow retired by a pack
+  // uninstall stays in the builder list and in every picker — retired in name only, which is worse
+  // than not retiring it at all because the label says otherwise.
+  const includeRetired = String((req.query as any)?.includeRetired ?? "") === "1";
+  res.json(await prisma.workflowTemplate.findMany({
+    where: includeRetired ? {} : { retired: false },
+    orderBy: { name: "asc" },
+  }));
 });
 R.get("/templates/:id", requireAuth, requireStaff, async (req, res) => {
   const t = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id }, include: { instances: { select: { id: true, status: true } } } });
@@ -1208,6 +1261,36 @@ R.get("/tasks/:id/verify", requireAuth, requireStaff, async (req, res) => {
   if (!task) return res.status(404).json({ error: "Task not found" });
   res.json(await evalVerifyRule(task) ?? { docType: null });
 });
+/**
+ * The client's login for the authority this step is done at.
+ *
+ * Never returns the password. It answers "is there one, and which" so the officer stops hunting
+ * through the vault by client and guessing from labels; revealing the secret still goes through
+ * /api/credentials/:id/reveal with its own admin-only gate, its human check and its audit entry.
+ * Widening who may SEE a client's government login is a security decision, not a convenience one,
+ * so this deliberately does not do it — a PRO officer learns the credential exists and who to ask.
+ */
+R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+  if (!task.govCenter) return res.json({ portal: null, found: false });
+
+  const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId }, select: { companyId: true } });
+  if (!inst?.companyId) return res.json({ portal: task.govCenter, found: false, reason: "This run is not attached to a client, so there is no vault to look in." });
+
+  const cred = await prisma.siteCredential.findFirst({
+    where: { companyId: inst.companyId, govCenter: task.govCenter },
+    select: { id: true, label: true, url: true, username: true },
+  });
+  if (!cred) return res.json({ portal: task.govCenter, found: false, reason: `No ${task.govCenter} login is stored for this client.` });
+
+  // Reveal is admin-only, exactly as the vault screen is. Told plainly rather than shown a button
+  // that returns 403.
+  const canReveal = a?.role === "admin" || a?.role === "super_admin";
+  res.json({ portal: task.govCenter, found: true, ...cred, canReveal });
+});
+
 R.get("/tasks", requireAuth, requireStaff, async (req, res) => {
   const where: any = {};
   if (req.query.instanceId) where.instanceId = String(req.query.instanceId);

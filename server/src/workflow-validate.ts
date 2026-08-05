@@ -24,6 +24,7 @@ export const ENGINE_NODE_TYPES = new Set([
   "webhook", "api",
   "issue_document",
   "draft_invoice", "charge_fee", "invoice", "create_invoice",
+  "courier", "dispatch",
   "delay",
   "parallel_split", "split", "parallel_join", "join",
   "end",

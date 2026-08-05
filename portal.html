@@ -3206,7 +3206,20 @@ class Component extends DCLogic {
           // 401 with no token means they are simply signed out, which is not a fault and must not
           // be announced as one: logging out deliberately would otherwise raise 'session expired'.
           if (res.status === 401) { this._setLoad(key, 'expired'); if (tok) this.setState({ authExpired: true }); return null; }
-          if (res.status === 403) { this._setLoad(key, 'denied'); return null; }
+          // 403 is normally one panel the user may not see. A SUSPENDED client is not that — the
+          // whole account is closed, and leaving them on a portal of empty panels looks like the
+          // product is broken rather than like a deliberate action somebody can explain and undo.
+          if (res.status === 403) {
+            return res.json().catch(() => ({})).then((j9) => {
+              if (j9 && j9.suspended) {
+                try { localStorage.removeItem('stimespro:portalToken'); } catch (e9) {}
+                this.setState({ auth: 'login', lError: j9.error || 'This account is suspended.' });
+                return null;
+              }
+              this._setLoad(key, 'denied');
+              return null;
+            });
+          }
           if (!res.ok) { this._setLoad(key, 'error'); return null; }
           return res.json().catch(() => { this._setLoad(key, 'error'); return null; });
         })

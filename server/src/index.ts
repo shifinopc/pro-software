@@ -18,6 +18,10 @@ import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaise
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
+import { COUNTRIES } from "./countries.js";
+import { workforceAll, workforceFor, recordBand } from "./workforce.js";
+import { listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
+import { HOME_COUNTRY } from "./crud.js";
 import { figuresFromAmount } from "./money.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
@@ -59,6 +63,164 @@ app.get("/api/health", async (_req, res) => {
     res.json({ ok: true, db: "connected" });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// The country list the pickers are built from. Served rather than duplicated in the front end: a
+// second copy is how the console offers a country the server does not recognise. Static reference
+// data, so it needs no auth and no database.
+app.get("/api/countries", (_req, res) => {
+  res.json(COUNTRIES);
+});
+
+// ── Country packs ────────────────────────────────────────────────────────────
+// Installable configuration for a market: document types, workflows, services, authorities. Reading
+// the list and previewing are safe; applying rewrites configuration, so it takes the same write role
+// as any other admin change.
+app.get("/api/packs", requireAuth, requireStaff, (_req, res) => {
+  res.json({ packs: listPacks(), installed: null });
+});
+app.get("/api/packs/installed", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await installedPacks());
+});
+// Preview. Runs exactly the planner the install runs, so what this returns is what will happen —
+// a preview computed a second way is a preview that can be wrong.
+app.post("/api/packs/preview", requireAuth, requireStaff, async (req, res) => {
+  try {
+    res.json(await planInstall(readPack(String(req.body?.file ?? ""))));
+  } catch (e: any) {
+    res.status(400).json({ error: `Could not read that pack — ${e?.message ?? e}` });
+  }
+});
+// ── Workforce nationalisation (Saudization / Emiratisation / …) ──────────────
+//
+// Reading is a plain staff permission: this is a count of records the reader can already see. The
+// band is a WRITE — somebody is asserting what an official portal said — so it takes the write role
+// and is recorded in the audit log with who said it and when.
+app.get("/api/workforce", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await workforceAll());
+});
+app.get("/api/workforce/:companyId", requireAuth, requireStaff, async (req, res) => {
+  const w = await workforceFor(String(req.params.companyId));
+  if (!w) return res.status(404).json({ error: "No such client" });
+  res.json(w);
+});
+app.put("/api/workforce/:companyId/band", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const band = String(req.body?.band ?? "").trim();
+    // Dated by the reader, not by the clock: a band read on the portal last Tuesday is a fact about
+    // last Tuesday, and stamping it "now" would overstate how fresh it is.
+    const at = String(req.body?.at ?? "").trim() || new Date().toISOString().slice(0, 10);
+    const out = await recordBand(String(req.params.companyId), band, at, req.body?.note ?? null);
+    await logAudit({
+      action: band ? "workforce.band_recorded" : "workforce.band_cleared",
+      actorId: a?.sub, target: out?.companyName ?? String(req.params.companyId),
+      detail: band ? `${band} as at ${at} · ratio then ${(out?.bandRatioBp ?? 0) / 100}%` : "cleared",
+    });
+    res.json(out);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// Receive a new version of a country's configuration. This is the route by which an update reaches
+// an installation at all — without it, publishing a corrected fee would mean a redeploy. Admin-only
+// and audited: it changes what every future install and upgrade on this server will do.
+app.post("/api/packs/upload", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, requireHuman, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const out = savePack(req.body?.pack);
+    await logAudit({
+      action: "pack.upload", actorId: a?.sub, target: `${out.country} ${out.version}`,
+      detail: out.replaced ? `${out.file} (replaced an existing file)` : out.file,
+    });
+    logActivity({ type: "system", message: `Country pack available: ${out.country} ${out.version}`, user: a?.email });
+    res.json(out);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+/**
+ * Which installed countries have a newer pack sitting on this server.
+ *
+ * Computed here rather than in the console so the answer is the same everywhere it is shown — a
+ * badge that disagrees with the button it points at is worse than no badge.
+ */
+app.get("/api/packs/updates", requireAuth, requireStaff, async (_req, res) => {
+  const installed = await installedPacks();
+  const available = listPacks().filter(p => !p.error);
+  const out: Record<string, { from: string; to: string; file: string }> = {};
+  for (const [country, inst] of Object.entries(installed)) {
+    const newer = available
+      .filter(p => String(p.country).toUpperCase() === country)
+      // Numeric compare, so 2026.10 counts as newer than 2026.2 rather than sorting as text.
+      .filter(p => String(p.version).localeCompare(inst.version, undefined, { numeric: true }) > 0)
+      .sort((x, y) => String(y.version).localeCompare(String(x.version), undefined, { numeric: true }))[0];
+    if (newer) out[country] = { from: inst.version, to: newer.version, file: newer.file };
+  }
+  res.json(out);
+});
+
+// Upgrade preview — read-only, and the same planner the upgrade runs.
+app.post("/api/packs/upgrade-preview", requireAuth, requireStaff, async (req, res) => {
+  try { res.json(await planUpgrade(readPack(String(req.body?.file ?? "")))); }
+  catch (e: any) { res.status(400).json({ error: `Could not read that pack — ${e?.message ?? e}` }); }
+});
+// Moving an installed market to a newer pack. This can delete rows the new version dropped, so it
+// carries the same admin-only guard as uninstall rather than the lighter one install has.
+app.post("/api/packs/upgrade", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, requireHuman, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const pack = readPack(String(req.body?.file ?? ""));
+    const out = await applyUpgrade(pack);
+    const detail = `${out.added} added · ${out.updated} updated · ${out.revived} revived · ${out.yours} left as yours · ${out.removed} removed · ${out.retired} retired`;
+    await logAudit({ action: "pack.upgrade", actorId: a?.sub, target: `${pack.country} → ${pack.version}`, detail });
+    logActivity({ type: "system", message: `Country pack upgraded: ${pack.countryName} → ${pack.version} — ${detail}`, user: a?.email });
+    res.json(out);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+// Uninstall preview — read-only, and the same planner the uninstall runs.
+app.post("/api/packs/uninstall-preview", requireAuth, requireStaff, async (req, res) => {
+  try { res.json(await planUninstall(String(req.body?.country ?? ""))); }
+  catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+});
+// The only route here that deletes anything. Admin-only on top of the write role: removing a market's
+// configuration is not an everyday change, and the plan has to be seen before it runs.
+app.post("/api/packs/uninstall", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, requireHuman, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const country = String(req.body?.country ?? "");
+    const out = await applyUninstall(country);
+    await logAudit({
+      action: "pack.uninstall", actorId: a?.sub, target: country,
+      detail: `${out.removed} removed · ${out.retired} retired · ${out.kept} kept`,
+    });
+    logActivity({ type: "system", message: `Country pack uninstalled: ${country} — ${out.removed} removed, ${out.retired} retired`, user: a?.email });
+    res.json(out);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/api/packs/install", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const pack = readPack(String(req.body?.file ?? ""));
+    // Adoption stamps rows somebody built by hand. It is never inferred — the console asks, and the
+    // answer travels here explicitly.
+    const out = await applyInstall(pack, { adopt: req.body?.adopt === true });
+    await logAudit({
+      action: "pack.install", actorId: a?.sub, target: `${pack.country} ${pack.version}`,
+      detail: `${out.created} created · ${out.adopted} adopted${out.unresolved.length ? ` · ${out.unresolved.length} unresolved` : ""}`,
+    });
+    logActivity({ type: "system", message: `Country pack installed: ${pack.countryName} ${pack.version}`, user: a?.email });
+    res.json(out);
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
   }
 });
 
@@ -110,6 +272,21 @@ async function doLogin(req: express.Request, res: express.Response, kind: "staff
     }
     await logAudit({ action: "login.fail", actorId: user?.id ?? null, actorEmail: String(email || "").toLowerCase() || null, ip });
     return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  // A portal user whose client is suspended is refused at the door, with the REASON. Bouncing them
+  // after a successful sign-in with a generic "account inactive" would leave them guessing at a
+  // password problem; the credentials were right and the account is fine — the client is suspended.
+  // Checked here as well as in requireAuth because a token must not be issued at all in that state.
+  if (kind === "portal" && user!.companyId) {
+    const co = await prisma.company.findUnique({ where: { id: user!.companyId }, select: { name: true, status: true, suspendedReason: true } });
+    if (co?.status === "suspended") {
+      await logAudit({ action: "login.blocked", actorId: user!.id, actorEmail: user!.email, ip, detail: `client suspended: ${co.name}` });
+      return res.status(403).json({
+        error: "Access to this account is suspended. Please contact us to restore it.",
+        suspended: true, reason: co.suspendedReason ?? null,
+      });
+    }
   }
 
   // Success → reset counters, log, issue token with current tokenVersion
@@ -818,20 +995,29 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
 });
 
 // ── Billing suspension & payment extensions ──────────────────────────
-// Policy: a suspended client can still SIGN IN and SEE everything — documents, expiry dates,
-// invoices. What they lose is the ability to ask for new work. Withholding compliance data would
-// make them miss a visa deadline, which harms the client far more than it pressures them, and the
-// firm carries the consequences of that too.
+// Policy: suspending a client LOCKS OUT every portal user under it — no sign-in, and any session
+// already open stops working on its next request. Enforced in requireAuth by reading the company
+// each time, so restoring the client restores access instantly and no per-user flag has to be kept
+// in step. Staff are unaffected; they are not under a client.
+//
+// This replaced a deliberate read-only policy, and the reason that policy existed still stands: a
+// locked-out client cannot see their own visa expiry dates, so a suspension over an unpaid invoice
+// can cause a missed deadline that the firm may also carry. Changed on the owner's instruction —
+// worth re-reading before anyone widens what suspension is used for.
 // Suspension is never automatic: the dunning job recommends, a human decides.
 
-/** Portal write-guard. Read routes never use this; nor does reporting a payment or replying. */
+/**
+ * Portal write-guard. Now belt-and-braces: a suspended client cannot authenticate at all, so this
+ * should never fire for one. Kept because it is the guard that would still hold if the auth-level
+ * lockout were ever relaxed back to read-only.
+ */
 async function requireNotSuspended(req: any, res: any, next: any) {
   const a = req.auth;
   try {
     const co = await prisma.company.findUnique({ where: { id: a.companyId }, select: { status: true, suspendedReason: true } });
     if (co?.status === "suspended") {
       return res.status(403).json({
-        error: "New requests are paused on this account while there's an outstanding balance. You can still view everything, and telling us about a payment will lift it.",
+        error: "This account is suspended. Please contact us to restore access.",
         suspended: true, reason: co.suspendedReason ?? null,
       });
     }
@@ -947,25 +1133,109 @@ app.post("/api/companies/:id/remove-addon", requireAuth, requireStaff, requireWr
   res.json({ ok: true });
 });
 
+/**
+ * Retire a document that a newer one has replaced.
+ *
+ * The columns and the reader-side filtering already existed, but only the WORKFLOW engine ever wrote
+ * them — so a document added by hand never retired the one it replaced, and a person ended up with
+ * two live Passports, both counted, both driving renewal reminders. This is the same act, available
+ * to a human.
+ *
+ * The old row is KEPT. Its number and expiry are the only record of what the person held before, and
+ * a compliance system that forgets that has no audit trail. Every reader filters on
+ * `supersededAt: null`, so exactly one document of a type stays authoritative for a subject.
+ */
+app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+  if (!doc) return res.status(404).json({ error: "Document not found" });
+  if (doc.supersededAt) return res.json({ document: doc, alreadySuperseded: true });
+
+  // The replacement, when one is named, must be a real document for the SAME subject and type —
+  // otherwise "replaced by" points at something unrelated and the trail lies.
+  const byId = req.body?.replacedBy ? String(req.body.replacedBy) : null;
+  if (byId) {
+    const by = await prisma.document.findUnique({ where: { id: byId } });
+    if (!by) return res.status(400).json({ error: "The replacing document no longer exists" });
+    if (by.id === doc.id) return res.status(400).json({ error: "A document cannot replace itself" });
+    if (by.docType !== doc.docType) return res.status(400).json({ error: `A ${by.docType} cannot replace a ${doc.docType}` });
+    const sameSubject = by.employeeId && doc.employeeId ? by.employeeId === doc.employeeId : by.person === doc.person;
+    if (!sameSubject) return res.status(400).json({ error: "That document belongs to a different person" });
+  }
+
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const document = await prisma.document.update({
+    where: { id: doc.id },
+    data: { supersededAt: new Date().toISOString(), supersededById: byId },
+  });
+  logActivity({
+    type: "compliance",
+    message: `${doc.docType} for ${doc.person}: an older record (${doc.docNumber ?? "no number"}, exp ${doc.expiryDate ?? "none"}) was superseded`,
+    user: me?.name ?? "Staff",
+  });
+  await logAudit({ action: "document.supersede", actorId: a.sub, target: doc.id, detail: `${doc.docType} · ${doc.person} · exp ${doc.expiryDate ?? "none"}` });
+  res.json({ document });
+});
+
 /** Edit an employee's details, appending to the same history[] the exit flow writes. */
 app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const emp = await prisma.employee.findUnique({ where: { id: req.params.id } });
   if (!emp) return res.status(404).json({ error: "Employee not found" });
 
-  const { name, role, iqamaExpiry } = req.body ?? {};
-  const nextName = String(name ?? "").trim();
+  const b = req.body ?? {};
+  const nextName = String(b.name ?? "").trim();
   if (!nextName) return res.status(400).json({ error: "Name is required" });
-  if (iqamaExpiry && isNaN(new Date(String(iqamaExpiry)).getTime()))
+  if (b.iqamaExpiry && isNaN(new Date(String(b.iqamaExpiry)).getTime()))
     return res.status(400).json({ error: "That expiry date isn't a valid date" });
+  if (b.dob && isNaN(new Date(String(b.dob)).getTime()))
+    return res.status(400).json({ error: "That date of birth isn't a valid date" });
+
+  /**
+   * Every field is OPTIONAL and omitting one leaves it alone.
+   *
+   * `undefined` means "not sent" and `null`/"" means "clear it" — a caller that only knows about
+   * three fields (the old Edit dialog, a script) must not blank the eight it has never heard of.
+   */
+  const keep = <T>(sent: any, current: T, coerce: (v: any) => T): T =>
+    sent === undefined ? current : coerce(sent);
+  const str = (v: any) => (v == null ? null : String(v).trim() || null);
 
   // Record what actually changed, so the history is a diff rather than "edited".
   const changes: string[] = [];
-  if (nextName !== emp.name) changes.push(`name: ${emp.name} → ${nextName}`);
-  const nextRole = role == null ? emp.role : String(role).trim() || null;
-  if (nextRole !== emp.role) changes.push(`role: ${emp.role ?? "—"} → ${nextRole ?? "—"}`);
-  const nextExpiry = iqamaExpiry == null ? emp.iqamaExpiry : String(iqamaExpiry).trim() || null;
-  if (nextExpiry !== emp.iqamaExpiry) changes.push(`Iqama expiry: ${emp.iqamaExpiry ?? "—"} → ${nextExpiry ?? "—"}`);
+  const note = (label: string, from: any, to: any) => {
+    if (String(from ?? "") !== String(to ?? "")) changes.push(`${label}: ${from ?? "—"} → ${to ?? "—"}`);
+  };
+
+  const nextRole = keep(b.role, emp.role, str);
+  const nextExpiry = keep(b.iqamaExpiry, emp.iqamaExpiry, str);
+  const nextDob = keep(b.dob, emp.dob, str);
+  const nextNat = keep(b.nationality, emp.nationality, str);
+  const nextType = keep(b.employmentType, emp.employmentType, str);
+  const nextCat = keep(b.jobCategory, emp.jobCategory, str);
+  // Minor units, like every other money value here — a salary held as a float is the rounding bug
+  // the invoices already had, waiting to happen against a wage floor.
+  const nextSalary = b.salary === undefined ? emp.salary
+    : (b.salary === null || b.salary === "" ? null : Math.round(Number(b.salary)));
+  if (nextSalary != null && !Number.isFinite(nextSalary)) return res.status(400).json({ error: "That salary isn't a number" });
+
+  const cur: any = (emp.customData && typeof emp.customData === "object") ? emp.customData : {};
+  const nextCustom = { ...cur };
+  if (b.department !== undefined) nextCustom.department = str(b.department);
+  if (b.joinDate !== undefined) nextCustom.joinDate = str(b.joinDate);
+  if (b.visaQuota !== undefined) nextCustom.visaQuota = Number(b.visaQuota) || 1;
+
+  note("name", emp.name, nextName);
+  note("role", emp.role, nextRole);
+  note("Iqama expiry", emp.iqamaExpiry, nextExpiry);
+  note("date of birth", emp.dob, nextDob);
+  note("nationality", emp.nationality, nextNat);
+  note("salary", emp.salary, nextSalary);
+  note("employment type", emp.employmentType, nextType);
+  note("job category", emp.jobCategory, nextCat);
+  note("department", cur.department, nextCustom.department);
+  note("joining date", cur.joinDate, nextCustom.joinDate);
+  note("visa quota", cur.visaQuota, nextCustom.visaQuota);
   if (!changes.length) return res.json({ employee: emp, unchanged: true });
 
   const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
@@ -973,6 +1243,8 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
     where: { id: emp.id },
     data: {
       name: nextName, role: nextRole, iqamaExpiry: nextExpiry,
+      dob: nextDob, nationality: nextNat, salary: nextSalary,
+      employmentType: nextType, jobCategory: nextCat, customData: nextCustom,
       history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
         { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],
     },
@@ -1727,7 +1999,12 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
   const vErr = validate("company", req.body, true);
   if (vErr) return res.status(400).json({ error: vErr });
   try {
-    const company = await prisma.company.create({ data: req.body });
+    // Clients are created here, NOT through the generic CRUD path, so the country default has to be
+    // stated in both places. Without it a client added tomorrow arrives with no country and silently
+    // drops out of anything that filters by one — which is the whole point of having the column.
+    const company = await prisma.company.create({
+      data: { ...req.body, country: req.body?.country || HOME_COUNTRY },
+    });
     // Only provision a portal user when there's a real email address (skip "—" placeholders).
     // The one-time password is random and returned ONCE here — it is never recoverable afterwards,
     // only re-issued via reset-portal-password.
@@ -1940,6 +2217,9 @@ app.delete("/api/packages/:id", requireAuth, requireStaff, requireWriteRole, asy
 const entities: [string, string][] = [
   ["companies", "company"],   // list handled above; :id/POST/PUT/DELETE fall through to crud
   ["groups", "clientGroup"],
+  // Nationalisation bands per country — Nitaqat and its equivalents. Configuration, so it goes
+  // through the same CRUD, country-scoping and retire rules as every other config table.
+  ["workforce-bands", "workforceBand"],
   ["packages", "package"],
   ["subscriptions", "subscription"],
   ["employees", "employee"],
@@ -2003,6 +2283,12 @@ app.get("/api/invoices/next-number", requireAuth, requireStaff, async (_req, res
 /** Same for quotations, which had the same count-based bug (`QT-` + 339 + how many exist). */
 app.get("/api/quotations/next-number", requireAuth, requireStaff, async (_req, res) => {
   res.json({ number: await nextNumber("quotation") });
+});
+// Shipments raised by hand used to be numbered `CR- + Date.now().slice(-5)` in the browser — a
+// timestamp wearing a reference's clothes, which collides and sorts by nothing useful. Same
+// configured sequence as every other document now, and the same one the workflow's courier step uses.
+app.get("/api/courier-shipments/next-number", requireAuth, requireStaff, async (_req, res) => {
+  res.json({ number: await nextNumber("courier") });
 });
 
 // ── Record sequences: the configured shape of every document reference ──

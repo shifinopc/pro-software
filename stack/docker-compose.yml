@@ -78,6 +78,10 @@ services:
       # /api/files/:id, which checks who is asking. It needs its own volume for exactly the same
       # reason as the one above: without it, a rebuild destroys real client records.
       - uploads_private:/app/uploads-private
+      # Country packs. The image ships the packs it was built with, but a NEW version of a country
+      # is uploaded through the console at runtime — without a volume that upload lives only until
+      # the next rebuild, so an update published on Tuesday would vanish on Wednesday.
+      - packs:/app/packs
     networks:
       - web
       - internal
@@ -131,3 +135,5 @@ volumes:
     name: stimespro_uploads
   uploads_private:
     name: stimespro_uploads_private
+  packs:
+    name: stimespro_packs
