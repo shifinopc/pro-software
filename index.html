@@ -12613,6 +12613,44 @@ class Component extends DCLogic {
       const n9 = rows9.filter(r9 => r9.overdue).length;
       return n9 > 0 ? String(n9) : '';
     })();
+
+    /**
+     * THE REST OF THE NAV BADGES, COUNTED RATHER THAN TYPED.
+     *
+     * These were literals — '8' beside My Tasks, '26' beside Renewals, '14' beside Requests Queue —
+     * and unlike the sample rows elsewhere they were not gated on `_authed`, so they showed to
+     * everybody, always. On a production instance holding one company and no invoices the sidebar
+     * was announcing 26 renewals and 14 open requests. Same class of bug the dashboard already had
+     * fixed; the nav was missed.
+     *
+     * Two rules, both taken from the four badges above that were already honest:
+     *   · A badge is what NEEDS SOMEBODY, not how many rows exist. "Clients 4" beside a list of
+     *     clients is furniture; "Approvals 5" is work. So Clients gets no badge at all.
+     *   · Zero shows NOTHING. A row of noughts down the sidebar is noise, and a badge that only
+     *     appears when it has something to say is the one people keep reading.
+     *
+     * Computed here rather than reused from the screens' own figures further down this function:
+     * those are declared hundreds of lines later, and reaching them from here is a TDZ error that
+     * blanks the whole console rather than a number that comes out wrong.
+     */
+    /**
+     * NO LITERAL BADGE COUNTS BELOW.
+     *
+     * Twelve of these slots used to carry design numbers — My Tasks 8, Task List 12, Renewals 26 —
+     * so a brand-new system with no tasks and no invoices still showed a sidebar full of work. They
+     * are overwritten a moment later by `_liveBadges` further down, so the fakes only ever flashed;
+     * but a number that is wrong for the first second of every page load is still a number people
+     * read, and on a slow connection that second is longer than it sounds.
+     *
+     * `_liveBadges` is the ONE owner of those twelve. It counts from the same arrays the screens
+     * themselves render, which is what stops a badge and the page it points at from disagreeing.
+     * Deriving them a second time up here would give two answers to one question, and the two would
+     * drift the first time either screen's filter changed — so the slot is left EMPTY until the real
+     * count arrives. Nothing is the honest thing to show when the answer is not known yet.
+     *
+     * The badges that ARE set here — Setup Check, Notifications, Problem Reports and the Sales three
+     * — have no counterpart in `_liveBadges` and are computed above from real rows.
+     */
     const groupsAll = [
       ['Overview', I.grid, [['Dashboard', I.grid], ['Activity Timeline', I.clock]]],
       // Sales sits before Operations because that is the order the work happens in: somebody is a
@@ -12621,10 +12659,10 @@ class Component extends DCLogic {
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
       ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Sales Teams', I.users], ['Sales Analytics', I.layers]]],
-      ['Operations', I.check, [['My Tasks', I.check, '8'], ['Task List', I.fileText, '12'], ['Approvals', I.check, '5'], ['SLA Monitor', I.shield, '4'], ['Requests Queue', I.buoy, '14'], ['Government Centers', I.building, '9'], ['Appointments', I.calendar, '6'], ['Courier', I.card, '5'], ['PRO Teams', I.users], ['Operations Analytics', I.layers]]],
-      ['Clients & Compliance', I.building, [['Clients', I.building, '4'], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh, '26']]],
+      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Operations Analytics', I.layers]]],
+      ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
-      ['Finance', I.invoice, [['Quotations', I.stamp, '1'], ['Invoices', I.invoice, '3'], ['Receipts', I.card], ['Reports', I.layers]]],
+      ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Receipts', I.card], ['Reports', I.layers]]],
       ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
       // Problem Reports carries a badge of what is still unread — a report nobody looks at is the
       // same as no report at all, and the count is the only thing that makes anyone look.
