@@ -9,8 +9,11 @@
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
-import { triggerRenewals, checkWorkforceBands, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
+import { sendDueDigests, pruneDigests } from "./digest.js";
+import { mailHealth, pruneMailLog } from "./mailer.js";
+import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
+import { captureWorkforceSnapshots } from "./workforce.js";
 
 const DAY = 86400000;
 
@@ -152,12 +155,87 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
 
   // Nationalisation bands. Everything this needs already existed — the ratio, the thresholds, the
   // distance to the next band — and nothing watched it. A number nobody looks at is not a control.
+  // Record where every client stands today, BEFORE the band job reads it — so the row exists even
+  // if the alerting throws, and so a day is never missed for a reason unrelated to the workforce.
+  // History cannot be backfilled: an employee record does not say when it was added.
+  const wfSnap = await safely("workforce-history", () => captureWorkforceSnapshots());
+
   const wfBands = await safely("workforce", checkWorkforceBands);
   if ("checked" in wfBands && (wfBands.dropped || wfBands.nearEdge)) {
     await logAudit({
       action: "cron.workforce_bands",
       target: `${wfBands.dropped} dropped, ${wfBands.nearEdge} close to the edge`,
       detail: [`source=${source}`, wfBands.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // What somebody said they would do, and the deals nobody has said anything about. The pipeline is
+  // only as good as the chasing, and the chasing is the part that gets forgotten.
+  // Every connected mailbox, pulled. One index built for the whole pass rather than per mailbox:
+  // the contact list does not change between two syncs a second apart, and rebuilding it per rep
+  // would make the cost of this job scale with headcount for no gain.
+  const mailbox = await safely("mailbox-sync", async () => {
+    const { buildMatchIndex, syncMailbox } = await import("./mailbox.js");
+    const { providerFor } = await import("./mailproviders.js");
+    const conns = await prisma.mailboxConnection.findMany({ where: { status: { not: "disconnected" } }, select: { userId: true, provider: true } });
+    if (!conns.length) return { mailboxes: 0, stored: 0, failed: 0, details: [] as string[] };
+    const index = await buildMatchIndex();
+    let stored = 0, failed = 0;
+    const details: string[] = [];
+    for (const c of conns) {
+      const out = await syncMailbox(c.userId, providerFor(c.provider), index);
+      stored += out.stored;
+      if (out.error) { failed++; details.push(out.error.slice(0, 120)); }
+    }
+    return { mailboxes: conns.length, stored, failed, details };
+  });
+  if ("mailboxes" in mailbox && (mailbox.stored || mailbox.failed)) {
+    await logAudit({
+      action: "cron.mailbox_sync",
+      target: `${mailbox.stored} message(s) from ${mailbox.mailboxes} mailbox(es)`,
+      detail: [`source=${source}`, mailbox.failed ? `${mailbox.failed} failed: ${mailbox.details.join("; ")}` : ""].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  const followUps = await safely("follow-ups", checkFollowUps);
+  if ("due" in followUps && (followUps.overdue || followUps.stale)) {
+    await logAudit({
+      action: "cron.follow_ups",
+      target: `${followUps.due} due (${followUps.overdue} overdue), ${followUps.stale} deals gone quiet`,
+      detail: [`source=${source}`, followUps.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // Subscriptions that will not renew themselves. Raised BEFORE they lapse, so somebody can still
+  // do something about it — the lapse notice below fires once it is already too late.
+  const renewalDeals = await safely("renewal-deals", raiseRenewalDeals);
+  if ("created" in renewalDeals && renewalDeals.created) {
+    await logAudit({
+      action: "cron.renewal_deals",
+      target: `${renewalDeals.created} renewal deal(s) raised of ${renewalDeals.considered} approaching`,
+      detail: [`source=${source}`, renewalDeals.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // Money already quoted and then forgotten — the most expensive silence in the product. Runs
+  // BEFORE billing so a quotation about to lapse is raised in the same tick that bills for the
+  // work already won, rather than a cycle later.
+  // Leads nothing is happening to: no deal, no contact, in no column, on no queue.
+  const idle = await safely("idle-leads", checkIdleLeads);
+  if ("nudged" in idle && idle.nudged) {
+    await logAudit({
+      action: "cron.idle_leads",
+      target: `${idle.nudged} lead(s) with nothing happening, of ${idle.checked}`,
+      detail: [`source=${source}`, idle.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  const quotes = await safely("quote-chase", chaseQuotations);
+  if ("chased" in quotes && (quotes.chased || quotes.expiringSoon || quotes.lapsed)) {
+    await logAudit({
+      action: "cron.quotes_chased",
+      target: `${quotes.chased} unanswered, ${quotes.expiringSoon} about to lapse, ${quotes.lapsed} lapsed`,
+      detail: [`source=${source}`, quotes.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
 
@@ -197,9 +275,53 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     });
   }
 
+  // LAST, deliberately: every job above may have queued something, and running the digest after
+  // them means a reminder raised this morning goes out in this morning's digest rather than waiting
+  // a full day for the next one.
+  const digest = await safely("digest", () => sendDueDigests());
+  if ("sent" in digest && digest.sent) {
+    await logAudit({
+      action: "cron.digests_sent",
+      target: `${digest.sent} digest(s), ${digest.items} item(s)`,
+      detail: [`source=${source}`, digest.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+  // Cheap and idempotent, so it rides along rather than needing a schedule of its own.
+  await safely("digest-prune", () => pruneDigests().then(removed => ({ removed })));
+  await safely("mail-log-prune", () => pruneMailLog().then(removed => ({ removed })));
+
+  /**
+   * Mail that did not arrive, said out loud.
+   *
+   * DELIBERATELY IN-APP ONLY. Emailing somebody about an email that failed is how a broken relay
+   * turns one fault into a loop — every notification about the failure fails, and notifies about
+   * that. `logNotification` writes the bell row and nothing else, which is exactly what is wanted:
+   * a human sees it next time they open the console, and the log panel in Settings → Email has the
+   * detail. Keyed by the day so a relay that is down all afternoon raises one row, not two hundred.
+   */
+  const mail = await safely("mail-health", () => mailHealth(1));
+  if ("failed" in mail && mail.failed > 0) {
+    const day = new Date().toISOString().slice(0, 10);
+    const first = await prisma.notification.create({
+      data: {
+        type: "system", time: "Just now", createdAt: new Date().toISOString(), read: false,
+        dedupeKey: `mail-failed:${day}`,
+        title: `${mail.failed} email${mail.failed === 1 ? "" : "s"} could not be sent`,
+        message: `${mail.recent[0]?.error ?? "See Settings → Email for the log."} — most recent: ${mail.recent[0]?.to ?? "?"}`.slice(0, 2000),
+      },
+    }).then(() => true).catch(() => false); // unique violation = already raised today
+    if (first) {
+      await logAudit({
+        action: "cron.mail_failures",
+        target: `${mail.failed} failed in the last 24h`,
+        detail: [`source=${source}`, mail.recent.slice(0, 3).map(r => `${r.to}: ${r.error ?? "?"}`).join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+      });
+    }
+  }
+
   // Every job that ran belongs in the result. A job missing from here ran invisibly — the tick
   // response is the only place anyone can see what the hourly pass actually did.
-  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans, workforce: wfBands };
+  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
 }
 
 let timer: NodeJS.Timeout | null = null;

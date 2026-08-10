@@ -10,18 +10,67 @@ import QRCode from "qrcode";
 import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
 import { workflowRouter } from "./workflow.js";
-import { validate } from "./validate.js";
+import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, contactProblem, billingAmountProblem } from "./validate.js";
+import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryContact } from "./contacts.js";
+import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics } from "./pipeline.js";
+import { crmDashboard } from "./crmdashboard.js";
+import { recordLifecycle, lifecycleAnalytics, campaignPerformance } from "./lifecycle.js";
+import { openFollowUps, historyFor, logInteraction, closeFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
+import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
+import { opsReport, opsPeriodsWithActivity } from "./opsreport.js";
+import { setupCheck } from "./setupcheck.js";
+import { salesRules } from "./salesrules.js";
+import { findDuplicates } from "./duplicates.js";
+import { nextOwner, nextOwnerFor, rotation, distributeUnowned, assignableOwners, recordAssignment, assignmentHistory } from "./assignment.js";
+import { routeFor } from "./routing.js";
+import { scoreOpenLeads } from "./leadscore.js";
+import { freeSlots, bookSlot } from "./booking.js";
+import { visibleUserIds, actableTeamIds } from "./visibility.js";
+import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
+import { itemsForStage, effectiveItems, blockersFor, summaryFor } from "./dealchecklist.js";
+import { syncMailbox, saveConnection } from "./mailbox.js";
+import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
+
+/**
+ * The OAuth `state`, signed.
+ *
+ * It carries WHO is connecting. Unsigned, anybody who could reach the callback could attach their
+ * own mailbox to somebody else's account — or worse, attach a colleague's mailbox to their own and
+ * read it through the CRM. Signed with the same JWT secret and short-lived, because the round trip
+ * to a provider and back is measured in seconds.
+ */
+function signState(payload: { sub: string; provider: "google" | "microsoft" }): string {
+  const body = Buffer.from(JSON.stringify({ ...payload, t: Date.now() })).toString("base64url");
+  const sig = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev").update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+function verifyState(raw: string): { sub: string; provider: "google" | "microsoft" } | null {
+  const [body, sig] = String(raw).split(".");
+  if (!body || !sig) return null;
+  const want = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev").update(body).digest("base64url");
+  // Constant-time: a signature check that returns early leaks how much of it was right.
+  if (sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return null;
+  try {
+    const j = JSON.parse(Buffer.from(body, "base64url").toString());
+    if (!j.sub || (Date.now() - Number(j.t)) > 10 * 60 * 1000) return null;
+    return { sub: String(j.sub), provider: j.provider === "microsoft" ? "microsoft" : "google" };
+  } catch { return null; }
+}
+import { bookingPage } from "./bookingpage.js";
+import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
-import { sendMail, getEmailConfig, verifyEmail } from "./mailer.js";
+import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
+import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
+import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected } from "./notify.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
-import { COUNTRIES } from "./countries.js";
-import { workforceAll, workforceFor, recordBand } from "./workforce.js";
+import { COUNTRIES, countryName, countryCurrency } from "./countries.js";
+import { workforceAll, workforceFor, recordBand, workforceHistory } from "./workforce.js";
 import { listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
-import { HOME_COUNTRY } from "./crud.js";
+import { homeCountry, homeCurrency, homeMarket } from "./orgsettings.js";
 import { figuresFromAmount } from "./money.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
@@ -38,6 +87,17 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeade
 // Generous but bounded: a broken screen can fire several reports in a row, a bot should not.
 const reportLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many reports — try again later" } });
 const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests — try again later" } });
+/**
+ * Resending an invitation is NOT the same risk as the reset flow above, and must not share its cap.
+ *
+ * `resetLimiter` throttles an UNAUTHENTICATED endpoint anybody can hit, so five an hour is right
+ * there. Resending is authenticated, role-gated, audited, and can only ever mail an address already
+ * on a user record — and it is counted per IP, so a whole office behind one connection shares the
+ * allowance. At five an hour, onboarding six clients in a morning fails on the sixth with a message
+ * about "too many requests" that names nothing the admin did wrong. Thirty leaves the abuse ceiling
+ * low while putting it far above any honest day's work.
+ */
+const inviteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many invitations sent from here in the last hour — try again shortly" } });
 
 // Allow the console + portal origins (local dev and live). Override with CORS_ORIGINS in .env
 // (comma-separated). Requests with no Origin (curl, server-to-server) are always allowed.
@@ -48,15 +108,88 @@ const DEFAULT_ORIGINS = [
 const allowedOrigins = (process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(",").map(s => s.trim()).filter(Boolean)
   : DEFAULT_ORIGINS);
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error(`Origin ${origin} not allowed by CORS`));
-  },
+/**
+ * SAME-ORIGIN IS ALWAYS ALLOWED, and has to be said explicitly.
+ *
+ * CORS exists to police CROSS-origin requests. But this API also serves a page of its own — the
+ * public booking page at /book/:slug — and that page's fetches carry `Origin: <this server>`, which
+ * was not on the allowlist. The result was a booking page that rendered its slots (the GET was a
+ * plain navigation-adjacent request) and then failed silently on submit with "Could not reach us".
+ *
+ * It passed every curl test, because curl sends no Origin header at all and the first branch below
+ * waves those through. Only driving a real browser surfaced it — which is the argument for doing
+ * that rather than trusting a 201 from the command line.
+ *
+ * Comparing against the request's own Host rather than adding a hardcoded origin keeps this correct
+ * on every deployment without anybody remembering to add one more entry to a list.
+ */
+// The per-request form, because deciding this needs the request: same-origin is recognised by
+// comparing the Origin against the Host it arrived on, not by keeping one more hostname in a list
+// that somebody has to remember to update per deployment.
+app.use(cors((req, cb) => {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  const sameOrigin = !!origin && !!host && (origin === `http://${host}` || origin === `https://${host}`);
+  if (!origin || sameOrigin || allowedOrigins.includes(origin)) return cb(null, { origin: true, credentials: true });
+  cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
+/**
+ * A website enquiry form becomes a lead.
+ *
+ * PUBLIC. The only route in the product that writes without a session, so it is deliberately narrow:
+ * see webintake.ts for what it can and cannot create. Everything here is the guard rail.
+ *
+ * Two limiters, because they fail differently. The per-address one stops one machine flooding it;
+ * the per-key one stops a leaked key being used from a thousand addresses, which the first cannot
+ * see. A real enquiry form sends one request every few minutes at most, so both are generous.
+ *
+ * The body cap is separate from the app-wide 6mb: nothing here needs more than a few kilobytes, and
+ * accepting megabytes on an unauthenticated route is an invitation.
+ */
+const intakeByIp = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Too many submissions — try again shortly" },
+});
+const intakeByKey = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: (req) => String(req.header("x-api-key") ?? "no-key"),
+  message: { error: "Too many submissions for this site — try again later" },
+});
+
+app.post("/api/public/enquiry", intakeByIp, intakeByKey, express.json({ limit: "32kb" }), async (req, res) => {
+  const site = await siteForKey(req.header("x-api-key"));
+  // One message for missing, unknown and revoked alike. Distinguishing them tells somebody probing
+  // keys which of their guesses used to be real.
+  if (!site) return res.status(401).json({ error: "Not authorised" });
+
+  try {
+    const out = await receiveEnquiry(req.body, { keyName: site.name, homeCountry: (await homeCountry()) });
+    if (!out.ok) return res.status(out.status).json({ error: out.error });
+    // The caller is a website, not a member of staff: it is told the enquiry was received and
+    // nothing else. Whether it became a new lead or joined an existing one is internal, and saying
+    // so would let anybody with the key test which addresses are already on file.
+    return res.status(202).json({ ok: true, message: "Thank you — we have received your enquiry." });
+  } catch (e: any) {
+    console.error("[intake] failed:", e?.message ?? e);
+    return res.status(500).json({ error: "Could not record that enquiry" });
+  }
+});
+
 app.use(express.json({ limit: '6mb' })); // raised for base64 logo/file uploads
 
 // ── Public ──
+// Opening the API's own port in a browser is a thing people do when something is not working, and
+// Express's default "Cannot GET /" answers the wrong question — it looks like a broken deployment
+// rather than an API with no front page. This says what is listening and where the real one is.
+// Exact path only, so it shadows nothing.
+app.get("/", (_req, res) => {
+  res.type("text/plain").send(
+    `STIMES PRO API — this port serves the API only.\n\n` +
+    `  health   /api/health\n` +
+    `  console  ${process.env.CONSOLE_URL || "http://localhost:5188"}\n`
+  );
+});
+
 app.get("/api/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -100,6 +233,22 @@ app.post("/api/packs/preview", requireAuth, requireStaff, async (req, res) => {
 app.get("/api/workforce", requireAuth, requireStaff, async (_req, res) => {
   res.json(await workforceAll());
 });
+/**
+ * The recorded trend. Registered BEFORE /:companyId, or "history" would be read as a client id.
+ *
+ * Every client's series in one request: the Clients list shows a direction beside each band, and
+ * one call per row would be a request per client on every render.
+ */
+app.get("/api/workforce-history", requireAuth, requireStaff, async (req, res) => {
+  const days = Math.max(2, Math.min(730, Number(req.query.days) || 90));
+  const id = String(req.query.companyId ?? "").trim();
+  if (id) return res.json(await workforceHistory(id, days));
+  const ids = await prisma.company.findMany({ where: { lifecycle: ACTIVE_CLIENT }, select: { id: true } });
+  const out: Record<string, any> = {};
+  for (const c of ids) out[c.id] = await workforceHistory(c.id, days);
+  res.json(out);
+});
+
 app.get("/api/workforce/:companyId", requireAuth, requireStaff, async (req, res) => {
   const w = await workforceFor(String(req.params.companyId));
   if (!w) return res.status(404).json({ error: "No such client" });
@@ -279,13 +428,18 @@ async function doLogin(req: express.Request, res: express.Response, kind: "staff
   // password problem; the credentials were right and the account is fine — the client is suspended.
   // Checked here as well as in requireAuth because a token must not be issued at all in that state.
   if (kind === "portal" && user!.companyId) {
-    const co = await prisma.company.findUnique({ where: { id: user!.companyId }, select: { name: true, status: true, suspendedReason: true } });
+    const co = await prisma.company.findUnique({ where: { id: user!.companyId }, select: { name: true, status: true, suspendedReason: true, lifecycle: true } });
     if (co?.status === "suspended") {
       await logAudit({ action: "login.blocked", actorId: user!.id, actorEmail: user!.email, ip, detail: `client suspended: ${co.name}` });
       return res.status(403).json({
         error: "Access to this account is suspended. Please contact us to restore it.",
         suspended: true, reason: co.suspendedReason ?? null,
       });
+    }
+    // Same rule as requireAuth, applied before a token exists: the portal belongs to clients.
+    if (co && co.lifecycle !== ACTIVE_CLIENT) {
+      await logAudit({ action: "login.blocked", actorId: user!.id, actorEmail: user!.email, ip, detail: `not a client: ${co.name} (${co.lifecycle})` });
+      return res.status(403).json({ error: "This portal is no longer active. Please contact us.", suspended: true, reason: null });
     }
   }
 
@@ -342,12 +496,19 @@ app.post("/api/auth/forgot-password", resetLimiter, async (req, res) => {
     const base = user.type === "portal" ? (process.env.PORTAL_URL || "https://cp.ionob.in") : (process.env.CONSOLE_URL || "https://pro.ionob.in");
     const link = `${base}/reset?token=${raw}`;
     await logAudit({ action: "password.reset_requested", actorId: user.id, actorEmail: user.email, ip: clientIp(req) });
-    await sendMail({
-      to: user.email,
-      subject: "Reset your STIMES PRO password",
-      text: `Reset your password (valid 1 hour): ${link}`,
-      html: `<p>We received a request to reset your STIMES PRO password.</p><p><a href="${link}">Reset your password</a> (valid for 1 hour).</p><p>If you didn't request this, ignore this email.</p>`,
+    const ctxReset = await emailContext();
+    const orgReset = ctxReset.org;
+    const { html, text } = renderEmail(ctxReset, {
+      heading: "Reset your password",
+      preheader: "The link is valid for one hour.",
+      lines: [
+        `We received a request to reset the password for <b>${escEmail(user.email)}</b>.`,
+        "Use the button below within the next hour. After that the link stops working and you will need to ask for a new one.",
+      ],
+      cta: { label: "Reset your password", url: link },
+      note: "If you didn't ask for this, no action is needed — your password has not changed, and this link can only be used once.",
     });
+    await sendMail({ to: user.email, subject: `Reset your ${orgReset} password`, text, html });
   }
   res.json({ ok: true });
 });
@@ -521,7 +682,8 @@ app.get("/api/portal/notifications", requireAuth, requirePortal, async (req, res
   const a = (req as any).auth;
   const now = Date.now();
   const nowISO = new Date(now).toISOString();
-  const money = (c: any) => `${c.currency || "SAR"} ${Number(c.amount).toLocaleString()}`;
+  const homeCur = await homeCurrency();
+  const money = (c: any) => `${c.currency || homeCur} ${Number(c.amount).toLocaleString()}`;
   const [docs, reqs, invs, addonReqs] = await Promise.all([
     prisma.document.findMany({ where: { companyId: a.companyId, supersededAt: null, NOT: { expiryDate: null } } }),
     prisma.serviceRequest.findMany({ where: { companyId: a.companyId } }),
@@ -636,6 +798,27 @@ app.post("/api/companies/:id/reset-portal-password", requireAuth, requireStaff, 
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(temp), mustChangePassword: true, failedLogins: 0, lockedUntil: null, tokenVersion: { increment: 1 } } });
   await logAudit({ action: "portal.password_reset", actorId: a.sub, target: user.email, detail: `company ${req.params.id}`, ip: clientIp(req) });
   res.json({ email: user.email, tempPassword: temp });
+});
+
+/**
+ * Send the invitation again — the recovery path for a link that was never delivered or has expired.
+ *
+ * This is NOT the same tool as "reset password" below. A reset overwrites a password the person is
+ * still using and kicks them out of live sessions; a resend only issues a new link, which matters for
+ * an account that has no password to reset. Reissuing invalidates the previous link, so there is only
+ * ever one live invitation per account.
+ */
+app.post("/api/users/:id/resend-invite", requireAuth, requireStaff, requireWriteRole, requireHuman, inviteLimiter, async (req, res) => {
+  const a = (req as any).auth;
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (user.status && user.status !== "active" && user.status !== "invited") {
+    return res.status(400).json({ error: "That account is inactive — reactivate it before inviting them again" });
+  }
+  const co = user.companyId ? await prisma.company.findUnique({ where: { id: user.companyId }, select: { name: true } }) : null;
+  const result = await sendInvitation(user, { companyName: co?.name, invitedBy: a?.email, resend: true });
+  await logAudit({ action: "user.invite_resent", actorId: a?.sub, target: user.email, detail: result.emailed ? "emailed" : `not emailed: ${result.error ?? "unknown"}`, ip: clientIp(req) });
+  res.json({ name: user.name, ...result });
 });
 
 // Admin-only: reset ANY user's (staff or portal) password → one-time temp password, forced change on
@@ -1052,6 +1235,1342 @@ app.post("/api/companies/:id/restore", requireAuth, requireStaff, requireWriteRo
   logActivity({ type: "finance", message: `Account restored: ${co.name}`, user: me?.name ?? "Staff" });
   await logAudit({ action: "company.restore", actorId: a.sub, target: co.id, detail: co.name });
   res.json({ company });
+});
+
+// ── Contacts ────────────────────────────────────────────────────────────────────────────────────
+//
+// Deliberately NOT in the generic CRUD table below. Every write has to hold one invariant — exactly
+// one primary contact per company, mirrored onto the company's three legacy columns — and a generic
+// PUT would happily set isPrimary on a second row, leaving the mirror pointing at one person and the
+// list showing another. Every route here goes through contacts.ts, which is the only writer.
+
+/**
+ * The clients a `sales` user may see. Every other staff role sees all of them.
+ *
+ * Read from `Company.ownerId` — the column on the client, not the JSON array that used to live on
+ * the user. Ownership belongs to the client for the same reason a document's expiry belongs to the
+ * document: it is a fact about that record, one value, and asking "who owns this?" should not mean
+ * loading every user and scanning their arrays.
+ *
+ * Returning an EMPTY array is a real answer — a salesperson who owns nothing sees nothing. It is
+ * `null` that means "no restriction", and only a non-sales role gets that.
+ */
+/**
+ * The day a report should read team membership as at.
+ *
+ * The END of the period, so a report about March is answered with March's team — otherwise every
+ * historical number is quietly recomputed against whoever is in the team today, which is the exact
+ * failure the dated rows exist to prevent.
+ *
+ * Clamped to today, because a membership question about the future has no honest answer: nobody has
+ * typed in next month's leavers. For a live period that makes it the current team, which is the best
+ * available truth rather than a guess.
+ */
+function asAtFor(period?: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!period) return today;
+  const r = periodRange(period);
+  if (!r) return today;
+  const end = r.to.slice(0, 10);
+  return end < today ? end : today;
+}
+
+async function salesCompanyIds(req: any, on?: string): Promise<string[] | null> {
+  if (req.auth?.role !== "sales") return null;
+  // The caller's own book — or their TEAM's, when they lead one. Without this, a sales lead (who
+  // per the firm's model owns no clients themselves) would be clamped to companies they personally
+  // own: an empty set, which the report machinery correctly treats as "sees nothing". The lead's
+  // Performance screen would sit empty while their team closed deals — scoping working perfectly
+  // and answering the wrong question.
+  // TAKES THE SAME DAY as the report it is scoping. This was left undated when the reports gained a
+  // period, which quietly half-fixed the history: the owner filter used the period's team while the
+  // company filter used TODAY's, so a rep who left the team took their clients out of last quarter's
+  // figures even though the owner filter still counted them. Two scopings of one report disagreeing
+  // is worse than either being wrong on its own — the total is short and nothing looks broken.
+  const vis = await visibleUserIds(req.auth, on);
+  const owners = vis.ids ?? [req.auth.sub];
+  const mine = await prisma.company.findMany({ where: { ownerId: { in: owners } }, select: { id: true } });
+  return mine.map(c => c.id);
+}
+
+app.get("/api/contacts", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const companyId = String(req.query.companyId ?? "").trim();
+  if (companyId && scoped && !scoped.includes(companyId)) return res.json([]);
+  const where: any = { archived: String(req.query.includeArchived ?? "") === "1" ? undefined : false };
+  if (companyId) where.companyId = companyId;
+  else if (scoped) where.companyId = { in: scoped };
+  res.json(await prisma.contact.findMany({ where, orderBy: [{ isPrimary: "desc" }, { name: "asc" }], take: 1000 }));
+});
+
+app.post("/api/contacts", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const vErr = validate("contact", req.body, true);
+  if (vErr) return res.status(400).json({ error: vErr });
+  const scoped = await salesCompanyIds(req as any);
+  const companyId = String(req.body.companyId);
+  if (scoped && !scoped.includes(companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+  if (!co) return res.status(404).json({ error: "Client not found" });
+  try {
+    const c = await addContact(companyId, req.body);
+    logActivity({ type: "client", message: `Contact added: ${c!.name} (${co.name})`, user: (req as any).auth?.email });
+    res.status(201).json(c);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.put("/api/contacts/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const vErr = validate("contact", req.body, false);
+  if (vErr) return res.status(400).json({ error: vErr });
+  const before = await prisma.contact.findUnique({ where: { id: req.params.id } });
+  if (!before) return res.status(404).json({ error: "Contact not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(before.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try { res.json(await editContact(req.params.id, req.body)); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.post("/api/contacts/:id/make-primary", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const c = await prisma.contact.findUnique({ where: { id: req.params.id } });
+  if (!c) return res.status(404).json({ error: "Contact not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(c.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    await setPrimaryContact(c.companyId, c.id);
+    res.json({ ok: true, contacts: await prisma.contact.findMany({ where: { companyId: c.companyId, archived: false }, orderBy: [{ isPrimary: "desc" }, { name: "asc" }] }) });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete("/api/contacts/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const c = await prisma.contact.findUnique({ where: { id: req.params.id } });
+  if (!c) return res.status(404).json({ error: "Contact not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(c.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    await removeContact(req.params.id);
+    await logAudit({ action: "contact.delete", actorId: (req as any).auth?.sub, target: c.id, detail: c.name, ip: clientIp(req) });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// ── Lead sources and loss reasons ───────────────────────────────────────────────────────────────
+//
+// SUGGESTIONS, NOT CONSTRAINTS. Nothing anywhere validates a source or a lost reason against these
+// lists, and that is deliberate: every value recorded before the lists existed would fail, and a
+// country nobody has configured a list for could not record a loss at all — which would make the
+// rule "say why it was lost" impossible to satisfy. The lists exist so the common answers are one
+// press and spelled the same way, which is what makes the loss report worth reading.
+
+const PICKLISTS = {
+  "lead-sources": "leadSource", "lost-reasons": "lostReason", "competitors": "competitor",
+  "industries": "industry", "campaigns": "campaign", "cancel-reasons": "cancelReason",
+} as const;
+// Which columns actually carry each list's wording — the retire-vs-delete check below reads these.
+// Competitor lives only on the deal; sources and reasons on both the deal and the company;
+// industry and campaign only on the company.
+const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interaction", string]>> = {
+  leadSource: [["opportunity", "source"], ["company", "source"]],
+  lostReason: [["opportunity", "lostReason"], ["company", "lostReason"]],
+  competitor: [["opportunity", "competitor"]],
+  industry: [["company", "industry"]],
+  campaign: [["company", "campaign"]],
+  // Lives on the INTERACTION, not the company or the deal — the only list here that does. An empty
+  // array here would have made `used` always zero, so removing a reason would delete it outright
+  // even with cancellations recorded under that wording, breaking the retire-don't-delete rule.
+  cancelReason: [["interaction", "cancelReason"]],
+};
+
+for (const [path, model] of Object.entries(PICKLISTS)) {
+  app.get(`/api/${path}`, requireAuth, requireStaff, async (req, res) => {
+    const country = String(req.query.country ?? "").trim() || (await homeCountry());
+    res.json(await (prisma as any)[model].findMany({
+      where: { country, retired: false },
+      orderBy: [{ sort: "asc" }, { name: "asc" }],
+    }));
+  });
+
+  app.put(`/api/${path}`, requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+    const country = String((req.body ?? {}).country ?? "").trim() || (await homeCountry());
+    const rows: any[] = Array.isArray((req.body ?? {}).rows ? req.body.rows : []) ? req.body.rows : [];
+    const named = rows.filter(r => String(r?.name ?? "").trim());
+    const seen = new Set<string>();
+    for (const r of named) {
+      const k = String(r.name).trim().toLowerCase();
+      if (seen.has(k)) return res.status(400).json({ error: `"${String(r.name).trim()}" is in the list twice — the report would split one answer across two rows.` });
+      seen.add(k);
+    }
+
+    const existing = await (prisma as any)[model].findMany({ where: { country } });
+    const keep = new Set(named.map(r => r.id).filter(Boolean));
+    // Removing an entry RETIRES it: records already carrying that wording keep their meaning, and
+    // the loss report still groups them. Only an entry nothing has ever used is deleted outright.
+    for (const row of existing) {
+      if (keep.has(row.id)) continue;
+      let used = 0;
+      for (const [table, field] of PICKLIST_USAGE[model]) {
+        used += await (prisma as any)[table].count({ where: { [field]: row.name } });
+      }
+      if (used > 0) await (prisma as any)[model].update({ where: { id: row.id }, data: { retired: true } });
+      else await (prisma as any)[model].delete({ where: { id: row.id } });
+    }
+    for (const [i, r] of named.entries()) {
+      const data = { country, name: String(r.name).trim(), color: r.color ?? null, bg: r.bg ?? null, sort: i, retired: false, ...(r.id ? { packModified: true } : {}) };
+      if (r.id) await (prisma as any)[model].update({ where: { id: r.id }, data });
+      else await (prisma as any)[model].create({ data });
+    }
+    await logAudit({ action: `${path}.save`, actorId: (req as any).auth?.sub, target: country, detail: `${named.length} entries`, ip: clientIp(req) });
+    res.json(await (prisma as any)[model].findMany({ where: { country, retired: false }, orderBy: [{ sort: "asc" }, { name: "asc" }] }));
+  });
+}
+
+/**
+ * Hand out the companies already sitting unowned.
+ *
+ * Previews by default. Distributing a book of business is somebody's decision, so it takes a
+ * deliberate press — nothing here runs on a timer, and the preview names who would get what before
+ * anything is written.
+ */
+app.post("/api/companies/distribute-unowned", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const apply = (req.body ?? {}).apply === true;
+  const out = await distributeUnowned({ apply, actor: (req as any).auth?.sub ?? null });
+  if (apply && out.assigned.length) {
+    await logAudit({
+      action: "companies.distribute",
+      actorId: (req as any).auth?.sub,
+      target: `${out.assigned.length} company/companies`,
+      detail: out.assigned.map(a => `${a.company} → ${a.to}`).join("; ").slice(0, 900),
+      ip: clientIp(req),
+    });
+  }
+  res.json(out);
+});
+
+/** Who is in the rotation and what each is carrying — so "why did they get it" is answerable. */
+app.get("/api/owner-rotation", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await rotation());
+});
+
+/**
+ * Who a client may be assigned to. Served rather than decided in the browser, because the console
+ * had its own idea — every active member of staff — and it disagreed with assignment.ts.
+ *
+ * `include` keeps a current owner on the list even if their role no longer qualifies, so opening a
+ * record cannot silently drop the person it is already assigned to.
+ */
+app.get("/api/assignable-owners", requireAuth, requireStaff, async (req, res) => {
+  res.json(await assignableOwners(String(req.query.include ?? "").trim() || null));
+});
+
+/**
+ * Correct a lead's own details — the mirror of the create route above.
+ *
+ * WHY IT IS NOT THE GENERIC CRUD PUT
+ *
+ * `contacts` is a relation, not a column, so Prisma rejects it inside `data` — the create route
+ * already strips it for the same reason. And the company's three flat contact columns are a MIRROR
+ * of the primary contact with exactly one writer (contacts.ts). Letting an edit form write
+ * `contact`/`email`/`phone` directly would give that mirror a second author and the two would drift
+ * within a week. So the person is edited through the contacts module, and the mirror follows.
+ *
+ * WHAT IT REFUSES TO TOUCH
+ *
+ * Lifecycle. Making a lead a client provisions a portal login, opens a deal and stamps a CR — that
+ * is the lifecycle route's job, with its own dialog and its own consequences. A correction form that
+ * could quietly do it by changing a dropdown would be a very expensive typo.
+ */
+app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const existing = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: "Not found" });
+
+  const b = req.body ?? {};
+  const contact = b.contact && typeof b.contact === "object" ? b.contact : null;
+  const name = String(b.name ?? "").trim();
+  if (!name) return res.status(400).json({ error: "A company name is the one thing this cannot be saved without." });
+  // Checked HERE too, not only in the browser. A form is a convenience; the route is the rule, and
+  // this one is also reachable from anything else that learns the URL.
+  const problem = contactProblem(contact);
+  if (problem) return res.status(400).json({ error: problem });
+
+  try {
+    await prisma.company.update({
+      where: { id: existing.id },
+      data: {
+        name,
+        city: b.city ?? null,
+        source: b.source ?? null,
+        sourceDetail: b.sourceDetail ?? null,
+        // `null` is a real choice here — a manager deliberately unassigning — so the key being
+        // PRESENT is what decides, not whether it has a value.
+        ...("ownerId" in b ? { ownerId: b.ownerId || null } : {}),
+      },
+    });
+
+    // A person changed it, so no reason is invented: the method IS the explanation. recordAssignment
+    // skips a no-op, so saving this form without touching the owner writes nothing.
+    if ("ownerId" in b) {
+      await recordAssignment(prisma, {
+        companyId: existing.id, from: existing.ownerId, to: b.ownerId || null,
+        assignedById: a?.sub ?? null, method: "manual",
+      });
+    }
+
+    if (contact) {
+      const primary = await prisma.contact.findFirst({ where: { companyId: existing.id, isPrimary: true } })
+        ?? await prisma.contact.findFirst({ where: { companyId: existing.id } });
+      const data = { name: String(contact.name ?? "").trim() || name, jobTitle: contact.jobTitle || null, email: contact.email || null, phone: contact.phone || null };
+      if (primary) await editContact(primary.id, data);
+      else if (data.name) await addContact(existing.id, data);
+    }
+
+    await logAudit({ action: "company.edit", actorId: a?.sub, target: `${name} (${existing.id})`, detail: existing.name !== name ? `renamed from ${existing.name}` : undefined, ip: clientIp(req) });
+    const updated = await prisma.company.findUnique({ where: { id: existing.id } });
+    res.json(updated);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/**
+ * "Have we already got this company?" — asked while somebody is typing.
+ *
+ * Deliberately NOT scoped to the caller's own clients. A sales user who cannot see a colleague's
+ * client is exactly the person about to enter it a second time, and hiding the match would let them
+ * do it. The owner's name comes back with it so they know who to ask.
+ */
+app.get("/api/companies/duplicates", requireAuth, requireStaff, async (req, res) => {
+  res.json(await findDuplicates({
+    name: String(req.query.name ?? ""), cr: String(req.query.cr ?? ""),
+    email: String(req.query.email ?? ""), phone: String(req.query.phone ?? ""),
+    excludeId: String(req.query.excludeId ?? "") || null,
+  }));
+});
+
+/**
+ * What is not set up yet. Counted on request — a cached score would keep congratulating somebody
+ * for work they have not done.
+ */
+app.get("/api/setup-check", requireAuth, requireStaff, async (req, res) => {
+  const country = String(req.query.country ?? "").trim() || (await homeCountry());
+  res.json(await setupCheck(country));
+});
+
+// ── Sales performance ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The Activities screen: what the team has actually been doing, across every client.
+ *
+ * `?days` bounds the window — the default is a fortnight, because an unbounded log is a screen that
+ * gets slower every month and answers a question nobody asked ("what happened in March?"). `?kind`
+ * narrows to one sort of contact; `?mine=1` to the caller's own.
+ *
+ * Counts come back for EVERY kind including the zeroes, so the filter bar keeps its shape as it is
+ * used rather than dropping chips as they stop matching.
+ */
+app.get("/api/activities", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const days = Math.max(1, Math.min(365, Number(req.query.days ?? 14) || 14));
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const kind = String(req.query.kind ?? "").trim();
+  const mine = String(req.query.mine ?? "") === "1" ? ((req as any).auth?.sub ?? null) : null;
+  const includeAuto = String(req.query.auto ?? "") === "1";
+  try {
+    const [rows, counts, autoCount] = await Promise.all([
+      activityFeed({ companyIds: scoped, ownerId: mine, kinds: kind ? [kind] : null, since, includeAuto, limit: 300 }),
+      // Counts ignore the kind filter on purpose — a chip has to show how many it WOULD match, not
+      // how many match the filter that is already on.
+      activityCounts({ companyIds: scoped, ownerId: mine, since, includeAuto }),
+      // How many are being held back, so the screen can offer them by number rather than hiding
+      // the fact that anything was excluded at all.
+      includeAuto ? Promise.resolve(0) : prisma.interaction.count({
+        where: { auto: true, at: { gte: since }, ...(scoped ? { companyId: { in: scoped } } : {}), ...(mine ? { ownerId: mine } : {}) },
+      }),
+    ]);
+    res.json({ rows, counts, since, days, includeAuto, autoCount, scope: scoped ? "own" : "firm" });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// The CRM dashboard: every headline figure for today, in one round trip.
+//
+// Scoped through the SAME pair as the Pipeline board and the Performance report — salesCompanyIds
+// for the companies, visibleUserIds for the deal owners. Deliberately not a third scoping rule: a
+// dashboard that shows a rep a firm-wide total while their own board shows their book would make
+// them think the board was broken.
+//
+// Undated, unlike sales-report. This screen answers "where are we NOW", so the as-at date is today
+// and there is no period to pick — every figure that is about a month says so in its own name.
+app.get("/api/crm-dashboard", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const vis = await visibleUserIds((req as any).auth);
+  // WHOSE TARGET, decided by the SAME rule the Performance report uses — the firm's, or the one
+  // team you lead, or your own. Resolved here rather than inside the dashboard module so there is
+  // one rule in one place; a second copy is how two screens end up measuring against two targets
+  // and neither reader knows which they are looking at.
+  const period = new Date().toISOString().slice(0, 7);
+  const led = await actableTeamIds((req as any).auth);
+  const teamId = led && led.length === 1 ? led[0] : null;
+  const ownerId = vis.scope === "self" ? (req as any).auth.sub : null;
+  const row = await prisma.salesTarget.findFirst({
+    where: { period, teamId: teamId ?? null, ownerId: teamId ? null : ownerId },
+  });
+  const target = row
+    ? {
+        amountMinor: row.amountMinor,
+        label: teamId ? "your team's target" : ownerId ? "your target" : "the firm's target",
+      }
+    : null;
+  try {
+    res.json(await crmDashboard({ companyIds: scoped, ownerIds: vis.ids, target }));
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// History read back, in one round trip: stage dwell times and death stages, the lifecycle funnel
+// and its conversion speeds, and who deals are being lost to. All three begin at the day their
+// tables began — each block says so rather than presenting a week of record as an eternal truth.
+app.get("/api/stage-analytics", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const country = String(req.query.country ?? "").trim() || (await homeCountry());
+  const scoped = await salesCompanyIds(req as any);
+  try {
+    // `lostTo` already lives inside stageAnalytics — a second competitor grouping here briefly
+    // existed and is exactly the two-answers-to-one-question this codebase keeps refusing.
+    const [stages, lifecycle, campaigns] = await Promise.all([
+      stageAnalytics(country),
+      lifecycleAnalytics({ companyIds: scoped }),
+      campaignPerformance({ companyIds: scoped }),
+    ]);
+    res.json({ ...stages, lifecycle, campaigns });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.get("/api/sales-report", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  // Three rungs now, not two, and all three come from ONE place (visibility.ts):
+  //   firm — admins, who may also narrow to any one person via ?ownerId
+  //   team — somebody with reports: their team's deals, narrowable to one of THEIR OWN people only
+  //   self — everyone else, exactly as before
+  // The narrowing check matters: without it, ?ownerId would let any team lead read any rep's
+  // numbers by guessing an id, and the middle rung would quietly be the top one.
+  const period = String(req.query.period ?? "").trim() || undefined;
+  // AS AT THE PERIOD, not as at today. People move between teams; asking "who is in this team" of a
+  // report about March credits March's deals to whoever happens to be in the team in August. Clamped
+  // to today because a membership question about the future has no honest answer — nobody's leaving
+  // date has been typed in yet — so the current team is the best available truth for a live period.
+  const on = asAtFor(period);
+  const scoped = await salesCompanyIds(req as any, on);
+  const vis = await visibleUserIds((req as any).auth, on);
+  const asked = String(req.query.ownerId ?? "").trim() || null;
+  const ownerId = vis.ids === null ? asked : (asked && vis.ids.includes(asked) ? asked : null);
+  const ownerIds = ownerId ? null : vis.ids;
+  // Exactly one team led → that team's target is the one this report is measured against. Two teams
+  // have no single target, and inventing one by adding them up would answer a question nobody asked.
+  const led = await actableTeamIds((req as any).auth, on);
+  // Not gated on vis.scope. An empty team degrades the VIEW to self-scope — correctly, there is
+  // nobody else's work to show — but the target still belongs to the team, and a lead who has been
+  // asked for a number before the team is staffed should see it rather than a blank. The rows and
+  // the target answer different questions and are allowed to disagree about how many people there are.
+  const teamId = !ownerId && led && led.length === 1 ? led[0] : null;
+  try {
+    // The same default salesReport applies internally — resolved here too so the two halves of the
+    // response cannot end up describing different periods when none was asked for.
+    const range = periodRange(period || currentPeriod())!;
+    res.json({
+      report: await salesReport({ period, ownerId, ownerIds, companyIds: scoped, teamId }),
+      // What happened to the commitments that came due in the same period. Scoped by exactly the
+      // same owner/company filters as the report above, so the two halves of the screen cannot be
+      // answering about different people.
+      followUps: await followUpCompletion({ from: range.from, to: range.to, companyIds: scoped, ownerId, ownerIds }),
+      periods: await periodsWithActivity(),
+      scope: ownerId ? "self" : vis.scope,
+      // WHICH team, not just that it is a team one. Without it the console can show a team's target
+      // and then save the edit against the firm — the bar measuring one thing and the box editing
+      // another, which is worse than having no editor.
+      teamId,
+      teamName: teamId ? (await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }))?.name ?? null : null,
+      // Said out loud, so a lead reading last quarter knows the team was read as it stood then.
+      membershipAsAt: on,
+    });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * The operations half of Performance: throughput, SLA record, and who is carrying what.
+ *
+ * SCOPED THE SAME WAY THE SALES ONE IS, and for the same reason. An officer sees their own figures;
+ * admins see the team. The alternative — everybody sees everybody — turns a workload view into a
+ * comparison nobody agreed to be part of, and it is the kind of screen that changes how people pick
+ * up work within a week of being switched on.
+ */
+app.get("/api/ops-report", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "accountant", "sales"), async (req, res) => {
+  // Same three rungs as the sales report, from the same module. A PRO lead sees their people's
+  // throughput and open load — unranked, as this report already insists — and can narrow to one of
+  // their own reports; they cannot narrow to anybody outside the team by guessing an id.
+  const on = asAtFor(String(req.query.period ?? "").trim() || undefined);
+  const vis = await visibleUserIds((req as any).auth, on);
+  const asked = String(req.query.assigneeId ?? "").trim() || null;
+  const assigneeId = vis.ids === null ? asked : (asked && vis.ids.includes(asked) ? asked : null);
+  const assigneeIds = assigneeId ? null : vis.ids;
+  try {
+    res.json({
+      report: await opsReport({ period: String(req.query.period ?? "").trim() || undefined, assigneeId, assigneeIds }),
+      periods: await opsPeriodsWithActivity(),
+      /** So the screen can say "your work" / "your team" rather than implying it is the firm. */
+      scope: assigneeId ? "self" : vis.scope,
+    });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.get("/api/sales-targets", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (_req, res) => {
+  res.json(await prisma.salesTarget.findMany({ orderBy: { period: "desc" }, take: 200 }));
+});
+
+/**
+ * Set or clear a target.
+ *
+ * An amount of zero CLEARS it rather than storing a target of nothing — "0% of SAR 0" is a figure
+ * that means nothing, and the report deliberately reports "no target set" instead.
+ */
+app.put("/api/sales-targets", requireAuth, requireStaff, async (req, res) => {
+  const b = req.body ?? {};
+  // NOT blanket requireWriteRole. A team lead is a sales user, so the admin-only gate hid this from
+  // the one person who is actually asked what their team will bring in — the control was aimed at
+  // "who may change the firm's number", and it caught the team case by accident. Admins keep
+  // everything; a lead may set the target of a team THEY LEAD, and nothing else.
+  const auth = (req as any).auth;
+  const isAdmin = auth?.role === "admin" || auth?.role === "super_admin";
+  if (!isAdmin) {
+    const wanted = String(b.teamId ?? "").trim();
+    const led = await actableTeamIds(auth);
+    if (!wanted || !led || !led.includes(wanted)) {
+      return res.status(403).json({ error: "You can only set a target for a team you lead" });
+    }
+  }
+  const period = String(b.period ?? "").trim();
+  if (!periodRange(period)) return res.status(400).json({ error: `"${period}" is not a period — use 2026-08 or 2026-Q3` });
+  const ownerId = b.ownerId || null;
+  const teamId = b.teamId || null;
+  // A target belongs to the firm, ONE person, or ONE team. Both set is not a smaller target, it is
+  // an ambiguous one, and the report would have to pick which it meant.
+  if (ownerId && teamId) return res.status(400).json({ error: "A target is for a person or for a team, not both" });
+  if (teamId && !(await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } }))) {
+    return res.status(400).json({ error: "That team no longer exists" });
+  }
+  const amountMinor = Math.round(Number(b.amountMinor) || 0);
+
+  if (amountMinor <= 0) {
+    await prisma.salesTarget.deleteMany({ where: { period, ownerId, teamId } });
+    return res.json({ ok: true, cleared: true });
+  }
+  const existing = await prisma.salesTarget.findFirst({ where: { period, ownerId, teamId } });
+  const data = { period, ownerId, teamId, amountMinor, currency: b.currency || null, country: b.country || null, note: b.note || null };
+  const row = existing
+    ? await prisma.salesTarget.update({ where: { id: existing.id }, data })
+    : await prisma.salesTarget.create({ data: { ...data, createdAt: new Date().toISOString() } });
+  await logAudit({ action: "sales-target.set", actorId: (req as any).auth?.sub, target: period, detail: String(amountMinor), ip: clientIp(req) });
+  res.json(row);
+});
+
+// ── A deal's checklist ─────────────────────────────────────────────────────────────────────────
+
+/** What this deal still owes, with how each item came to be satisfied. */
+app.get("/api/opportunities/:id/checklist", requireAuth, requireStaff, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  const company = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  res.json(await summaryFor(opp, company, opp.stage));
+});
+
+/**
+ * Tick or untick a MANUAL item.
+ *
+ * Document items are refused outright rather than quietly ignored. They are satisfied by a document
+ * existing, and letting somebody tick one by hand would create exactly the disagreement between the
+ * list and reality that deriving them was meant to prevent — with the hand-tick winning.
+ */
+app.post("/api/opportunities/:id/checklist", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+
+  const key = String((req.body ?? {}).key ?? "").trim();
+  const done = !!(req.body ?? {}).done;
+  // The SAME list the reader shows — see effectiveItems. Validating against the snapshot alone
+  // refused every item on a deal that had never been moved under a checklist, while displaying them.
+  const company0 = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  const items = await effectiveItems(opp, company0, opp.stage);
+  const item = items.find(i => i.key === key);
+  if (!item) return res.status(400).json({ error: "That is not on this deal's checklist" });
+  if (String(item.source) === "document") {
+    return res.status(400).json({ error: `"${item.label}" is satisfied by the document itself — upload or record it against the client and it ticks on its own.` });
+  }
+
+  const me = await prisma.user.findUnique({ where: { id: (req as any).auth?.sub }, select: { name: true } });
+  const state: Record<string, any> = (opp.checklistState && typeof opp.checklistState === "object") ? { ...(opp.checklistState as any) } : {};
+  if (done) state[key] = { done: true, at: new Date().toISOString(), by: me?.name ?? null };
+  else delete state[key];
+
+  const saved = await prisma.opportunity.update({ where: { id: opp.id }, data: { checklistState: state as any }, include: { stage: true } });
+  const company = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  res.json(await summaryFor(saved, company, saved.stage));
+});
+
+/**
+ * Waive a required item, with a reason.
+ *
+ * The escape hatch that makes a blocking checklist survivable. Without it a deal can sit for ever
+ * behind an item that no longer applies — a document the client is exempt from, a step done before
+ * this system existed — and the only way out is the database.
+ *
+ * ADMIN ONLY, and recorded. A waiver that anybody could grant is not a control, and one that leaves
+ * no trace turns "we checked" into a claim nobody can test afterwards.
+ */
+app.post("/api/opportunities/:id/checklist/waive", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true, company: { select: { name: true } } } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+
+  const key = String((req.body ?? {}).key ?? "").trim();
+  const why = String((req.body ?? {}).reason ?? "").trim();
+  if (!why) return res.status(400).json({ error: "Say why this is being waived — a waiver with no reason teaches nobody anything" });
+  const company0 = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  const items = await effectiveItems(opp, company0, opp.stage);
+  const item = items.find(i => i.key === key);
+  if (!item) return res.status(400).json({ error: "That is not on this deal's checklist" });
+
+  const me = await prisma.user.findUnique({ where: { id: (req as any).auth?.sub }, select: { name: true } });
+  const waived: Record<string, any> = (opp.checklistWaived && typeof opp.checklistWaived === "object") ? { ...(opp.checklistWaived as any) } : {};
+  waived[key] = { reason: why, at: new Date().toISOString(), by: me?.name ?? null };
+
+  const saved = await prisma.opportunity.update({ where: { id: opp.id }, data: { checklistWaived: waived as any }, include: { stage: true } });
+  await logActivity({ type: "sales", message: `Checklist waived on ${opp.title} (${opp.company?.name}): ${item.label} — ${why}`, user: (req as any).auth?.email });
+  await logAudit({ action: "deal.checklist.waive", actorId: (req as any).auth?.sub, target: opp.title, detail: `${item.label}: ${why}`, ip: clientIp(req) });
+  const company = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  res.json(await summaryFor(saved, company, saved.stage));
+});
+
+// ── Teams: who works together, and who leads them ──────────────────────────────────────────────
+//
+// Every write here goes through teams.ts rather than touching TeamMember/TeamLead directly, because
+// the one thing that must never be got wrong is CLOSING the previous row instead of overwriting it.
+// A second writer that edits in place turns the history into a lie, and it does so silently.
+
+/** The teams as they stand — or as they stood, with ?on=YYYY-MM-DD. */
+app.get("/api/teams", requireAuth, requireStaff, async (req, res) => {
+  const kind = String(req.query.kind ?? "").trim();
+  if (kind && !TEAM_KINDS.includes(kind as any)) return res.status(400).json({ error: `"${kind}" is not a kind of team` });
+  const on = String(req.query.on ?? "").trim() || todayDay();
+  res.json(await teamViews({ kind: kind || undefined, on, includeInactive: String(req.query.all ?? "") === "1" }));
+});
+
+app.get("/api/teams/:id/history", requireAuth, requireStaff, async (req, res) => {
+  const t = await prisma.team.findUnique({ where: { id: req.params.id } });
+  if (!t) return res.status(404).json({ error: "That team no longer exists" });
+  res.json(await teamHistory(t.id));
+});
+
+app.post("/api/teams", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const b = req.body ?? {};
+  const name = String(b.name ?? "").trim();
+  const kind = String(b.kind ?? "").trim();
+  if (!name) return res.status(400).json({ error: "Give the team a name — it goes on reports" });
+  if (!TEAM_KINDS.includes(kind as any)) return res.status(400).json({ error: "Say whether this is a sales or a PRO team" });
+  const clash = await prisma.team.findFirst({ where: { name, kind, active: true } });
+  if (clash) return res.status(409).json({ error: `There is already a ${kind} team called "${name}"` });
+
+  const team = await prisma.team.create({
+    data: { name, kind, country: b.country || null, active: true, createdAt: new Date().toISOString() },
+  });
+  await logActivity({ type: "team", message: `Team created: ${name} (${kind})`, user: (req as any).auth?.email });
+  res.json((await teamViews({ includeInactive: true })).find(t => t.id === team.id) ?? team);
+});
+
+app.put("/api/teams/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const b = req.body ?? {};
+  const team = await prisma.team.findUnique({ where: { id: req.params.id } });
+  if (!team) return res.status(404).json({ error: "That team no longer exists" });
+  const data: any = {};
+  if (b.name !== undefined) {
+    const name = String(b.name).trim();
+    if (!name) return res.status(400).json({ error: "A team needs a name" });
+    data.name = name;
+  }
+  if (b.country !== undefined) data.country = b.country || null;
+  // Retiring, not deleting. The team's history is what last quarter's report reads, and a team that
+  // can be deleted is a quarter that can stop adding up.
+  if (b.active !== undefined) data.active = !!b.active;
+
+  const saved = await prisma.team.update({ where: { id: team.id }, data });
+  if (b.active === false) await logActivity({ type: "team", message: `Team retired: ${saved.name}`, user: (req as any).auth?.email });
+  res.json((await teamViews({ includeInactive: true })).find(t => t.id === saved.id) ?? saved);
+});
+
+/**
+ * Change who leads a team. The operation the whole model exists for — one edit, whoever is in it.
+ *
+ * `userId: null` is a real answer and leaves the team deliberately unled, which the screen then says
+ * out loud. It is not the same as "unchanged", which is why the field must be present to act.
+ */
+app.post("/api/teams/:id/lead", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const team = await prisma.team.findUnique({ where: { id: req.params.id } });
+  if (!team) return res.status(404).json({ error: "That team no longer exists" });
+  if (!("userId" in (req.body ?? {}))) return res.status(400).json({ error: "Say who should lead it, or null for nobody" });
+
+  const userId = req.body.userId || null;
+  if (userId) {
+    const problem = await personProblem(String(userId), "lead");
+    if (problem) return res.status(400).json({ error: problem });
+  }
+  const on = String((req.body ?? {}).on ?? "").trim() || todayDay();
+  await setLead(team.id, userId, on);
+
+  const who = userId ? (await prisma.user.findUnique({ where: { id: String(userId) }, select: { name: true } }))?.name : null;
+  await logActivity({
+    type: "team",
+    message: `Team lead ${who ? `set to ${who}` : "cleared"}: ${team.name}`,
+    user: (req as any).auth?.email,
+  });
+  await logAudit({ action: "team.lead", actorId: (req as any).auth?.sub, target: team.name, detail: who ?? "(nobody)", ip: clientIp(req) });
+  res.json((await teamViews({ includeInactive: true, on })).find(t => t.id === team.id));
+});
+
+/** Add somebody. Joining closes whatever membership they had — one team per person, see teams.ts. */
+app.post("/api/teams/:id/members", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const team = await prisma.team.findUnique({ where: { id: req.params.id } });
+  if (!team) return res.status(404).json({ error: "That team no longer exists" });
+  const userId = String((req.body ?? {}).userId ?? "").trim();
+  if (!userId) return res.status(400).json({ error: "Say who is joining" });
+  const problem = await personProblem(userId, "member");
+  if (problem) return res.status(400).json({ error: problem });
+
+  const on = String((req.body ?? {}).on ?? "").trim() || todayDay();
+  await addMember(team.id, userId, on);
+  res.json((await teamViews({ includeInactive: true, on })).find(t => t.id === team.id));
+});
+
+app.delete("/api/teams/:id/members/:userId", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const team = await prisma.team.findUnique({ where: { id: req.params.id } });
+  if (!team) return res.status(404).json({ error: "That team no longer exists" });
+  const on = String(req.query.on ?? "").trim() || todayDay();
+  await removeMember(team.id, req.params.userId, on);
+  res.json((await teamViews({ includeInactive: true, on })).find(t => t.id === team.id));
+});
+
+// ── Interactions: what was said, and what was promised ──────────────────────────────────────────
+
+app.get("/api/interactions", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const companyId = String(req.query.companyId ?? "").trim();
+  if (companyId) {
+    if (scoped && !scoped.includes(companyId)) return res.json([]);
+    return res.json(await historyFor(companyId));
+  }
+  const where: any = {};
+  if (scoped) where.companyId = { in: scoped };
+  if (req.query.opportunityId) where.opportunityId = String(req.query.opportunityId);
+  res.json(await prisma.interaction.findMany({
+    where,
+    include: { company: { select: { id: true, name: true, lifecycle: true } }, opportunity: { select: { id: true, title: true } } },
+    orderBy: { at: "desc" }, take: 500,
+  }));
+});
+
+/** What is owed today, overdue first. The one screen a salesperson opens in the morning. */
+app.get("/api/follow-ups", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const mine = String(req.query.mine ?? "") === "1" ? (req as any).auth?.sub : null;
+  res.json(await openFollowUps({ companyIds: scoped, ownerId: mine, on: String(req.query.on ?? "").trim() || undefined }));
+});
+
+app.post("/api/interactions", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const b = req.body ?? {};
+  const co = await prisma.company.findUnique({ where: { id: String(b.companyId ?? "") }, select: { id: true, name: true } });
+  if (!co) return res.status(404).json({ error: "Pick who this was with" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    const row = await logInteraction({ ...b, companyId: co.id, contactId: b.contactId || null, ownerId: b.ownerId || (req as any).auth?.sub || null });
+    logActivity({
+      type: "sales",
+      message: `${KIND_LABEL[row.kind] ?? "Contact"} logged: ${co.name}${row.nextAction ? ` — next: ${row.nextAction} (${dayOf(row.nextActionAt)})` : ""}`,
+      user: (req as any).auth?.email,
+    });
+    res.status(201).json(row);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.put("/api/interactions/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const before = await prisma.interaction.findUnique({ where: { id: req.params.id } });
+  if (!before) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(before.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  const b = req.body ?? {};
+  res.json(await prisma.interaction.update({
+    where: { id: before.id },
+    data: {
+      kind: b.kind === undefined ? undefined : String(b.kind),
+      at: b.at === undefined ? undefined : (b.at || before.at),
+      summary: b.summary === undefined ? undefined : (b.summary || null),
+      outcome: b.outcome === undefined ? undefined : (b.outcome || null),
+      nextAction: b.nextAction === undefined ? undefined : (b.nextAction || null),
+      nextActionAt: b.nextActionAt === undefined ? undefined : (b.nextActionAt || null),
+    },
+  }));
+});
+
+app.post("/api/interactions/:id/done", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const row = await prisma.interaction.findUnique({ where: { id: req.params.id } });
+  if (!row) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try { res.json(await closeFollowUp(row.id)); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// Push a follow-up's date forward. Logged to the activity feed like any other decision about work —
+// a commitment quietly moving is the thing this feature exists to stop being quiet.
+app.post("/api/interactions/:id/reschedule", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const row = await prisma.interaction.findUnique({ where: { id: req.params.id }, include: { company: { select: { name: true } } } });
+  if (!row) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    const saved = await rescheduleFollowUp(row.id, { to: String((req.body ?? {}).to ?? ""), reason: (req.body ?? {}).reason });
+    logActivity({
+      type: "sales",
+      message: `Follow-up moved to ${dayOf(saved.nextActionAt)}: ${saved.nextAction} (${row.company.name})`
+        + (saved.snoozeCount > 1 ? ` — pushed ${saved.snoozeCount} times, first due ${dayOf(saved.snoozedFrom)}` : "")
+        + (saved.snoozeReason ? ` — ${saved.snoozeReason}` : ""),
+      user: (req as any).auth?.email,
+    });
+    res.json(saved);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// Abandon a follow-up. A REASON is required — see cancelFollowUp for why this one is demanded
+// where a reschedule's is not.
+app.post("/api/interactions/:id/cancel", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const row = await prisma.interaction.findUnique({ where: { id: req.params.id }, include: { company: { select: { name: true } } } });
+  if (!row) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    const saved = await cancelFollowUp(row.id, String((req.body ?? {}).reason ?? ""));
+    logActivity({
+      type: "sales",
+      message: `Follow-up cancelled: ${saved.nextAction} (${row.company.name}) — ${saved.cancelReason}`,
+      user: (req as any).auth?.email,
+    });
+    res.json(saved);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete("/api/interactions/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const row = await prisma.interaction.findUnique({ where: { id: req.params.id } });
+  if (!row) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  await prisma.interaction.delete({ where: { id: row.id } });
+  res.json({ ok: true });
+});
+
+// ── Pipeline stages (configuration) ─────────────────────────────────────────────────────────────
+//
+// Reads go through here rather than the generic CRUD so the whole SET can be validated on save.
+// One stage at a time cannot catch "no won column" or "two lost columns", and neither of those is
+// visible until somebody tries to close a deal.
+
+app.get("/api/pipeline-stages", requireAuth, requireStaff, async (req, res) => {
+  const country = String(req.query.country ?? "").trim() || (await homeCountry());
+  res.json(await stagesFor(country));
+});
+
+app.put("/api/pipeline-stages", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const country = String((req.body ?? {}).country ?? "").trim() || (await homeCountry());
+  const rows: any[] = Array.isArray((req.body ?? {}).stages) ? req.body.stages : [];
+  const err = validateStages(rows);
+  if (err) return res.status(400).json({ error: err });
+
+  const existing = await prisma.pipelineStage.findMany({ where: { country } });
+  const keep = new Set(rows.map(r => r.id).filter(Boolean));
+
+  // A stage with deals on it is RETIRED, never deleted: the opportunity points at it, and removing
+  // the row would leave cards that cannot say which column they were in. Same rule as a document
+  // type with documents captured under it.
+  for (const s of existing) {
+    if (keep.has(s.id)) continue;
+    const inUse = await prisma.opportunity.count({ where: { stageId: s.id } });
+    if (inUse) await prisma.pipelineStage.update({ where: { id: s.id }, data: { retired: true } });
+    else await prisma.pipelineStage.delete({ where: { id: s.id } });
+  }
+
+  for (const [i, r] of rows.entries()) {
+    // An empty chase window means "no rule", which is different from zero — zero would book a chase
+    // due the same day. Blank and null both have to survive as null.
+    const chase = r.followUpDays === "" || r.followUpDays == null ? null : Math.max(0, Math.min(365, Number(r.followUpDays) || 0));
+    // How long a deal may sit here before it is called stalled. Blank means "use the global
+    // setting", which is different from 0 — zero would call every deal stalled the day it arrived.
+    // Floored at 1 for exactly that reason.
+    const limit = r.maxDays === "" || r.maxDays == null ? null : Math.max(1, Math.min(365, Number(r.maxDays) || 0));
+    const data = {
+      country, name: String(r.name).trim(), color: r.color ?? null, bg: r.bg ?? null,
+      sort: i, probabilityBp: Math.max(0, Math.min(10000, Number(r.probabilityBp) || 0)),
+      followUpDays: chase, followUpAction: String(r.followUpAction ?? "").trim() || null,
+      maxDays: limit,
+      isWon: !!r.isWon, isLost: !!r.isLost, retired: false,
+      // The checklist this stage gates on. Only "dynamic" is settable from the editor — a static
+      // list typed per stage would be a second place to maintain the same requirements, and the rule
+      // is the one that ships inside a country pack. Blank clears the gate entirely.
+      checklistSource: String(r.checklistRuleId ?? "").trim() ? "dynamic" : null,
+      checklistRuleId: String(r.checklistRuleId ?? "").trim() || null,
+      // Editing a pack-installed stage marks it modified, so an upgrade knows not to overwrite it.
+      ...(r.id ? { packModified: true } : {}),
+    };
+    if (r.id) await prisma.pipelineStage.update({ where: { id: r.id }, data });
+    else await prisma.pipelineStage.create({ data });
+  }
+  await logAudit({ action: "pipeline-stages.save", actorId: (req as any).auth?.sub, target: country, detail: `${rows.length} stages`, ip: clientIp(req) });
+  res.json(await stagesFor(country));
+});
+
+// ── Opportunities ───────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/pipeline", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const country = String(req.query.country ?? "").trim() || (await homeCountry());
+  const scoped = await salesCompanyIds(req as any);
+  const board = await boardFor(country, { companyIds: scoped, ownerId: String(req.query.ownerId ?? "").trim() || null });
+  // Quotations out with no answer. Counted here rather than on the board's own cards because a
+  // quotation can exist without a deal behind it, and money already quoted and then forgotten is
+  // worth a number at the top of the screen somebody looks at every morning.
+  const awaiting = await prisma.quotation.count({
+    where: { status: "sent", ...(scoped ? { companyId: { in: scoped } } : {}) },
+  });
+  res.json({ ...board, awaitingAnswer: awaiting });
+});
+
+app.get("/api/opportunities", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const where: any = {};
+  if (scoped) where.companyId = { in: scoped };
+  if (req.query.companyId) where.companyId = String(req.query.companyId);
+  const rows = await prisma.opportunity.findMany({ where, include: { stage: true }, orderBy: { createdAt: "desc" }, take: 500 });
+  res.json(await Promise.all(rows.map(r => withMoney(r as any))));
+});
+
+app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const b = req.body ?? {};
+  if (!String(b.title ?? "").trim()) return res.status(400).json({ error: "Give it a title — a pipeline of untitled deals cannot be read" });
+  const co = await prisma.company.findUnique({ where: { id: String(b.companyId ?? "") } });
+  if (!co) return res.status(404).json({ error: "Pick the company this is for" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  // Pursuing a company already written off is a contradiction that would sit in the pipeline
+  // forever. Reopen it on the Leads screen first — that is one press, and it says what happened.
+  if (co.lifecycle === "lost") return res.status(409).json({ error: `${co.name} is marked lost. Reopen it before adding a deal.` });
+
+  const country = co.country ?? (await homeCountry());
+  const stages = await stagesFor(country);
+  if (!stages.length) return res.status(409).json({ error: `No pipeline stages are set up for ${countryName(country)}. Add them under Sales Settings first.` });
+  // Named stage, or the first open one — never a terminal column, which would record a deal as won
+  // or lost at the moment it was created.
+  const stage = (b.stageId && stages.find(s => s.id === b.stageId)) || stages.find(s => !s.isWon && !s.isLost) || stages[0];
+
+  const now = new Date().toISOString();
+  const created = await prisma.opportunity.create({
+    data: {
+      number: await nextNumber("opportunity").catch(() => null),
+      companyId: co.id, contactId: b.contactId || null, title: String(b.title).trim(),
+      valueMinor: b.valueMinor == null || b.valueMinor === "" ? null : Math.round(Number(b.valueMinor)),
+      currency: b.currency || countryCurrency(country),
+      probabilityBp: b.probabilityBp == null || b.probabilityBp === "" ? null : Math.max(0, Math.min(10000, Number(b.probabilityBp))),
+      stageId: stage.id, expectedCloseDate: b.expectedCloseDate || null,
+      ownerId: b.ownerId || (req as any).auth?.sub || null, source: b.source || co.source || null,
+      country, notes: b.notes || null, createdAt: now, stageAt: now,
+    },
+    include: { stage: true },
+  });
+  await recordTransition(prisma, { opportunityId: created.id, toStageId: stage.id, movedById: (req as any).auth?.sub ?? null, at: now });
+  logActivity({ type: "sales", message: `Deal opened: ${created.title} (${co.name})`, user: (req as any).auth?.email });
+  res.status(201).json(await withMoney(created as any));
+});
+
+app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const before = await prisma.opportunity.findUnique({ where: { id: req.params.id } });
+  if (!before) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(before.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  const b = req.body ?? {};
+  const updated = await prisma.opportunity.update({
+    where: { id: before.id },
+    data: {
+      title: b.title == null ? undefined : String(b.title).trim(),
+      contactId: b.contactId === undefined ? undefined : (b.contactId || null),
+      valueMinor: b.valueMinor === undefined ? undefined : (b.valueMinor === "" || b.valueMinor === null ? null : Math.round(Number(b.valueMinor))),
+      probabilityBp: b.probabilityBp === undefined ? undefined : (b.probabilityBp === "" || b.probabilityBp === null ? null : Math.max(0, Math.min(10000, Number(b.probabilityBp)))),
+      expectedCloseDate: b.expectedCloseDate === undefined ? undefined : (b.expectedCloseDate || null),
+      ownerId: b.ownerId === undefined ? undefined : (b.ownerId || null),
+      source: b.source === undefined ? undefined : (b.source || null),
+      notes: b.notes === undefined ? undefined : (b.notes || null),
+      // Empty string means "back to derived" — an override somebody can take OFF again matters as
+      // much as one they can put on. Anything not in the known set is refused rather than stored,
+      // because a typo here would silently vanish a deal from every forecast bucket.
+      forecastCategory: b.forecastCategory === undefined ? undefined
+        : (["pipeline", "best_case", "commit"].includes(String(b.forecastCategory)) ? String(b.forecastCategory) : null),
+      competitor: b.competitor === undefined ? undefined : (String(b.competitor).trim() || null),
+    },
+    include: { stage: true },
+  });
+  res.json(await withMoney(updated as any));
+});
+
+/**
+ * Move a deal to another column.
+ *
+ * The only route that writes `stageId`, so the two things that must accompany a move happen here
+ * and nowhere else: a losing move records WHY, and a closing move stamps when.
+ */
+app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+
+  const to = await prisma.pipelineStage.findUnique({ where: { id: String((req.body ?? {}).stageId ?? "") } });
+  if (!to || to.retired) return res.status(400).json({ error: "That column does not exist" });
+  if (to.country !== opp.country) return res.status(400).json({ error: "That column belongs to another country" });
+  if (to.id === opp.stageId) return res.json(await withMoney(opp as any));
+
+  const reason = String((req.body ?? {}).lostReason ?? "").trim();
+  if (to.isLost && !reason) return res.status(400).json({ error: "Say why it was lost — that is the whole value of recording it" });
+
+  /**
+   * THE STAGE'S CHECKLIST GATES THE MOVE OUT OF IT.
+   *
+   * Checked against the stage the deal is LEAVING, not the one it is entering: a list is what this
+   * column asks you to have finished before the deal goes any further.
+   *
+   * Losing a deal is exempt on purpose. A deal that dies is precisely the one whose paperwork was
+   * never finished, and refusing to record the loss until the client sends documents they are never
+   * going to send would push people to leave dead deals sitting in the pipeline — which corrupts
+   * every open-pipeline figure on the board to keep a checklist tidy.
+   */
+  if (!to.isLost) {
+    const company = await prisma.company.findUnique({ where: { id: opp.companyId } });
+    const outstanding = await blockersFor(opp, company, opp.stage);
+    if (outstanding.length) {
+      return res.status(409).json({
+        // NAMED, every one of them. "Checklist incomplete" sends somebody hunting; the list tells
+        // them what to go and get.
+        error: `${opp.stage?.name ?? "This stage"} still needs: ${outstanding.map(i => i.label).join(", ")}`,
+        blockers: outstanding.map(i => ({ key: i.key, label: i.label, source: i.source, docType: i.docType })),
+        canWaive: true,
+      });
+    }
+  }
+
+  const now = new Date().toISOString();
+  // Reads BEFORE the transaction — they need no atomicity and would only hold it open.
+  const snapshotCompany = await prisma.company.findUnique({ where: { id: opp.companyId } });
+  const snapshot = await itemsForStage(to, opp, snapshotCompany);
+
+  /**
+   * ONE TRANSACTION for the three writes that must not disagree: the stage change, the history row
+   * that records it, and the follow-up swap (retire the old stage's chase, book the new one).
+   * A move whose transition never landed makes the analytics confidently wrong; a move whose old
+   * chase survived leaves somebody hounding a client about a stage the deal has left.
+   *
+   * Deliberately NOT in here: the activity line and the win notification. Rolling back a legitimate
+   * won deal because a toast failed to insert would be worse than the toast missing.
+   */
+  const { moved, booked } = await prisma.$transaction(async (tx) => {
+    const moved = await tx.opportunity.update({
+      where: { id: opp.id },
+      data: {
+        stageId: to.id, stageAt: now,
+        lostReason: to.isLost ? reason : null,
+        closedAt: to.isWon || to.isLost ? now : null,
+        // SNAPSHOT on arrival. Editing a stage's rule afterwards must not retroactively change what
+        // a deal already sitting in it was asked for — the same rule the workflow engine applies to
+        // a task's checklist, and for the same reason: people plan around what they were told.
+        checklist: snapshot as any,
+        // The state belongs to the list it was ticked against. Carrying manual ticks into a
+        // different stage's list would mark items nobody ever looked at, and the keys are not even
+        // guaranteed to mean the same thing.
+        checklistState: {} as any,
+        checklistWaived: {} as any,
+      },
+      include: { stage: true, company: { select: { name: true } } },
+    });
+    await recordTransition(tx, {
+      opportunityId: opp.id, fromStageId: opp.stageId, toStageId: to.id,
+      movedById: (req as any).auth?.sub ?? null, at: now,
+      lostReason: to.isLost ? reason : null,
+    });
+    // The stage's own chase window: books the follow-up this stage asks for, and retires the one
+    // the previous stage booked. Only ever touches rule-created commitments — and now fails WITH
+    // the move rather than leaving a half-moved deal.
+    const booked = await applyStageFollowUp(moved as any, to, (req as any).auth?.sub, tx);
+    return { moved, booked };
+  });
+
+  const st = statusOf(to);
+  logActivity({
+    type: "sales",
+    message: `Deal ${st === "won" ? "won" : st === "lost" ? "lost" : "moved"}: ${moved.title} (${(moved as any).company?.name}) → ${to.name}${reason ? ` — ${reason}` : ""}`,
+    user: (req as any).auth?.email,
+  });
+  if (st === "won") logNotification({ type: "system", title: "Deal won", message: `${moved.title} — ${(moved as any).company?.name}` });
+  // Say what was booked. A follow-up that appears in somebody's queue without the move that caused
+  // it having mentioned it is the kind of thing people assume is a bug.
+  res.json({ ...(await withMoney(moved as any)), followUp: booked ? { action: booked.nextAction, due: booked.nextActionAt } : null });
+});
+
+/**
+ * Raise the quotation for a deal.
+ *
+ * From here on the QUOTATION holds the money and this deal reads it — see withMoney. The estimate
+ * typed on the card was always a guess, and leaving both live is how a board says SAR 40,000 while
+ * the document the client signed says something else.
+ *
+ * Accepting that quotation is what wins the deal; nobody has to remember to drag the card.
+ */
+app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true, company: true } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  if (opp.quotationId) {
+    const existing = await prisma.quotation.findUnique({ where: { id: opp.quotationId } });
+    if (existing) return res.status(409).json({ error: `Quotation ${existing.number} was already raised from this deal.` });
+  }
+  if (statusOf(opp.stage) !== "open") return res.status(409).json({ error: "This deal is already closed." });
+
+  const b = req.body ?? {};
+  const items = Array.isArray(b.items) && b.items.length
+    ? b.items
+    : [{ name: opp.title, units: 1, price: (opp.valueMinor ?? 0) / 100 }];
+  const gross = items.reduce((n: number, it: any) => n + (Number(it.price) || 0) * (Number(it.units) || 1), 0);
+  // The same figure helper the rest of the money paths use, so VAT is worked out one way only —
+  // and at the CONFIGURED rate, not one passed in from the caller.
+  const figures = await figuresFromAmount(gross);
+
+  const q = await prisma.quotation.create({
+    data: {
+      number: await nextNumber("quotation"),
+      companyId: opp.companyId, clientName: opp.company.name,
+      service: opp.title, items,
+      amount: Math.round(figures.totalMinor / 100),
+      subtotalMinor: figures.subtotalMinor, vatMinor: figures.vatMinor, totalMinor: figures.totalMinor, vatRateBp: figures.vatRateBp,
+      status: "draft", date: new Date().toISOString().slice(0, 10),
+      validUntil: b.validUntil || null, notes: b.notes || null,
+    },
+  });
+  await prisma.opportunity.update({ where: { id: opp.id }, data: { quotationId: q.id } });
+  logActivity({ type: "sales", message: `Quotation ${q.number} raised for ${opp.title} (${opp.company.name})`, user: (req as any).auth?.email });
+  res.status(201).json({ quotation: q, opportunity: await withMoney({ ...opp, quotationId: q.id } as any) });
+});
+
+app.delete("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id } });
+  if (!opp) return res.status(404).json({ error: "Deal not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  // A deal that HAPPENED is not deleted — move it to the lost column, which keeps it in the loss
+  // report. Deleting would quietly improve the win rate, which is the one number this is for.
+  if (opp.quotationId) return res.status(409).json({ error: "A quotation was raised from this deal. Move it to the lost column instead — deleting it would take it out of the win-rate figures." });
+  await prisma.opportunity.delete({ where: { id: opp.id } });
+  await logAudit({ action: "opportunity.delete", actorId: (req as any).auth?.sub, target: opp.id, detail: opp.title, ip: clientIp(req) });
+  res.json({ ok: true });
+});
+
+/**
+ * Open a deal for a company, pre-filled from what is already known about it.
+ *
+ * WHY THIS IS A BUTTON AND NOT A RULE
+ *
+ * Whether there is business worth pursuing is a judgement somebody makes after speaking to people. A
+ * rule that opened a deal for every lead would fill the board with cards nobody had thought about,
+ * and a forecast built on those is worse than no forecast. What IS automatable is the friction —
+ * finding the company, typing a title, remembering the owner — so all of that is done here.
+ *
+ * Refuses when an open deal already exists: two live cards for one conversation is how a pipeline
+ * starts double-counting the same money.
+ */
+app.post("/api/companies/:id/open-deal", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!co) return res.status(404).json({ error: "Company not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  const out = await openDealFor(co, {
+    title: (req.body ?? {}).title,
+    actor: (req as any).auth?.sub,
+    homeCountry: (await homeCountry()),
+    numberFor: () => nextNumber("opportunity"),
+  });
+  if ("skipped" in out) {
+    const message = out.skipped === "no-stages"
+      ? `No pipeline stages are set up for ${countryName(co.country ?? (await homeCountry()))}. Add them under Sales Settings first.`
+      : out.skipped === "lost"
+        ? `${co.name} is marked lost. Reopen it before opening a deal.`
+        : `${co.name} ${out.detail}.`;
+    return res.status(409).json({ error: message });
+  }
+
+  logActivity({ type: "sales", message: `Deal opened for ${co.name}: ${out.deal.title}`, user: (req as any).auth?.email });
+  res.status(201).json(await withMoney(out.deal as any));
+});
+
+/**
+ * Move a company along the lifecycle: lead → prospect → client, or out to lost / churned.
+ *
+ * This is the only route that may write `lifecycle`, and it is where the two things that must happen
+ * exactly once happen: the CR number is captured on the way in to `client`, and the portal login is
+ * provisioned at that same moment and never before. A lead with a portal account could sign in and
+ * look at an empty client portal for a firm that has not agreed to work with them yet.
+ */
+/**
+ * How this company came to its current owner — the answer to "why did this lead come to me?".
+ *
+ * Scoped like everything else: a sales user can read the history of a company in their own book,
+ * which is precisely the one they are asking about.
+ */
+app.get("/api/companies/:id/assignments", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(req.params.id)) return res.status(403).json({ error: "Not one of your clients" });
+  try {
+    res.json(await assignmentHistory(req.params.id));
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!co) return res.status(404).json({ error: "Company not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+
+  const to = String((req.body ?? {}).to ?? "").trim();
+  if (!LIFECYCLES.includes(to)) return res.status(400).json({ error: `Lifecycle must be one of: ${LIFECYCLES.join(", ")}` });
+  if (to === co.lifecycle) return res.status(409).json({ error: `Already ${to}` });
+
+  const cr = String((req.body ?? {}).cr ?? co.cr ?? "").trim();
+  const lostReason = String((req.body ?? {}).lostReason ?? "").trim();
+  // Both of these are refused rather than defaulted. A CR invented here is a fake number on a real
+  // client; a blank lost-reason makes the one report that could improve next quarter useless.
+  if (to === ACTIVE_CLIENT && !cr) return res.status(400).json({ error: "A CR number is required to make this a client" });
+  if ((to === "lost" || to === "churned") && !lostReason) return res.status(400).json({ error: "Say why it was lost — that is the whole value of recording it" });
+
+  // The change and its history row commit or fail together — a company whose current state
+  // disagrees with the last line of its own record is the one inconsistency this table cannot
+  // survive, because every conversion figure is computed from these rows.
+  // Qualification, offered at promotion and never demanded: a promotion with none recorded is
+  // legitimate — somebody in a hurry is not forced to invent a budget. Every field is optional,
+  // but what IS sent is validated rather than stored raw.
+  const q = (req.body ?? {}).qualification;
+  let qual: Record<string, unknown> | null = null;
+  if (to === "prospect" && q && typeof q === "object") {
+    const budget = q.budget === "" || q.budget == null ? null : Math.round(Number(q.budget) * 100);
+    if (budget != null && (!Number.isFinite(budget) || budget < 0)) return res.status(400).json({ error: "The budget has to be a number" });
+    const priority = String(q.priority ?? "").trim();
+    if (priority && !["low", "medium", "high"].includes(priority)) return res.status(400).json({ error: "Priority is low, medium or high" });
+    const dmId = String(q.decisionMakerId ?? "").trim();
+    if (dmId) {
+      // The decision maker must be one of THIS company's contacts — a contact id from another
+      // company would silently attach a stranger to the file.
+      const dm = await prisma.contact.findUnique({ where: { id: dmId }, select: { companyId: true } });
+      if (!dm || dm.companyId !== co.id) return res.status(400).json({ error: "Pick the decision maker from this company's contacts" });
+    }
+    const fields = {
+      qualRequirement: String(q.requirement ?? "").trim() || null,
+      qualBudgetMinor: budget,
+      qualDecisionBy: String(q.decisionBy ?? "").trim() || null,
+      qualDecisionMakerId: dmId || null,
+      qualCurrentSolution: String(q.currentSolution ?? "").trim() || null,
+      qualPriority: priority || null,
+    };
+    // Only counts as a qualification if SOMETHING was said — six empty fields stamped with a date
+    // would claim an interview that never happened.
+    if (Object.values(fields).some(v => v != null)) qual = { ...fields, qualAt: new Date().toISOString() };
+  }
+
+  const nowLc = new Date().toISOString();
+  const company = await prisma.$transaction(async (tx) => {
+    const updated = await tx.company.update({
+      where: { id: co.id },
+      data: {
+        lifecycle: to,
+        cr: to === ACTIVE_CLIENT ? cr : co.cr,
+        lostReason: to === "lost" || to === "churned" ? lostReason : null,
+        // Taken on the day they became a client, not the day the lead was typed in.
+        createdAt: to === ACTIVE_CLIENT && !co.createdAt ? nowLc : co.createdAt,
+        ...(qual ?? {}),
+      },
+    });
+    await recordLifecycle(tx, {
+      companyId: co.id, from: co.lifecycle, to,
+      changedById: a?.sub ?? null, at: nowLc,
+      reason: to === "lost" || to === "churned" ? lostReason : null,
+    });
+    return updated;
+  });
+
+  // The portal login, once, on becoming a client. Same rules as the create route: only with a real
+  // address, only if that address is not already a user. The account is created with NO password —
+  // the invitation link they receive is what sets the first one. See invitations.ts.
+  let portalInvite: InviteResult | null = null;
+  if (to === ACTIVE_CLIENT) {
+    const email = String(company.email || "").toLowerCase();
+    if (email.includes("@")) {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (!existing) {
+        const pu = await prisma.user.create({
+          data: {
+            name: company.contact ?? company.name, email, roleId: "client_admin", status: "active",
+            lastActive: null, type: "portal", companyId: company.id,
+            passwordHash: null, mustChangePassword: true,
+          },
+        });
+        portalInvite = await sendInvitation(pu, { companyName: company.name, invitedBy: a?.email });
+        await logAudit({ action: "portal.invited", actorId: a?.sub, target: pu.email, detail: `${company.name} · ${portalInvite.emailed ? "emailed" : "not emailed"}`, ip: clientIp(req) });
+      }
+    }
+  }
+
+  // Promoting to prospect is the moment somebody says there is something here, which is exactly
+  // when a deal should exist. Done only when ASKED — the console ticks the box for them and lets
+  // them untick it, because a card appearing on the board that nobody chose is how a forecast stops
+  // being trusted.
+  let openedDeal: { title: string; number: string | null } | null = null;
+  if ((req.body ?? {}).openDeal === true) {
+    const made = await openDealFor(company, {
+      title: (req.body ?? {}).dealTitle,
+      actor: a?.sub,
+      homeCountry: (await homeCountry()),
+      numberFor: () => nextNumber("opportunity"),
+      // The deal starts from what qualification learned. From here on the DEAL owns its copies —
+      // editing the company's qualification later must not reprice a deal in flight, the same
+      // snapshot rule the stage checklist follows.
+      valueMinor: (qual?.qualBudgetMinor as number | null) ?? null,
+      expectedCloseDate: (qual?.qualDecisionBy as string | null) ?? null,
+      notes: (qual?.qualRequirement as string | null) ?? null,
+    });
+    // A refusal here is not a failure of the lifecycle change: the company has still moved, and the
+    // reason it could not have a deal is reported alongside rather than losing the whole request.
+    if ("deal" in made) openedDeal = { title: made.deal.title, number: made.deal.number };
+    else logActivity({ type: "sales", message: `No deal opened for ${company.name} — ${made.detail}`, user: "System" });
+  }
+
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  logActivity({ type: "client", message: `${co.name}: ${co.lifecycle} → ${to}${lostReason ? ` (${lostReason})` : ""}`, user: me?.name ?? "Staff" });
+  await logAudit({ action: "company.lifecycle", actorId: a.sub, target: co.id, detail: `${co.name}: ${co.lifecycle} → ${to}`, ip: clientIp(req) });
+  if (to === ACTIVE_CLIENT) logNotification({ type: "system", title: "New client won", message: company.name });
+  res.json({ company, ...(portalInvite ? { portalInvite } : {}), ...(openedDeal ? { openedDeal } : {}) });
 });
 
 /**
@@ -1534,6 +3053,19 @@ app.use("/api/invoices", requireAuth, requireStaff, async (req, res, next) => {
   next();
 });
 
+// ── Money on a billing document is checked here, not only in the browser ──────────────────────
+// The console refuses a negative price and a quantity below one, but that was the ONLY guard: a
+// direct POST of `units: -5, price: -100` was accepted and stored a document totalling 575.00,
+// because negative × negative is positive and nothing on this side looked. See
+// billingAmountProblem() for why an invoice is never allowed to carry a negative line.
+for (const route of ["/api/invoices", "/api/quotations"]) {
+  app.use(route, requireAuth, requireStaff, (req, res, next) => {
+    if (req.method !== "POST" && req.method !== "PUT" && req.method !== "PATCH") return next();
+    const problem = billingAmountProblem(req.body);
+    return problem ? res.status(400).json({ error: problem }) : next();
+  });
+}
+
 // ── ZATCA QR for printed tax invoices ────────────────────────────────
 // Saudi e-invoicing mandates a QR carrying a base64 TLV payload with five tags: seller name, seller
 // VAT number, invoice timestamp, invoice total (incl. VAT) and the VAT amount. Rendered server-side
@@ -1902,7 +3434,13 @@ app.post("/api/portal/addon-requests", requireAuth, requirePortal, requireNotSus
         status: "pending", date: new Date().toISOString().slice(0, 10),
       },
     });
-    logActivity({ type: "finance", message: `${company?.name ?? "A client"} requested the add-on "${svc.name}"`, user: company?.name ?? "Client" });
+    // Put it on the pipeline. A client asking to buy something is the strongest buying signal this
+    // product ever gets, and until now it landed entirely outside the board — approved, invoiced,
+    // and counted in the accounts having never been in a forecast.
+    const boarded = await dealForAddonRequest(created, { homeCountry: (await homeCountry()), numberFor: () => nextNumber("opportunity") })
+      .catch(e => { console.error("could not board the add-on request", e); return null; });
+
+    logActivity({ type: "finance", message: `${company?.name ?? "A client"} requested the add-on "${svc.name}"${boarded ? " — on the board as a deal" : ""}`, user: company?.name ?? "Client" });
     notify({
       rule: "Approval requested", audience: "staff",
       inApp: { type: "task", title: `Add-on requested — ${company?.name ?? "client"}`, message: svc.name },
@@ -1972,24 +3510,48 @@ app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, r
     prisma.upgradeRequest.update({ where: { id: reqRow.id }, data: { status: "approved", quotedPrice: price } }),
   ]);
 
+  // The price somebody just agreed is what this deal was worth. Won here rather than left open, so
+  // client-initiated business counts in the win rate instead of vanishing into the accounts.
+  const wonDeal = await closeAddonDeal(reqRow.id, { won: true, priceMinor: price > 0 ? Math.round(price * 100) : null })
+    .catch(e => { console.error("could not close the add-on deal", e); return null; });
+
   logActivity({ type: "finance", message: `Add-on approved: ${reqRow.serviceName} for ${company?.name ?? "client"}${price > 0 ? ` · ${price}` : " · no charge"}` });
   await logAudit({ action: "addon.approve", actorId: a.sub, target: reqRow.id, detail: `${reqRow.serviceName} → ${company?.name ?? reqRow.companyId} · ${price}` });
   notifyAddonApproved({ companyId: reqRow.companyId, serviceName: reqRow.serviceName, price, invoiceNumber: price > 0 ? number : null });
-  res.json({ ok: true, addedTo: target.id, invoice: price > 0 ? (maybeInvoice as any) : null });
+  res.json({ ok: true, addedTo: target.id, invoice: price > 0 ? (maybeInvoice as any) : null, deal: wonDeal ? { title: wonDeal.title, stage: wonDeal.stage.name } : null });
 });
 
 // ── Staff data API (authenticated staff; writes require admin/super_admin) ──
 // Sales users only see the companies assigned to them.
 app.get("/api/companies", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   const a = (req as any).auth;
+
+  /**
+   * Which lifecycles to return. Defaults to CLIENTS ONLY.
+   *
+   * The default is the safe one on purpose. Every existing caller of this route — the client list,
+   * the invoice and employee pickers, the dashboard counts — was written when a Company was a client
+   * by definition, and none of them says so out loud. Had the default been "everything", each of
+   * those would have started quietly including leads the day the column shipped, and the first
+   * anyone would know is a prospect appearing on an invoice.
+   *
+   *   ?lifecycle=lead,prospect   the CRM screens ask for what they want
+   *   ?lifecycle=all             everything, for the combined list
+   */
+  const asked = String(req.query.lifecycle ?? "").trim();
+  const lifecycle =
+    asked === "all" ? undefined
+    : asked ? { in: asked.split(",").map(s => s.trim()).filter(s => LIFECYCLES.includes(s)) }
+    : ACTIVE_CLIENT;
+  const where: any = lifecycle === undefined ? {} : { lifecycle };
+
   if (a.role === "sales") {
-    const u = await prisma.user.findUnique({ where: { id: a.sub } });
-    const ids = Array.isArray(u?.assignedClientIds) ? (u!.assignedClientIds as string[]) : [];
-    return res.json(await withLiveCounts(await prisma.company.findMany({ where: { id: { in: ids } }, take: 500 })));
+    // One filter, no id list: a salesperson's clients are simply the ones they own.
+    return res.json(await withLiveCounts(await prisma.company.findMany({ where: { ...where, ownerId: a.sub }, take: 500 })));
   }
   // Live counts here too: this explicit route is registered BEFORE the generic CRUD, so it wins
   // for /api/companies and would otherwise still serve the stale stored columns.
-  res.json(await withLiveCounts(await prisma.company.findMany({ take: 500 }))); // hard cap: this list was unbounded
+  res.json(await withLiveCounts(await prisma.company.findMany({ where, take: 500 }))); // hard cap: this list was unbounded
 });
 
 // Create a company AND auto-provision a portal login for it. The password is RANDOM per client and
@@ -2002,36 +3564,108 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
     // Clients are created here, NOT through the generic CRUD path, so the country default has to be
     // stated in both places. Without it a client added tomorrow arrives with no country and silently
     // drops out of anything that filters by one — which is the whole point of having the column.
+    // `contacts` is a relation, not a column — it arrives from the Add-client form as the people to
+    // create alongside the company, and Prisma rejects it inside `data`.
+    const { contacts: incomingContacts, ...body } = req.body ?? {};
+
+    // The same rule as the edit route. Creating was the looser of the two, which is backwards — a
+    // bad address typed once at creation is the one that never gets looked at again.
+    for (const c of Array.isArray(incomingContacts) ? incomingContacts : []) {
+      const problem = contactProblem(c);
+      if (problem) return res.status(400).json({ error: problem });
+    }
+
+    // Nobody named an owner. A record with none is invisible to every sales user, so one is chosen —
+    // but ONLY when the field is empty, and only when there is somebody in the rotation to choose.
+    // An explicit owner, including a deliberate null from a manager who wants to allocate it later,
+    // is never overridden: `ownerId` present in the body means somebody decided.
+    let autoOwner: { id: string; name: string } | null = null;
+    // The router's own words for WHY it chose this person ("Riyadh + Website"). It was already
+    // computed and thrown away; it is the whole answer to "why did this lead come to me?".
+    let autoOwnerWhy: string | null = null;
+    if (!("ownerId" in body) || body.ownerId === undefined) {
+      const rules = await salesRules();
+      // Routed on the lead's own facts, falling back to workload when no rule matches.
+      if (rules.autoAssignOwner) {
+        const routed = await nextOwnerFor({
+          source: body?.source ?? null, city: body?.city ?? null,
+          country: body?.country ?? null, service: body?.service ?? null,
+        });
+        autoOwner = routed.owner;
+        autoOwnerWhy = routed.why;
+      }
+    }
+
     const company = await prisma.company.create({
-      data: { ...req.body, country: req.body?.country || HOME_COUNTRY },
+      data: { ...body, country: body?.country || (await homeCountry()), ...(autoOwner ? { ownerId: autoOwner.id } : {}) },
     });
+    // The arrival row IS the capture date. `createdAt` could not carry it: its own comment says
+    // "client since", the web intake stamped it at arrival anyway, and this route never stamped it
+    // at all — three behaviours for one column. The history table has exactly one.
+    await recordLifecycle(prisma, { companyId: company.id, to: company.lifecycle, changedById: (req as any).auth?.sub ?? null, at: new Date().toISOString() });
+    // Whoever it landed on, and by which mechanism. An owner named in the request is a decision
+    // somebody made; one chosen by the router is a rule firing, and the two must not look alike.
+    if (company.ownerId) {
+      await recordAssignment(prisma, {
+        companyId: company.id, from: null, to: company.ownerId,
+        assignedById: (req as any).auth?.sub ?? null,
+        method: autoOwner ? "auto" : "manual",
+        reason: autoOwner ? autoOwnerWhy : null,
+      });
+    }
+    if (autoOwner) logActivity({ type: "sales", message: `${company.name} assigned to ${autoOwner.name}`, user: "System" });
+
+    // The people. Created through addContact so the first one becomes primary and the company's
+    // three mirror columns are written by the one function allowed to write them.
+    for (const c of Array.isArray(incomingContacts) ? incomingContacts : []) {
+      if (c && String(c.name ?? "").trim()) await addContact(company.id, c);
+    }
+    // No contacts sent, but the old-style columns were: keep them in step rather than leaving a
+    // company whose mirror says one thing and whose contact list is empty.
+    if (!Array.isArray(incomingContacts) && (company.contact || company.email || company.phone)) {
+      await addContact(company.id, { name: company.contact || company.name, email: company.email, phone: company.phone });
+    }
+
     // Only provision a portal user when there's a real email address (skip "—" placeholders).
     // The one-time password is random and returned ONCE here — it is never recoverable afterwards,
     // only re-issued via reset-portal-password.
-    let portalTempPassword: string | null = null;
-    const email = String(company.email || "").toLowerCase();
+    //
+    // Not for a lead or a prospect: they have not agreed to anything, and an account that can sign
+    // in to an empty portal is a support call at best. The login is provisioned when they become a
+    // client, on the lifecycle route.
+    let portalInvite: InviteResult | null = null;
+    const email = company.lifecycle === ACTIVE_CLIENT ? String(company.email || "").toLowerCase() : "";
     if (email.includes("@")) {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (!existing) {
-        portalTempPassword = generateTempPassword();
-        await prisma.user.create({
+        const pu = await prisma.user.create({
           data: {
             name: company.contact ?? company.name,
             email,
             roleId: "client_admin",
             status: "active",
-            lastActive: "Just now",
+            lastActive: null,
             type: "portal",
             companyId: company.id,
-            passwordHash: await hashPassword(portalTempPassword),
-            mustChangePassword: true, // force the client to set their own password on first login
+            // No password at all until the invitation link is used — see invitations.ts.
+            passwordHash: null,
+            mustChangePassword: true,
           },
         });
+        portalInvite = await sendInvitation(pu, { companyName: company.name, invitedBy: (req as any).auth?.email });
+        await logAudit({ action: "portal.invited", actorId: (req as any).auth?.sub, target: pu.email, detail: `${company.name} · ${portalInvite.emailed ? "emailed" : "not emailed"}`, ip: clientIp(req) });
       }
     }
-    logActivity({ type: "client", message: `New client onboarded: ${company.name}`, user: (req as any).auth?.email });
-    logNotification({ type: "system", title: "New client added", message: company.name });
-    res.status(201).json(portalTempPassword ? { ...company, portalTempPassword } : company);
+    // Say what actually happened. A lead announced as an onboarded client is a message the whole
+    // office reads and acts on — somebody opens the file expecting signed paperwork.
+    const isClient = company.lifecycle === ACTIVE_CLIENT;
+    logActivity({
+      type: isClient ? "client" : "sales",
+      message: isClient ? `New client onboarded: ${company.name}` : `New ${company.lifecycle}: ${company.name}`,
+      user: (req as any).auth?.email,
+    });
+    if (isClient) logNotification({ type: "system", title: "New client added", message: company.name });
+    res.status(201).json(portalInvite ? { ...company, portalInvite } : company);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
@@ -2100,7 +3734,7 @@ app.delete("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, 
 //                               the account is marked must-change-password. Admin / Super Admin only.
 app.post("/api/users", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
   const a = (req as any).auth;
-  const { name, email, roleId, password, assignedClientIds, status, type, mustChangePassword, companyId } = req.body ?? {};
+  const { name, email, roleId, password, status, type, mustChangePassword, companyId } = req.body ?? {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: "Name is required" });
   const mail = String(email || "").trim().toLowerCase();
   if (!mail.includes("@")) return res.status(400).json({ error: "A valid email is required" });
@@ -2111,7 +3745,6 @@ app.post("/api/users", requireAuth, requireStaff, requireWriteRole, requireHuman
   if (!invite && String(password).length < secU.minPwLen) return res.status(400).json({ error: `Password must be at least ${secU.minPwLen} characters` });
   const existing = await prisma.user.findUnique({ where: { email: mail } });
   if (existing) return res.status(409).json({ error: "A user with this email already exists" });
-  const tempPassword = invite ? generateTempPassword() : null;
   try {
     const created = await prisma.user.create({
       data: {
@@ -2122,15 +3755,20 @@ app.post("/api/users", requireAuth, requireStaff, requireWriteRole, requireHuman
         lastActive: invite ? null : "Just now",
         type: type === "portal" ? "portal" : "staff",
         companyId: type === "portal" ? (companyId || null) : null,
-        passwordHash: await hashPassword(String(invite ? tempPassword : password)),
-        assignedClientIds: assignedClientIds ?? undefined,
+        // An invited account has NO password — the emailed link is what sets the first one.
+        passwordHash: invite ? null : await hashPassword(String(password)),
         mustChangePassword: invite ? (mustChangePassword !== false) : !!mustChangePassword,
       },
     });
-    await logAudit({ action: "user.create", actorId: a?.sub, target: `${created.email} (${created.id})`, detail: `role ${created.roleId}${invite ? " · invite" : ""}`, ip: clientIp(req) });
+    const co = created.companyId ? await prisma.company.findUnique({ where: { id: created.companyId }, select: { name: true } }) : null;
+    const inviteResult = invite ? await sendInvitation(created, { companyName: co?.name, invitedBy: a?.email }) : null;
+    await logAudit({
+      action: invite ? "user.invited" : "user.create", actorId: a?.sub, target: `${created.email} (${created.id})`,
+      detail: `role ${created.roleId}${invite ? ` · invite ${inviteResult!.emailed ? "emailed" : "NOT emailed"}` : ""}`, ip: clientIp(req),
+    });
     logActivity({ type: "client", message: `New team member created: ${created.name} — ${created.roleId}` });
     const { passwordHash, resetTokenHash, resetExpires, ...safe } = created as any;
-    res.status(201).json({ ...safe, ...(tempPassword ? { tempPassword } : {}) });
+    res.status(201).json({ ...safe, ...(inviteResult ? { invite: inviteResult } : {}) });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
@@ -2247,14 +3885,16 @@ const readRole: Record<string, string[]> = {
   groups:        ["super_admin", "admin", "pro_officer", "sales"],
   users:         ["super_admin", "admin"],
 };
-// Row-level scope for the `sales` role: it may only touch its assigned clients. GET /api/companies
+// Row-level scope for the `sales` role: it may only touch the clients it owns. GET /api/companies
 // filtered for sales already, but /:id and the client-owned collections did not — a scoped list with
 // unscoped records is no restriction at all. `field` is the column that points at the company.
+//
+// Reads the owner column on the client, so this and the list route above answer "whose client is
+// this?" the same way. They used to share a JSON array, which is how a scope and a list drift apart.
 const salesScope = (field: "id" | "companyId"): ScopeFn => async (req: any) => {
   if (req.auth?.role !== "sales") return null; // every other role is gated by readRole above
-  const u = await prisma.user.findUnique({ where: { id: req.auth.sub } });
-  const ids = Array.isArray(u?.assignedClientIds) ? (u!.assignedClientIds as string[]) : [];
-  return { [field]: { in: ids } };
+  const mine = await prisma.company.findMany({ where: { ownerId: req.auth.sub }, select: { id: true } });
+  return { [field]: { in: mine.map(c => c.id) } };
 };
 const scopes: Record<string, ScopeFn> = {
   companies:     salesScope("id"),
@@ -2462,6 +4102,12 @@ app.get("/api/service-items/:id/usage", requireAuth, requireStaff, async (req, r
     : [];
   res.json({ packages: inPackages, clients, openRequests: openReqs, canDelete: !inPackages.length && !clients.length && !openReqs });
 });
+// The `/api/users` managerId guard stood here. It refused a portal account a manager, a lead who
+// was not active staff, and anybody reporting to themselves. managerId is gone, but NONE of those
+// rules are: they are properties of team membership, not of that column, and they now live on the
+// teams API in teams.ts where the membership is actually written. Deleting them here without
+// carrying them there is how a rule quietly stops being enforced.
+
 for (const [path, modelName] of entities) {
   const guards: any[] = [requireAuth, requireStaff];
   if (readRole[path]) guards.push(requireReadRole(...readRole[path]));
@@ -2495,6 +4141,268 @@ app.get("/api", (_req, res) => {
 // ── Email / SMTP configuration (Settings → Email) ───────────────────
 // Kept OFF the generic settings routes below: the stored password must never be readable, so this
 // endpoint returns a masked view and the generic handlers refuse the "email" key entirely.
+/**
+ * What this system is actually connected to.
+ *
+ * Every field here is READ, never declared. A channel is "connected" because its configuration
+ * resolves and its log has traffic — not because a row somewhere says so. That distinction is the
+ * whole point of the screen: an integrations page whose status is itself a stored setting tells you
+ * what somebody once typed, which is the opposite of what you open it to find out.
+ *
+ * Channels that do not exist yet are listed with `available: false` and what they would need. They
+ * are named rather than hidden because "we cannot do WhatsApp yet" is a real answer to somebody
+ * looking for WhatsApp, and an empty screen is not.
+ */
+
+// ── Mailbox sync ────────────────────────────────────────────────────────────────────────────
+//
+// A person connects their OWN mailbox, and only their own. There is no route by which an admin
+// connects somebody else's — a grant somebody did not personally give is not consent, and the
+// whole feature rests on being able to say that honestly to the staff it reads.
+app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  const google = providerConfigured("google");
+  const microsoft = providerConfigured("microsoft");
+  res.json({
+    // Never the tokens. Not redacted, not partially — they are simply not in the shape.
+    connected: !!conn && conn.status !== "disconnected",
+    provider: conn?.provider ?? null,
+    address: conn?.address ?? null,
+    status: conn?.status ?? null,
+    lastSyncAt: conn?.lastSyncAt ?? null,
+    lastError: conn?.lastError ?? null,
+    available: { google, microsoft },
+    // Said plainly rather than left for somebody to infer from two false flags.
+    setupNote: google || microsoft ? null
+      : "No mail provider is configured yet. An admin needs to register an app on the firm's own Google Workspace or Microsoft 365 tenant and add its client id and secret to the server environment.",
+  });
+});
+
+app.get("/api/mailbox/connect", requireAuth, requireStaff, async (req, res) => {
+  const provider = String(req.query.provider ?? "google") === "microsoft" ? "microsoft" : "google";
+  if (!providerConfigured(provider)) return res.status(400).json({ error: `${provider === "google" ? "Google" : "Microsoft"} is not configured on this server yet.` });
+  // The state carries WHO is connecting, signed, so the callback cannot be replayed to attach
+  // somebody else's mailbox to this account.
+  const state = signState({ sub: (req as any).auth.sub, provider });
+  res.json({ url: authorizeUrl(provider, state) });
+});
+
+app.get("/api/mailbox/callback", async (req, res) => {
+  const code = String(req.query.code ?? "");
+  const state = String(req.query.state ?? "");
+  const parsed = verifyState(state);
+  if (!code || !parsed) return res.status(400).type("html").send("<p>That sign-in link is no longer valid. Please start again from Settings.</p>");
+  try {
+    const t = await exchangeCode(parsed.provider, code);
+    await saveConnection(parsed.sub, parsed.provider, t.address, t);
+    await logAudit({ action: "mailbox.connected", actorId: parsed.sub, target: t.address, detail: parsed.provider });
+    res.type("html").send(`<p>Mailbox <b>${t.address.replace(/[<>&]/g, "")}</b> connected. You can close this tab.</p>`);
+  } catch (e: any) {
+    res.status(400).type("html").send(`<p>Could not connect that mailbox: ${String(e?.message ?? e).replace(/[<>&]/g, "")}</p>`);
+  }
+});
+
+app.post("/api/mailbox/disconnect", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  if (!conn) return res.json({ ok: true });
+  // The row goes entirely, tokens with it. Marking it "disconnected" and keeping the tokens would
+  // leave a live grant sitting in the database belonging to somebody who believes they revoked it.
+  await prisma.mailboxConnection.delete({ where: { userId: a.sub } });
+  await logAudit({ action: "mailbox.disconnected", actorId: a.sub, target: conn.address, detail: "tokens deleted" });
+  res.json({ ok: true });
+});
+
+/** Sync my own mailbox now. The hourly tick does this too; this is for "did it work?". */
+app.post("/api/mailbox/sync", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  if (!conn) return res.status(400).json({ error: "No mailbox is connected." });
+  res.json(await syncMailbox(a.sub, providerFor(conn.provider)));
+});
+
+// ── Booking links ───────────────────────────────────────────────────────────────────────────
+//
+// Two public endpoints and one public page. The slug travels in a URL, so it is public whatever
+// anybody intends; these are written so a slug-holder can do exactly two things — read a list of
+// free times, and take one. Reading is throttled harder than most GETs because the response is
+// derived (it queries a diary), and booking harder still because it writes.
+const bookReadLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests — try again shortly" } });
+const bookWriteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: "Too many bookings from here in the last hour — please call us instead" } });
+
+app.get("/api/public/book/:slug", bookReadLimiter, async (req, res) => {
+  const link = await prisma.bookingLink.findFirst({ where: { slug: String(req.params.slug), active: true } });
+  // An inactive and a non-existent link answer identically. Distinguishing them would let somebody
+  // with a list of guesses learn which slugs the firm has ever used.
+  if (!link) return res.status(404).json({ error: "This booking link is no longer available." });
+  const who = await prisma.user.findUnique({ where: { id: link.userId }, select: { name: true } });
+  const { zone, slots } = await freeSlots(link);
+  // Only what the page needs to draw itself. Not the rep's email, not their id, not the diary the
+  // slots were derived from.
+  res.json({ title: link.title, blurb: link.blurb, minutes: link.minutes, with: who?.name ?? "our team", zone, slots });
+});
+
+app.post("/api/public/book/:slug", bookWriteLimiter, async (req, res) => {
+  const out = await bookSlot(String(req.params.slug), req.body ?? {});
+  res.status(out.ok ? 201 : 400).json(out);
+});
+
+/** The page itself — self-contained, so it works even while the console bundle is being deployed. */
+app.get("/book/:slug", bookReadLimiter, async (req, res) => {
+  const slug = String(req.params.slug).replace(/[^a-zA-Z0-9_-]/g, "");
+  res.type("html").send(bookingPage(slug));
+});
+
+// Console-side management. Ordinary auth; a link is configuration like any other.
+app.get("/api/booking-links", requireAuth, requireStaff, async (_req, res) => {
+  const links = await prisma.bookingLink.findMany({ orderBy: { createdAt: "asc" } });
+  const users = await prisma.user.findMany({ where: { type: "staff" }, select: { id: true, name: true } });
+  const byId = new Map(users.map(u => [u.id, u.name]));
+  res.json(links.map(l => ({ ...l, userName: byId.get(l.userId) ?? "(nobody)" })));
+});
+
+app.put("/api/booking-links", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, async (req, res) => {
+  const rows = Array.isArray(req.body?.links) ? req.body.links : null;
+  if (!rows) return res.status(400).json({ error: "Send { links: [...] }" });
+  const seen = new Set<string>();
+  for (const l of rows) {
+    const slug = String(l?.slug ?? "").trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) return res.status(400).json({ error: `"${l?.slug ?? ""}" is not a usable link address — letters, numbers and hyphens only.` });
+    if (seen.has(slug)) return res.status(400).json({ error: `Two links share the address "${slug}". Each one needs its own.` });
+    seen.add(slug);
+    if (!String(l?.title ?? "").trim()) return res.status(400).json({ error: "Every link needs a title — it is what the visitor sees they are booking." });
+    if (!String(l?.userId ?? "").trim()) return res.status(400).json({ error: `"${l.title}" does not say whose diary it books.` });
+    if (Number(l.dayEnd) <= Number(l.dayStart)) return res.status(400).json({ error: `"${l.title}" finishes before it starts.` });
+    if (Number(l.minutes) < 5) return res.status(400).json({ error: `"${l.title}" is shorter than five minutes.` });
+  }
+  const now = new Date().toISOString();
+  await prisma.$transaction([
+    prisma.bookingLink.deleteMany({}),
+    ...rows.map((l: any) => prisma.bookingLink.create({
+      data: {
+        userId: String(l.userId), slug: String(l.slug).trim().toLowerCase(), title: String(l.title).trim(),
+        blurb: l.blurb || null, active: l.active !== false,
+        minutes: Number(l.minutes) || 30, bufferMins: Number(l.bufferMins) || 0,
+        dayStart: Number(l.dayStart) || 9, dayEnd: Number(l.dayEnd) || 17,
+        workDays: String(l.workDays || "7,1,2,3,4"), daysAhead: Number(l.daysAhead) || 14,
+        noticeHours: Number(l.noticeHours) || 4, createdAt: now, updatedAt: now,
+      },
+    })),
+  ]);
+  await logAudit({ action: "booking.links.saved", actorId: (req as any).auth?.sub, target: "Booking links", detail: `${rows.length} link(s)` });
+  res.json(await prisma.bookingLink.findMany({ orderBy: { createdAt: "asc" } }));
+});
+
+/**
+ * How promising each open lead is, and the arithmetic behind it.
+ *
+ * Derived on every read. There is no score column and no job keeping one fresh, because a stored
+ * score is wrong the moment somebody logs a call — and a number that is quietly out of date is
+ * worse than no number, since nothing on screen says so.
+ */
+app.get("/api/lead-scores", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await scoreOpenLeads());
+});
+
+// ── Assignment rules ────────────────────────────────────────────────────────────────────────
+// Ordered, first match wins, no match falls back to the load balancer that has always been there.
+app.get("/api/assignment-rules", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await prisma.assignmentRule.findMany({ orderBy: [{ scope: "asc" }, { position: "asc" }] }));
+});
+app.put("/api/assignment-rules", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, async (req, res) => {
+  const rows = Array.isArray(req.body?.rules) ? req.body.rules : null;
+  if (!rows) return res.status(400).json({ error: "Send { rules: [...] }" });
+  for (const r of rows) {
+    if (!String(r?.label ?? "").trim()) return res.status(400).json({ error: "Every rule needs a name — it is what the audit line will say." });
+    if (r.scope !== "lead" && r.scope !== "task") return res.status(400).json({ error: `"${r.label}" must apply to leads or to tasks.` });
+    // A rule with a condition and no target routes nothing; a rule with neither is a catch-all that
+    // sends everything somewhere, which is a thing you can mean but never by accident.
+    if (!String(r.toUserId ?? "").trim() && !String(r.toRole ?? "").trim())
+      return res.status(400).json({ error: `"${r.label}" does not say who the work goes to.` });
+  }
+  const now = new Date().toISOString();
+  await prisma.$transaction([
+    prisma.assignmentRule.deleteMany({}),
+    ...rows.map((r: any, i: number) => prisma.assignmentRule.create({
+      data: {
+        scope: r.scope, position: i, active: r.active !== false, label: String(r.label).trim(),
+        whenSource: r.whenSource || null, whenCity: r.whenCity || null, whenCountry: r.whenCountry || null,
+        whenGovCenter: r.whenGovCenter || null, whenService: r.whenService || null,
+        toUserId: r.toUserId || null, toRole: r.toRole || null,
+        createdAt: now, updatedAt: now,
+      },
+    })),
+  ]);
+  await logAudit({ action: "assignment.rules.saved", actorId: (req as any).auth?.sub, target: "Assignment rules", detail: `${rows.length} rule(s) saved` });
+  res.json(await prisma.assignmentRule.findMany({ orderBy: [{ scope: "asc" }, { position: "asc" }] }));
+});
+/** Dry-run: what WOULD happen to a lead or a step with these facts, and which rule decided it. */
+app.post("/api/assignment-rules/test", requireAuth, requireStaff, async (req, res) => {
+  const { scope, ...facts } = req.body ?? {};
+  if (scope !== "lead" && scope !== "task") return res.status(400).json({ error: "scope must be lead or task" });
+  const routed = await routeFor(scope, facts);
+  const who = routed.userId ? await prisma.user.findUnique({ where: { id: routed.userId }, select: { name: true } }) : null;
+  res.json({ ...routed, name: who?.name ?? null });
+});
+
+app.get("/api/integrations", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (_req, res) => {
+  const cfg = await getEmailConfig();
+  const health = await mailHealth(7);
+  const keys = await prisma.apiKey.count({ where: { revoked: false } });
+  const keysAll = await prisma.apiKey.count();
+
+  res.json({
+    channels: [
+      {
+        key: "smtp", name: "Outbound email (SMTP)", available: true,
+        connected: !!(cfg.enabled && cfg.host && cfg.user),
+        // Configured-but-switched-off is its own state: the credentials are right and nothing is
+        // being sent, which reads as broken unless the screen says which of the two it is.
+        detail: !cfg.host ? "No SMTP server set"
+          : !cfg.enabled ? `Configured for ${cfg.host}, but sending is switched off`
+          : `Sending through ${cfg.host} as ${cfg.from || cfg.user}`,
+        stats: { sent: health.sent, failed: health.failed, skipped: health.skipped, days: 7 },
+        screen: "Email",
+      },
+      {
+        key: "web-intake", name: "Website enquiry form", available: true,
+        connected: keys > 0,
+        detail: keys > 0
+          ? `${keys} live key${keys === 1 ? "" : "s"} can post enquiries` + (keysAll > keys ? ` · ${keysAll - keys} revoked` : "")
+          : "No key issued — a website form has nothing to post to",
+        stats: null, screen: "Security",
+      },
+      {
+        key: "whatsapp", name: "WhatsApp", available: false, connected: false,
+        detail: "Not built. Needs a WhatsApp Business Platform number (Meta Cloud API or a provider such as 360dialog/Twilio) — see the note on this screen before choosing.",
+        stats: null, screen: null,
+      },
+      // Built, but its availability is genuinely conditional: without an OAuth app registered on
+      // the firm's own tenant there is nothing for a rep to connect TO. Reported as three states
+      // rather than two, because "we have not set this up" and "this product cannot do it" are
+      // different answers and only one of them has an action attached.
+      await (async () => {
+        const g = providerConfigured("google"), m = providerConfigured("microsoft");
+        const conns = await prisma.mailboxConnection.findMany({ where: { status: { not: "disconnected" } }, select: { status: true } });
+        const stored = await prisma.emailMessage.count();
+        const broken = conns.filter(c => c.status === "needs_reconnect").length;
+        return {
+          key: "mailbox", name: "Salesperson mailbox sync",
+          available: g || m,
+          connected: conns.length > 0 && broken < conns.length,
+          detail: !(g || m)
+            ? "Ready, but no mail provider is configured. Register an app on the firm's own Google Workspace or Microsoft 365 tenant and add its client id and secret to the server environment — an internal app, consented once by an admin for the whole domain."
+            : conns.length === 0
+            ? `Ready via ${[g && "Google", m && "Microsoft 365"].filter(Boolean).join(" and ")}. Nobody has connected a mailbox yet — each person connects their own from Settings.`
+            : `${conns.length} mailbox${conns.length === 1 ? "" : "es"} connected${broken ? `, ${broken} needing to be reconnected` : ""} · ${stored} matched message${stored === 1 ? "" : "s"} on client records`,
+          stats: null, screen: null,
+        };
+      })(),
+    ],
+  });
+});
+
 app.get("/api/email-config", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (_req, res) => {
   const cfg = await getEmailConfig();
   const { pass, ...safe } = cfg;
@@ -2507,12 +4415,37 @@ app.put("/api/email-config", requireAuth, requireStaff, requireReadRole("super_a
     const existing = await prisma.appSetting.findUnique({ where: { key: "email" } });
     const prev = (existing?.value && typeof existing.value === "object" ? existing.value : {}) as Record<string, unknown>;
     const port = Number(b.port);
+
+    // A From line with no email address in it authenticates fine and then fails at MAIL FROM with a
+    // bare "451 Invalid from" — which reads as a broken mail server rather than a typo in one field.
+    // Catch it here, where it can be named. Blank is allowed: that falls back to the SMTP_FROM default.
+    const from = String(b.from ?? "").trim();
+    const ADDR = "[^\\s@<>]+@[^\\s@<>]+\\.[^\\s@<>]+";
+    const wellFormed = (v: string) => new RegExp(`^(${ADDR}|.*<\\s*${ADDR}\\s*>)$`).test(v);
+    if (from && !wellFormed(from)) {
+      return res.status(400).json({
+        error: `"${from}" is a name, not an address. Use name@yourdomain.com, or ${from} <name@yourdomain.com>.`,
+      });
+    }
+
+    // Held to the same standard as `from`, and for a sharper reason: a malformed reply-to does not
+    // bounce back to us — the client presses Reply, their mail client accepts the address, and the
+    // message goes nowhere anybody will ever look. Blank is fine and means "replies are not read",
+    // which the footer then says out loud.
+    const replyTo = String(b.replyTo ?? "").trim();
+    if (replyTo && !wellFormed(replyTo)) {
+      return res.status(400).json({
+        error: `"${replyTo}" is not a reply address. Use name@yourdomain.com, or leave it blank if nobody reads replies.`,
+      });
+    }
+
     const value: Record<string, unknown> = {
       host: String(b.host ?? "").trim(),
       port: Number.isFinite(port) && port > 0 && port < 65536 ? Math.round(port) : 587,
       secure: !!b.secure,
       user: String(b.user ?? "").trim(),
-      from: String(b.from ?? "").trim(),
+      from,
+      replyTo,
       enabled: b.enabled !== false,
       // An empty password field means "unchanged" — the UI never receives the secret to send back.
       pass: typeof b.pass === "string" && b.pass !== "" ? b.pass : (prev.pass ?? ""),
@@ -2527,6 +4460,24 @@ app.put("/api/email-config", requireAuth, requireStaff, requireReadRole("super_a
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+/**
+ * What has actually been leaving the building. Read-only, admin-only.
+ *
+ * Bodies are never stored, so this cannot leak a reset link or a client's document details — it is
+ * addresses, subjects, and the transport's own words about what went wrong.
+ */
+app.get("/api/email-log", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const days = Math.min(90, Math.max(1, Number((req.query.days as string) ?? 7) || 7));
+  const health = await mailHealth(days);
+  const rows = await prisma.mailLog.findMany({
+    where: { at: { gte: health.since } },
+    orderBy: { at: "desc" },
+    take: 200,
+    select: { to: true, subject: true, status: true, kind: true, error: true, at: true },
+  });
+  res.json({ ...health, days, rows });
+});
+
 // Verify the SMTP connection (no mail sent), or send a real test message to `to`.
 app.post("/api/email-config/test", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireWriteRole, async (req, res) => {
   const to = String(req.body?.to ?? "").trim();
@@ -2534,12 +4485,30 @@ app.post("/api/email-config/test", requireAuth, requireStaff, requireReadRole("s
   if (!v.ok) return res.status(400).json({ error: v.error || "Could not connect to the mail server" });
   if (!to) return res.json({ ok: true, verified: true, sent: false });
   try {
-    const r = await sendMail({
-      to,
-      subject: "STIMES PRO — test email",
-      text: "This is a test message from STIMES PRO. Your email settings are working.",
-      html: "<p>This is a test message from <b>STIMES PRO</b>.</p><p>Your email settings are working.</p>",
+    // The test mail is the one an admin judges the system by, so it goes through the same shell as
+    // every client-facing message — and it states the settings that delivered it, because "it
+    // arrived" is only useful if you can see WHICH configuration arrived.
+    const cfg = await getEmailConfig();
+    const ctxTest = await emailContext();
+    const org = ctxTest.org;
+    const { html, text } = renderEmail(ctxTest, {
+      heading: "Your email settings are working",
+      preheader: `Delivered through ${cfg.host} — this configuration is live.`,
+      lines: [
+        `This is a test message from <b>${escEmail(org)}</b>, sent from Settings → Email.`,
+        "It was delivered using the settings below. Anything this system sends from now on — password resets, client notifications, invoice reminders — goes out the same way and looks like this.",
+      ],
+      facts: [
+        { label: "Server", value: escEmail(cfg.host) },
+        { label: "Port", value: `${cfg.port} · ${cfg.secure ? "SSL/TLS" : "STARTTLS"}` },
+        { label: "Username", value: escEmail(cfg.user || "— none (unauthenticated relay)") },
+        { label: "From", value: escEmail(cfg.from) },
+        { label: "Reply-to", value: escEmail(cfg.replyTo || "— none, replies go nowhere") },
+        { label: "Sent", value: escEmail(new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC") },
+      ],
+      note: "You received this because somebody pressed <b>Send test</b> in the console. No client was contacted.",
     });
+    const r = await sendMail({ to, subject: `${org} — test email`, text, html });
     await logAudit({ action: "settings.email_test", actorId: (req as any).auth?.sub, target: to, ip: clientIp(req) });
     return res.json({ ok: true, verified: true, sent: r.sent });
   } catch (e: any) { return res.status(400).json({ error: String(e?.message ?? e) }); }

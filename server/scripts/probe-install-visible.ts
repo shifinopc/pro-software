@@ -13,6 +13,7 @@
  */
 import { prisma } from "../src/db.js";
 import { readPack, planInstall, applyInstall, installedPacks, planUninstall } from "../src/packs.js";
+import { requireScratchDatabase } from "./_scratch-guard.js";
 
 const countryRow = async () => {
   const r = await prisma.appSetting.findUnique({ where: { key: "countryRules" } });
@@ -21,9 +22,10 @@ const countryRow = async () => {
 };
 
 async function main() {
+  await requireScratchDatabase("This probe", "copy");
   let bad = 0;
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
-  const pack = readPack("pack-sa-2026.1.json");
+  const pack = readPack("pack-sa-2026.2.json");
 
   const plan = await planInstall(pack);
   console.log(`the plan against your own configuration:`);

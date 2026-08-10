@@ -10,13 +10,23 @@
 //  3. NON-FATAL — one job failing must not stop the others or kill the process.
 // ─────────────────────────────────────────────────────────────
 import { prisma } from "./db.js";
+import { homeCurrency } from "./orgsettings.js";
+import { jobRules } from "./jobrules.js";
 import { logActivity, logNotification } from "./auth.js";
 import { workforceFor, bandsFor } from "./workforce.js";
 import { startInstance, pickAssignee } from "./workflow.js";
 import { sameCountry, countryNationality } from "./countries.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentExpiring, notifySlaBreach, notifyInvoiceRaised, notifyInvoiceOverdue, notifyAwait } from "./notify.js";
+// The sales-chasing reminders, addressed to whoever owns the record rather than to every admin.
+import { notifyFollowUpDue, notifyGoneQuiet, notifyQuoteChase, notifyRenewalDeal, notifyTaskAssigned, notifyTaskLate } from "./notify.js";
 import { figuresFromAmount } from "./money.js";
+import { ACTIVE_CLIENT } from "./validate.js";
+import { salesRules } from "./salesrules.js";
+import { openFollowUps, lastContactMap } from "./interactions.js";
+import { idleDaysOf } from "./lifecycle.js";
+import { healthOf } from "./dealhealth.js";
+import { stagesFor, recordTransition } from "./pipeline.js";
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -325,9 +335,10 @@ export async function triggerRenewals(): Promise<RenewalResult> {
 // ─────────────────────────────────────────────────────────────
 export type SlaResult = { evaluated: number; atRisk: number; breached: number; escalated: string[] };
 
-const DOC_SLA_AT_RISK_DAYS = 7; // matches the SLA Monitor screen
+// The at-risk window is a setting now — see jobrules.ts. It was 7 days here.
 
 export async function escalateSla(): Promise<SlaResult> {
+  const rules = await jobRules();
   const out: SlaResult = { evaluated: 0, atRisk: 0, breached: 0, escalated: [] };
 
   // ── Workflow steps with an SLA budget ──
@@ -361,6 +372,16 @@ export async function escalateSla(): Promise<SlaResult> {
     // Only a real breach emails the team, and only once — "at risk" stays in the in-app queue so the
     // hourly tick can't turn a busy day into an inbox full of warnings.
     if (firstSla && state === "breached") await notifySlaBreach({ title: slaTitle, detail: slaDetail });
+    // …and separately, the person it actually belongs to. The line above reports across the queue to
+    // admins; this names one task to one desk. Both states go here, unlike the admin version: "your
+    // step is about to be late" is the one message that can still prevent the breach.
+    if (firstSla) {
+      notifyTaskLate({
+        assigneeId: t.assigneeId, title: t.title, state: state === "breached" ? "breached" : "at risk",
+        hoursOver: state === "breached" ? Math.abs(Math.round(remH)) : null,
+        clientName: t.instance?.clientName ?? null,
+      });
+    }
     logActivity({ type: "task", message: `SLA ${state}: ${t.title}${who} — priority ${priority}` });
     state === "breached" ? out.breached++ : out.atRisk++;
     out.escalated.push(`${t.title} → ${state}`);
@@ -376,7 +397,7 @@ export async function escalateSla(): Promise<SlaResult> {
     if (exp === null) continue;
     out.evaluated++;
     const daysLeft = daysUntil(exp);
-    const state = daysLeft < 0 ? "breached" : daysLeft <= DOC_SLA_AT_RISK_DAYS ? "at_risk" : "on_track";
+    const state = daysLeft < 0 ? "breached" : daysLeft <= rules.docSlaAtRiskDays ? "at_risk" : "on_track";
     if (state === "on_track") continue;
 
     // Keyed by state, so each document escalates once on entering at_risk and once on breaching.
@@ -421,17 +442,23 @@ function addCycle(ms: number, cycle: string): number {
   return d.getTime();
 }
 
-const MAX_CATCHUP = 12; // a long-dormant subscription bills in arrears, but never unboundedly
+// The catch-up ceiling is a setting now — see jobrules.ts. It was 12 periods here.
 
 export async function renewSubscriptions(): Promise<BillingResult> {
+  const rules = await jobRules();
   const out: BillingResult = { scanned: 0, renewed: 0, invoiced: 0, lapsed: 0, details: [] };
   const subs = await prisma.subscription.findMany({
-    include: { package: { select: { name: true, billingCycle: true } }, company: { select: { id: true, name: true } } },
+    include: { package: { select: { name: true, billingCycle: true } }, company: { select: { id: true, name: true, lifecycle: true } } },
   });
 
   for (const s of subs) {
     let end = parseDate(s.endDate);
     if (end === null) continue;
+    // Never invoice a company that is not a client. A churned client keeps its subscription row —
+    // that is its billing history — and an hourly job that reads only `endDate` would go on raising
+    // invoices against a firm that left months ago, which is the kind of thing that reaches them
+    // through their accountant rather than through us.
+    if (s.company && s.company.lifecycle !== ACTIVE_CLIENT) continue;
     out.scanned++;
 
     // Keep daysLeft honest whether or not it renews — it had the same never-recomputed drift as documents.
@@ -468,7 +495,7 @@ export async function renewSubscriptions(): Promise<BillingResult> {
 
     // Roll forward, raising one draft invoice per elapsed period (arrears are billed, not skipped).
     let cycles = 0;
-    while (daysUntil(end) <= 0 && cycles < MAX_CATCHUP) {
+    while (daysUntil(end) <= 0 && cycles < rules.maxCatchUpPeriods) {
       const periodEnd = new Date(end).toISOString();
       if (s.lastBilledFor === periodEnd) { end = addCycle(end, s.package.billingCycle); cycles++; continue; } // already billed
 
@@ -495,7 +522,10 @@ export async function renewSubscriptions(): Promise<BillingResult> {
             data: {
               number, companyId: who.companyId, clientName: label,
               // Figures frozen at issue rather than re-derived at print time — see money.ts.
-              ...(await figuresFromAmount(s.price)), currency: "SAR", status: "draft", // DRAFT: a human releases it
+              // The firm's configured currency, not a literal. Deliberately NOT the client's own
+              // country's — changing what an existing client is billed in is a decision for a human,
+              // not a side effect of this cleanup.
+              ...(await figuresFromAmount(s.price)), currency: await homeCurrency(), status: "draft", // DRAFT: a human releases it
               date: new Date().toISOString().slice(0, 10),
               dueDate: new Date(next).toISOString().slice(0, 10),
               services: `${s.package.name} — ${s.package.billingCycle} subscription (${fmtDisplay(end)} → ${fmtDisplay(next)})`,
@@ -522,7 +552,7 @@ export async function renewSubscriptions(): Promise<BillingResult> {
         message: `${label} · draft invoice ${number} for SAR ${s.price} is ready to review`,
       });
     }
-    if (cycles >= MAX_CATCHUP) out.details.push(`${s.package.name}: stopped at ${MAX_CATCHUP} catch-up periods — needs manual review`);
+    if (cycles >= rules.maxCatchUpPeriods) out.details.push(`${s.package.name}: stopped at ${rules.maxCatchUpPeriods} catch-up periods — needs manual review`);
   }
   return out;
 }
@@ -658,11 +688,12 @@ const DUNNING_LADDER = [1, 7, 14, 30];
  * Days past due at which the job RECOMMENDS suspension. It never suspends on its own: a mis-keyed
  * amount or an unrecorded bank transfer would otherwise cut off a client who has actually paid.
  */
-const SUSPEND_RECOMMEND_DAYS = 45;
+// The threshold is a setting now — see jobrules.ts. It was 45 days here.
 /** Statuses that mean "money is owed" — a draft has not been released, a paid one is done. */
 const CHASEABLE = new Set(["pending", "unpaid", "sent", "overdue"]);
 
 export async function chaseOverdueInvoices(): Promise<DunningResult> {
+  const rules = await jobRules();
   const out: DunningResult = { scanned: 0, markedOverdue: 0, chased: 0, settledButUnmarked: 0, onExtension: 0, suspendRecommended: [], details: [] };
   /** companyId → worst days-overdue seen, for the suspension recommendation at the end. */
   const worstByCompany = new Map<string, { name: string; days: number; owed: number; currency: string }>();
@@ -750,7 +781,7 @@ export async function chaseOverdueInvoices(): Promise<DunningResult> {
   // Suspension RECOMMENDATION. Deliberately advisory: the job flags, a human decides. Clients already
   // suspended are skipped so the alert doesn't repeat every hour once someone has acted.
   for (const [companyId, w] of worstByCompany) {
-    if (w.days < SUSPEND_RECOMMEND_DAYS) continue;
+    if (w.days < rules.suspendRecommendDays) continue;
     const co = await prisma.company.findUnique({ where: { id: companyId }, select: { status: true } });
     if (co?.status === "suspended") continue;
     out.suspendRecommended.push(`${w.name} (${w.days}d, ${w.currency} ${w.owed.toLocaleString()})`);
@@ -846,9 +877,11 @@ export async function assignOrphanTasks(): Promise<AssignResult> {
     out.scanned++;
     const who = await pickAssignee(t.assigneeRole!);
     if (!who) continue; // still nobody in that role — leave it rather than assign the wrong desk
-    await prisma.workflowTask.update({ where: { id: t.id }, data: { assignee: who } });
+    await prisma.workflowTask.update({ where: { id: t.id }, data: { assignee: who.name, assigneeId: who.id } });
     out.assigned++;
-    out.details.push(`${t.title} → ${who}`);
+    out.details.push(`${t.title} → ${who.name}`);
+    // Work that appears on somebody's desk while they are not looking at the console.
+    notifyTaskAssigned({ assigneeId: who.id, title: t.title, why: `it was waiting for a ${t.assigneeRole}` });
   }
   return out;
 }
@@ -869,12 +902,15 @@ export type WorkforceAlertResult = { checked: number; dropped: number; improved:
  * Percentage points, not a percentage OF the ratio: regulators publish bands in points, so a warning
  * expressed the same way is one a person can act on without converting anything.
  */
-const BAND_EDGE_POINTS = 2;
+// The edge width is a setting now — see jobrules.ts. It was 2 points here.
 
 export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
+  const rules = await jobRules();
   const out: WorkforceAlertResult = { checked: 0, dropped: 0, improved: 0, nearEdge: 0, details: [] };
   const companies = await prisma.company.findMany({
-    where: { NOT: { country: null } },
+    // Clients only. A lead has no workforce here to have a band about, and interrupting somebody
+    // about a prospect's imaginary compliance position is how an alert channel gets muted.
+    where: { NOT: { country: null }, lifecycle: ACTIVE_CLIENT },
     select: { id: true, name: true, country: true, workforceBandSeen: true },
   });
 
@@ -921,7 +957,7 @@ export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
     const isLowest = band ? !bands.some(b => b.minBp < band.minBp) : true;
     if (band && !isLowest) {
       const margin = w.ratioMinBp - band.minBp;
-      if (margin >= 0 && margin <= BAND_EDGE_POINTS * 100) {
+      if (margin >= 0 && margin <= rules.bandEdgePoints * 100) {
         out.nearEdge++;
         out.details.push(`${co.name}: ${pct(margin)} above the ${now} floor`);
         // The key carries the band AND the whole-point margin, so it re-fires if the gap narrows
@@ -932,6 +968,360 @@ export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
           message: `${pct(w.ratioMinBp)} against a ${pct(band.minBp)} floor — ${pct(margin)} of headroom. One departure could move it.`,
         });
       }
+    }
+  }
+  return out;
+}
+
+/**
+ * Chase what people said they would do.
+ *
+ * Two separate silences are worth interrupting somebody about, and they are not the same:
+ *
+ *   - a FOLLOW-UP came due. Somebody wrote down a commitment with a date and that date has arrived.
+ *   - a DEAL went quiet. Nobody promised anything, which is the problem: an open opportunity with
+ *     no contact for weeks is the one that is quietly dying while the board still counts it.
+ *
+ * The second only fires where there is no open follow-up already: a deal somebody is actively
+ * chasing on Sunday does not also need "nobody has touched this". Two alerts about one thing is how
+ * a notification list stops being read.
+ */
+// How long counts as stale is a setting now — see jobrules.ts. It was 14 days here.
+
+export interface FollowUpResult {
+  due: number; overdue: number; stale: number; details: string[];
+}
+
+export async function checkFollowUps(): Promise<FollowUpResult> {
+  const rules = await jobRules();
+  const out: FollowUpResult = { due: 0, overdue: 0, stale: 0, details: [] };
+  const on = new Date().toISOString().slice(0, 10);
+
+  // ── commitments that have come due ──
+  const owed = await openFollowUps({ on });
+  for (const f of owed) {
+    out.due++;
+    if (f.overdue) out.overdue++;
+    const who = f.ownerId ? await prisma.user.findUnique({ where: { id: f.ownerId }, select: { name: true } }) : null;
+    // Keyed on the DAY as well as the entry, so an overdue commitment is raised again each morning
+    // rather than once and then never — but still only once per day, however often the tick runs.
+    // The bell row and the email are ONE decision: `notifyOnce` returns false when this event has
+    // already been raised, and the mail rides on that same answer. Deduping the email separately
+    // would eventually let the two drift, which is how people stop trusting either.
+    const freshFollowUp = await notifyOnce(`followup:${f.id}:${on}`, {
+      type: "system",
+      title: f.overdue
+        ? `Overdue by ${f.daysLate} day${f.daysLate === 1 ? "" : "s"}: ${f.nextAction}`
+        : `Due today: ${f.nextAction}`,
+      message: `${f.company.name}${f.opportunity ? ` — ${f.opportunity.title}` : ""}${who ? ` · ${who.name}` : ""}`,
+    });
+    if (freshFollowUp) {
+      notifyFollowUpDue({
+        ownerId: f.ownerId, companyId: f.company.id, companyName: f.company.name,
+        // `nextAction` is nullable on the column but never null here — openFollowUps only returns
+        // entries that HAVE one. The fallback is for the type, not for a case that occurs.
+        action: f.nextAction ?? "Follow up", dealTitle: f.opportunity?.title ?? null, daysLate: f.overdue ? f.daysLate : 0,
+      });
+    }
+    out.details.push(`${f.company.name}: ${f.nextAction}${f.overdue ? ` (${f.daysLate}d late)` : ""}`);
+  }
+
+  // ── open deals that are not moving ──
+  //
+  // The verdict comes from dealhealth.ts, which is now the ONLY place either measure of "not moving"
+  // is worked out. This loop used to compute days-since-contact itself while the Sales Dashboard
+  // computed days-in-stage, and both called the result "stalled" — so a deal could be stalled on one
+  // surface and healthy on the other, with neither saying which it meant.
+  const openDeals = await prisma.opportunity.findMany({
+    include: { stage: true, company: { select: { id: true, name: true, lifecycle: true } } },
+    take: 1000,
+  });
+  const live = openDeals.filter(d => !d.stage.isWon && !d.stage.isLost && d.company.lifecycle !== "lost");
+  if (live.length) {
+    const contacted = await lastContactMap(live.map(d => d.companyId));
+    const owedCompanies = new Set(owed.map(f => f.companyId));
+    const on = new Date().toISOString().slice(0, 10);
+    for (const d of live) {
+      if (owedCompanies.has(d.companyId)) continue; // already being chased
+      const health = healthOf({
+        deal: d, stage: d.stage,
+        lastContactAt: contacted[d.companyId] ?? null,
+        staleDealDays: rules.staleDealDays,
+        on,
+      });
+      // Only the two states that mean nobody is working it. `at-risk` is a slipped forecast date,
+      // which is a conversation with a manager rather than a notification at 3am.
+      if (health.state !== "stalled" && health.state !== "quiet") continue;
+      out.stale++;
+      const days = (health.state === "stalled" ? health.daysInStage : health.daysQuiet) ?? 0;
+      // Keyed by the week, so it repeats as the gap widens without nagging daily. The state is in
+      // the key too: a deal that goes from quiet to stalled is worth saying again.
+      const raised = await notifyOnce(`deal-stale:${d.id}:${health.state}:${Math.floor(days / 7)}`, {
+        type: "system",
+        title: health.state === "stalled"
+          ? `Stalled ${days} days in ${d.stage.name}: ${d.title}`
+          : `No contact in ${days} days: ${d.title}`,
+        // The reasons, verbatim from the same module the dashboard prints. One wording, two surfaces.
+        message: `${d.company.name} — ${health.reasons.join("; ")}.`,
+      });
+      if (raised) {
+        out.details.push(`${d.company.name}: ${d.title} ${health.state} ${days}d`);
+        notifyGoneQuiet({ ownerId: d.ownerId, companyId: d.companyId, what: "this deal", name: d.title, days, kind: "deal" });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * A subscription about to lapse is a deal somebody has to go and win.
+ *
+ * ONLY the ones with auto-renew OFF. An auto-renewing subscription bills itself and needs no
+ * selling; putting it on the board would fill the pipeline with revenue nobody has to work for,
+ * and every forecast built on that board would then be counting money twice — once as recurring
+ * and once as new business.
+ *
+ * Raised BEFORE the end date, not after. `renewSubscriptions` already announces a lapse once it has
+ * happened, which is the point at which it is too late to do anything about it.
+ *
+ * Idempotency is the unique `originKey`, not a lookup: the tick re-reads the same subscription every
+ * hour, and a find-then-create races with itself. Same reasoning as notifyOnce.
+ */
+// The lead time is a setting now — see jobrules.ts. It was 45 days here.
+
+export interface RenewalDealResult { considered: number; created: number; skipped: number; details: string[] }
+
+export async function raiseRenewalDeals(): Promise<RenewalDealResult> {
+  const rules = await jobRules();
+  const out: RenewalDealResult = { considered: 0, created: 0, skipped: 0, details: [] };
+
+  const subs = await prisma.subscription.findMany({
+    where: { autoRenew: false },
+    include: { package: { select: { name: true } }, company: { select: { id: true, name: true, country: true, lifecycle: true } } },
+    take: 1000,
+  });
+
+  for (const s of subs) {
+    const end = parseDate(s.endDate);
+    if (end === null) continue;
+    const days = daysUntil(end);
+    // Not yet worth raising, or already long gone — a deal opened for a subscription that lapsed
+    // last year is not work, it is clutter.
+    if (days > rules.renewalLeadDays || days < -rules.renewalGraceDays) continue;
+    out.considered++;
+
+    const who = await resolveSubscriber(s);
+    // Group-scoped subscriptions have no single company to hang a deal on. Skipped rather than
+    // guessed at: picking one member of the group would put the renewal on the wrong file.
+    if (!who?.companyId) { out.skipped++; continue; }
+    if (s.company && s.company.lifecycle !== ACTIVE_CLIENT) { out.skipped++; continue; }
+
+    const country = s.company?.country ?? null;
+    const stages = await stagesFor(country);
+    if (!stages.length) {
+      out.skipped++;
+      out.details.push(`${who.name}: no pipeline stages for ${country ?? "no country"} — renewal not raised`);
+      continue;
+    }
+    const first = stages.find(st => !st.isWon && !st.isLost) ?? stages[0];
+
+    try {
+      const nowISOv = nowISO();
+      const renewal = await prisma.opportunity.create({
+        data: {
+          // The key carries the PERIOD as well as the subscription, so next year's renewal is a new
+          // deal rather than being suppressed by this year's.
+          originKey: `renewal:${s.id}:${s.endDate}`,
+          number: await nextNumber("opportunity").catch(() => null),
+          companyId: who.companyId,
+          title: `Renew ${s.package.name}`,
+          valueMinor: s.price ? s.price * 100 : null,
+          stageId: first.id,
+          expectedCloseDate: String(s.endDate).slice(0, 10),
+          source: "renewal",
+          country,
+          notes: `Raised automatically: this subscription ends ${s.endDate} and auto-renew is off.`,
+          createdAt: nowISOv, stageAt: nowISOv,
+        },
+      });
+      await recordTransition(prisma, { opportunityId: renewal.id, toStageId: first.id, at: nowISOv });
+      out.created++;
+      out.details.push(`${who.name}: ${s.package.name} ends ${s.endDate}`);
+      if (await notifyOnce(`renewal-deal:${s.id}:${s.endDate}`, {
+        type: "system",
+        title: `Renewal to win: ${who.name}`,
+        message: `${s.package.name} ends ${s.endDate} and auto-renew is off. A deal is on the board.`,
+      })) {
+        notifyRenewalDeal({ companyId: who.companyId, clientName: who.name, title: `${s.package.name} renewal`, endDate: s.endDate });
+      }
+    } catch {
+      // Unique violation on originKey = already raised. Expected on every tick after the first.
+      out.skipped++;
+    }
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// #13 — QUOTATIONS NOBODY HAS ANSWERED
+//
+// The most expensive silence in the product: work already priced, sent, and then forgotten. Nothing
+// chased these before, so a quotation could sit in `sent` until it lapsed and nobody would know
+// unless they happened to open the list.
+//
+// THREE MOMENTS, EACH SAID ONCE
+//
+//   no answer     — N days after it was SENT (not after it was dated; see Quotation.sentAt)
+//   about to lapse — a few days before validUntil, while there is still time to act
+//   lapsed         — its validity has passed and it was never answered
+//
+// Each is a different thing to do about it, which is why they are separate rather than one repeated
+// reminder. `notifyOnce` keys them per quotation per moment, so the hourly tick cannot repeat any.
+//
+// WHAT IT DELIBERATELY DOES NOT DO
+//
+// It never marks the deal lost. A client going quiet is not a decision, and auto-losing would put a
+// loss into the win-rate figures that nobody decided and no reason explains.
+// ─────────────────────────────────────────────────────────────
+
+export interface QuoteChaseResult {
+  scanned: number;
+  chased: number;
+  expiringSoon: number;
+  lapsed: number;
+  details: string[];
+}
+
+export async function chaseQuotations(): Promise<QuoteChaseResult> {
+  const out: QuoteChaseResult = { scanned: 0, chased: 0, expiringSoon: 0, lapsed: 0, details: [] };
+  const rules = await salesRules();
+
+  // Only `sent`. A draft is not the client's problem yet, and accepted/rejected/invoiced are answers.
+  const quotes = await prisma.quotation.findMany({ where: { status: "sent" }, take: 1000 });
+
+  for (const q of quotes) {
+    // Fall back to the issue date for rows written before sentAt existed. Stated rather than silent:
+    // those are chased slightly early, which is the safer direction for money already quoted.
+    const sent = parseDate(q.sentAt ?? q.date);
+    if (sent === null) continue;
+    out.scanned++;
+
+    const waiting = Math.max(0, Math.floor((Date.now() - sent) / DAY));
+    const who = q.clientName ?? "a client";
+    // Who to tell: the deal's owner where the quotation came from one, so it reaches the person who
+    // will actually pick up the phone rather than the whole office.
+    // `ownerId`/`companyId` were missing from this select, so the intent above was never actually
+    // deliverable — the reminder had no way to reach a person. They are read now.
+    const opp = await prisma.opportunity.findFirst({ where: { quotationId: q.id }, select: { title: true, ownerId: true, companyId: true } });
+    const about = opp ? `${opp.title} — ${who}` : who;
+    const chaseTo = { ownerId: opp?.ownerId ?? null, companyId: opp?.companyId ?? q.companyId ?? null };
+
+    const until = parseDate(q.validUntil);
+    const daysLeft = until === null ? null : Math.floor((until - Date.now()) / DAY);
+
+    // ── lapsed ──
+    if (daysLeft !== null && daysLeft < 0) {
+      if (rules.quoteExpiryNotice && await notifyOnce(`quote:lapsed:${q.id}`, {
+        type: "finance",
+        title: `Quotation lapsed unanswered: ${q.number}`,
+        message: `${about} · valid until ${q.validUntil} · ${waiting} days with no answer. Re-issue it or close the deal — it is no longer a live offer.`,
+      })) {
+        out.lapsed++; out.details.push(`LAPSED ${q.number} (${who})`);
+        notifyQuoteChase({ ...chaseTo, number: q.number, clientName: who, state: "lapsed", days: Math.abs(daysLeft), validUntil: q.validUntil });
+      }
+      continue;
+    }
+
+    // ── about to lapse ──
+    if (daysLeft !== null && daysLeft <= rules.quoteExpiryWarnDays) {
+      if (await notifyOnce(`quote:expiring:${q.id}`, {
+        type: "finance",
+        title: `Quotation about to lapse: ${q.number}`,
+        message: `${about} · valid until ${q.validUntil}, ${daysLeft === 0 ? "today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}. Still unanswered after ${waiting} days.`,
+      })) {
+        out.expiringSoon++; out.details.push(`EXPIRING ${q.number} (${who}, ${daysLeft}d)`);
+        notifyQuoteChase({ ...chaseTo, number: q.number, clientName: who, state: "expiring", days: daysLeft, validUntil: q.validUntil });
+      }
+      continue;
+    }
+
+    // ── no answer ──
+    if (waiting >= rules.quoteChaseDays) {
+      if (await notifyOnce(`quote:silent:${q.id}`, {
+        type: "finance",
+        title: `No answer on quotation ${q.number}`,
+        message: `${about} · sent ${waiting} days ago${q.validUntil ? ` · valid until ${q.validUntil}` : " · no validity date set"}. Worth a call.`,
+      })) {
+        out.chased++; out.details.push(`SILENT ${q.number} (${who}, ${waiting}d)`);
+        notifyQuoteChase({ ...chaseTo, number: q.number, clientName: who, state: "silent", days: waiting, validUntil: q.validUntil });
+      }
+    }
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────
+// #14 — LEADS NOTHING IS HAPPENING TO
+//
+// A lead with no deal is in no pipeline column, so the stale-deal nudge cannot see it — there is no
+// deal to be stale. It is not on the follow-up queue either, because nobody promised anything. It is
+// simply invisible: typed in once, and then nowhere.
+//
+// This is the one gap in the sales side where forgetting costs nothing visible until a quarter later
+// when somebody asks what happened to all the enquiries.
+// ─────────────────────────────────────────────────────────────
+
+// Days a lead may sit untouched: a setting now — see jobrules.ts. It was 10 days here.
+
+export interface IdleLeadResult { checked: number; nudged: number; details: string[] }
+
+export async function checkIdleLeads(): Promise<IdleLeadResult> {
+  const rules = await jobRules();
+  const out: IdleLeadResult = { checked: 0, nudged: 0, details: [] };
+
+  const leads = await prisma.company.findMany({
+    where: { lifecycle: { in: ["lead", "prospect"] } },
+    select: { id: true, name: true, createdAt: true, ownerId: true, lifecycle: true },
+    take: 1000,
+  });
+
+  for (const lead of leads) {
+    out.checked++;
+
+    const deals = await prisma.opportunity.count({ where: { companyId: lead.id } });
+    const lastTouch = await prisma.interaction.findFirst({
+      where: { companyId: lead.id },
+      orderBy: { at: "desc" },
+      select: { at: true },
+    });
+    const arrival = await prisma.lifecycleTransition.findFirst({
+      where: { companyId: lead.id, fromLifecycle: null },
+      orderBy: { changedAt: "asc" },
+      select: { changedAt: true },
+    });
+
+    // ONE definition, shared with the Leads screen's Idle tab — see idleDaysOf. Written twice these
+    // would drift, and a tab that disagrees with the notification people received teaches them the
+    // tab is wrong. Null covers all three "does not apply" cases: not a lead, has a deal, no date.
+    const idle = idleDaysOf({
+      lifecycle: lead.lifecycle,
+      deals,
+      lastContactAt: lastTouch?.at ?? null,
+      arrivedAt: arrival?.changedAt ?? null,
+      createdAt: lead.createdAt,
+    });
+    if (idle === null || idle < rules.idleLeadDays) continue;
+
+    // Keyed on the WEEK, so a lead that stays idle is mentioned once a week rather than once ever —
+    // saying it a single time and never again is how something quietly stays forgotten.
+    const week = new Date().toISOString().slice(0, 10);
+    if (await notifyOnce(`idle-lead:${lead.id}:${week}`, {
+      type: "system",
+      title: `Nothing happening: ${lead.name}`,
+      message: `A ${lead.lifecycle} with no deal and no contact for ${idle} days. Open a deal for them or mark it lost — either is better than it sitting here.`,
+    })) {
+      out.nudged++; out.details.push(`${lead.name} (${idle}d)`);
+      notifyGoneQuiet({ ownerId: lead.ownerId, companyId: lead.id, what: "this lead", name: lead.name, days: idle, kind: "lead" });
     }
   }
   return out;

@@ -42,6 +42,26 @@ const nameOf = (n: AnyNode) => n.label || n.type || n.id;
  * @param tpl    trigger + triggerConfig, so an expiry template with no binding can be reported here
  *               too rather than only in the template list
  */
+/**
+ * The steps that will land on nobody's desk.
+ *
+ * `task` and `approval` are the only node types the engine turns into work a person has to do.
+ * Every other type runs itself, so "no role" is the correct state for a delay or a split and
+ * counting those was what produced the "122 of 190 steps" figure for a problem that is twelve
+ * steps big.
+ *
+ * A roleless step is not an error — the engine handles it, falling back to the run-level owner and
+ * then to unassigned. But "unassigned" in a compliance business means a government deadline sitting
+ * in a pile nobody is notified about, and the cost of noticing late is a fine. So it is a warning
+ * while a template is a draft, and a refusal at the moment somebody makes it live.
+ */
+export function stepsMissingRole(graph: any): AnyNode[] {
+  const nodes: AnyNode[] = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  return nodes.filter(n =>
+    (n?.type === "task" || n?.type === "approval") &&
+    !(n as any)?.config?.assigneeRole && !(n as any)?.config?.approverRole);
+}
+
 export function validateGraph(graph: any, tpl?: { trigger?: string | null; triggerConfig?: any }): GraphIssue[] {
   const out: GraphIssue[] = [];
   const nodes: AnyNode[] = Array.isArray(graph?.nodes) ? graph.nodes : [];
@@ -189,6 +209,16 @@ export function validateGraph(graph: any, tpl?: { trigger?: string | null; trigg
   // looking configured, and re-saving the trigger settings clears it to manual.
   if (tpl?.trigger === "request_intake") {
     out.push({ level: "warning", message: "The old \"Client request intake\" trigger never started anything on its own. To run this from a client request, bind it to a service under Configure → Services; otherwise it is a manual workflow." });
+  }
+
+  // ── Steps that land on nobody's desk ──
+  // A warning here, a refusal at activation. Told while it is still a draft so the author fixes it
+  // in the Builder, rather than finding out only when they press Activate.
+  for (const n of stepsMissingRole(graph)) {
+    out.push({
+      level: "warning", nodeId: n.id, node: nameOf(n),
+      message: `"${nameOf(n)}" names no role, so the task it creates lands unassigned and waits for somebody to notice it. Set "Assigned role" on the step.`,
+    });
   }
 
   return out;

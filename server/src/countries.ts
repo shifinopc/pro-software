@@ -155,6 +155,30 @@ export function countryFlag(code: unknown): string {
   return String.fromCodePoint(...[...c].map(ch => 0x1f1e6 + ch.charCodeAt(0) - 65));
 }
 
+/**
+ * The currency a deal in this country is denominated in.
+ *
+ * From the same list the picker reads, so a UAE opportunity cannot end up priced in riyals because
+ * somebody's default was Saudi. Falls back to the home market's currency rather than an empty
+ * string: a figure with no currency beside it is read as whatever the reader assumes.
+ */
+export function countryCurrency(code: unknown, fallback?: string): string {
+  const c = BY_CODE.get(String(code ?? "").trim().toUpperCase());
+  if (c) return c.currency;
+  // The last resort was a literal "SAR". It is now the seed market's own currency, read from this
+  // same table — so the two cannot drift, and there is exactly one place that says which market a
+  // fresh install assumes. Callers that can reach the settings pass the configured one instead.
+  return fallback || BY_CODE.get(SEED_MARKET)?.currency || "";
+}
+
+/**
+ * The market a fresh install assumes before anybody has chosen one in Settings → General.
+ *
+ * Deliberately here, next to the table it indexes, rather than imported from orgsettings.ts — that
+ * module reads the database and imports this one, so pointing this back at it would be a cycle.
+ */
+export const SEED_MARKET = "SA";
+
 /** The demonym, which is what a person means by "nationality" on a form. */
 export function countryNationality(code: unknown): string {
   const c = BY_CODE.get(String(code ?? "").trim().toUpperCase());

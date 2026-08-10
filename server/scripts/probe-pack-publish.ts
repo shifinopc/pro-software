@@ -22,7 +22,7 @@ async function main() {
 
   try {
     // Install the current version so there is something to update FROM.
-    const v1 = readPack("pack-sa-2026.1.json");
+    const v1 = readPack("pack-sa-2026.2.json");
     await applyInstall(v1, { adopt: true });
     const inst0 = (await installedPacks())["SA"];
     console.log(`installed: SA ${inst0?.version} · ${inst0?.rows} rows`);

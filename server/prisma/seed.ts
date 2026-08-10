@@ -120,7 +120,8 @@ async function main() {
       { name: "Khalid Al-Mutairi", email: "admin@stimes.sa", roleId: "super_admin", status: "active", lastActive: "Now", type: "staff", passwordHash: pwAdmin },
       { name: "Omar Abdullah", email: "officer@stimes.sa", roleId: "pro_officer", status: "active", lastActive: "Yesterday", type: "staff", passwordHash: pwOfficer },
       { name: "Sara Ahmed", email: "accounts@stimes.sa", roleId: "accountant", status: "active", lastActive: "Jan 20", type: "staff", passwordHash: pwAcct },
-      { name: "Yousef Al-Harbi", email: "yousef@stimes.sa", roleId: "sales", status: "active", lastActive: "2h ago", type: "staff", assignedClientIds: ["cl1", "cl6"], passwordHash: pwSales },
+      // Ownership is no longer a list on the user — it is Company.ownerId, set on the clients below.
+      { name: "Yousef Al-Harbi", email: "yousef@stimes.sa", roleId: "sales", status: "active", lastActive: "2h ago", type: "staff", passwordHash: pwSales },
     ],
   });
 

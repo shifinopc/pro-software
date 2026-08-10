@@ -1,19 +1,17 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { idleDaysOf } from "./lifecycle.js";
+import { homeCountry } from "./orgsettings.js";
 import { validate } from "./validate.js";
 import { logActivity, logNotification } from "./auth.js";
 import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
 import { startDeliveryForQuotation } from "./delivery.js";
+import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
 
-/**
- * The market this installation operates in, for records created without one stated.
- *
- * Deliberately a single named constant rather than a literal sprinkled through the create paths: the
- * product is Saudi-only today, and the point of the country columns is that it will not always be.
- * When a second market opens this becomes an org setting and only this line changes.
- */
-export const HOME_COUNTRY = "SA";
+// The market this installation operates in now lives in Settings → General, read through
+// `homeCountry()`. It used to be `export const HOME_COUNTRY = "SA"` right here, carrying a comment
+// that promised it would become a setting when a second market opened. See src/orgsettings.ts.
 
 /**
  * Configuration that belongs to a market rather than to the firm.
@@ -22,7 +20,7 @@ export const HOME_COUNTRY = "SA";
  * done in a particular country, so a second country pack must be able to keep them apart — otherwise
  * an Emirates ID document type is offered to a Saudi client.
  */
-export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "workforceBand"];
+export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "workforceBand", "pipelineStage", "leadSource", "lostReason"];
 
 /**
  * Configuration that can be RETIRED instead of deleted.
@@ -32,7 +30,7 @@ export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "servi
  * everywhere, still readable, so old records keep their meaning. Includes workflowTemplate, which the
  * workflow router serves rather than this helper — it filters separately.
  */
-export const RETIREABLE = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "govCenter", "workforceBand"];
+export const RETIREABLE = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "govCenter", "workforceBand", "pipelineStage", "leadSource", "lostReason"];
 
 
 // Build a friendly activity line for a newly-created record (persisted feed).
@@ -106,10 +104,22 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
   if (!rows.length) return rows;
   const ids = rows.map(r => r.id).filter(Boolean);
   if (!ids.length) return rows;
-  const [emps, docs] = await Promise.all([
+  const [emps, docs, arrivals, contacts, deals] = await Promise.all([
     prisma.employee.groupBy({ by: ["companyId"], where: { companyId: { in: ids }, archived: false }, _count: { _all: true } }),
     prisma.document.findMany({ where: { companyId: { in: ids }, supersededAt: null }, select: { companyId: true, status: true, expiryDate: true } }),
+    // WHEN EACH ONE ARRIVED. `createdAt` cannot answer this — its own comment says "client since",
+    // and the staff form never stamped it — so "a lead added this week" was unanswerable from a
+    // company row. The arrival transition means exactly one thing. Two more grouped queries; still
+    // flat in the number of companies.
+    prisma.lifecycleTransition.groupBy({ by: ["companyId"], where: { companyId: { in: ids }, fromLifecycle: null }, _min: { changedAt: true } }),
+    // When anybody last logged anything against them — what "idle" is measured from.
+    prisma.interaction.groupBy({ by: ["companyId"], where: { companyId: { in: ids } }, _max: { at: true } }),
+    // Any deal at all means somebody is on it, so it cannot be idle — see idleDaysOf.
+    prisma.opportunity.groupBy({ by: ["companyId"], where: { companyId: { in: ids } }, _count: { _all: true } }),
   ]);
+  const arrivedBy = new Map(arrivals.map(a => [a.companyId, a._min.changedAt]));
+  const contactedBy = new Map(contacts.map(c => [c.companyId, c._max.at]));
+  const dealsBy = new Map(deals.map(d => [d.companyId, d._count._all]));
   const empBy = new Map(emps.map(e => [e.companyId, e._count._all]));
   const ovd = new Map<string, number>(), exp = new Map<string, number>();
   // Two more counts, because the dashboard's health bar had nothing real to divide by. It read
@@ -138,6 +148,22 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
     expiring: exp.get(r.id) ?? 0,
     documents: tot.get(r.id) ?? 0,
     undated: unk.get(r.id) ?? 0,
+    /** When this company entered the system. Null for anything that predates the history table. */
+    arrivedAt: arrivedBy.get(r.id) ?? null,
+    /** When anybody last logged contact. Null means never — which is not the same as "long ago". */
+    lastContactAt: contactedBy.get(r.id) ?? null,
+    /**
+     * Days this lead has been neglected, or null when the question does not apply. From the SAME
+     * function the hourly idle-lead notice uses, so the Leads screen's Idle tab and the message
+     * somebody received cannot disagree.
+     */
+    idleDays: idleDaysOf({
+      lifecycle: r.lifecycle,
+      deals: dealsBy.get(r.id) ?? 0,
+      lastContactAt: contactedBy.get(r.id) ?? null,
+      arrivedAt: arrivedBy.get(r.id) ?? null,
+      createdAt: r.createdAt ?? null,
+    }),
   }));
 }
 
@@ -242,16 +268,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       // without this, the client added tomorrow arrives with no country and quietly drops out of
       // anything that filters by one. Named in a single place so that when a second market opens this
       // becomes an org setting rather than a value hunted through the codebase.
-      if (modelName === "company" && !data.country) data.country = HOME_COUNTRY;
+      if (modelName === "company" && !data.country) data.country = await homeCountry();
       // Configuration belongs to a market too. Without this, a document type or template created after
       // a second country pack is installed has no country and shows up in every client's pickers
       // regardless of where they operate — the same "backfilled but not defaulted" gap that had to be
       // fixed twice already today, once for clients and once for government centers.
-      if (COUNTRY_SCOPED_CONFIG.includes(modelName) && !data.country) data.country = HOME_COUNTRY;
+      if (COUNTRY_SCOPED_CONFIG.includes(modelName) && !data.country) data.country = await homeCountry();
       // An employee counts toward one country's workforce — their employer's unless stated otherwise.
       if (modelName === "employee" && !data.workCountry && data.companyId) {
         const co = await prisma.company.findUnique({ where: { id: data.companyId }, select: { country: true } }).catch(() => null);
-        data.workCountry = co?.country ?? HOME_COUNTRY;
+        data.workCountry = co?.country ?? await homeCountry();
       }
       const created = await model.create({ data });
       // Persisted activity feed + notifications for compliance-critical events
@@ -306,6 +332,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
           });
         }
       }
+      // A quotation reaching `sent` is the moment the clock starts on the client's answer. Stamped
+      // on the TRANSITION, so re-saving an already-sent quotation does not restart the wait and let
+      // a stale one escape being chased.
+      if (modelName === "quotation"
+        && String(req.body?.status ?? "").toLowerCase() === "sent"
+        && String((before as any).status ?? "").toLowerCase() !== "sent"
+        && !(updated as any).sentAt) {
+        await prisma.quotation.update({ where: { id: updated.id }, data: { sentAt: new Date().toISOString() } });
+        (updated as any).sentAt = new Date().toISOString();
+      }
       // A quotation reaching `accepted` schedules the work it describes — whether the client
       // accepted it in the portal or staff recorded the acceptance here. Gated on the TRANSITION,
       // so re-saving an already-accepted quotation doesn't try again (startDelivery is idempotent
@@ -333,6 +369,13 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         && String(req.body?.status ?? "").toLowerCase() === "rejected"
         && String((before as any).status ?? "").toLowerCase() !== "rejected") {
         notifyAddonRejected({ companyId: (updated as any).companyId, serviceName: (updated as any).serviceName });
+        // …and the deal it raised is lost, with a reason. Business the client asked for and did not
+        // get belongs in the loss report like any other — otherwise the only client-initiated deals
+        // that ever appear are the ones that succeeded, and the win rate flatters itself.
+        await closeAddonDeal((updated as any).id, {
+          won: false,
+          reason: String(req.body?.rejectedReason ?? "").trim() || "Add-on request turned down",
+        }).catch(e => console.error("could not close the add-on deal", e));
       }
       res.json(redact(modelName, updated));
     } catch (e: any) {

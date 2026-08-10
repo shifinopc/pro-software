@@ -5,9 +5,10 @@
 // completed via completeTask(), which resumes the frontier from that node.
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { homeCurrency, homeCountry } from "./orgsettings.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
-import { validateGraph } from "./workflow-validate.js";
+import { validateGraph, stepsMissingRole } from "./workflow-validate.js";
 import { figuresForFee } from "./money.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
@@ -61,26 +62,70 @@ async function resolveDynamic(ruleId: string, vars: Record<string, any>): Promis
  * Choose who a new step belongs to: the ACTIVE staff member holding that role with the fewest open
  * tasks. Least-loaded rather than plain round-robin, because a round robin keeps handing work to
  * someone already buried. Ties break on name so the result is deterministic (and testable).
- * Returns the user's NAME — that is what WorkflowTask.assignee holds and what /my-work matches on.
+ * Returns the PERSON, not just their name. It used to return a string, which meant the caller wrote
+ * a display name and nothing else — so a task could never be turned into a mailbox and the officer
+ * doing the work could not be told about it. The name is still returned for the display mirror.
  * Null when nobody holds the role, which leaves the old unassigned behaviour intact.
  */
-export async function pickAssignee(role: string): Promise<string | null> {
+/**
+ * Turn a display name back into a person — but only when there is exactly one candidate.
+ *
+ * Names reach this code from places that only ever held a name: a template that hard-codes "Layla
+ * Ahmed", a run variable, the reassign form. Somebody has to bridge that to an id, and this is the
+ * only place that does it.
+ *
+ * TWO MATCHES MEANS NO MATCH. Guessing between two people called Ahmed would send one of them
+ * somebody else's work; returning null leaves the task showing the name it always showed, and the
+ * notification falls back to the admins, who can see the ambiguity and fix it.
+ */
+export async function resolveStaffByName(name: string | null | undefined): Promise<{ id: string; name: string } | null> {
+  const n = String(name ?? "").trim();
+  if (!n || n === "Unassigned") return null;
+  const hits = await prisma.user.findMany({
+    where: { name: n, type: "staff", status: "active" },
+    select: { id: true, name: true },
+    take: 2,
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
+export async function pickAssignee(
+  role: string,
+  /** What the step is about, so a routing rule can say who is right for it rather than who is free. */
+  facts?: import("./routing.js").RoutingFacts,
+): Promise<{ id: string; name: string; email: string } | null> {
+  // A routing rule refines this decision; it never invents one. Nothing matching leaves the
+  // load balancer below untouched, which is exactly how this behaved before rules existed.
+  if (facts) {
+    const { routeFor } = await import("./routing.js");
+    const routed = await routeFor("task", facts);
+    if (routed.userId) {
+      // A rule naming a PERSON is honoured even when they do not hold the step's role: somebody
+      // wrote "GOSI deregistration goes to Noura" on purpose, and silently overruling that with the
+      // role would make the rule look broken rather than overridden.
+      const u = await prisma.user.findUnique({ where: { id: routed.userId }, select: { id: true, name: true, email: true } });
+      if (u) return u;
+    }
+    // A rule naming a ROLE redirects which team balances, then falls through to the same logic.
+    if (routed.role) role = routed.role;
+  }
   const candidates = await prisma.user.findMany({
     where: { roleId: role, status: "active", type: "staff" },
-    select: { name: true },
+    select: { id: true, name: true, email: true },
   });
-  if (!candidates.length) return null;
-  const names = candidates.map(c => c.name).filter(Boolean) as string[];
-  if (!names.length) return null;
+  const people = candidates.filter(c => c.name);
+  if (!people.length) return null;
+  // Counted by id now. Load was grouped by NAME, so two staff sharing one had their queues merged
+  // and the balancer read one of them as twice as busy as they were.
   const load = await prisma.workflowTask.groupBy({
-    by: ["assignee"],
-    where: { status: "active", assignee: { in: names } },
+    by: ["assigneeId"],
+    where: { status: "active", assigneeId: { in: people.map(p => p.id) } },
     _count: { _all: true },
   });
-  const byName = new Map(load.map(l => [l.assignee as string, l._count._all]));
-  return names
-    .map(n => ({ n, c: byName.get(n) ?? 0 }))
-    .sort((a, b) => (a.c - b.c) || a.n.localeCompare(b.n))[0].n;
+  const byId = new Map(load.map(l => [l.assigneeId as string, l._count._all]));
+  return people
+    .map(p => ({ p, c: byId.get(p.id) ?? 0 }))
+    .sort((a, b) => (a.c - b.c) || a.p.name.localeCompare(b.p.name))[0].p;
 }
 
 // The effective checklist for a task node at runtime: dynamic rule (if configured) else the node's own list.
@@ -408,7 +453,7 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           await prisma.invoice.create({ data: {
             number, companyId: inst.companyId ?? null, clientName: inst.clientName ?? null,
             ...figures,
-            currency: c.currency || "SAR", status: "draft", date: nowISO().slice(0, 10),
+            currency: c.currency || await homeCurrency(), status: "draft", date: nowISO().slice(0, 10),
             services: label,
             // This was the only one of the four invoice creators that stored no line items, so its tax
             // invoice printed a description with QTY, PRICE and AMOUNT all blank. The line is priced
@@ -615,14 +660,25 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // yourself defeats the control.
         const runAssignee = node.type === "approval" ? null : (typeof vars.assignee === "string" ? vars.assignee.trim() : "");
         const ownerFallback = runAssignee && runAssignee !== "Unassigned" ? runAssignee : null;
-        const assignee = c.assignee
-          || (role ? await pickAssignee(role) : null)
-          || ownerFallback;
+        // The id travels with the name from here on. A template-named or run-named assignee only has
+        // a name, so it is resolved once, at creation — never re-derived later from the stored string.
+        // The step's own facts, so a rule can route on the authority it is done at or the country
+        // the run belongs to rather than only on who happens to be free this minute.
+        const picked = role ? await pickAssignee(role, {
+          govCenter: (typeof c.govCenter === "string" && c.govCenter.trim()) ? c.govCenter.trim() : null,
+          country: typeof vars.country === "string" ? vars.country : null,
+          service: typeof vars.service === "string" ? vars.service : null,
+        }) : null;
+        const assignee = c.assignee || picked?.name || ownerFallback;
+        const assigneeId = c.assignee
+          ? (await resolveStaffByName(c.assignee))?.id ?? null
+          : picked?.id ?? (ownerFallback ? (await resolveStaffByName(ownerFallback))?.id ?? null : null);
         await prisma.workflowTask.create({
           data: {
             instanceId: inst.id, nodeId, nodeType: node.type,
             title: c.title || node.label || (node.type === "approval" ? "Approval" : "Task"),
             assignee,
+            assigneeId,
             assigneeRole: role,
             status: "active",
             // Same story as `assignee` directly above: the dialog collects a priority, passes it in
@@ -1145,6 +1201,32 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     if (graph !== undefined) data.graph = graph;
     if (active !== undefined) data.active = !!active;
     if (version !== undefined) data.version = version;
+
+    // ── Going live is the moment the roles have to exist ──────────────────────────────────────
+    // Saving stays unblocked — a half-built template is a normal thing to leave the Builder holding,
+    // and that is the whole reason validateGraph only ever reports. Activating is different: from
+    // here the graph runs against real clients, and a `task` step with no role produces work that
+    // lands unassigned and notifies nobody. In a business whose deadlines are government deadlines,
+    // "sitting in a pile somebody will spot eventually" is how a fine happens.
+    //
+    // Only checked on the DRAFT → ACTIVE transition. Editing a template that is already live must
+    // not be blocked by this — that would strand whoever is halfway through fixing it, and the runs
+    // in flight are unaffected by the template anyway.
+    if (data.active === true) {
+      const current = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id }, select: { active: true, graph: true } });
+      if (current && !current.active) {
+        const missing = stepsMissingRole(graph !== undefined ? graph : current.graph);
+        if (missing.length) {
+          const names = missing.map(n => `"${n.label || n.type || n.id}"`);
+          const shown = names.slice(0, 4).join(", ") + (names.length > 4 ? ` and ${names.length - 4} more` : "");
+          return res.status(400).json({
+            error: `${missing.length === 1 ? "One step names" : `${missing.length} steps name`} no role: ${shown}. Work from ${missing.length === 1 ? "it" : "them"} would land unassigned and notify nobody. Set "Assigned role" on each, then activate.`,
+            steps: missing.map(n => ({ id: n.id, label: n.label || n.type || n.id })),
+          });
+        }
+      }
+    }
+
     const t = await prisma.workflowTemplate.update({ where: { id: req.params.id }, data });
     // Told on the way out, every time, whatever changed. Never blocking: a half-built template is a
     // normal thing to leave the Builder holding. The point is that "saved" stops implying "will work".
@@ -1296,6 +1378,42 @@ R.get("/tasks", requireAuth, requireStaff, async (req, res) => {
   if (req.query.instanceId) where.instanceId = String(req.query.instanceId);
   res.json(await prisma.workflowTask.findMany({ where, orderBy: { id: "desc" } }));
 });
+/**
+ * MAY THIS PERSON ACT ON THIS STEP — the one answer, asked in two places.
+ *
+ * It was the same expression written out twice, in the checklist route and the complete route. Two
+ * copies of a permission check is one copy that eventually stops matching the other, and the half
+ * that gets forgotten is always the one nobody is testing.
+ *
+ * The rungs, narrowest first:
+ *   · an admin, who moves anything
+ *   · the role the step names, which is how templates address work
+ *   · the person the step names
+ *   · nobody named at all — a step in the open pool
+ *   · A TEAM LEAD, for a step belonging to one of THEIR OWN people.
+ *
+ * That last rung is new, and it is deliberately not "a lead may approve anything". It requires the
+ * step to sit with somebody in their team, which means a lead approving work is always approving
+ * SOMEBODY ELSE'S — the second pair of eyes an approval step exists to be. A lead cannot use it to
+ * reach a step assigned to a person in another team, and it grants nothing at all on their own
+ * steps, where they already stood or did not on the rungs above.
+ */
+async function mayActOnTask(
+  a: { sub?: string; role?: string },
+  me: { name?: string | null } | null,
+  task: { assigneeRole: string | null; assignee: string | null; assigneeId: string | null },
+): Promise<boolean> {
+  if (a.role === "admin" || a.role === "super_admin") return true;
+  if (task.assigneeRole && task.assigneeRole === a.role) return true;
+  if (task.assignee && me?.name && task.assignee === me.name) return true;
+  if (!task.assigneeRole && !task.assignee) return true;
+
+  if (!task.assigneeId || task.assigneeId === a.sub) return false;
+  const { visibleUserIds } = await import("./visibility.js");
+  const vis = await visibleUserIds(a);
+  return vis.scope === "team" && !!vis.ids && vis.ids.includes(task.assigneeId);
+}
+
 // Update a task's checklist state WITHOUT changing status (partial save + per-item receive/verify/reject).
 R.post("/tasks/:id/checklist", requireAuth, requireStaff, async (req, res) => {
   try {
@@ -1305,7 +1423,7 @@ R.post("/tasks/:id/checklist", requireAuth, requireStaff, async (req, res) => {
     if (task.status !== "active") return res.status(400).json({ error: "This step is already completed" });
     const me = await prisma.user.findUnique({ where: { id: a.sub } });
     const isAdmin = a.role === "admin" || a.role === "super_admin";
-    const allowed = isAdmin || (task.assigneeRole && task.assigneeRole === a.role) || (task.assignee && me?.name && task.assignee === me.name) || (!task.assigneeRole && !task.assignee);
+    const allowed = await mayActOnTask(a, me, task);
     if (!allowed) return res.status(403).json({ error: "This step is assigned to another role" });
     const { checklistState, itemKey, action, note, fileRef } = req.body ?? {};
     const state = effectiveState(task);
@@ -1356,7 +1474,7 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
     if (!task) return res.status(404).json({ error: "Task not found" });
     const me = await prisma.user.findUnique({ where: { id: a.sub } });
     const isAdmin = a.role === "admin" || a.role === "super_admin";
-    const allowed = isAdmin || (task.assigneeRole && task.assigneeRole === a.role) || (task.assignee && me?.name && task.assignee === me.name) || (!task.assigneeRole && !task.assignee);
+    const allowed = await mayActOnTask(a, me, task);
     if (!allowed) return res.status(403).json({ error: "This step is assigned to another role" });
     const { outcome, checklist, checklistState, variables } = req.body ?? {};
     // #2/#3 completion gating (tasks only — approvals branch on approve/reject): every REQUIRED item must be
@@ -1375,16 +1493,75 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
     res.json(inst);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+/**
+ * WHERE EACH RULE IS ACTUALLY USED — one answer, two readers.
+ *
+ * The delete guard and the rules screen both need this. Computing it twice is how the screen ends up
+ * saying "not used anywhere" about a rule the guard then refuses to delete, so it is written once and
+ * both call it. Returns a Map of ruleId → plain sentences, already in the words a person would use.
+ */
+async function checklistRuleUsage(): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const add = (id: string, what: string) => out.set(id, [...(out.get(id) ?? []), what]);
+
+  for (const st of await prisma.pipelineStage.findMany({ where: { checklistRuleId: { not: null }, retired: false }, select: { name: true, country: true, checklistRuleId: true } })) {
+    add(String(st.checklistRuleId), `Pipeline stage "${st.name}"${st.country ? ` · ${st.country}` : ""}`);
+  }
+  for (const t of await prisma.workflowTemplate.findMany({ select: { name: true, graph: true } })) {
+    for (const n of (((t.graph as any)?.nodes ?? []) as any[])) {
+      const id = String(n?.config?.checklistRuleId ?? "").trim();
+      if (id) add(id, `Workflow "${t.name}" → step "${n.label ?? n.id}"`);
+    }
+  }
+  return out;
+}
+
 // Checklist rules (dynamic per-client document sets) CRUD — admin/super_admin for writes.
-R.get("/checklist-rules", requireAuth, requireStaff, async (_req, res) => { res.json(await prisma.checklistRule.findMany({ orderBy: { name: "asc" } })); });
+R.get("/checklist-rules", requireAuth, requireStaff, async (_req, res) => {
+  const [rules, usage] = await Promise.all([
+    prisma.checklistRule.findMany({ orderBy: { name: "asc" } }),
+    checklistRuleUsage(),
+  ]);
+  // `usedBy` travels with the rule so the screen can say what a change will affect BEFORE somebody
+  // makes it — the delete guard already knew this and only ever said so at the moment of refusal.
+  res.json(rules.map(r => ({ ...r, usedBy: usage.get(r.id) ?? [] })));
+});
 R.post("/checklist-rules", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
-  try { const { name, rows } = req.body ?? {}; if (!name) return res.status(400).json({ error: "Name required" }); res.status(201).json(await prisma.checklistRule.create({ data: { name: String(name), rows: rows ?? [] } })); } catch (e: any) { res.status(400).json({ error: e.message }); }
+  try {
+    const { name, rows, country } = req.body ?? {};
+    if (!name) return res.status(400).json({ error: "Name required" });
+    // COUNTRY, defaulted rather than left null. A rule with no country appears in every country's
+    // pickers — the exact problem the column was added to solve — and it cannot travel in a pack.
+    const c = String(country ?? "").trim().toUpperCase() || (await homeCountry());
+    res.status(201).json(await prisma.checklistRule.create({ data: { name: String(name), country: c, rows: rows ?? [] } }));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.put("/checklist-rules/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
-  try { const { name, rows } = req.body ?? {}; const data: any = {}; if (name !== undefined) data.name = name; if (rows !== undefined) data.rows = rows; res.json(await prisma.checklistRule.update({ where: { id: req.params.id }, data })); } catch (e: any) { res.status(400).json({ error: e.message }); }
+  try {
+    const { name, rows, country } = req.body ?? {};
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (rows !== undefined) data.rows = rows;
+    if (country !== undefined) data.country = String(country ?? "").trim().toUpperCase() || null;
+    // Editing a pack-installed rule marks it modified, so an upgrade shows a diff instead of
+    // silently overwriting somebody's changes — the same contract every other packable row has.
+    data.packModified = true;
+    res.json(await prisma.checklistRule.update({ where: { id: req.params.id }, data }));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.delete("/checklist-rules/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
-  try { await prisma.checklistRule.delete({ where: { id: req.params.id } }); res.status(204).end(); } catch (e: any) { res.status(400).json({ error: e.message }); }
+  try {
+    // WHO IS STILL POINTING AT IT. A rule can be named by a pipeline stage and by any number of
+    // workflow steps; deleting it leaves those pointing at nothing, and a step whose checklist
+    // silently became empty is the kind of failure nobody notices until an audit.
+    const id = req.params.id;
+    const used = (await checklistRuleUsage()).get(id) ?? [];
+    if (used.length) {
+      return res.status(409).json({ error: `Still in use by ${used.join(", ")}. Point those somewhere else first.`, usedBy: used });
+    }
+    await prisma.checklistRule.delete({ where: { id } });
+    res.status(204).end();
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 // Delegate a workflow step to a specific person (admin only). Clears the role gate so the named person owns it.
 R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
@@ -1406,15 +1583,43 @@ R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
     // delegation and stays admin-only.
     const me = await prisma.user.findUnique({ where: { id: a.sub } });
     const claimingSelf = !!me?.name && assignee === me.name && !cur.assignee && !!cur.assigneeRole && cur.assigneeRole === a.role;
-    if (!isAdmin && !claimingSelf) {
-      return res.status(403).json({ error: "Only an admin can delegate a step — you can claim unassigned work for your own role" });
+
+    // A TEAM LEAD MAY DELEGATE WITHIN THEIR TEAM. This is the rung between "claim your own" and
+    // "admin moves anything": whoever leads a team (see teams.ts) handing a step to one of their own
+    // people. It asks visibility.ts rather than reading membership itself, which is why it kept
+    // working unchanged when teams stopped being a pointer on each user and became dated rows.
+    // Both ends are checked —
+    //   • the TARGET must be in their team (a lead oversees, they do not carry, so handing work to
+    //     themselves is not part of the model and is deliberately not allowed here), and
+    //   • the step must be UNASSIGNED, or currently on one of their team. A lead cannot pull work
+    //     off somebody outside the team, however good their reasons — that stays an admin's call,
+    //     because the person losing the step answers to a different lead.
+    let leadDelegating = false;
+    if (!isAdmin && !claimingSelf && assignee) {
+      const target = await resolveStaffByName(assignee);
+      if (target) {
+        const { visibleUserIds } = await import("./visibility.js");
+        const vis = await visibleUserIds(a);
+        leadDelegating = vis.scope === "team"
+          && vis.ids!.includes(target.id) && target.id !== a.sub
+          && (!cur.assigneeId || vis.ids!.includes(cur.assigneeId));
+      }
+    }
+
+    if (!isAdmin && !claimingSelf && !leadDelegating) {
+      return res.status(403).json({ error: "You can claim unassigned work for your own role, or hand a step to one of your own team — anything wider needs an admin" });
     }
 
     // A claim keeps assigneeRole so the step still reads as role-owned work; a delegation clears it,
     // because the point of naming a person is to take it out of the role queue entirely.
+    // Claiming resolves to the claimer with no lookup — they are signed in. A delegation carries only
+    // a name from the form, so it goes through the one bridge that refuses to guess.
+    const targetId = claimingSelf && !isAdmin ? a.sub : (await resolveStaffByName(assignee))?.id ?? null;
     const t = await prisma.workflowTask.update({
       where: { id: req.params.id },
-      data: claimingSelf && !isAdmin ? { assignee } : { assignee: assignee || null, assigneeRole: null },
+      data: claimingSelf && !isAdmin
+        ? { assignee, assigneeId: targetId }
+        : { assignee: assignee || null, assigneeId: assignee ? targetId : null, assigneeRole: null },
     });
     const verb = claimingSelf && !isAdmin ? "claimed by" : "delegated to";
     await logAudit({ action: claimingSelf && !isAdmin ? "workflow.task_claim" : "workflow.task_reassign", actorId: a.sub, target: `${t.title} (${t.id})`, detail: `→ ${assignee || "unassigned"}` });

@@ -20,8 +20,8 @@
 // rolled over naturally starts a new run.
 import { prisma } from "./db.js";
 
-export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt" | "employee" | "courier";
-export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt", "employee", "courier"];
+export type SeqKind = "task" | "request" | "invoice" | "quotation" | "receipt" | "employee" | "courier" | "opportunity";
+export const SEQ_KINDS: SeqKind[] = ["task", "request", "invoice", "quotation", "receipt", "employee", "courier", "opportunity"];
 
 export interface SeqConfig { pattern: string }
 
@@ -38,14 +38,16 @@ export const SEQ_DEFAULTS: Record<SeqKind, SeqConfig> = {
   // Shipments were numbered `CR- + Date.now().slice(-5)` — a timestamp pretending to be a sequence,
   // which collides and sorts meaninglessly. Same scheme as everything else now.
   courier: { pattern: "CR-{####}" },
+  // A deal needs a reference somebody can quote in an email before any quotation exists.
+  opportunity: { pattern: "OPP-{####}" },
 };
 
 export const SEQ_LABEL: Record<SeqKind, string> = {
-  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt", employee: "Employee code", courier: "Courier shipment",
+  task: "Task", request: "Request", invoice: "Invoice", quotation: "Quotation", receipt: "Receipt", employee: "Employee code", courier: "Courier shipment", opportunity: "Deal",
 };
 
 /** Which model and column each sequence numbers. */
-const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment" | "employee" | "courierShipment"; field: "ref" | "number" | "code" }> = {
+const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "quotation" | "payment" | "employee" | "courierShipment" | "opportunity"; field: "ref" | "number" | "code" }> = {
   task: { model: "task", field: "ref" },
   request: { model: "serviceRequest", field: "number" },
   invoice: { model: "invoice", field: "number" },
@@ -53,6 +55,7 @@ const TARGET: Record<SeqKind, { model: "task" | "serviceRequest" | "invoice" | "
   receipt: { model: "payment", field: "number" },
   employee: { model: "employee", field: "code" },
   courier: { model: "courierShipment", field: "ref" },
+  opportunity: { model: "opportunity", field: "number" },
 };
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];

@@ -11,12 +11,14 @@
  */
 import { prisma } from "../src/db.js";
 import { readPack, applyInstall, planUpgrade, applyUpgrade, installedPacks, type Pack } from "../src/packs.js";
+import { requireScratchDatabase } from "./_scratch-guard.js";
 
 async function main() {
   let bad = 0;
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
+  await requireScratchDatabase("This probe");
 
-  const v1: Pack = JSON.parse(JSON.stringify(readPack("pack-sa-2026.1.json")));
+  const v1: Pack = JSON.parse(JSON.stringify(readPack("pack-sa-2026.2.json")));
   // A row nothing will ever reference, so that "dropped and unused" can actually be tested. Every
   // real checklist rule in this pack is used by a workflow step, which makes them all retire cases.
   v1.checklistRules!.push({ key: "sa.checklist.zz-unused", name: "ZZ Unused Rule", rows: [] } as any);
@@ -26,7 +28,7 @@ async function main() {
 
   // ── build v2 ──
   const v2: Pack = JSON.parse(JSON.stringify(v1));
-  v2.version = "2026.2";
+  v2.version = "2026.3";
 
   const CHANGED = v2.documentTypes![0];               // pack changes it, nobody here did → update
   CHANGED.defaultFee = (CHANGED.defaultFee ?? 0) + 250;
@@ -131,15 +133,15 @@ async function main() {
   if (!usedAfter?.retired) fail("a dropped in-use type was not retired");
 
   // Live rows move to the new version. A row v2 withdrew keeps the version that last contained it —
-  // stamping it 2026.2 would claim it is part of a version that dropped it.
+  // stamping it 2026.3 would claim it is part of a version that dropped it.
   const live = await prisma.documentType.findMany({ where: { packKey: { not: null }, retired: false }, select: { packVersion: true } });
-  const stale = live.filter(v => v.packVersion !== "2026.2").length;
-  console.log(`  every live row says 2026.2:          ${stale === 0 ? "YES" : "NO — " + stale + " still on the old version"}`);
+  const stale = live.filter(v => v.packVersion !== "2026.3").length;
+  console.log(`  every live row says 2026.3:          ${stale === 0 ? "YES" : "NO — " + stale + " still on the old version"}`);
   if (stale) fail("the version stamp did not move everywhere");
 
   const reported = (await installedPacks())["SA"];
   console.log(`  the country reports:                 ${reported?.version}${reported?.mixed ? " (mixed)" : ""}`);
-  if (reported?.version !== "2026.2") fail(`Country Rules would still show ${reported?.version} after upgrading`);
+  if (reported?.version !== "2026.3") fail(`Country Rules would still show ${reported?.version} after upgrading`);
 
   const after = { docs: await prisma.document.count(), companies: await prisma.company.count() };
   console.log(`\n  client data untouched:               documents ${before.docs}->${after.docs} · clients ${before.companies}->${after.companies}`);

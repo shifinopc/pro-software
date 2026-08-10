@@ -33,6 +33,7 @@ export type Pack = {
   generatedAt?: string; contains?: string;
   documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[];
   workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
+  pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[];
 };
 
 /**
@@ -60,6 +61,19 @@ export const KINDS = [
   // it is measured by would be half a market.
   { key: "workforceBands", model: "workforceBand", label: "workforce bands", one: "workforce band",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, minBp: r.minBp, maxBp: r.maxBp, sort: r.sort }) },
+  // Sales stages. Same argument as the bands: a pack that sets up how work is DONE in a market but
+  // not how it is SOLD there leaves the new country with an empty pipeline board.
+  // followUpDays/followUpAction travel too: how soon a market expects a reply after a quotation is
+  // part of how business is done there, and a pack that set up the columns but not the chasing
+  // would install a pipeline that never reminds anybody of anything.
+  { key: "pipelineStages", model: "pipelineStage", label: "pipeline stages", one: "pipeline stage",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, probabilityBp: r.probabilityBp, isWon: r.isWon, isLost: r.isLost, followUpDays: r.followUpDays, followUpAction: r.followUpAction }) },
+  // Where business comes from and why it is lost. Both are wording, and wording is exactly the thing
+  // that differs between markets — "walk-in" means something in Riyadh that it does not in Dubai.
+  { key: "leadSources", model: "leadSource", label: "lead sources", one: "lead source",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  { key: "lostReasons", model: "lostReason", label: "loss reasons", one: "loss reason",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
   { key: "packages", model: "package", label: "packages", one: "package",
     fields: (r: any) => ({ name: r.name, tier: r.tier, basePrice: r.basePrice, billingCycle: r.billingCycle, empMin: r.empMin, empMax: r.empMax, features: r.features, color: r.color }) },
 ] as const;

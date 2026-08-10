@@ -10,35 +10,82 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model ClientGroup {
-  id         String    @id @default(cuid())
-  name       String
-  contact    String?
-  email      String?
-  companies  Company[]
+  id        String    @id @default(cuid())
+  name      String
+  contact   String?
+  email     String?
+  companies Company[]
 }
 
 model Company {
-  id              String           @id @default(cuid())
-  name            String
-  cr              String
-  industry        String?
-  employees       Int              @default(0)
-  status          String           @default("active")
-  overdue         Int              @default(0)
-  expiring        Int              @default(0)
-  contact         String?
-  email           String?
-  phone           String?
-  city            String?
+  id        String  @id @default(cuid())
+  name      String
+  /// Commercial registration. NULLABLE since leads exist.
+  ///
+  /// This was required, which is correct for a client and impossible for a prospect: a company you
+  /// are still pitching has not given you its CR, and demanding one to save the record is what
+  /// pushes people into typing "0000" — a fake number that then looks exactly like a real one.
+  /// Captured at the moment the lead becomes a client instead; see `lifecycle`.
+  cr        String?
+  industry  String?
+  employees Int     @default(0)
+  status    String  @default("active")
+  overdue   Int     @default(0)
+  expiring  Int     @default(0)
+  contact   String?
+  email     String?
+  phone     String?
+  city      String?
+
+  // ── CRM: the same record before it is a client ──────────────────────────────────────────────
+  //
+  // lead → prospect → client, and out again to lost (never bought) or churned (did, then left).
+  //
+  // ONE record, not a Lead table that gets "converted" into a Company. Conversion is where CRMs
+  // rot: the convert step copies some fields, misses others, and leaves two rows for one company,
+  // so the phone number is right on one and stale on the other and nobody can tell which. A record
+  // that only ever changes state has no copy step to get wrong, and the history from the first
+  // cold call through the tenth invoice stays on one timeline.
+  //
+  // The price of that decision, stated because it is real: every screen that means CLIENT must now
+  // say so. A lead with no employees would otherwise sit in the Saudization report at 0%, be billed
+  // by the renewal job, and be counted as a client on the dashboard.
+  lifecycle     String        @default("client")
+  /// Who owns the relationship — the staff user's id.
+  ///
+  /// This IS ownership now. It replaced a JSON array on the user, which meant answering "who owns
+  /// this client?" required loading every user and scanning their arrays, and nothing prevented two
+  /// people holding the same id. NULL means unassigned, which is a state worth seeing rather than a
+  /// blank: the `sales` role sees exactly the clients whose ownerId is theirs, so an unowned client
+  /// is invisible to every salesperson until somebody claims it.
+  ownerId       String?
+  /// Where it came from — referral, website, walk-in, campaign. `sourceDetail` holds the specifics
+  /// ("referred by Al Rajhi HR"), because a source you cannot ask a follow-up question about is
+  /// worth very little when deciding where the next riyal of marketing goes.
+  source        String?
+  sourceDetail  String?
+  /// Which marketing effort generated this lead, when one did. Optional always — most leads are
+  /// not the fruit of a campaign, and forcing an answer would fill the column with fiction.
+  campaign      String?
+  /// Why it was lost. Only meaningful with lifecycle `lost` or `churned`, and the single most
+  /// useful field on this model for anyone trying to sell better next quarter.
+  lostReason    String?
+  // `nextFollowUpAt` used to be here, meant to hold the next dated commitment to this company. It
+  // is gone: it would have been a copy of the earliest open follow-up in the interaction log, and a
+  // copy needs a second write to stay true — so the first follow-up closed without touching it
+  // would leave a company reading "call them Sunday" forever. Asked of the log instead.
+  contacts      Contact[]
+  opportunities Opportunity[]
+  interactions  Interaction[]
+
   // Which country's law this client operates under. ISO 3166-1 alpha-2.
   //
   // Nothing in the product had a concept of country: every rule, document type and threshold was
   // implicitly Saudi. That is fine for one market and is the first thing in the way of a second one,
   // because there is nowhere to hang "this client is judged by UAE rules, not Saudi ones". Nullable
   // so existing rows are valid; backfilled to SA, which is what every one of them is.
-  country         String?
+  country              String?
   // Workforce nationalisation — Saudization here, Emiratisation next door, the same shape either way.
   //
   // The RATIO is computed from employee records and never stored: a stored percentage is wrong the
@@ -47,6 +94,29 @@ model Company {
   // inventing a table and announcing "Green" while the official portal says otherwise. It is recorded
   // instead: read on the portal, written down, dated, with the ratio AT THAT MOMENT captured beside it
   // so drift since is measurable. `workforceBandNote` says where it was read.
+  // ── Qualification: what was learned before calling this a real opportunity ──────────────────
+  //
+  // Captured at PROMOTION (lead → prospect), never demanded at arrival: a website enquiry should
+  // not have to state a budget to become a lead, and a form that asks gets "0" typed into it.
+  // These are relationship-level facts — what the company needs, who decides, what they spend
+  // today — so they live here rather than on any one opportunity; the deal opened at promotion is
+  // PRE-FILLED from them (budget → estimate, decision date → expected close) and owns its copies
+  // from then on, exactly like the stage checklist snapshot.
+  /// What the customer actually needs, in the qualifier's words.
+  qualRequirement     String? @db.Text
+  /// What they said they could spend. Minor units, like every other money column.
+  qualBudgetMinor     Int?
+  /// When they expect to decide — ISO day.
+  qualDecisionBy      String?
+  /// Who decides — a Contact id, so the decision maker is a person on file, not a retyped name.
+  qualDecisionMakerId String?
+  /// What they use today ("Excel", "Odoo", "a PRO on WhatsApp") — the thing being displaced.
+  qualCurrentSolution String?
+  /// low | medium | high. The qualifier's judgement, not a computed score.
+  qualPriority        String?
+  /// When qualification was recorded, so "qualified three weeks ago, still no deal" is askable.
+  qualAt              String?
+
   workforceBand        String?
   workforceBandAt      String?
   workforceBandNote    String?
@@ -57,28 +127,69 @@ model Company {
   /// at all. Without it every tick would either re-announce the same band forever or announce nothing,
   /// and "this client dropped out of Green" — the one thing worth interrupting somebody for — could
   /// never be said.
-  workforceBandSeen   String?
-  workforceBandSeenAt String?
+  workforceBandSeen    String?
+  workforceBandSeenAt  String?
   // Billing suspension. `status` carries "suspended"; these record why and since when so the console
   // and the client's banner can both explain it rather than just showing a red badge.
-  suspendedAt     String?
-  suspendedReason String?
-  customData      Json? // values for admin-defined custom client fields (Form Builder)
+  suspendedAt          String?
+  suspendedReason      String?
+  customData           Json? // values for admin-defined custom client fields (Form Builder)
   // When this client was taken on. Deliberately nullable with NO default: existing rows genuinely
   // do not know, and stamping them all with the migration date would replace one fabrication
   // ("Client since 2024", picked from a hardcoded array by row position) with a tidier one.
-  createdAt       String?
-  group           ClientGroup?     @relation(fields: [groupId], references: [id])
-  groupId         String?
-  employeeList    Employee[]
-  documents       Document[]
-  credentials     SiteCredential[]
-  invoices        Invoice[]
-  tasks           Task[]
-  subscriptions   Subscription[]
-  upgradeRequests UpgradeRequest[]
+  createdAt            String?
+  group                ClientGroup?     @relation(fields: [groupId], references: [id])
+  groupId              String?
+  employeeList         Employee[]
+  documents            Document[]
+  credentials          SiteCredential[]
+  invoices             Invoice[]
+  tasks                Task[]
+  subscriptions        Subscription[]
+  upgradeRequests      UpgradeRequest[]
 
   @@index([status])
+  @@index([lifecycle])
+  @@index([ownerId])
+}
+
+/// A person at a company, rather than a company's one phone number.
+///
+/// `Company.contact/email/phone` held exactly one human: a name, an address and a number, with no
+/// room for the fact that the HR manager approves the visa, the PRO collects the passport and the
+/// owner signs the quotation. Those three get called about different things, and writing the second
+/// one down meant overwriting the first.
+///
+/// Those three columns still exist and still work. They are now a MIRROR of whichever contact is
+/// primary, written by one server-side function and by nothing else — see `syncPrimaryContact`.
+/// Kept rather than dropped because eight places read them, including the portal-login provisioner
+/// and the invoice recipient list; a mirror with a single writer is honest, two editable copies
+/// would not be.
+model Contact {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+  name      String
+  /// What they do, in their words — "HR Manager", "PRO", "Owner". Free text on purpose: a picker
+  /// here would be a list of titles that is wrong in the second country the product reaches.
+  jobTitle  String?
+  email     String?
+  phone     String?
+  /// Kept apart from `phone` because in this market it usually is a different number, and sending
+  /// a document to the wrong one means it is not read.
+  whatsapp  String?
+  /// Exactly one per company, enforced server-side on write rather than by a constraint: the
+  /// constraint would have to be dropped and re-added on every re-assignment.
+  isPrimary Boolean @default(false)
+  /// The portal login this person holds, if they have one. Links the two identities instead of
+  /// keeping a second address book that drifts from the first.
+  userId    String?
+  notes     String? @db.Text
+  archived  Boolean @default(false)
+  createdAt String?
+
+  @@index([companyId])
+  @@index([email])
 }
 
 model Package {
@@ -98,11 +209,11 @@ model Package {
   // definition of their own fields, which is the orphaning this codebase has already been bitten by.
   // So uninstall retires what real records depend on: gone from every picker, still readable, so a
   // two-year-old Iqama still renders with its fields intact.
-  retired      Boolean @default(false)
+  retired       Boolean        @default(false)
   // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
-  packKey      String?
-  packVersion  String?
-  packModified Boolean @default(false)
+  packKey       String?
+  packVersion   String?
+  packModified  Boolean        @default(false)
   // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
   // country pack installed, an unmarked row appears in every client's pickers regardless of the
   // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
@@ -122,19 +233,19 @@ model Package {
 }
 
 model Subscription {
-  id        String   @id @default(cuid())
-  scope     String // "group" | "company"
-  refId     String // group id or company id
-  package   Package  @relation(fields: [packageId], references: [id])
-  packageId String
-  price     Int
-  startDate String?
-  endDate   String?
-  daysLeft  Int      @default(0)
-  autoRenew Boolean  @default(true)
-  custom    Boolean  @default(false)
-  company   Company? @relation(fields: [companyId], references: [id])
-  companyId String?
+  id            String   @id @default(cuid())
+  scope         String // "group" | "company"
+  refId         String // group id or company id
+  package       Package  @relation(fields: [packageId], references: [id])
+  packageId     String
+  price         Int
+  startDate     String?
+  endDate       String?
+  daysLeft      Int      @default(0)
+  autoRenew     Boolean  @default(true)
+  custom        Boolean  @default(false)
+  company       Company? @relation(fields: [companyId], references: [id])
+  companyId     String?
   // Billing-period marker: the endDate the last recurring invoice was raised for. The renewal job
   // refuses to invoice the same period twice, which is what stops an hourly tick from billing a
   // client 24 times a day.
@@ -144,16 +255,16 @@ model Subscription {
   // Deliberately HERE and not on Package.serviceIds — a package is shared by every client on that
   // tier, so unlocking a service there would hand it to all of them. This is the one rule this
   // feature turns on: entitlement = the package's services ∪ this subscription's add-ons.
-  addons Json? @default("[]")
+  addons        Json?    @default("[]")
 
   @@index([refId, scope])
 }
 
 model Employee {
-  id          String  @id @default(cuid())
-  company     Company @relation(fields: [companyId], references: [id])
-  companyId   String
-  name        String
+  id             String  @id @default(cuid())
+  company        Company @relation(fields: [companyId], references: [id])
+  companyId      String
+  name           String
   // WHAT MAKES THIS PERSON THIS PERSON.
   //
   // The row carried nothing unique but the name, so two employees called Mohammed Ali were
@@ -165,42 +276,42 @@ model Employee {
   // The code is unique WITHIN A CLIENT, not across the firm — see @@unique below. Each client numbers
   // its own staff from 1, so two clients both having an EMP-0002 is normal and must not be blocked.
   // An invoice number is the opposite case and stays firm-wide unique.
-  code        String?
-  govId       String? // Iqama / national ID / passport no. — whatever identifies them officially
+  code           String?
+  govId          String? // Iqama / national ID / passport no. — whatever identifies them officially
   // Facts a PREREQUISITE can test. A rule could only ever say "another document, valid N months",
   // because there was nothing else on the row to compare against — a minimum-age rule needs a date.
   //
   // Nationality previously lived in `customData["cf-nat"]`, a Form Builder field. It is a column now
   // and that field was retired from the employee form: two places to type the same fact means the rule
   // reads one while the user fills the other, and the check silently passes on an empty value.
-  dob         String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
+  dob            String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
   // ISO 3166-1 alpha-2, NOT free text. It was a text box with the placeholder "e.g. Saudi", which
   // invites "Saudi", "Saudi Arabian", "KSA" and "saudi" as four different countries. A nationality
   // that four spellings can hide behind is fine as a label and useless as something to count, and a
   // workforce quota that misses a spelling under-reports — the dangerous direction. Comparisons go
   // through resolveCountry(), so a rule written as "Saudi" still matches a row stored as "SA".
-  nationality String?
+  nationality    String?
   // Which country's workforce this person counts toward. Usually the employer's, but a group with
   // entities in two countries needs to say which one — an employee counts once, not everywhere.
-  workCountry String?
+  workCountry    String?
   // Facts a workforce-quota calculation needs and the row did not carry. All nullable: a percentage
   // computed from incomplete data must report how much it could see rather than quietly assume.
-  salary         Int?    // monthly, in minor units — see money.ts for why money is never a float
+  salary         Int? // monthly, in minor units — see money.ts for why money is never a float
   employmentType String? // full_time | part_time — part-time counts fractionally in some regimes
   jobCategory    String? // skilled | unskilled | … — some regimes count only part of the workforce
-  role        String?
-  iqamaExpiry String?
-  status      String  @default("valid")
-  customData  Json? // values for admin-defined custom employee fields (Form Builder / CustomObject)
-  archived    Boolean @default(false)
-  history     Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
+  role           String?
+  iqamaExpiry    String?
+  status         String  @default("valid")
+  customData     Json? // values for admin-defined custom employee fields (Form Builder / CustomObject)
+  archived       Boolean @default(false)
+  history        Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
   // Offboarding. `archived` stays the FINAL state (every headcount already filters on it); these track
   // the run-up to it. The moment this leaves "active" the renewal engine stops touching their
   // documents — renewing the visa of someone who is leaving is the bug this exists to prevent.
-  exitStatus    String  @default("active") // active | exit_requested | exiting | exited
-  exitDate      String? // last working day, as declared by the client
-  exitReason    String? // resignation | termination | end_of_contract | transfer | other
-  exitRequestId String? // the ServiceRequest that tracks the exit
+  exitStatus     String  @default("active") // active | exit_requested | exiting | exited
+  exitDate       String? // last working day, as declared by the client
+  exitReason     String? // resignation | termination | end_of_contract | transfer | other
+  exitRequestId  String? // the ServiceRequest that tracks the exit
 
   // Per client, not per system: each client numbers its own staff, so EMP-0002 may exist at several
   // clients at once. Still a real constraint — one client cannot issue the same code twice.
@@ -208,7 +319,6 @@ model Employee {
   @@index([companyId, archived])
   @@index([exitStatus])
 }
-
 
 model Document {
   id               String  @id @default(cuid())
@@ -243,7 +353,6 @@ model Document {
   supersededById   String? // the document that replaced it, when there is one
 
   @@index([supersededAt])
-
   @@index([status])
   @@index([expiryDate])
   @@index([companyId, status])
@@ -268,15 +377,15 @@ model DocumentType {
   // definition of their own fields, which is the orphaning this codebase has already been bitten by.
   // So uninstall retires what real records depend on: gone from every picker, still readable, so a
   // two-year-old Iqama still renders with its fields intact.
-  retired      Boolean @default(false)
+  retired             Boolean @default(false)
   // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
-  packKey      String?
-  packVersion  String?
-  packModified Boolean @default(false)
+  packKey             String?
+  packVersion         String?
+  packModified        Boolean @default(false)
   // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
   // country pack installed, an unmarked row appears in every client's pickers regardless of the
   // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
-  country       String?
+  country             String?
   name                String  @unique
   fields              Json?   @default("[]") // array of { id, label, type, options?, required? }
   prereqs             Json?   @default("[]") // renewal rules: array of { requiresDocType, minMonths }
@@ -292,31 +401,32 @@ model DocumentType {
 
 // Admin-defined custom object/record type (Object Builder) or standalone form (Form Builder), distinguished by `kind`.
 model CustomObject {
-  id       String  @id @default(cuid())
-  name     String
-  icon     String? // optional emoji
-  fields   Json?   @default("[]") // array of { id, label, type, options?, required? }
+  id        String  @id @default(cuid())
+  name      String
+  icon      String? // optional emoji
+  fields    Json?   @default("[]") // array of { id, label, type, options?, required? }
   // Only "form" is used. The Object Builder — a no-code record designer whose records had nowhere
   // to be seen outside the builder itself — was removed; this is the Form Builder's storage now.
-  kind     String  @default("form")
-  appliesTo String @default("") // form-only: "" standalone | "employee" | "client" → fields feed that record's Add form
+  kind      String  @default("form")
+  appliesTo String  @default("") // form-only: "" standalone | "employee" | "client" → fields feed that record's Add form
 }
 
 model Task {
-  id         String   @id @default(cuid())
-  title      String
-  company    Company? @relation(fields: [companyId], references: [id])
-  companyId  String?
-  clientName String?
-  assignee   String?
-  priority   String   @default("medium")
-  dueDate    String?
-  status     String   @default("todo")
-  docType    String?
+  id                 String   @id @default(cuid())
+  title              String
+  company            Company? @relation(fields: [companyId], references: [id])
+  companyId          String?
+  clientName         String?
+  assigneeId         String? // the user; `assignee` below is the display mirror. See WorkflowTask.
+  assignee           String?
+  priority           String   @default("medium")
+  dueDate            String?
+  status             String   @default("todo")
+  docType            String?
   // Government authority this task is submitted to (Qiwa, Muqeem…). The Government Centers screen
   // buckets its queues by this — it was read there but never written by any form until now.
-  govCenter  String?
-  archived   Boolean  @default(false) // soft-archive; recoverable via the Archived view
+  govCenter          String?
+  archived           Boolean  @default(false) // soft-archive; recoverable via the Archived view
   workflowInstanceId String? // set when creating this task also launched a workflow run
   complianceDocId    String? // renewal task → the compliance document it renews (cross-link)
   // The quotation whose acceptance created this task. Also the idempotency key: delivery is started
@@ -343,15 +453,15 @@ model Task {
 }
 
 model Invoice {
-  id         String   @id @default(cuid())
-  number     String
-  company    Company? @relation(fields: [companyId], references: [id])
-  companyId  String?
-  clientName String?
+  id             String   @id @default(cuid())
+  number         String
+  company        Company? @relation(fields: [companyId], references: [id])
+  companyId      String?
+  clientName     String?
   // Whole currency units. DERIVED from totalMinor on every write and kept because reports, the dunning
   // job, the invoice list and the portal all read it — changing its meaning would touch every one of
   // them. `*Minor` below is what the DOCUMENT says; this is a convenience with a single writer.
-  amount     Int
+  amount         Int
   // WHAT THE INVOICE SAYS, FROZEN AT ISSUE.
   //
   // These were computed on the fly at print time instead: the stored total was treated as VAT-inclusive
@@ -367,30 +477,30 @@ model Invoice {
   vatMinor       Int?
   totalMinor     Int?
   vatRateBp      Int? // basis points: 1500 = 15.00%. Frozen at issue, never re-read from settings.
-  currency   String   @default("SAR")
-  status     String   @default("pending")
-  date       String?
-  dueDate    String?
-  services   String?  @db.Text
+  currency       String   @default("SAR")
+  status         String   @default("pending")
+  date           String?
+  dueDate        String?
+  services       String?  @db.Text
   // Line items: [{ name, units, price }]. `amount` stays the source of truth for totals/reports and
   // is recomputed from these on save, so existing single-amount invoices keep working untouched.
-  items      Json?    @default("[]")
-  notes      String?  @db.Text
+  items          Json?    @default("[]")
+  notes          String?  @db.Text
   // Payment extension / promise-to-pay. While `promisedDate` is in the future the dunning job stops
   // chasing this invoice and it stops counting toward a suspension recommendation — an arrangement
   // the client has actually agreed should not keep generating reminders.
-  promisedDate String?
-  promisedNote String?
+  promisedDate   String?
+  promisedNote   String?
   // Set when this invoice was raised from an accepted quotation, so the two are linked instead of
   // the quote being retyped by hand with nothing tying them together.
-  quotationId String?
+  quotationId    String?
   // Set when the invoice was raised for a plan add-on, so voiding it knows which add-on it paid
   // for. Without it a void is just an accounting event and the service silently stays free.
   addonServiceId String?
   // Voiding. An issued invoice is never deleted — it stays on file with status "void" and a reason,
   // because a tax document that vanishes is worse than one marked cancelled.
-  voidedAt   String?
-  voidReason String?
+  voidedAt       String?
+  voidReason     String?
 
   @@index([status])
   @@index([date])
@@ -406,9 +516,19 @@ model User {
   status             String  @default("active")
   lastActive         String?
   type               String  @default("staff") // staff | portal
+  // `managerId` was here: a pointer on each person saying who they reported to, with the team left
+  // to be inferred from everyone sharing a value. The argument for it was that one column cannot
+  // drift. What it could not do is the thing this firm actually needs — CHANGE A LEAD. That was one
+  // edit per member with nothing to tell you which one you missed, and afterwards there was no
+  // record that the old lead had ever led anything, so a report about last quarter was computed
+  // against this quarter's team. It was set on 0 of 7 staff when it was removed, so nothing was
+  // migrated. See model Team.
   companyId          String? // for portal users
   phone              String?
-  assignedClientIds  Json? // for sales users
+  // `assignedClientIds` was here: a JSON array of the client ids a sales user was allowed to see.
+  // It is gone. Ownership is a fact about the CLIENT, so it lives on the client as `Company.ownerId`
+  // — a column that can be joined, sorted, grouped and reported on, and that cannot hold the same
+  // client twice under two different people. See scripts/migrate-ownership.ts.
   mustChangePassword Boolean @default(false) // portal users must set their own password on first login
   tokenVersion       Int     @default(0) // bump to invalidate all previously issued JWTs
   failedLogins       Int     @default(0) // consecutive failed logins → lockout
@@ -419,6 +539,81 @@ model User {
   // nothing to flag individually. "Mark all read" records a watermark instead: anything older than
   // this is read. Without it the control could only ever be local state that reset on reload.
   notifReadAt        String?
+}
+
+/// A TEAM, AND WHO LED IT WHEN.
+///
+/// WHY THIS IS A TABLE AND NOT A COLUMN. It replaced `User.managerId`, whose comment argued that a
+/// single column cannot drift out of step with reality. True, and beside the point: the operation
+/// this firm performs on a team is CHANGING ITS LEAD, and a pointer-per-person made that one edit
+/// per member with no way to confirm you had caught them all. It also could not answer "who led
+/// this team in September", so every historical number was silently computed against today's team.
+///
+/// A lead is still NOT a role. Roles answer "what may you do"; a team answers "whose work may you
+/// see, and hand out". The permissions matrix is untouched by any of this.
+///
+/// Per the firm's working model a lead OVERSEES and does not carry clients — which is precisely why
+/// changing one is safe and cheap: no ownership, no deal and no task moves. Only who can see.
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  /// sales | pro — which side of the business. Set on the TEAM, never inferred from its members'
+  /// roles: a PRO team that happens to contain an accountant is still a PRO team.
+  kind      String
+  country   String?
+  active    Boolean      @default(true)
+  createdAt String
+  members   TeamMember[]
+  leads     TeamLead[]
+
+  @@index([kind, active])
+}
+
+/// Who was in a team, and WHEN — append-only.
+///
+/// A person leaving stamps `toDay`; the row is never deleted and never edited to point somewhere
+/// else. That is the whole reason this table exists rather than a `User.teamId` column: a deleted
+/// or overwritten row cannot answer a question about last quarter, and answering questions about
+/// last quarter is what the history is for.
+///
+/// There is deliberately NO denormalised pointer on User. The current team is the row with no
+/// `toDay`, derived on read. A cached copy would be a second source of truth whose only job is to
+/// agree with this one, and the interesting bugs all live in the moment it stops agreeing.
+model TeamMember {
+  id      String  @id @default(cuid())
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId  String
+  userId  String
+  /// ISO day, inclusive.
+  fromDay String
+  /// ISO day the person left, exclusive. Null = still a member. Named `fromDay`/`toDay` rather than
+  /// from/to because FROM is a reserved word in MySQL and a quoted column name is a trap for the
+  /// next person writing raw SQL against this.
+  toDay   String?
+
+  @@index([teamId, toDay])
+  @@index([userId, toDay])
+}
+
+/// Who led a team, and WHEN.
+///
+/// Separate from membership on purpose. A lead change and a member change are different events with
+/// different consequences, and folding them into one table means every query begins by asking which
+/// kind of row it is looking at — which is how "the lead" and "a member who was once the lead" end
+/// up counted as the same thing.
+///
+/// A lead need not be a member of the team they lead, and may be a member of another one; that is
+/// how a second tier is expressed without anything recursive. Visibility still resolves ONE level.
+model TeamLead {
+  id      String  @id @default(cuid())
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  teamId  String
+  userId  String
+  fromDay String
+  toDay   String?
+
+  @@index([teamId, toDay])
+  @@index([userId, toDay])
 }
 
 model Audit {
@@ -437,22 +632,22 @@ model Audit {
 }
 
 model UpgradeRequest {
-  id            String   @id @default(cuid())
-  company       Company  @relation(fields: [companyId], references: [id])
+  id            String  @id @default(cuid())
+  company       Company @relation(fields: [companyId], references: [id])
   companyId     String
   clientName    String
   fromPackageId String?
   toPackageId   String?
-  note          String?  @db.Text
-  status        String   @default("pending")
+  note          String? @db.Text
+  status        String  @default("pending")
   date          String?
   // "package" = move the client to another tier (the original flow).
   // "addon"   = unlock ONE service on top of the tier they already have. Same review queue, so staff
   //             see both kinds in one place instead of a second inbox.
-  kind        String  @default("package")
-  serviceId   String? // addon only — the ServiceItem being requested
-  serviceName String? // snapshot, so the queue still reads correctly if the catalog item is renamed
-  quotedPrice Int? // addon only — set by staff at approval; the client never sees a price before that
+  kind          String  @default("package")
+  serviceId     String? // addon only — the ServiceItem being requested
+  serviceName   String? // snapshot, so the queue still reads correctly if the catalog item is renamed
+  quotedPrice   Int? // addon only — set by staff at approval; the client never sees a price before that
 
   @@index([status])
   @@index([kind])
@@ -488,22 +683,22 @@ model Activity {
 }
 
 model ServiceRequest {
-  id         String  @id @default(cuid())
+  id                 String  @id @default(cuid())
   // Reference (REQ-0001) from the configured record sequence. Both apps used to display
   // "SRV-" + the last four characters of the cuid — a label derived from a database id, which
   // nobody can quote back and which is not unique in any meaningful sense.
-  number     String?
-  companyId  String?
-  clientName String?
-  type       String?
-  message    String? @db.Text // the client's opening message; the thread lives in ServiceRequestMessage
+  number             String?
+  companyId          String?
+  clientName         String?
+  type               String?
+  message            String? @db.Text // the client's opening message; the thread lives in ServiceRequestMessage
   // open | accepted | resolved | rejected — a client reply reopens it.
   //
   // `accepted` exists because "approve" used to write "resolved": the vocabulary said the work was
   // FINISHED at the moment it was agreed, and there was no state for the part in between, which is
   // where a request spends nearly all of its life.
-  status     String  @default("open")
-  date       String?
+  status             String  @default("open")
+  date               String?
   // What accepting this request produced. Null while open; both set together when work starts, and
   // workflowInstanceId stays null when the service has no template bound (ten of fourteen today).
   taskId             String?
@@ -513,10 +708,10 @@ model ServiceRequest {
   rejectedReason     String? // shown to the client; rejecting used to say nothing at all
   // Unread is derived from these rather than a per-user read table — two timestamps per side is
   // enough at this scale and keeps the bell query trivial.
-  lastClientMsgAt String?
-  lastStaffMsgAt  String?
-  staffReadAt     String?
-  clientReadAt    String?
+  lastClientMsgAt    String?
+  lastStaffMsgAt     String?
+  staffReadAt        String?
+  clientReadAt       String?
 
   @@index([companyId])
   @@index([status])
@@ -557,18 +752,17 @@ model ServiceRequestMessage {
   @@index([requestId])
 }
 
-
 model Notification {
-  id      String  @id @default(cuid())
-  type    String
-  title   String
-  message String? @db.Text
-  time    String?
+  id        String  @id @default(cuid())
+  type      String
+  title     String
+  message   String? @db.Text
+  time      String?
   // Real ISO timestamp. `time` is only a display string (everything said "Just now" forever) and the
   // id is a cuid, so there was nothing to compare a per-user read watermark against. Nullable because
   // rows written before this existed have no honest value — those are treated as already read.
   createdAt String?
-  read    Boolean @default(false)
+  read      Boolean @default(false)
   // Set by automated jobs so a repeating tick can't repeat a notification. Unique — the insert is the
   // dedupe (no read-then-write race). Null for human-generated notifications, which may legitimately repeat.
   dedupeKey String? @unique
@@ -597,11 +791,11 @@ model WorkflowTemplate {
   // definition of their own fields, which is the orphaning this codebase has already been bitten by.
   // So uninstall retires what real records depend on: gone from every picker, still readable, so a
   // two-year-old Iqama still renders with its fields intact.
-  retired      Boolean @default(false)
+  retired       Boolean            @default(false)
   // rather than overwrite. Null packKey = made here, owned by you, never touched by a pack.
-  packKey      String?
-  packVersion  String?
-  packModified Boolean @default(false)
+  packKey       String?
+  packVersion   String?
+  packModified  Boolean            @default(false)
   // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
   // country pack installed, an unmarked row appears in every client's pickers regardless of the
   // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
@@ -641,46 +835,53 @@ model WorkflowInstance {
 
 // A unit of human work produced by a task/approval node. The engine waits on these.
 model WorkflowTask {
-  id           String           @id @default(cuid())
-  instance     WorkflowInstance @relation(fields: [instanceId], references: [id])
-  instanceId   String
-  nodeId       String // originating graph node
-  nodeType     String           @default("task") // task | approval
-  title        String
-  assignee     String? // optional specific person
-  assigneeRole String? // role gate — who may complete it
-  status       String           @default("active") // active | done | approved | rejected | skipped
-  priority     String           @default("medium")
-  dueDate      String?
-  slaHours     Int?
+  id                  String           @id @default(cuid())
+  instance            WorkflowInstance @relation(fields: [instanceId], references: [id])
+  instanceId          String
+  nodeId              String // originating graph node
+  nodeType            String           @default("task") // task | approval
+  title               String
+  // WHO, as an id — not just a name.
+  //
+  // `assignee` is a display name and used to be the only record of who a step belonged to, so nothing
+  // could turn a task into a mailbox: two people called Ahmed are one string, and a rename orphans
+  // the row silently. The id is the fact; the name beside it is a mirror kept for display and for the
+  // load-balancing group-by. Same lesson as resolving documents by employeeId rather than by person.
+  assigneeId          String?
+  assignee            String? // display mirror of assigneeId — see above
+  assigneeRole        String? // role gate — who may complete it
+  status              String           @default("active") // active | done | approved | rejected | skipped
+  priority            String           @default("medium")
+  dueDate             String?
+  slaHours            Int?
   // What the person doing this step is supposed to do. SNAPSHOTTED from the node when the step is
   // created, for the same reason the checklist is: editing the template must not rewrite the
   // instructions someone is already working from. There was no field for this at all, so
   // "Verify passport validity" was the entire brief a new officer got.
-  instructions String?            @db.Text
+  instructions        String?          @db.Text
   // A document this step must SEE and CHECK before it can be completed: { docType, minMonths }.
   // Snapshotted at creation like the checklist and the instructions, so editing the template cannot
   // change the rule someone is already being held to. Steps could collect a document type's fields
   // and write them back, but could never look at an existing document and refuse — so "verify the
   // passport has six months left" was a label, not a control.
-  verifyRule   Json?
-  checklist    Json? // resolved item defs snapshot: [{ key, label, required }] (also accepts legacy [{label,done}])
-  checklistState Json? // per-item runtime state: { [key]: { received, verified, note?, fileRef? } }
-  requireVerification Boolean @default(false) // completion needs each required item received AND verified
-  captures     Json? // [{ var, label, type, options? }] — variables the completer must set
-  outcome      String? // approval: approve|reject ; task with branches: chosen key
-  completedBy  String?
-  completedAt  String?
-  createdAt    String? // when the step became active — for SLA elapsed calc
+  verifyRule          Json?
+  checklist           Json? // resolved item defs snapshot: [{ key, label, required }] (also accepts legacy [{label,done}])
+  checklistState      Json? // per-item runtime state: { [key]: { received, verified, note?, fileRef? } }
+  requireVerification Boolean          @default(false) // completion needs each required item received AND verified
+  captures            Json? // [{ var, label, type, options? }] — variables the completer must set
+  outcome             String? // approval: approve|reject ; task with branches: chosen key
+  completedBy         String?
+  completedAt         String?
+  createdAt           String? // when the step became active — for SLA elapsed calc
   // SLA escalation bookkeeping. `slaState` is the last state the escalator ACTED on, so it only fires
   // on a real transition (on_track→at_risk→breached) instead of re-notifying every hourly tick.
-  slaState     String? // null (never evaluated) | on_track | at_risk | breached
-  escalatedAt  String?
+  slaState            String? // null (never evaluated) | on_track | at_risk | breached
+  escalatedAt         String?
   // Which authority this step is carried out at, snapshotted from the node like the instructions.
   // The portal used to live only on the parent Task — one value per case — so a cancellation that
   // runs through Qiwa, Muqeem and GOSI could name just one of them, and the Government Centers queue
   // could only ever list whole cases rather than the jobs waiting at each authority.
-  govCenter    String?
+  govCenter           String?
 
   @@index([status])
   @@index([assigneeRole])
@@ -689,6 +890,51 @@ model WorkflowTask {
 
 // Admin-defined rule that maps instance variables → a document set (dynamic per-client checklists).
 // rows: [{ conditions: [{ var, op, value }], documents: [{ key, label, required }] }] — union of matching rows.
+/// What one client's workforce looked like on one day.
+///
+/// WHY THIS EXISTS
+///
+/// The ratio could always be counted for today, and drift could be measured against the moment
+/// somebody wrote a band down. Neither answers "is this getting better or worse", because nothing
+/// was ever kept. History cannot be reconstructed later — an employee record does not say when it
+/// was added, and one that has been deleted says nothing at all — so a day not captured is a day
+/// gone for good. That is the whole argument for the table.
+///
+/// WHY THE DERIVED FIGURES ARE STORED, NOT RECOMPUTED
+///
+/// Everywhere else in this codebase a figure that can be computed is computed, because a stored copy
+/// goes stale. A snapshot is the exact opposite case: it must keep saying what was TRUE THAT DAY.
+/// Recomputing `bandName` from today's thresholds would silently rewrite last year's record the
+/// first time a regulator moved a boundary, and the trend would then show a change that never
+/// happened. The counts are kept alongside so a reader can always see what the ratio was made of.
+model WorkforceSnapshot {
+  id         String  @id @default(cuid())
+  companyId  String
+  country    String?
+  /// The DAY, as YYYY-MM-DD. One row per client per day: the tick runs hourly and this is what
+  /// stops it writing twenty-four near-identical rows.
+  day        String
+  /// The counts the figures below came from.
+  total      Int
+  nationals  Int
+  expats     Int
+  unknown    Int
+  partTime   Int     @default(0)
+  /// Basis points, the same as everywhere else. `min` assumes every unrecorded nationality is an
+  /// expat; `max` assumes none is. They are equal when `certain`.
+  ratioMinBp Int
+  ratioMaxBp Int
+  certain    Boolean @default(true)
+  /// The band the thresholds gave THAT DAY, by name. Null where the country had no bands set up or
+  /// the client had nobody on the books — both are real states and neither is a zero.
+  bandName   String?
+  createdAt  String?
+
+  @@unique([companyId, day])
+  @@index([companyId])
+  @@index([day])
+}
+
 /// A nationalisation band for one country — Nitaqat's Platinum/Green/Yellow/Red, Emiratisation's
 /// equivalents, whatever a market calls them.
 ///
@@ -725,8 +971,506 @@ model WorkforceBand {
   @@index([country])
 }
 
+/// One column of the sales pipeline, for one country.
+///
+/// Configuration, like workforce bands and for the same reason: a firm's sales process is its own,
+/// and the stages a Saudi PRO practice runs ("Enquiry → Quoted → Documents in → Won") are not the
+/// ones its Emirati branch would use. Hard-coding a set here would make the board a picture of how
+/// somebody else sells.
+///
+/// Carries the same provenance columns as every other config model, so a stage set travels in a
+/// country pack and can be upgraded, retired and uninstalled like anything else.
+model PipelineStage {
+  id             String        @id @default(cuid())
+  country        String?
+  name           String
+  color          String?
+  bg             String?
+  /// Left to right. Two stages with the same sort are a configuration error the editor refuses.
+  sort           Int           @default(0)
+  /// The odds a deal in this column closes, in basis points — 2500 = 25%. Used for the weighted
+  /// total at the top of each column, so "SAR 400,000 in the pipeline" can be read as what it is
+  /// rather than as money anybody expects to bank.
+  probabilityBp  Int           @default(0)
+  /// The two terminal columns. An opportunity's status is DERIVED from these — see Opportunity.
+  /// Exactly one of each per country; the editor enforces it, because a pipeline with no won column
+  /// can never record a sale and one with two has no single answer to "did we win it".
+  isWon          Boolean       @default(false)
+  isLost         Boolean       @default(false)
+  /// HOW LONG A DEAL MAY SIT IN THIS COLUMN before it is called stalled. Null falls back to the
+  /// global `staleDealDays` setting.
+  ///
+  /// Separate from `followUpDays` below, which is a nudge — "chase them on Thursday". This is a
+  /// limit: past it, the deal is reported as stalled on the dashboard and in the hourly notice.
+  /// Per-stage because the tolerances genuinely differ — a fortnight in Enquiry is normal and a
+  /// fortnight in Contract Signing is a problem.
+  ///
+  /// This column exists because "stalled" had drifted into meaning two different things: the hourly
+  /// job measured days since anybody last SPOKE to the client, the dashboard measured days the card
+  /// had sat in one COLUMN, and neither said which it meant. Both measures are useful; having two
+  /// unlabelled ones was the bug. See src/dealhealth.ts, which is now the only place either is
+  /// worked out.
+  maxDays        Int?
+  /// How many days after landing here somebody should chase, or null for "no rule".
+  ///
+  /// The stale-deal nudge already catches a deal nobody has touched for a fortnight, but that is a
+  /// backstop, not a plan: a quotation sent on Monday wants chasing on Thursday, not in two weeks.
+  /// A window per stage is the difference between the pipeline reminding people and the pipeline
+  /// merely recording what they remembered.
+  followUpDays   Int?
+  /// What the chase actually IS, in the words the owner will read on their queue. "Follow up" tells
+  /// nobody anything; "Chase for a decision on the quotation" is a task. Falls back to a sentence
+  /// naming the stage when left empty.
+  followUpAction String?
+  /// WHAT A DEAL MUST SATISFY TO LEAVE THIS STAGE.
+  ///
+  /// "dynamic" resolves `checklistRuleId` against facts the deal already holds — its source, its
+  /// size, its country, whether a quotation exists — using the same ChecklistRule engine the
+  /// workflow steps use. "static" uses the list typed on the stage below. Null means no checklist,
+  /// which is the state every stage starts in and a perfectly good answer for most of them.
+  ///
+  /// Reusing ChecklistRule rather than inventing a second one is deliberate: it is already
+  /// country-scoped and already ships inside a country pack, so a market's sales requirements travel
+  /// with its documents and workflows instead of being re-typed per installation.
+  checklistSource String?
+  checklistRuleId String?
+  /// The static list: [{ key, label, required, source: "manual" | "document", docType? }].
+  /// A `document` item is never ticked by a person — it is satisfied when a live Document of that
+  /// type exists for the deal's company, so the list reads as a status rather than a second to-do.
+  checklistItems  Json?
+  retired        Boolean       @default(false)
+  packKey        String?
+  packVersion    String?
+  packModified   Boolean       @default(false)
+  opportunities  Opportunity[]
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// Where business comes from, and why it is lost — per country.
+///
+/// WHY THESE EXIST AT ALL
+///
+/// Both fields were free text, and free text does not group. "Price", "price", "too expensive" and
+/// "cost" are one reason typed four ways, and the loss report — the single most useful thing a sales
+/// screen can show — silently splits them into four rows of one, which reads as "no clear pattern"
+/// when the pattern is the whole story.
+///
+/// WHY THEY ARE A SUGGESTION AND NOT A RULE
+///
+/// The server does NOT validate against these lists, deliberately. Every value recorded before they
+/// existed would fail, and a country nobody has configured a list for could not record a loss at
+/// all — which would mean the rule "say why it was lost" could not be satisfied. The list makes the
+/// common answers one press and consistent; anything genuinely new is still typeable.
+///
+/// Two tables rather than one picklist with a `kind` column: the pack machinery maps one key to one
+/// model, and a shared table would put sources and loss reasons in the same pack section.
+model LeadSource {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// WHERE A DEAL HAS BEEN — one row per stage move, appended forever.
+///
+/// The Opportunity stores only its CURRENT stage and when it arrived there, which answers "how long
+/// has it sat here" and nothing else. This table answers the questions that cannot be reconstructed
+/// later: how long deals normally spend in each stage, which stage they die in, who moved what. It
+/// is append-only and exists BEFORE the history matters, because by the time it matters it is too
+/// late to start.
+///
+/// `durationDays` is deliberately absent — it is the gap between consecutive rows, derived on read.
+/// `isBackward` is deliberately PRESENT, the opposite call: it is judged against stage sort order AT
+/// THE MOMENT of the move, and sorts get edited and stages retired, so it genuinely cannot be
+/// reconstructed afterwards.
+model StageTransition {
+  id            String  @id @default(cuid())
+  opportunityId String
+  /// Null = the deal ARRIVED here at creation — its first stage, not a move.
+  fromStageId   String?
+  toStageId     String
+  /// Who moved it, or null for the system (renewal job, quotation acceptance, add-on approval).
+  movedById     String?
+  movedAt       String
+  /// Captured when the move WAS the loss, so "died in Quoted because Price" is one row.
+  lostReason    String?
+  isBackward    Boolean @default(false)
+
+  @@index([opportunityId])
+  @@index([toStageId])
+  @@index([movedAt])
+}
+
+/// WHAT THE RELATIONSHIP HAS BEEN — one row per lifecycle change, appended forever.
+///
+/// The company stores only its CURRENT lifecycle; the Activity feed records changes as prose, which
+/// can be read but not computed on. This is the structural record: it is what makes "how long does
+/// a lead take to become a client" and the lead→prospect→client funnel answerable at all.
+///
+/// It also settles a date that had quietly become ambiguous. `Company.createdAt` means "client
+/// since" per its own comment, was stamped at lead-arrival by the web intake, and was never stamped
+/// at all by the staff form — three behaviours for one column. Here the arrival row (fromLifecycle
+/// null) IS the lead-capture date and the →client row IS client-since, each unambiguous.
+model LifecycleTransition {
+  id            String  @id @default(cuid())
+  companyId     String
+  /// Null = the company ENTERED the system in `toLifecycle` — its first state, not a change.
+  fromLifecycle String?
+  toLifecycle   String
+  /// Who changed it, or null for the system (web intake, booking link).
+  changedById   String?
+  changedAt     String
+  /// Captured when the change WAS the loss — the same reason the lifecycle route already demands.
+  reason        String?
+
+  @@index([companyId])
+  @@index([toLifecycle])
+  @@index([changedAt])
+}
+
+/// WHO HAS OWNED THIS COMPANY — one row per ownership change, appended forever.
+///
+/// The third history table, and the one that answers a question people actually ask out loud:
+/// "why did this lead come to me?" Ownership is decided in four places — the create route's
+/// auto-assign, the details form, the bulk distribute, and the web intake's routing — and until
+/// now only the current holder survived, so an automatic assignment was indistinguishable from a
+/// manager's decision.
+///
+/// `method` says WHICH mechanism, `reason` says WHY that mechanism chose this person — the routing
+/// rule's own words ("Riyadh + Website"), which nextOwnerFor already computes and used to throw
+/// away. Null owner on either side is meaningful: from-null is a first assignment, to-null is a
+/// manager deliberately unassigning so somebody else can claim it.
+model OwnerAssignment {
+  id           String  @id @default(cuid())
+  companyId    String
+  fromOwnerId  String?
+  toOwnerId    String?
+  /// Who made the change, or null when a job or a public endpoint did.
+  assignedById String?
+  /// auto | manual | distribute | intake
+  method       String
+  reason       String?
+  at           String
+
+  @@index([companyId])
+  @@index([toOwnerId])
+  @@index([at])
+}
+
+/// Why a follow-up was abandoned — suggest-don't-constrain, like every other list here.
+model CancelReason {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// What a company does — suggest-don't-constrain, same contract as every list here. A master
+/// rather than hardcoded values because "which industries exist" is a fact about the market the
+/// installation serves, and it ships in a country pack like the rest.
+model Industry {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// Which marketing effort produced a lead. SOURCE says where it came from (Google, referral);
+/// campaign says which spend or push made that happen — the split that lets marketing be judged
+/// on what it generated rather than on which channel happened to carry it.
+model Campaign {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// Who the deal was lost to (or fought against) — suggest-don't-constrain, like LostReason below.
+model Competitor {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+model LostReason {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// A piece of business being pursued — the thing a pipeline is made of.
+///
+/// WHY THE MONEY LIVES SOMEWHERE ELSE ONCE A QUOTATION EXISTS
+///
+/// `valueMinor` is an ESTIMATE, and only while nobody has quoted. The moment a quotation is raised
+/// from this opportunity the quotation's figures are the ones of record, and this reads them rather
+/// than keeping its own — otherwise the board says SAR 40,000, the quotation says SAR 38,500, and
+/// there is no way to tell which one a forecast was built from.
+///
+/// WHY THERE IS NO `status` COLUMN
+///
+/// Open, won and lost are not a second thing to record: they are what the CURRENT STAGE means. A
+/// stored status is a copy of the stage, and the two disagree the first time somebody drags a card
+/// without the handler that maintains both — which is exactly the class of bug this codebase keeps
+/// finding. `isWon`/`isLost` on the stage are the single answer.
+model Opportunity {
+  id                String        @id @default(cuid())
+  /// Reference (OPP-0001) from the configured record sequence, so it can be quoted in an email.
+  number            String?
+  company           Company       @relation(fields: [companyId], references: [id])
+  companyId         String
+  /// Who at that company is driving it. Nullable — early on, often nobody is known yet.
+  contactId         String?
+  title             String
+  /// The estimate, in minor units, while no quotation exists. Never rounded to whole riyals: the
+  /// same reason Invoice and Quotation hold minor units.
+  valueMinor        Int?
+  currency          String?
+  /// Per-deal odds, overriding the stage's default when somebody knows better. Basis points.
+  probabilityBp     Int?
+  /// FORECAST CATEGORY — "commit" | "best_case" | "pipeline", or NULL for "derive it from the odds".
+  ///
+  /// The fourth dimension of a deal, separate from all three others: the STAGE is where it sits in
+  /// the process, HEALTH is how it is doing, the NEXT ACTION is what happens next — and this is
+  /// whether its money may be promised upward. Two deals can share a stage while one is committed
+  /// and the other is a long shot, which is exactly the distinction a stage cannot carry.
+  ///
+  /// Null is the normal state and means DERIVED (see forecastOf in pipeline.ts): the same
+  /// override-the-derivation pattern as probabilityBp above, and for the same reason — a person who
+  /// has met the client knows more than a threshold, but only sometimes, and a column that had to
+  /// be set on every deal would mostly be stale.
+  forecastCategory  String?
+  /// Who this deal is up against. Free text with a suggested master (model Competitor) — the same
+  /// suggest-don't-constrain contract as lostReason, and most useful ON a loss: "lost to Odoo on
+  /// price" is one row in two columns.
+  competitor        String?
+  stage             PipelineStage @relation(fields: [stageId], references: [id])
+  stageId           String
+  expectedCloseDate String?
+  ownerId           String?
+  source            String?
+  /// Required by the API when moving into a losing stage. A loss with no reason recorded makes the
+  /// one report that could improve next quarter worthless.
+  lostReason        String?
+  /// The quotation raised from this opportunity, if any. Its acceptance is what wins the deal —
+  /// see startDeliveryForQuotation, which is the single place both accept paths run through.
+  quotationId       String?
+  country           String?
+  notes             String?       @db.Text
+  /// The stage's checklist, SNAPSHOT on entering the stage. Editing a stage's rule afterwards must
+  /// not retroactively change what a deal in flight was asked for — the same reason a workflow task
+  /// snapshots its checklist rather than reading the template live.
+  checklist         Json?
+  /// MANUAL ticks only, keyed by item key. Document items are deliberately absent: they are derived
+  /// from the documents that actually exist, so a stored tick could disagree with reality and the
+  /// stored one would win. Nothing here can be true about a document.
+  checklistState    Json?
+  /// A required item let through by an admin, with the reason. Without an escape a deal can be stuck
+  /// for ever behind an item that no longer applies, and the only way out is the database. A waived
+  /// item counts as done and is reported as WAIVED, never as satisfied.
+  checklistWaived   Json?
+  /// What raised this deal automatically, if anything did — "renewal:<subscriptionId>:<endDate>".
+  ///
+  /// UNIQUE, and that is the whole point: the hourly tick re-reads the same expiring subscription
+  /// every hour, and a find-then-create would race with itself into duplicates. The index IS the
+  /// dedupe, the same trick `notifyOnce` uses. NULL for deals a person opened, and MySQL permits
+  /// any number of NULLs in a unique index, so hand-made deals are unaffected.
+  originKey         String?       @unique
+  createdAt         String?
+  /// When it entered the stage it is in now, so "sitting in Quoted for 40 days" is answerable.
+  stageAt           String?
+  closedAt          String?
+
+  interactions Interaction[]
+
+  @@index([companyId])
+  @@index([stageId])
+  @@index([ownerId])
+}
+
+/// What somebody is expected to sell in a period.
+///
+/// A target is the DENOMINATOR that makes every other sales figure mean something: "SAR 180,000 won"
+/// is a fact, and whether it is a good quarter is not answerable without this.
+///
+/// Progress against it is never stored. It is the value of the deals won inside the period, counted
+/// when asked — a stamped "72% achieved" would be wrong the moment the next deal closed, and would
+/// need a write on every win to stay true.
+model SalesTarget {
+  id          String  @id @default(cuid())
+  /// "2026-08" for a month, "2026-Q3" for a quarter. Text rather than a date range because that is
+  /// how the target is actually set and spoken about, and a range invites two rows that overlap.
+  period      String
+  /// Whose target. NULL means the whole firm — the two are different questions and both get asked,
+  /// so neither is derived from the other.
+  ownerId     String?
+  /// A TEAM's target, for the same reason a person's is not derived from the firm's: a lead is asked
+  /// what their team will bring in, and that is not the sum of what each member was individually
+  /// asked for. Exactly one of ownerId / teamId is set, or neither for the firm — enforced in the
+  /// route rather than the schema, because "at most one of these" has no column-level expression.
+  teamId      String?
+  amountMinor Int
+  currency    String?
+  country     String?
+  note        String?
+  createdAt   String?
+
+  @@unique([period, ownerId, teamId])
+  @@index([period])
+}
+
+/// Something that happened with a client, and what was promised next.
+///
+/// TWO TENSES IN ONE ROW, ON PURPOSE
+///
+/// `at` + `summary` are the PAST: the call that happened, what was said. `nextAction` +
+/// `nextActionAt` are the FUTURE: what you undertook to do about it. They belong together because
+/// that is how the commitment is actually made — "I'll send the quote on Sunday" is said during the
+/// call, and splitting it into a separate to-do record is how the two drift apart, leaving a task
+/// nobody can trace to a conversation and a conversation with no consequence.
+///
+/// A follow-up is OPEN while `nextActionAt` is set and `nextActionDoneAt` is not. That is the whole
+/// definition — there is no status column, for the same reason an opportunity has none.
+///
+/// Deliberately not called an Activity: `Activity` already exists in this schema as the system's own
+/// audit feed, written by the login path. Two things called activity, one of them meaning "a person
+/// picked up the phone", is a vocabulary collision the reader would pay for every time.
+model Interaction {
+  id               String       @id @default(cuid())
+  company          Company      @relation(fields: [companyId], references: [id])
+  companyId        String
+  /// Who was spoken to. Nullable — a note about the company as a whole names nobody.
+  contactId        String?
+  /// The deal it was about, if it was about one. Nullable: plenty of contact is relationship rather
+  /// than pipeline, and forcing every call to hang off an opportunity invents deals to hold notes.
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id])
+  opportunityId    String?
+  /// call | meeting | email | whatsapp | note | site_visit
+  kind             String       @default("call")
+  /// When it HAPPENED, which is not when it was typed in. Somebody logging Thursday's call on
+  /// Monday would otherwise put it in the wrong week of every report.
+  at               String
+  summary          String?      @db.Text
+  /// How it went, in the logger's words. Free text: a picker here would be a list of outcomes that
+  /// is wrong for the second kind of business the firm does.
+  outcome          String?
+  nextAction       String?
+  nextActionAt     String?
+  nextActionDoneAt String?
+  // ── Cancelled is not Done ───────────────────────────────────────────────────────────────────
+  //
+  // `nextActionDoneAt` used to carry both meanings, and they are different facts: "I made the call"
+  // and "the client says this is no longer needed" should not read the same in a completion figure.
+  // Conflating them also pushed people towards logging a fake interaction to clear the queue, which
+  // corrupts the contact log as well as the count.
+  //
+  // Two nullable dates rather than a `status` string, so the state stays DERIVED and cannot
+  // contradict itself the way `status: "done"` beside a null completion date could:
+  //   both null      → open
+  //   nextActionDoneAt → done
+  //   cancelledAt      → cancelled
+  cancelledAt      String?
+  /// Why it was abandoned. Required by the route — a cancellation with no reason teaches nothing,
+  /// and "why did forty of these get dropped last month" is the question that earns the column.
+  cancelReason     String?
+  /// Who owes it. Defaults to whoever logged it, because an unassigned commitment is nobody's.
+  ownerId          String?
+  /// True when a stage rule booked this rather than a person typing it.
+  ///
+  /// The distinction earns its column: moving a deal on CLEARS the previous stage's chase, and it
+  /// must only ever clear its own. A commitment somebody made to a client by hand — "I promised to
+  /// call Fahad on Sunday" — survives every stage move, because nothing in a pipeline knows better
+  /// than the person who made the promise.
+  auto             Boolean      @default(false)
+  // ── Snooze: pushing a commitment, with the push left visible ────────────────────────────────
+  //
+  // Moving a date used to mean closing the commitment and logging a new one, which loses the fact
+  // that it moved at all. These three columns keep it: how MANY times it has been pushed, what it
+  // was FIRST due, and the last reason given.
+  //
+  // The count is the point. One postponement is ordinary; a follow-up pushed five times is not a
+  // scheduling fact, it is somebody avoiding a call — and that only becomes visible if the pushes
+  // accumulate somewhere instead of each one overwriting the last.
+  //
+  // Deliberately three columns rather than a SnoozeEvent table, unlike the stage/lifecycle/owner
+  // histories added elsewhere. Those answer analytical questions ACROSS many records over time;
+  // this answers one question about one commitment — "how long has this been dodged, and since
+  // when" — which compresses to a count and a date with no loss of the actionable signal.
+  /// How many times the due date has been pushed. Never reset — that is what makes it a signal.
+  snoozeCount      Int          @default(0)
+  /// What it was FIRST due, set on the first snooze only, so repeated pushes cannot erase the origin.
+  snoozedFrom      String?
+  /// Why it was last pushed. Optional: demanding a reason turns a snooze into a form people avoid,
+  /// and an avoided snooze becomes an ignored overdue row, which is strictly worse.
+  snoozeReason     String?
+  createdAt        String?
+
+  @@index([companyId])
+  @@index([opportunityId])
+  @@index([nextActionAt])
+  @@index([ownerId])
+}
+
 model ChecklistRule {
-  id   String @id @default(cuid())
+  id           String  @id @default(cuid())
   // Provenance, for rows that came from a country pack.
   //
   // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
@@ -750,9 +1494,9 @@ model ChecklistRule {
   // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
   // country pack installed, an unmarked row appears in every client's pickers regardless of the
   // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
-  country       String?
-  name String
-  rows Json?  @default("[]")
+  country      String?
+  name         String
+  rows         Json?   @default("[]")
 
   @@index([packKey])
 }
@@ -776,7 +1520,7 @@ model AppSetting {
 
 // ── Operations masters (Government Centers / Appointments / Courier) ──
 model GovCenter {
-  id        String  @id @default(cuid())
+  id           String  @id @default(cuid())
   // Provenance, for rows that came from a country pack.
   //
   // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
@@ -797,38 +1541,38 @@ model GovCenter {
   packKey      String?
   packVersion  String?
   packModified Boolean @default(false)
-  name      String
+  name         String
   // Which country's authority this is. Country Rules used to hold its own typed list of portals
   // ("MOL, Absher, Muqeem, Qiwa") beside this table, and the two already disagreed — this one is
   // real, because the step picker, the Government Centers queue and the credential link all read it.
   // With a country on the row, that screen can show the true list instead of keeping a second one.
-  country   String?
-  sub       String? // what it handles
-  color     String?
-  bg        String?
-  officer   String? // default owning officer
-  pending   Int     @default(0)
-  submitted Int     @default(0)
-  approved  Int     @default(0)
-  rejected  Int     @default(0)
+  country      String?
+  sub          String? // what it handles
+  color        String?
+  bg           String?
+  officer      String? // default owning officer
+  pending      Int     @default(0)
+  submitted    Int     @default(0)
+  approved     Int     @default(0)
+  rejected     Int     @default(0)
 
   @@index([packKey])
 }
 
 model Appointment {
-  id         String  @id @default(cuid())
-  title      String
-  type       String? // Medical test / Biometrics / ...
-  companyId  String?
-  clientName String?
-  employee   String?
-  location   String?
-  date       String?
-  time       String?
-  status     String  @default("scheduled") // Requested | Confirmed | Rescheduled | Attended | No-show | Cancelled
-  notes      String?
-  history    Json?   @default("[]") // audit trail: [{ at, by, event, detail }] from creation onward
-  taskId     String? // optional link to the Task this meeting belongs to (shown on the task)
+  id                String  @id @default(cuid())
+  title             String
+  type              String? // Medical test / Biometrics / ...
+  companyId         String?
+  clientName        String?
+  employee          String?
+  location          String?
+  date              String?
+  time              String?
+  status            String  @default("scheduled") // Requested | Confirmed | Rescheduled | Attended | No-show | Cancelled
+  notes             String?
+  history           Json?   @default("[]") // audit trail: [{ at, by, event, detail }] from creation onward
+  taskId            String? // optional link to the Task this meeting belongs to (shown on the task)
   // Client-requested reschedule awaiting STAFF approval: { date, time, note, by, at }.
   // Approve (console) applies date/time + history; decline just clears it. Null = none pending.
   pendingReschedule Json?
@@ -838,24 +1582,24 @@ model Appointment {
 }
 
 model CourierShipment {
-  id         String  @id @default(cuid())
-  ref        String
+  id          String  @id @default(cuid())
+  ref         String
   description String?
-  companyId  String?
-  clientName String?
-  carrier    String?
-  direction  String  @default("outbound") // outbound | inbound
-  status     String  @default("in_transit") // preparing | in_transit | delivered | returned
-  eta        String?
-  at         String?
+  companyId   String?
+  clientName  String?
+  carrier     String?
+  direction   String  @default("outbound") // outbound | inbound
+  status      String  @default("in_transit") // preparing | in_transit | delivered | returned
+  eta         String?
+  at          String?
   // What is in the envelope, and what it belongs to.
   //
   // A shipment used to be a bare row: a reference, a carrier and a status. So a renewed passport went
   // out and the document had no idea where it was — "where is that passport" could only be answered by
   // remembering which shipment it was in. Appointments already carried a taskId; courier was the one
   // left out of the chain.
-  documentId String?
-  taskId     String?
+  documentId  String?
+  taskId      String?
 
   @@index([companyId])
   @@index([documentId])
@@ -884,12 +1628,12 @@ model Payment {
 }
 
 model Quotation {
-  id         String  @id @default(cuid())
-  number     String
-  companyId  String?
-  clientName String?
-  service    String?
-  amount     Int     @default(0)
+  id            String  @id @default(cuid())
+  number        String
+  companyId     String?
+  clientName    String?
+  service       String?
+  amount        Int     @default(0)
   // Same minor-unit figures as Invoice, and for the same reason: `amount Int` cannot hold halala, so
   // the gross used to be rounded to a whole riyal on save and the RATE reverse-engineered at print
   // time — which printed "VAT 20%" on a SAR 10 line. Frozen here at issue, and carried straight
@@ -899,20 +1643,27 @@ model Quotation {
   totalMinor    Int?
   vatRateBp     Int? // basis points: 1500 = 15.00%
   // Line items [{ name, units, price }] — mirrors Invoice.items. `amount` stays the total of record.
-  items      Json?   @default("[]")
+  items         Json?   @default("[]")
   // draft    — being written, console only
   // approved — signed off internally, ready to send; still console only
   // sent     — released; the first state the client can see
   // accepted — the CLIENT agreed to it
   // rejected — the client declined
   // invoiced — an invoice has been raised from it
-  status     String  @default("draft")
-  date       String?
-  validUntil String?
-  notes      String?
+  status        String  @default("draft")
+  date          String?
+  /// When it was actually RELEASED to the client, which is not the same as `date`.
+  ///
+  /// `date` is the issue date printed on the document, set when the row is created. A quotation
+  /// drafted on the 1st and sent on the 20th carries the 1st — so chasing on `date` would announce
+  /// "no answer for 19 days" the moment somebody pressed Send. Stamped on the transition to `sent`,
+  /// in the one place that transition is detected.
+  sentAt        String?
+  validUntil    String?
+  notes         String?
   // What the client asked to be changed, when they send it back instead of accepting. Kept apart
   // from `notes`, which is printed ON the quotation — this is correspondence, not document content.
-  clientNote String? @db.Text
+  clientNote    String? @db.Text
 
   @@index([companyId])
   @@index([status])
@@ -920,7 +1671,7 @@ model Quotation {
 
 // ── Service catalog (gov fee + service fee per offered service) ──
 model ServiceItem {
-  id         String  @id @default(cuid())
+  id           String  @id @default(cuid())
   // Provenance, for rows that came from a country pack.
   //
   // packKey is the stable identity a pack uses — sa.doctype.iqama — so a re-install recognises this
@@ -944,16 +1695,16 @@ model ServiceItem {
   // Which country this belongs to. Configuration was implicitly Saudi everywhere; with a second
   // country pack installed, an unmarked row appears in every client's pickers regardless of the
   // market they operate in. Nullable for existing rows, backfilled to SA, defaulted on create.
-  country       String?
-  name       String
-  govFee     Int     @default(0)
-  serviceFee Int     @default(0)
-  time       String? // "3–5 days"
-  sla        String? // "5 working days"
-  docs       Int     @default(0)
-  included   Boolean @default(true) // included in base plans vs premium
-  docType    String? // document it produces
-  workflowId String? // bound workflow template
+  country      String?
+  name         String
+  govFee       Int     @default(0)
+  serviceFee   Int     @default(0)
+  time         String? // "3–5 days"
+  sla          String? // "5 working days"
+  docs         Int     @default(0)
+  included     Boolean @default(true) // included in base plans vs premium
+  docType      String? // document it produces
+  workflowId   String? // bound workflow template
   // WHAT THE CLIENT MUST SUPPLY — the single source of truth, read by the portal request wizard
   // (one upload slot per entry) AND by a workflow collect step configured checklistSource:"service".
   // Four places used to claim this knowledge and none agreed: a hardcoded sentence in the portal
@@ -961,7 +1712,7 @@ model ServiceItem {
   // derived, each step's own checklist, and ChecklistRule. Empty means "not configured yet" and the
   // portal falls back to a free-form box — it does NOT mean "no documents needed".
   // [{ key, label, required, hint }]
-  requiredDocs Json? @default("[]")
+  requiredDocs Json?   @default("[]")
 
   @@index([packKey])
 }
@@ -982,14 +1733,14 @@ model ApiKey {
 }
 
 model FileAsset {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   kind       String // org-logo | login-logo | document | attachment
   name       String
   // Where to fetch it. Branding assets keep a public /files/<random> path so an <img> tag can load
   // them without a token. Anything holding a person's identity documents is stored OUTSIDE the
   // served folder and its path is /api/files/<id>, which checks who is asking — see `private`.
   path       String
-  size       Int    @default(0)
+  size       Int     @default(0)
   uploadedBy String?
   // Who the file belongs to. Set for client uploads; null for staff/branding uploads, which only
   // staff may read. This is the whole basis of the access check on /api/files/:id.
@@ -1019,4 +1770,231 @@ model ErrorReport {
   createdAt String?
 
   @@index([status])
+}
+
+/// One line waiting to go into somebody's daily digest.
+///
+/// Owner-addressed reminders are QUEUED here instead of being sent one at a time when digest mode is
+/// on. It has to be a table rather than something derived: `Notification` is a single global bell
+/// with no recipient column, so there is nothing in it that says who each row was for.
+model DigestItem {
+  id     String  @id @default(cuid())
+  email  String // the recipient, resolved at queue time — ownership can change before the digest goes
+  rule   String // the RuleKey it came from, so the digest can group by it
+  title  String  @db.Text
+  detail String? @db.Text
+  url    String?
+  /// True when this reached them only because nobody owns the record. Said out loud in the digest.
+  orphan Boolean @default(false)
+
+  createdAt String
+  sentAt    String? // null = still waiting
+
+  @@index([email, sentAt])
+}
+
+/// One digest actually sent. The unique index IS the guard — the insert either wins or throws, so two
+/// overlapping ticks cannot both mail somebody the same morning. Same trick as Notification.dedupeKey.
+model DigestRun {
+  id     String @id @default(cuid())
+  email  String
+  day    String // YYYY-MM-DD in the ORGANISATION's timezone, not the server's
+  items  Int
+  sentAt String
+
+  @@unique([email, day])
+}
+
+/// Every attempt to send an email, and what happened to it.
+///
+/// Failures used to go to `console.error` and nowhere else: `deliver()` swallowed them so a mail
+/// outage could not break a write path — correct — but that meant a client's invoice notice could
+/// fail silently forever and the only symptom was somebody eventually saying "I never got that".
+///
+/// Written from inside `sendMail`, so nothing that sends can avoid being recorded.
+model MailLog {
+  id      String  @id @default(cuid())
+  to      String
+  subject String  @db.Text
+  /// sent | failed | skipped  (skipped = sending is switched off, which is not a fault)
+  status  String
+  /// What kind of message it was — the rule key, "invitation", "password reset"… for reading the log.
+  kind    String?
+  /// The transport's own words. Kept verbatim: "Invalid from" and "auth failed" need different fixes.
+  error   String? @db.Text
+  at      String
+
+  @@index([status, at])
+  @@index([at])
+}
+
+/// WHO GETS THIS PIECE OF WORK.
+///
+/// Both halves of the system already answered that question, and both answered it the same way:
+/// whoever is carrying the least. `rotation()` picks the lightest salesperson for a new lead;
+/// `pickAssignee()` picks the lightest holder of a role for a workflow task. Load balancing is the
+/// right DEFAULT — it needs no maintenance and self-corrects — but it is the wrong and only answer
+/// when the work is not interchangeable. An officer who does Qiwa all day is faster at Qiwa. A rep
+/// who knows company formation closes more of it. Neither fact could be expressed anywhere.
+///
+/// So: an ordered list of rules, first match wins, and NO MATCH FALLS BACK TO THE LOAD BALANCER.
+/// That last part is what makes this safe to add to a working system — an empty rule list behaves
+/// exactly as today, and a rule can only ever redirect work that was going to be handed out anyway.
+///
+/// One table for both sides deliberately. "Leads from the website go to Fahad" and "GOSI steps go to
+/// Noura" are the same sentence about different nouns, and splitting them into two features would
+/// give the firm two places to look and two sets of behaviour to remember.
+///
+/// A rule never overrides a human. The workflow ladder still puts a step's own named assignee first,
+/// and a lead somebody has already claimed is not reassigned — rules fill empty owners, like the
+/// rotation they refine.
+model AssignmentRule {
+  id       String  @id @default(cuid())
+  /// lead | task — which side of the business this rule routes.
+  scope    String
+  /// First match wins, so order is the rule. Lower runs first.
+  position Int     @default(0)
+  active   Boolean @default(true)
+  /// What a human calls this rule, for the list and for the audit line.
+  label    String
+
+  /// CONDITIONS. Every one is optional and an unset condition matches anything, so a rule with no
+  /// conditions at all is a catch-all — useful as the last row, dangerous as the first, which is why
+  /// the editor shows position and the resolver explains which rule fired.
+  whenSource    String? /// lead: where it came from — Website, Referral…
+  whenCity      String? /// lead: territory, matched case-insensitively
+  whenCountry   String? /// both: SA, AE…
+  whenGovCenter String? /// task: the authority the step is done at
+  whenService   String? /// both: the service being sold or delivered
+
+  /// TARGET. A person, or a role to balance within. Exactly one is meant to be set; the resolver
+  /// prefers toUserId when both are, because naming a person is the more specific instruction.
+  toUserId String?
+  toRole   String?
+
+  createdAt String?
+  updatedAt String?
+
+  @@index([scope, active, position])
+}
+
+/// A LINK SOMEBODY OUTSIDE THIS SYSTEM CAN BOOK TIME THROUGH.
+///
+/// The alternative it replaces is four emails deciding on one meeting. A rep sends the link, the
+/// client picks a time that is genuinely free, and the appointment, the lead and the logged
+/// interaction all exist without anybody retyping them.
+///
+/// THE LIMIT THIS CANNOT HIDE. "Free" here means free *according to this system*. Until a rep's own
+/// calendar is connected, a meeting that lives only in their Google Calendar is invisible to slot
+/// generation and will be offered. That is a real double-booking risk, it is stated on the screen
+/// where links are made, and it is the strongest argument for doing the mailbox/calendar work next.
+///
+/// Availability is a WEEKLY SHAPE, not a list of dates. Storing dates would need somebody to keep
+/// extending them, and a booking page that quietly runs out of slots looks broken rather than full.
+model BookingLink {
+  id     String  @id @default(cuid())
+  /// The staff member being booked. Their name is what the visitor sees.
+  userId String
+  /// The public part of the URL: /book/<slug>. Unique, and never reused after deletion — an old
+  /// link landing on somebody else's diary is worse than an old link that plainly does not work.
+  slug   String  @unique
+  /// What the visitor is booking, in their words: "Free 30-minute consultation".
+  title  String
+  blurb  String? @db.Text
+
+  active      Boolean @default(true)
+  /// Length of the meeting, and the gap enforced after one before the next may start.
+  minutes     Int     @default(30)
+  bufferMins  Int     @default(0)
+  /// Working hours, in the ORGANISATION's timezone. 9 → 17 means the last 30-minute slot is 16:30.
+  dayStart    Int     @default(9)
+  dayEnd      Int     @default(17)
+  /// Which days are workable, as ISO weekday numbers (1 = Monday … 7 = Sunday). Saudi Arabia's
+  /// working week is Sunday–Thursday, so this is NOT a Monday–Friday default.
+  workDays    String  @default("7,1,2,3,4")
+  /// How far ahead the page offers, and how much notice is required before the earliest slot.
+  daysAhead   Int     @default(14)
+  noticeHours Int     @default(4)
+
+  createdAt String?
+  updatedAt String?
+
+  @@index([userId])
+}
+
+/// A REP'S OWN MAILBOX, CONNECTED.
+///
+/// The point is that a client's reply lands on their record without anybody copying it there, and
+/// that mail a rep sends goes out from THEIR address so the reply comes back to them — not to a
+/// shared no-reply nobody watches.
+///
+/// TOKENS, NOT PASSWORDS. Encrypted with CRED_KEY, the same envelope the government-portal vault
+/// uses. A token can be revoked by the person who granted it, from their own provider account,
+/// without telling us — which is the property that makes this acceptable to hand over in the first
+/// place. Passwords have none of that, which is why per-user SMTP was rejected.
+///
+/// ONE ROW PER PERSON. Nobody connects two mailboxes: two would mean deciding which one a reply
+/// belongs to, and there is no honest answer to that.
+model MailboxConnection {
+  id       String @id @default(cuid())
+  userId   String @unique
+  /// google | microsoft — which adapter reads it. See mailbox.ts for why this is a thin seam.
+  provider String
+  /// The address that was actually connected, shown so somebody can tell which account they granted.
+  address  String
+
+  /// AES-GCM, CRED_KEY. Never returned by any route, ever — not even redacted.
+  accessTokenEnc  String  @db.Text
+  refreshTokenEnc String? @db.Text
+  /// When the access token dies. Refreshed ahead of this, not after a 401 — a sync that only
+  /// recovers from failure spends every cycle failing first.
+  expiresAt       String?
+
+  /// Where the last sync got to. Provider-specific opaque string (Gmail historyId, Graph deltaLink).
+  /// Kept because a full re-read of a mailbox on every tick is both slow and a privacy problem.
+  cursor     String? @db.Text
+  lastSyncAt String?
+  /// The transport's own words when a sync failed. Surfaced rather than swallowed: a mailbox that
+  /// silently stopped syncing looks exactly like a client who stopped writing.
+  lastError  String? @db.Text
+  status     String  @default("active") // active | needs_reconnect | disconnected
+
+  createdAt String?
+  updatedAt String?
+}
+
+/// ONE EMAIL, ATTACHED TO THE RECORD IT IS ABOUT.
+///
+/// SCOPED ON PURPOSE. Only messages whose counterparty matches a Contact or Company already in this
+/// system are stored. A rep's payslip, their doctor, their job hunt — none of it is matched, so
+/// none of it is written. That filter is the whole ethical basis for reading a person's mailbox at
+/// all, and it is applied BEFORE the row exists rather than as a query on top of one.
+///
+/// The BODY IS NOT STORED. A subject line and the participants are enough to answer "did they
+/// reply, and when" — which is the question this feature exists for. Storing bodies would turn a
+/// CRM into a mail archive with a different threat model and a different conversation with staff.
+model EmailMessage {
+  id         String @id @default(cuid())
+  /// Whose mailbox it came from. A message can legitimately exist twice — two reps on one thread —
+  /// and the pair below is what keeps those distinct instead of one overwriting the other.
+  userId     String
+  /// The provider's own id for the message.
+  externalId String
+  /// The provider's thread/conversation id — what makes a reply a reply.
+  threadId   String
+
+  companyId String?
+  contactId String?
+
+  direction    String // in | out
+  subject      String? @db.Text
+  /// The other side's address. Ours is on the connection, so storing it again would be a second copy.
+  counterparty String
+  sentAt       String
+
+  createdAt String?
+
+  @@unique([userId, externalId])
+  @@index([companyId, sentAt])
+  @@index([threadId])
 }

@@ -12,10 +12,11 @@
 //     classify than silently drop something the client is paying for.
 //   · a broken workflow template costs that ONE line its run, not the whole delivery.
 import { prisma } from "./db.js";
-import { startInstance, describeTemplate } from "./workflow.js";
+import { startInstance, describeTemplate, resolveStaffByName } from "./workflow.js";
 import { nextNumber } from "./sequence.js";
 import { logActivity, logNotification } from "./auth.js";
-import { notifyRequestAccepted } from "./notify.js";
+import { notifyRequestAccepted, notifyTaskAssigned } from "./notify.js";
+import { winOpportunityForQuotation } from "./pipeline.js";
 
 const nowISO = () => new Date().toISOString();
 
@@ -60,6 +61,13 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   const empty: DeliveryResult = { started: false, tasks: [], runs: 0, unmatched: [], failures: [] };
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return { ...empty, reason: "Quotation not found" };
+
+  // An accepted quotation IS a won deal. Done here rather than on the two accept routes because
+  // this is the one function both of them — the portal's and the console's — already run through;
+  // hooking them separately is how one of them ends up not doing it. Deliberately before the
+  // idempotency check below: re-driving a quotation whose tasks already exist must still be able to
+  // move a deal that was left open, and winOpportunityForQuotation is itself a no-op once won.
+  await winOpportunityForQuotation(q.id).catch(e => console.error("could not close the deal for", q.number, e));
 
   // Idempotency. The client can accept in the portal while staff mark it accepted in the console,
   // and the scheduler may re-drive a row; none of that should double-book the officers.
@@ -252,9 +260,11 @@ export async function acceptServiceRequest(
       title,
       companyId: rq.companyId ?? null,
       clientName: rq.clientName ?? null,
-      // Unassigned by default, as delivery does: naming an owner puts work in someone's queue
-      // without telling them, and a bound workflow routes its own steps by role anyway.
+      // Unassigned by default: a bound workflow routes its own steps by role anyway. The old reason
+      // beside this — "naming an owner puts work in someone's queue without telling them" — no longer
+      // holds: naming one now emails them (see below), so the default is about routing, not silence.
       assignee: (opts.assignee ?? "").trim() || "Unassigned",
+      assigneeId: (await resolveStaffByName(opts.assignee))?.id ?? null,
       priority: "medium",
       status: "todo",
       dueDate: opts.dueDate || dueDateFrom(svc?.sla, svc?.time) || "",
@@ -262,6 +272,15 @@ export async function acceptServiceRequest(
       requestId: rq.id,
     },
   });
+
+  // Naming somebody on acceptance now tells them, rather than dropping work into a queue they only
+  // find by looking. Silent when nobody was named — the workflow routes its own steps.
+  if (task.assigneeId) {
+    notifyTaskAssigned({
+      assigneeId: task.assigneeId, title: task.title, clientName: task.clientName,
+      dueDate: task.dueDate || null, why: `accepted for ${rq.clientName ?? "a client"}`,
+    });
+  }
 
   let runId: string | null = null;
   let failure: string | undefined;

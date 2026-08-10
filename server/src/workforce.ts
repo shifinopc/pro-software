@@ -24,6 +24,7 @@
  */
 import { prisma } from "./db.js";
 import { sameCountry, countryName } from "./countries.js";
+import { ACTIVE_CLIENT } from "./validate.js";
 
 export type Workforce = {
   companyId: string;
@@ -165,15 +166,89 @@ export async function workforceFor(companyId: string): Promise<Workforce | null>
   };
 }
 
-/** Every client, for the list and the dashboard. */
+/**
+ * Every client, for the list and the dashboard.
+ *
+ * CLIENTS — not leads. A company being pitched has no employees on this system, so it would arrive
+ * here as 0 of 0, be reported at 0% nationalisation, and sit in the compliance list looking like a
+ * client in trouble. Nothing about a prospect's real workforce is knowable from this database, and a
+ * figure that looks knowable is worse than an absent one.
+ */
 export async function workforceAll(): Promise<Workforce[]> {
-  const ids = await prisma.company.findMany({ select: { id: true }, orderBy: { name: "asc" } });
+  const ids = await prisma.company.findMany({ where: { lifecycle: ACTIVE_CLIENT }, select: { id: true }, orderBy: { name: "asc" } });
   const out: Workforce[] = [];
   for (const c of ids) {
     const w = await workforceFor(c.id);
     if (w) out.push(w);
   }
   return out;
+}
+
+/**
+ * Record what every client's workforce looks like today.
+ *
+ * Idempotent through the unique (companyId, day): the tick runs hourly, and the FIRST run of a day
+ * writes the row. Later runs UPDATE it, so a hire at 4pm is reflected in today's row rather than
+ * being lost until tomorrow — the row means "as at the end of this day", and the day is not over.
+ *
+ * A client with nobody on the books is still recorded. "They had no staff on the 5th" is history,
+ * and leaving a gap would make the trend interpolate across it as though nothing had changed.
+ */
+export interface SnapshotResult { day: string; written: number; skipped: number }
+
+export async function captureWorkforceSnapshots(day = new Date().toISOString().slice(0, 10)): Promise<SnapshotResult> {
+  const out: SnapshotResult = { day, written: 0, skipped: 0 };
+  const rows = await workforceAll();
+  for (const w of rows) {
+    // No country means no thresholds and no meaningful comparison; recording a ratio against
+    // nothing would put a line on a chart that cannot be read.
+    if (!w.country) { out.skipped++; continue; }
+    const data = {
+      country: w.country,
+      total: w.total, nationals: w.nationals, expats: w.expats, unknown: w.unknown, partTime: w.partTime,
+      ratioMinBp: w.ratioMinBp, ratioMaxBp: w.ratioMaxBp, certain: w.certain,
+      // The band as the thresholds read it TODAY, by name. See the model comment: recomputing this
+      // later from changed thresholds would rewrite a day that has already happened.
+      bandName: w.computedBand?.name ?? null,
+    };
+    await prisma.workforceSnapshot.upsert({
+      where: { companyId_day: { companyId: w.companyId, day } },
+      create: { companyId: w.companyId, day, ...data, createdAt: new Date().toISOString() },
+      update: data,
+    });
+    out.written++;
+  }
+  return out;
+}
+
+/**
+ * One client's series, oldest first, with the change between the ends.
+ *
+ * `enough` is the honest part: two points is the minimum that can show a direction, and a single
+ * point drawn as a flat line reads as "stable" when what it means is "we have only just started
+ * looking". The screen is told which it is rather than being left to guess from the array length.
+ */
+export async function workforceHistory(companyId: string, days = 90) {
+  const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const points = await prisma.workforceSnapshot.findMany({
+    where: { companyId, day: { gte: from } },
+    orderBy: { day: "asc" },
+  });
+  const first = points[0] ?? null;
+  const last = points[points.length - 1] ?? null;
+  const changeBp = first && last ? last.ratioMinBp - first.ratioMinBp : null;
+  return {
+    points,
+    from, days,
+    enough: points.length >= 2,
+    changeBp,
+    /** Only a real move counts as a direction; a ratio that has not shifted is not "up". */
+    direction: changeBp === null || changeBp === 0 ? "flat" : changeBp > 0 ? "up" : "down",
+    /** Whether the band changed over the window, which is the part somebody acts on. */
+    bandFrom: first?.bandName ?? null,
+    bandTo: last?.bandName ?? null,
+    bandMoved: !!(first && last && first.bandName !== last.bandName),
+  };
 }
 
 /**
