@@ -154,6 +154,45 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
       out.failures.length ? `workflow failed: ${out.failures.join("; ")}` : null,
     ].filter(Boolean).join(" · "),
   });
+
+  /**
+   * STILL A LEAD, ALREADY BEING WORKED FOR.
+   *
+   * Accepting a quotation wins the deal and schedules the work, but it does NOT make the company a
+   * client — that needs a CR number, and only a person holds the commercial registration it comes
+   * off. So the two halves of the system can drift apart quietly: officers running tasks for a
+   * company the CRM still calls a lead, with no CR on file and no portal login to see any of it.
+   *
+   * Deliberately a notice and not an automatic conversion. Inventing a CR is not an option, and
+   * converting without one would either fail or write a client record with a hole in it — the very
+   * thing the required field exists to prevent. Telling somebody at the moment it becomes true is
+   * the most the system can honestly do.
+   *
+   * Placed after the work is scheduled and inside the once-per-quotation path, so it cannot fire for
+   * a delivery that did not happen and cannot repeat on a re-drive.
+   *
+   * try/catch for the same reason every other notification here has one: a lead that is now doing
+   * paid work is worth saying, and never worth failing a delivery over.
+   */
+  try {
+    if (q.companyId) {
+      const co = await prisma.company.findUnique({
+        where: { id: q.companyId },
+        select: { name: true, lifecycle: true, cr: true },
+      });
+      if (co && co.lifecycle !== "client") {
+        logNotification({
+          type: "system",
+          title: `${co.name} is not a client yet`,
+          message: `They accepted ${q.number} and work has started, but the record is still marked "${co.lifecycle}"`
+            + `${co.cr ? "" : " with no CR number"}. Open the lead and use "Won — turn into a client" to set it up.`,
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[delivery] could not raise the not-yet-a-client notice:", (e as any)?.message ?? e);
+  }
+
   return out;
 }
 
