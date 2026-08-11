@@ -8646,21 +8646,18 @@
                    reliably re-patch style attributes on re-render — a chosen name would have kept
                    the placeholder's grey. -->
               <div class="fm-selwrap">
-                <div data-dd data-open="{{ ddIgCoOpen }}" onClick="{{ ddIgCoToggle }}" class="fm-inp fm-sel">
-                  <sc-if value="{{ ddIgCoHasValue }}" hint-placeholder-val="{{ false }}"><span style="color:#1A1523;">{{ ddIgCoLabel }}</span></sc-if>
-                  <sc-if value="{{ ddIgCoEmpty }}" hint-placeholder-val="{{ true }}"><span style="color:#A9A6B4;">Choose a client or lead…</span></sc-if>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                <div class="fm-combo">
+                  <input data-dd data-open="{{ ddIgCoOpen }}" onClick="{{ ddIgCoOpenList }}" onInput="{{ ddIgCoSetQuery }}" onKeyDown="{{ ddIgCoKey }}" value="{{ ddIgCoValue }}" placeholder="{{ ddIgCoPlaceholder }}" autocomplete="off" class="fm-inp">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
                 </div>
                 <sc-if value="{{ ddIgCoOpen }}" hint-placeholder-val="{{ false }}">
                   <div data-dd data-hidescroll="true" class="fm-dd">
-                    <div style="padding:4px 4px 6px;">
-                      <input value="{{ ddIgCoQuery }}" onInput="{{ ddIgCoSetQuery }}" placeholder="{{ ddIgCoPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;">
-                    </div>
                     <sc-if value="{{ ddIgCoNoMatch }}" hint-placeholder-val="{{ false }}">
-                      <div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody matches that</div>
+                      <div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client or lead matches that</div>
                     </sc-if>
-                    <sc-for list="{{ ddIgCoOptions }}" as="o" hint-placeholder-count="5">
-                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    <sc-for list="{{ ddIgCoRows }}" as="o" hint-placeholder-count="5">
+                      <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                      <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
                     </sc-for>
                   </div>
                 </sc-if>
@@ -23143,6 +23140,31 @@ class Component extends DCLogic {
     const _leadRows = Array.isArray(this.state.leadsData) ? this.state.leadsData : [];
     const _contactRows = Array.isArray(this.state.contactsData) ? this.state.contactsData : [];
     const _allCos = [...(Array.isArray(this.state.companiesData) ? this.state.companiesData : []), ..._leadRows];
+    /**
+     * "Who is this for" — the same question the New deal dialog and Log contact both ask.
+     *
+     * Written once because it was written twice: two copies of the same list, one of which had
+     * already been given sections while the other still had a filter box stuck to the top of its
+     * panel. Two answers to one question is how the same picker ends up behaving differently
+     * depending on which dialog you opened it from.
+     *
+     * Sectioned rather than flat: a client and a lead are not interchangeable — one has a signed
+     * relationship behind it and the other is a hope — and the heading says which you are choosing.
+     */
+    const _coSections9 = () => [
+      {
+        title: 'CLIENTS',
+        options: (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+          .map(c => ({ value: c.id, label: c.name, hint: 'client' })),
+      },
+      {
+        // Lost ones stay out: picking a company already written off is far more often a mis-click on
+        // a similar name than a decision to reopen it.
+        title: 'LEADS & PROSPECTS',
+        options: _leadRows.filter(c => c.lifecycle !== 'lost')
+          .map(c => ({ value: c.id, label: c.name + ' — ' + c.lifecycle, hint: c.lifecycle })),
+      },
+    ];
     const _coById = Object.fromEntries(_allCos.map(c => [c.id, c]));
     // Same answer as the Clients list, from the same column — see _ownerName9 above.
     // WHO CAN MANAGE A CLIENT — decided by the server, not here.
@@ -24768,19 +24790,12 @@ class Component extends DCLogic {
         return { label: _KIND_LABEL9[k], bd: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#7C00FF' : '#fff', fg: on ? '#fff' : '#6F6C7A',
           pick: () => this.setState({ intLog: { ...(this.state.intLog || {}), kind: k } }) };
       }),
-      // The house searchable picker, keyed by company ID rather than by name — see the note in
-      // mkDdSearch. This was the last native <select> in a dialog, which is why it alone came out
-      // in the browser's own chrome while every other field wore the app's.
-      ...mkDdSearch(
-        'ddIgCo',
-        [
-          ...(Array.isArray(this.state.companiesData) ? this.state.companiesData : []).map(c => ({ value: c.id, label: c.name + ' — client' })),
-          ...(Array.isArray(this.state.leadsData) ? this.state.leadsData : []).filter(c => c.lifecycle !== 'lost').map(c => ({ value: c.id, label: c.name + ' — ' + c.lifecycle })),
-        ],
+      // Keyed by company ID rather than by name: two companies can share a name, and logging a call
+      // against whichever one sorted first is a note filed on a stranger.
+      ...mkDdCombo('ddIgCo', _coSections9(),
         (_ig && _ig.companyId) || '',
         (v) => this.setState({ intLog: { ...(this.state.intLog || {}), companyId: v }, igErr: '' }),
-        'Search clients and leads…',
-      ),
+        'Search clients and leads…'),
       igfCompany: (_ig && _ig.companyId) || '', igfAt: (_ig && _ig.at) || '',
       // The people at the company already chosen. Empty until one is, and the picker is left out of
       // the markup entirely rather than shown as a disabled box with nothing in it.
@@ -25374,20 +25389,7 @@ class Component extends DCLogic {
       // Same control as Managed by: the field IS the search box. Sectioned, because "who for" is two
       // different questions wearing one label — an existing client, or somebody still being pitched
       // — and the answer changes what the deal means.
-      ...mkDdCombo('ddDlfCo', [
-        {
-          title: 'CLIENTS',
-          options: (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).map(c => ({ value: c.id, label: c.name, hint: 'client' })),
-        },
-        {
-          // Lost ones stay out: opening a deal against a company already written off is more often
-          // a mis-click on a similar name than a decision to try again.
-          title: 'LEADS & PROSPECTS',
-          options: (Array.isArray(this.state.leadsData) ? this.state.leadsData : [])
-            .filter(c => c.lifecycle !== 'lost')
-            .map(c => ({ value: c.id, label: c.name + ' — ' + c.lifecycle, hint: c.lifecycle })),
-        },
-      ], (_dl && _dl.companyId) || '',
+      ...mkDdCombo('ddDlfCo', _coSections9(), (_dl && _dl.companyId) || '',
         (v) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), companyId: v }, dlErr: '' }),
         'Search clients and leads…'),
       dlfTitle: (_dl && _dl.title) || '', dlfCompany: (_dl && _dl.companyId) || '',
