@@ -273,6 +273,22 @@
   .fm-opt{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:8px;font-size:12.5px;cursor:pointer;transition:background .1s;}
   .fm-opt:hover{background:#F7F3FD;}
   .fm-opt > span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* A section heading inside a list — not selectable, and it must not look it. `cursor:default`
+     rather than inheriting the pointer from its neighbours, because a heading that highlights and
+     shows a hand invites a click that does nothing. */
+  .fm-opt-head{padding:9px 11px 4px;font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#A9A6B4;cursor:default;user-select:none;}
+  .fm-opt-head:first-child{padding-top:4px;}
+
+  /* A picker you type into. Deliberately NOT .fm-sel: that class carries `user-select:none` and
+     `cursor:pointer`, which are right for a div pretending to be a select and wrong for a real text
+     box — between them they would stop you selecting the text you had just typed. It takes .fm-inp
+     and the open-state ring, and nothing else.
+     The caret is pointer-events:none: it sits over the input, and without that the arrow people aim
+     at would be the one spot that does not put a cursor in the field. */
+  .fm-combo{position:relative;display:block;}
+  .fm-combo > .fm-inp{padding-right:32px;}
+  .fm-combo > .fm-inp[data-open="1"],.fm-combo > .fm-inp[data-open="true"]{border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.12);}
+  .fm-combo-caret{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;}
 
   .fm-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto;gap:9px;align-items:start;}
   @media (max-width:640px){.fm-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}}
@@ -1639,14 +1655,16 @@
                   <div class="pg-sec-lab" style="margin-top:18px;">Managed by</div>
                   <sc-if value="{{ cdCanSetOwner }}" hint-placeholder-val="{{ true }}">
                     <div class="fm-selwrap" style="max-width:320px;">
-                      <div data-dd data-open="{{ ddCdOwnerOpen }}" onClick="{{ ddCdOwnerToggle }}" class="fm-inp fm-sel">
-                        <span>{{ ddCdOwnerLabel }}</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddCdOwnerOpen }}" onClick="{{ ddCdOwnerOpenList }}" onInput="{{ ddCdOwnerSetQuery }}" onKeyDown="{{ ddCdOwnerKey }}" value="{{ ddCdOwnerValue }}" placeholder="{{ ddCdOwnerPlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
                       </div>
                       <sc-if value="{{ ddCdOwnerOpen }}" hint-placeholder-val="{{ false }}">
                         <div data-dd data-hidescroll="true" class="fm-dd">
-                          <sc-for list="{{ ddCdOwnerOptions }}" as="o" hint-placeholder-count="3">
-                            <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                          <sc-if value="{{ ddCdOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody in your team matches that</div></sc-if>
+                          <sc-for list="{{ ddCdOwnerRows }}" as="o" hint-placeholder-count="3">
+                            <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
                           </sc-for>
                         </div>
                       </sc-if>
@@ -9202,20 +9220,26 @@
             <div class="fm-wide">
               <label class="fm-lab">Managed by</label>
               <div class="fm-hint" style="margin:-2px 0 6px;">Who in your team looks after this client. Not the client's own owner.</div>
+              <!-- The FIELD is the search box. One control: it shows the answer when closed and
+                   takes the search when open, rather than a box showing a name above a second box
+                   for finding one. -->
               <div class="fm-selwrap">
-                <div data-dd data-open="{{ ddLdfOwnerOpen }}" onClick="{{ ddLdfOwnerToggle }}" class="fm-inp fm-sel">
-                  <span>{{ ddLdfOwnerLabel }}</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                <div class="fm-combo">
+                  <input data-dd data-open="{{ ddLdfOwnerOpen }}" onClick="{{ ddLdfOwnerOpenList }}" onInput="{{ ddLdfOwnerSetQuery }}" onKeyDown="{{ ddLdfOwnerKey }}" value="{{ ddLdfOwnerValue }}" placeholder="{{ ddLdfOwnerPlaceholder }}" autocomplete="off" class="fm-inp">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
                 </div>
                 <sc-if value="{{ ddLdfOwnerOpen }}" hint-placeholder-val="{{ false }}">
                   <div data-dd data-hidescroll="true" class="fm-dd">
-                    <sc-for list="{{ ddLdfOwnerOptions }}" as="o" hint-placeholder-count="4">
-                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    <sc-if value="{{ ddLdfOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody in your team matches that</div></sc-if>
+                    <sc-for list="{{ ddLdfOwnerRows }}" as="o" hint-placeholder-count="4">
+                      <!-- sc-if has no else, so the row carries both flags. -->
+                      <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                      <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
                     </sc-for>
                   </div>
                 </sc-if>
               </div>
-              <div class="fm-hint">Defaults to you. A lead nobody owns does not appear for any sales user.</div>
+              <sc-if value="{{ ldfOwnerWarn }}" hint-placeholder-val="{{ true }}"><div class="fm-hint" style="color:#B8860B;">Nobody owns this yet — an unowned lead does not appear for any sales user.</div></sc-if>
             </div>
             <div class="fm-wide">
               <label class="fm-lab">Notes</label>
@@ -11060,7 +11084,12 @@ class Component extends DCLogic {
       if (e.key === 'Escape') {
         const s = this.state;
         if (s.openDd || s.calOpen || s.notifPop || s.clientFilterOpen || s.userMenu || s.railMenu || s.quickCreate) {
-          this.setState({ openDd: null, calOpen: false, notifPop: false, clientFilterOpen: false, userMenu: false, railMenu: false, quickCreate: false });
+          // Drop the search text with the list. A combo keeps its query under `dq_<key>`, and a
+          // reopened picker pre-filtered by whatever was abandoned last time looks like a picker
+          // that has lost half the team.
+          const cleared = {};
+          for (const k in s) if (k.indexOf('dq_') === 0) cleared[k] = '';
+          this.setState({ ...cleared, openDd: null, calOpen: false, notifPop: false, clientFilterOpen: false, userMenu: false, railMenu: false, quickCreate: false });
           return;
         }
         // Top-most modal: click its full-screen backdrop, which carries the close handler. Match
@@ -11423,7 +11452,11 @@ class Component extends DCLogic {
         .catch(() => {});
       // Who a client may be managed by. Refreshed after a user is created or edited, so somebody
       // added as a sales user this morning is offerable this morning.
-      this._loadAssignableOwners = () => fetch(API + '/api/assignable-owners', { headers: hdr })
+      // `all=1`: the ones who may carry a book, PLUS the rest of the staff flagged ineligible. The
+      // owner pickers are searchable, and a search that cannot find a colleague by name reads as
+      // broken rather than as a rule. They are listed apart and labelled — see the grouping in
+      // _ownerGroups9 — so widening what is offered never blurs who is normally assignable.
+      this._loadAssignableOwners = () => fetch(API + '/api/assignable-owners?all=1', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ assignableOwners: v }); })
         .catch(() => {});
@@ -13833,6 +13866,97 @@ class Component extends DCLogic {
       };
     };
 
+    /**
+     * A picker you type INTO — the field is the search box.
+     *
+     * The difference from mkDdSearch is where the typing happens, and it is not cosmetic. That one
+     * puts a filter input inside the panel, so the control is two boxes: one showing the answer and
+     * one to look for it. This one has a single box that shows the answer when it is closed and
+     * accepts the search when it is open, which is what a person means by "make the field
+     * searchable".
+     *
+     * `sections` is an array of { title, options } — a title of '' renders no heading. Sections
+     * keep their order, and an empty one disappears rather than leaving a dangling heading over
+     * nothing. That is what carries "sales-eligible first, everyone else below": the rule is still
+     * visible in the list, it just no longer decides who is findable.
+     *
+     * Two notes on the runtime rather than the design:
+     *   · only onClick/onChange/onInput/onKeyDown are bound, so there is no onFocus/onBlur to hang
+     *     open and close on. Opening is a click; closing is the shared outside-click handler that
+     *     every `data-dd` element already takes part in.
+     *   · sc-if has no else, so a row carries BOTH `isHeading` and `isOption` — one flag cannot be
+     *     negated in the template.
+     */
+    const mkDdCombo = (key, sections, current, pickFn, placeholder) => {
+      const open = this.state.openDd === key;
+      const q = String(this.state['dq_' + key] || '');
+      const ql = q.trim().toLowerCase();
+      const norm = (o) => (o && typeof o === 'object')
+        ? { value: o.value != null ? o.value : o.id, label: String(o.label), hint: o.hint ? String(o.hint) : '' }
+        : { value: o, label: String(o), hint: '' };
+
+      const all = [];
+      const rows = [];
+      for (const sec of (sections || [])) {
+        const opts = (sec.options || []).map(norm);
+        all.push(...opts);
+        const shown = ql ? opts.filter(o => (o.label + ' ' + o.hint).toLowerCase().includes(ql)) : opts;
+        if (!shown.length) continue;                       // no heading over an empty section
+        if (sec.title) rows.push({ isHeading: true, isOption: false, label: sec.title, hint: '', pick: () => {} });
+        for (const o of shown) {
+          rows.push({
+            isHeading: false, isOption: true, label: o.label, hint: o.hint,
+            weight: o.value === current ? 700 : 500,
+            color: o.value === current ? '#7C00FF' : '#1A1523',
+            bg: o.value === current ? '#F7F3FD' : 'transparent',
+            pick: () => { pickFn(o.value); this.setState({ openDd: null, ['dq_' + key]: '' }); },
+          });
+        }
+      }
+      // EMPTY IS NOT A SELECTION, even though '' is a real option people can pick.
+      //
+      // The list carries an "Unassigned — nobody will see this…" row on purpose: choosing to leave a
+      // lead unowned is a legitimate act and needs somewhere to happen. But matching it as the
+      // current value would put that whole sentence INTO the text box as if it had been typed,
+      // which is not an empty field — it is a field that looks filled in and reads as noise. So a
+      // falsy current means nothing is chosen: the box stays blank and the placeholder speaks.
+      const sel = current ? (all.find(o => o.value === current) || null) : null;
+      const firstOption = rows.find(r => r.isOption) || null;
+
+      return {
+        // OPEN-ONLY, not a toggle. On a div-pretending-to-be-a-select, click-to-toggle is right.
+        // On a real text box it is not: clicking into the field to move the cursor would shut the
+        // list you are reading. Closing is Escape, picking, or clicking away.
+        //
+        // Opening clears the query so the box is ready to be typed into, and the selected name
+        // moves to the placeholder — losing sight of the current answer while searching for its
+        // replacement is how somebody ends up assigning a lead twice to be sure.
+        [key + 'OpenList']: () => { if (!open) this.setState({ openDd: key, ['dq_' + key]: '' }); },
+        [key + 'Open']: open,
+        [key + 'Value']: open ? q : (sel ? sel.label : ''),
+        [key + 'Placeholder']: open && sel ? sel.label : (placeholder || 'Search…'),
+        [key + 'SetQuery']: (e) => this.setState({ openDd: key, ['dq_' + key]: e.target.value }),
+        // ESCAPE IS NOT HANDLED HERE, deliberately.
+        //
+        // The global key handler already closes an open dropdown and returns without touching the
+        // modal behind it. Handling Escape here too broke that: this ran first, cleared `openDd`,
+        // and the global handler then saw no open dropdown, fell through to "close the top-most
+        // overlay", and shut the whole Add-a-lead form with everything typed into it. Two owners
+        // for one key, where the second one's guard was the thing the first had just removed.
+        [key + 'Key']: (e) => {
+          // Enter takes the top match, which is the whole point of typing three letters. It does
+          // nothing when the search matches nothing, rather than falling through to the form's
+          // submit and saving a record the person was still filling in.
+          if (e.key === 'Enter') { e.preventDefault(); if (firstOption) firstOption.pick(); }
+        },
+        [key + 'Rows']: rows,
+        [key + 'NoMatch']: ql !== '' && !firstOption,
+        [key + 'HasValue']: !!sel,
+        [key + 'Empty']: !sel,
+        [key + 'Label']: sel ? sel.label : '',
+      };
+    };
+
     // provider-wide invoices — WIRED to /api/invoices (state.invoicesData). Design samples show only
     // when unauthenticated. Real status → display label; amount rendered in the system currency.
     const invStatusTone = { Paid: ['#E7F8EF', '#0E9355'], Unpaid: ['#FEF4E2', '#B8860B'], Overdue: ['#FEECEC', '#C0353A'], Draft: ['#F3F1F7', '#6F6C7A'], Pending: ['#EFEBFF', '#6D5BD0'], 'Part paid': ['#E4F4FD', '#0284C7'], Void: ['#F3F1F7', '#8C8899'] };
@@ -15155,6 +15279,19 @@ class Component extends DCLogic {
       const u9 = (Array.isArray(this.state.usersData) ? this.state.usersData : []).find(x9 => String(x9.id) === String(id9));
       return (u9 && u9.name) || 'Unknown';
     };
+    /**
+     * How a person reads in an owner PICKER — name, role, and what they are already carrying.
+     *
+     * The load is there because choosing an owner is a load decision: "Sales Rep — sales · 12
+     * clients" is the one fact that stops everything landing on whoever sorts first.
+     *
+     * Declared up here beside _ownerName9, not down in the leads section where its sibling
+     * _ownerSections9 lives, because the client screen builds its own picker thousands of lines
+     * earlier. A const used before its declaration is not hoisted into scope — it throws, and one
+     * ReferenceError inside renderVals blanks the whole console rather than the one field.
+     */
+    const _ownerLabel9 = (u9) => u9.name + ' — ' + String(u9.roleId || '').replace(/_/g, ' ')
+      + (u9.load ? ' · ' + u9.load + (u9.load === 1 ? ' client' : ' clients') : '');
     // "Unassigned" rather than a dash: a dash reads as a value, and an unowned client is a thing
     // somebody should notice and fix.
     const _repOf = (c9) => _ownerName9(c9.ownerId) || 'Unassigned';
@@ -15723,15 +15860,28 @@ class Component extends DCLogic {
       clDetailApi.cdOwnerId = clRow.ownerId || '';
       // Plain picker, like the one on the lead form: the same handful of colleagues, listed in the
       // field itself. A filter box over a team you can read at a glance is a control to get past.
-      Object.assign(clDetailApi, mkDd('ddCdOwner', [
-        { value: '', label: 'Unassigned' },
-        ..._cdPool9.map(u9 => ({
-          value: u9.id,
-          label: u9.name + (u9.roleId ? ' — ' + String(u9.roleId).replace(/_/g, ' ') : '')
-            + (u9.load ? ' · ' + u9.load + (u9.load === 1 ? ' client' : ' clients') : ''),
-        })),
-        ...(_cdCur9 ? [{ value: _cdCur9.id, label: _cdCur9.name + ' — no longer eligible' }] : []),
-      ], clRow.ownerId || '', (v9) => this._setOwner(clRow.realId, v9, clRow.name)));
+      // Same control as the lead form's Managed by, because it is the same question about the same
+      // people — two behaviours for one field is how somebody learns the app twice.
+      // `_cdCur9` is appended as its own section: whoever is stored stays pickable even when their
+      // role no longer qualifies and the pool has dropped them.
+      Object.assign(clDetailApi, mkDdCombo('ddCdOwner', [
+        { title: '', options: [{ value: '', label: 'Unassigned' }] },
+        {
+          title: _cdPool9.some(u9 => u9.eligible === false) ? 'ACCOUNT MANAGERS' : '',
+          options: _cdPool9.filter(u9 => u9.eligible !== false).map(u9 => ({ value: u9.id, label: _ownerLabel9(u9) })),
+        },
+        {
+          title: 'NOT NORMALLY ASSIGNABLE',
+          options: [
+            ..._cdPool9.filter(u9 => u9.eligible === false).map(u9 => ({
+              value: u9.id, label: _ownerLabel9(u9), hint: String(u9.roleId || '').replace(/_/g, ' '),
+            })),
+            ...(_cdCur9 ? [{ value: _cdCur9.id, label: _cdCur9.name + ' — no longer eligible' }] : []),
+          ],
+        },
+      // The placeholder carries the empty state here: on a record panel "who manages this" wants an
+      // answer on the face of it, and a blank box with a generic prompt would not give one.
+      ], clRow.ownerId || '', (v9) => this._setOwner(clRow.realId, v9, clRow.name), 'Unassigned — search to assign'));
       // ── The people at this client ──
       const _cdPeople = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
         .filter(c9 => c9.companyId === clRow.realId)
@@ -22981,6 +23131,33 @@ class Component extends DCLogic {
     // second is recoverable, a lead assigned to the accountant is not.
     const _ownerChoices9 = _ownerPool9 || [];
     const _meId9 = (this.state.meUser || {}).id || '';
+    /**
+     * The owner list as a searchable picker wants it: sections, with the rule intact.
+     *
+     * `/api/assignable-owners?all=1` now returns the rest of the staff as well, each flagged
+     * `eligible: false`. Grouping is what keeps that from being a loosening of the rule — the people
+     * who may carry a book come first under their own heading, and everybody else sits below one
+     * that says so. Searching finds a PRO officer by name instead of drawing a blank; choosing one
+     * is a deliberate act against a visible warning rather than an indistinguishable row.
+     *
+     * (`_ownerLabel9` itself is declared far above, next to _ownerName9 — the client screen needs it
+     * several thousand lines before this point, and a const referenced ahead of its declaration is
+     * not a hoisting quirk here, it is a ReferenceError that blanks the entire console.)
+     */
+    const _ownerSections9 = (unassignedLabel) => [
+      { title: '', options: [{ value: '', label: unassignedLabel }] },
+      {
+        title: _ownerChoices9.some(u => u.eligible === false) ? 'ACCOUNT MANAGERS' : '',
+        options: _ownerChoices9.filter(u => u.eligible !== false).map(u => ({ value: u.id, label: _ownerLabel9(u) })),
+      },
+      {
+        title: 'NOT NORMALLY ASSIGNABLE',
+        // The role is the hint as well as part of the label, so typing "accountant" finds them.
+        options: _ownerChoices9.filter(u => u.eligible === false).map(u => ({
+          value: u.id, label: _ownerLabel9(u), hint: String(u.roleId || '').replace(/_/g, ' '),
+        })),
+      },
+    ];
     const _ownerOf = (c) => {
       if (!c.ownerId) return 'Unassigned';
       const u = _staffUsers9.find(x => String(x.id) === String(c.ownerId));
@@ -25753,23 +25930,23 @@ class Component extends DCLogic {
       ldEmptyBody: _leadRows.length
         ? 'Try another filter — there are ' + _leadRows.length + ' companies here in total.'
         : 'Add the companies you are talking to. They live on the same record a client does, so nothing is retyped when one signs.',
-      // Pre-owned by whoever is adding it. A lead created with no owner is invisible to the very
-      // person who just typed it in, which is the most confusing possible first experience.
-      ldAdd: () => this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: _meId9 }, ldfErr: '', ldfBad: '' }),
-      // The load is shown because choosing an owner is a load decision — "Sales Rep — sales · 12
-      // clients" is the one fact that stops everything landing on whoever is top of the list.
-      // NOT searchable. It is one team, listed in full, and the options belong in the field itself —
-      // a filter box over a handful of colleagues is a control to get past rather than a way in.
-      ...mkDd('ddLdfOwner', [
-        { value: '', label: 'Unassigned — nobody will see this in the sales views' },
-        ..._ownerChoices9.map(u => ({
-          value: u.id,
-          label: u.name + ' — ' + String(u.roleId || '').replace(/_/g, ' ')
-            + (u.load ? ' · ' + u.load + (u.load === 1 ? ' client' : ' clients') : '')
-            + (u.eligible === false ? ' · no longer eligible' : ''),
-        })),
-      ], (_ldf && _ldf.owner) || '',
-        (v) => this.setState({ ldForm: { ...(this.state.ldForm || {}), owner: v }, ldfErr: '', ldfBad: '' })),
+      // OPENS UNOWNED, and the form asks rather than assuming.
+      //
+      // It used to pre-fill with whoever was adding the lead, on the reasoning that a lead with no
+      // owner is invisible to the person who just typed it in. That is still true, which is why the
+      // field is a required-looking one with a warning under it rather than a silent blank — but
+      // the default was being accepted unread, and a picker whose answer is already filled in is
+      // not a question anybody reads.
+      ldAdd: () => this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '' }),
+      // Typed into the field itself — see mkDdCombo. Sections come from _ownerSections9, so the
+      // people who may carry a book are listed first and everybody else under their own heading.
+      ...mkDdCombo('ddLdfOwner', _ownerSections9('Unassigned — nobody will see this in the sales views'),
+        (_ldf && _ldf.owner) || '',
+        (v) => this.setState({ ldForm: { ...(this.state.ldForm || {}), owner: v }, ldfErr: '', ldfBad: '' }),
+        'Search your team…'),
+      // Shown under the field only while nothing is chosen. Not an error — leaving a lead unowned is
+      // a legitimate choice — but it should be one somebody makes on purpose.
+      ldfOwnerWarn: !(_ldf && _ldf.owner),
 
       // ── Add-lead form ──
       ldFormOpen: !!_ldf,

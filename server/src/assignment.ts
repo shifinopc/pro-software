@@ -112,13 +112,29 @@ export const OWNER_ROLES = [...SELLING_ROLES, "admin", "super_admin"];
  * salesperson moved to accounts, say. Dropping them from the list would make their name vanish from
  * the picker while still being the stored owner, and the next person to open that record would
  * "fix" it by accident.
+ *
+ * `includeIneligible` returns every active member of staff instead, each still carrying its honest
+ * `eligible` flag. That is for a SEARCHABLE picker, which needs a different shape of answer from a
+ * short list: the restricted list is the right default precisely because it is the whole list — but
+ * once somebody is typing a name, a picker that silently has no answer for "Omar" is worse than one
+ * that finds him and says he is not normally assignable. The rule above is unchanged and still the
+ * one auto-assignment follows; this only stops the search pretending those people do not exist.
+ *
+ * The flag is opt-in so the default answer, and every existing caller, stays exactly as it was.
  */
-export async function assignableOwners(alsoInclude?: string | null): Promise<Array<{ id: string; name: string; roleId: string; load: number; eligible: boolean }>> {
+export async function assignableOwners(
+  alsoInclude?: string | null,
+  includeIneligible = false,
+): Promise<Array<{ id: string; name: string; roleId: string; load: number; eligible: boolean }>> {
   const users = await prisma.user.findMany({
     where: {
       type: "staff",
       status: "active",
-      OR: [{ roleId: { in: OWNER_ROLES } }, ...(alsoInclude ? [{ id: alsoInclude }] : [])],
+      // Widened, not replaced: `eligible` below still answers "may this person carry a book",
+      // so the caller can group them rather than being handed one undifferentiated list.
+      ...(includeIneligible
+        ? {}
+        : { OR: [{ roleId: { in: OWNER_ROLES } }, ...(alsoInclude ? [{ id: alsoInclude }] : [])] }),
     },
     select: { id: true, name: true, roleId: true },
     orderBy: { name: "asc" },

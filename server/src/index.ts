@@ -1455,9 +1455,14 @@ app.get("/api/owner-rotation", requireAuth, requireStaff, async (_req, res) => {
  *
  * `include` keeps a current owner on the list even if their role no longer qualifies, so opening a
  * record cannot silently drop the person it is already assigned to.
+ *
+ * `all=1` adds the staff who are not normally assignable, each still flagged `eligible: false`, for
+ * the searchable pickers — see assignableOwners(). It widens what is OFFERED, never what the
+ * assignment rules choose on their own.
  */
 app.get("/api/assignable-owners", requireAuth, requireStaff, async (req, res) => {
-  res.json(await assignableOwners(String(req.query.include ?? "").trim() || null));
+  const all = ["1", "true", "yes"].includes(String(req.query.all ?? "").toLowerCase());
+  res.json(await assignableOwners(String(req.query.include ?? "").trim() || null, all));
 });
 
 /**
