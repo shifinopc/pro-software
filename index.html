@@ -26723,7 +26723,21 @@ class Component extends DCLogic {
     // Headline figures + filter tabs, in the same shape as the invoice list.
     const _qtAll = Array.isArray(qtData) ? qtData : [];
     const _qtSum = (pred) => _qtAll.filter(pred).reduce((a9, q9) => a9 + _docTotal(q9), 0);
-    const _qtAwaiting = _qtAll.filter(q9 => q9.status === 'sent');
+    /**
+     * STILL WITH THE CLIENT — which is not the same as "status is sent".
+     *
+     * A superseded quotation keeps its own status on purpose: it WAS sent, and rewriting that to
+     * rejected would claim the client turned it down. But it is no longer an offer anybody is
+     * waiting on, so counting it here double-counted the money — QT-343 at SAR 5,000 plus its own
+     * replacement QT-343-R1 at SAR 2,875 read as SAR 7,875 awaiting an answer, for one deal worth
+     * SAR 2,875.
+     *
+     * Used by every figure that means "outstanding": the value, the count, the banner and the chart.
+     * The LIST still shows superseded rows, with their own chip — that is history, and hiding it
+     * would leave people wondering where a quotation they sent had gone.
+     */
+    const _qtLive = (q9) => !q9.supersededAt;
+    const _qtAwaiting = _qtAll.filter(q9 => q9.status === 'sent' && _qtLive(q9));
     const _qtWon = _qtAll.filter(q9 => ['accepted', 'invoiced'].includes(String(q9.status)));
     const _qtLost = _qtAll.filter(q9 => q9.status === 'rejected');
     const _qtDecided = _qtWon.length + _qtLost.length;
@@ -26757,7 +26771,7 @@ class Component extends DCLogic {
       quotes: quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter),
       quotesEmpty: quotes.length === 0,
       qtTabs,
-      qtAwaiting: fmtCur(_qtSum(q9 => q9.status === 'sent')),
+      qtAwaiting: fmtCur(_qtSum(q9 => q9.status === 'sent' && _qtLive(q9))),
       qtAwaitingCount: _qtAwaiting.length + (_qtAwaiting.length === 1 ? ' quotation with the client' : ' quotations with the client'),
       qtWonValue: fmtCur(_qtSum(q9 => ['accepted', 'invoiced'].includes(String(q9.status)))),
       qtWonCount: _qtWon.length + (_qtWon.length === 1 ? ' accepted' : ' accepted'),
@@ -26765,7 +26779,9 @@ class Component extends DCLogic {
       // including it would drag the rate down for no reason.
       qtWinRate: _qtDecided ? Math.round((_qtWon.length / _qtDecided) * 100) + '%' : '—',
       qtWinSub: _qtDecided ? _qtWon.length + ' of ' + _qtDecided + ' decided' : 'nothing decided yet',
-      qtChart: sixMonthBars(_qtAll.filter(q9 => q9.status !== 'draft')),
+      // Superseded ones out here too: quoting SAR 5,000 and then SAR 2,875 for the same job is one
+      // opportunity re-priced, not SAR 7,875 of quoting.
+      qtChart: sixMonthBars(_qtAll.filter(q9 => q9.status !== 'draft' && _qtLive(q9))),
       // WIRED: full create-quotation modal → POST /api/quotations (status 'sent' → awaits client approval).
       showCreateQuote: (() => {
         // Same repaint hook as the invoice dialog, so the preview tracks every keystroke.
@@ -26812,8 +26828,10 @@ class Component extends DCLogic {
       submitQuoteDraft: () => _quoteSubmit('draft'),
       submitQuote: () => _quoteSubmit('sent'),
       qHasPending: quotes.some(q => q.status === 'Sent'),
-      qPendingTitle: (() => { const p9 = quotes.find(q => q.status === 'Sent'); return p9 ? p9.id + ' · ' + p9.title : ''; })(),
-      qPendingMeta: (() => { const p9 = quotes.find(q => q.status === 'Sent'); return p9 ? p9.amount + (p9.meta && p9.meta !== '—' ? ' · ' + p9.meta : '') : ''; })(),
+      // The LIVE offer, not the one it replaced — the banner points at what the client is actually
+      // holding, and "Open quotation" beside it has to open the document they were sent.
+      qPendingTitle: (() => { const p9 = quotes.find(q => q.status === 'Sent' && !q.isSuperseded); return p9 ? p9.id + ' · ' + p9.title : ''; })(),
+      qPendingMeta: (() => { const p9 = quotes.find(q => q.status === 'Sent' && !q.isSuperseded); return p9 ? p9.amount + (p9.meta && p9.meta !== '—' ? ' · ' + p9.meta : '') : ''; })(),
       qOpenPending: () => { const p = quotes.find(q => q.status === 'Sent'); if (p) this.setState({ quoteOpen: p.id }); },
       showQuote: !!qOpen,
       closeQuote: () => this.setState({ quoteOpen: null }),

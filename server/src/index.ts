@@ -2161,8 +2161,12 @@ app.get("/api/pipeline", requireAuth, requireStaff, requireReadRole("super_admin
   // Quotations out with no answer. Counted here rather than on the board's own cards because a
   // quotation can exist without a deal behind it, and money already quoted and then forgotten is
   // worth a number at the top of the screen somebody looks at every morning.
+  //
+  // `supersededAt: null` matters as much as the status: a replaced quotation keeps `sent`, because
+  // it was sent and the client did not reject it — but nobody is waiting on it any more. Without
+  // this, revising an offer INCREASES the number of answers you appear to be waiting for.
   const awaiting = await prisma.quotation.count({
-    where: { status: "sent", ...(scoped ? { companyId: { in: scoped } } : {}) },
+    where: { status: "sent", supersededAt: null, ...(scoped ? { companyId: { in: scoped } } : {}) },
   });
   res.json({ ...board, awaitingAnswer: awaiting });
 });
