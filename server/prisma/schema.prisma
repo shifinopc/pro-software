@@ -1665,8 +1665,25 @@ model Quotation {
   // from `notes`, which is printed ON the quotation — this is correspondence, not document content.
   clientNote    String? @db.Text
 
+  /// REVISIONS — a sent quotation is never edited, it is replaced.
+  ///
+  /// The client is holding a PDF. Changing the price on the row they already have makes their copy
+  /// and ours disagree, and the disagreement is invisible until somebody argues about it. So a new
+  /// offer is a NEW row: QT-343 becomes QT-343-R1, and the original stays exactly as it was sent.
+  ///
+  /// `revisesId` points back one step, so the chain can be walked. `supersededAt` is what makes the
+  /// old one stop counting — it keeps its own status, because "sent, then replaced" is the truth and
+  /// rewriting it to rejected would claim the client turned it down when they did not.
+  ///
+  /// Negotiations run to several rounds, which is why this is a chain and not a single flag: R1 can
+  /// be superseded by R2 the same way the original was superseded by R1.
+  revisesId      String?
+  supersededAt   String?
+  supersededById String?
+
   @@index([companyId])
   @@index([status])
+  @@index([revisesId])
 }
 
 // ── Service catalog (gov fee + service fee per offered service) ──

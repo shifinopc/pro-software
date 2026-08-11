@@ -2943,6 +2943,94 @@ app.post("/api/service-requests/:id/reject", requireAuth, requireStaff, requireW
   } catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
 });
 
+/**
+ * REVISE A QUOTATION — a new offer, not an edit.
+ *
+ * The client is holding the PDF of QT-343. Dropping the price on that same row makes their copy and
+ * ours disagree, silently, until somebody argues about it. So this writes a NEW quotation, QT-343-R1,
+ * copying everything across, and marks the original superseded. The original keeps its own status:
+ * "sent, then replaced" is what happened, and rewriting it to `rejected` would claim the client
+ * turned it down when they did not.
+ *
+ * SEPARATE FROM THE STAGE MOVE, on purpose. Tying a revision to "move the deal to Negotiation" only
+ * works for the first round — you are already in Negotiation for round two, so the prompt never
+ * comes again. Real haggling runs to several rounds, and half of them are about payment terms or
+ * scope rather than price. So the move records that the client replied, and this records the new
+ * offer, and either can happen without the other.
+ *
+ * The revision lands as a DRAFT. It is a new price that has not been checked by anybody — sending it
+ * straight out would skip the approval the original went through.
+ */
+app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+  if (!q) return res.status(404).json({ error: "Quotation not found" });
+
+  const st = String(q.status).toLowerCase();
+  // Nothing to preserve yet: a quotation the client has never seen should be corrected in place
+  // rather than versioned, or every typo in a draft leaves a dead -R behind.
+  if (st === "draft" || st === "approved") {
+    return res.status(409).json({ error: `${q.number} has not been sent yet — edit it instead of revising it` });
+  }
+  if (st === "accepted") return res.status(409).json({ error: `${q.number} was accepted — revising it would change a deal that is already agreed` });
+  if (st === "invoiced") return res.status(409).json({ error: `${q.number} has been invoiced` });
+  if (q.supersededAt) {
+    const by = q.supersededById ? await prisma.quotation.findUnique({ where: { id: q.supersededById }, select: { number: true } }) : null;
+    return res.status(409).json({ error: `${q.number} was already replaced${by ? ` by ${by.number}` : ""} — revise that one instead` });
+  }
+
+  /**
+   * QT-343 → QT-343-R1 → QT-343-R2. Suffixed from the ROOT rather than from the row being revised,
+   * so a chain never compounds into QT-343-R1-R1. The next index counts what already exists on that
+   * root, which also survives a revision being deleted — the numbers stay unique either way.
+   */
+  const root = q.number.replace(/-R\d+$/, "");
+  const kin = await prisma.quotation.findMany({
+    where: { OR: [{ number: root }, { number: { startsWith: root + "-R" } }] },
+    select: { number: true },
+  });
+  let next = 1;
+  for (const k of kin) {
+    const m = /-R(\d+)$/.exec(k.number);
+    if (m && Number(m[1]) >= next) next = Number(m[1]) + 1;
+  }
+  const number = `${root}-R${next}`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const created = await prisma.$transaction(async (tx) => {
+    const rev = await tx.quotation.create({
+      data: {
+        number,
+        companyId: q.companyId, clientName: q.clientName, service: q.service,
+        // Every figure carried across so the editor opens on the offer as it stands. Changing them
+        // is the entire point of the revision, but starting from blank would have somebody retyping
+        // lines they never meant to alter.
+        amount: q.amount, subtotalMinor: q.subtotalMinor, vatMinor: q.vatMinor,
+        totalMinor: q.totalMinor, vatRateBp: q.vatRateBp, items: q.items ?? undefined,
+        notes: q.notes, validUntil: q.validUntil,
+        // NOT copied: sentAt (this one has not been sent) and clientNote (what they said about the
+        // OLD offer belongs to the old offer).
+        status: "draft", date: today, revisesId: q.id,
+      },
+    });
+    await tx.quotation.update({
+      where: { id: q.id },
+      data: { supersededAt: new Date().toISOString(), supersededById: rev.id },
+    });
+    // The deal follows the live offer. Without this the board keeps showing the superseded figure,
+    // and the forecast is quoting a price nobody is offering any more.
+    await tx.opportunity.updateMany({ where: { quotationId: q.id }, data: { quotationId: rev.id } });
+    return rev;
+  });
+
+  await logAudit({
+    action: "quotation.revise", actorId: (req as any).auth?.sub,
+    target: created.number, detail: `revises ${q.number}`, ip: clientIp(req),
+  });
+  logActivity({ type: "sales", message: `Quotation revised: ${q.number} → ${created.number}`, user: (req as any).auth?.email });
+
+  res.json(created);
+});
+
 app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });

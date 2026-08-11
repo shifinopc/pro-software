@@ -2808,6 +2808,13 @@
                     <sc-if value="{{ q.canApprove }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.approve }}" title="Sign this off internally — the client still cannot see it" style="font-size:11px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Approve</span></sc-if>
                     <sc-if value="{{ q.canSend }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.send }}" title="Release it to the client portal" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Send</span></sc-if>
                     <sc-if value="{{ q.canInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.convert }}" title="Raise a draft invoice from this accepted quotation" style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:7px 14px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Invoice</span></sc-if>
+                    <!-- Outlined, not filled: revising is a normal part of negotiating, but it is
+                         not the thing to reach for first on a quotation that is still out. -->
+                    <sc-if value="{{ q.canRevise }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.revise }}" title="The client wants it changed — issue a new version (QT-…-R1) and leave this one as it was sent" style="font-size:11px; font-weight:700; color:#6D5BD0; background:#fff; border:1px solid #D9CCF7; padding:6px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">Revise</span></sc-if>
+                    <!-- A superseded quotation keeps its own status — it WAS sent — so the row says
+                         separately that a newer version has taken over, rather than pretending the
+                         client rejected it. -->
+                    <sc-if value="{{ q.isSuperseded }}" hint-placeholder-val="{{ false }}"><span title="{{ q.supersededNote }}" style="font-size:10.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:6px 11px; border-radius:9px; white-space:nowrap;">Superseded</span></sc-if>
                     <sc-if value="{{ q.hasInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.openInvoice }}" title="Open the invoice this quotation became" style="font-size:11px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);">{{ q.invoicedAs }} →</span></sc-if>
                     <span onClick="{{ q.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span>
                     <span onClick="{{ q.view }}" title="View the quotation" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B4757" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
@@ -12063,10 +12070,15 @@ class Component extends DCLogic {
         })
         .catch(() => this.setState({ wfBusy: false, wfErr: 'Server unreachable — nothing was saved' }));
     };
-    this._opReload = (pathE, key) => {
+    // `after` runs once the new rows are IN STATE. Anything that wants to open a record it has just
+    // created needs that ordering: the editors read from the loaded list, so opening a row the list
+    // has not seen yet gives a blank form over a record that does exist.
+    this._opReload = (pathE, key, after) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/' + pathE, { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-        .then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ [key]: v }); }).catch(() => {});
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (Array.isArray(v)) this.setState({ [key]: v }, typeof after === 'function' ? after : undefined); })
+        .catch(() => {});
     };
     // Persist one checklist item action (receive/unreceive/verify/reject) to the workflow engine.
     this._chkPersist = (stepId, itemKey, action, note) => {
@@ -26536,6 +26548,32 @@ class Component extends DCLogic {
             this.toast(id + ' sent to ' + (raw0 && raw0.clientName ? raw0.clientName : 'the client') + ' — now visible in their portal');
             this._opReload('quotations', 'quotationsData');
           });
+        },
+        // A NEW OFFER, not an edit. The client is holding the PDF of this number — changing the
+        // price on this row would leave their copy and ours disagreeing with nothing to show it.
+        // Creates QT-343-R1 as a draft and opens it, so the new price is typed into the revision.
+        canRevise: ['sent', 'rejected'].includes(String(raw0 && raw0.status || '').toLowerCase()) && !(raw0 && raw0.supersededAt),
+        supersededNote: raw0 && raw0.supersededAt ? 'Replaced by a newer revision' : '',
+        isSuperseded: !!(raw0 && raw0.supersededAt),
+        revise: (ev9) => {
+          ev9 && ev9.stopPropagation && ev9.stopPropagation();
+          const tok9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + realId + '/revise', {
+            method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => {
+              if (!ok) return this.toast((j9 && j9.error) || 'Could not revise that quotation', 'error');
+              this.toast(j9.number + ' created as a draft — change the price, then approve and send it');
+              // Reload BEFORE opening: the editor reads from the loaded list, and opening a row the
+              // list has not seen yet gives a blank form over a quotation that does exist.
+              const after9 = () => {
+                const fresh9 = (Array.isArray(this.state.quotationsData) ? this.state.quotationsData : []).find(x9 => x9.id === j9.id);
+                if (fresh9) openEditQuote(fresh9);
+              };
+              this._opReload && this._opReload('quotations', 'quotationsData', after9);
+              this._opReload && this._opReload('opportunities', 'dealsData');
+            })
+            .catch(() => this.toast('Cannot reach the server — nothing was revised', 'error'));
         },
         convert: (ev9) => {
           ev9 && ev9.stopPropagation && ev9.stopPropagation();
