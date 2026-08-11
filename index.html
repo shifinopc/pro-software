@@ -26571,6 +26571,11 @@ class Component extends DCLogic {
                 if (fresh9) openEditQuote(fresh9);
               };
               this._opReload && this._opReload('quotations', 'quotationsData', after9);
+              // THE BOARD, not just the deal list. A revision changes what the deal is worth —
+              // withMoney reads the figure off the linked quotation — so a pipeline left unrefreshed
+              // keeps showing the old price under the old number, which reads as the revision having
+              // silently failed. It is the first place anybody looks after changing a price.
+              if (this._loadPipeline) this._loadPipeline();
               this._opReload && this._opReload('opportunities', 'dealsData');
             })
             .catch(() => this.toast('Cannot reach the server — nothing was revised', 'error'));
