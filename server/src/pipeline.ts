@@ -93,9 +93,20 @@ export async function recordTransition(db: any, args: {
   movedById?: string | null;
   at: string;
   lostReason?: string | null;
+  /**
+   * Pass this when the caller ALREADY holds both stages, which the move route does.
+   *
+   * Without it this function issues a `findMany` to compare two sort orders — and when it is called
+   * inside `$transaction`, that read is held by the open transaction. It is how the move route came
+   * to spend 7.3s inside a 5s interactive-transaction budget, blow the deadline, and take the whole
+   * API process down with it. A read that answers a question the caller can already answer has no
+   * business inside a transaction at all.
+   */
+  isBackward?: boolean;
 }) {
-  let isBackward = false;
-  if (args.fromStageId && args.fromStageId !== args.toStageId) {
+  let isBackward = args.isBackward ?? false;
+  // Only when the caller could not tell us — every path that already has the stages should pass it.
+  if (args.isBackward === undefined && args.fromStageId && args.fromStageId !== args.toStageId) {
     const pair = await db.pipelineStage.findMany({
       where: { id: { in: [args.fromStageId, args.toStageId] } },
       select: { id: true, sort: true },

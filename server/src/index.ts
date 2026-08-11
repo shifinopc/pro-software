@@ -2301,7 +2301,12 @@ app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteR
    * Deliberately NOT in here: the activity line and the win notification. Rolling back a legitimate
    * won deal because a toast failed to insert would be worse than the toast missing.
    */
-  const { moved, booked } = await prisma.$transaction(async (tx) => {
+  // Worked out HERE, from the two stages already in hand, so the transaction below issues no reads
+  // at all. `opp.stage` is the stage being left and `to` the one being entered; both carry `sort`.
+  const movingBackward = !!(opp.stage && to.sort < opp.stage.sort);
+  let moved: any, booked: any;
+  try {
+  ({ moved, booked } = await prisma.$transaction(async (tx) => {
     const moved = await tx.opportunity.update({
       where: { id: opp.id },
       data: {
@@ -2324,13 +2329,24 @@ app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteR
       opportunityId: opp.id, fromStageId: opp.stageId, toStageId: to.id,
       movedById: (req as any).auth?.sub ?? null, at: now,
       lostReason: to.isLost ? reason : null,
+      isBackward: movingBackward,
     });
     // The stage's own chase window: books the follow-up this stage asks for, and retires the one
     // the previous stage booked. Only ever touches rule-created commitments — and now fails WITH
     // the move rather than leaving a half-moved deal.
     const booked = await applyStageFollowUp(moved as any, to, (req as any).auth?.sub, tx);
     return { moved, booked };
-  });
+    // Belt as well as braces: the reads are out, but three writes on a cold pool can still outrun
+    // Prisma's 5s default, and a blown deadline here does not fail politely — it throws P2028 from
+    // inside the callback, which is what killed the process.
+  }, { timeout: 20000 }));
+  } catch (e: any) {
+    // The move is atomic, so a failure here changed NOTHING — which is the one fact the person
+    // dragging the card needs. Saying so beats a generic 500 that leaves them refreshing to find
+    // out whether it half-happened.
+    console.error("[deal.move]", e?.stack ?? e);
+    return res.status(503).json({ error: "That move could not be saved — nothing was changed. Try again." });
+  }
 
   const st = statusOf(to);
   logActivity({
@@ -4684,6 +4700,31 @@ const port = Number(process.env.PORT) || 4100;
 app.post("/api/cron/tick", requireAuth, requireStaff, requireWriteRole, async (_req, res) => {
   try { res.json(await runTick("manual")); }
   catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+/**
+ * ONE BAD REQUEST MUST NOT TAKE THE SERVER WITH IT.
+ *
+ * Express 4 does not forward errors thrown inside an async handler — nothing catches them, so they
+ * surface as unhandled rejections, and Node has terminated the process on those since v15. That is
+ * not a theoretical hazard: a stage move whose transaction overran Prisma's 5s budget threw P2028,
+ * and the whole API went down. Every other user got "Server unreachable" because one card was
+ * dragged on a slow connection.
+ *
+ * Logged and survived, deliberately, rather than exiting "cleanly to be safe". A request that fails
+ * has already told its caller nothing useful; killing every other in-flight request as well turns
+ * one person's failed action into everybody's outage. The stack still goes to the log, so the
+ * underlying fault is not hidden — see the process manager's logs, not a silent recovery.
+ *
+ * `uncaughtException` is included for the same reason but is the more dangerous of the two: state
+ * after one can genuinely be corrupt. It is still preferable to a hard exit on a single-instance
+ * deployment with no supervisor to restart it.
+ */
+process.on("unhandledRejection", (reason: any) => {
+  console.error("[unhandledRejection]", reason?.stack ?? reason);
+});
+process.on("uncaughtException", (err: any) => {
+  console.error("[uncaughtException]", err?.stack ?? err);
 });
 
 app.listen(port, () => {
