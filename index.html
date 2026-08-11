@@ -1645,8 +1645,6 @@
                       </div>
                       <sc-if value="{{ ddCdOwnerOpen }}" hint-placeholder-val="{{ false }}">
                         <div data-dd data-hidescroll="true" class="fm-dd">
-                          <div style="padding:4px 4px 6px;"><input value="{{ ddCdOwnerQuery }}" onInput="{{ ddCdOwnerSetQuery }}" placeholder="{{ ddCdOwnerPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;"></div>
-                          <sc-if value="{{ ddCdOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody matches that</div></sc-if>
                           <sc-for list="{{ ddCdOwnerOptions }}" as="o" hint-placeholder-count="3">
                             <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
                           </sc-for>
@@ -9211,8 +9209,6 @@
                 </div>
                 <sc-if value="{{ ddLdfOwnerOpen }}" hint-placeholder-val="{{ false }}">
                   <div data-dd data-hidescroll="true" class="fm-dd">
-                    <div style="padding:4px 4px 6px;"><input value="{{ ddLdfOwnerQuery }}" onInput="{{ ddLdfOwnerSetQuery }}" placeholder="{{ ddLdfOwnerPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;"></div>
-                    <sc-if value="{{ ddLdfOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody matches that</div></sc-if>
                     <sc-for list="{{ ddLdfOwnerOptions }}" as="o" hint-placeholder-count="4">
                       <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
                     </sc-for>
@@ -10669,8 +10665,33 @@ class Component extends DCLogic {
       const above = t.top - b.top - GAP;
       const up = below < Math.min(MAX, MIN) && above > below;
       dd.classList.toggle('fm-dd-up', up);
-      // Never below MIN: a two-line list is more useful than a correctly-placed sliver.
-      dd.style.maxHeight = Math.max(MIN, Math.min(MAX, Math.floor(up ? above : below))) + 'px';
+      const room = Math.floor(up ? above : below);
+      // CAPPED TO THE ROOM THERE IS, with no floor under it.
+      //
+      // This used to read `Math.max(MIN, …)` — never go below 96px, on the reasoning that a
+      // two-line list beats a correctly-placed sliver. But the clipping box is `.fm-body`, so a
+      // panel taller than the room is not a taller panel: the surplus is simply cut off at the
+      // dialog's edge and drawn behind the footer. The floor did not buy two visible lines, it
+      // bought two lines with the second one hidden — which is what "Managed by" looked like,
+      // opening into a box whose options ran under Cancel/Save.
+      dd.style.maxHeight = Math.min(MAX, Math.max(0, room)) + 'px';
+      // If neither side can show a usable list, move the field rather than the list. Scrolling the
+      // dialog so the control sits clear of the footer gives the panel its room back; the
+      // alternative is a correctly-measured 30px sliver, which is honest and still useless.
+      if (room < MIN && box && box !== document.body) {
+        const want = MIN - room;
+        const max = box.scrollHeight - box.clientHeight;
+        const next = Math.min(max, box.scrollTop + (up ? -want : want));
+        if (Math.abs(next - box.scrollTop) > 1 && next >= 0) {
+          box.scrollTop = next;
+          // Re-measure against where things have actually landed. Guarded so a field that cannot be
+          // given room — a dialog shorter than MIN — settles instead of scrolling on every frame.
+          if (!this._ddReflow) {
+            this._ddReflow = true;
+            requestAnimationFrame(() => { this._ddReflow = false; this._placeDropdowns(); });
+          }
+        }
+      }
     }
   }
   componentDidUpdate() { this._placeDropdowns(); }
@@ -13706,17 +13727,37 @@ class Component extends DCLogic {
         })),
       };
     };
-    const mkDd = (key, options, current, pickFn) => {
+    /**
+     * The same picker WITHOUT the filter box — the options sit in the field directly.
+     *
+     * Takes the same option shape as mkDdSearch: a plain string, where the label is the value, or a
+     * {value,label} pair for lists whose labels can collide or whose value is an id.
+     *
+     * Which of the two to reach for is a question about the LIST, not the field. A filter box earns
+     * its place over a list you would otherwise have to hunt through; over four names it is a second
+     * control to tab past, and it costs about 40px of panel height that then has to fit inside a
+     * scrolling dialog — which is how a two-option picker ended up taller than the room beneath it
+     * and drawn half behind the footer.
+     */
+    const mkDd = (key, options, current, pickFn, emptyLabel) => {
       const open = this.state.openDd === key;
+      const norm = (options || []).map(o => (o && typeof o === 'object')
+        ? { value: o.value != null ? o.value : o.id, label: String(o.label) }
+        : { value: o, label: String(o) });
+      const sel = norm.find(o => o.value === current) || null;
       return {
         [key + 'Toggle']: () => this.setState({ openDd: open ? null : key }),
         [key + 'Open']: open,
-        [key + 'Options']: options.map(label => ({
-          label, active: label === current,
-          weight: label === current ? 700 : 500,
-          color: label === current ? '#7C00FF' : '#1A1523',
-          bg: label === current ? '#F7F3FD' : 'transparent',
-          pick: () => { pickFn(label); this.setState({ openDd: null }); },
+        // Only meaningful to the {value,label} callers; the string callers render the value itself.
+        [key + 'Label']: sel ? sel.label : (emptyLabel || ''),
+        [key + 'HasValue']: !!sel,
+        [key + 'Empty']: !sel,
+        [key + 'Options']: norm.map(o => ({
+          label: o.label, active: o.value === current,
+          weight: o.value === current ? 700 : 500,
+          color: o.value === current ? '#7C00FF' : '#1A1523',
+          bg: o.value === current ? '#F7F3FD' : 'transparent',
+          pick: () => { pickFn(o.value); this.setState({ openDd: null }); },
         })),
       };
     };
@@ -15609,7 +15650,9 @@ class Component extends DCLogic {
         ? (Array.isArray(this.state.usersData) ? this.state.usersData : []).find(u9 => u9.id === clRow.ownerId)
         : null;
       clDetailApi.cdOwnerId = clRow.ownerId || '';
-      Object.assign(clDetailApi, mkDdSearch('ddCdOwner', [
+      // Plain picker, like the one on the lead form: the same handful of colleagues, listed in the
+      // field itself. A filter box over a team you can read at a glance is a control to get past.
+      Object.assign(clDetailApi, mkDd('ddCdOwner', [
         { value: '', label: 'Unassigned' },
         ..._cdPool9.map(u9 => ({
           value: u9.id,
@@ -15617,7 +15660,7 @@ class Component extends DCLogic {
             + (u9.load ? ' · ' + u9.load + (u9.load === 1 ? ' client' : ' clients') : ''),
         })),
         ...(_cdCur9 ? [{ value: _cdCur9.id, label: _cdCur9.name + ' — no longer eligible' }] : []),
-      ], clRow.ownerId || '', (v9) => this._setOwner(clRow.realId, v9, clRow.name), 'Search people…'));
+      ], clRow.ownerId || '', (v9) => this._setOwner(clRow.realId, v9, clRow.name)));
       // ── The people at this client ──
       const _cdPeople = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
         .filter(c9 => c9.companyId === clRow.realId)
@@ -25644,8 +25687,9 @@ class Component extends DCLogic {
       ldAdd: () => this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: _meId9 }, ldfErr: '', ldfBad: '' }),
       // The load is shown because choosing an owner is a load decision — "Sales Rep — sales · 12
       // clients" is the one fact that stops everything landing on whoever is top of the list.
-      // Searchable: this list is every person who can carry a book, and it grows with the firm.
-      ...mkDdSearch('ddLdfOwner', [
+      // NOT searchable. It is one team, listed in full, and the options belong in the field itself —
+      // a filter box over a handful of colleagues is a control to get past rather than a way in.
+      ...mkDd('ddLdfOwner', [
         { value: '', label: 'Unassigned — nobody will see this in the sales views' },
         ..._ownerChoices9.map(u => ({
           value: u.id,
@@ -25654,8 +25698,7 @@ class Component extends DCLogic {
             + (u.eligible === false ? ' · no longer eligible' : ''),
         })),
       ], (_ldf && _ldf.owner) || '',
-        (v) => this.setState({ ldForm: { ...(this.state.ldForm || {}), owner: v }, ldfErr: '', ldfBad: '' }),
-        'Search people…'),
+        (v) => this.setState({ ldForm: { ...(this.state.ldForm || {}), owner: v }, ldfErr: '', ldfBad: '' })),
 
       // ── Add-lead form ──
       ldFormOpen: !!_ldf,
