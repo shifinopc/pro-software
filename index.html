@@ -8762,16 +8762,16 @@
               <div class="fm-wide">
                 <label class="fm-lab">Who for <span class="fm-req">*</span></label>
                 <div class="fm-selwrap">
-                  <div data-dd data-open="{{ ddDlfCoOpen }}" onClick="{{ ddDlfCoToggle }}" class="fm-inp fm-sel">
-                    <span>{{ ddDlfCoLabel }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                  <div class="fm-combo">
+                    <input data-dd data-open="{{ ddDlfCoOpen }}" onClick="{{ ddDlfCoOpenList }}" onInput="{{ ddDlfCoSetQuery }}" onKeyDown="{{ ddDlfCoKey }}" value="{{ ddDlfCoValue }}" placeholder="{{ ddDlfCoPlaceholder }}" autocomplete="off" class="fm-inp">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
                   </div>
                   <sc-if value="{{ ddDlfCoOpen }}" hint-placeholder-val="{{ false }}">
                     <div data-dd data-hidescroll="true" class="fm-dd">
-                      <div style="padding:4px 4px 6px;"><input value="{{ ddDlfCoQuery }}" onInput="{{ ddDlfCoSetQuery }}" placeholder="{{ ddDlfCoPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;"></div>
-                      <sc-if value="{{ ddDlfCoNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody matches that</div></sc-if>
-                      <sc-for list="{{ ddDlfCoOptions }}" as="o" hint-placeholder-count="4">
-                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      <sc-if value="{{ ddDlfCoNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client or lead matches that</div></sc-if>
+                      <sc-for list="{{ ddDlfCoRows }}" as="o" hint-placeholder-count="4">
+                        <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                        <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
                       </sc-for>
                     </div>
                   </sc-if>
@@ -23235,6 +23235,39 @@ class Component extends DCLogic {
       ? [..._ldFiltered9].sort((a, b) => _ldKey9(a).localeCompare(_ldKey9(b)) || String(a.name).localeCompare(String(b.name)))
       : _ldFiltered9;
     const _ldOpen = _leadRows.filter(l => l.lifecycle === 'lead' || l.lifecycle === 'prospect').length;
+    /**
+     * THE EDIT DRAFT — one builder, because there are two buttons that open this form.
+     *
+     * The row's Edit and the detail panel's Edit each used to spell the draft out in full, and both
+     * spelled it out the same way: eleven fields, listed by hand. When Industry and Campaign were
+     * added to the form they were added to the blank-draft builder and to the save payload, but not
+     * to these two — so the fields worked perfectly on a new lead, saved correctly, and then came
+     * back EMPTY the moment anybody reopened the record to correct something. The value was in the
+     * database the whole time; only the form had forgotten to ask for it.
+     *
+     * Two copies of a field list is a standing invitation to that bug, and it does not announce
+     * itself: nothing throws, the field is simply blank, and saving over it writes the blank back.
+     * One builder means the next column added to this form cannot be half-wired.
+     *
+     * `primary` is the lead's main contact row — the person's own record is the source of truth for
+     * name/title/email/phone, with the company's flat mirror columns as the fallback for leads that
+     * predate contacts.
+     */
+    const _ldDraft9 = (l, primary) => ({
+      id: l.id,
+      name: l.name,
+      contact: (primary && primary.name) || l.contact || '',
+      title: (primary && primary.jobTitle) || '',
+      email: (primary && primary.email) || l.email || '',
+      phone: (primary && primary.phone) || l.phone || '',
+      source: l.source || '',
+      city: l.city || '',
+      industry: l.industry || '',
+      campaign: l.campaign || '',
+      note: l.sourceDetail || '',
+      owner: l.ownerId || '',
+      sourceOther: false,
+    });
     const _ldf = this.state.ldForm || null;
     const _lc = this.state.lcOpen || null;
     const _ct = this.state.ctEdit || null;
@@ -25308,12 +25341,25 @@ class Component extends DCLogic {
       dlStageOdds: 'stage default',
       // Same list and same keying as the Log-contact picker: by ID, because two leads can share a
       // name and a deal opened against the wrong one is money attributed to the wrong company.
-      ...mkDdSearch('ddDlfCo', [
-        ...(Array.isArray(this.state.companiesData) ? this.state.companiesData : []).map(c => ({ value: c.id, label: c.name + ' — client' })),
-        ...(Array.isArray(this.state.leadsData) ? this.state.leadsData : []).filter(c => c.lifecycle !== 'lost').map(c => ({ value: c.id, label: c.name + ' — ' + c.lifecycle })),
+      // Same control as Managed by: the field IS the search box. Sectioned, because "who for" is two
+      // different questions wearing one label — an existing client, or somebody still being pitched
+      // — and the answer changes what the deal means.
+      ...mkDdCombo('ddDlfCo', [
+        {
+          title: 'CLIENTS',
+          options: (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).map(c => ({ value: c.id, label: c.name, hint: 'client' })),
+        },
+        {
+          // Lost ones stay out: opening a deal against a company already written off is more often
+          // a mis-click on a similar name than a decision to try again.
+          title: 'LEADS & PROSPECTS',
+          options: (Array.isArray(this.state.leadsData) ? this.state.leadsData : [])
+            .filter(c => c.lifecycle !== 'lost')
+            .map(c => ({ value: c.id, label: c.name + ' — ' + c.lifecycle, hint: c.lifecycle })),
+        },
       ], (_dl && _dl.companyId) || '',
         (v) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), companyId: v }, dlErr: '' }),
-        'Search clients and leads…', 'Choose a client or lead…'),
+        'Search clients and leads…'),
       dlfTitle: (_dl && _dl.title) || '', dlfCompany: (_dl && _dl.companyId) || '',
       dlfValue: (_dl && _dl.value) || '', dlfProb: (_dl && _dl.prob) || '',
       dlfClose: (_dl && _dl.close) || '', dlfSource: (_dl && _dl.source) || '', dlfNotes: (_dl && _dl.notes) || '',
@@ -25735,19 +25781,7 @@ class Component extends DCLogic {
           // already said — which is the context you want before adding to it.
           canEdit: canWrite,
           edit: () => this.setState({
-            ldForm: {
-              id: l.id,
-              name: l.name,
-              contact: (primary && primary.name) || l.contact || '',
-              title: (primary && primary.jobTitle) || '',
-              email: (primary && primary.email) || l.email || '',
-              phone: (primary && primary.phone) || l.phone || '',
-              source: l.source || '',
-              city: l.city || '',
-              note: l.sourceDetail || '',
-              owner: l.ownerId || '',
-              sourceOther: false,
-            },
+            ldForm: _ldDraft9(l, primary),
             ldfErr: '', ldfBad: '', dupMatches: [],
           }),
           win: () => this.setState({ lcOpen: { id: l.id, name: l.name, to: 'client', cr: l.cr || '', hasEmail: !!l.email }, lcErr: '' }),
@@ -25910,15 +25944,7 @@ class Component extends DCLogic {
           // something else happens to be on screen is the kind of thing that fails once, in a demo.
           ldpEdit: () => this.setState({
             leadPanel: null, ldfErr: '', ldfBad: '', dupMatches: [],
-            ldForm: {
-              id: lp.id, name: lp.name,
-              contact: (primary && primary.name) || lp.contact || '',
-              title: (primary && primary.jobTitle) || '',
-              email: (primary && primary.email) || lp.email || '',
-              phone: (primary && primary.phone) || lp.phone || '',
-              source: lp.source || '', city: lp.city || '', note: lp.sourceDetail || '',
-              owner: lp.ownerId || '', sourceOther: false,
-            },
+            ldForm: _ldDraft9(lp, primary),
           }),
           ldpOpenDealShow: canWrite && !!lp && lp.lifecycle !== 'lost' && !deal,
           ldpOpenDeal: () => { this.setState({ leadPanel: null }); this._openDeal(lp.id, lp.name); },

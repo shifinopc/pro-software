@@ -1504,6 +1504,16 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
         city: b.city ?? null,
         source: b.source ?? null,
         sourceDetail: b.sourceDetail ?? null,
+        // Industry and campaign were missing from this list entirely. The create route is the
+        // generic CRUD one, which writes whatever columns it is handed, so a NEW lead kept both —
+        // and the edit form sent them faithfully on every save, to a route that quietly dropped
+        // them on the floor. Correcting an industry did nothing and said it had worked.
+        //
+        // Keyed on PRESENCE, like ownerId below rather than like city above: clearing the box is a
+        // real answer and has to be writable, but a caller that never mentions industry must not
+        // have it wiped as a side effect of renaming the company.
+        ...("industry" in b ? { industry: b.industry || null } : {}),
+        ...("campaign" in b ? { campaign: b.campaign || null } : {}),
         // `null` is a real choice here — a manager deliberately unassigning — so the key being
         // PRESENT is what decides, not whether it has a value.
         ...("ownerId" in b ? { ownerId: b.ownerId || null } : {}),
