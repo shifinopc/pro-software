@@ -117,12 +117,23 @@ export async function crmDashboard(scope: CrmScope = {}) {
   const sum = (rows: any[]) => rows.reduce((n, d) => n + (d.valueMinor ?? 0), 0);
 
   // ── the pipeline, by stage ────────────────────────────────────────────────────────────────────
+  /**
+   * EVERY stage, terminal columns included.
+   *
+   * This used to stop at the open ones, on the reasoning that won and lost are not "pipeline". True
+   * of a forecast total, wrong for a list of stages: a board with nothing in Won reads very
+   * differently from a board where Won is simply absent, and the reader cannot tell the second case
+   * from a configuration that has no won column at all. The figures that must exclude them —
+   * `deals.open`, the weighted total — compute from `open` and are unaffected.
+   */
   const pipeline = stages
-    .filter(s => !s.isWon && !s.isLost)
     .map(s => {
-      const rows = open.filter(d => d.stageId === s.id);
+      // Open deals for an open column; for Won and Lost the deals that ended there — an empty Won
+      // column would otherwise be indistinguishable from one nobody has reached.
+      const rows = (s.isWon || s.isLost ? priced : open).filter(d => d.stageId === s.id);
       return {
         id: s.id, name: s.name, color: s.color ?? "#7C00FF", bg: s.bg ?? "#F5EEFF",
+        isWon: s.isWon, isLost: s.isLost,
         count: rows.length,
         valueMinor: sum(rows),
         weightedMinor: rows.reduce((n, d) => n + (d.weightedMinor ?? 0), 0),
