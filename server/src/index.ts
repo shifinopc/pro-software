@@ -1845,6 +1845,17 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
   // ── the quarter the current month sits in ───────────────────────────────────────────────────
   const q = Math.floor(now.getUTCMonth() / 3) + 1;
   const qMonths = [0, 1, 2].map(i => new Date(Date.UTC(now.getUTCFullYear(), (q - 1) * 3 + i, 1)).toISOString().slice(0, 7));
+  /**
+   * WHICH PERIOD the people-facing panels report on.
+   *
+   * The leaderboard and the officer table used to be quarter-only, and an officer's target had to
+   * exist in all three of its months before the column showed anything at all — so setting one
+   * month left the cell reading a dash and the save looked ignored. `?period=YYYY-MM` narrows them
+   * to that month; without it they keep reporting the quarter, which is what the screen asks for
+   * when its card is set to Quarter.
+   */
+  const asked = String(req.query.period ?? "").trim();
+  const scopeMonths = /^\d{4}-\d{2}$/.test(asked) && months.some(m => m.key === asked) ? [asked] : qMonths;
   const qWon = deals.filter(d => isWon(d) && qMonths.includes(monthOf(d.closedAt) ?? "")).reduce((n, d) => n + money(d), 0);
   // A quarter's target is its months' targets added up, and only when EVERY month has one: two
   // months of three would read as a quarter target a third too small and nothing would say so.
@@ -1856,12 +1867,12 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
   const users = ownerIds.length
     ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true, roleId: true, commissionRateBp: true } })
     : [];
-  const ownerTargets = await prisma.salesTarget.findMany({ where: { period: { in: qMonths }, ownerId: { not: null } } });
+  const ownerTargets = await prisma.salesTarget.findMany({ where: { period: { in: scopeMonths }, ownerId: { not: null } } });
   const leaderboard = users.map(u => {
-    const mine = deals.filter(d => d.ownerId === u.id && qMonths.includes(monthOf(d.closedAt) ?? ""));
+    const mine = deals.filter(d => d.ownerId === u.id && scopeMonths.includes(monthOf(d.closedAt) ?? ""));
     const won = mine.filter(isWon);
     const lost = mine.filter(isLost);
-    const ts = qMonths.map(p => ownerTargets.find(t => t.ownerId === u.id && t.period === p)?.amountMinor ?? null);
+    const ts = scopeMonths.map(p => ownerTargets.find(t => t.ownerId === u.id && t.period === p)?.amountMinor ?? null);
     const tgt = ts.every(t => t != null) ? (ts as number[]).reduce((a, b) => a + b, 0) : null;
     const wonValue = won.reduce((n, d) => n + money(d), 0);
     return {
@@ -1907,6 +1918,8 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
     commissionMinor: leaderboard.reduce((n, r) => n + (r.commissionMinor ?? 0), 0),
     commissionKnown: leaderboard.filter(r => r.rateBp != null).length,
     commissionPeople: leaderboard.length,
+    // What the people panels above were counted over, so the screen can caption them honestly.
+    scope: scopeMonths.length === 1 ? scopeMonths[0] : "quarter",
     quarter: {
       label: "Q" + q + " " + now.getUTCFullYear(),
       wonMinor: qWon,

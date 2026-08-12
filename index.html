@@ -4858,7 +4858,7 @@
                         <div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ o.role }}</div>
                       </div>
                     </div>
-                    <span style="font-size:12.5px; color:#6F6C7A; font-variant-numeric:tabular-nums;">{{ o.target }}</span>
+                    <span onClick="{{ o.setTarget }}" title="Set this person’s target for the selected month" style="font-size:12.5px; color:#6F6C7A; font-variant-numeric:tabular-nums; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.target }}</span>
                     <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ o.achieved }}</span>
                     <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                       <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></span></span>
@@ -11992,10 +11992,22 @@ class Component extends DCLogic {
        * would otherwise cost every page load a round trip to be told so.
        */
       /** Targets & Forecast: four panels, one call, counted on the server. */
-      this._loadTF = () => fetch(API + '/api/targets-forecast', { headers: hdr })
-        .then(r => (r.ok ? r.json() : null))
-        .then(v => { if (v) this.setState({ tfData: v }); })
-        .catch(() => {});
+      /**
+       * Targets & Forecast. `period` narrows the leaderboard and the officer table to one month;
+       * omitted, they report the quarter.
+       *
+       * The last period asked for is REMEMBERED, so the reloads that follow a save — which have no
+       * opinion about the period, they just want fresh figures — do not silently drag the screen
+       * back to the quarter under somebody who is looking at a month.
+       */
+      this._loadTF = (period) => {
+        if (period !== undefined) this._tfPeriod = period;
+        const p = this._tfPeriod || '';
+        return fetch(API + '/api/targets-forecast' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => { if (v) this.setState({ tfData: v }); })
+          .catch(() => {});
+      };
       this._loadInbox = () => fetch(API + '/api/inbox', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v) this.setState({ inboxData: v }); })
@@ -26252,9 +26264,20 @@ class Component extends DCLogic {
       // ── Targets & Forecast ────────────────────────────────────────────────────────────────
       ...(() => {
         const D = this.state.tfData || null;
-        if (this.state.active === 'Targets & Forecast' && !D && !this._tfAsked) {
-          this._tfAsked = true;
-          if (this._loadTF) this._loadTF();
+        // Re-read when the PERIOD the people panels are counted over changes — the month strip and
+        // the Quarter/Month switch both move it, and the leaderboard and officer table are computed
+        // on the server for whichever it is.
+        // Resolved the SAME way the card resolves the month it displays. Using raw state here
+        // meant that on first load — before anybody has touched the strip — the card showed August
+        // from the report's period while the request asked for the quarter, so an officer's August
+        // target was saved, returned by the API, and still rendered as a dash.
+        const want9 = this.state.tfScope === 'quarter'
+          ? ''
+          : (this.state.tfMonth || (_rep && _rep.period) || '');
+        if (this.state.active === 'Targets & Forecast' && (!D || this._tfFor !== want9) && this._tfAsking !== want9) {
+          this._tfAsking = want9;
+          this._tfFor = want9;
+          if (this._loadTF) this._loadTF(want9);
         }
         const ccy = (D && D.currency) || 'SAR';
         const k9 = (minor) => {
@@ -26281,7 +26304,10 @@ class Component extends DCLogic {
         })();
         const q = D.quarter || {};
         const missing9 = (q.missingMonths || []);
-        const scope9 = this.state.tfScope === 'month' ? 'month' : 'quarter';
+        // MONTH by default. A quarter is what you report at the end of one; a month is what
+        // anybody is working against today, and it is the period a target is actually stored
+        // in — so the card opens on the same unit the Set-target button writes.
+        const scope9 = this.state.tfScope === 'quarter' ? 'quarter' : 'month';
         const isMonth9 = scope9 === 'month';
         const curM9 = (D.months || []).find(m => m.key === selMonth9) || null;
         // One pair of figures, chosen once, so every line on the card is talking about the same
@@ -26437,6 +26463,28 @@ class Component extends DCLogic {
             role: ({ super_admin: 'Super Admin', admin: 'Admin', sales: 'Sales consultant',
                      pro_officer: 'PRO Officer', accountant: 'Accountant' })[r.roleId] || r.roleId || 'Staff',
             target: r.targetMinor != null ? k9(r.targetMinor) : '\u2014',
+            // The TARGET column was permanently a dash: an officer's target is its own row, keyed
+            // by ownerId, and nothing in the product could write one — the Set-target dialog only
+            // ever sets the firm's. So the cell that reports it now sets it, for the month the
+            // strip is on, the same way the rate cell beside it works.
+            setTarget: () => this._prompt('Target for ' + r.name + ' — ' + (selLabel9 || ''), '', {
+              placeholder: 'Amount for this person, this month',
+              body: 'This is theirs alone. The firm-wide figure is set from the button at the top and '
+                + 'is not divided up — the two are only as consistent as you make them. Leave blank to clear.',
+            }).then(v => {
+              if (v === null) return;
+              const t = String(v).trim();
+              const minor = t === '' ? 0 : Math.round(Number(t) * 100);
+              if (t !== '' && !Number.isFinite(minor)) return this.toast('That is not an amount', 'error');
+              this._crmFetch('/api/sales-targets', {
+                method: 'PUT',
+                body: JSON.stringify({ period: selMonth9, ownerId: r.id, amountMinor: minor, currency: ccy }),
+              }).then(({ ok, j }) => {
+                if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
+                this.toast(t === '' ? 'Target cleared' : 'Target set for ' + r.name);
+                if (this._loadTF) this._loadTF();
+              }).catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+            }),
             achieved: k9(r.wonMinor),
             barW: r.pctBp != null ? Math.max(2, Math.min(100, Math.round(r.pctBp / 100))) + '%' : '0%',
             barColor: r.pctBp == null ? '#E4E1EC' : r.pctBp >= 10000 ? '#12B76A' : r.pctBp >= 7000 ? '#7C00FF' : '#F0A030',
