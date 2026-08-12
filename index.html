@@ -4686,19 +4686,6 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Targets &amp; Forecast</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ perfSub }}</div>
           </div>
-          <div class="pill-selwrap">
-            <div data-dd data-open="{{ ddPerfPeriodOpen }}" onClick="{{ ddPerfPeriodToggle }}" class="pill-sel">
-              <span>{{ ddPerfPeriodLabel }}</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0; opacity:.6;"><path d="M6 9l6 6 6-6"></path></svg>
-            </div>
-            <sc-if value="{{ ddPerfPeriodOpen }}" hint-placeholder-val="{{ false }}">
-              <div data-dd data-hidescroll="true" class="pill-dd">
-                <sc-for list="{{ ddPerfPeriodOptions }}" as="o" hint-placeholder-count="4">
-                  <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                </sc-for>
-              </div>
-            </sc-if>
-          </div>
           <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
             <!-- WHICH MONTH the header acts on. Targets are stored a month at a time, so the button
                  beside this says which one it is about to set rather than leaving you to infer it
@@ -9150,6 +9137,100 @@
   <!-- New team. A form rather than the single-field prompt this used to be: the prompt asked for
        a name and returned a team that immediately tripped the card's own "nobody leads this"
        warning, because there was nowhere to say who did. -->
+  <!-- ══ SET TARGET ══════════════════════════════════════════════════════
+       A target is a judgement, and the old one-line prompt asked for it with nothing on screen to
+       judge against. This puts the two things that inform the number beside the field: what the
+       month has done so far, and whether the last few targets were met or missed.
+
+       It also writes FORWARD. Setting one month at a time is why a quarter figure so often never
+       appears — it needs all three — so a growth rule fills the next two and shows exactly what it
+       is about to write before it writes it. -->
+  <sc-if value="{{ stOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ stClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stStop }}" data-st-panel="1" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 30px 70px rgba(38,7,77,.35);">
+        <div style="background:linear-gradient(120deg,#3A0A76,#7C00FF); color:#fff; padding:20px 24px; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-shrink:0;">
+          <div>
+            <div style="font-size:10px; font-weight:700; letter-spacing:.12em; opacity:.8;">SALES TARGET</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:700; letter-spacing:-.01em; margin-top:3px;">{{ stTitle }}</div>
+            <div style="font-size:11.5px; opacity:.8; margin-top:2px;">{{ stSub }}</div>
+          </div>
+          <div onClick="{{ stClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; background:rgba(255,255,255,.16); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:rgba(255,255,255,.28);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <div style="flex:1; min-height:0; overflow-y:auto; padding:18px 24px 20px;">
+          <sc-if value="{{ stWarn }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFF9EF; border:1px solid #F3DFB4; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8A6A16; line-height:1.5;">⚠ {{ stWarnText }}</div>
+          </sc-if>
+
+          <div style="margin-top:13px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:14px 16px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+              <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ stMonthLabel }}</span>
+              <span style="font-size:10.5px; color:#B4AFC4;">{{ stStatus }}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+              <span style="font-size:15px; font-weight:700; color:#A9A6B4; flex-shrink:0;">{{ stCcy }}</span>
+              <input value="{{ stAmount }}" onInput="{{ setStAmount }}" placeholder="0" inputmode="decimal" style="flex:1; min-width:0; border:none; background:transparent; outline:none; font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700; color:#1A1523;">
+            </div>
+          </div>
+
+          <!-- Setting one month at a time is the reason a quarter figure so often never appears. -->
+          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:18px;">UPCOMING MONTHS</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:9px;">
+            <sc-for list="{{ stRules }}" as="r" hint-placeholder-count="4">
+              <span onClick="{{ r.pick }}" style="text-align:center; font-size:12px; font-weight:600; color:{{ r.color }}; background:{{ r.bg }}; border:1px solid {{ r.bd }}; padding:11px 12px; border-radius:11px; cursor:pointer;">{{ r.label }}</span>
+            </sc-for>
+          </div>
+          <!-- What Save is about to write, before it writes it. A rule that quietly set three
+               months without showing them would be the kind of help nobody asked for. -->
+          <sc-if value="{{ stHasAhead }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-top:11px;">
+              <sc-for list="{{ stAhead }}" as="a" hint-placeholder-count="3">
+                <div style="background:#F5EEFF; border-radius:12px; padding:11px 12px; text-align:center;">
+                  <div style="font-size:10px; font-weight:700; color:#A9A6B4;">{{ a.label }}</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; margin-top:3px;">{{ a.value }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:8px;">{{ stAheadNote }}</div>
+
+          <!-- The only thing on screen that says whether the number being typed is realistic. -->
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:20px;">
+            <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TRACK RECORD</span>
+            <span style="font-size:10px; color:#C9C4D4;">set → achieved</span>
+          </div>
+          <sc-if value="{{ stHasRecord }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:11px;">
+              <sc-for list="{{ stRecord }}" as="t" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:11px;">
+                  <span style="flex-shrink:0; width:62px; font-size:11.5px; color:#4B4757;">{{ t.month }}</span>
+                  <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ t.barW }}; background:{{ t.barColor }}; border-radius:99px;"></span></span>
+                  <span style="flex-shrink:0; width:74px; text-align:right; font-size:11px; color:#B4AFC4; font-variant-numeric:tabular-nums;">{{ t.target }}</span>
+                  <span style="flex-shrink:0; width:74px; text-align:right; font-size:11.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ t.actual }}</span>
+                  <span style="flex-shrink:0; width:74px; text-align:right; font-size:10.5px; font-weight:700; color:{{ t.verdictColor }};">{{ t.verdict }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ stNoRecord }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:11.5px; color:#B4AFC4; margin-top:10px; line-height:1.6;">No earlier month carries a target, so there is nothing yet to judge this figure against.</div>
+          </sc-if>
+
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:18px; padding-top:14px; border-top:1px solid #F5F3F9; line-height:1.6;">{{ stFootNote }}</div>
+
+          <sc-if value="{{ stHasErr }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; font-weight:600; color:#C0353A; background:#FEECEC; border-radius:10px; padding:9px 12px; line-height:1.5;">{{ stErr }}</div>
+          </sc-if>
+        </div>
+
+        <div style="flex-shrink:0; display:flex; justify-content:flex-end; gap:9px; align-items:center; padding:14px 24px; border-top:1px solid #F0EDF6;">
+          <span onClick="{{ stClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ stSave }}" style="background:#1A1523; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">Save target</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ ntOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ ntClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ ntStop }}" data-nt-panel="1" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 30px 70px rgba(38,7,77,.3); animation:popIn .22s cubic-bezier(.16,1,.3,1) both;">
@@ -24485,7 +24566,7 @@ class Component extends DCLogic {
      * An empty string CLEARS the target: the server takes 0 as "no target", which is what the
      * screen then says instead of drawing a bar against nothing.
      */
-    const _saveTarget9 = (raw9, period9) => {
+    const _saveTarget9 = (raw9, period9, quiet9) => {
       const raw = String(raw9 ?? '').trim();
       const period = period9 || (_rep && _rep.period) || '';
       if (!period) return this.toast('No period selected', 'error');
@@ -24498,14 +24579,15 @@ class Component extends DCLogic {
           amountMinor: raw ? Math.round(Number(raw) * 100) : 0, currency: _repCcy,
         }),
       }).then(({ ok, j }) => {
-        if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
-        this.toast(raw ? 'Target set' : 'Target cleared');
+        if (!ok) { this.toast((j && j.error) || 'Could not set that target', 'error'); return false; }
+        if (!quiet9) this.toast(raw ? 'Target set' : 'Target cleared');
         this.setState({ perfTargetInput: '' });
         if (this._loadSalesReport) this._loadSalesReport(period);
         // The quota card, the leaderboard and the officer table all measure against this, and they
         // come from a different endpoint — without this they would keep showing the old target.
         if (this._loadTF) this._loadTF();
-      }).catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+        return true;
+      }).catch(() => { this.toast('Server unreachable — nothing changed', 'error'); return false; });
     };
     const _pctOf = (bp) => (bp == null ? null : (bp / 100).toFixed(bp % 100 ? 1 : 0) + '%');
     // One table shape for loss reasons, sources and owners: they are the same question asked three
@@ -26048,6 +26130,133 @@ class Component extends DCLogic {
           tmAdd: () => this.setState({ ntOpen: true, ntName: '', ntLead: '', ntErr: '' }),
         };
       })(),
+      // ── Set target dialog ─────────────────────────────────────────────────────────────────
+      ...(() => {
+        const D = this.state.tfData || null;
+        const open9 = !!this.state.stOpen;
+        if (!open9) return { stOpen: false };
+        const ccy = (D && D.currency) || 'SAR';
+        const months = (D && D.months) || [];
+        const key9 = this.state.stMonth || '';
+        const lbl = (k) => {
+          const d = new Date(k + '-01T00:00:00Z');
+          return isNaN(d) ? k : d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).slice(0, 3) + ' ' + d.getUTCFullYear();
+        };
+        const k9 = (minor) => {
+          if (minor == null) return '\u2014';
+          const n = minor / 100, a = Math.abs(n);
+          if (a >= 1e6) return ccy + ' ' + (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm';
+          if (a >= 10000) return ccy + ' ' + Math.round(n / 1000) + 'k';
+          return ccy + ' ' + Math.round(n).toLocaleString();
+        };
+        const cur9 = months.find(m => m.key === key9) || null;
+        const amt9 = String(this.state.stAmount || '').trim();
+        const minor9 = amt9 && Number.isFinite(Number(amt9)) ? Math.round(Number(amt9) * 100) : null;
+        const rule9 = this.state.stRule || 'none';
+        const step9 = rule9 === 'g5' ? 1.05 : rule9 === 'g10' ? 1.10 : rule9 === 'same' ? 1 : null;
+
+        // The three months this Save will write, previewed before it writes them. "By hand" writes
+        // only the month named at the top, which is what the old one-field prompt did.
+        const idx9 = months.findIndex(m => m.key === key9);
+        const ahead9 = [];
+        if (minor9 != null && step9 != null) {
+          let v = minor9;
+          for (let i = 0; i < 3; i++) {
+            const m = months[idx9 + i];
+            if (!m) break;
+            ahead9.push({ key: m.key, label: lbl(m.key).split(' ')[0], value: k9(Math.round(v)), minor: Math.round(v) });
+            v = v * step9;
+          }
+        }
+
+        /**
+         * SET against ACHIEVED, for the months already behind us. This is the one panel that says
+         * whether the number about to be typed is realistic — a target met four times running and
+         * one missed by 11% is an argument for a figure, and nothing else on the screen makes it.
+         */
+        const record9 = months
+          .filter(m => !m.isFuture && m.key < key9 && m.targetMinor != null)
+          .sort((a, b) => b.key.localeCompare(a.key))
+          .map(m => {
+            const pct = m.targetMinor > 0 ? Math.round((m.actualMinor * 100) / m.targetMinor) : null;
+            return {
+              month: lbl(m.key),
+              target: k9(m.targetMinor),
+              actual: k9(m.actualMinor),
+              barW: Math.max(2, Math.min(100, pct == null ? 0 : pct)) + '%',
+              barColor: pct != null && pct >= 100 ? '#12B76A' : '#E8A33D',
+              verdict: pct == null ? '' : pct >= 100 ? 'Met \u00b7 +' + (pct - 100) + '%' : (100 - pct) + '% short',
+              verdictColor: pct != null && pct >= 100 ? '#0E9355' : '#B7791F',
+            };
+          });
+
+        const RULES = [
+          { id: 'none', label: 'Set each month by hand' },
+          { id: 'same', label: 'Same every month' },
+          { id: 'g5', label: 'Grow 5% each month' },
+          { id: 'g10', label: 'Grow 10% each month' },
+        ];
+        return {
+          stOpen: true,
+          stClose: () => this.setState({ stOpen: false, stErr: '' }),
+          stStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+          stTitle: 'Set the number to beat',
+          stSub: lbl(key9) + ', and how it rolls forward',
+          stMonthLabel: lbl(key9) + ' TARGET',
+          stCcy: ccy,
+          stAmount: this.state.stAmount || '',
+          setStAmount: (e) => this.setState({ stAmount: e.target.value, stErr: '' }),
+          // Says where the month stands, so the figure is typed with its own history in view.
+          stStatus: !cur9 ? ''
+            : cur9.isFuture ? 'not started yet'
+            : cur9.targetMinor == null ? k9(cur9.actualMinor) + ' won so far'
+            : Math.round((cur9.actualMinor * 100) / (cur9.targetMinor || 1)) + '% of the current target',
+          stWarn: !!(cur9 && cur9.targetMinor == null),
+          stWarnText: lbl(key9) + ' has no target yet \u2014 set one to measure against.',
+          stRules: RULES.map(r => ({
+            label: r.label,
+            color: rule9 === r.id ? '#fff' : '#4B4757',
+            bg: rule9 === r.id ? '#7C00FF' : '#fff',
+            bd: rule9 === r.id ? '#7C00FF' : '#E4E0EC',
+            pick: () => this.setState({ stRule: r.id }),
+          })),
+          stAhead: ahead9,
+          stHasAhead: ahead9.length > 0,
+          stAheadNote: ahead9.length
+            ? 'Saving writes all ' + ahead9.length + ' of these.'
+            : 'Saving writes ' + lbl(key9) + ' only.',
+          stRecord: record9,
+          stHasRecord: record9.length > 0,
+          stNoRecord: record9.length === 0,
+          // What the design claims here is that the team figure splits across officers by their
+          // quota share. It does not: a per-officer target is its own row, set on the officers
+          // table, and nothing derives one from the team's. Saying so is more use than repeating it.
+          stFootNote: 'This is the firm-wide figure. Each officer\u2019s own target is set on the '
+            + 'per-officer table below \u2014 nothing is split automatically, so the two are only as '
+            + 'consistent as somebody makes them.',
+          stErr: this.state.stErr || '',
+          stHasErr: !!this.state.stErr,
+          stSave: () => {
+            if (!amt9) return this.setState({ stErr: 'Enter an amount, or press Cancel to leave it as it is.' });
+            if (minor9 == null) return this.setState({ stErr: '\u201c' + amt9 + '\u201d is not an amount.' });
+            const writes = ahead9.length ? ahead9 : [{ key: key9, minor: minor9 }];
+            // Sequential on purpose: they are separate rows and a half-applied plan is worse than a
+            // refused one, so the first failure stops the rest and says which month it stopped at.
+            const run = (i) => {
+              if (i >= writes.length) {
+                this.setState({ stOpen: false });
+                this.toast(writes.length === 1 ? 'Target set' : writes.length + ' months set');
+                if (this._loadTF) this._loadTF();
+                return;
+              }
+              _saveTarget9(String(writes[i].minor / 100), writes[i].key, true)
+                .then(ok => { if (ok) run(i + 1); else this.setState({ stErr: 'Stopped at ' + lbl(writes[i].key) + ' \u2014 nothing after it was written.' }); });
+            };
+            run(0);
+          },
+        };
+      })(),
+
       // ── Targets & Forecast ────────────────────────────────────────────────────────────────
       ...(() => {
         const D = this.state.tfData || null;
@@ -26158,11 +26367,18 @@ class Component extends DCLogic {
             };
           }),
           tfSetHeaderLabel: 'Set target for ' + (selLabel9 || ''),
-          tfSetHeader: () => this._prompt('Target for ' + (selLabel9 || ''), '', {
-            placeholder: 'Amount for the whole firm',
-            body: 'Targets are set a MONTH at a time \u2014 the quarter figure is its three months added '
-              + 'together, and it only appears once all three have one. Leave it blank to clear.',
-          }).then(v => { if (v !== null) _saveTarget9(v, selMonth9); }),
+          tfSetHeader: () => {
+            const cur = (D.months || []).find(m => m.key === selMonth9);
+            this.setState({
+              stOpen: true,
+              stMonth: selMonth9,
+              // Pre-filled with whatever is already set, so the dialog opens on the truth and a
+              // stray Save cannot silently halve a target somebody agreed last week.
+              stAmount: cur && cur.targetMinor != null ? String(cur.targetMinor / 100) : '',
+              stRule: 'none',
+              stErr: '',
+            });
+          },
           tfCommission: k9(D.commissionMinor),
           tfCommissionSub: (D.commissionKnown || 0) === (D.commissionPeople || 0)
             ? 'all ' + (D.commissionPeople || 0) + ' rates set'
