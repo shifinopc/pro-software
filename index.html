@@ -4478,39 +4478,6 @@
            that produced it, because a coloured badge nobody can decompose gets trusted blindly for
            a week and ignored for ever after. -->
 
-      <!-- Deal health keeps its own card: the chips above answer "how many", this answers "why",
-           and the stacked bar is the only place the whole open book is shown at once. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .17s both;">
-
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Deal health</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdHealthSub }}</div>
-            </div>
-          </div>
-          <!-- One stacked bar first: the split across the whole open book, before the counts. -->
-          <div style="display:flex; height:12px; border-radius:99px; overflow:hidden; margin-top:15px; background:#F3F1F7; gap:2px;">
-            <sc-for list="{{ cdHealthBar }}" as="h" hint-placeholder-count="4">
-              <div title="{{ h.tip }}" style="width:{{ h.pct }}%; background:{{ h.color }}; animation:slideRight .8s cubic-bezier(.16,1,.3,1) .2s both;"></div>
-            </sc-for>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; flex:1;">
-            <sc-for list="{{ cdHealth }}" as="h" hint-placeholder-count="5">
-              <div style="border:1px solid #F0EDF6; border-radius:12px; padding:11px 13px;">
-                <div style="display:flex; align-items:center; gap:7px;">
-                  <span style="width:8px; height:8px; border-radius:99px; background:{{ h.color }}; flex-shrink:0;"></span>
-                  <span style="flex:1; min-width:0; font-size:11.5px; font-weight:600; color:#4B4757; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ h.label }}</span>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:{{ h.color }};">{{ h.count }}</span>
-                </div>
-                <div style="font-size:10.5px; color:#A9A6B4; margin-top:4px;">{{ h.value }}</div>
-              </div>
-            </sc-for>
-          </div>
-          <div style="margin-top:14px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdHealthNote }}</div>
-        </div>
-
-      </section>
 
 
 
@@ -24186,7 +24153,6 @@ class Component extends DCLogic {
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
           cdStalledRows: [], cdStalledEmpty: false, cdStalledEmptyNote: '', cdStalledSub: '',
           cdStalledCount: '0', cdStalledColor: '#26074D', cdStalledUnknown: '', cdStalledUnknownShown: false,
-          cdHealth: [], cdHealthBar: [], cdHealthSub: '', cdHealthNote: '',
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
           cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
           cdSrcRows: [], cdSrcEmpty: false, cdStageRows: [], cdStageEmpty: false,
@@ -24536,26 +24502,8 @@ class Component extends DCLogic {
               ? D.funnel.lostUnattributed + (D.funnel.lostUnattributed === 1 ? ' lost deal is' : ' lost deals are') + ' not shown against a step — only a deal’s current stage is stored, so where it dropped out is not recorded.'
               : 'Nothing has been lost yet.'),
 
-          // ── deal health ──
+          // Used by "Needs a look", whose chips replaced the Deal health card.
           cdGoPipeline: goTo('Pipeline', 'Sales'),
-          cdHealthSub: _openCount
-            ? ord(_openCount) + ' open deal' + (_openCount === 1 ? '' : 's') + ' · ' + ord(_unwell) + ' need a look'
-            : 'No open deals',
-          cdHealth: D.health.map(h => ({
-            label: h.label, color: h.color, count: ord(h.count),
-            value: h.valueMinor ? _money9(h.valueMinor, ccy) : '—',
-          })),
-          // Only the states that actually have deals get a slice; a 0% segment renders as a hairline
-          // that looks like a rounding artefact.
-          cdHealthBar: D.health.filter(h => h.count > 0).map(h => ({
-            pct: _openCount ? Math.round((h.count / _openCount) * 100) : 0,
-            color: h.color,
-            tip: h.label + ' · ' + h.count + (h.count === 1 ? ' deal' : ' deals'),
-          })),
-          // Says what the two thresholds MEAN, because "stalled" and "gone quiet" sound alike and
-          // are measured against different clocks.
-          cdHealthNote: 'Stalled is time sitting in one stage, against that stage’s own limit. '
-            + 'Gone quiet is ' + D.staleDealDays + '+ days with nobody logging any contact. Set a stage’s limit in Sales Settings.',
 
           cdAttentionEmpty: D.needsAttention.length === 0,
           /**
