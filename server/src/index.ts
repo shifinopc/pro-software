@@ -569,6 +569,10 @@ async function portalCompanyInScope(auth: any, id: string) {
   return target && target.groupId === mine.groupId ? target : null;
 }
 
+// REMOVED: GET /api/portal/custom-objects and /api/portal/document-types. Both worked, both
+// returned firm-wide configuration — every custom form, all 20 document types — to any client
+// login, and no portal screen has ever called either. An authenticated endpoint nothing uses is
+// surface without benefit; they are two lines each if a portal feature ever needs them.
 app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
   const company = await prisma.company.findUnique({
@@ -1002,14 +1006,8 @@ app.post("/api/portal/employees", requireAuth, requirePortal, requireNotSuspende
 });
 
 // Portal: read the entity-bound Form Builder forms (kind=form) so the portal Add-Employee form mirrors the console.
-app.get("/api/portal/custom-objects", requireAuth, requirePortal, async (_req, res) => {
-  res.json(await prisma.customObject.findMany({ where: { kind: "form" } }));
-});
 
 // Portal: read admin-defined document types (so the portal can render the right fields when uploading a document)
-app.get("/api/portal/document-types", requireAuth, requirePortal, async (_req, res) => {
-  res.json(await prisma.documentType.findMany({ orderBy: { name: "asc" } }));
-});
 
 // Portal: add a document (scoped to the authenticated client's company) → flows into Compliance
 app.post("/api/portal/documents", requireAuth, requirePortal, async (req, res) => {
