@@ -4686,25 +4686,29 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Targets &amp; Forecast</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ perfSub }}</div>
           </div>
+          <!-- ONE group on the right, not three loose children. This row is space-between,
+               so a strip, a button and a card sitting in it directly were spread across the
+               whole width with the title between them. The artifact keeps the three together,
+               and together is also what says they belong to each other. -->
           <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
-            <!-- WHICH MONTH the header acts on. Targets are stored a month at a time, so the button
-                 beside this says which one it is about to set rather than leaving you to infer it
-                 from whatever the page last loaded. Future months are selectable: setting next
-                 quarter's targets is the whole point of having them. -->
-            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-wrap:wrap;">
-              <sc-for list="{{ tfMonthTabs }}" as="m" hint-placeholder-count="6">
-                <span onClick="{{ m.pick }}" style="font-size:11.5px; font-weight:{{ m.weight }}; color:{{ m.color }}; background:{{ m.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer;">{{ m.label }}</span>
-              </sc-for>
-            </div>
-            <span onClick="{{ tfSetHeader }}" style="font-size:12px; font-weight:600; color:#7C00FF; background:#fff; border:1px solid #DDD1F5; padding:9px 18px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#FBF7FF; border-color:#C9A2FF;">{{ tfSetHeaderLabel }}</span>
-          </sc-if>
-          <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
-            <div class="pg-card" style="padding:10px 16px; text-align:right;">
-              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMMISSION PAYABLE</div>
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#0E9355; margin-top:2px;">{{ tfCommission }}</div>
-              <!-- How much of the bill this figure actually covers. A total quoted without it reads
-                   as the whole thing when it may be a fraction. -->
-              <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ tfCommissionSub }}</div>
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end;">
+              <!-- WHICH MONTH the header acts on. Targets are stored a month at a time, so the button
+                   beside this says which one it is about to set rather than leaving you to infer it
+                   from whatever the page last loaded. Future months are selectable: setting next
+                   quarter's targets is the whole point of having them. -->
+              <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-wrap:wrap;">
+                <sc-for list="{{ tfMonthTabs }}" as="m" hint-placeholder-count="6">
+                  <span onClick="{{ m.pick }}" style="font-size:11.5px; font-weight:{{ m.weight }}; color:{{ m.color }}; background:{{ m.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer;">{{ m.label }}</span>
+                </sc-for>
+              </div>
+              <span onClick="{{ tfSetHeader }}" style="font-size:12px; font-weight:600; color:#7C00FF; background:#fff; border:1px solid #DDD1F5; padding:9px 18px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#FBF7FF; border-color:#C9A2FF;">{{ tfSetHeaderLabel }}</span>
+              <div class="pg-card" style="padding:10px 16px; text-align:right;">
+                <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMMISSION PAYABLE</div>
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#0E9355; margin-top:2px;">{{ tfCommission }}</div>
+                <!-- How much of the bill this figure actually covers. A total quoted without it reads
+                     as the whole thing when it may be a fraction. -->
+                <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ tfCommissionSub }}</div>
+              </div>
             </div>
           </sc-if>
         </section>
@@ -26244,7 +26248,10 @@ class Component extends DCLogic {
             // refused one, so the first failure stops the rest and says which month it stopped at.
             const run = (i) => {
               if (i >= writes.length) {
-                this.setState({ stOpen: false });
+                // Stay on the month the person chose. Each write reloads the report for its own
+                // period, so after a three-month batch the selection would otherwise have walked
+                // forward to October on its own and the header would name a month nobody picked.
+                this.setState({ stOpen: false, tfMonth: key9 });
                 this.toast(writes.length === 1 ? 'Target set' : writes.length + ' months set');
                 if (this._loadTF) this._loadTF();
                 return;
