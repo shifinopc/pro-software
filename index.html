@@ -3896,9 +3896,7 @@
       <sc-if value="{{ showFollowUps }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Follow-ups">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Follow-ups</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ fuSub }}</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
@@ -3907,7 +3905,7 @@
               </sc-for>
             </div>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
-              <button onClick="{{ fuLog }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Log contact</button>
+              <button onClick="{{ fuLog }}" style="background:#1A1523; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Log contact</button>
             </sc-if>
           </div>
         </section>
@@ -3927,59 +3925,80 @@
           </section>
         </sc-if>
 
-        <!-- GROUPED BY URGENCY, not one flat list distinguished only by a badge colour. Late and
-             due-today are different conversations: one is an apology, the other is a plan. -->
-        <sc-for list="{{ fuGroups }}" as="g" hint-placeholder-count="2">
+        <!-- ONE card holding every group, as the design has it — not a card per group.
+             Two cards with a gap between them read as two lists that happen to be near each other;
+             the morning queue is one list, and where the tinted band changes from red to amber is
+             the point where the conversation changes from an apology to a plan.
+
+             GROUPED BY URGENCY, still, rather than one flat list distinguished by a badge colour.
+             Late and due-today are different conversations. -->
+        <sc-if value="{{ fuHasAny }}" hint-placeholder-val="{{ true }}">
           <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-            <div style="display:flex; align-items:center; gap:9px; padding:15px 22px 12px; border-bottom:1px solid #F5F2FA;">
-              <span style="width:8px; height:8px; border-radius:99px; background:{{ g.color }};"></span>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ g.label }}</span>
-              <span style="font-size:10.5px; font-weight:700; color:{{ g.color }}; background:{{ g.bg }}; padding:2px 9px; border-radius:99px;">{{ g.count }}</span>
-              <span style="flex:1;"></span>
-              <span style="font-size:11px; color:#A9A6B4;">{{ g.note }}</span>
-            </div>
-            <sc-for list="{{ g.rows }}" as="f" hint-placeholder-count="3">
-              <div style="display:flex; align-items:flex-start; gap:13px; padding:14px 22px; border-bottom:1px solid #FAF8FC;" style-hover="background:#FAF7FE;">
-                <span style="width:4px; align-self:stretch; border-radius:3px; background:{{ f.stripe }}; flex-shrink:0;"></span>
-                <!-- What kind of contact this came out of, as an icon rather than a word buried in
-                     the context line. A queue is scanned, and a shape is read faster than a label. -->
-                <div style="flex-shrink:0; width:32px; height:32px; border-radius:10px; background:{{ f.kindBg }}; display:flex; align-items:center; justify-content:center; margin-top:1px;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ f.kindColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ f.kindIcon }}"></path></svg>
-                </div>
-                <div style="flex:1; min-width:0;">
-                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <span style="font-size:13px; font-weight:700;">{{ f.action }}</span>
-                    <span style="font-size:9.5px; font-weight:700; color:{{ f.dueColor }}; background:{{ f.dueBg }}; padding:2px 9px; border-radius:99px;">{{ f.due }}</span>
-                    <!-- How many times this has been pushed, and since when. One postponement is
-                         ordinary, five is a call being avoided, and only the count shows it. -->
-                    <sc-if value="{{ f.snoozed }}" hint-placeholder-val="{{ false }}">
-                      <span title="{{ f.snoozeTitle }}" style="font-size:9.5px; font-weight:700; color:{{ f.snoozeColor }}; background:{{ f.snoozeBg }}; padding:2px 9px; border-radius:99px;">{{ f.snoozeLabel }}</span>
-                    </sc-if>
-                    <sc-if value="{{ f.auto }}" hint-placeholder-val="{{ false }}">
-                      <span title="Booked by a stage rule, not by a person" style="font-size:9.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 9px; border-radius:99px;">automatic</span>
+            <sc-for list="{{ fuGroups }}" as="g" hint-placeholder-count="2">
+              <div style="display:flex; align-items:center; gap:9px; padding:9px 22px; background:{{ g.bg }};">
+                <span style="width:7px; height:7px; border-radius:99px; background:{{ g.color }};"></span>
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:{{ g.color }};">{{ g.label }}</span>
+                <span style="font-size:10.5px; font-weight:700; color:{{ g.color }}; opacity:.7;">{{ g.count }}</span>
+                <span style="flex:1;"></span>
+                <span style="font-size:10.5px; color:{{ g.color }}; opacity:.7;">{{ g.note }}</span>
+              </div>
+              <sc-for list="{{ g.rows }}" as="f" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:13px; padding:13px 22px; border-bottom:1px solid #F5F3F9;" style-hover="background:#FCFAFF;">
+                  <!-- What kind of contact this came out of, as an icon rather than a word buried in
+                       the context line. A queue is scanned, and a shape is read faster than a label. -->
+                  <div style="flex-shrink:0; width:34px; height:34px; border-radius:11px; background:{{ f.kindBg }}; display:flex; align-items:center; justify-content:center;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ f.kindColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ f.kindIcon }}"></path></svg>
+                  </div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                      <span style="font-size:13px; font-weight:700;">{{ f.action }}</span>
+                      <!-- How many times this has been pushed, and since when. One postponement is
+                           ordinary, five is a call being avoided, and only the count shows it. Kept
+                           though the design has no such chip: its mock data had never been snoozed. -->
+                      <sc-if value="{{ f.snoozed }}" hint-placeholder-val="{{ false }}">
+                        <span title="{{ f.snoozeTitle }}" style="font-size:9.5px; font-weight:700; color:{{ f.snoozeColor }}; background:{{ f.snoozeBg }}; padding:2px 9px; border-radius:99px;">{{ f.snoozeLabel }}</span>
+                      </sc-if>
+                      <sc-if value="{{ f.auto }}" hint-placeholder-val="{{ false }}">
+                        <span title="Booked by a stage rule, not by a person" style="font-size:9.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 9px; border-radius:99px;">automatic</span>
+                      </sc-if>
+                    </div>
+                    <!-- Who and which deal, on ONE grey line. They were two: a bold name above a
+                         grey context line, which made every row two-and-a-bit lines tall and the
+                         queue twice as long to walk. -->
+                    <div style="font-size:11px; color:#A9A6B4; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ f.who }} · {{ f.context }}</div>
+                    <sc-if value="{{ f.snoozeReasonShown }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:11px; color:#8C8899; margin-top:3px; line-height:1.5; font-style:italic;">{{ f.snoozeReason }}</div>
                     </sc-if>
                   </div>
-                  <div style="font-size:11.5px; color:#4B4757; margin-top:3px; font-weight:600;">{{ f.who }}</div>
-                  <div style="font-size:11px; color:#A9A6B4; margin-top:3px; line-height:1.5;">{{ f.context }}</div>
-                  <sc-if value="{{ f.snoozeReasonShown }}" hint-placeholder-val="{{ false }}">
-                    <div style="font-size:11px; color:#8C8899; margin-top:4px; line-height:1.5; font-style:italic;">{{ f.snoozeReason }}</div>
+                  <!-- Whose commitment it is. Only worth showing when the list spans more than one
+                       person — on "Mine" it would be the same face on every row. -->
+                  <sc-if value="{{ fuShowOwners }}" hint-placeholder-val="{{ false }}">
+                    <span title="{{ f.owner }}" style="flex-shrink:0; width:28px; height:28px; border-radius:99px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ f.initials }}</span>
+                  </sc-if>
+                  <!-- WHEN, on the right beside the controls rather than next to the title. It is
+                       the fact that decides which button you press, so it belongs with them. -->
+                  <span style="flex-shrink:0; font-size:9.5px; font-weight:700; color:{{ f.dueColor }}; background:{{ f.dueBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ f.due }}</span>
+                  <sc-if value="{{ f.canAct }}" hint-placeholder-val="{{ true }}">
+                    <!-- Four icons, not four words. At this width the labels wrapped onto a second
+                         line and pushed the row taller than the thing it describes; and these four
+                         are the same four on every row, so they are learned once and then aimed at.
+                         Each keeps its full label in the tooltip. -->
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
+                      <span onClick="{{ f.done }}" title="Mark this done" style="width:30px; height:30px; border-radius:9px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#D3F1E1;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                      <span onClick="{{ f.snooze }}" title="Push this back to another date" style="width:30px; height:30px; border-radius:9px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+                      <span onClick="{{ f.cancel }}" title="Cancel this follow-up" style="width:30px; height:30px; border-radius:9px; background:#FEECEC; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FBDADA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span>
+                      <span onClick="{{ f.logNext }}" title="Log what happened and book the next one" style="width:30px; height:30px; border-radius:9px; background:#F3F1F7; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EAE7F0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 0 1-.9-3.8 8.4 8.4 0 0 1 8.4-9 8.4 8.4 0 0 1 8.6 8.3z"></path></svg></span>
+                    </div>
                   </sc-if>
                 </div>
-                <!-- Whose commitment it is. Only worth showing when the list spans more than one
-                     person — on "Mine" it would be the same face on every row. -->
-                <sc-if value="{{ fuShowOwners }}" hint-placeholder-val="{{ false }}">
-                  <span title="{{ f.owner }}" style="flex-shrink:0; width:28px; height:28px; border-radius:99px; background:{{ f.avBg }}; color:#fff; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:2px;">{{ f.initials }}</span>
-                </sc-if>
-                <sc-if value="{{ f.canAct }}" hint-placeholder-val="{{ true }}">
-                  <div style="display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; max-width:270px;">
-                    <span onClick="{{ f.logNext }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Log contact</span>
-                    <span onClick="{{ f.snooze }}" style="font-size:10.5px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#FDECC8;">Reschedule</span>
-                    <span onClick="{{ f.cancel }}" style="font-size:10.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#E8E5EE;">Cancel</span>
-                    <span onClick="{{ f.done }}" style="font-size:10.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#D3F1E1;">Done</span>
-                  </div>
-                </sc-if>
-              </div>
+              </sc-for>
             </sc-for>
+            <!-- The rule that stops the queue being gamed, said where the pushing happens. Snoozing
+                 is the obvious way to make a completion figure look better, and somebody will try it
+                 exactly once. -->
+            <div style="padding:12px 22px; background:#FBFAFE; font-size:11px; color:#8C8899; line-height:1.6;">Completion rate is measured from the <b style="color:#4B4757;">original</b> due date, not the rescheduled one — so pushing a follow-up back cannot improve it.</div>
+          </section>
+        </sc-if>
           </section>
         </sc-for>
 
@@ -25409,9 +25428,6 @@ class Component extends DCLogic {
       })(),
 
       // ── Follow-ups ──
-      fuSub: _fu.length
-        ? _fu.filter(f => f.overdue).length + ' overdue · ' + _fu.filter(f => !f.overdue).length + ' due today'
-        : 'What somebody undertook to do, by the day they said',
       // ── the shape of the day ──
       fuHasAny: _fu.length > 0,
       fuStats: (() => {
