@@ -9187,17 +9187,15 @@
             <input value="{{ ntName }}" onInput="{{ setNtName }}" placeholder="{{ ntPlaceholder }}" class="fm-inp"></div>
           <div style="margin-top:13px;"><label class="fm-lab">Team leader</label>
             <div class="fm-selwrap" style="z-index:40;">
-              <div data-dd data-open="{{ ddNtLeadOpen }}" onClick="{{ ddNtLeadOpenList }}" class="fm-combo">
-                <input value="{{ ddNtLeadValue }}" onInput="{{ ddNtLeadSetQuery }}" onKeyDown="{{ ddNtLeadKey }}" placeholder="{{ ddNtLeadPlaceholder }}" class="fm-inp" style="border:none; background:transparent; padding:0; width:100%;">
-                <svg class="fm-combo-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              <div data-dd data-open="{{ ddNtLeadOpen }}" onClick="{{ ddNtLeadToggle }}" class="fm-sel">
+                <span style="color:{{ ddNtLeadColor }};">{{ ddNtLeadLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
               </div>
               <sc-if value="{{ ddNtLeadOpen }}" hint-placeholder-val="{{ false }}">
-                <div data-dd data-hidescroll="true" class="pill-dd" style="max-height:210px; overflow-y:auto;">
-                  <sc-for list="{{ ddNtLeadRows }}" as="o" hint-placeholder-count="5">
-                    <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
-                    <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                <div data-dd data-hidescroll="true" class="pill-dd" style="max-height:230px; overflow-y:auto;">
+                  <sc-for list="{{ ddNtLeadOptions }}" as="o" hint-placeholder-count="6">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
                   </sc-for>
-                  <sc-if value="{{ ddNtLeadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if>
                 </div>
               </sc-if>
             </div>
@@ -26139,10 +26137,14 @@ class Component extends DCLogic {
           setNtName: (e) => this.setState({ ntName: e.target.value, ntErr: '' }),
           ntErr: this.state.ntErr || '',
           ntHasErr: !!this.state.ntErr,
-          // Same searchable control as every other person picker on this screen, so choosing a
-          // leader here and changing one on the card are visibly the same act.
-          ...mkDdCombo('ddNtLead', [{ label: 'PEOPLE', options: staff9.map(u => ({ value: u.id, label: u.name })) }],
-            this.state.ntLead || '', (v) => this.setState({ ntLead: v, ntErr: '' }), 'Search people\u2026'),
+          // A PLAIN picker, not a search-as-you-type field. This firm has a handful of staff, and
+          // a filter box over seven names is furniture — the same reason the leads grouping picker
+          // has none. The searchable combo stays on the team card, where it is choosing out of the
+          // whole staff directory rather than from a list you can read at a glance.
+          ...mkDd('ddNtLead', staff9.map(u => ({ value: u.id, label: u.name })),
+            this.state.ntLead || '', (v) => this.setState({ ntLead: v, ntErr: '' }), 'Nobody yet'),
+          // Grey until somebody is picked, so "Nobody yet" cannot be misread as a name.
+          ddNtLeadColor: this.state.ntLead ? '#1A1523' : '#A9A6B4',
           ntSave: () => {
             const nm = String(this.state.ntName || '').trim();
             if (!nm) return this.setState({ ntErr: 'Give the team a name \u2014 it goes on reports.' });
