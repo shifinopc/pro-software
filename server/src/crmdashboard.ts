@@ -204,11 +204,20 @@ export async function crmDashboard(scope: CrmScope = {}) {
     })),
   };
 
-  /** Every deal needing a look, worst first — not only the stalled ones. */
+  /**
+   * Every open deal, worst first — INCLUDING the healthy ones.
+   *
+   * It used to stop at severity > 0, which was right while this fed a "needs attention" list and
+   * wrong the moment the screen grew a Healthy filter: the chip counted deals the list could not
+   * show, so pressing it emptied a card that had just told you there was one. A filter and its
+   * list have to be drawn from the same set.
+   *
+   * Twelve rather than six, because the list is now filterable and six worst-first rows can be
+   * entirely stalled — leaving Healthy to filter an empty set on a book that has healthy deals.
+   */
   const needsAttention = judged
-    .filter(j => j.health.severity > 0)
     .sort(byWorstFirst)
-    .slice(0, 6)
+    .slice(0, 12)
     .map(j => ({
       id: j.deal.id, title: j.deal.title,
       company: (j.deal as any).company?.name ?? null,
@@ -217,6 +226,12 @@ export async function crmDashboard(scope: CrmScope = {}) {
       state: j.health.state, label: j.health.label, color: j.health.color, bg: j.health.bg,
       reasons: j.health.reasons,
       valueMinor: j.deal.valueMinor ?? null,
+      // The meter the design draws under each row: how long it has sat against what this stage
+      // allows. Both are already worked out by dealhealth — sending them means the screen never has
+      // to re-derive a limit and reach a different answer from the badge beside it.
+      daysInStage: j.health.daysInStage,
+      stageLimit: j.health.stageLimit,
+      daysQuiet: j.health.daysQuiet,
     }));
 
   // ── the funnel ────────────────────────────────────────────────────────────────────────────────
@@ -341,11 +356,48 @@ export async function crmDashboard(scope: CrmScope = {}) {
 
   const followUps = await openFollowUps({ companyIds: scope.companyIds ?? null });
 
+  /**
+   * THE QUEUE, not just its size.
+   *
+   * The counts were all this returned, which was enough for four tiles and is not enough for a list.
+   * Rows are capped at five each — this is the "what do I do next" card, and a queue long enough to
+   * scroll has stopped being one.
+   *
+   * Each row carries what it needs to be acted on and nothing more: who it is about, what was
+   * promised, and how late. `daysLate` comes from openFollowUps, which measures from the ORIGINAL
+   * due date, so a commitment pushed back three times still reports how long it has really been
+   * owed rather than looking fresh.
+   */
+  const chase = {
+    followUps: followUps.slice(0, 5).map(f => ({
+      id: f.id,
+      title: f.nextAction ?? "Follow up",
+      company: (f as any).company?.name ?? null,
+      kind: f.kind ?? "call",
+      overdue: !!f.overdue,
+      daysLate: (f as any).daysLate ?? 0,
+    })),
+    // Arrived today, with the score the Leads screen shows — same figure, so a lead that reads 82
+    // there cannot read something else here.
+    newLeads: await (async () => {
+      const ids = [...new Set(arrivedToday.map(r => r.companyId))].slice(0, 5);
+      if (!ids.length) return [];
+      const rows = await prisma.company.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, source: true },
+      });
+      return rows.map(c => ({ id: c.id, name: c.name, source: c.source ?? "Not recorded" }));
+    })(),
+    appointments: upcoming.slice(0, 5),
+    undated: undatedUpcoming,
+  };
+
   return {
     on: today,
     month: thisMonth,
     leads: { total: leads.length, newToday: newLeadsToday },
     followUpsToday: { total: followUps.length, overdue: followUps.filter(f => f.overdue).length },
+    chase,
     deals: {
       open: { count: open.length, valueMinor: sum(open), weightedMinor: open.reduce((n, d) => n + (d.weightedMinor ?? 0), 0) },
       won: { count: won.length, thisMonth: wonThisMonth.length, thisMonthMinor: sum(wonThisMonth) },

@@ -4254,7 +4254,106 @@
            weeks, and the board alone cannot tell them apart. Every verdict here carries the reasons
            that produced it, because a coloured badge nobody can decompose gets trusted blindly for
            a week and ignored for ever after. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1fr 1fr; gap:18px;" class="cd-two">
+      <!-- Needs a look / Needs chasing, at the design'S 1.45fr / 1fr. The wider card is the one
+           you read; the narrower one is the one you act from. Equal halves made the reading card
+           cramped while the queue ran out of things to say.
+
+           Softer and deeper than the app'S usual hairline box: no border, and a long low shadow
+           that lifts this pair off the page because it is the pair somebody actually works from. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1.45fr 1fr; gap:20px; align-items:stretch;" class="cd-two">
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div>
+              <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs a look</div>
+              <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Ranked worst first &middot; tap a state to filter</div>
+            </div>
+            <span onClick="{{ cdGoPipeline }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">Open pipeline &rarr;</span>
+          </div>
+          <!-- Chips filter the list BELOW them, and both come from the same set. A count that
+               cannot be pressed through to its rows is the fastest way to lose trust in one. -->
+          <div style="display:flex; gap:6px; margin-top:15px; flex-wrap:wrap;">
+            <sc-for list="{{ cdLookChips }}" as="h" hint-placeholder-count="6">
+              <span onClick="{{ h.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; color:{{ h.chipColor }}; background:{{ h.chipBg }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ h.label }}<span style="opacity:.75;">{{ h.count }}</span></span>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:9px; margin-top:17px;">
+            <sc-for list="{{ cdLookRows }}" as="d" hint-placeholder-count="3">
+              <div onClick="{{ d.go }}" style="position:relative; overflow:hidden; background:#FCFBFE; border-radius:16px; padding:14px 16px 13px 18px; cursor:pointer; transition:background .12s;" style-hover="background:#F7F3FD;">
+                <span style="position:absolute; left:0; top:0; bottom:0; width:4px; background:{{ d.stateColor }};"></span>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <span style="width:36px; height:36px; border-radius:12px; background:{{ d.stateBg }}; color:{{ d.stateColor }}; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
+                      <span style="font-size:9px; font-weight:700; color:{{ d.stateColor }}; background:{{ d.stateBg }}; padding:2px 9px; border-radius:99px; flex-shrink:0;">{{ d.label }}</span>
+                    </div>
+                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ d.why }}</div>
+                  </div>
+                  <div style="text-align:right; flex-shrink:0;">
+                    <div style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:14px;">{{ d.value }}</div>
+                    <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ d.owner }}</div>
+                  </div>
+                </div>
+                <!-- Days in stage against what THIS stage allows, drawn and stated. The figure
+                     beside the bar is the point: a bar alone cannot say 19 out of 12. -->
+                <sc-if value="{{ d.hasMeter }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:11px;">
+                    <div style="flex:1; height:4px; background:#EFECF5; border-radius:99px; overflow:hidden;">
+                      <div style="height:100%; width:{{ d.meterW }}%; background:{{ d.meterColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div>
+                    </div>
+                    <span style="font-size:9.5px; font-weight:600; color:#B4AFC4; flex-shrink:0;">{{ d.meterLabel }}</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ cdLookEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:26px; text-align:center; font-size:12px; color:#B4AFC4;">{{ cdLookEmptyNote }}</div>
+            </sc-if>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="font-size:10px; color:#B4AFC4; margin-top:16px; padding-top:12px; border-top:1px solid #F5F3F9; line-height:1.6;"><b>Stalled</b> = days in stage vs that stage's limit &middot; <b>Quiet</b> = days since anyone made contact.</div>
+        </div>
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
+          <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs chasing</div>
+          <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Today's queue</div>
+          <sc-for list="{{ cdQueue }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:8px; margin-top:20px;">
+              <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.1em; text-transform:uppercase;">{{ g.label }}</span>
+              <span style="font-size:9.5px; font-weight:700; color:{{ g.pillColor }}; background:{{ g.pillBg }}; padding:2px 8px; border-radius:99px;">{{ g.count }}</span>
+              <div style="flex:1;"></div>
+              <span onClick="{{ g.go }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;">All &rarr;</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px; margin-top:9px;">
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                <div onClick="{{ r.go }}" style="display:flex; align-items:center; gap:11px; background:#FCFBFE; border-radius:13px; padding:10px 12px; cursor:pointer;" style-hover="background:#F7F3FD;">
+                  <span style="width:30px; height:30px; border-radius:{{ r.iconRadius }}; background:{{ r.iconBg }}; color:{{ r.iconColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.icon }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.title }}</div>
+                    <div style="font-size:9.5px; color:#A9A6B4; margin-top:2px;">{{ r.sub }}</div>
+                  </div>
+                  <span style="font-size:9.5px; font-weight:700; color:{{ r.tagColor }}; background:{{ r.tagBg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ r.tag }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px; text-align:center; font-size:11px; color:#B4AFC4;">{{ g.emptyNote }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <!-- Stated, never hidden: a meeting whose date cannot be read is a data problem somebody
+               should fix, not a row to quietly drop. -->
+          <sc-if value="{{ cdUndatedShown }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px; background:#FFF9EF; border:1px solid #FBE2B8; border-radius:12px; padding:11px 13px; font-size:10.5px; color:#8A6D1F; line-height:1.6;">&#9888; {{ cdUndatedNote }}</div>
+          </sc-if>
+          <div style="flex:1;"></div>
+        </div>
+      </section>
+
+      <!-- Deal health keeps its own card: the chips above answer "how many", this answers "why",
+           and the stacked bar is the only place the whole open book is shown at once. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .17s both;">
+
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
             <div>
@@ -4283,32 +4382,6 @@
           <div style="margin-top:14px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdHealthNote }}</div>
         </div>
 
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Needs a look</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">Worst first — not only the stalled ones</div>
-            </div>
-            <span onClick="{{ cdGoPipeline }}" style="font-size:12px; color:#7C00FF; font-weight:600; cursor:pointer; white-space:nowrap;">Board →</span>
-          </div>
-          <div style="display:flex; flex-direction:column; margin-top:12px; flex:1;">
-            <sc-for list="{{ cdAttention }}" as="a" hint-placeholder-count="5">
-              <div onClick="{{ a.go }}" style="display:flex; align-items:flex-start; gap:11px; padding:10px 0; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FDFBFF;">
-                <span style="flex-shrink:0; margin-top:1px; font-size:9.5px; font-weight:700; color:{{ a.color }}; background:{{ a.bg }}; padding:3px 9px; border-radius:99px; min-width:72px; text-align:center;">{{ a.label }}</span>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ a.title }}</div>
-                  <!-- The WHY, in words. This is the whole difference between a health badge people
-                       act on and one they learn to scroll past. -->
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ a.why }}</div>
-                </div>
-                <span style="flex-shrink:0; font-size:11px; color:#6F6C7A; margin-top:1px;">{{ a.value }}</span>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdAttentionEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">Every open deal is healthy — nothing is overdue, stalled or gone quiet.</div>
-            </sc-if>
-          </div>
-        </div>
       </section>
 
       <!-- Funnel + stalled -->
@@ -24148,6 +24221,8 @@ class Component extends DCLogic {
           cdStalledCount: '0', cdStalledColor: '#26074D', cdStalledUnknown: '', cdStalledUnknownShown: false,
           cdHealth: [], cdHealthBar: [], cdHealthSub: '', cdHealthNote: '',
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
+          cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
+          cdQueue: [], cdUndatedShown: false, cdUndatedNote: '',
           cdSources: [], cdSourceArcs: [], cdSourceTotal: '0', cdSourcesEmpty: false, cdSourceSub: '', cdSourceNote: '', cdGoLeads: () => {},
           cdLostReasons: [], cdLostEmpty: false, cdLostEmptyNote: '', cdLostSub: '',
           cdPipeBars: [], cdPipeEmpty: false, cdPipeEmptyNote: '', cdPipeSub: '',
@@ -24535,6 +24610,119 @@ class Component extends DCLogic {
             + 'Gone quiet is ' + D.staleDealDays + '+ days with nobody logging any contact. Set a stage’s limit in Sales Settings.',
 
           cdAttentionEmpty: D.needsAttention.length === 0,
+          /**
+           * NEEDS A LOOK — the design's filterable list.
+           *
+           * The chips and the rows are built from ONE array. The old split (counts from `health`,
+           * rows from a severity-filtered list) meant a chip could report a state the list had no
+           * rows for; pressing Healthy emptied a card that had just said there was one.
+           *
+           * `All` is the default and shows everything the server sent, worst first — the order is
+           * already correct on arrival, so no re-sorting here to disagree with it.
+           */
+          ...(() => {
+            const rows9 = Array.isArray(D.needsAttention) ? D.needsAttention : [];
+            const sel9 = this.state.cdLookState || 'all';
+            const tone9 = { stalled: ['#C0353A', '#FEECEC'], overdue: ['#E5484D', '#FEECEC'], 'at-risk': ['#B8860B', '#FEF4E2'], quiet: ['#6D5BD0', '#EFEBFF'], healthy: ['#0E9355', '#E7F8EF'] };
+            const states9 = ['stalled', 'overdue', 'at-risk', 'quiet', 'healthy'];
+            const shown9 = sel9 === 'all' ? rows9 : rows9.filter(r => r.state === sel9);
+            const initials9 = (n) => String(n || '?').replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            return {
+              cdLookChips: [{ key: 'all', label: 'All', count: rows9.length }]
+                .concat(states9.map(st => ({ key: st, label: st === 'at-risk' ? 'At risk' : st[0].toUpperCase() + st.slice(1), count: rows9.filter(r => r.state === st).length })))
+                .map(c => ({
+                  label: c.label, count: String(c.count),
+                  // The selected chip inverts; the rest wear their own state's tint. An unselected
+                  // chip in solid colour would compete with the row stripes for the same meaning.
+                  chipColor: sel9 === c.key ? '#fff' : (c.key === 'all' ? '#4B4757' : (tone9[c.key] || ['#6F6C7A'])[0]),
+                  chipBg: sel9 === c.key ? (c.key === 'all' ? '#1A1523' : (tone9[c.key] || ['', '#F3F1F7'])[0]) : (c.key === 'all' ? '#F3F1F7' : (tone9[c.key] || ['', '#F3F1F7'])[1]),
+                  pick: () => this.setState({ cdLookState: c.key }),
+                })),
+              cdLookRows: shown9.map(a => {
+                const lim9 = Number(a.stageLimit) || 0;
+                const day9 = a.daysInStage == null ? null : Number(a.daysInStage);
+                return {
+                  initials: initials9(a.company || a.title),
+                  company: a.company || a.title,
+                  label: a.label,
+                  stateColor: a.color, stateBg: a.bg,
+                  why: [a.title, (a.reasons || [])[0]].filter(Boolean).join(' · '),
+                  value: a.valueMinor == null ? '—' : _money9(a.valueMinor, ccy),
+                  owner: a.owner || 'Unassigned',
+                  // No limit, or no stage date, means no meter — a bar drawn against an unknown
+                  // ceiling is a picture of a number nobody measured.
+                  hasMeter: day9 != null && lim9 > 0,
+                  meterW: day9 != null && lim9 > 0 ? Math.max(3, Math.min(100, Math.round((day9 / lim9) * 100))) : 0,
+                  meterColor: a.color,
+                  meterLabel: day9 != null && lim9 > 0 ? day9 + ' / ' + lim9 + 'd in stage' : '',
+                  go: goTo('Pipeline', 'Sales'),
+                };
+              }),
+              cdLookEmpty: shown9.length === 0,
+              cdLookEmptyNote: rows9.length === 0
+                ? 'No open deals yet.'
+                : 'Nothing is ' + (sel9 === 'at-risk' ? 'at risk' : sel9) + ' right now.',
+            };
+          })(),
+          /**
+           * NEEDS CHASING — three queues, each with its count, its rows and a way through to the
+           * screen that owns it. Built from `chase`, which the server caps at five a piece: this is
+           * the "what next" card, and a queue long enough to scroll has stopped being one.
+           */
+          ...(() => {
+            const c9 = D.chase || { followUps: [], newLeads: [], appointments: [], undated: 0 };
+            const kindIcon9 = { call: '\u260E', meeting: '\u25A3', email: '\u2709', whatsapp: '\u25CF', note: '\u270E', site_visit: '\u2691' };
+            const mon9 = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+            const ini9 = (n) => String(n || '?').replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            const groups9 = [
+              {
+                label: 'Follow-ups due', count: (D.followUpsToday || {}).total || 0,
+                pillColor: '#B8860B', pillBg: '#FEF4E2', go: goTo('Follow-ups', 'Sales'),
+                emptyNote: 'Nothing due \u2728',
+                rows: (c9.followUps || []).map(f => ({
+                  icon: kindIcon9[f.kind] || '\u270E', iconBg: '#F3EFFA', iconColor: '#6D5BD0', iconRadius: '9px',
+                  title: f.title, sub: f.company || 'No company',
+                  // Late reads in days; on-time simply says so. "0 days late" is a phrase nobody says.
+                  tag: f.overdue ? (f.daysLate || 1) + (f.daysLate === 1 ? ' day late' : ' days late') : 'due today',
+                  tagColor: f.overdue ? '#C0353A' : '#B8860B', tagBg: f.overdue ? '#FEECEC' : '#FEF4E2',
+                  go: goTo('Follow-ups', 'Sales'),
+                })),
+              },
+              {
+                label: 'New leads today', count: (D.leads || {}).newToday || 0,
+                pillColor: '#0284C7', pillBg: '#E4F4FD', go: goTo('Leads', 'Sales'),
+                emptyNote: 'None arrived today',
+                rows: (c9.newLeads || []).map(l => ({
+                  icon: ini9(l.name), iconBg: '#EFEBFA', iconColor: '#6D5BD0', iconRadius: '99px',
+                  title: l.name, sub: l.source,
+                  tag: 'new', tagColor: '#0284C7', tagBg: '#E4F4FD',
+                  go: goTo('Leads', 'Sales'),
+                })),
+              },
+              {
+                label: 'Appointments', count: (c9.appointments || []).length,
+                pillColor: '#0E9355', pillBg: '#E7F8EF', go: goTo('Appointments', 'Operations'),
+                emptyNote: 'Nothing booked',
+                rows: (c9.appointments || []).map(a => {
+                  const d9 = String(a.date || '');
+                  const m9 = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d9);
+                  return {
+                    icon: m9 ? (mon9[Number(m9[2]) - 1] + ' ' + Number(m9[3])) : '\u2014',
+                    iconBg: '#F3EFFA', iconColor: '#6D5BD0', iconRadius: '9px',
+                    title: a.title, sub: a.client || 'No client',
+                    tag: a.time || 'no time', tagColor: '#0284C7', tagBg: '#E4F4FD',
+                    go: goTo('Appointments', 'Operations'),
+                  };
+                }),
+              },
+            ];
+            return {
+              cdQueue: groups9.map(g => ({ ...g, count: String(g.count), empty: g.rows.length === 0 })),
+              cdUndatedShown: (c9.undated || 0) > 0,
+              cdUndatedNote: (c9.undated || 0) + ((c9.undated || 0) === 1 ? ' appointment has' : ' appointments have')
+                + ' a date nobody can read \u2014 it is not counted above, and it will not appear in any diary until it is fixed.',
+            };
+          })(),
           cdAttention: D.needsAttention.map(a => ({
             label: a.label, color: a.color, bg: a.bg,
             title: a.title,
