@@ -4701,6 +4701,115 @@
           </div>
         </section>
 
+        <!-- ── The design's four panels ───────────────────────────────────────────
+             Quota, forecast, leaderboard and channels, all counted by /api/targets-forecast from
+             deals and the targets somebody set — nothing here is stored, so this screen and the
+             pipeline cannot come to disagree about what was won.
+
+             The design also carries a COMMISSION PAYABLE figure. There is no commission rate on a
+             user, a team or a plan anywhere in this schema, so that number could only be invented,
+             and a made-up figure on a panel about money owed to people is the worst place for one.
+             It is absent rather than guessed. -->
+        <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:stretch;">
+            <div style="position:relative; overflow:hidden; border-radius:18px; background:linear-gradient(135deg,#26074D,#5E00C4); color:#fff; padding:22px 24px; display:flex; flex-direction:column; justify-content:center;">
+              <div style="position:absolute; right:-40px; top:-40px; width:170px; height:170px; border-radius:99px; background:radial-gradient(closest-side, rgba(255,255,255,.14), transparent);"></div>
+              <div style="position:relative; font-size:10.5px; font-weight:700; letter-spacing:.08em; opacity:.8;">{{ tfQuarterLabel }}</div>
+              <div style="position:relative; display:flex; align-items:baseline; gap:9px; margin-top:8px; flex-wrap:wrap;">
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:30px; font-weight:700; letter-spacing:-.02em;">{{ tfWon }}</span>
+                <sc-if value="{{ tfHasTarget }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:12.5px; opacity:.75;">{{ tfOfTarget }}</span>
+                </sc-if>
+              </div>
+              <div style="position:relative; height:9px; border-radius:99px; background:rgba(255,255,255,.2); overflow:hidden; margin-top:14px;"><div style="height:100%; width:{{ tfPctW }}; background:linear-gradient(90deg,#12B76A,#A7F3D0); border-radius:99px;"></div></div>
+              <div style="position:relative; display:flex; justify-content:space-between; gap:10px; margin-top:9px; font-size:11px; opacity:.85;"><span>{{ tfPctLine }}</span><span>{{ tfGapLine }}</span></div>
+              <sc-if value="{{ tfPartial }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative; font-size:10px; opacity:.75; margin-top:8px; line-height:1.5;">{{ tfPartialNote }}</div>
+              </sc-if>
+            </div>
+
+            <div class="pg-card" style="padding:20px 22px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Forecast vs target</div>
+                <div style="display:flex; align-items:center; gap:12px; font-size:10px; color:#8C8899;">
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:8px; height:8px; border-radius:2px; background:#7C00FF;"></span>Actual</span>
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:8px; height:8px; border-radius:2px; background:#C9A2FF;"></span>Projected</span>
+                  <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:11px; height:2px; background:#D8D3E3;"></span>Target</span>
+                </div>
+              </div>
+              <div style="display:flex; align-items:flex-end; gap:10px; height:132px; margin-top:16px;">
+                <sc-for list="{{ tfMonths }}" as="f" hint-placeholder-count="6">
+                  <div title="{{ f.tip }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end;">
+                    <div style="position:relative; width:100%; height:100%; display:flex; align-items:flex-end;">
+                      <sc-if value="{{ f.hasTarget }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:absolute; left:0; right:0; bottom:{{ f.tH }}; height:2px; background:#D8D3E3;"></div>
+                      </sc-if>
+                      <div style="width:100%; height:{{ f.h }}; background:{{ f.color }}; border-radius:6px 6px 3px 3px; display:flex; align-items:flex-start; justify-content:center; padding-top:5px;">
+                        <span style="font-size:8.5px; font-weight:700; color:#fff; white-space:nowrap;">{{ f.value }}</span>
+                      </div>
+                    </div>
+                    <span style="font-size:9.5px; font-weight:600; color:#8C8899;">{{ f.m }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </section>
+
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .09s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:start;">
+            <div class="pg-card" style="padding:18px 20px 20px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">🏆 Sales leaderboard</div>
+                <span style="font-size:10.5px; color:#A9A6B4;">by quota attainment</span>
+              </div>
+              <sc-if value="{{ tfHasBoard }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:11.5px; font-weight:700; color:#0E9355; margin-top:5px;">{{ tfBoardTop }}</div>
+                <div style="display:flex; flex-direction:column; gap:9px; margin-top:12px;">
+                  <sc-for list="{{ tfBoard }}" as="r" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:center; gap:11px; background:{{ r.rowBg }}; border:1px solid {{ r.rowBd }}; border-radius:13px; padding:11px 13px;">
+                      <span style="font-size:13px; width:22px; text-align:center; flex-shrink:0; color:#A9A6B4; font-weight:700;">{{ r.rank }}</span>
+                      <span style="width:32px; height:32px; border-radius:99px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.initials }}</span>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</div>
+                        <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ r.sub }}</div>
+                        <div style="height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:7px;"><div style="height:100%; width:{{ r.barW }}; background:{{ r.barColor }}; border-radius:99px;"></div></div>
+                      </div>
+                      <div style="text-align:right; flex-shrink:0;">
+                        <div style="font-size:15px; font-weight:700; color:{{ r.pctColor }}; font-variant-numeric:tabular-nums;">{{ r.pct }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:2px; white-space:nowrap;">{{ r.closed }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+
+            <div class="pg-card" style="padding:18px 20px 20px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Lead-source ROI</div>
+                <span style="font-size:10.5px; color:#A9A6B4;">which channels convert</span>
+              </div>
+              <sc-if value="{{ tfHasSources }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-direction:column; gap:13px; margin-top:14px;">
+                  <sc-for list="{{ tfSources }}" as="x" hint-placeholder-count="5">
+                    <div title="{{ x.tip }}">
+                      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+                        <span style="font-size:12.5px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
+                        <span style="display:flex; align-items:baseline; gap:12px; flex-shrink:0;">
+                          <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ x.value }}</span>
+                          <span style="font-size:11px; font-weight:700; color:{{ x.convColor }}; width:38px; text-align:right; font-variant-numeric:tabular-nums;">{{ x.conv }}</span>
+                        </span>
+                      </div>
+                      <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:6px;"><div style="height:100%; width:{{ x.barW }}; background:{{ x.barColor }}; border-radius:99px;"></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">Bar length is revenue won from that source. The figure on the right is how many of its DECIDED deals were won — open ones are not counted as failures, or every new channel would look like the worst one.</div>
+              </sc-if>
+            </div>
+          </section>
+        </sc-if>
+
+
         <!-- The target, and how far along it is. Shown first because it is the only thing that makes
              the figures below mean anything — "SAR 180,000 won" is not good or bad on its own. -->
         <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; padding:18px 22px;">
@@ -11933,6 +12042,11 @@ class Component extends DCLogic {
        * a screen people open, not a number another screen needs, and a mailbox nobody has connected
        * would otherwise cost every page load a round trip to be told so.
        */
+      /** Targets & Forecast: four panels, one call, counted on the server. */
+      this._loadTF = () => fetch(API + '/api/targets-forecast', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v) this.setState({ tfData: v }); })
+        .catch(() => {});
       this._loadInbox = () => fetch(API + '/api/inbox', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v) this.setState({ inboxData: v }); })
@@ -26043,6 +26157,96 @@ class Component extends DCLogic {
           tmAdd: () => this.setState({ ntOpen: true, ntName: '', ntLead: '', ntErr: '' }),
         };
       })(),
+      // ── Targets & Forecast ────────────────────────────────────────────────────────────────
+      ...(() => {
+        const D = this.state.tfData || null;
+        if (this.state.active === 'Targets & Forecast' && !D && !this._tfAsked) {
+          this._tfAsked = true;
+          if (this._loadTF) this._loadTF();
+        }
+        const ccy = (D && D.currency) || 'SAR';
+        const k9 = (minor) => {
+          if (minor == null) return '\u2014';
+          const n = minor / 100, a = Math.abs(n);
+          if (a >= 1e6) return ccy + ' ' + (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm';
+          if (a >= 10000) return ccy + ' ' + Math.round(n / 1000) + 'k';
+          return ccy + ' ' + Math.round(n).toLocaleString();
+        };
+        const pct9 = (bp) => bp == null ? null : Math.round(bp / 100);
+        const ini9 = (n) => (String(n || '').match(/[\p{L}\p{N}]+/gu) || []).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+        if (!D) return { tfReady: false, tfLoading: true, tfMonths: [], tfBoard: [], tfSources: [] };
+
+        const q = D.quarter || {};
+        // The tallest thing on the chart sets the scale — including targets, or a month that missed
+        // its target by half would draw a bar as tall as one that beat it.
+        const top = Math.max(1, ...(D.months || []).flatMap(m => [m.actualMinor || 0, m.projectedMinor || 0, m.targetMinor || 0]));
+        return {
+          tfReady: true, tfLoading: false,
+          tfQuarterLabel: 'TEAM QUOTA \u00b7 ' + (q.label || ''),
+          tfWon: k9(q.wonMinor),
+          tfHasTarget: q.targetMinor != null,
+          tfOfTarget: q.targetMinor != null ? 'of ' + k9(q.targetMinor) : '',
+          tfPctW: q.pctBp != null ? Math.max(0, Math.min(100, Math.round(q.pctBp / 100))) + '%' : '0%',
+          tfPctLine: q.pctBp != null ? Math.round(q.pctBp / 100) + '% achieved' : 'No target set for this quarter',
+          tfGapLine: q.gapMinor != null ? k9(q.gapMinor) + ' to quota' : '',
+          // Said plainly rather than shown as a smaller quota: a quarter is only measurable when
+          // all three of its months carry a target.
+          tfPartial: (q.monthsWithTarget || 0) > 0 && (q.monthsWithTarget || 0) < (q.monthsInQuarter || 3),
+          tfPartialNote: 'Only ' + (q.monthsWithTarget || 0) + ' of 3 months in this quarter have a target set, so no quarter figure is shown.',
+          tfMonths: (D.months || []).map(m => {
+            const shown = m.isFuture ? (m.projectedMinor || 0) : (m.actualMinor || 0);
+            return {
+              m: m.label,
+              h: Math.max(2, Math.round((shown / top) * 100)) + '%',
+              // Solid for what happened, pale for what is only forecast. The difference between a
+              // fact and a projection is the most important thing on this chart.
+              color: m.isFuture ? '#C9A2FF' : '#7C00FF',
+              value: k9(shown),
+              hasTarget: m.targetMinor != null,
+              tH: m.targetMinor != null ? Math.round((m.targetMinor / top) * 100) + '%' : '0%',
+              tip: m.label + ' \u2014 ' + (m.isFuture ? 'projected ' : 'won ') + k9(shown)
+                + (m.targetMinor != null ? ' \u00b7 target ' + k9(m.targetMinor) : ' \u00b7 no target set'),
+            };
+          }),
+          tfBoardTop: (D.leaderboard || []).length
+            ? 'Top: ' + D.leaderboard[0].name + ' \u00b7 ' + k9(D.leaderboard[0].wonMinor)
+              + (D.leaderboard[0].pctBp != null ? ' \u00b7 ' + Math.round(D.leaderboard[0].pctBp / 100) + '% of quota' : '')
+            : '',
+          tfHasBoard: (D.leaderboard || []).length > 0,
+          tfBoard: (D.leaderboard || []).map((r, i) => ({
+            name: r.name,
+            initials: ini9(r.name),
+            rank: i === 0 ? '\u{1F947}' : i === 1 ? '\u{1F948}' : i === 2 ? '\u{1F949}' : '#' + (i + 1),
+            sub: r.deals + (r.deals === 1 ? ' deal won' : ' deals won')
+              + (r.winRateBp != null ? ' \u00b7 ' + Math.round(r.winRateBp / 100) + '% win rate' : ' \u00b7 nothing decided'),
+            closed: k9(r.wonMinor) + ' closed',
+            // A percentage of quota, or nothing at all where no quota was set. A leaderboard "by
+            // quota attainment" that invents 0% for everybody without a target ranks them last for
+            // an omission that is not theirs.
+            pct: r.pctBp != null ? Math.round(r.pctBp / 100) + '%' : 'no target',
+            pctColor: r.pctBp == null ? '#A9A6B4' : r.pctBp >= 10000 ? '#0E9355' : r.pctBp >= 7000 ? '#7C00FF' : '#8C8899',
+            barW: r.pctBp != null ? Math.max(2, Math.min(100, Math.round(r.pctBp / 100))) + '%' : '0%',
+            barColor: r.pctBp == null ? '#E4E1EC' : r.pctBp >= 10000 ? '#12B76A' : r.pctBp >= 7000 ? '#7C00FF' : '#C9C4D4',
+            rowBg: i === 0 ? '#F6FDF9' : '#fff',
+            rowBd: i === 0 ? '#BFEBD2' : '#F0EDF6',
+          })),
+          tfHasSources: (D.sources || []).length > 0,
+          tfSources: (() => {
+            const max = Math.max(1, ...(D.sources || []).map(x => x.wonMinor || 0));
+            return (D.sources || []).map(x => ({
+              name: x.name,
+              value: x.wonMinor ? k9(x.wonMinor) : '\u2014',
+              barW: Math.max(1, Math.round(((x.wonMinor || 0) / max) * 100)) + '%',
+              barColor: x.convertedBp == null ? '#DDD9E6' : x.convertedBp >= 7500 ? '#12B76A' : x.convertedBp >= 4000 ? '#7C00FF' : '#0284C7',
+              conv: x.convertedBp != null ? Math.round(x.convertedBp / 100) + '%' : '\u2014',
+              convColor: x.convertedBp == null ? '#C9C4D4' : '#6F6C7A',
+              tip: x.name + ' \u2014 ' + x.deals + (x.deals === 1 ? ' deal' : ' deals')
+                + (x.convertedBp != null ? ', ' + Math.round(x.convertedBp / 100) + '% of the decided ones won' : ', none decided yet'),
+            }));
+          })(),
+        };
+      })(),
+
       // ── Inbox ─────────────────────────────────────────────────────────────────────────────
       ...(() => {
         const D9 = this.state.inboxData || null;

@@ -1754,6 +1754,128 @@ app.get("/api/ops-report", requireAuth, requireStaff, requireReadRole("super_adm
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+/**
+ * TARGETS & FORECAST — the four panels of that screen, counted here, in one call.
+ *
+ * Nothing is stored. Every figure is derived from deals, their stages and the targets somebody has
+ * set, so this screen and the pipeline cannot disagree about what was won.
+ *
+ * THE ONE PANEL THIS DOES NOT RETURN is commission. There is no commission rate on a user, a team
+ * or a plan anywhere in this schema — a payable figure would have to be invented, and an invented
+ * number on a page about money owed to people is the worst place to put one.
+ */
+app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const stages = await prisma.pipelineStage.findMany({ select: { id: true, isWon: true, isLost: true } });
+  const wonIds = new Set(stages.filter(s => s.isWon).map(s => s.id));
+  const lostIds = new Set(stages.filter(s => s.isLost).map(s => s.id));
+
+  const deals = await prisma.opportunity.findMany({
+    where: scoped ? { companyId: { in: scoped } } : {},
+    select: {
+      id: true, stageId: true, ownerId: true, valueMinor: true, currency: true,
+      probabilityBp: true, expectedCloseDate: true, closedAt: true, source: true, companyId: true,
+    },
+  });
+  const money = (d: any) => d.valueMinor ?? 0;
+  const isWon = (d: any) => wonIds.has(d.stageId);
+  const isLost = (d: any) => lostIds.has(d.stageId);
+  const isOpen = (d: any) => !isWon(d) && !isLost(d);
+  const monthOf = (iso: string | null) => (iso ? String(iso).slice(0, 7) : null);
+
+  // ── the six-month strip, anchored on the current month ──────────────────────────────────────
+  const now = new Date();
+  const months: Array<{ key: string; label: string }> = [];
+  for (let i = 3; i >= -2; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    months.push({ key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) });
+  }
+  const thisMonth = now.toISOString().slice(0, 7);
+  const targets = await prisma.salesTarget.findMany({ where: { ownerId: null, teamId: null } });
+  const targetFor = (period: string) => targets.find(t => t.period === period)?.amountMinor ?? null;
+
+  const strip = months.map(m => {
+    // ACTUAL is what closed won in that month. PROJECTED is the weighted value of open deals whose
+    // expected close falls in it — a forecast, not a wish, and only shown for months not yet over.
+    const actual = deals.filter(d => isWon(d) && monthOf(d.closedAt) === m.key).reduce((n, d) => n + money(d), 0);
+    const projected = deals
+      .filter(d => isOpen(d) && monthOf(d.expectedCloseDate) === m.key)
+      .reduce((n, d) => n + Math.round(money(d) * ((d.probabilityBp ?? 0) / 10000)), 0);
+    return {
+      key: m.key, label: m.label,
+      actualMinor: actual,
+      projectedMinor: projected,
+      targetMinor: targetFor(m.key),
+      isFuture: m.key > thisMonth,
+      isCurrent: m.key === thisMonth,
+    };
+  });
+
+  // ── the quarter the current month sits in ───────────────────────────────────────────────────
+  const q = Math.floor(now.getUTCMonth() / 3) + 1;
+  const qMonths = [0, 1, 2].map(i => new Date(Date.UTC(now.getUTCFullYear(), (q - 1) * 3 + i, 1)).toISOString().slice(0, 7));
+  const qWon = deals.filter(d => isWon(d) && qMonths.includes(monthOf(d.closedAt) ?? "")).reduce((n, d) => n + money(d), 0);
+  // A quarter's target is its months' targets added up, and only when EVERY month has one: two
+  // months of three would read as a quarter target a third too small and nothing would say so.
+  const qTargets = qMonths.map(targetFor);
+  const qTarget = qTargets.every(t => t != null) ? (qTargets as number[]).reduce((a, b) => a + b, 0) : null;
+
+  // ── who is where against their own target ───────────────────────────────────────────────────
+  const ownerIds = [...new Set(deals.map(d => d.ownerId).filter(Boolean))] as string[];
+  const users = ownerIds.length ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } }) : [];
+  const ownerTargets = await prisma.salesTarget.findMany({ where: { period: { in: qMonths }, ownerId: { not: null } } });
+  const leaderboard = users.map(u => {
+    const mine = deals.filter(d => d.ownerId === u.id && qMonths.includes(monthOf(d.closedAt) ?? ""));
+    const won = mine.filter(isWon);
+    const lost = mine.filter(isLost);
+    const ts = qMonths.map(p => ownerTargets.find(t => t.ownerId === u.id && t.period === p)?.amountMinor ?? null);
+    const tgt = ts.every(t => t != null) ? (ts as number[]).reduce((a, b) => a + b, 0) : null;
+    const wonValue = won.reduce((n, d) => n + money(d), 0);
+    return {
+      name: u.name,
+      wonMinor: wonValue,
+      deals: won.length,
+      // Null, not zero: nobody who has decided nothing has a win rate, and 0% reads as "loses
+      // everything" rather than "has not closed anything yet".
+      winRateBp: won.length + lost.length ? Math.round((won.length * 10000) / (won.length + lost.length)) : null,
+      targetMinor: tgt,
+      pctBp: tgt && tgt > 0 ? Math.round((wonValue * 10000) / tgt) : null,
+    };
+  }).sort((a, b) => (b.pctBp ?? -1) - (a.pctBp ?? -1) || b.wonMinor - a.wonMinor);
+
+  // ── which channels convert ──────────────────────────────────────────────────────────────────
+  const srcKeys = [...new Set(deals.map(d => (d.source ?? "").trim()).filter(Boolean))];
+  const sources = srcKeys.map(k => {
+    const mine = deals.filter(d => (d.source ?? "").trim() === k);
+    const won = mine.filter(isWon);
+    const decided = won.length + mine.filter(isLost).length;
+    return {
+      name: k,
+      wonMinor: won.reduce((n, d) => n + money(d), 0),
+      deals: mine.length,
+      // Of the deals from this source that have been DECIDED — counting open ones as failures
+      // would make every fresh channel look like the worst one.
+      convertedBp: decided ? Math.round((won.length * 10000) / decided) : null,
+    };
+  }).sort((a, b) => b.wonMinor - a.wonMinor);
+
+  res.json({
+    currency: deals.find(d => d.currency)?.currency ?? "SAR",
+    quarter: {
+      label: "Q" + q + " " + now.getUTCFullYear(),
+      wonMinor: qWon,
+      targetMinor: qTarget,
+      pctBp: qTarget && qTarget > 0 ? Math.round((qWon * 10000) / qTarget) : null,
+      gapMinor: qTarget != null ? Math.max(0, qTarget - qWon) : null,
+      monthsWithTarget: qTargets.filter(t => t != null).length,
+      monthsInQuarter: 3,
+    },
+    months: strip,
+    leaderboard,
+    sources,
+  });
+});
+
 app.get("/api/sales-targets", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (_req, res) => {
   res.json(await prisma.salesTarget.findMany({ orderBy: { period: "desc" }, take: 200 }));
 });
