@@ -4046,36 +4046,72 @@
            and the Pipeline board cannot disagree about how many deals are open. -->
       <sc-if value="{{ showCrmDash }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Sales Dashboard">
 
-      <!-- ── Where the pipeline stands ──────────────────────────────────────────────────────────
-           A white section, not the dark gradient it was. The gradient hero came from an earlier
-           pass and shouted over a screen whose whole job is comparison: four glass tiles on a
-           painted background are harder to read against each other than four tinted ones on paper,
-           and the dark block set the sales screen apart from every other page for no reason anybody
-           could name. The published design settles it — same card as everything else, and the
-           colour moved onto the tiles where it means something. -->
-      <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; padding:18px 22px 20px;">
-        <div class="cd-head">
-          <span class="cd-head-i">💼</span>
-          <span class="cd-head-t">Where the pipeline stands</span>
-          <span class="cd-head-s">{{ cdMonthLabelShort }}</span>
-          <div style="flex:1;"></div>
-          <sc-if value="{{ cdHasMom }}" hint-placeholder-val="{{ false }}">
-            <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:{{ cdHeroPillBd }}; background:{{ cdHeroPillBg }}; padding:4px 11px; border-radius:99px;">{{ cdMom }}</span>
-          </sc-if>
-          <span onClick="{{ cdRefresh }}" class="cd-head-a">Refresh</span>
-        </div>
-        <!-- The tint is positional, not data-driven: the four tiles always mean the same four
-             things in the same order, so the colour is part of the layout a reader learns once. -->
-        <div class="cd-tiles" style="margin-top:14px;">
-          <sc-for list="{{ cdKpis }}" as="k" hint-placeholder-count="4">
-            <div onClick="{{ k.go }}" class="cd-tile {{ k.tint }}">
-              <div class="cd-tile-k">{{ k.label }}</div>
-              <div class="cd-tile-v">{{ k.value }}</div>
-              <div class="cd-tile-s">{{ k.sub }}</div>
+      <!-- ── THE HERO, from the published design ────────────────────────────────────────────────
+           Wider and deeper than the card it replaces: full width at the top rather than one half of
+           a two-up, and a longer gradient — #1B0637 into #4A0C9E into #7C00FF — so the darkest point
+           sits under the headline where the type has to hold and the purple only arrives at the far
+           edge.
+
+           Three glass panels, not two. Invoiced and Collected were already here; Open pipeline joins
+           them because the design sets the money questions side by side, and they are genuinely
+           separate: what closed, what was billed, what was actually received, and what is still in
+           front of us. None of them stands in for another. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; position:relative; overflow:hidden; border-radius:24px; background:linear-gradient(120deg,#1B0637 0%,#4A0C9E 55%,#7C00FF 130%); color:#fff; padding:26px 28px; box-shadow:0 20px 46px -22px rgba(38,7,77,.75);">
+        <div style="position:absolute; right:-70px; top:-90px; width:280px; height:280px; border-radius:99px; background:rgba(255,255,255,.07); animation:floatY 8s ease-in-out infinite;"></div>
+        <div style="position:absolute; right:130px; bottom:-140px; width:240px; height:240px; border-radius:99px; background:rgba(255,255,255,.05); animation:floatY2 10s ease-in-out infinite;"></div>
+        <div style="position:relative; display:grid; grid-template-columns:minmax(230px,1fr) minmax(0,1.6fr); gap:26px; align-items:center;">
+          <div>
+            <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+              <span style="font-size:10.5px; font-weight:700; letter-spacing:.12em; opacity:.8;">WON · {{ cdMonthLabelShort }}</span>
+              <sc-if value="{{ cdHasMom }}" hint-placeholder-val="{{ true }}">
+                <span title="Against last month's won value" style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.26); padding:3px 10px; border-radius:99px;">{{ cdMom }}</span>
+              </sc-if>
             </div>
-          </sc-for>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; letter-spacing:-.02em; margin-top:8px; line-height:1.05;">{{ cdWonValue }}</div>
+            <div style="font-size:11px; opacity:.75; margin-top:4px;">{{ cdWonLine }}</div>
+            <!-- Six months as flat segments, the way the design reads them: a strip under the
+                 headline that gives the TREND and gets out of the way. The month-by-month figures
+                 keep their own card further down. -->
+            <div style="display:flex; align-items:flex-end; gap:5px; height:26px; margin-top:16px;">
+              <sc-for list="{{ cdSpark }}" as="b" hint-placeholder-count="6">
+                <div title="{{ b.tip }}" style="flex:1; height:{{ b.h }}%; min-height:4px; border-radius:4px; background:{{ b.fill }};"></div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ cdHasTarget }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:12px; font-size:10.5px; opacity:.75; margin-top:9px;">
+                <span>{{ cdTargetLabel }}</span>
+                <span style="margin-left:auto; font-weight:700; opacity:1;">{{ cdTargetLine }}</span>
+              </div>
+            </sc-if>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(152px,1fr)); gap:12px;">
+            <div style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:16px; padding:15px 17px; backdrop-filter:blur(6px);">
+              <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.7;">INVOICED</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:23px; margin-top:7px;">{{ cdInvoiced }}</div>
+              <div style="font-size:10.5px; opacity:.65; margin-top:3px;">{{ cdInvoicedSub }}</div>
+            </div>
+            <!-- Collected carries its own bar and, when there is a shortfall, states it in red.
+                 Billed and received are the pair most often mistaken for each other, and the gap
+                 between them is the reason both are on the screen. -->
+            <div style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:16px; padding:15px 17px; backdrop-filter:blur(6px);">
+              <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.7;">COLLECTED</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:23px; margin-top:7px; color:#7CFFB0;">{{ cdCollected }}</div>
+              <sc-if value="{{ cdHasCollectedBar }}" hint-placeholder-val="{{ true }}">
+                <div style="height:4px; background:rgba(255,255,255,.2); border-radius:99px; overflow:hidden; margin-top:9px;">
+                  <div style="height:100%; width:{{ cdCollectedPct }}%; background:#7CFFB0; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
+                </div>
+              </sc-if>
+              <div style="font-size:10.5px; color:{{ cdOutstandingColor }}; font-weight:600; margin-top:6px;">{{ cdCollectedSub }}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:16px; padding:15px 17px; backdrop-filter:blur(6px);">
+              <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.7;">OPEN PIPELINE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:23px; margin-top:7px;">{{ cdOpenValue }}</div>
+              <div style="font-size:10.5px; opacity:.65; margin-top:3px;">{{ cdOpenSub }}</div>
+            </div>
+          </div>
         </div>
       </section>
+
 
       <!-- What needs chasing. Every tile is a place to GO, not a number to admire — the same
            contract the main Dashboard's "What needs me today" row makes. -->
@@ -4096,58 +4132,6 @@
         <!-- WON, not "revenue". The headline is the value of deals the CRM closed this month; the
              two boxes underneath are money the FINANCE side saw. Three different numbers, all named,
              none of them silently standing in for the others. -->
-        <div style="position:relative; overflow:hidden; border-radius:18px; background:linear-gradient(112deg,#8B17FF 0%,#7C00FF 45%,#5E00C4 100%); color:#fff; padding:24px 28px; box-shadow:0 10px 30px rgba(124,0,255,.22); display:flex; flex-direction:column;">
-          <div style="position:absolute; right:-70px; top:-90px; width:280px; height:280px; border-radius:99px; background:rgba(255,255,255,.08); animation:floatY 7s ease-in-out infinite;"></div>
-          <div style="position:absolute; right:60px; bottom:-120px; width:220px; height:220px; border-radius:99px; background:rgba(255,255,255,.06); animation:floatY2 9s ease-in-out infinite;"></div>
-          <div style="display:flex; align-items:center; justify-content:space-between; position:relative; gap:10px;">
-            <div style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; letter-spacing:.12em; opacity:.85;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-              WON · {{ cdMonthLabelShort }}
-            </div>
-            <sc-if value="{{ cdHasMom }}" hint-placeholder-val="{{ true }}">
-              <span title="Against last month's won value" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); padding:3px 12px; border-radius:99px; white-space:nowrap;">
-                <sc-if value="{{ cdMomUp }}" hint-placeholder-val="{{ true }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"></path></svg></sc-if>
-                <sc-if value="{{ cdMomDown }}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFB4B7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></sc-if>
-                {{ cdMom }}
-              </span>
-            </sc-if>
-          </div>
-          <div style="font-family:'Space Grotesk',sans-serif; font-size:34px; font-weight:700; letter-spacing:-.02em; margin-top:12px; position:relative;">{{ cdWonValue }}</div>
-          <div style="font-size:11.5px; opacity:.8; margin-top:3px; position:relative;">{{ cdWonLine }}</div>
-          <div style="display:flex; align-items:flex-end; gap:5px; height:52px; margin-top:14px; position:relative;">
-            <!-- The target, drawn ACROSS the bars so a month can be read against it at a glance.
-                 Only rendered when a target is actually set — a dashed line at an invented level
-                 would be the most confidently wrong thing on the screen. -->
-            <sc-if value="{{ cdHasTarget }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute; left:0; right:0; bottom:{{ cdTargetPct }}%; height:0; border-top:1.5px dashed rgba(255,255,255,.75); z-index:2;">
-                <!-- BELOW the line, not above it. When the target is the tallest thing on the card
-                     the line sits at 100% and a label above it is drawn outside the box. -->
-                <span style="position:absolute; right:0; top:2px; font-size:9px; font-weight:700; letter-spacing:.04em; opacity:.9; white-space:nowrap;">{{ cdTargetLabel }}</span>
-              </div>
-            </sc-if>
-            <sc-for list="{{ cdSpark }}" as="b" hint-placeholder-count="6">
-              <div title="{{ b.tip }}" style="flex:1; height:{{ b.h }}%; min-height:3px; border-radius:4px 4px 2px 2px; background:{{ b.fill }}; transform-origin:bottom; animation:barGrow .7s cubic-bezier(.16,1,.3,1) .35s both;"></div>
-            </sc-for>
-          </div>
-          <sc-if value="{{ cdHasTarget }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:10px; opacity:.8; margin-top:8px; position:relative;">{{ cdTargetLine }}</div>
-          </sc-if>
-          <div style="display:flex; justify-content:space-between; font-size:9.5px; opacity:.7; margin-top:7px; letter-spacing:.04em; position:relative;">
-            <sc-for list="{{ cdSpark }}" as="b" hint-placeholder-count="6"><span>{{ b.label }}</span></sc-for>
-          </div>
-          <div style="display:flex; gap:10px; margin-top:18px; position:relative;">
-            <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:11px 14px;">
-              <div style="font-size:9.5px; font-weight:700; letter-spacing:.05em; opacity:.75;">COLLECTED</div>
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; margin-top:3px;">{{ cdCollected }}</div>
-              <div style="font-size:9.5px; opacity:.65; margin-top:2px;">{{ cdCollectedSub }}</div>
-            </div>
-            <div style="flex:1; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.16); border-radius:12px; padding:11px 14px;">
-              <div style="font-size:9.5px; font-weight:700; letter-spacing:.05em; opacity:.75;">INVOICED</div>
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; margin-top:3px;">{{ cdInvoiced }}</div>
-              <div style="font-size:9.5px; opacity:.65; margin-top:2px;">{{ cdInvoicedSub }}</div>
-            </div>
-          </div>
-        </div>
 
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px; display:flex; flex-direction:column;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -24100,6 +24084,7 @@ class Component extends DCLogic {
           cdHasMom: false, cdMomUp: false, cdMomDown: false, cdMom: '',
           cdWonValue: '—', cdWonLine: '', cdSpark: [],
           cdCollected: '—', cdCollectedSub: '', cdInvoiced: '—', cdInvoicedSub: '',
+          cdOpenValue: '—', cdOpenSub: '', cdCollectedPct: 0, cdHasCollectedBar: false, cdOutstandingColor: 'rgba(255,255,255,.65)',
           cdOutcomes: [], cdOutcomeScope: '',
           cdHasTarget: false, cdTargetPct: 0, cdTargetLabel: '', cdTargetLine: '',
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
@@ -24280,9 +24265,35 @@ class Component extends DCLogic {
             tip: m.label + ' · ' + _money9(m.wonMinor, ccy) + ' · ' + m.wonCount + (m.wonCount === 1 ? ' deal' : ' deals'),
           })),
           cdCollected: _money9(D.money.collectedMinor, ccy),
-          cdCollectedSub: D.money.collectedCount + (D.money.collectedCount === 1 ? ' payment in' : ' payments in'),
+          /**
+           * WHAT IS STILL OWED, when anything is — the design's red line under the green figure.
+           *
+           * Collected against INVOICED, not against won: the shortfall people chase is the gap
+           * between what was billed and what arrived. Won deals that have not been invoiced yet are
+           * not outstanding money, they are work not yet billed, and counting them here would invent
+           * a debt nobody has been asked to pay.
+           *
+           * Falls back to the payment count when there is nothing outstanding, so the line still
+           * says something rather than going blank on a fully collected month.
+           */
+          cdCollectedSub: (() => {
+            const owed = Math.max(0, (D.money.invoicedMinor || 0) - (D.money.collectedMinor || 0));
+            if (owed > 0) return _money9(owed, ccy) + ' outstanding';
+            return D.money.collectedCount + (D.money.collectedCount === 1 ? ' payment in' : ' payments in');
+          })(),
+          cdOutstandingColor: ((D.money.invoicedMinor || 0) - (D.money.collectedMinor || 0)) > 0 ? '#FFB4B7' : 'rgba(255,255,255,.65)',
+          // The bar only appears when there is something to be a proportion OF. A full-width green
+          // bar over a month that invoiced nothing would read as "all collected" rather than "none".
+          cdHasCollectedBar: (D.money.invoicedMinor || 0) > 0,
+          cdCollectedPct: (D.money.invoicedMinor || 0) > 0
+            ? Math.max(0, Math.min(100, Math.round(((D.money.collectedMinor || 0) / D.money.invoicedMinor) * 100)))
+            : 0,
           cdInvoiced: _money9(D.money.invoicedMinor, ccy),
           cdInvoicedSub: D.money.invoicedCount + (D.money.invoicedCount === 1 ? ' invoice raised' : ' invoices raised'),
+          // The third money panel. Value at face, weighted beside the count — the same pair the
+          // pipeline board leads with, so the two screens cannot quote different figures.
+          cdOpenValue: _money9(D.deals.open.valueMinor, ccy),
+          cdOpenSub: D.deals.open.count + (D.deals.open.count === 1 ? ' deal · ' : ' deals · ') + _money9(D.deals.open.weightedMinor, ccy) + ' weighted',
 
           // ── the target, drawn across the spark ──
           cdHasTarget: targetMinor > 0,
