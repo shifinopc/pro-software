@@ -1915,6 +1915,10 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
       gapMinor: qTarget != null ? Math.max(0, qTarget - qWon) : null,
       monthsWithTarget: qTargets.filter(t => t != null).length,
       monthsInQuarter: 3,
+      // WHICH months are still missing, not just how many. "1 of 3" tells somebody they are not
+      // finished; naming July and September tells them what to do next, and the screen can point
+      // its own hint at the first one instead of repeating the month they have just set.
+      missingMonths: qMonths.filter(m => targetFor(m) == null),
     },
     months: strip,
     leaderboard,

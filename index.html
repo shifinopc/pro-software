@@ -26271,6 +26271,11 @@ class Component extends DCLogic {
           return mon + ' ' + d.getUTCFullYear();
         })();
         const q = D.quarter || {};
+        const missing9 = (q.missingMonths || []);
+        const monLbl9 = (k) => {
+          const d = new Date(k + '-01T00:00:00Z');
+          return isNaN(d) ? k : d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).slice(0, 3);
+        };
         // The tallest thing on the chart sets the scale — including targets, or a month that missed
         // its target by half would draw a bar as tall as one that beat it.
         const top = Math.max(1, ...(D.months || []).flatMap(m => [m.actualMinor || 0, m.projectedMinor || 0, m.targetMinor || 0]));
@@ -26281,13 +26286,29 @@ class Component extends DCLogic {
           tfHasTarget: true,
           tfOfTarget: q.targetMinor != null ? 'of ' + k9(q.targetMinor) : 'of not set',
           tfPctW: q.pctBp != null ? Math.max(0, Math.min(100, Math.round(q.pctBp / 100))) + '%' : '0%',
-          tfPctLine: q.pctBp != null ? Math.round(q.pctBp / 100) + '% achieved' : 'no target yet',
-          // Points at the control that fixes it rather than only reporting the absence.
-          tfGapLine: q.gapMinor != null ? k9(q.gapMinor) + ' to quota' : 'set a target for ' + (selLabel9 || 'this month'),
+          /**
+           * WHAT THIS CARD IS ABOUT is the QUARTER, and a month's target is not one.
+           *
+           * Setting August used to leave it reading "no target yet" directly under a toast saying
+           * "Target set" — both true, about different things, and together they read as a save that
+           * did not happen. It now counts what is set and NAMES what is not, so the same moment
+           * reads "1 of 3 months set" with the missing ones beside it.
+           */
+          tfPctLine: q.pctBp != null
+            ? Math.round(q.pctBp / 100) + '% achieved'
+            : (q.monthsWithTarget || 0) > 0
+              ? (q.monthsWithTarget || 0) + ' of 3 months set'
+              : 'no target yet',
+          // Points at the NEXT month that needs one — repeating the month just set is what made
+          // this feel like nothing had happened.
+          tfGapLine: q.gapMinor != null
+            ? k9(q.gapMinor) + ' to quota'
+            : (missing9.length ? 'still needs ' + missing9.map(m => monLbl9(m)).join(' and ') : 'set a target for ' + (selLabel9 || 'this month')),
           // Said plainly rather than shown as a smaller quota: a quarter is only measurable when
           // all three of its months carry a target.
           tfPartial: (q.monthsWithTarget || 0) > 0 && (q.monthsWithTarget || 0) < (q.monthsInQuarter || 3),
-          tfPartialNote: 'Only ' + (q.monthsWithTarget || 0) + ' of 3 months in this quarter have a target set, so no quarter figure is shown.',
+          tfPartialNote: 'A quarter figure needs all three months. ' + missing9.map(m => monLbl9(m)).join(' and ')
+            + (missing9.length === 1 ? ' is' : ' are') + ' still without one — pick ' + monLbl9(missing9[0] || '') + ' above and set it.',
           tfMonths: (D.months || []).map(m => {
             const shown = m.isFuture ? (m.projectedMinor || 0) : (m.actualMinor || 0);
             return {
@@ -26349,7 +26370,9 @@ class Component extends DCLogic {
               },
             };
           }),
-          tfSetHeaderLabel: 'Set target for ' + (selLabel9 || ''),
+          tfSetHeaderLabel: ((D.months || []).find(m => m.key === selMonth9) || {}).targetMinor != null
+            ? 'Change target for ' + (selLabel9 || '')
+            : 'Set target for ' + (selLabel9 || ''),
           tfSetHeader: () => {
             const cur = (D.months || []).find(m => m.key === selMonth9);
             this.setState({
