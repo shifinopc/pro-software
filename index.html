@@ -11885,6 +11885,27 @@ class Component extends DCLogic {
       }).then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })));
     };
     /** Reload everything a lifecycle or contact change can move between lists. */
+    /**
+     * Open a blank lead form — WITHOUT moving the reader to another screen.
+     *
+     * Both modals are top-level overlays gated only on their own draft, so they render over
+     * whatever page is showing. The dashboard's "+ Lead" nevertheless set `active: 'Leads'` first,
+     * which meant pressing it in the Sales screen threw away the screen you were reading: come back
+     * from the modal, whether you saved or cancelled, and the dashboard is gone. Nothing about
+     * adding a lead requires being on the Leads page — the form posts to /api/companies from
+     * anywhere — so the navigation was cost with no purchase.
+     *
+     * Hoisted rather than copied because the two callers had already drifted: the Leads button
+     * cleared the score preview and the dashboard's did not, so opening it from the dashboard
+     * showed the last lead's score against an empty form.
+     */
+    this._openLeadForm = () => {
+      if (this._previewScore) this._previewScore({});
+      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [] });
+    };
+    /** The same, for a deal. */
+    this._openDealForm = () => this.setState({ dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '' });
+
     this._crmReload = () => {
       if (this._loadLeads) this._loadLeads();
       if (this._loadContacts) this._loadContacts();
@@ -11893,6 +11914,11 @@ class Component extends DCLogic {
       if (this._loadInteractions) this._loadInteractions();
       this._opReload('companies', 'companiesData');
       if (this._loadWorkforce) this._loadWorkforce();
+      // Added last: the forms can now be saved from the Sales screen without leaving it, so its
+      // counters have to move too. A tile still reading "no leads added today" directly above the
+      // toast confirming one was added is the kind of contradiction people stop trusting a number
+      // over — and they are right to.
+      if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
     };
     /** Save a deal — create or edit — through the routes that hold the rules. */
     this._saveDeal = (id, data) => this._crmFetch(id ? '/api/opportunities/' + id : '/api/opportunities', {
@@ -11902,6 +11928,7 @@ class Component extends DCLogic {
       this.setState({ dealEdit: null, dlErr: '' });
       this.toast(id ? 'Deal updated' : 'Deal opened');
       if (this._loadPipeline) this._loadPipeline();
+      if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
       return true;
     }).catch(() => { this.setState({ dlErr: 'Server unreachable — nothing was saved' }); return false; });
     /** Move a deal to another column. A losing move carries its reason or the server refuses it. */
@@ -24383,15 +24410,8 @@ class Component extends DCLogic {
           cdAllBg: this.state.cdMine ? 'transparent' : '#7C00FF',
           cdPickMine: () => { this.setState({ cdMine: true }); if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: true }); },
           cdPickAll: () => { this.setState({ cdMine: false }); if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: false }); },
-          cdAddLead: () => this.setState({
-            active: 'Leads', activeGroup: 'Sales',
-            ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' },
-            ldfErr: '', ldfBad: '',
-          }),
-          cdAddDeal: () => this.setState({
-            active: 'Pipeline', activeGroup: 'Sales',
-            dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '',
-          }),
+          cdAddLead: () => this._openLeadForm(),
+          cdAddDeal: () => this._openDealForm(),
           cdCollected: _money9(D.money.collectedMinor, ccy),
           /**
            * WHAT IS STILL OWED, when anything is — the design's red line under the green figure.
@@ -25614,7 +25634,7 @@ class Component extends DCLogic {
       pipAllBg: this.state.pipMine ? 'transparent' : '#7C00FF',
       pipPickMine: () => { this.setState({ pipMine: true }); if (this._loadPipeline) this._loadPipeline(true); },
       pipPickAll: () => { this.setState({ pipMine: false }); if (this._loadPipeline) this._loadPipeline(false); },
-      pipAdd: () => this.setState({ dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '' }),
+      pipAdd: () => this._openDealForm(),
       pipGoSettings: () => this.setState({ active: 'Sales Settings', activeGroup: 'Configure' }),
       pipStats: [
         {
@@ -26428,7 +26448,7 @@ class Component extends DCLogic {
       // field is a required-looking one with a warning under it rather than a silent blank — but
       // the default was being accepted unread, and a picker whose answer is already filled in is
       // not a question anybody reads.
-      ldAdd: () => { if (this._previewScore) this._previewScore({}); return this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null }); },
+      ldAdd: () => this._openLeadForm(),
       // Typed into the field itself — see mkDdCombo. Sections come from _ownerSections9, so the
       // people who may carry a book are listed first and everybody else under their own heading.
       ...mkDdCombo('ddLdfOwner', _ownerSections9('Unassigned — nobody will see this in the sales views'),
