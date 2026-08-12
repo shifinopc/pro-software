@@ -4726,7 +4726,16 @@
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:stretch;">
             <div style="position:relative; overflow:hidden; border-radius:18px; background:linear-gradient(135deg,#26074D,#5E00C4); color:#fff; padding:22px 24px; display:flex; flex-direction:column; justify-content:center;">
               <div style="position:absolute; right:-40px; top:-40px; width:170px; height:170px; border-radius:99px; background:radial-gradient(closest-side, rgba(255,255,255,.14), transparent);"></div>
-              <div style="position:relative; font-size:10.5px; font-weight:700; letter-spacing:.08em; opacity:.8;">{{ tfQuarterLabel }}</div>
+              <div style="position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:.08em; opacity:.8;">{{ tfQuarterLabel }}</span>
+                <!-- Quarter or the month the strip is on. Somebody who has just set August's target
+                     wants to see August against it, and the roll-up cannot show that. -->
+                <span style="display:flex; gap:2px; background:rgba(255,255,255,.16); border-radius:99px; padding:3px;">
+                  <sc-for list="{{ tfScopes }}" as="sc" hint-placeholder-count="2">
+                    <span onClick="{{ sc.pick }}" style="font-size:10.5px; font-weight:700; color:{{ sc.color }}; background:{{ sc.bg }}; padding:4px 12px; border-radius:99px; cursor:pointer;">{{ sc.label }}</span>
+                  </sc-for>
+                </span>
+              </div>
               <div style="position:relative; display:flex; align-items:baseline; gap:9px; margin-top:8px; flex-wrap:wrap;">
                 <span style="font-family:'Space Grotesk',sans-serif; font-size:30px; font-weight:700; letter-spacing:-.02em;">{{ tfWon }}</span>
                 <sc-if value="{{ tfHasTarget }}" hint-placeholder-val="{{ true }}">
@@ -26272,6 +26281,17 @@ class Component extends DCLogic {
         })();
         const q = D.quarter || {};
         const missing9 = (q.missingMonths || []);
+        const scope9 = this.state.tfScope === 'month' ? 'month' : 'quarter';
+        const isMonth9 = scope9 === 'month';
+        const curM9 = (D.months || []).find(m => m.key === selMonth9) || null;
+        // One pair of figures, chosen once, so every line on the card is talking about the same
+        // period. Reading them separately per line is how a card ends up half quarter, half month.
+        const scTarget9 = isMonth9 ? (curM9 ? curM9.targetMinor : null) : q.targetMinor;
+        const scWon9 = isMonth9 ? (curM9 ? curM9.actualMinor : 0) : q.wonMinor;
+        // NOT pct9 — that name is already a basis-points helper in this block, and redeclaring it
+        // is a syntax error that blanks the whole screen rather than just this card.
+        const scPct9 = scTarget9 != null && scTarget9 > 0 ? Math.round((scWon9 * 100) / scTarget9) : null;
+        const scGap9 = scTarget9 != null ? Math.max(0, scTarget9 - scWon9) : null;
         const monLbl9 = (k) => {
           const d = new Date(k + '-01T00:00:00Z');
           return isNaN(d) ? k : d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).slice(0, 3);
@@ -26281,11 +26301,26 @@ class Component extends DCLogic {
         const top = Math.max(1, ...(D.months || []).flatMap(m => [m.actualMinor || 0, m.projectedMinor || 0, m.targetMinor || 0]));
         return {
           tfReady: true, tfLoading: false,
-          tfQuarterLabel: 'TEAM QUOTA \u00b7 ' + (q.label || ''),
-          tfWon: k9(q.wonMinor),
+          // QUARTER or MONTH. The card only ever rolled the quarter up, so somebody who had just
+          // set August's target had nowhere to see August against it — the one number they were
+          // most likely to want. The strip already names a month; this decides whether the card
+          // reports that month or the three it belongs to.
+          tfScopes: [
+            { id: 'quarter', label: 'Quarter' },
+            { id: 'month', label: selLabel9 ? selLabel9.split(' ')[0] : 'Month' },
+          ].map(x => ({
+            label: x.label,
+            color: scope9 === x.id ? '#26074D' : 'rgba(255,255,255,.75)',
+            bg: scope9 === x.id ? '#fff' : 'transparent',
+            pick: () => this.setState({ tfScope: x.id }),
+          })),
+          tfQuarterLabel: isMonth9
+            ? 'TARGET \u00b7 ' + (selLabel9 || '').toUpperCase()
+            : 'TEAM QUOTA \u00b7 ' + (q.label || ''),
+          tfWon: k9(isMonth9 ? (curM9 ? curM9.actualMinor : 0) : q.wonMinor),
           tfHasTarget: true,
-          tfOfTarget: q.targetMinor != null ? 'of ' + k9(q.targetMinor) : 'of not set',
-          tfPctW: q.pctBp != null ? Math.max(0, Math.min(100, Math.round(q.pctBp / 100))) + '%' : '0%',
+          tfOfTarget: scTarget9 != null ? 'of ' + k9(scTarget9) : 'of not set',
+          tfPctW: scPct9 != null ? Math.max(0, Math.min(100, scPct9)) + '%' : '0%',
           /**
            * WHAT THIS CARD IS ABOUT is the QUARTER, and a month's target is not one.
            *
@@ -26294,19 +26329,25 @@ class Component extends DCLogic {
            * did not happen. It now counts what is set and NAMES what is not, so the same moment
            * reads "1 of 3 months set" with the missing ones beside it.
            */
-          tfPctLine: q.pctBp != null
-            ? Math.round(q.pctBp / 100) + '% achieved'
-            : (q.monthsWithTarget || 0) > 0
-              ? (q.monthsWithTarget || 0) + ' of 3 months set'
-              : 'no target yet',
+          tfPctLine: scPct9 != null
+            ? scPct9 + '% achieved'
+            : isMonth9
+              // A month is one number: it either has a target or it does not, and there is no
+              // partial state to report the way a quarter has.
+              ? 'no target for this month'
+              : (q.monthsWithTarget || 0) > 0
+                ? (q.monthsWithTarget || 0) + ' of 3 months set'
+                : 'no target yet',
           // Points at the NEXT month that needs one — repeating the month just set is what made
           // this feel like nothing had happened.
-          tfGapLine: q.gapMinor != null
-            ? k9(q.gapMinor) + ' to quota'
-            : (missing9.length ? 'still needs ' + missing9.map(m => monLbl9(m)).join(' and ') : 'set a target for ' + (selLabel9 || 'this month')),
+          tfGapLine: scGap9 != null
+            ? (scGap9 > 0 ? k9(scGap9) + (isMonth9 ? ' to target' : ' to quota') : 'target met')
+            : isMonth9
+              ? 'set a target for ' + (selLabel9 || 'this month')
+              : (missing9.length ? 'still needs ' + missing9.map(m => monLbl9(m)).join(' and ') : 'set a target for ' + (selLabel9 || 'this month')),
           // Said plainly rather than shown as a smaller quota: a quarter is only measurable when
           // all three of its months carry a target.
-          tfPartial: (q.monthsWithTarget || 0) > 0 && (q.monthsWithTarget || 0) < (q.monthsInQuarter || 3),
+          tfPartial: !isMonth9 && (q.monthsWithTarget || 0) > 0 && (q.monthsWithTarget || 0) < (q.monthsInQuarter || 3),
           tfPartialNote: 'A quarter figure needs all three months. ' + missing9.map(m => monLbl9(m)).join(' and ')
             + (missing9.length === 1 ? ' is' : ' are') + ' still without one — pick ' + monLbl9(missing9[0] || '') + ' above and set it.',
           tfMonths: (D.months || []).map(m => {
