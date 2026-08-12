@@ -3702,47 +3702,88 @@
         </sc-if>
 
         <sc-if value="{{ pipShowKanban }}" hint-placeholder-val="{{ true }}">
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; gap:14px; align-items:flex-start; overflow-x:auto; padding-bottom:6px;">
-            <sc-for list="{{ pipColumns }}" as="col" hint-placeholder-count="4">
-              <div data-pip-stage="{{ col.dropId }}" style="flex:0 0 268px; background:#FAF8FC; border:1px solid #EDEBF2; border-radius:16px; padding:13px;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                  <span style="font-size:11.5px; font-weight:700; color:{{ col.color }}; background:{{ col.bg }}; padding:3px 11px; border-radius:99px;">{{ col.name }}</span>
-                  <span style="font-size:11px; font-weight:700; color:#A9A6B4;">{{ col.count }}</span>
-                </div>
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; margin-top:9px;">{{ col.total }}</div>
-                <div style="font-size:10.5px; color:#8C8899; margin-top:2px; line-height:1.5;">{{ col.sub }}</div>
+          <!-- ── THE BOARD, laid out the way the design lays it out ──────────────────────
+               GRID, not a row of fixed-width columns. `grid-auto-columns:minmax(200px,1fr)` lets the
+               stages SHARE the width when they fit and only starts scrolling when they genuinely
+               cannot — which is the whole of "make it fit on screen". The old `flex:0 0 268px` meant
+               six stages always measured 1608px and always overflowed, on any monitor, with three
+               deals on the board or with three hundred.
 
-                <div style="display:flex; flex-direction:column; gap:9px; margin-top:12px;">
+               The floor is 200px, not the design's 238: the design's board has five stages and this
+               one has six, so 238 fit the DESIGN rather than the screen — six of them measured
+               1498px inside 1318px of it. At 200 the six share a laptop's width and still hold the
+               value and its badge on one line. Past that it scrolls, which is the honest answer: a
+               firm that configures ten stages cannot have all ten legible at once. -->
+          <section data-hidescroll="true" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:14px; align-items:start; overflow-x:auto; padding-bottom:6px;">
+            <sc-for list="{{ pipColumns }}" as="col" hint-placeholder-count="4">
+              <div data-pip-stage="{{ col.dropId }}" style="background:#FAF8FC; border:1px solid #EDEBF2; border-radius:16px; padding:12px; min-height:120px;">
+                <!-- Header: a dot for the stage, the name, the count as a tinted pill, and the money
+                     pushed to the far edge — one line where there used to be three. A column heading
+                     is not the content, it is the label on the content, and it was taking four lines
+                     of vertical space on every column before the first card. -->
+                <div style="padding:2px 4px 10px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="width:8px; height:8px; border-radius:99px; background:{{ col.color }}; flex-shrink:0;"></span>
+                    <span style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ col.name }}</span>
+                    <span style="font-size:10px; font-weight:700; color:{{ col.color }}; background:{{ col.bg }}; padding:1px 8px; border-radius:99px; flex-shrink:0;">{{ col.count }}</span>
+                    <span title="{{ col.totalExact }}" style="margin-left:auto; font-size:10.5px; font-weight:700; color:#8C8899; white-space:nowrap;">{{ col.total }}</span>
+                  </div>
+                  <div style="font-size:9.5px; color:#B4AFC4; margin-top:4px; padding-left:16px;">{{ col.sub }}</div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:9px;">
                   <sc-for list="{{ col.deals }}" as="d" hint-placeholder-count="2">
-                    <div data-pip-deal="{{ d.dragId }}" style="background:#fff; border:1px solid #EDEBF2; border-radius:13px; padding:12px 13px; cursor:{{ d.dragCursor }}; position:relative; overflow:hidden;" style-hover="border-color:#DDD1F5;">
-                      <!-- The health stripe. Only rendered when something is wrong — a green edge on
-                           every card would be decoration; a coloured one on four of forty is a signal. -->
-                      <sc-if value="{{ d.hlShow }}" hint-placeholder-val="{{ false }}">
-                        <div title="{{ d.hlWhy }}" style="position:absolute; left:0; top:0; bottom:0; width:3px; background:{{ d.hlColor }};"></div>
-                      </sc-if>
-                      <div style="font-size:12.5px; font-weight:700; line-height:1.4;">{{ d.title }}</div>
-                      <div style="font-size:11px; color:#8C8899; margin-top:3px;">{{ d.company }}</div>
-                      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:9px;">
-                        <span style="font-size:12.5px; font-weight:700;">{{ d.value }}</span>
-                        <span style="display:flex; gap:5px; align-items:center;"><sc-if value="{{ d.hasChecklist }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.openChecklist }}" style="font-size:9.5px; font-weight:700; color:{{ d.clkColor }}; background:{{ d.clkBg }}; padding:2px 8px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ d.clkLabel }}</span></sc-if><span style="font-size:9.5px; font-weight:700; color:{{ d.srcColor }}; background:{{ d.srcBg }}; padding:2px 8px; border-radius:99px;">{{ d.srcLabel }}</span></span>
+                    <div data-pip-deal="{{ d.dragId }}" style="background:#fff; border:1px solid #EDEBF2; border-left:3px solid {{ d.cardEdge }}; border-radius:13px; padding:13px 14px; cursor:{{ d.dragCursor }}; transition:transform .15s, box-shadow .15s, border-color .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(124,0,255,.08);">
+                      <!-- Who, first. The deal's own title goes underneath: a board is scanned for the
+                           client, and half of these deals are called "annual renewal". -->
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="width:26px; height:26px; border-radius:8px; background:#F3E8FF; color:#7C00FF; font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
+                        <span title="{{ d.company }}" style="flex:1; min-width:0; font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
+                        <sc-if value="{{ d.atRisk }}" hint-placeholder-val="{{ false }}">
+                          <span title="{{ d.hlWhy }}" style="font-size:10px; flex-shrink:0;">🔥</span>
+                        </sc-if>
+                        <span style="font-size:9px; font-weight:700; color:#A9A6B4; flex-shrink:0;">{{ d.ref }}</span>
                       </div>
-                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px; line-height:1.5;">{{ d.meta }}</div>
+                      <div style="font-size:11px; color:#8C8899; margin-top:5px; line-height:1.4;">{{ d.title }}</div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                        <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ d.value }}</span>
+                        <span style="font-size:8.5px; font-weight:700; color:{{ d.srcColor }}; background:{{ d.srcBg }}; padding:2px 7px; border-radius:99px;">{{ d.srcLabel }}</span>
+                      </div>
+                      <sc-if value="{{ d.hasClose }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:9.5px; color:#B4AFC4; margin-top:4px;">{{ d.ref }} · closes {{ d.closesLabel }}</div>
+                      </sc-if>
+                      <!-- The odds, drawn rather than written. Five cards reading "40%" is a column
+                           nobody reads twice; five bars of different lengths is read at a glance.
+                           Grey and empty when a deal carries no odds, which is its own answer. -->
+                      <div title="{{ d.odds }}" style="height:4px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:8px;"><div style="height:100%; width:{{ d.probW }}; background:{{ d.probColor }}; border-radius:99px;"></div></div>
+                      <div style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;">
+                        <sc-if value="{{ d.hasRiskChip }}" hint-placeholder-val="{{ false }}">
+                          <span title="{{ d.hlWhy }}" style="font-size:9px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:1px 7px; border-radius:99px;">{{ d.riskChip }}</span>
+                        </sc-if>
+                        <sc-if value="{{ d.hasChecklist }}" hint-placeholder-val="{{ false }}">
+                          <span onClick="{{ d.openChecklist }}" style="font-size:9px; font-weight:700; color:{{ d.clkColor }}; background:{{ d.clkBg }}; padding:1px 7px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.96);">☑ {{ d.clkLabel }}</span>
+                        </sc-if>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:7px; margin-top:8px;">
+                        <span style="width:19px; height:19px; border-radius:99px; background:#26074D; color:#fff; font-size:7px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.ownerInitials }}</span>
+                        <span style="font-size:10px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.owner }} · {{ d.sourceLabel }}</span>
+                      </div>
                       <sc-if value="{{ d.canAct }}" hint-placeholder-val="{{ true }}">
-                        <div data-pip-actions="1" style="display:flex; gap:6px; margin-top:10px; padding-top:9px; border-top:1px solid #F5F2FA; flex-wrap:wrap;">
-                          <span onClick="{{ d.open }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Open</span>
-                          <span onClick="{{ d.log }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Log</span>
-                          <sc-if value="{{ d.canQuote }}" hint-placeholder-val="{{ true }}">
-                            <span onClick="{{ d.quote }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Quote</span>
-                          </sc-if>
+                        <div data-pip-actions="1" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; border-top:1px solid #F5F3F9; padding-top:9px;">
+                          <span onClick="{{ d.open }}" style="font-size:9.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EBDBFF;">Open</span>
+                          <span onClick="{{ d.log }}" style="font-size:9.5px; font-weight:700; color:#4B4757; background:#F3F1F7; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EAE7F0;">Log</span>
                           <sc-if value="{{ d.canMove }}" hint-placeholder-val="{{ true }}">
-                            <span onClick="{{ d.next }}" style="font-size:10.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
+                            <span onClick="{{ d.next }}" style="font-size:9.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
+                          </sc-if>
+                          <sc-if value="{{ d.canQuote }}" hint-placeholder-val="{{ true }}">
+                            <span onClick="{{ d.quote }}" style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D2ECFB;">Quote</span>
                           </sc-if>
                         </div>
                       </sc-if>
                     </div>
                   </sc-for>
                   <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
-                    <div style="font-size:11px; color:#BFBCC9; text-align:center; padding:14px 6px; line-height:1.5;">Nothing here</div>
+                    <div style="padding:18px; text-align:center; font-size:11px; color:#B4AFC4;">Nothing here</div>
                   </sc-if>
                 </div>
               </div>
@@ -23471,6 +23512,29 @@ class Component extends DCLogic {
     // formatter here is how one screen shows SAR 38,000 and another SAR 38,000.00 for one figure.
     const _money9 = (minor, ccy) => minor == null ? '—'
       : (ccy || 'SAR') + ' ' + (minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    /**
+     * A column's magnitude, not its amount — "SAR 433k", the way the design reads a header.
+     *
+     * Nobody reconciles a column heading; they compare it to the one beside it. Two decimals of
+     * halalas across five headings is nine characters of precision that has no reader, and it was
+     * what pushed the columns past the width of the screen. The CARDS keep the exact figure,
+     * because a deal's value IS quoted to somebody.
+     */
+    const _moneyK9 = (minor, ccy) => {
+      if (minor == null) return '—';
+      const n = minor / 100;
+      const a = Math.abs(n);
+      const c = (ccy || 'SAR') + ' ';
+      if (a >= 1e6) return c + (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm';
+      if (a >= 10000) return c + Math.round(n / 1000) + 'k';
+      return c + Math.round(n).toLocaleString();
+    };
+    /** "29 Aug" — the design's close date. The year is noise on a board of this quarter's work. */
+    const _dayMon9 = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso + 'T00:00:00');
+      return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    };
     const _pipeAll = _pipeCols.flatMap(c => c.deals);
     const _openCols = _pipeCols.filter(c => !c.stage.isWon && !c.stage.isLost);
     const _wonCol = _pipeCols.find(c => c.stage.isWon) || null;
@@ -23506,6 +23570,29 @@ class Component extends DCLogic {
               hlShow: !!(d.health && d.health.severity > 0),
               hlWhy: (d.health && d.health.reasons.length) ? d.health.reasons.join(' · ') : 'nothing outstanding',
               hlDays: d.health && d.health.daysInStage != null ? d.health.daysInStage + 'd' : '—',
+              // ── What the board's card shows, beyond what the list and table need ──
+              // The company is the headline and the deal is the subtitle, which is the design's
+              // ordering and the right way round: a board is scanned for WHO, and half these deals
+              // are called "annual renewal".
+              initials: _initials((d.company && d.company.name) || d.title),
+              ref: d.number || '',
+              closesLabel: _dayMon9(d.expectedCloseDate),
+              hasClose: !!d.expectedCloseDate,
+              // The odds as a bar. Same number the weighted column total is built from, drawn
+              // instead of written — five cards of "40%" is a column nobody reads twice.
+              probW: (d.probabilityBp != null ? Math.max(2, Math.min(100, Math.round(d.probabilityBp / 100))) : 0) + '%',
+              probColor: d.probabilityBp == null ? '#DDD9E6'
+                : d.probabilityBp >= 7000 ? '#0E9355' : d.probabilityBp >= 5000 ? '#B8860B' : '#8C8899',
+              ownerInitials: d.ownerId ? _initials(_userName9(d.ownerId) || '?') : '—',
+              // The left edge carries health on EVERY card, not only the unwell ones. On the design
+              // it is structure — the eye uses it to find where one card ends — so a card without
+              // one reads as broken rather than as healthy. The colour still says which.
+              cardEdge: (d.health && d.health.color) || '#E7E4EE',
+              atRisk: !!(d.health && d.health.severity >= 2),
+              // The single most useful thing wrong with it, not the full list — the full list is
+              // the stripe's tooltip and the list view's line.
+              riskChip: (d.health && d.health.reasons && d.health.reasons.length) ? d.health.reasons[0] : '',
+              hasRiskChip: !!(d.health && d.health.reasons && d.health.reasons.length),
               stageName: col.stage.name,
               stageColor: col.stage.color || (col.stage.isWon ? '#0E9355' : col.stage.isLost ? '#C0353A' : '#7C00FF'),
               stageBg: col.stage.bg || (col.stage.isWon ? '#E7F8EF' : col.stage.isLost ? '#FEECEC' : '#F5EEFF'),
@@ -23525,6 +23612,7 @@ class Component extends DCLogic {
               _sev: (d.health && d.health.severity) ?? 0,
               _close: d.expectedCloseDate || '',
               _stage: col.stage.sort,
+              sourceLabel: d.source || 'no source',
               srcLabel: d.valueSource === 'quotation' ? (d.quotation ? d.quotation.number : 'QUOTED') : d.valueSource === 'estimate' ? 'ESTIMATE' : 'NO FIGURE',
               srcColor: d.valueSource === 'quotation' ? '#0E9355' : d.valueSource === 'estimate' ? '#B7791F' : '#A9A6B4',
               srcBg: d.valueSource === 'quotation' ? '#E7F8EF' : d.valueSource === 'estimate' ? '#FFF6E5' : '#F3F1F7',
@@ -25759,11 +25847,12 @@ class Component extends DCLogic {
           color: col.stage.color || (col.stage.isWon ? '#0E9355' : col.stage.isLost ? '#C0353A' : '#7C00FF'),
           bg: col.stage.bg || (col.stage.isWon ? '#E7F8EF' : col.stage.isLost ? '#FEECEC' : '#F5EEFF'),
           count: col.count,
-          total: _money9(col.totalMinor, _ccy9),
+          total: _moneyK9(col.totalMinor, _ccy9),
+          totalExact: _money9(col.totalMinor, _ccy9),
           // Weighted is meaningless on a closed column, and unpriced deals are named rather than
           // folded into the total as zero — a column that says SAR 0 with deals in it is a lie.
           sub: [
-            term ? null : 'weighted ' + _money9(col.weightedMinor, _ccy9),
+            term ? null : _moneyK9(col.weightedMinor, _ccy9) + ' weighted',
             col.unpriced ? col.unpriced + ' unpriced' : null,
           ].filter(Boolean).join(' · ') || 'nothing outstanding',
           empty: col.count === 0,
