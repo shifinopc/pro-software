@@ -3753,7 +3753,7 @@
                     <div onClick="{{ pipAdd }}" title="New deals start in {{ col.name }}" style="border:1px dashed #D9CBF2; border-radius:13px; padding:10px; text-align:center; font-size:11px; font-weight:700; color:#8C7BA6; cursor:pointer;" style-hover="background:#F3E8FF; color:#7C00FF; border-color:#C9A2FF;">＋ New deal</div>
                   </sc-if>
                   <sc-for list="{{ col.deals }}" as="d" hint-placeholder-count="2">
-                    <div data-pip-deal="{{ d.dragId }}" style="background:#fff; border:1px solid #EDEBF2; border-left:3px solid {{ d.cardEdge }}; border-radius:13px; padding:13px 14px; cursor:{{ d.dragCursor }}; transition:transform .15s, box-shadow .15s, border-color .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(124,0,255,.08);">
+                    <div data-pip-deal="{{ d.dragId }}" onClick="{{ d.openCard }}" title="Open this deal" style="background:#fff; border:1px solid #EDEBF2; border-left:3px solid {{ d.cardEdge }}; border-radius:13px; padding:13px 14px; cursor:{{ d.dragCursor }}; transition:transform .15s, box-shadow .15s, border-color .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(124,0,255,.08);">
                       <!-- Who, first. The deal's own title goes underneath: a board is scanned for the
                            client, and half of these deals are called "annual renewal". -->
                       <div style="display:flex; align-items:center; gap:8px;">
@@ -11352,6 +11352,9 @@ class Component extends DCLogic {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       if (!drag.live) return;   // never travelled — leave it a plain click
+      // Stamped only for a REAL drag. A press that never moved must stay a plain click, or
+      // clicking a card would stop opening it.
+      this._pipDragEndedAt = Date.now();
       const col = _pipCol(document.elementFromPoint(e.clientX, e.clientY));
       const stageId = col && col.getAttribute('data-pip-stage');
       if (!stageId || col === drag.fromCol) return;
@@ -23875,6 +23878,28 @@ class Component extends DCLogic {
               // wanting to know where a deal stands is far commoner than wanting to retype it, and
               // this press used to answer the rarer question.
               open: () => this._openDeal9(d.id),
+              /**
+               * The same, from anywhere on the card — which is where people press, and the design
+               * puts its click on the whole card too. Only the Open pill carried it here, so most
+               * of a card that looks entirely pressable did nothing at all.
+               *
+               * TWO GUARDS, because this element is also the drag handle.
+               *
+               * Presses inside the action row are not for the card. Open, Log, → and Quote sit
+               * inside it and their clicks bubble; without this, pressing Log would open the drawer
+               * over the contact form it had just raised.
+               *
+               * And a click fires after a drag that starts and ends on the same card — drop a card
+               * back where it came from and the browser reports a click. Opening a panel because
+               * somebody changed their mind mid-drag is the kind of thing that makes a board feel
+               * like it is fighting you.
+               */
+              openCard: (e) => {
+                const t = e && e.target;
+                if (t && t.closest && t.closest('[data-pip-actions]')) return;
+                if (this._pipDragEndedAt && Date.now() - this._pipDragEndedAt < 250) return;
+                this._openDeal9(d.id);
+              },
               edit: () => this.setState({
                 dealEdit: {
                   id: d.id, companyId: d.companyId, title: d.title,
