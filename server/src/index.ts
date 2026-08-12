@@ -1760,10 +1760,37 @@ app.get("/api/ops-report", requireAuth, requireStaff, requireReadRole("super_adm
  * Nothing is stored. Every figure is derived from deals, their stages and the targets somebody has
  * set, so this screen and the pipeline cannot disagree about what was won.
  *
- * THE ONE PANEL THIS DOES NOT RETURN is commission. There is no commission rate on a user, a team
- * or a plan anywhere in this schema — a payable figure would have to be invented, and an invented
- * number on a page about money owed to people is the worst place to put one.
+ * COMMISSION is derived, never stored: rate x what that person actually closed. The rate lives on
+ * the user because that is where it is negotiated, and it is NULLABLE on purpose — null means
+ * nobody has set one, which is a different fact from zero. Zero says "this person earns no
+ * commission"; null says "we have not been told", and a payable figure for null would be invented.
  */
+/**
+ * Set somebody's commission rate, in basis points. Admins only: it is a term of employment, not a
+ * preference, and a salesperson editing their own would be marking their own homework.
+ *
+ * An empty value CLEARS it back to null rather than storing zero — "not agreed" and "agreed at
+ * nothing" are different, and only the second should produce a payable line of SAR 0.
+ */
+app.put("/api/users/:id/commission-rate", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const role = (req as any).auth?.role;
+  if (role !== "super_admin" && role !== "admin") {
+    return res.status(403).json({ error: "Only an administrator can set a commission rate" });
+  }
+  const raw = (req.body ?? {}).rateBp;
+  if (raw === null || raw === "" || raw === undefined) {
+    await prisma.user.update({ where: { id: String(req.params.id) }, data: { commissionRateBp: null } });
+    return res.json({ ok: true, rateBp: null });
+  }
+  const bp = Math.round(Number(raw));
+  if (!Number.isFinite(bp) || bp < 0 || bp > 10000) {
+    return res.status(400).json({ error: "A rate is between 0% and 100%" });
+  }
+  await prisma.user.update({ where: { id: String(req.params.id) }, data: { commissionRateBp: bp } });
+  await logAudit({ action: "user.commission-rate", actorId: (req as any).auth?.sub, target: String(req.params.id), detail: (bp / 100) + "%", ip: clientIp(req) });
+  res.json({ ok: true, rateBp: bp });
+});
+
 app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   const scoped = await salesCompanyIds(req as any);
   const stages = await prisma.pipelineStage.findMany({ select: { id: true, isWon: true, isLost: true } });
@@ -1822,7 +1849,9 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
 
   // ── who is where against their own target ───────────────────────────────────────────────────
   const ownerIds = [...new Set(deals.map(d => d.ownerId).filter(Boolean))] as string[];
-  const users = ownerIds.length ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } }) : [];
+  const users = ownerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true, roleId: true, commissionRateBp: true } })
+    : [];
   const ownerTargets = await prisma.salesTarget.findMany({ where: { period: { in: qMonths }, ownerId: { not: null } } });
   const leaderboard = users.map(u => {
     const mine = deals.filter(d => d.ownerId === u.id && qMonths.includes(monthOf(d.closedAt) ?? ""));
@@ -1832,9 +1861,15 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
     const tgt = ts.every(t => t != null) ? (ts as number[]).reduce((a, b) => a + b, 0) : null;
     const wonValue = won.reduce((n, d) => n + money(d), 0);
     return {
+      id: u.id,
       name: u.name,
+      roleId: u.roleId,
       wonMinor: wonValue,
       deals: won.length,
+      // Null rate, null commission. Multiplying an unknown rate by a known figure would produce a
+      // confident number nobody agreed to pay.
+      rateBp: u.commissionRateBp ?? null,
+      commissionMinor: u.commissionRateBp != null ? Math.round((wonValue * u.commissionRateBp) / 10000) : null,
       // Null, not zero: nobody who has decided nothing has a win rate, and 0% reads as "loses
       // everything" rather than "has not closed anything yet".
       winRateBp: won.length + lost.length ? Math.round((won.length * 10000) / (won.length + lost.length)) : null,
@@ -1853,6 +1888,8 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
       name: k,
       wonMinor: won.reduce((n, d) => n + money(d), 0),
       deals: mine.length,
+      wonCount: won.length,
+      decided,
       // Of the deals from this source that have been DECIDED — counting open ones as failures
       // would make every fresh channel look like the worst one.
       convertedBp: decided ? Math.round((won.length * 10000) / decided) : null,
@@ -1861,6 +1898,11 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
 
   res.json({
     currency: deals.find(d => d.currency)?.currency ?? "SAR",
+    // Only what is actually calculable. Somebody with no rate contributes nothing to the total
+    // rather than a zero that would make the firm's bill look settled.
+    commissionMinor: leaderboard.reduce((n, r) => n + (r.commissionMinor ?? 0), 0),
+    commissionKnown: leaderboard.filter(r => r.rateBp != null).length,
+    commissionPeople: leaderboard.length,
     quarter: {
       label: "Q" + q + " " + now.getUTCFullYear(),
       wonMinor: qWon,

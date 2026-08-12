@@ -4699,6 +4699,15 @@
               </div>
             </sc-if>
           </div>
+          <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
+            <div class="pg-card" style="padding:10px 16px; text-align:right;">
+              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMMISSION PAYABLE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#0E9355; margin-top:2px;">{{ tfCommission }}</div>
+              <!-- How much of the bill this figure actually covers. A total quoted without it reads
+                   as the whole thing when it may be a fraction. -->
+              <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ tfCommissionSub }}</div>
+            </div>
+          </sc-if>
         </section>
 
         <!-- ── The design's four panels ───────────────────────────────────────────
@@ -4792,20 +4801,58 @@
                 <div style="display:flex; flex-direction:column; gap:13px; margin-top:14px;">
                   <sc-for list="{{ tfSources }}" as="x" hint-placeholder-count="5">
                     <div title="{{ x.tip }}">
-                      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-                        <span style="font-size:12.5px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
-                        <span style="display:flex; align-items:baseline; gap:12px; flex-shrink:0;">
-                          <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ x.value }}</span>
-                          <span style="font-size:11px; font-weight:700; color:{{ x.convColor }}; width:38px; text-align:right; font-variant-numeric:tabular-nums;">{{ x.conv }}</span>
-                        </span>
+                      <div style="display:flex; align-items:center; gap:11px;">
+                        <span style="flex-shrink:0; width:104px; font-size:10.5px; font-weight:700; color:{{ x.chipFg }}; background:{{ x.chipBg }}; padding:4px 10px; border-radius:99px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box;">{{ x.name }}</span>
+                        <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ x.barW }}; background:{{ x.barColor }}; border-radius:99px;"></span></span>
+                        <span style="flex-shrink:0; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; width:78px; text-align:right;">{{ x.value }}</span>
                       </div>
-                      <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:6px;"><div style="height:100%; width:{{ x.barW }}; background:{{ x.barColor }}; border-radius:99px;"></div></div>
+                      <div style="font-size:10px; color:#B4AFC4; margin-top:4px; padding-left:115px;">{{ x.counts }}</div>
                     </div>
                   </sc-for>
                 </div>
                 <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">Bar length is revenue won from that source. The figure on the right is how many of its DECIDED deals were won — open ones are not counted as failures, or every new channel would look like the worst one.</div>
               </sc-if>
             </div>
+          </section>
+
+          <!-- Per-officer performance. The leaderboard above ranks; this settles up: what each of
+               them was asked for, what they closed, the gap in MONEY rather than a percentage, and
+               what that earns them.
+
+               RATE and COMMISSION are real figures, not the design's decoration: the rate lives on
+               the user, is set from this table, and the commission is that rate times what the
+               person actually closed. A dash means no rate has been agreed — which is a different
+               fact from a rate of zero, and only the second can produce a payable line. -->
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .11s both; padding:18px 0 6px; overflow:hidden;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700; padding:0 22px 14px;">Per-officer performance</div>
+            <sc-if value="{{ tfHasOfficers }}" hint-placeholder-val="{{ true }}">
+              <div style="overflow-x:auto;"><div style="min-width:820px;">
+                <div style="display:grid; grid-template-columns:minmax(0,1.5fr) 110px 110px minmax(0,1.6fr) 80px 120px; gap:12px; padding:0 22px 9px; font-size:9.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+                  <span>Officer</span><span>Target</span><span>Achieved</span><span>Progress</span><span>Rate</span><span style="text-align:right;">Commission</span>
+                </div>
+                <sc-for list="{{ tfOfficers }}" as="o" hint-placeholder-count="4">
+                  <div style="display:grid; grid-template-columns:minmax(0,1.5fr) 110px 110px minmax(0,1.6fr) 80px 120px; gap:12px; align-items:center; padding:13px 22px; border-bottom:1px solid #F7F5FB;">
+                    <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                      <span style="width:30px; height:30px; border-radius:99px; background:#26074D; color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ o.initials }}</span>
+                      <div style="min-width:0;">
+                        <div style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ o.name }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ o.role }}</div>
+                      </div>
+                    </div>
+                    <span style="font-size:12.5px; color:#6F6C7A; font-variant-numeric:tabular-nums;">{{ o.target }}</span>
+                    <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ o.achieved }}</span>
+                    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                      <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></span></span>
+                      <span style="font-size:10.5px; font-weight:700; color:{{ o.gapColor }}; white-space:nowrap; flex-shrink:0;">{{ o.gap }}</span>
+                    </div>
+                    <sc-if value="{{ o.canSetRate }}" hint-placeholder-val="{{ true }}">
+                      <span onClick="{{ o.setRate }}" title="Set this person's commission rate" style="font-size:12px; color:{{ o.rateColor }}; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.rate }}</span>
+                    </sc-if>
+                    <span style="font-size:12.5px; font-weight:700; color:{{ o.commissionColor }}; text-align:right; font-variant-numeric:tabular-nums;">{{ o.commission }}</span>
+                  </div>
+                </sc-for>
+              </div></div>
+            </sc-if>
           </section>
         </sc-if>
 
@@ -26240,11 +26287,73 @@ class Component extends DCLogic {
             rowBg: i === 0 ? '#F6FDF9' : '#fff',
             rowBd: i === 0 ? '#BFEBD2' : '#F0EDF6',
           })),
+          // The firm's bill, and how much of it is actually known. A total quoted without saying
+          // how many people it covers reads as the whole bill when it may be a fraction of it.
+          tfCommission: k9(D.commissionMinor),
+          tfCommissionSub: (D.commissionKnown || 0) === (D.commissionPeople || 0)
+            ? 'all ' + (D.commissionPeople || 0) + ' rates set'
+            : (D.commissionKnown || 0) + ' of ' + (D.commissionPeople || 0) + ' rates set',
+          tfCommissionPartial: (D.commissionKnown || 0) < (D.commissionPeople || 0),
+          tfOfficers: (D.leaderboard || []).map(r => ({
+            name: r.name,
+            initials: ini9(r.name),
+            role: ({ super_admin: 'Super Admin', admin: 'Admin', sales: 'Sales consultant',
+                     pro_officer: 'PRO Officer', accountant: 'Accountant' })[r.roleId] || r.roleId || 'Staff',
+            target: r.targetMinor != null ? k9(r.targetMinor) : '\u2014',
+            achieved: k9(r.wonMinor),
+            barW: r.pctBp != null ? Math.max(2, Math.min(100, Math.round(r.pctBp / 100))) + '%' : '0%',
+            barColor: r.pctBp == null ? '#E4E1EC' : r.pctBp >= 10000 ? '#12B76A' : r.pctBp >= 7000 ? '#7C00FF' : '#F0A030',
+            // The gap in money, or by how much they are past it. "82%" is a score; "SAR 88k to go"
+            // is the thing somebody can still do something about this quarter.
+            gap: r.pctBp == null ? 'no target set'
+              : r.pctBp >= 10000 ? 'Target met \u00b7 +' + (Math.round(r.pctBp / 100) - 100) + '%'
+              : k9(Math.max(0, (r.targetMinor || 0) - r.wonMinor)) + ' to go',
+            gapColor: r.pctBp == null ? '#A9A6B4' : r.pctBp >= 10000 ? '#0E9355' : r.pctBp >= 7000 ? '#7C00FF' : '#B7791F',
+            // A dash where no rate has been agreed, never 0% — see the note on the column.
+            rate: r.rateBp != null ? (r.rateBp / 100) + '%' : '\u2014',
+            rateColor: r.rateBp != null ? '#4B4757' : '#C9C4D4',
+            commission: r.commissionMinor != null ? k9(r.commissionMinor) : '\u2014',
+            commissionColor: r.commissionMinor != null ? '#0E9355' : '#C9C4D4',
+            canSetRate: canWrite,
+            setRate: () => this._prompt('Commission rate for ' + r.name, r.rateBp != null ? String(r.rateBp / 100) : '', {
+              placeholder: 'e.g. 4.5',
+              body: 'A percentage of what they close. Leave it blank to clear it \u2014 blank means no rate has '
+                + 'been agreed, which is not the same as agreeing on nothing.',
+            }).then(v => {
+              if (v === null) return;
+              const t = String(v).trim();
+              const bp = t === '' ? null : Math.round(parseFloat(t) * 100);
+              if (t !== '' && !Number.isFinite(bp)) return this.toast('That is not a percentage');
+              const API = this._apiBase || 'http://localhost:4100';
+              const tok = localStorage.getItem('stimespro:token');
+              fetch(API + '/api/users/' + r.id + '/commission-rate', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
+                body: JSON.stringify({ rateBp: bp }),
+              }).then(res => res.json().then(j => ({ ok: res.ok, j })))
+                .then(({ ok, j }) => {
+                  if (!ok) return this.toast((j && j.error) || 'Could not set that rate');
+                  this.toast(bp == null ? 'Rate cleared' : 'Rate set to ' + (bp / 100) + '%');
+                  if (this._loadTF) this._loadTF();
+                })
+                .catch(() => this.toast('Server unreachable'));
+            }),
+          })),
+          tfHasOfficers: (D.leaderboard || []).length > 0,
           tfHasSources: (D.sources || []).length > 0,
           tfSources: (() => {
             const max = Math.max(1, ...(D.sources || []).map(x => x.wonMinor || 0));
-            return (D.sources || []).map(x => ({
+            const TONE = [['#E7F8EF', '#0E9355'], ['#F3E8FF', '#7C00FF'], ['#E4F4FD', '#0284C7'],
+                          ['#EFEBFF', '#6D5BD0'], ['#FEF4E2', '#B7791F'], ['#F3F1F7', '#6F6C7A']];
+            return (D.sources || []).map((x, i) => ({
               name: x.name,
+              chipBg: TONE[i % TONE.length][0],
+              chipFg: TONE[i % TONE.length][1],
+              // The three facts the design puts beside the bar, which together say whether a
+              // channel is worth its money: how much it sent, how much closed, and the rate.
+              counts: x.deals + (x.deals === 1 ? ' lead' : ' leads')
+                + ' \u00b7 ' + x.wonCount + ' won'
+                + ' \u00b7 ' + (x.convertedBp != null ? Math.round(x.convertedBp / 100) + '%' : 'none decided'),
               value: x.wonMinor ? k9(x.wonMinor) : '\u2014',
               barW: Math.max(1, Math.round(((x.wonMinor || 0) / max) * 100)) + '%',
               barColor: x.convertedBp == null ? '#DDD9E6' : x.convertedBp >= 7500 ? '#12B76A' : x.convertedBp >= 4000 ? '#7C00FF' : '#0284C7',
