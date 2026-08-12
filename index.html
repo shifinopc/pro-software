@@ -4014,20 +4014,6 @@
           </section>
         </sc-if>
 
-        <!-- What is coming, kept apart from what is owed. Mixing them makes the queue unreadable. -->
-        <sc-if value="{{ fuHasLater }}" hint-placeholder-val="{{ false }}">
-          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; overflow:hidden;">
-            <div class="pg-card-h"><div><div class="pg-card-t">Coming up</div><div class="pg-card-s">Dated, but not yet due</div></div></div>
-            <div class="pg-card-b" style="padding-top:6px;">
-              <sc-for list="{{ fuLater }}" as="l" hint-placeholder-count="3">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid #FAF8FC; font-size:12px;">
-                  <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ l.action }}</span>
-                  <span style="color:#8C8899; flex-shrink:0;">{{ l.when }}</span>
-                </div>
-              </sc-for>
-            </div>
-          </section>
-        </sc-if>
       </div></sc-if>
 
       <!-- ── Setup Check ────────────────────────────────────────────────────────────────────────
@@ -24101,6 +24087,13 @@ class Component extends DCLogic {
     const _ig = this.state.intLog || null;
     const _KIND_LABEL9 = { call: 'Call', meeting: 'Meeting', email: 'Email', whatsapp: 'WhatsApp', note: 'Note', site_visit: 'Site visit' };
     const _todayISO9 = new Date().toISOString().slice(0, 10);
+    // Declared HERE, beside the other follow-up reads, because the shaper below now consumes it.
+    // It used to sit a hundred lines further down, which was fine while nothing above referenced
+    // it — and a TDZ throw the moment something did. const is not hoisted for use, and in this
+    // runtime that throw takes the whole screen, not just the section that made the mistake.
+    const _later9 = _ints
+      .filter(i => i.nextActionAt && !i.nextActionDoneAt && String(i.nextActionAt).slice(0, 10) > _todayISO9)
+      .sort((a, b) => String(a.nextActionAt).localeCompare(String(b.nextActionAt)));
 
     /**
      * ONE SHAPE FOR A FOLLOW-UP ROW.
@@ -24121,7 +24114,22 @@ class Component extends DCLogic {
     const _fuInitials9 = (name) => (String(name || '')
       .replace(/\([^)]*\)/g, ' ').match(/[\p{L}\p{N}]+/gu) || [])
       .slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-    const _fuShaped9 = _fu.map(f => ({
+    /**
+     * The queue and the not-yet-due list, shaped by ONE function.
+     *
+     * "Coming up" was a separate card in an older style — a bare title and a date, no icon, no
+     * owner, no controls — which made a dated commitment look like a different KIND of thing from
+     * the identical commitment that happens to be due today. It is the same thing, further away.
+     *
+     * The two lists come from different places: `_fu` is the server's open-follow-ups read, which
+     * covers overdue and due-today, and `_later9` is built here from the interactions already in
+     * hand. Ids are deduplicated across the join rather than assumed disjoint — if the route is
+     * ever widened to return future rows, this would otherwise render each of them twice, which is
+     * the sort of bug that looks like a data fault and gets investigated as one.
+     */
+    const _fuIds9 = new Set(_fu.map(f => f.id));
+    const _fuAll9 = [..._fu, ..._later9.filter(i => !_fuIds9.has(i.id))];
+    const _fuShaped9 = _fuAll9.map(f => ({
         // Kept so the grouped queue can split on it without re-deriving what the server already said.
         isOverdue: !!f.overdue,
         auto: !!f.auto,
@@ -24132,7 +24140,21 @@ class Component extends DCLogic {
         initials: _fuInitials9(f.ownerId ? _userName9(f.ownerId) : ''),
         avBg: _FU_AV9[Math.abs(String(f.ownerId || '').split('').reduce((n, c) => n + c.charCodeAt(0), 0)) % _FU_AV9.length],
         action: f.nextAction,
-        due: f.overdue ? (f.daysLate === 1 ? '1 day late' : f.daysLate + ' days late') : 'today',
+        // Three states, not two. Everything that was not late used to read "today", which for a
+        // follow-up dated next Friday is simply false.
+        isLater: !f.overdue && String(f.nextActionAt).slice(0, 10) > _todayISO9,
+        due: f.overdue
+          ? (f.daysLate === 1 ? '1 day late' : f.daysLate + ' days late')
+          : String(f.nextActionAt).slice(0, 10) > _todayISO9
+            // Day and month, worked out here rather than through one of this file's date helpers:
+            // each of those lives inside a different screen's block, and reaching across for one is
+            // what took the Pipeline screen down earlier.
+            ? (() => {
+                const d = new Date(String(f.nextActionAt).slice(0, 10) + 'T00:00:00');
+                return isNaN(d) ? String(f.nextActionAt).slice(0, 10)
+                  : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+              })()
+            : 'today',
         // A pushed commitment says so. Amber for the first push, red once it has been moved three
         // times or more — at that point it is not scheduling, it is avoidance, and it should stop
         // looking like a neutral fact.
@@ -24159,9 +24181,9 @@ class Component extends DCLogic {
           },
           snErr: '',
         }),
-        dueColor: f.overdue ? '#C0353A' : '#B7791F',
-        dueBg: f.overdue ? '#FEECEC' : '#FFF6E5',
-        stripe: f.overdue ? '#C0353A' : '#F0C24B',
+        dueColor: f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#B7791F'),
+        dueBg: f.overdue ? '#FEECEC' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#E4F4FD' : '#FFF6E5'),
+        stripe: f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#F0C24B'),
         who: (f.company && f.company.name) || '—',
         context: [
           f.opportunity ? f.opportunity.title : null,
@@ -24184,9 +24206,6 @@ class Component extends DCLogic {
     }));
     // Dated but not yet due, from the full log — /api/follow-ups deliberately returns only what is
     // owed BY today, so "coming up" is worked out here from the same rows the timeline reads.
-    const _later9 = _ints
-      .filter(i => i.nextActionAt && !i.nextActionDoneAt && String(i.nextActionAt).slice(0, 10) > _todayISO9)
-      .sort((a, b) => String(a.nextActionAt).localeCompare(String(b.nextActionAt)));
 
     // ── The two wording lists ──
     //
@@ -25454,10 +25473,14 @@ class Component extends DCLogic {
       fuShowOwners: new Set(_fu.map(f => f.ownerId || '')).size > 1,
       fuGroups: (() => {
         const late = _fuShaped9.filter(f => f.isOverdue);
-        const now = _fuShaped9.filter(f => !f.isOverdue);
+        const now = _fuShaped9.filter(f => !f.isOverdue && !f.isLater);
+        const soon = _fuShaped9.filter(f => f.isLater);
         return [
           { key: 'late', label: 'Overdue', color: '#C0353A', bg: '#FEECEC', rows: late, note: 'Promised before today' },
           { key: 'today', label: 'Due today', color: '#B7791F', bg: '#FFF6E5', rows: now, note: 'Promised for today' },
+          // Same card, same rows, a cooler band. It is not a different kind of thing — it is the
+          // same commitment, further away — and the tint is what says so without a second heading.
+          { key: 'soon', label: 'Coming up', color: '#0284C7', bg: '#E4F4FD', rows: soon, note: 'Dated, not yet due' },
         ].filter(g => g.rows.length).map(g => ({ ...g, count: String(g.rows.length) }));
       })(),
 
@@ -25562,11 +25585,6 @@ class Component extends DCLogic {
       fuEmptyBody: _ints.length
         ? 'Everything with a date on it is either done or still ahead. Anything overdue would be at the top of this list.'
         : 'Log a call, a meeting or a note against a client, and anything you promise to do next appears here on the day it is due.',
-      fuHasLater: _later9.length > 0,
-      fuLater: _later9.slice(0, 12).map(i => ({
-        action: i.nextAction + ((i.company && i.company.name) ? ' — ' + i.company.name : ''),
-        when: String(i.nextActionAt).slice(0, 10),
-      })),
       // `pickCompany` is set at OPEN time and never recomputed. The flag used to be "there is no
       // company on the draft yet", which meant the field deleted itself the instant you chose one —
       // so you could not read back, let alone correct, the single answer the dialog most needs.
