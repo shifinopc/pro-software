@@ -4700,6 +4700,18 @@
             </sc-if>
           </div>
           <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
+            <!-- WHICH MONTH the header acts on. Targets are stored a month at a time, so the button
+                 beside this says which one it is about to set rather than leaving you to infer it
+                 from whatever the page last loaded. Future months are selectable: setting next
+                 quarter's targets is the whole point of having them. -->
+            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-wrap:wrap;">
+              <sc-for list="{{ tfMonthTabs }}" as="m" hint-placeholder-count="6">
+                <span onClick="{{ m.pick }}" style="font-size:11.5px; font-weight:{{ m.weight }}; color:{{ m.color }}; background:{{ m.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer;">{{ m.label }}</span>
+              </sc-for>
+            </div>
+            <span onClick="{{ tfSetHeader }}" style="font-size:12px; font-weight:600; color:#7C00FF; background:#fff; border:1px solid #DDD1F5; padding:9px 18px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#FBF7FF; border-color:#C9A2FF;">{{ tfSetHeaderLabel }}</span>
+          </sc-if>
+          <sc-if value="{{ tfReady }}" hint-placeholder-val="{{ true }}">
             <div class="pg-card" style="padding:10px 16px; text-align:right;">
               <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMMISSION PAYABLE</div>
               <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#0E9355; margin-top:2px;">{{ tfCommission }}</div>
@@ -4735,21 +4747,7 @@
               <sc-if value="{{ tfPartial }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative; font-size:10px; opacity:.75; margin-top:8px; line-height:1.5;">{{ tfPartialNote }}</div>
               </sc-if>
-              <!-- SETTING the target, as a link rather than a form.
-                   The artifact has no control here at all — its targets are fixed mock data — so
-                   there is nothing to copy, and an input and a button embedded in the gradient was
-                   the one thing on this card that did not look like the design. But this is the only
-                   place in the product that can set a target, and the quota figure, the leaderboard
-                   and the per-officer table are all measured against one: removing it to match a
-                   drawing would leave three panels reporting on a number nobody could enter.
 
-                   So the card reads as the design's at a glance and the capability sits one press
-                   inside it, in the same prompt the commission rate uses. -->
-              <sc-if value="{{ perfCanSetTarget }}" hint-placeholder-val="{{ true }}">
-                <div style="position:relative; margin-top:13px;">
-                  <span onClick="{{ tfSetTarget }}" style="font-size:11px; font-weight:700; color:#fff; opacity:.85; cursor:pointer; border-bottom:1px dotted rgba(255,255,255,.5); padding-bottom:1px;" style-hover="opacity:1;">{{ tfSetTargetLabel }}</span>
-                </div>
-              </sc-if>
             </div>
 
             <div class="pg-card" style="padding:20px 22px;">
@@ -24487,13 +24485,15 @@ class Component extends DCLogic {
      * An empty string CLEARS the target: the server takes 0 as "no target", which is what the
      * screen then says instead of drawing a bar against nothing.
      */
-    const _saveTarget9 = (raw9) => {
+    const _saveTarget9 = (raw9, period9) => {
       const raw = String(raw9 ?? '').trim();
+      const period = period9 || (_rep && _rep.period) || '';
+      if (!period) return this.toast('No period selected', 'error');
       if (raw && !Number.isFinite(Number(raw))) return this.toast('The target has to be a number', 'error');
       return this._crmFetch('/api/sales-targets', {
         method: 'PUT',
         body: JSON.stringify({
-          period: (_rep && _rep.period) || '',
+          period,
           teamId: (_repEnv && _repEnv.teamId) || null,
           amountMinor: raw ? Math.round(Number(raw) * 100) : 0, currency: _repCcy,
         }),
@@ -24501,7 +24501,7 @@ class Component extends DCLogic {
         if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
         this.toast(raw ? 'Target set' : 'Target cleared');
         this.setState({ perfTargetInput: '' });
-        if (this._loadSalesReport) this._loadSalesReport((_rep && _rep.period) || '');
+        if (this._loadSalesReport) this._loadSalesReport(period);
         // The quota card, the leaderboard and the officer table all measure against this, and they
         // come from a different endpoint — without this they would keep showing the old target.
         if (this._loadTF) this._loadTF();
@@ -26067,6 +26067,17 @@ class Component extends DCLogic {
         const ini9 = (n) => (String(n || '').match(/[\p{L}\p{N}]+/gu) || []).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
         if (!D) return { tfReady: false, tfLoading: true, tfMonths: [], tfBoard: [], tfSources: [] };
 
+        // Defaults to the month the report opened on, so the strip and the figures agree before
+        // anybody touches it.
+        const selMonth9 = this.state.tfMonth || (_rep && _rep.period) || (D.months || []).filter(m => !m.isFuture).slice(-1)[0]?.key || '';
+        const selLabel9 = (() => {
+          const d = new Date(selMonth9 + '-01T00:00:00Z');
+          if (isNaN(d)) return selMonth9;
+          // Three letters, matching the chips and the chart. en-GB's short month is "Sept" for
+          // September alone, so without this the strip reads Sep and the button beside it Sept.
+          const mon = d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).slice(0, 3);
+          return mon + ' ' + d.getUTCFullYear();
+        })();
         const q = D.quarter || {};
         // The tallest thing on the chart sets the scale — including targets, or a month that missed
         // its target by half would draw a bar as tall as one that beat it.
@@ -26075,11 +26086,12 @@ class Component extends DCLogic {
           tfReady: true, tfLoading: false,
           tfQuarterLabel: 'TEAM QUOTA \u00b7 ' + (q.label || ''),
           tfWon: k9(q.wonMinor),
-          tfHasTarget: q.targetMinor != null,
-          tfOfTarget: q.targetMinor != null ? 'of ' + k9(q.targetMinor) : '',
+          tfHasTarget: true,
+          tfOfTarget: q.targetMinor != null ? 'of ' + k9(q.targetMinor) : 'of not set',
           tfPctW: q.pctBp != null ? Math.max(0, Math.min(100, Math.round(q.pctBp / 100))) + '%' : '0%',
-          tfPctLine: q.pctBp != null ? Math.round(q.pctBp / 100) + '% achieved' : 'No target set for this quarter',
-          tfGapLine: q.gapMinor != null ? k9(q.gapMinor) + ' to quota' : '',
+          tfPctLine: q.pctBp != null ? Math.round(q.pctBp / 100) + '% achieved' : 'no target yet',
+          // Points at the control that fixes it rather than only reporting the absence.
+          tfGapLine: q.gapMinor != null ? k9(q.gapMinor) + ' to quota' : 'set a target for ' + (selLabel9 || 'this month'),
           // Said plainly rather than shown as a smaller quota: a quarter is only measurable when
           // all three of its months carry a target.
           tfPartial: (q.monthsWithTarget || 0) > 0 && (q.monthsWithTarget || 0) < (q.monthsInQuarter || 3),
@@ -26127,15 +26139,30 @@ class Component extends DCLogic {
           // the period being reported on, whether a team or the firm owns the target, and which
           // currency — three things this panel would otherwise have to work out a second time and
           // could get differently.
-          tfSetTargetLabel: q.targetMinor != null ? 'Change this month’s target' : 'Set this month’s target',
-          tfSetTarget: () => this._prompt('Target for ' + ((_rep && _rep.label) || 'this month'), '', {
-            placeholder: 'Amount for the whole firm',
-            body: 'Targets are set a MONTH at a time — the quarter figure above is its three months '
-              + 'added together, and it only appears once all three have one. Leave it blank to clear.',
-          }).then(v => {
-            if (v === null) return;
-            _saveTarget9(v);
+          // WHICH MONTH the header is acting on. Targets are stored per month, so a screen that
+          // sets them needs to say which one — and a forward month has to be selectable, because
+          // setting next quarter's targets is the entire point of having them.
+          tfMonthTabs: (D.months || []).map(m => {
+            const on = m.key === selMonth9;
+            return {
+              label: m.label, key: m.key,
+              color: on ? '#fff' : (m.isFuture ? '#B4AFC4' : '#6F6C7A'),
+              bg: on ? '#7C00FF' : 'transparent',
+              weight: on ? '700' : '600',
+              pick: () => {
+                this.setState({ tfMonth: m.key });
+                // The report follows the strip, so the figures under it belong to the month named
+                // on the button rather than to whichever month happened to load first.
+                if (this._loadSalesReport) this._loadSalesReport(m.key);
+              },
+            };
           }),
+          tfSetHeaderLabel: 'Set target for ' + (selLabel9 || ''),
+          tfSetHeader: () => this._prompt('Target for ' + (selLabel9 || ''), '', {
+            placeholder: 'Amount for the whole firm',
+            body: 'Targets are set a MONTH at a time \u2014 the quarter figure is its three months added '
+              + 'together, and it only appears once all three have one. Leave it blank to clear.',
+          }).then(v => { if (v !== null) _saveTarget9(v, selMonth9); }),
           tfCommission: k9(D.commissionMinor),
           tfCommissionSub: (D.commissionKnown || 0) === (D.commissionPeople || 0)
             ? 'all ' + (D.commissionPeople || 0) + ' rates set'

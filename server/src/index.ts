@@ -1815,7 +1815,11 @@ app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("sup
   const months: Array<{ key: string; label: string }> = [];
   for (let i = 3; i >= -2; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
-    months.push({ key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) });
+    // Trimmed to three letters. en-GB's "short" month is "Sept" for September and three letters
+    // for the other eleven, which puts one odd-length label in the middle of a strip of chips and
+    // one wider bar label in the middle of the chart.
+    const short = d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }).slice(0, 3);
+    months.push({ key: d.toISOString().slice(0, 7), label: short });
   }
   const thisMonth = now.toISOString().slice(0, 7);
   const targets = await prisma.salesTarget.findMany({ where: { ownerId: null, teamId: null } });
