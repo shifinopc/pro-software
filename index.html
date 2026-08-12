@@ -5316,7 +5316,7 @@
             <div style="display:grid; grid-template-columns:26px minmax(0,1.35fr) minmax(0,1.05fr) 104px minmax(0,1.15fr) 116px 104px 116px; gap:10px; align-items:center; padding:13px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:13px;">{{ l.tick }}</span>
               <div onClick="{{ l.open }}" style="min-width:0; cursor:pointer; display:flex; align-items:center; gap:10px;" title="Open this lead">
-                <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; flex-shrink:0;">{{ l.initials }}</span>
+                <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:{{ l.avColor }}; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; flex-shrink:0;">{{ l.initials }}</span>
                 <span style="min-width:0;">
                   <span style="display:flex; align-items:center; gap:7px; min-width:0;">
                     <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="color:#7C00FF;">{{ l.name }}</span>
@@ -5326,7 +5326,7 @@
                       <span title="Nothing logged and no deal for this long" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:{{ l.idleColor }}; background:{{ l.idleBg }}; padding:2px 8px; border-radius:99px;">{{ l.idleLabel }}</span>
                     </sc-if>
                     <sc-if value="{{ l.campaignShown }}" hint-placeholder-val="{{ false }}">
-                      <span title="Campaign that produced this lead" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:#0284C7; background:#EAF4FE; padding:2px 8px; border-radius:99px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ l.campaign }}</span>
+                      <span title="Campaign that produced this lead" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ l.campaign }}</span>
                     </sc-if>
                   </span>
                   <span style="display:block; font-size:11px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.meta }}</span>
@@ -5402,6 +5402,23 @@
               </div>
             </div>
           </sc-for>
+          <!-- Where you are in the list, and the pages. The count sits on the left because it
+               answers a question people have BEFORE they reach for a page number: is what I am
+               looking at all of it? -->
+          <sc-if value="{{ ldPageShown }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 22px; border-top:1px solid #F0EDF6;">
+              <span style="font-size:11.5px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ ldPageLabel }}</span>
+              <sc-if value="{{ ldPagerShown }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span onClick="{{ ldPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ ldPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                  <sc-for list="{{ ldPages }}" as="p" hint-placeholder-count="2">
+                    <span onClick="{{ p.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.color }}; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;">{{ p.n }}</span>
+                  </sc-for>
+                  <span onClick="{{ ldNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ ldNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
           <sc-if value="{{ ldEmpty }}" hint-placeholder-val="{{ false }}">
             <div style="padding:44px 24px; text-align:center;">
               <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">{{ ldEmptyTitle }}</div>
@@ -23710,6 +23727,22 @@ class Component extends DCLogic {
       : _ldGroup9
       ? [..._ldFiltered9].sort((a, b) => _ldKey9(a).localeCompare(_ldKey9(b)) || String(a.name).localeCompare(String(b.name)))
       : _ldFiltered9;
+    /**
+     * ONE PAGE AT A TIME, as the design shows: "1–7 of 9", with the pages beside it.
+     *
+     * The list rendered every row it had. That is fine at nine and useless at four hundred — the
+     * table grows past the window, the footer no one can reach stops being read, and the browser
+     * lays out four hundred rows on every keystroke in the search box.
+     *
+     * The page is CLAMPED rather than remembered blindly: filtering to a tab with two rows while
+     * sitting on page three would otherwise show an empty table with no way to tell why, and the
+     * fix — press back to page one — is not one people find, because the pagination is off the
+     * bottom of an empty table.
+     */
+    const LD_PER_PAGE = 12;
+    const _ldPageCount9 = Math.max(1, Math.ceil(_ldVisible.length / LD_PER_PAGE));
+    const _ldPage9 = Math.min(Math.max(1, this.state.ldPage || 1), _ldPageCount9);
+    const _ldPaged9 = _ldVisible.slice((_ldPage9 - 1) * LD_PER_PAGE, _ldPage9 * LD_PER_PAGE);
     const _ldOpen = _leadRows.filter(l => l.lifecycle === 'lead' || l.lifecycle === 'prospect').length;
     /**
      * THE EDIT DRAFT — one builder, because there are two buttons that open this form.
@@ -26568,7 +26601,7 @@ class Component extends DCLogic {
           // The count travels with its label rather than wearing a pill of its own. Nine chips each
           // carrying a second pill was a row of eighteen shapes.
           cFg: on ? '#B98BFF' : '#B4AFC4',
-          pick: () => this.setState({ ldFilter: k }),
+          pick: () => this.setState({ ldFilter: k, ldPage: 1 }),
         };
       }),
       // Says what the current tab MEANS, because "Idle" and "New" are judgements rather than
@@ -26582,7 +26615,7 @@ class Component extends DCLogic {
       ldFilterNoteShown: ['Unassigned', 'New', 'Idle', 'Churned'].includes(_ldFilter),
       // ── search, grouping and selection ──────────────────────────────────────────────────────
       ldQuery: this.state.ldQuery || '',
-      setLdQuery: (e) => this.setState({ ldQuery: e.target.value }),
+      setLdQuery: (e) => this.setState({ ldQuery: e.target.value, ldPage: 1 }),
       // mkDdSearch rather than mkDd because the options carry a value distinct from their label —
       // "No grouping" stores '' — and the search box is simply left out of the markup.
       ...mkDdSearch('ddLdGroup', [
@@ -26597,12 +26630,32 @@ class Component extends DCLogic {
       // Selection deliberately survives a regroup: grouping is a sort, the same rows are still
       // there, and clearing would throw away work the moment somebody reorders to check it.
       ], _ldGroup9, (v) => this.setState({ ldGroupBy: v })),
+      ldPageLabel: _ldVisible.length
+        ? ((_ldPage9 - 1) * LD_PER_PAGE + 1) + '\u2013' + Math.min(_ldPage9 * LD_PER_PAGE, _ldVisible.length) + ' of ' + _ldVisible.length
+        : '',
+      ldPageShown: _ldVisible.length > 0,
+      ldPagerShown: _ldPageCount9 > 1,
+      ldPages: Array.from({ length: _ldPageCount9 }, (_, i) => i + 1).map(n => ({
+        n: String(n),
+        color: n === _ldPage9 ? '#fff' : '#6F6C7A',
+        bg: n === _ldPage9 ? '#7C00FF' : '#fff',
+        bd: n === _ldPage9 ? '#7C00FF' : '#EDEBF2',
+        pick: () => this.setState({ ldPage: n }),
+      })),
+      // Greyed and inert at the ends rather than hidden: controls that appear and disappear move
+      // the ones beside them, and the page numbers are what people are aiming at.
+      ldPrevOp: _ldPage9 > 1 ? '1' : '.35',
+      ldNextOp: _ldPage9 < _ldPageCount9 ? '1' : '.35',
+      ldPrev: () => { if (_ldPage9 > 1) this.setState({ ldPage: _ldPage9 - 1 }); },
+      ldNext: () => { if (_ldPage9 < _ldPageCount9) this.setState({ ldPage: _ldPage9 + 1 }); },
+      // Select-all means the rows in front of you. Ticking a box and silently selecting three
+      // hundred rows on pages nobody has looked at is how a bulk reassignment goes wrong.
       ldToggleAll: () => {
-        const ids = _ldVisible.map(l => l.id);
+        const ids = _ldPaged9.map(l => l.id);
         const all = ids.length && ids.every(id => (this.state.ldSel || []).includes(id));
         this.setState({ ldSel: all ? [] : ids });
       },
-      ldAllMark: _ldVisible.length && _ldVisible.every(l => (this.state.ldSel || []).includes(l.id)) ? '☑' : '☐',
+      ldAllMark: _ldPaged9.length && _ldPaged9.every(l => (this.state.ldSel || []).includes(l.id)) ? '☑' : '☐',
       ldAllFg: _ldVisible.length && _ldVisible.every(l => (this.state.ldSel || []).includes(l.id)) ? '#7C00FF' : '#C9C6D2',
       ldBulkOpen: (this.state.ldSel || []).length > 0,
       ldBulkCount: (this.state.ldSel || []).length + ((this.state.ldSel || []).length === 1 ? ' lead selected' : ' leads selected'),
@@ -26632,7 +26685,7 @@ class Component extends DCLogic {
         }).catch(() => this.toast('Could not reassign them all', 'error'));
       },
 
-      ldRows: _ldVisible.map(l => {
+      ldRows: _ldPaged9.map(l => {
         const tone = _LC_TONE[l.lifecycle] || _LC_TONE.lead;
         const mine = _contactRows.filter(c => c.companyId === l.id);
         const primary = mine.find(c => c.isPrimary) || mine[0] || null;
@@ -26727,7 +26780,17 @@ class Component extends DCLogic {
           // Initials on a colour derived from the NAME, so the same company is the same colour on
           // every screen and in every session. Random would look livelier and mean nothing.
           initials: String(l.name).split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase(),
-          avBg: ['#7C00FF', '#0E9355', '#0284C7', '#B7791F', '#C0353A', '#26074D'][Math.abs([...String(l.name)].reduce((a, c) => a + c.charCodeAt(0), 0)) % 6],
+          // A PALE tint carrying dark initials, not a solid block of colour with white on it.
+          // Seven saturated squares down the left of a table pull the eye away from the names
+          // beside them, which are the thing being read; the tint identifies without competing.
+          // Paired, so the tint and its ink always belong to each other.
+          ...(() => {
+            const TONE = [
+              ['#F3E8FF', '#7C00FF'], ['#E7F8EF', '#0E9355'], ['#E4F4FD', '#0284C7'],
+              ['#FEF4E2', '#B7791F'], ['#FEECEC', '#C0353A'], ['#EFEBFF', '#6D5BD0'],
+            ][Math.abs([...String(l.name)].reduce((a, c) => a + c.charCodeAt(0), 0)) % 6];
+            return { avBg: TONE[0], avColor: TONE[1] };
+          })(),
           tick: (this.state.ldSel || []).includes(l.id) ? '☑' : '☐',
           tickFg: (this.state.ldSel || []).includes(l.id) ? '#7C00FF' : '#C9C6D2',
           toggle: () => {
