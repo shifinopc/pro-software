@@ -5232,49 +5232,52 @@
       <sc-if value="{{ showLeads }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Leads">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES · CRM</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Leads</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ ldSub }}</div>
           </div>
           <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
           </sc-if>
         </section>
 
-        <!-- THE TABS GET THEIR OWN ROW, above search and grouping.
-             They shared one row until there were nine of them, at which point the bar wrapped and
-             the grouping dropdown opened on top of the chips that had spilled onto the second line.
-             Tabs first because they are what the screen is filtered BY; search and grouping are
-             refinements of whatever tab is open, and a dropdown belongs above the table, not above
-             its own siblings. -->
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:7px; flex-wrap:wrap; align-items:center;">
-          <sc-for list="{{ ldFilters }}" as="f" hint-placeholder-count="9">
-            <span onClick="{{ f.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; padding:7px 13px; border-radius:99px; cursor:pointer; border:1px solid {{ f.bd }}; background:{{ f.bg }}; color:{{ f.fg }};">
-              {{ f.label }}
-              <span style="font-size:10.5px; font-weight:700; color:{{ f.cFg }}; background:{{ f.cBg }}; padding:1px 7px; border-radius:99px;">{{ f.count }}</span>
-            </span>
-          </sc-for>
-        </section>
+        <!-- Tabs, search and ordering on ONE row, as the design has them.
+             They were three stacked bands — tabs, then a gap, then search and the picker — which
+             pushed the table a third of the way down the screen before a single lead appeared.
 
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .06s both; display:flex; gap:10px; flex-wrap:wrap; align-items:center; position:relative; z-index:20;">
-          <div style="position:relative; flex:1; min-width:220px; max-width:340px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:13px; top:50%; transform:translateY(-50%);"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.2-4.2"></path></svg>
-            <input value="{{ ldQuery }}" onInput="{{ setLdQuery }}" placeholder="Search name, contact, email, phone, city…" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:99px; padding:8px 14px 8px 34px; font-size:12.5px; background:#fff;">
+             The tabs sit in one shared track rather than as nine separate outlined pills. Nine
+             bordered chips in a row read as nine buttons of equal weight; a track with one raised
+             chip in it reads as what it is, which is a single control currently set to All. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+          <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center; background:#F3EFFA; border-radius:99px; padding:3px;">
+            <sc-for list="{{ ldFilters }}" as="f" hint-placeholder-count="9">
+              <span onClick="{{ f.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer; background:{{ f.bg }}; color:{{ f.fg }}; box-shadow:{{ f.shadow }};">
+                {{ f.label }}
+                <span style="font-size:10.5px; font-weight:700; color:{{ f.cFg }};">{{ f.count }}</span>
+              </span>
+            </sc-for>
           </div>
-          <!-- The house picker, pill-shaped. No search box: four fixed options, where a filter field
-               would be furniture. -->
-          <div class="pill-selwrap">
-            <div data-dd data-open="{{ ddLdGroupOpen }}" onClick="{{ ddLdGroupToggle }}" class="pill-sel">
-              <span>{{ ddLdGroupLabel }}</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0; opacity:.6;"><path d="M6 9l6 6 6-6"></path></svg>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <div style="position:relative; min-width:250px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+              <input value="{{ ldQuery }}" onInput="{{ setLdQuery }}" placeholder="Company, city, source, contact" style="width:100%; box-sizing:border-box; font-family:inherit; font-size:12px; color:#1A1523; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:9px 14px 9px 36px; outline:none;">
             </div>
-            <sc-if value="{{ ddLdGroupOpen }}" hint-placeholder-val="{{ false }}">
-              <div data-dd data-hidescroll="true" class="pill-dd">
-                <sc-for list="{{ ddLdGroupOptions }}" as="o" hint-placeholder-count="4">
-                  <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                </sc-for>
+            <!-- Ordering AND grouping, in one control. Every option reorders the same flat list, so
+                 a separate sort dropdown beside a group dropdown would ask people to hold two ideas
+                 that produce one outcome. "Hottest first" is one of its options, which is what the
+                 design shows this control set to. -->
+            <div class="pill-selwrap">
+              <div data-dd data-open="{{ ddLdGroupOpen }}" onClick="{{ ddLdGroupToggle }}" class="pill-sel">
+                <span>{{ ddLdGroupLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
               </div>
-            </sc-if>
+              <sc-if value="{{ ddLdGroupOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="pill-dd">
+                  <sc-for list="{{ ddLdGroupOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
           </div>
         </section>
         <sc-if value="{{ ldFilterNoteShown }}" hint-placeholder-val="{{ false }}">
@@ -26549,9 +26552,6 @@ class Component extends DCLogic {
       }),
 
       // ── Leads ──
-      ldSub: _leadRows.length
-        ? _ldOpen + ' open · ' + _leadRows.filter(l => l.lifecycle === 'lost').length + ' lost'
-        : 'Companies you are pitching, before they are clients',
       // Each tab carries its OWN count, computed against the search box but not against the tab —
       // a tab has to say how many it would show, not how many match the tab already open. A zero is
       // shown rather than hidden: "Unassigned 0" is the answer somebody wanted.
@@ -26560,9 +26560,14 @@ class Component extends DCLogic {
         const n = _leadRows.filter(_ldTabTest9[k]).filter(_ldMatch9).length;
         return {
           label: k, count: String(n),
-          bd: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#7C00FF' : '#fff', fg: on ? '#fff' : '#6F6C7A',
-          // The count pill has to stay legible on the filled chip as well as the empty one.
-          cBg: on ? 'rgba(255,255,255,.22)' : '#F3F1F7', cFg: on ? '#fff' : '#8C8899',
+          // Raised, not filled. Inside a shared track the selected tab only has to stand off the
+          // track — a solid purple chip there fights the + Add lead button for the eye, and this
+          // row is a filter, not the thing you came to press.
+          bg: on ? '#fff' : 'transparent', fg: on ? '#7C00FF' : '#6F6C7A',
+          shadow: on ? '0 1px 3px rgba(38,7,77,.14)' : 'none',
+          // The count travels with its label rather than wearing a pill of its own. Nine chips each
+          // carrying a second pill was a row of eighteen shapes.
+          cFg: on ? '#B98BFF' : '#B4AFC4',
           pick: () => this.setState({ ldFilter: k }),
         };
       }),
