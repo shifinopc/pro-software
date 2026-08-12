@@ -4046,6 +4046,27 @@
            and the Pipeline board cannot disagree about how many deals are open. -->
       <sc-if value="{{ showCrmDash }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Sales Dashboard">
 
+      <!-- ── Page header, from the design ────────────────────────────────────────────────────────
+           The screen lost its title when the old hero went: that heading lived INSIDE the gradient,
+           so replacing the gradient took the name of the page with it. The design keeps them apart,
+           which is the better arrangement — a page should say what it is above the first thing it
+           shows, not inside it.
+
+           Two buttons, both of which do something. The design also carries a period picker and a
+           Mine/Everyone toggle; those are NOT here, because /api/crm-dashboard fixes the period to
+           the current month and takes no scope parameter, so both would be controls that move and
+           change nothing. A dead toggle is worse than an absent one — it gets pressed, it appears to
+           work, and the reader concludes the numbers are for "mine" when they never were. -->
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+        <h1 style="margin:0; font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:26px;">Sales</h1>
+        <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+          <span onClick="{{ cdRefresh }}" style="display:inline-flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:#4B4757; background:#fff; padding:7px 15px; border-radius:99px; cursor:pointer; box-shadow:0 1px 3px rgba(38,7,77,.08);" style-hover="color:#7C00FF;">{{ cdMonthLabelShort }} · Refresh</span>
+          <button onClick="{{ cdAddLead }}" style="background:#fff; color:#4B4757; border:none; font-size:12.5px; font-weight:600; padding:10px 17px; border-radius:99px; cursor:pointer; box-shadow:0 1px 3px rgba(38,7,77,.08);" style-hover="color:#7C00FF;">+ Lead</button>
+          <button onClick="{{ cdAddDeal }}" style="background:#1A1523; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 19px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Deal</button>
+        </div>
+      </div>
+
+
       <!-- ── THE HERO, from the published design ────────────────────────────────────────────────
            Wider and deeper than the card it replaces: full width at the top rather than one half of
            a two-up, and a longer gradient — #1B0637 into #4A0C9E into #7C00FF — so the darkest point
@@ -24085,6 +24106,7 @@ class Component extends DCLogic {
           cdWonValue: '—', cdWonLine: '', cdSpark: [],
           cdCollected: '—', cdCollectedSub: '', cdInvoiced: '—', cdInvoicedSub: '',
           cdOpenValue: '—', cdOpenSub: '', cdCollectedPct: 0, cdHasCollectedBar: false, cdOutstandingColor: 'rgba(255,255,255,.65)',
+          cdAddLead: () => {}, cdAddDeal: () => {},
           cdOutcomes: [], cdOutcomeScope: '',
           cdHasTarget: false, cdTargetPct: 0, cdTargetLabel: '', cdTargetLine: '',
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
@@ -24264,6 +24286,18 @@ class Component extends DCLogic {
             label: m.label,
             tip: m.label + ' · ' + _money9(m.wonMinor, ccy) + ' · ' + m.wonCount + (m.wonCount === 1 ? ' deal' : ' deals'),
           })),
+          // Both open the SAME dialogs the Leads and Pipeline screens use — reached from here rather
+          // than reimplemented, so a lead added from the dashboard cannot end up with a different
+          // shape from one added on the screen that owns it.
+          cdAddLead: () => this.setState({
+            active: 'Leads', activeGroup: 'Sales',
+            ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' },
+            ldfErr: '', ldfBad: '',
+          }),
+          cdAddDeal: () => this.setState({
+            active: 'Pipeline', activeGroup: 'Sales',
+            dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '',
+          }),
           cdCollected: _money9(D.money.collectedMinor, ccy),
           /**
            * WHAT IS STILL OWED, when anything is — the design's red line under the green figure.
