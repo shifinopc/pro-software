@@ -3985,6 +3985,48 @@
           </span>
         </section>
 
+        <!-- THE CONNECTION. /api/mailbox/{status,connect,disconnect,sync} have all worked for as
+             long as this screen has existed and nothing called them, so a mailbox could not be
+             connected from the console at all — the Inbox could only show what some earlier sync
+             had already fetched. -->
+        <sc-if value="{{ mbConnected }}" hint-placeholder-val="{{ false }}">
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .03s both; padding:14px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <span style="width:9px; height:9px; border-radius:99px; background:#12B76A; flex-shrink:0;"></span>
+            <div style="flex:1; min-width:180px;">
+              <div style="font-size:13px; font-weight:700;">{{ mbAddress }}</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:1px;">{{ mbProvider }} · {{ mbLastSync }}</div>
+            </div>
+            <span onClick="{{ mbSync }}" style="font-size:12px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ mbSyncLabel }}</span>
+            <span onClick="{{ mbDisconnect }}" style="font-size:12px; font-weight:600; color:#8C8899; cursor:pointer;" style-hover="color:#C0353A;">Disconnect</span>
+          </section>
+          <sc-if value="{{ mbHasError }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FEECEC; border:1px solid #F5C9C9; border-radius:11px; padding:10px 14px; font-size:11.5px; color:#C0353A; line-height:1.55;">Last sync failed — {{ mbError }}</div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ mbNotConnected }}" hint-placeholder-val="{{ true }}">
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .03s both; padding:16px 18px;">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <span style="width:9px; height:9px; border-radius:99px; background:#E8A33D; flex-shrink:0;"></span>
+              <div style="flex:1; min-width:200px;">
+                <div style="font-size:13px; font-weight:700;">Connect a mailbox</div>
+                <div style="font-size:11px; color:#8C8899; margin-top:1px;">Threads below are whatever an earlier sync collected. Nothing new arrives until a mailbox is connected.</div>
+              </div>
+              <sc-for list="{{ mbProviders }}" as="p" hint-placeholder-count="2">
+                <button onClick="{{ p.go }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:9px 16px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#6900D6;">{{ p.label }}</button>
+              </sc-for>
+              <sc-if value="{{ mbCanConnect }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ mbRefresh }}" style="font-size:12px; font-weight:600; color:#7C00FF; cursor:pointer; flex-shrink:0;" style-hover="text-decoration:underline;">Refresh</span>
+              </sc-if>
+            </div>
+            <!-- The server knows exactly what is missing and says so; repeating it in different
+                 words here would be a second explanation to keep in step with the first. -->
+            <sc-if value="{{ mbShowSetup }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11.5px; color:#8C8899; line-height:1.6;">{{ mbSetupNote }}</div>
+            </sc-if>
+          </section>
+        </sc-if>
+
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
           <sc-for list="{{ inboxTabs }}" as="t" hint-placeholder-count="3">
             <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 15px; border-radius:99px; cursor:pointer;">
@@ -6682,6 +6724,28 @@
                     <span onClick="{{ arAddLead }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:8px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">+ Lead rule</span>
                     <span onClick="{{ arAddTask }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:8px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">+ Step rule</span>
                   </div>
+                </div>
+
+                <!-- WHO IS NEXT, and what the rules do. Both were already answerable by the API and
+                     neither was asked, so this panel described a policy without ever showing it. -->
+                <div style="margin-top:16px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:14px 16px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                    <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.07em;">ROTATION · LIGHTEST FIRST</span>
+                    <span onClick="{{ arTry }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ arTryLabel }}</span>
+                  </div>
+                  <sc-if value="{{ arHasRotation }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:10px;">
+                      <sc-for list="{{ arRotation }}" as="c" hint-placeholder-count="4">
+                        <span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:{{ c.color }}; background:{{ c.bg }}; padding:6px 11px; border-radius:99px;">
+                          {{ c.name }}<span style="font-size:10.5px; opacity:.75;">{{ c.load }}</span>
+                        </span>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <div style="font-size:11px; color:#8C8899; margin-top:9px; line-height:1.55;">{{ arRotationNote }}</div>
+                  <sc-if value="{{ arHasTry }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px solid #F0EDF6; font-size:11.5px; font-weight:600; color:#3C1470;">{{ arTryResult }}</div>
+                  </sc-if>
                 </div>
 
                 <sc-if value="{{ arEmpty }}" hint-placeholder-val="{{ true }}">
@@ -12052,6 +12116,14 @@ class Component extends DCLogic {
         .then(v => { if (v && v.modules) this.setState({ permsApi: v }); })
         .catch(() => {});
       this._loadPerms();
+      // The mailbox connection. Four working endpoints had no UI at all, so a firm could not
+      // connect a mailbox from the console — the Inbox could only ever show what a sync had already
+      // fetched, and nothing could start one.
+      this._loadMailbox = () => fetch(API + '/api/mailbox/status', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v) this.setState({ mboxData: v }); })
+        .catch(() => {});
+      this._loadMailbox();
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
@@ -12317,6 +12389,14 @@ class Component extends DCLogic {
       this._loadLeadScores();
       // Who gets the work. Read on demand; saving replaces the whole ordered list, because the
       // order IS the rule and patching one row would leave the sequence ambiguous.
+      // WHO IS ACTUALLY NEXT. /api/owner-rotation has always been able to answer it and nothing
+      // asked — so the rules screen said work "balances by workload" without ever showing the
+      // workload it balances against.
+      this._loadRotation = () => fetch(API + '/api/owner-rotation', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (Array.isArray(v)) this.setState({ rotationData: v }); })
+        .catch(() => {});
+      this._loadRotation();
       this._loadAssignRules = () => fetch(API + '/api/assignment-rules', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ assignRules: v, arDraft: null }); })
@@ -22982,6 +23062,14 @@ class Component extends DCLogic {
       // and a name that matches nobody is reported rather than silently dropped, because a rule
       // pointing at a person who does not exist routes nothing and looks configured.
       ...(() => {
+        // ── who is next, and what the rules would actually do ──────────────────────────
+        const _rot9 = Array.isArray(this.state.rotationData) ? this.state.rotationData : [];
+        const _try9 = this.state.arTryResult || null;
+        const _arApi9 = () => this._apiBase || 'http://localhost:4100';
+        const _arHdr9 = () => {
+          const t = localStorage.getItem('stimespro:token');
+          return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+        };
         const live = Array.isArray(this.state.assignRules) ? this.state.assignRules : [];
         const draft = this.state.arDraft;
         const rows = draft || live;
@@ -23001,6 +23089,52 @@ class Component extends DCLogic {
           arDirty: !!draft,
           arErr: this.state.arErr || '',
           arSaveHint: `${rows.length} rule${rows.length === 1 ? '' : 's'} · checked top to bottom`,
+          // The rotation, lightest load first — the same order the assigner itself uses, because it
+          // is the same call. A screen that explained the policy without showing its state left
+          // "balances by workload" as a claim nobody could check.
+          arRotation: _rot9.slice(0, 6).map((c, i) => ({
+            name: c.name,
+            load: c.load + (c.load === 1 ? ' client' : ' clients'),
+            next: i === 0,
+            color: i === 0 ? '#0E9355' : '#6F6C7A',
+            bg: i === 0 ? '#E7F8EF' : '#F7F5FB',
+          })),
+          arHasRotation: _rot9.length > 0,
+          arNoRotation: _rot9.length === 0,
+          // Nobody to give work to is a REAL state, and a different one from "no rules set".
+          arRotationNote: _rot9.length
+            ? 'Next unrouted lead goes to ' + _rot9[0].name + ', who is carrying the least.'
+            : 'No active member of staff holds a selling role, so nothing can be auto-assigned at all.',
+
+          // TRY IT. The rules are checked in order and the first match wins, which is easy to write
+          // and hard to predict — this asks the server the same question the assigner asks, rather
+          // than reimplementing the matching here and getting a second opinion.
+          arTryLabel: this.state.arTrying ? 'Asking\u2026' : 'Test these rules',
+          arTry: () => {
+            if (this.state.arTrying) return;
+            this.setState({ arTrying: true });
+            Promise.all(['lead', 'task'].map(scope =>
+              fetch(_arApi9() + '/api/assignment-rules/test', {
+                method: 'POST', headers: _arHdr9(), body: JSON.stringify({ scope }),
+              }).then(r => (r.ok ? r.json() : null)).then(j => ({ scope, j })).catch(() => ({ scope, j: null }))
+            )).then(res => {
+              const line = res.map(({ scope, j }) => {
+                if (!j) return 'A new ' + scope + ' \u2192 could not be checked';
+                // The SERVER's own answer, not mine. My first version invented one and got it
+                // wrong: it printed “nobody — unassigned” directly under a rotation line naming who
+                // the next lead goes to. No rule matching does not mean nobody gets it — it means
+                // the workload balance decides, which is exactly what the rotation above shows.
+                const who = j.name || (j.role ? 'the ' + String(j.role).replace(/_/g, ' ') + ' team' : null);
+                if (who) return 'A new ' + scope + ' \u2192 ' + who;
+                const head = _rot9.length ? _rot9[0].name : 'nobody \u2014 no one holds a selling role';
+                return 'A new ' + scope + ' \u2192 ' + head + ' (no rule matched \u2014 balanced by workload)';
+              }).join('   \u00b7   ');
+              this.setState({ arTrying: false, arTryResult: line });
+            });
+          },
+          arTryResult: _try9 || '',
+          arHasTry: !!_try9,
+
           arRows: rows.map((r, i) => {
             const [condKey, condSuffix, condPlaceholder] = CONDS[r.scope] || CONDS.lead;
             const typed = r._toName !== undefined ? r._toName : (nameOf(r.toUserId) || r.toRole || '');
@@ -27131,6 +27265,105 @@ class Component extends DCLogic {
             : !D9.connected ? 'No mailbox is connected yet. Once one is, the conversations it syncs appear here against the client they belong to.'
             : all9.length === 0 ? 'The mailbox is connected but nothing has synced yet.'
             : 'Nothing on this filter.',
+          // ── the connection itself ──────────────────────────────────────────────
+          ...(() => {
+            const M9 = this.state.mboxData || null;
+            const av9 = (M9 && M9.available) || {};
+            const _api9 = () => this._apiBase || 'http://localhost:4100';
+            const _hdr9 = () => {
+              const t = localStorage.getItem('stimespro:token');
+              return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+            };
+            const ago9 = (iso) => {
+              if (!iso) return 'never';
+              const ms = Date.now() - Date.parse(iso);
+              if (!Number.isFinite(ms)) return 'never';
+              const m = Math.round(ms / 60000);
+              if (m < 1) return 'just now';
+              if (m < 60) return m + ' min ago';
+              const h = Math.round(m / 60);
+              return h < 24 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
+            };
+            // Only the providers this SERVER can actually complete a sign-in with. Offering Google
+            // when no client id exists produces a button whose only outcome is "not configured",
+            // which is how a dead control gets built on purpose.
+            const provs9 = [['google', 'Google Workspace'], ['microsoft', 'Microsoft 365']]
+              .filter(([id]) => av9[id])
+              .map(([id, label]) => ({
+                label: 'Connect ' + label,
+                go: () => {
+                  fetch(_api9() + '/api/mailbox/connect?provider=' + id, { headers: _hdr9() })
+                    .then(r => r.json())
+                    .then(j => {
+                      if (!j || !j.url) return this.toast((j && j.error) || 'Could not start that sign-in', 'error');
+                      // A new tab, not this one: the sign-in happens on the provider's site and
+                      // comes back to the callback page, and navigating the console away from an
+                      // unsaved screen to do it would be its own bug.
+                      window.open(j.url, '_blank', 'noopener');
+                      this.toast('Finish the sign-in in the new tab, then press Refresh');
+                    })
+                    .catch(() => this.toast('Server unreachable', 'error'));
+                },
+              }));
+            const busy9 = !!this.state.mboxBusy;
+            return {
+              mbLoaded: !!M9,
+              mbConnected: !!(M9 && M9.connected),
+              mbNotConnected: !!M9 && !M9.connected,
+              mbAddress: (M9 && M9.address) || '',
+              mbProvider: M9 && M9.provider === 'microsoft' ? 'Microsoft 365' : M9 && M9.provider ? 'Google Workspace' : '',
+              mbLastSync: 'Last checked ' + ago9(M9 && M9.lastSyncAt),
+              mbHasError: !!(M9 && M9.lastError),
+              mbError: (M9 && M9.lastError) || '',
+              mbProviders: provs9,
+              mbCanConnect: provs9.length > 0,
+              // The server's own words. It knows precisely what is missing; paraphrasing it here
+              // would be a second explanation to keep in step with the first.
+              mbSetupNote: (M9 && M9.setupNote) || '',
+              mbShowSetup: !!(M9 && !M9.connected && provs9.length === 0),
+              mbSyncLabel: busy9 ? 'Checking\u2026' : 'Check for new mail',
+              mbSync: () => {
+                if (busy9) return;
+                this.setState({ mboxBusy: true });
+                fetch(_api9() + '/api/mailbox/sync', { method: 'POST', headers: _hdr9() })
+                  .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                  .then(({ ok, j }) => {
+                    this.setState({ mboxBusy: false });
+                    if (!ok) return this.toast((j && j.error) || 'That sync did not run', 'error');
+                    // Says what it actually found, so "nothing new" is distinguishable from "it
+                    // did not run" — the two look identical on a screen that just refreshes.
+                    const n = j && (j.messages ?? j.imported ?? j.count);
+                    this.toast(n != null ? (n === 0 ? 'No new mail' : n + ' new message' + (n === 1 ? '' : 's')) : 'Mailbox checked');
+                    if (this._loadMailbox) this._loadMailbox();
+                    if (this._loadInbox) this._loadInbox();
+                  })
+                  .catch(() => { this.setState({ mboxBusy: false }); this.toast('Server unreachable', 'error'); });
+              },
+              mbRefresh: () => { if (this._loadMailbox) this._loadMailbox(); if (this._loadInbox) this._loadInbox(); },
+              mbDisconnect: () => {
+                this._confirm('Disconnect ' + ((M9 && M9.address) || 'this mailbox') + '?', {
+                  body: 'The stored tokens are deleted, not just marked inactive. Mail already folded into '
+                    + 'the Inbox stays; nothing new arrives until a mailbox is connected again.',
+                  okLabel: 'Disconnect',
+                  danger: true,
+                }).then(ok => {
+                  if (!ok) return;
+                  fetch(_api9() + '/api/mailbox/disconnect', { method: 'POST', headers: _hdr9() })
+                    .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                    .then(({ ok: k, j }) => {
+                      if (!k) return this.toast((j && j.error) || 'Could not disconnect', 'error');
+                      this.toast('Mailbox disconnected');
+                      // BOTH payloads. The header pill reads its state from /api/inbox, so reloading
+                      // only the connection left the screen saying "Mailbox connected" beside a card
+                      // offering to connect one.
+                      if (this._loadMailbox) this._loadMailbox();
+                      if (this._loadInbox) this._loadInbox();
+                    })
+                    .catch(() => this.toast('Server unreachable', 'error'));
+                });
+              },
+            };
+          })(),
           inboxConnected: !!(D9 && D9.connected),
           inboxStatus: !D9 ? 'Loading' : (D9.connected ? 'Mailbox connected' : 'No mailbox connected'),
           inboxStatusColor: (D9 && D9.connected) ? '#0E9355' : '#B7791F',

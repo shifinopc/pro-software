@@ -1736,24 +1736,9 @@ app.get("/api/sales-report", requireAuth, requireStaff, requireReadRole("super_a
  * comparison nobody agreed to be part of, and it is the kind of screen that changes how people pick
  * up work within a week of being switched on.
  */
-app.get("/api/ops-report", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "accountant", "sales"), async (req, res) => {
-  // Same three rungs as the sales report, from the same module. A PRO lead sees their people's
-  // throughput and open load — unranked, as this report already insists — and can narrow to one of
-  // their own reports; they cannot narrow to anybody outside the team by guessing an id.
-  const on = asAtFor(String(req.query.period ?? "").trim() || undefined);
-  const vis = await visibleUserIds((req as any).auth, on);
-  const asked = String(req.query.assigneeId ?? "").trim() || null;
-  const assigneeId = vis.ids === null ? asked : (asked && vis.ids.includes(asked) ? asked : null);
-  const assigneeIds = assigneeId ? null : vis.ids;
-  try {
-    res.json({
-      report: await opsReport({ period: String(req.query.period ?? "").trim() || undefined, assigneeId, assigneeIds }),
-      periods: await opsPeriodsWithActivity(),
-      /** So the screen can say "your work" / "your team" rather than implying it is the firm. */
-      scope: assigneeId ? "self" : vis.scope,
-    });
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
+// The /api/ops-report ROUTE is gone with the Operations Analytics screen it served. The
+// opsReport() function it called is very much alive — /api/team-performance is built on
+// it — so only the unused door was removed, not the room behind it.
 
 /**
  * TEAM PERFORMANCE — the operations screen, in one call.
