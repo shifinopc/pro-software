@@ -1,0 +1,46 @@
+x; color:#8C8899; margin-top:2px;">{{ ddTitle }}</div></div>
+          <div sc-camel-on-click="{{ closeDealDetail }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="15" height="15" sc-camel-view-box="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; margin-top:16px;">
+          <div style="flex:1; background:linear-gradient(112deg,#26074D,#5E00C4); color:#fff; border-radius:14px; padding:14px 16px;"><div style="font-size:9.5px; font-weight:700; opacity:.8; letter-spacing:.06em;">DEAL VALUE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; margin-top:3px;">{{ ddValue }}</div></div>
+          <span style="font-size:10.5px; font-weight:700; color:{{ ddStColor }}; background:{{ ddStBg }}; padding:5px 13px; border-radius:99px;">{{ ddStage }}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin-top:18px;">
+          <sc-for list="{{ ddFields }}" as="f" hint-placeholder-count="4"><div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">{{ f.k }}</div><div style="font-size:13px; font-weight:600; margin-top:3px;">{{ f.v }}</div></div></sc-for>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:22px;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">QUOTATION · QUOTE-TO-CASH</span><span style="font-size:9.5px; font-weight:700; color:{{ ddQuoteColor }}; background:{{ ddQuoteBg }}; padding:2px 9px; border-radius:99px;">{{ ddQuoteStatus }}</span></div>
+        <div style="margin-top:10px; border:1px solid #F0EDF6; border-radius:13px; overflow:hidden;">
+          <sc-for list="{{ ddQuoteLines }}" as="q" hint-placeholder-count="2">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 13px; border-bottom:1px solid #FAF8FC;"><div style="min-width:0;"><div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.desc }}</div><div style="font-size:9.5px; color:#A9A6B4;">qty {{ q.qty }}</div></div><span style="font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; flex-shrink:0;">{{ q.amount }}</span></div>
+          </sc-for>
+          <div style="padding:10px 13px; background:#FBFAFE;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#8C8899;"><span>VAT 15%</span><span>{{ ddVat }}</span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:7px; border-top:1px solid #EDEBF2;"><span style="font-size:11.5px; font-weight:700;">Total incl. VAT</span><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#7C00FF;">{{ ddGross }}</span></div>
+          </div>
+        </div>
+        <sc-if value="{{ ddNoQuote }}" hint-placeholder-val="{{ false }}"><button sc-camel-on-click="{{ createQuote }}" style="margin-top:10px; width:100%; background:#fff; color:#7C00FF; border:1px dashed #C9A2FF; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Create quotation for this deal</button></sc-if>
+        <sc-if value="{{ ddAccepted }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px; display:flex; align-items:center; gap:9px; background:#E7F8EF; border:1px solid #A6E5C3; border-radius:12px; padding:11px 13px;">
+            <span style="width:22px; height:22px; border-radius:99px; background:#12B76A; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="12" height="12" sc-camel-view-box="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+            <div><div style="font-size:12px; font-weight:700; color:#0E6B40;">Accepted by client</div><div style="font-size:10px; color:#0E9355;">{{ ddAcceptedBy }} · audit trail recorded</div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ ddCanAccept }}" hint-placeholder-val="{{ false }}">
+          <button sc-camel-on-click="{{ acceptQuote }}" style="margin-top:10px; width:100%; background:#FFF9EF; color:#8A6D1F; border:1px solid #FBE2B8; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#FEF4E2;">✍ Record client acceptance / e-signature</button>
+        </sc-if>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:22px;">STAGE PROGRESS</div>
+        <div style="display:flex; flex-direction:column; margin-top:11px;">
+          <sc-for list="{{ ddStages }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex; gap:11px; position:relative; padding-bottom:13px;">
+              <div style="display:flex; flex-direction:column; align-items:center;">
+                <sc-if value="{{ s.current }}" hint-placeholder-val="{{ false }}"><span style="width:14px; height:14px; border-radius:99px; border:3px solid {{ s.dot }}; border-top-color:transparent; animation:spinP .9s linear infinite; flex-shrink:0;"></span></sc-if>
+                <sc-if value="{{ s.notCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0;"></span></sc-if>
+                <div style="width:2px; flex:1; background:#F0EDF6; margin-top:2px;"></div>
+              </div>
+              <div style="font-size:12.5px; font-weight:600;">{{ s.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">ACTIVITY</div>
+        <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
+          <sc-for list="{{ ddActivities }}" as="a" hint-placeholder-count="3"><div style="display:flex; gap:10px; align-items:flex-start;"><span style="font-size:13px;">{{ a.ic }}</span><div style="flex:1;"><div style="font-size:12px; font-weight:600;">{{ a.label }}</div><div style="font-size:10.5px; 

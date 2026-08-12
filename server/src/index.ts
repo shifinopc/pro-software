@@ -1807,6 +1807,97 @@ app.put("/api/sales-targets", requireAuth, requireStaff, async (req, res) => {
 // ── A deal's checklist ─────────────────────────────────────────────────────────────────────────
 
 /** What this deal still owes, with how each item came to be satisfied. */
+/**
+ * Everything the deal drawer shows, in one call.
+ *
+ * Four separate reads — the deal, its quotation's lines, the stage ladder, its history — and the
+ * drawer wants all four before it can draw anything. Fetching them separately would open it on a
+ * value with no stage and no quotation and fill it in over three frames, which reads as a screen
+ * that cannot make its mind up. One call, one render.
+ *
+ * The stage ladder comes from the SAME stagesFor() the board builds its columns from, so the
+ * drawer's progress list cannot end up naming stages the board does not have.
+ */
+app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const id = String(req.params.id);
+  const deal = await prisma.opportunity.findUnique({
+    where: { id },
+    include: { company: { select: { id: true, name: true, lifecycle: true } } },
+  });
+  if (!deal) return res.status(404).json({ error: "No such deal" });
+  // Same scoping as every other sales read: a salesperson sees their own book and nobody else's.
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && deal.companyId && !scoped.includes(deal.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+
+  const stages = await stagesFor(await homeCountry());
+  const owner = deal.ownerId
+    ? await prisma.user.findUnique({ where: { id: deal.ownerId }, select: { id: true, name: true } })
+    : null;
+  // `quotationId` is a plain column, not a relation, so this is its own read.
+  const q = deal.quotationId
+    ? await prisma.quotation.findUnique({ where: { id: deal.quotationId } })
+    : null;
+
+  // History: what was logged against this deal, and every stage it has moved through. Merged into
+  // one list because the reader is asking "what has happened here", not "what happened of type X".
+  const [touches, moves] = await Promise.all([
+    prisma.interaction.findMany({
+      where: { opportunityId: id }, orderBy: { at: "desc" }, take: 12,
+      select: { id: true, kind: true, summary: true, at: true, ownerId: true },
+    }),
+    prisma.stageTransition.findMany({
+      where: { opportunityId: id }, orderBy: { movedAt: "desc" }, take: 12,
+      select: { id: true, movedAt: true, toStageId: true, movedById: true, isBackward: true },
+    }),
+  ]);
+  const who = new Map((await prisma.user.findMany({
+    where: { id: { in: [...new Set([...touches.map(t => t.ownerId), ...moves.map(m => m.movedById)].filter(Boolean) as string[])] } },
+    select: { id: true, name: true },
+  })).map(u => [u.id, u.name]));
+  const stageName = (sid: string | null) => stages.find(x => x.id === sid)?.name ?? "a stage";
+
+  const activity = [
+    ...touches.map(t => ({
+      id: t.id, at: t.at, kind: t.kind,
+      label: (KIND_LABEL[t.kind] ?? "Contact") + (t.summary ? ": " + t.summary : ""),
+      by: (t.ownerId && who.get(t.ownerId)) || null,
+    })),
+    ...moves.map(m => ({
+      id: m.id, at: m.movedAt, kind: "stage",
+      label: (m.isBackward ? "Moved back to " : "Moved to ") + stageName(m.toStageId),
+      by: (m.movedById && who.get(m.movedById)) || null,
+    })),
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 12);
+
+  res.json({
+    id: deal.id,
+    number: deal.number,
+    title: deal.title,
+    company: deal.company,
+    stageId: deal.stageId,
+    valueMinor: deal.valueMinor,
+    currency: deal.currency,
+    probabilityBp: deal.probabilityBp,
+    expectedCloseDate: deal.expectedCloseDate,
+    source: deal.source,
+    owner: owner ? owner.name : null,
+    stages: stages.map(x => ({ id: x.id, name: x.name, sort: x.sort, isWon: x.isWon, isLost: x.isLost, color: x.color, bg: x.bg })),
+    quotation: q ? {
+      id: q.id, number: q.number, status: q.status,
+      // `items` is free-form JSON, so every field is coerced rather than trusted — one malformed
+      // row written by an older version would otherwise take the whole drawer down with it.
+      lines: (Array.isArray(q.items) ? q.items : []).map((r: any) => ({
+        name: String(r?.name ?? r?.description ?? "Item"),
+        units: Number(r?.units ?? r?.qty ?? 1) || 1,
+        priceMinor: Math.round(Number(r?.price ?? 0) * 100) || 0,
+      })),
+      subtotalMinor: q.subtotalMinor, vatMinor: q.vatMinor, totalMinor: q.totalMinor,
+      vatRateBp: q.vatRateBp,
+    } : null,
+    activity,
+  });
+});
+
 app.get("/api/opportunities/:id/checklist", requireAuth, requireStaff, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });

@@ -167,6 +167,10 @@
   @keyframes aurora{0%,100%{transform:translate(0,0) scale(1);}33%{transform:translate(60px,-40px) scale(1.15);}66%{transform:translate(-50px,30px) scale(.92);}}
   @keyframes aurora2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-70px,-50px) scale(1.2);}}
   @keyframes spinP{to{transform:rotate(360deg);}}
+  /* The deal drawer's entrance. `slideInRight` is declared twice already and animates a 28px
+     nudge, which is right for a card appearing in place and wrong for a panel arriving from
+     off-screen — the drawer would pop in almost fully formed. This one travels its own width. */
+  @keyframes drawerIn{from{transform:translateX(100%);}to{transform:translateX(0);}}
   @keyframes marqueeX{from{transform:translateX(0);}to{transform:translateX(-50%);}}
   @keyframes meshMove{0%,100%{background-position:0% 0%, 100% 100%, 50% 50%;}50%{background-position:100% 40%, 0% 60%, 60% 30%;}}
   @keyframes shimmer{0%{background-position:-200% 0;}100%{background-position:200% 0;}}
@@ -3683,12 +3687,6 @@
                   <span onClick="{{ v.pick }}" style="font-size:11.5px; font-weight:{{ v.weight }}; color:{{ v.color }}; background:{{ v.bg }}; padding:5px 13px; border-radius:99px; box-shadow:{{ v.shadow }}; cursor:pointer;">{{ v.label }}</span>
                 </sc-for>
               </div>
-              <!-- Kept, though the design has no button here: the design opens a deal from a row at
-                   the foot of its list view, and this board is the view people live in. Dropping the
-                   only way to start one to match a drawing would be a worse screen. -->
-              <sc-if value="{{ pipCanAdd }}" hint-placeholder-val="{{ true }}">
-                <button onClick="{{ pipAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:600; padding:7px 16px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New deal</button>
-              </sc-if>
             </div>
           </div>
 
@@ -3850,10 +3848,10 @@
                       <span onClick="{{ d.open }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; font-weight:700; color:#7C00FF; font-size:11.5px; cursor:pointer;">{{ d.ref }}</span>
                       <span onClick="{{ d.open }}" title="{{ d.company }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;">{{ d.company }}</span>
                       <span title="{{ d.title }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.title }}</span>
-                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:700; font-variant-numeric:tabular-nums; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.value }}</span>
-                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ d.probColor }}; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.odds }}</span>
-                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.owner }}</span>
-                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.closeCell }}</span>
+                      <span onClick="{{ d.open }}" title="Open this deal" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:700; font-variant-numeric:tabular-nums; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.value }}</span>
+                      <span onClick="{{ d.open }}" title="Open this deal" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ d.probColor }}; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.odds }}</span>
+                      <span onClick="{{ d.open }}" title="Open this deal" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.owner }}</span>
+                      <span onClick="{{ d.open }}" title="Open this deal" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.closeCell }}</span>
                       <span style="padding:9px 10px; border-left:1px solid #F5F3F9; display:flex; align-items:center;"><span title="{{ d.hlWhy }}" style="font-size:9.5px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:2px 8px; border-radius:4px;">{{ d.hlLabel }}</span></span>
                     </div>
                   </sc-for>
@@ -8801,6 +8799,131 @@
   </sc-if>
 
   <!-- A deal. Same dialog for opening and editing one. -->
+  <!-- ══ THE DEAL DRAWER ══════════════════════════════════════════════════
+       Opening a deal used to mean opening the EDIT FORM — eight inputs and a Save button, for the
+       far commoner act of wanting to know where the deal stands. This is the reading: what it is
+       worth, who owns it, what has been quoted, how far along it is and what has happened. Editing
+       is one press from here, which is the right way round.
+
+       Everything comes from ONE call, /api/opportunities/:id/detail. Four separate fetches would
+       open the panel on a value with no stage and no quotation and fill it in over three frames,
+       which reads as a screen that cannot make its mind up. -->
+  <sc-if value="{{ ddOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ ddClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
+      <div onClick="{{ ddStop }}" data-dd-panel="1" style="width:min(480px,100%); background:#fff; height:100%; overflow-y:auto; padding:22px 24px 30px; box-shadow:-24px 0 60px rgba(38,7,77,.25); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div style="min-width:0;">
+            <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; letter-spacing:-.01em;">{{ ddCompany }}</span>
+              <span style="font-size:10.5px; font-weight:700; color:#7C00FF;">{{ ddRef }}</span>
+            </div>
+            <div style="font-size:12px; color:#8C8899; margin-top:2px;">{{ ddTitle }}</div>
+          </div>
+          <div onClick="{{ ddClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <sc-if value="{{ ddLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:60px 0; text-align:center; font-size:12px; color:#A9A6B4;">Reading the deal…</div>
+        </sc-if>
+
+        <sc-if value="{{ ddReady }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; align-items:center; gap:12px; margin-top:16px;">
+            <div style="flex:1; background:linear-gradient(112deg,#26074D,#5E00C4); color:#fff; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:9.5px; font-weight:700; opacity:.8; letter-spacing:.06em;">DEAL VALUE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; margin-top:3px;">{{ ddValue }}</div>
+            </div>
+            <span style="font-size:10.5px; font-weight:700; color:{{ ddStColor }}; background:{{ ddStBg }}; padding:5px 13px; border-radius:99px;">{{ ddStage }}</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; margin-top:18px;">
+            <sc-for list="{{ ddFields }}" as="f" hint-placeholder-count="4">
+              <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">{{ f.k }}</div><div style="font-size:13px; font-weight:600; margin-top:3px;">{{ f.v }}</div></div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:22px;">
+            <span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">QUOTATION · QUOTE-TO-CASH</span>
+            <span style="font-size:9.5px; font-weight:700; color:{{ ddQuoteColor }}; background:{{ ddQuoteBg }}; padding:2px 9px; border-radius:99px;">{{ ddQuoteStatus }}</span>
+          </div>
+          <!-- The lines only exist once a quotation does. The design draws an itemised box either
+               way, filled with an estimate broken into invented parts; a made-up VAT line under a
+               figure nobody has quoted is the one thing on this panel somebody might act on. -->
+          <sc-if value="{{ ddHasQuote }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:10px; border:1px solid #F0EDF6; border-radius:13px; overflow:hidden;">
+              <sc-for list="{{ ddQuoteLines }}" as="q" hint-placeholder-count="2">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 13px; border-bottom:1px solid #FAF8FC;">
+                  <div style="min-width:0;">
+                    <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.desc }}</div>
+                    <div style="font-size:9.5px; color:#A9A6B4;">qty {{ q.qty }}</div>
+                  </div>
+                  <span style="font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; flex-shrink:0;">{{ q.amount }}</span>
+                </div>
+              </sc-for>
+              <div style="padding:10px 13px; background:#FBFAFE;">
+                <div style="display:flex; justify-content:space-between; font-size:11px; color:#8C8899;"><span>{{ ddVatLabel }}</span><span>{{ ddVat }}</span></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:7px; border-top:1px solid #EDEBF2;">
+                  <span style="font-size:11.5px; font-weight:700;">Total incl. VAT</span>
+                  <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#7C00FF;">{{ ddGross }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ ddNoQuote }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px; border:1px solid #F0EDF6; border-radius:13px; padding:14px; font-size:11.5px; color:#8C8899; line-height:1.6;">{{ ddNoQuoteWhy }}</div>
+          </sc-if>
+          <sc-if value="{{ ddCanQuote }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ ddQuote }}" style="margin-top:10px; width:100%; background:#fff; color:#7C00FF; border:1px dashed #C9A2FF; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Create quotation for this deal</button>
+          </sc-if>
+
+          <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:22px;">STAGE PROGRESS</div>
+          <div style="display:flex; flex-direction:column; margin-top:11px;">
+            <sc-for list="{{ ddStages }}" as="st" hint-placeholder-count="4">
+              <div style="display:flex; gap:11px; padding-bottom:13px;">
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                  <sc-if value="{{ st.current }}" hint-placeholder-val="{{ false }}">
+                    <span title="Where it is now" style="width:14px; height:14px; border-radius:99px; border:3px solid {{ st.dot }}; border-top-color:transparent; animation:spinP .9s linear infinite; flex-shrink:0;"></span>
+                  </sc-if>
+                  <sc-if value="{{ st.notCurrent }}" hint-placeholder-val="{{ true }}">
+                    <span style="width:14px; height:14px; border-radius:99px; background:{{ st.dot }}; flex-shrink:0;"></span>
+                  </sc-if>
+                  <div style="width:2px; flex:1; background:#F0EDF6; margin-top:2px;"></div>
+                </div>
+                <div style="font-size:12.5px; font-weight:{{ st.weight }}; color:{{ st.color }};">{{ st.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">ACTIVITY</div>
+          <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
+            <sc-for list="{{ ddActivities }}" as="a" hint-placeholder-count="3">
+              <div style="display:flex; gap:10px; align-items:flex-start;">
+                <span style="font-size:13px;">{{ a.ic }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12px; font-weight:600;">{{ a.label }}</div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ a.sub }}</div>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ ddNoActivity }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#B4AFC4;">Nothing has been logged against this deal yet.</div>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ ddCanAct }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; gap:8px; margin-top:22px; padding-top:16px; border-top:1px solid #F0EDF6; flex-wrap:wrap;">
+              <span onClick="{{ ddEdit }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit deal</span>
+              <span onClick="{{ ddLog }}" style="font-size:11.5px; font-weight:700; color:#4B4757; background:#F3F1F7; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Log contact</span>
+              <sc-if value="{{ ddCanMove }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ ddNext }}" style="font-size:11.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#D3F1E1;">{{ ddNextLabel }}</span>
+              </sc-if>
+            </div>
+          </sc-if>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ dlFormOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ dlClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -11919,6 +12042,25 @@ class Component extends DCLogic {
       if (this._previewScore) this._previewScore({});
       this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [] });
     };
+    /**
+     * Open the deal DRAWER — the reading of a deal, not the form for changing it.
+     *
+     * `ddData: null` is set before the fetch so the panel opens immediately and says it is reading.
+     * Waiting for the round trip would leave a press with no visible effect, which people answer by
+     * pressing again.
+     */
+    this._openDeal9 = (id) => {
+      this.setState({ ddId: id, ddData: null });
+      const API = this._apiBase || 'http://localhost:4100';
+      const tok = localStorage.getItem('stimespro:token');
+      fetch(API + '/api/opportunities/' + id + '/detail', { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+        .then(r => (r.ok ? r.json() : null))
+        // A failed read leaves ddData null, and the panel keeps saying it is reading rather than
+        // drawing an empty deal — an empty drawer looks like a deal with nothing in it.
+        .then(v => { if (v && this.state.ddId === id) this.setState({ ddData: v }); })
+        .catch(() => {});
+    };
+
     /** The same, for a deal. */
     this._openDealForm = () => this.setState({ dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '' });
 
@@ -23651,7 +23793,11 @@ class Component extends DCLogic {
                 },
                 igErr: '',
               }),
-              open: () => this.setState({
+              // Opens the READING. The form is one press further in, from the drawer's Edit deal —
+              // wanting to know where a deal stands is far commoner than wanting to retype it, and
+              // this press used to answer the rarer question.
+              open: () => this._openDeal9(d.id),
+              edit: () => this.setState({
                 dealEdit: {
                   id: d.id, companyId: d.companyId, title: d.title,
                   value: d.valueSource === 'estimate' && d.valueMinor != null ? String(d.valueMinor / 100) : '',
@@ -25831,6 +25977,144 @@ class Component extends DCLogic {
           deals: col.deals.map(d => _shapeDeal9(d, col)),
         };
       }),
+
+      // ── The deal drawer ──
+      ...(() => {
+        const id9 = this.state.ddId || null;
+        const D9 = this.state.ddData || null;
+        if (!id9) return { ddOpen: false, ddLoading: false, ddReady: false };
+        const close9 = () => this.setState({ ddId: null, ddData: null });
+        if (!D9) {
+          return {
+            ddOpen: true, ddLoading: true, ddReady: false,
+            ddCompany: 'Deal', ddRef: '', ddTitle: '',
+            ddClose: close9, ddStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+          };
+        }
+        const ccy9 = D9.currency || _ccy9;
+        const cur9 = (D9.stages || []).find(x => x.id === D9.stageId) || null;
+        const term9 = !!(cur9 && (cur9.isWon || cur9.isLost));
+        const q9 = D9.quotation || null;
+        const nextSt9 = (D9.stages || [])
+          .filter(x => !x.isWon && !x.isLost && cur9 && x.sort > cur9.sort)
+          .sort((a, b) => a.sort - b.sort)[0] || null;
+        // Same words the quotation module uses. A status this drawer invented would be a second
+        // vocabulary for one thing, and people would ask which of them is right.
+        const QS9 = {
+          draft: ['Draft', '#8C8899', '#F3F1F7'], approved: ['Approved', '#7C00FF', '#F5EEFF'],
+          sent: ['Awaiting an answer', '#B8860B', '#FEF4E2'], accepted: ['Accepted', '#0E9355', '#E7F8EF'],
+          rejected: ['Rejected', '#C0353A', '#FEECEC'], invoiced: ['Invoiced', '#0284C7', '#E4F4FD'],
+        };
+        const qs9 = (q9 && QS9[q9.status]) || ['Not created', '#A9A6B4', '#F3F1F7'];
+        // "2 days ago", from the stored instant. Declared HERE on purpose: the file's two other
+        // relative-time helpers each live inside a different screen's block, and reaching for one of
+        // them is exactly what broke this panel — renderVals threw "_ago9 is not defined" and took
+        // the whole Pipeline screen down with it, which is what a miss in this runtime looks like.
+        const ago9 = (iso) => {
+          const t = Date.parse(String(iso == null ? '' : iso));
+          if (!Number.isFinite(t)) return '';
+          const mins = Math.round((Date.now() - t) / 60000);
+          // Forward as well as back. Interactions carry a DATE, and a meeting booked for next week
+          // is stored ahead of now — with an ago-only helper it read "just now", which is the one
+          // answer that makes somebody think the meeting has already happened.
+          if (mins < 0) {
+            const f = -mins;
+            if (f < 60) return 'in ' + f + (f === 1 ? ' minute' : ' minutes');
+            const fh = Math.round(f / 60);
+            if (fh < 24) return 'in ' + fh + (fh === 1 ? ' hour' : ' hours');
+            const fd = Math.round(fh / 24);
+            return 'in ' + fd + (fd === 1 ? ' day' : ' days');
+          }
+          if (mins < 1) return 'just now';
+          if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+          const hrs = Math.round(mins / 60);
+          if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
+          const days = Math.round(hrs / 24);
+          if (days < 7) return days + (days === 1 ? ' day ago' : ' days ago');
+          const wks = Math.round(days / 7);
+          if (days < 30) return wks + (wks === 1 ? ' week ago' : ' weeks ago');
+          const mos = Math.round(days / 30);
+          return mos < 12 ? mos + (mos === 1 ? ' month ago' : ' months ago') : Math.round(days / 365) + 'y ago';
+        };
+        const ICON9 = { call: '\u260E', meeting: '\u{1F4C5}', email: '\u2709', note: '\u{1F4DD}', whatsapp: '\u{1F4AC}', stage: '\u2192' };
+        return {
+          ddOpen: true, ddLoading: false, ddReady: true,
+          ddClose: close9,
+          // The sheet swallows its own clicks; without this every press inside it reaches the
+          // backdrop underneath and closes the thing you were reading.
+          ddStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+          ddCompany: (D9.company && D9.company.name) || 'Deal',
+          ddRef: D9.number || '',
+          ddTitle: D9.title || '',
+          ddValue: _money9(D9.valueMinor, ccy9),
+          ddStage: cur9 ? cur9.name : 'No stage',
+          ddStColor: (cur9 && cur9.color) || (cur9 && cur9.isWon ? '#0E9355' : cur9 && cur9.isLost ? '#C0353A' : '#7C00FF'),
+          ddStBg: (cur9 && cur9.bg) || (cur9 && cur9.isWon ? '#E7F8EF' : cur9 && cur9.isLost ? '#FEECEC' : '#F5EEFF'),
+          ddFields: [
+            { k: 'Owner', v: D9.owner || 'Nobody yet' },
+            { k: 'Expected close', v: _dayMon9(D9.expectedCloseDate) || 'No date set' },
+            { k: 'Probability', v: D9.probabilityBp != null ? Math.round(D9.probabilityBp / 100) + '%' : 'Not set' },
+            { k: 'Quotation', v: q9 ? q9.number : 'none yet' },
+          ],
+          ddQuoteStatus: qs9[0], ddQuoteColor: qs9[1], ddQuoteBg: qs9[2],
+          ddHasQuote: !!(q9 && q9.lines && q9.lines.length),
+          ddQuoteLines: (q9 && q9.lines ? q9.lines : []).map((l, i) => ({
+            desc: l.name, qty: l.units,
+            amount: _money9(l.priceMinor * (l.units || 1), ccy9),
+            _k: i,
+          })),
+          // The rate is READ from the quotation, never assumed. It is frozen on the document at
+          // issue precisely so it cannot drift, and a drawer hardcoding "VAT 15%" over a quotation
+          // raised at a different rate would be contradicting the document it is describing.
+          ddVatLabel: 'VAT' + (q9 && q9.vatRateBp != null ? ' ' + (q9.vatRateBp / 100) + '%' : ''),
+          ddVat: _money9(q9 ? q9.vatMinor : null, ccy9),
+          ddGross: _money9(q9 ? q9.totalMinor : null, ccy9),
+          ddNoQuote: !(q9 && q9.lines && q9.lines.length),
+          ddNoQuoteWhy: q9
+            ? 'Quotation ' + q9.number + ' is attached but has no lines on it yet.'
+            : 'Nothing has been quoted. The value above is an estimate somebody typed, not a figure this client has been given.',
+          ddCanQuote: canWrite && !q9 && !term9,
+          ddQuote: () => { close9(); this._quoteDeal(D9.id, D9.title); },
+          ddStages: (D9.stages || []).slice().sort((a, b) => a.sort - b.sort).map(x => {
+            const isCur = x.id === D9.stageId;
+            const passed = !!(cur9 && x.sort < cur9.sort);
+            return {
+              label: x.name,
+              current: isCur, notCurrent: !isCur,
+              // Passed stages carry their own colour, the current one spins in it, and what is
+              // still ahead is grey — so the ladder reads as a position rather than a menu.
+              dot: isCur || passed ? (x.color || '#7C00FF') : '#E4E1EC',
+              weight: isCur ? '700' : '600',
+              color: isCur ? '#1A1523' : passed ? '#4B4757' : '#A9A6B4',
+            };
+          }),
+          ddActivities: (D9.activity || []).map(a => ({
+            ic: ICON9[a.kind] || '\u2022',
+            label: a.label,
+            sub: [a.by, ago9(a.at)].filter(Boolean).join(' \u00b7 '),
+            _k: a.id,
+          })),
+          ddNoActivity: !(D9.activity || []).length,
+          ddCanAct: canWrite,
+          // Routed through the one shape every view reads, so the drawer's Edit opens exactly the
+          // form the board's own card would have opened.
+          ddEdit: () => {
+            const col9 = _pipeCols.find(c => c.deals.some(x => x.id === D9.id)) || null;
+            const raw9 = col9 && col9.deals.find(x => x.id === D9.id);
+            close9();
+            if (raw9) _shapeDeal9(raw9, col9).edit();
+          },
+          ddLog: () => { close9(); this.setState({
+            intLog: {
+              companyId: D9.company && D9.company.id, opportunityId: D9.id,
+              companyName: (D9.company && D9.company.name) || '', kind: 'call',
+              at: new Date().toISOString().slice(0, 10), summary: '', outcome: '', next: '', nextAt: '',
+            }, igErr: '' }); },
+          ddCanMove: canWrite && !term9 && !!nextSt9,
+          ddNextLabel: nextSt9 ? '\u2192 ' + nextSt9.name : '',
+          ddNext: () => { close9(); if (nextSt9) this._moveDeal(D9.id, nextSt9.id); },
+        };
+      })(),
 
       // ── The deal dialog ──
       dlFormOpen: !!_dl,
