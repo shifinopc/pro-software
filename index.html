@@ -3801,31 +3801,69 @@
           </section>
         </sc-if>
 
-        <!-- TABLE VIEW — the manager reading: sortable columns, dense rows, no controls but Open. -->
+        <!-- ── TABLE VIEW, grouped by stage ────────────────────────────────────────
+             The board's information in a shape you can read down a column: same stages in the same
+             order, each with its own subtotal, and every deal on one line. It was a flat list with
+             sortable headings — which answered "the biggest deal" well and "how is Negotiation
+             doing" not at all, and the stage is the question this screen exists to answer.
+
+             Two departures from the design, both deliberate.
+
+             It has no "＋Field". That adds a custom column, and there is no custom-field system
+             behind deals to add one to; a control that does nothing is worse than an absent one.
+
+             And its subtitle does not say "click any cell to edit". In the design those cells raise
+             a toast reading "Value — inline edit on DL-2019" — the promise is not kept there either.
+             Here the cells open the deal, which is a real editor and the one that knows a value
+             backed by a quotation may not be typed over. The subtitle says that instead. -->
         <sc-if value="{{ pipShowTable }}" hint-placeholder-val="{{ false }}">
-          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden; padding:0;">
-            <div style="overflow-x:auto;"><div style="min-width:920px;">
-              <div style="display:grid; grid-template-columns:1.6fr 1fr .9fr .9fr 64px 80px 96px 1fr 64px; gap:10px; padding:13px 22px 11px; border-bottom:1px solid #F0EDF6;">
-                <sc-for list="{{ pipTableCols }}" as="c" hint-placeholder-count="8">
-                  <span onClick="{{ c.pick }}" style="font-size:10.5px; font-weight:{{ c.weight }}; color:{{ c.color }}; text-transform:uppercase; letter-spacing:.06em; cursor:pointer; white-space:nowrap;">{{ c.label }}</span>
-                </sc-for>
-                <span></span>
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; border-radius:12px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #EDEBF2; background:#FBFAFE;">
+              <span style="font-size:11px; font-weight:700; color:#4B4757;">{{ pipTblCount }}</span>
+              <span style="font-size:10.5px; color:#A9A6B4;">· grouped by stage · click a row to open it</span>
+            </div>
+            <div style="overflow-x:auto;"><div style="min-width:1000px;">
+              <div style="display:grid; grid-template-columns:22px 92px 1.4fr 1.6fr 118px 86px 96px 104px 96px; background:#FBFAFE; border-bottom:1px solid #EDEBF2; font-size:10px; font-weight:700; color:#8C8899; text-transform:uppercase; letter-spacing:.04em;">
+                <span style="padding:8px 6px;"></span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Ref</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Client</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Deal</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6; text-align:right;">Value</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6; text-align:right;">Prob</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Owner</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Close</span>
+                <span style="padding:8px 10px; border-left:1px solid #F0EDF6;">Health</span>
               </div>
-              <sc-for list="{{ pipTableRows }}" as="d" hint-placeholder-count="8">
-                <div style="display:grid; grid-template-columns:1.6fr 1fr .9fr .9fr 64px 80px 96px 1fr 64px; gap:10px; align-items:center; padding:11px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
-                  <div style="min-width:0;"><div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.title }}</div><div style="font-size:10.5px; color:#A9A6B4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.company }}</div></div>
-                  <span style="font-size:11px; font-weight:600; color:{{ d.stageColor }}; background:{{ d.stageBg }}; padding:3px 10px; border-radius:99px; width:fit-content; white-space:nowrap;">{{ d.stageName }}</span>
-                  <span title="{{ d.hlWhy }}" style="font-size:11px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:3px 10px; border-radius:99px; width:fit-content; white-space:nowrap;">{{ d.hlLabel }}</span>
-                  <span style="font-weight:700; white-space:nowrap;">{{ d.value }}</span>
-                  <span style="color:#6F6C7A;">{{ d.odds }}</span>
-                  <span style="color:#6F6C7A;">{{ d.hlDays }}</span>
-                  <span style="color:#6F6C7A; white-space:nowrap;">{{ d.closeDate }}</span>
-                  <span style="color:#6F6C7A; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.owner }}</span>
-                  <span onClick="{{ d.open }}" style="font-size:11.5px; color:#7C00FF; font-weight:600; cursor:pointer; text-align:right;">Open</span>
+              <sc-for list="{{ pipTblGroups }}" as="g" hint-placeholder-count="4">
+                <div onClick="{{ g.toggle }}" title="{{ g.tip }}" style="display:flex; align-items:center; gap:9px; padding:8px 14px; background:#F8F5FD; border-bottom:1px solid #EDEBF2; cursor:pointer;" style-hover="background:#F3EFFA;">
+                  <span style="font-size:10px; color:#8C8899; width:10px;">{{ g.caret }}</span>
+                  <span style="width:7px; height:7px; border-radius:2px; background:{{ g.color }};"></span>
+                  <span style="font-size:11.5px; font-weight:700;">{{ g.title }}</span>
+                  <span style="font-size:10px; font-weight:700; color:{{ g.color }}; background:{{ g.bg }}; padding:1px 7px; border-radius:4px;">{{ g.count }}</span>
+                  <div style="flex:1;"></div>
+                  <span title="{{ g.exact }}" style="font-size:10.5px; font-weight:700; color:#4B4757; font-variant-numeric:tabular-nums;">{{ g.total }}</span>
                 </div>
+                <sc-if value="{{ g.expanded }}" hint-placeholder-val="{{ true }}">
+                  <sc-for list="{{ g.rows }}" as="d" hint-placeholder-count="2">
+                    <div style="display:grid; grid-template-columns:22px 92px 1.4fr 1.6fr 118px 86px 96px 104px 96px; border-bottom:1px solid #F5F3F9; font-size:12px; align-items:stretch;" style-hover="background:#FCFAFF;">
+                      <span title="{{ d.hlWhy }}" style="border-left:3px solid {{ d.cardEdge }};"></span>
+                      <span onClick="{{ d.open }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; font-weight:700; color:#7C00FF; font-size:11.5px; cursor:pointer;">{{ d.ref }}</span>
+                      <span onClick="{{ d.open }}" title="{{ d.company }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;">{{ d.company }}</span>
+                      <span title="{{ d.title }}" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.title }}</span>
+                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:700; font-variant-numeric:tabular-nums; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.value }}</span>
+                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; color:{{ d.probColor }}; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.odds }}</span>
+                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.owner }}</span>
+                      <span onClick="{{ d.open }}" title="Open the deal to change this" style="padding:9px 10px; border-left:1px solid #F5F3F9; color:#6F6C7A; cursor:cell;" style-hover="background:#F3E8FF;">{{ d.closeCell }}</span>
+                      <span style="padding:9px 10px; border-left:1px solid #F5F3F9; display:flex; align-items:center;"><span title="{{ d.hlWhy }}" style="font-size:9.5px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:2px 8px; border-radius:4px;">{{ d.hlLabel }}</span></span>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:10px 14px 10px 44px; font-size:11px; color:#B4AFC4; border-bottom:1px solid #F5F3F9;">No deals in this stage</div>
+                  </sc-if>
+                </sc-if>
               </sc-for>
-              <sc-if value="{{ pipTableEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:34px 24px; text-align:center; font-size:12.5px; color:#A9A6B4;">No deals on the board yet.</div>
+              <sc-if value="{{ pipCanAdd }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ pipAdd }}" style="display:flex; align-items:center; gap:8px; padding:9px 14px 9px 44px; font-size:11.5px; font-weight:600; color:#A9A6B4; cursor:pointer;" style-hover="background:#FBFAFE; color:#7C00FF;">＋ New deal</div>
               </sc-if>
             </div></div>
           </section>
@@ -23514,6 +23552,7 @@ class Component extends DCLogic {
               initials: _initials((d.company && d.company.name) || d.title),
               ref: d.number || '',
               closesLabel: _dayMon9(d.expectedCloseDate),
+              closeCell: _dayMon9(d.expectedCloseDate) || 'no date',
               hasClose: !!d.expectedCloseDate,
               // The odds as a bar. Same number the weighted column total is built from, drawn
               // instead of written — five cards of "40%" is a column nobody reads twice.
@@ -25717,22 +25756,6 @@ class Component extends DCLogic {
         const stored9 = this.state.pipView || localStorage.getItem('stimespro:pipView') || 'kanban';
         const view = VIEWS9.includes(stored9) ? stored9 : 'kanban';
         const setView = (v) => () => { localStorage.setItem('stimespro:pipView', v); this.setState({ pipView: v }); };
-        const allDeals = _pipeCols.flatMap(col => col.deals.map(d => _shapeDeal9(d, col)));
-
-        // Table sorting. Header press sorts; pressing the same header flips it. The default is
-        // severity — the table's job is "which deals need me", and value is one press away.
-        const sortKey = this.state.pipSort || '_sev';
-        const sortDir = this.state.pipSortDir != null ? this.state.pipSortDir : -1;
-        const sorted = [...allDeals].sort((a, b) => {
-          const av = a[sortKey], bv = b[sortKey];
-          const c = typeof av === 'string' ? String(av).localeCompare(String(bv)) : (av - bv);
-          return c * sortDir;
-        });
-        const COLS = [
-          { key: 'title', label: 'Deal' }, { key: '_stage', label: 'Stage' }, { key: 'hlState', label: 'Health' },
-          { key: '_value', label: 'Value' }, { key: 'odds', label: 'Odds' }, { key: '_days', label: 'In stage' },
-          { key: '_close', label: 'Close' }, { key: 'owner', label: 'Owner' },
-        ];
         return {
           // Each view renders only when there are stages at all — the no-stages card owns that
           // state, and a view toggle over an unconfigured pipeline would switch between three
@@ -25750,17 +25773,40 @@ class Component extends DCLogic {
             bg: view === v ? '#7C00FF' : 'transparent',
             shadow: 'none',
           })),
-          // TABLE: sortable columns; the arrow on the active one says which way.
-          pipTableRows: sorted,
-          pipTableEmpty: allDeals.length === 0,
-          pipTableCols: COLS.map(c => ({
-            label: c.label + (sortKey === c.key ? (sortDir === 1 ? ' ↑' : ' ↓') : ''),
-            weight: sortKey === c.key ? '800' : '700',
-            color: sortKey === c.key ? '#7C00FF' : '#A9A6B4',
-            pick: () => this.setState(sortKey === c.key
-              ? { pipSortDir: -sortDir }
-              : { pipSort: c.key, pipSortDir: c.key === 'title' || c.key === 'owner' || c.key === 'hlState' ? 1 : -1 }),
-          })),
+          // TABLE: the same stages, in the same order, each with its own subtotal.
+          //
+          // Grouped rather than sorted. The old table let you sort every column, which answered
+          // "the biggest deal" well and "how is Negotiation doing" not at all — and the stage is
+          // the question this screen exists to answer. Within a stage the worst health comes first,
+          // then the largest, so the top of each group is what to do about that group.
+          pipTblCount: (() => {
+            const n = _openCols.reduce((t, c) => t + c.count, 0);
+            return n + ' open deal' + (n === 1 ? '' : 's');
+          })(),
+          pipTblGroups: _pipeCols.map(col => {
+            const term = col.stage.isWon || col.stage.isLost;
+            // Expanded by default: collapsing is a thing somebody does on purpose, and a table that
+            // opens shut shows a reader nothing but headings.
+            const open = ((this.state.pipTblShut || {})[col.stage.id]) !== true;
+            return {
+              title: col.stage.name,
+              color: col.stage.color || (col.stage.isWon ? '#0E9355' : col.stage.isLost ? '#C0353A' : '#7C00FF'),
+              bg: col.stage.bg || (col.stage.isWon ? '#E7F8EF' : col.stage.isLost ? '#FEECEC' : '#F5EEFF'),
+              count: col.count,
+              total: _moneyK9(col.totalMinor, _ccy9),
+              exact: _money9(col.totalMinor, _ccy9)
+                + (term ? '' : ' · ' + _money9(col.weightedMinor, _ccy9) + ' weighted'),
+              caret: open ? '▾' : '▸',
+              tip: open ? 'Hide this stage' : 'Show this stage',
+              expanded: open,
+              empty: col.count === 0,
+              rows: col.deals.map(d => _shapeDeal9(d, col))
+                .sort((a, b) => b._sev - a._sev || b._value - a._value),
+              toggle: () => this.setState({
+                pipTblShut: { ...(this.state.pipTblShut || {}), [col.stage.id]: open },
+              }),
+            };
+          }),
         };
       })(),
       pipColumns: _pipeCols.map(col => {
