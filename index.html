@@ -319,6 +319,40 @@
   /* A field with nothing in it says so quietly instead of showing a dash that looks
      like a value. Ten dashes in a row is how a screen stops being read at all. */
   .pg-f-v.is-empty{font-weight:500;color:#C4C0CE;font-style:italic;}
+  /* ── Sales dashboard tiles, taken from the published design ────────────────────────────────
+     The design and this app already share a palette and a card — .pg-card is byte-for-byte the
+     section it uses. What it adds is a TINTED tile: a KPI carries its own quiet colour rather than
+     sitting as white-on-white or, as the sales hero did, white-on-a-dark-gradient.
+
+     Four tints, one per meaning, and the value takes the tint's own colour so the number is what
+     reads first. Neutral purple for a plain count, blue for something arriving, amber for something
+     owed, green for money in. Each is a pale wash — the fill is nearly white, so a row of four does
+     not turn the page into a paint chart. */
+  .cd-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;}
+  .cd-tile{border-radius:13px;padding:13px 15px;cursor:pointer;transition:transform .13s cubic-bezier(.16,1,.3,1),box-shadow .13s;}
+  .cd-tile:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(38,7,77,.07);}
+  .cd-tile-k{font-size:9.5px;font-weight:700;color:#A9A6B4;letter-spacing:.07em;text-transform:uppercase;}
+  .cd-tile-v{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;color:#1A1523;margin-top:5px;}
+  .cd-tile-s{font-size:10px;color:#B4AFC4;margin-top:2px;}
+  .cd-t1{border:1px solid #DDD1F5;background:#FBFAFE;}
+  .cd-t2{border:1px solid #E4F4FD;background:#F7FCFF;}
+  .cd-t2 .cd-tile-v{color:#0284C7;}
+  .cd-t3{border:1px solid #FBE2B8;background:#FFFBF3;}
+  .cd-t3 .cd-tile-v{color:#B8860B;}
+  .cd-t4{border:1px solid #A6E5C3;background:#F6FDF9;}
+  .cd-t4 .cd-tile-v{color:#0E9355;}
+  /* The design's section head: a glyph, the title, what it is for, and the way out — on one line. */
+  .cd-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .cd-head-i{font-size:15px;line-height:1;}
+  .cd-head-t{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#26074D;}
+  .cd-head-s{font-size:10.5px;color:#B4AFC4;}
+  .cd-head-a{font-size:11px;font-weight:700;color:#7C00FF;cursor:pointer;}
+  .cd-head-a:hover{color:#6900D6;}
+  /* Slimmer than the app's usual bar and on a paler track — the design uses these in lists where the
+     LABEL and the figure carry the meaning and the bar is only a sense of proportion. */
+  .cd-bar{flex:1;height:7px;background:#F5F3F9;border-radius:99px;overflow:hidden;}
+  .cd-bar > div{height:100%;border-radius:99px;animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;}
+
   .pg-sec-lab{font-size:9.5px;font-weight:800;color:#A9A6B4;letter-spacing:.07em;text-transform:uppercase;margin:18px 0 10px;}
   .pg-sec-lab:first-child{margin-top:0;}
   /* The activity feed gets its own scroll so it cannot push everything else off the
@@ -4012,31 +4046,32 @@
            and the Pipeline board cannot disagree about how many deals are open. -->
       <sc-if value="{{ showCrmDash }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Sales Dashboard">
 
-      <!-- Hero -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; overflow:hidden; border-radius:20px; background:linear-gradient(115deg,#26074D 0%,#4A1090 55%,#7C00FF 130%); color:#fff; padding:26px 30px 24px; box-shadow:0 14px 40px rgba(38,7,77,.25);">
-        <div style="position:absolute; right:-70px; top:-100px; width:300px; height:300px; border-radius:99px; background:rgba(255,255,255,.07); animation:floatY 8s ease-in-out infinite;"></div>
-        <div style="position:absolute; left:34%; bottom:-140px; width:240px; height:240px; border-radius:99px; background:rgba(255,255,255,.05); animation:floatY2 10s ease-in-out infinite;"></div>
-        <div style="position:absolute; inset:0; background-image:radial-gradient(rgba(255,255,255,.12) 1px, transparent 1px); background-size:28px 28px; opacity:.2;"></div>
-        <div style="position:relative; display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;">
-          <div style="flex:1; min-width:260px;">
-            <div style="font-size:11px; font-weight:700; letter-spacing:.14em; opacity:.75;">SALES · CRM</div>
-            <h1 style="margin:6px 0 0; font-family:'Space Grotesk',sans-serif; font-size:25px; font-weight:700; letter-spacing:-.01em;">Where the pipeline stands</h1>
-            <div style="display:flex; align-items:center; gap:9px; margin-top:9px; flex-wrap:wrap;">
-              <span style="display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28); font-size:11px; font-weight:700; padding:3px 12px; border-radius:99px;"><span style="width:5px; height:5px; border-radius:99px; background:#4ADE80; animation:pulseDot 2s ease-out infinite;"></span>{{ cdHeroOpen }}</span>
-              <span style="display:inline-flex; align-items:center; gap:6px; background:{{ cdHeroPillBg }}; border:1px solid {{ cdHeroPillBd }}; font-size:11px; font-weight:700; padding:3px 12px; border-radius:99px;">{{ cdHeroWin }}</span>
-              <span onClick="{{ cdRefresh }}" style="font-size:11px; font-weight:700; opacity:.7; cursor:pointer; padding:3px 4px;" style-hover="opacity:1;">Refresh</span>
-            </div>
-          </div>
+      <!-- ── Where the pipeline stands ──────────────────────────────────────────────────────────
+           A white section, not the dark gradient it was. The gradient hero came from an earlier
+           pass and shouted over a screen whose whole job is comparison: four glass tiles on a
+           painted background are harder to read against each other than four tinted ones on paper,
+           and the dark block set the sales screen apart from every other page for no reason anybody
+           could name. The published design settles it — same card as everything else, and the
+           colour moved onto the tiles where it means something. -->
+      <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; padding:18px 22px 20px;">
+        <div class="cd-head">
+          <span class="cd-head-i">💼</span>
+          <span class="cd-head-t">Where the pipeline stands</span>
+          <span class="cd-head-s">{{ cdMonthLabelShort }}</span>
+          <div style="flex:1;"></div>
+          <sc-if value="{{ cdHasMom }}" hint-placeholder-val="{{ false }}">
+            <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:{{ cdHeroPillBd }}; background:{{ cdHeroPillBg }}; padding:4px 11px; border-radius:99px;">{{ cdMom }}</span>
+          </sc-if>
+          <span onClick="{{ cdRefresh }}" class="cd-head-a">Refresh</span>
         </div>
-        <div style="position:relative; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:20px;">
+        <!-- The tint is positional, not data-driven: the four tiles always mean the same four
+             things in the same order, so the colour is part of the layout a reader learns once. -->
+        <div class="cd-tiles" style="margin-top:14px;">
           <sc-for list="{{ cdKpis }}" as="k" hint-placeholder-count="4">
-            <div onClick="{{ k.go }}" style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); border-radius:14px; padding:12px 15px; transition:background .15s; cursor:pointer;" style-hover="background:rgba(255,255,255,.18);">
-              <div style="font-size:9.5px; font-weight:700; letter-spacing:.06em; opacity:.7; text-transform:uppercase;">{{ k.label }}</div>
-              <div style="display:flex; align-items:center; gap:8px; margin-top:5px;">
-                <span style="font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:700;">{{ k.value }}</span>
-                <span style="width:6px; height:6px; border-radius:99px; background:{{ k.dot }};"></span>
-              </div>
-              <div style="font-size:10px; opacity:.65; margin-top:3px;">{{ k.sub }}</div>
+            <div onClick="{{ k.go }}" class="cd-tile {{ k.tint }}">
+              <div class="cd-tile-k">{{ k.label }}</div>
+              <div class="cd-tile-v">{{ k.value }}</div>
+              <div class="cd-tile-s">{{ k.sub }}</div>
             </div>
           </sc-for>
         </div>
@@ -24196,11 +24231,14 @@ class Component extends DCLogic {
           cdHeroPillBg: D.deals.winRateBp == null ? 'rgba(255,255,255,.16)' : (D.deals.winRateBp >= 5000 ? 'rgba(74,222,128,.22)' : 'rgba(229,72,77,.25)'),
           cdHeroPillBd: D.deals.winRateBp == null ? 'rgba(255,255,255,.28)' : (D.deals.winRateBp >= 5000 ? 'rgba(134,239,172,.45)' : 'rgba(255,138,142,.4)'),
 
+          // `tint` is positional — the four tiles always mean the same four things in the same
+          // order, so the colour belongs to the slot rather than to the number in it. A tint that
+          // changed with the value would be a status light, and none of these four are a status.
           cdKpis: [
-            { label: 'Total leads', value: ord(D.leads.total), sub: 'still at the lead stage', dot: '#A78BFA', go: goTo('Leads', 'Sales') },
-            { label: 'New leads today', value: ord(D.leads.newToday), sub: D.leads.newToday ? 'added today' : 'none added today', dot: '#4ADE80', go: goTo('Leads', 'Sales') },
-            { label: 'Follow-ups today', value: ord(D.followUpsToday.total), sub: D.followUpsToday.overdue ? ord(D.followUpsToday.overdue) + ' overdue' : 'none late', dot: D.followUpsToday.overdue ? '#FF8A8E' : '#4ADE80', go: goTo('Follow-ups', 'Sales') },
-            { label: 'Open deals', value: ord(D.deals.open.count), sub: _money9(D.deals.open.weightedMinor, ccy) + ' weighted', dot: '#7DD3FC', go: goTo('Pipeline', 'Sales') },
+            { label: 'Total leads', tint: 'cd-t1', value: ord(D.leads.total), sub: 'still at the lead stage', dot: '#A78BFA', go: goTo('Leads', 'Sales') },
+            { label: 'New leads today', tint: 'cd-t2', value: ord(D.leads.newToday), sub: D.leads.newToday ? 'added today' : 'none added today', dot: '#4ADE80', go: goTo('Leads', 'Sales') },
+            { label: 'Follow-ups today', tint: 'cd-t3', value: ord(D.followUpsToday.total), sub: D.followUpsToday.overdue ? ord(D.followUpsToday.overdue) + ' overdue' : 'none late', dot: D.followUpsToday.overdue ? '#FF8A8E' : '#4ADE80', go: goTo('Follow-ups', 'Sales') },
+            { label: 'Open deals', tint: 'cd-t4', value: ord(D.deals.open.count), sub: _money9(D.deals.open.weightedMinor, ccy) + ' weighted', dot: '#7DD3FC', go: goTo('Pipeline', 'Sales') },
           ],
 
           // ── what needs chasing ──
