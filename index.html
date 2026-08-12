@@ -1063,7 +1063,7 @@
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Team workload</span>
-            <a href="#" style="font-size:12px;">Manage</a>
+            <a href="#" onClick="{{ goProTeams }}" style="font-size:12px;">Manage</a>
           </div>
           <div style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
             <sc-for list="{{ team }}" as="m" hint-placeholder-count="4">
@@ -1124,7 +1124,7 @@
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Recent activity</span>
-            <a href="#" style="font-size:12px;">Timeline →</a>
+            <a href="#" onClick="{{ goTimeline }}" style="font-size:12px;">Timeline →</a>
           </div>
           <div style="display:flex; flex-direction:column; margin-top:14px;">
             <sc-for list="{{ activities }}" as="act" hint-placeholder-count="6">
@@ -4139,8 +4139,6 @@
             <div style="padding:12px 22px; background:#FBFAFE; font-size:11px; color:#8C8899; line-height:1.6;">Completion rate is measured from the <b style="color:#4B4757;">original</b> due date, not the rescheduled one — so pushing a follow-up back cannot improve it.</div>
           </section>
         </sc-if>
-          </section>
-        </sc-for>
 
         <!-- The guard is OUTSIDE the card, not inside it: within, an empty queue still painted a
              blank card under the groups. -->
@@ -5261,7 +5259,6 @@
               </sc-if>
             </div>
           </sc-for>
-        </section>
         </section>
       </div></sc-if>
 
@@ -11324,7 +11321,6 @@
       </div>
     </div>
   </sc-if>
-</div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;complianceScore&quot;: {&quot;editor&quot;: &quot;range&quot;, &quot;default&quot;: 87, &quot;min&quot;: 40, &quot;max&quot;: 100, &quot;step&quot;: 1, &quot;unit&quot;: &quot;%&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Data&quot;},
@@ -13597,6 +13593,9 @@ class Component extends DCLogic {
     const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
     // Initials from a display name — strips parentheticals (e.g. "Omar (PRO Officer)") and keeps only
     // letter/number-initial tokens, so avatars never read "O(".
+    // THE initials helper. Three private copies had grown beside it — two of mine — each
+    // reinventing the same rule, and one of them turned “Omar (PRO Officer)” into “O(” because it
+    // split on spaces instead of stripping the parenthetical the way this one always has.
     const _initials = (name) => String(name || '').replace(/\([^)]*\)/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
     const realClientNames = (Array.isArray(this.state.companiesData) && this.state.companiesData.length) ? this.state.companiesData.map(c2 => c2.name) : null;
     const realStaffNames = (Array.isArray(this.state.usersData) && this.state.usersData.length) ? this.state.usersData.filter(u => u.type !== 'portal').map(u => u.name) : null;
@@ -24067,6 +24066,9 @@ class Component extends DCLogic {
       goRequests: () => this.setState({ active: 'Requests Queue', activeGroup: 'Operations' }),
       goClients: () => this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance' }),
       goApprovals: () => this.setState({ active: 'Approvals', activeGroup: 'Operations' }),
+      // Both were dead <a href="#">. The labels already promised a destination; they now go there.
+      goProTeams: () => this.setState({ active: 'PRO Teams', activeGroup: 'Operations' }),
+      goTimeline: () => this.setState({ active: 'Activity Timeline', activeGroup: 'Overview' }),
     };
 
     // Role guard: a hidden screen reached by URL/stale state renders the Dashboard instead.
@@ -25001,8 +25003,6 @@ class Component extends DCLogic {
         // Initials, worked out here rather than through one of this file's other helpers. Each of
         // those sits inside a different screen's block, and reaching across for one is what took the
         // Pipeline screen down earlier today.
-        const inits9 = (n) => String(n || '').replace(/\([^)]*\)/g, ' ').split(/\s+/)
-          .filter(w => /[A-Za-z0-9]/.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
         const shaped = rows.map(r => {
           const tone = KIND_TONE[r.kind] || ['#F3F1F7', '#6F6C7A'];
           const t = Date.parse(r.at);
@@ -25030,7 +25030,7 @@ class Component extends DCLogic {
             // Who logged it, as a face. It was buried at the end of the meta line behind the contact
             // and the deal — the last thing on the third line of a row people scan the first line of.
             who: r.owner || 'Unknown',
-            whoInitials: inits9(r.owner),
+            whoInitials: _initials(r.owner),
             hasWho: !!r.owner,
             go: r.company ? () => this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance', clientOpen: r.company.id }) : () => {},
           };
@@ -26257,11 +26257,6 @@ class Component extends DCLogic {
         // Splitting on spaces and taking first characters turned “Omar (PRO Officer)” into “O(”.
         // Match WORDS instead, and drop the role — but never to nothing, or somebody actually
         // called “Administrator” comes back as “?”.
-        const tmInit9 = (n) => {
-          const w9 = String(n || '').match(/[A-Za-z0-9\u0600-\u06FF]+/g) || [];
-          const n9 = w9.filter(x => !/^(pro|officer|accountant|admin|administrator|manager|sales|rep)$/i.test(x));
-          return ((n9.length ? n9 : w9).slice(0, 2).map(x => x[0]).join('') || '?').toUpperCase();
-        };
         const _tmRows9 = _tmMine9.map(t => {
           const openHist9 = this.state.tmHistoryFor === t.id;
           const hist9 = (this.state.tmHistory || {})[t.id] || [];
@@ -26297,7 +26292,7 @@ class Component extends DCLogic {
             // The leader as a FACE, which is how the design leads the card and how people think
             // about a team. `hasLead` is separate from the label because "Nobody yet" must not be
             // rendered as somebody with the initials N.
-            leadInitials: t.leadName ? tmInit9(t.leadName) : '\u2014',
+            leadInitials: t.leadName ? _initials(t.leadName) : '\u2014',
             hasLead: !!t.leadName,
             leadAvBg: t.leadName ? '#7C00FF' : '#DDD9E6',
             // Which side of the business, as the design's chip. It says nothing new on a screen
@@ -26558,14 +26553,6 @@ class Component extends DCLogic {
         // Names here carry a parenthetical role — “Omar (PRO Officer)” — so splitting on spaces and
         // taking first characters produced “O(”. Only real words can start an initial, and the role
         // words are dropped so two officers are told apart by their names, not by their titles.
-        const inits = (n) => {
-          const words = String(n || '').match(/[A-Za-z\u0600-\u06FF]+/g) || [];
-          // Drop the role, but never to nothing: somebody actually called “Administrator” kept
-          // every word filtered out and came back as “?”.
-          const named = words.filter(w => !/^(pro|officer|accountant|admin|administrator|manager)$/i.test(w));
-          const use = named.length ? named : words;
-          return (use.slice(0, 2).map(w => w[0]).join('') || '?').toUpperCase();
-        };
         const offs = (D && Array.isArray(D.officers)) ? D.officers : [];
         // RANKED, unlike the report underneath it, which returns people alphabetically and says in
         // its own comment that ordering by output is a claim. This screen makes that claim on
@@ -26709,7 +26696,7 @@ class Component extends DCLogic {
             const p = slaPct(o);
             return {
               rank: anyDone9 && i === 0 ? '\ud83e\udd47' : anyDone9 && i === 1 ? '\ud83e\udd48' : anyDone9 && i === 2 ? '\ud83e\udd49' : '#' + (i + 1),
-              initials: inits(o.name),
+              initials: _initials(o.name),
               name: o.name,
               top: anyDone9 && i === 0,
               rowBg: anyDone9 && i === 0 ? '#F2FBF6' : '#fff',
