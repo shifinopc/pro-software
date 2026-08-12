@@ -3726,7 +3726,7 @@
                firm that configures ten stages cannot have all ten legible at once. -->
           <section data-hidescroll="true" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:14px; align-items:start; overflow-x:auto; padding-bottom:6px;">
             <sc-for list="{{ pipColumns }}" as="col" hint-placeholder-count="4">
-              <div data-pip-stage="{{ col.dropId }}" style="background:#FAF8FC; border:1px solid #EDEBF2; border-radius:16px; padding:12px; min-height:120px;">
+              <div data-pip-stage="{{ col.dropId }}" data-pip-tone="{{ col.color }}" style="background:#F8F5FD; border:1.5px solid #EDEBF2; border-radius:16px; padding:12px; min-height:120px; transition:background .15s, border-color .15s;">
                 <!-- Header: a dot for the stage, the name, the count as a tinted pill, and the money
                      pushed to the far edge — one line where there used to be three. A column heading
                      is not the content, it is the label on the content, and it was taking four lines
@@ -11037,7 +11037,17 @@ class Component extends DCLogic {
       const from = _pipDrag && _pipDrag.fromCol;
       document.querySelectorAll('[data-pip-stage]').forEach((n) => {
         const on = !!target && n === target && n !== from;
-        n.style.outline = on ? '2px solid #7C00FF' : '';
+        // OUTLINE, not the design's background-and-border swap.
+        //
+        // The design fills the hovered column lilac and colours its border. That was tried here and
+        // does not survive: this runtime re-renders on its own schedule and REPLACES the column
+        // nodes, so an inline background written mid-drag is gone within a frame — measured, with
+        // the column re-queried fresh each time, and it never painted once. Outline is the same
+        // signal through a property that is written and cleared in one place.
+        //
+        // What the design is right about is the COLOUR: the outline takes the stage's own tone, so
+        // the column you are about to drop into says which stage it is rather than only "here".
+        n.style.outline = on ? '2px solid ' + (n.getAttribute('data-pip-tone') || '#7C00FF') : '';
         n.style.outlineOffset = on ? '2px' : '';
       });
     };
@@ -11092,14 +11102,12 @@ class Component extends DCLogic {
       // the whole page unselectable — or, worse, with the scroll timer still running.
       _pipDrag = null;
       if (drag.timer) clearInterval(drag.timer);
-      // Clears exactly what _pipPaint sets — outline — and NOTHING the design declared.
+      // Clears exactly what _pipPaint sets — outline — and NOTHING the markup declared.
       //
-      // This line used to clear background and borderColor, left over from the first version of the
-      // highlight. Once the highlight moved to outline it did two wrong things at once: the purple
-      // outline was never cleared, so it stuck on the last column hovered; and blanking background
-      // and borderColor DELETED the column's own #FAF8FC fill and border, because the runtime writes
-      // each element's style as one attribute string and clearing a property it declared removes the
-      // value rather than restoring it. Both together are what made a column look broken after a drag.
+      // This line used to clear background and borderColor. The runtime writes each element's style
+      // as one attribute string, so clearing a property the markup declared removes the value rather
+      // than restoring it: every column dragged over sat there colourless until something happened
+      // to re-render the board. Outline is ours alone, so clearing it is safe.
       _pipPaint(null);
       drag.el.style.opacity = '';
       document.body.style.cursor = '';
@@ -23543,8 +23551,8 @@ class Component extends DCLogic {
               _stage: col.stage.sort,
               sourceLabel: d.source || 'no source',
               srcLabel: d.valueSource === 'quotation' ? (d.quotation ? d.quotation.number : 'QUOTED') : d.valueSource === 'estimate' ? 'ESTIMATE' : 'NO FIGURE',
-              srcColor: d.valueSource === 'quotation' ? '#0E9355' : d.valueSource === 'estimate' ? '#B7791F' : '#A9A6B4',
-              srcBg: d.valueSource === 'quotation' ? '#E7F8EF' : d.valueSource === 'estimate' ? '#FFF6E5' : '#F3F1F7',
+              srcColor: d.valueSource === 'quotation' ? '#0284C7' : d.valueSource === 'estimate' ? '#B8860B' : '#A9A6B4',
+              srcBg: d.valueSource === 'quotation' ? '#E4F4FD' : d.valueSource === 'estimate' ? '#FEF4E2' : '#F3F1F7',
               meta: [
                 d.number,
                 d.expectedCloseDate ? 'close ' + d.expectedCloseDate : null,
@@ -23561,8 +23569,8 @@ class Component extends DCLogic {
                     ? (d.checklist.requiredTotal - d.checklist.requiredDone) + ' to go'
                     : 'ready')
                 : '',
-              clkColor: d.checklist && d.checklist.blocked ? '#B7791F' : '#0E9355',
-              clkBg: d.checklist && d.checklist.blocked ? '#FFF6E5' : '#E7F8EF',
+              clkColor: d.checklist && d.checklist.blocked ? '#B8860B' : '#0E9355',
+              clkBg: d.checklist && d.checklist.blocked ? '#FEF4E2' : '#E7F8EF',
               openChecklist: () => {
                 const API = this._apiBase || 'http://localhost:4100';
                 const tok = localStorage.getItem('stimespro:token');
