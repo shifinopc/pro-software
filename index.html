@@ -4294,53 +4294,102 @@
       </section>
 
       <!-- Pipeline + who is closing -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:grid; grid-template-columns:1.15fr 1fr; gap:18px;" class="cd-two">
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Sales pipeline</span>
-            <span style="font-size:11.5px; color:#A9A6B4;">{{ cdPipeSub }}</span>
+      <!-- Lead sources / Pipeline by stage / Top salesperson, at the design's three-up.
+           Each answers a different question about the same book: where work comes from, where it
+           is sitting, and who is closing it. Side by side they read as one row; stacked as three
+           cards they read as three unrelated lists, which is what they were. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .17s both; display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; align-items:stretch;" class="cd-three">
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Lead sources</div>
+            <span style="font-size:10.5px; color:#B4AFC4;">won / total</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:13px; margin-top:18px; flex:1; justify-content:center;">
-            <sc-for list="{{ cdPipeBars }}" as="p" hint-placeholder-count="5">
-              <div onClick="{{ p.go }}" style="display:flex; align-items:center; gap:14px; cursor:pointer;">
-                <span style="font-size:12px; color:#4B4757; font-weight:500; width:118px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</span>
-                <div style="flex:1; height:26px; background:#F6F3FB; border-radius:8px; overflow:hidden;">
-                  <div style="height:100%; width:{{ p.pct }}%; background:{{ p.color }}; border-radius:8px; display:flex; align-items:center; justify-content:flex-end; padding-right:10px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) .2s both;">
-                    <span style="font-size:11px; font-weight:700; color:#fff;">{{ p.count }}</span>
+          <div style="display:flex; flex-direction:column; gap:3px; margin-top:16px;">
+            <sc-for list="{{ cdSrcRows }}" as="s" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center; gap:12px; padding:10px 11px; border-radius:13px; background:{{ s.rowBg }};">
+                <span style="width:24px; height:24px; border-radius:8px; background:{{ s.bg }}; color:{{ s.color }}; font-family:'space Grotesk',sans-serif; font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ s.rank }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+                    <span style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.name }}</span>
+                    <span style="font-size:10.5px; color:#A9A6B4; flex-shrink:0;">{{ s.ratio }}</span>
+                  </div>
+                  <div style="height:6px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:7px;">
+                    <div style="height:100%; width:{{ s.barW }}%; background:{{ s.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
                   </div>
                 </div>
-                <span style="font-size:11px; color:#A9A6B4; width:92px; text-align:right; flex-shrink:0;">{{ p.value }}</span>
+                <span style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:12.5px; color:{{ s.convColor }}; width:42px; text-align:right; flex-shrink:0;">{{ s.conv }}</span>
               </div>
             </sc-for>
-            <sc-if value="{{ cdPipeEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdPipeEmptyNote }}</div>
+            <sc-if value="{{ cdSrcEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:22px; text-align:center; font-size:12px; color:#B4AFC4;">No source recorded on any lead yet.</div>
             </sc-if>
           </div>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; border-top:1px solid #F5F3F9; padding-top:11px;">Right-hand figure is the source's conversion rate to won.</div>
         </div>
 
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Top salesperson</span>
-            <span style="font-size:11.5px; color:#A9A6B4;">{{ cdTopSub }}</span>
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Pipeline by stage</div>
+            <span style="font-size:10.5px; color:#B4AFC4;">value</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
-            <sc-for list="{{ cdTop }}" as="m" hint-placeholder-count="3">
-              <div style="display:flex; align-items:center; gap:12px;">
-                <div style="width:34px; height:34px; border-radius:99px; background:{{ m.avBg }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ m.initials }}</div>
-                <div style="flex:1; min-width:0;">
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <span style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.name }}</span>
-                    <span style="font-size:10.5px; font-weight:700; color:{{ m.badgeColor }}; background:{{ m.badgeBg }}; padding:2px 9px; border-radius:99px; flex-shrink:0;">{{ m.badge }}</span>
-                  </div>
-                  <div style="display:flex; align-items:center; gap:9px; margin-top:5px;">
-                    <div style="flex:1; height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><div style="height:100%; width:{{ m.share }}%; background:{{ m.badgeColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) .2s both;"></div></div>
-                    <span style="font-size:10.5px; color:#A9A6B4; white-space:nowrap;">{{ m.detail }}</span>
-                  </div>
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:18px;">
+            <sc-for list="{{ cdStageRows }}" as="f" hint-placeholder-count="4">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="width:8px; height:8px; border-radius:3px; background:{{ f.color }}; flex-shrink:0;"></span>
+                  <span style="font-size:12.5px; font-weight:600; color:#4B4757; flex:1; min-width:0;">{{ f.name }}</span>
+                  <span style="font-size:10px; font-weight:700; color:{{ f.color }}; background:{{ f.bg }}; padding:2px 8px; border-radius:99px; flex-shrink:0;">{{ f.count }}</span>
+                  <span style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:13px; flex-shrink:0;">{{ f.value }}</span>
+                </div>
+                <div style="height:10px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:8px;">
+                  <div style="height:100%; width:{{ f.w }}%; background:{{ f.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
                 </div>
               </div>
             </sc-for>
-            <sc-if value="{{ cdTopEmpty }}" hint-placeholder-val="{{ true }}"><div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdTopEmptyNote }}</div></sc-if>
+            <sc-if value="{{ cdStageEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:22px; text-align:center; font-size:12px; color:#B4AFC4;">No stages configured yet.</div>
+            </sc-if>
           </div>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:16px; border-top:1px solid #F5F3F9; padding-top:11px;">Bar length is stage value relative to the largest stage.</div>
+        </div>
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Top salesperson</div>
+            <span style="font-size:10.5px; color:#B4AFC4;">this period</span>
+          </div>
+          <!-- The leader gets the gradient; everybody else gets a row. One highlighted name is a
+               result, five highlighted names are wallpaper. -->
+          <sc-if value="{{ cdHasLeader }}" hint-placeholder-val="{{ true }}">
+            <div style="position:relative; overflow:hidden; display:flex; align-items:center; gap:14px; margin-top:18px; background:linear-gradient(115deg,#1B0637,#4A0C9E); color:#fff; border-radius:16px; padding:16px 18px;">
+              <div style="position:absolute; right:-30px; top:-40px; width:120px; height:120px; border-radius:99px; background:radial-gradient(closest-side, rgba(255,255,255,.14), transparent);"></div>
+              <span style="width:46px; height:46px; border-radius:99px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative;">{{ cdLeaderInitials }}</span>
+              <div style="flex:1; min-width:0; position:relative;">
+                <div style="font-size:13.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cdLeaderName }}</div>
+                <div style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:19px; color:#7CFFB0; margin-top:2px;">{{ cdLeaderValue }}</div>
+              </div>
+            </div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; gap:11px; margin-top:16px;">
+            <sc-for list="{{ cdLeaderRows }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:11px; width:22px; flex-shrink:0; text-align:center;">{{ p.medal }}</span>
+                <span style="width:26px; height:26px; border-radius:99px; background:{{ p.bg }}; color:{{ p.color }}; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.name }}</div>
+                  <div style="height:5px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:5px;">
+                    <div style="height:100%; width:{{ p.barW }}%; background:{{ p.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
+                  </div>
+                </div>
+                <span style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:12px; flex-shrink:0;">{{ p.value }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ cdLeaderEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:22px; text-align:center; font-size:12px; color:#B4AFC4;">Nothing closed this period.</div>
+            </sc-if>
+          </div>
+          <div style="flex:1;"></div>
         </div>
       </section>
 
@@ -4450,47 +4499,7 @@
       </section>
 
       <!-- Where leads come from + why deals are lost -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .19s both; display:grid; grid-template-columns:1fr 1fr; gap:18px;" class="cd-two">
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Lead sources</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdSourceSub }}</div>
-            </div>
-            <span onClick="{{ cdGoLeads }}" style="font-size:12px; color:#7C00FF; font-weight:600; cursor:pointer; white-space:nowrap;">Leads →</span>
-          </div>
-          <!-- A RING, because this is a composition — parts of one book of companies — and a ring
-               says "these add up to everything" in a way a row of bars never does. Same geometry as
-               the rings already used elsewhere in the console: r=26, circumference ~163. -->
-          <div style="display:flex; align-items:center; gap:20px; margin-top:16px; flex-wrap:wrap;">
-            <div style="position:relative; width:126px; height:126px; flex-shrink:0;">
-              <svg width="126" height="126" viewBox="0 0 60 60" style="transform:rotate(-90deg);">
-                <circle cx="30" cy="30" r="26" fill="none" stroke="#F3F1F7" stroke-width="7.5"></circle>
-                <sc-for list="{{ cdSourceArcs }}" as="a" hint-placeholder-count="4">
-                  <circle cx="30" cy="30" r="26" fill="none" stroke="{{ a.color }}" stroke-width="7.5" stroke-dasharray="{{ a.dash }}" stroke-dashoffset="{{ a.offset }}"></circle>
-                </sc-for>
-              </svg>
-              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-                <span style="font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:700; line-height:1;">{{ cdSourceTotal }}</span>
-                <span style="font-size:9.5px; color:#A9A6B4; margin-top:2px; letter-spacing:.05em;">COMPANIES</span>
-              </div>
-            </div>
-            <div style="flex:1; min-width:170px; display:flex; flex-direction:column; gap:9px;">
-              <sc-for list="{{ cdSources }}" as="s" hint-placeholder-count="4">
-                <div style="display:flex; align-items:center; gap:9px;">
-                  <span style="width:9px; height:9px; border-radius:3px; background:{{ s.color }}; flex-shrink:0;"></span>
-                  <span style="flex:1; min-width:0; font-size:12px; color:{{ s.labelColor }}; font-weight:{{ s.labelWeight }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.source }}</span>
-                  <span style="font-size:11.5px; font-weight:700; flex-shrink:0;">{{ s.pctLabel }}</span>
-                  <span style="font-size:10.5px; color:#A9A6B4; width:74px; text-align:right; flex-shrink:0;">{{ s.detail }}</span>
-                </div>
-              </sc-for>
-              <sc-if value="{{ cdSourcesEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:20px 12px; text-align:center; font-size:12px; color:#A9A6B4;">No companies yet.</div>
-              </sc-if>
-            </div>
-          </div>
-          <div style="margin-top:14px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdSourceNote }}</div>
-        </div>
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .19s both; display:grid; grid-template-columns:1fr; gap:18px;" class="cd-two">
 
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -24223,6 +24232,8 @@ class Component extends DCLogic {
           cdHealth: [], cdHealthBar: [], cdHealthSub: '', cdHealthNote: '',
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
           cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
+          cdSrcRows: [], cdSrcEmpty: false, cdStageRows: [], cdStageEmpty: false,
+          cdHasLeader: false, cdLeaderInitials: '', cdLeaderName: '', cdLeaderValue: '', cdLeaderRows: [], cdLeaderEmpty: false,
           cdQueue: [], cdUndatedShown: false, cdUndatedNote: '',
           cdSources: [], cdSourceArcs: [], cdSourceTotal: '0', cdSourcesEmpty: false, cdSourceSub: '', cdSourceNote: '', cdGoLeads: () => {},
           cdLostReasons: [], cdLostEmpty: false, cdLostEmptyNote: '', cdLostSub: '',
@@ -24722,6 +24733,69 @@ class Component extends DCLogic {
               cdUndatedShown: (c9.undated || 0) > 0,
               cdUndatedNote: (c9.undated || 0) + ((c9.undated || 0) === 1 ? ' appointment has' : ' appointments have')
                 + ' a date nobody can read \u2014 it is not counted above, and it will not appear in any diary until it is fixed.',
+            };
+          })(),
+          /**
+           * The three-up: where work comes from, where it is sitting, who is closing it.
+           *
+           * All three are ranked lists over the same book, so they share one shape — a rank or dot,
+           * a name, a bar proportional to the largest row, and the figure that matters on the right.
+           */
+          ...(() => {
+            const ini9 = (n) => String(n || '?').replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+            const pal9 = ['#7C00FF', '#0284C7', '#0E9355', '#B8860B', '#C0353A', '#6D5BD0'];
+            const tint9 = ['#F5EEFF', '#E4F4FD', '#E7F8EF', '#FEF4E2', '#FEECEC', '#EFEBFF'];
+
+            // ── lead sources ──
+            const src9 = (Array.isArray(D.leadSources) ? D.leadSources : []).slice(0, 5);
+            const srcMax9 = src9.reduce((n, x) => Math.max(n, x.total || 0), 0);
+
+            // ── pipeline by stage ── bar is value against the LARGEST stage, so an empty stage
+            // reads as empty rather than as a full bar of nothing.
+            const st9 = Array.isArray(D.pipeline) ? D.pipeline : [];
+            const stMax9 = st9.reduce((n, x) => Math.max(n, x.valueMinor || 0), 0);
+
+            // ── leaderboard ── the leader is pulled out; the rest are rows against their own top.
+            const lb9 = Array.isArray(D.leaderboard) ? D.leaderboard : [];
+            const lbMax9 = lb9.reduce((n, x) => Math.max(n, x.wonMinor || 0), 0);
+            const medal9 = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
+
+            return {
+              cdSrcRows: src9.map((x, i) => {
+                const conv9 = x.total ? Math.round((x.clients / x.total) * 100) : 0;
+                return {
+                  rank: String(i + 1),
+                  name: x.source || 'Not recorded',
+                  ratio: (x.clients || 0) + '/' + (x.total || 0),
+                  barW: srcMax9 ? Math.max(3, Math.round(((x.total || 0) / srcMax9) * 100)) : 0,
+                  conv: conv9 + '%',
+                  // Green only where something actually converted — a grey 0% does not read as a
+                  // failure, which is right when the source has had no chance yet.
+                  convColor: conv9 > 0 ? '#0E9355' : '#B4AFC4',
+                  color: pal9[i % pal9.length], bg: tint9[i % tint9.length],
+                  rowBg: i === 0 ? '#FBFAFE' : 'transparent',
+                };
+              }),
+              cdSrcEmpty: src9.length === 0,
+              cdStageRows: st9.map(x => ({
+                name: x.name, color: x.color || '#7C00FF', bg: x.bg || '#F5EEFF',
+                count: String(x.count || 0),
+                value: _money9(x.valueMinor || 0, ccy),
+                w: stMax9 ? Math.max(2, Math.round(((x.valueMinor || 0) / stMax9) * 100)) : 2,
+              })),
+              cdStageEmpty: st9.length === 0,
+              cdHasLeader: lb9.length > 0,
+              cdLeaderInitials: lb9.length ? ini9(lb9[0].name) : '',
+              cdLeaderName: lb9.length ? lb9[0].name : '',
+              cdLeaderValue: lb9.length ? _money9(lb9[0].wonMinor || 0, ccy) : '',
+              cdLeaderRows: lb9.slice(0, 4).map((x, i) => ({
+                medal: medal9[i] || ('#' + (i + 1)),
+                initials: ini9(x.name), name: x.name,
+                value: _money9(x.wonMinor || 0, ccy),
+                barW: lbMax9 ? Math.max(3, Math.round(((x.wonMinor || 0) / lbMax9) * 100)) : 0,
+                color: pal9[i % pal9.length], bg: tint9[i % tint9.length],
+              })),
+              cdLeaderEmpty: lb9.length === 0,
             };
           })(),
           cdAttention: D.needsAttention.map(a => ({
