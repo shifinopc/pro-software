@@ -11226,18 +11226,26 @@ class Component extends DCLogic {
       const from = _pipDrag && _pipDrag.fromCol;
       document.querySelectorAll('[data-pip-stage]').forEach((n) => {
         const on = !!target && n === target && n !== from;
-        // OUTLINE, not the design's background-and-border swap.
+        // An INSET ring, not an outline.
         //
-        // The design fills the hovered column lilac and colours its border. That was tried here and
-        // does not survive: this runtime re-renders on its own schedule and REPLACES the column
-        // nodes, so an inline background written mid-drag is gone within a frame — measured, with
-        // the column re-queried fresh each time, and it never painted once. Outline is the same
-        // signal through a property that is written and cleared in one place.
+        // An outline is painted OUTSIDE the border box, and with outline-offset it sat 4px clear of
+        // the column. The board scrolls sideways, so its section carries overflow-x:auto — which
+        // makes overflow-y compute to auto as well — and the columns start flush with the top of
+        // that box: measured, zero pixels of headroom. Every one of those 4px was clipped, so the
+        // highlight appeared as a ring with its top and bottom edges sliced off. It read as a
+        // rendering fault, which is exactly what it was.
         //
-        // What the design is right about is the COLOUR: the outline takes the stage's own tone, so
-        // the column you are about to drop into says which stage it is rather than only "here".
-        n.style.outline = on ? '2px solid ' + (n.getAttribute('data-pip-tone') || '#7C00FF') : '';
-        n.style.outlineOffset = on ? '2px' : '';
+        // inset box-shadow is painted INSIDE the padding box, follows the 16px corner radius, and
+        // cannot be clipped by an ancestor's overflow at any scroll position. Like outline before
+        // it, box-shadow is declared nowhere in the column's own markup, so writing and clearing it
+        // touches nothing the design owns.
+        //
+        // The design fills the hovered column lilac and colours its border instead. That was tried
+        // and does not survive here: this runtime re-renders on its own schedule and REPLACES the
+        // column nodes, so an inline background written mid-drag is gone within a frame. What the
+        // design is right about is the COLOUR — the ring takes the stage's own tone, so the column
+        // you are about to drop into says which stage it is rather than only "here".
+        n.style.boxShadow = on ? 'inset 0 0 0 2px ' + (n.getAttribute('data-pip-tone') || '#7C00FF') : '';
       });
     };
     // The board scrolls sideways, and the columns people most want to drop on — Won and Lost — are
@@ -11341,12 +11349,12 @@ class Component extends DCLogic {
       // Before anything that can throw. A ghost left on the body is a card floating over a page
       // nobody can click through, and the only way out of it would be a reload.
       _pipGhostDrop(drag.ghost);
-      // Clears exactly what _pipPaint sets — outline — and NOTHING the markup declared.
+      // Clears exactly what _pipPaint sets — the inset ring — and NOTHING the markup declared.
       //
       // This line used to clear background and borderColor. The runtime writes each element's style
       // as one attribute string, so clearing a property the markup declared removes the value rather
       // than restoring it: every column dragged over sat there colourless until something happened
-      // to re-render the board. Outline is ours alone, so clearing it is safe.
+      // to re-render the board. box-shadow is ours alone, so clearing it is safe.
       _pipPaint(null);
       drag.el.style.opacity = '';
       document.body.style.cursor = '';
