@@ -5462,11 +5462,9 @@
       <sc-if value="{{ showContacts }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Contacts">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Contacts</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ ctSub }}</div>
           </div>
-          <input value="{{ ctSearch }}" onInput="{{ setCtSearch }}" placeholder="Search name, company, email…" style="border:1px solid #DDD9E6; border-radius:99px; padding:9px 16px; font-size:12.5px; background:#fff; min-width:260px;">
+          <div style="display:flex; align-items:center; gap:9px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:8px 14px; min-width:250px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><input value="{{ ctSearch }}" onInput="{{ setCtSearch }}" placeholder="Name, company, email, role…" style="flex:1; border:none; outline:none; font-family:inherit; font-size:12px; background:transparent; min-width:0; color:#1A1523;"></div>
         </section>
 
         <!-- The people, not a spreadsheet of them. Role moves under the name, which frees the width
@@ -5485,57 +5483,94 @@
           </section>
         </sc-if>
 
-        <!-- A GRID, not two flex:1 blocks. Equal greed gave the name and the company half the spare
-             width each regardless of what was in them, which opened a hand's width of nothing after
-             a short role and let one long email push its row taller than its neighbours. Fixed
-             proportions keep every row the same height and every column starting on the same line. -->
-        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <div style="display:grid; grid-template-columns:36px minmax(0,1.15fr) minmax(0,1fr) minmax(0,1.5fr); gap:14px; padding:12px 22px 10px; border-bottom:1px solid #F0EDF6; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.06em;">
-            <span></span><span>Person</span><span>Company</span><span style="text-align:right;">How to reach them</span>
-          </div>
-          <sc-for list="{{ ctRows }}" as="p" hint-placeholder-count="6">
-            <div onClick="{{ p.open }}" style="display:grid; grid-template-columns:36px minmax(0,1.15fr) minmax(0,1fr) minmax(0,1.5fr); gap:14px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FAF7FE;">
-              <span style="width:36px; height:36px; border-radius:99px; background:{{ p.avBg }}; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ p.initials }}</span>
-              <div style="min-width:0;">
-                <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                  <span style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.name }}</span>
-                  <sc-if value="{{ p.isPrimary }}" hint-placeholder-val="{{ true }}"><span title="The main contact at this company" style="font-size:9px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:2px 8px; border-radius:99px; flex-shrink:0;">MAIN</span></sc-if>
-                </div>
-                <sc-if value="{{ p.roleShown }}" hint-placeholder-val="{{ true }}">
-                  <div style="font-size:11.5px; color:#8C8899; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.role }}</div>
-                </sc-if>
-              </div>
-              <div style="min-width:0;">
-                <div style="font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.company }}</div>
-                <span style="display:inline-block; font-size:9.5px; font-weight:700; color:{{ p.lcColor }}; background:{{ p.lcBg }}; padding:2px 9px; border-radius:99px; margin-top:3px;">{{ p.lcLabel }}</span>
-              </div>
-              <div style="min-width:0; display:flex; gap:6px; align-items:center; justify-content:flex-end;">
-                <sc-if value="{{ p.hasEmail }}" hint-placeholder-val="{{ true }}">
-                  <span title="{{ p.email }}" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#4B4757; background:#F7F5FB; padding:5px 10px; border-radius:99px; min-width:0;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M22 6l-10 7L2 6"></path></svg>
-                    <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.email }}</span>
-                  </span>
-                </sc-if>
-                <sc-if value="{{ p.hasPhone }}" hint-placeholder-val="{{ true }}">
-                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#4B4757; background:#F7F5FB; padding:5px 10px; border-radius:99px; white-space:nowrap;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ p.phoneIconColor }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"></path></svg>
-                    {{ p.phone }}
-                  </span>
-                </sc-if>
-                <!-- Neither address nor number: this is not a contact anybody can act on, and saying
-                     so is more use than two dashes in a table. -->
-                <sc-if value="{{ p.unreachable }}" hint-placeholder-val="{{ false }}">
-                  <span style="font-size:10.5px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:5px 11px; border-radius:99px; white-space:nowrap;">No way to reach them</span>
-                </sc-if>
-              </div>
-            </div>
+        <!-- Tabs, from the design. The screen had one search box and no way to say "clients only"
+             — and the two groups are asked about separately: a client contact is somebody to serve,
+             a lead contact is somebody to win. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content;">
+          <sc-for list="{{ ctTabs }}" as="t" hint-placeholder-count="3">
+            <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 15px; border-radius:99px; cursor:pointer;">
+              {{ t.label }}
+              <span style="font-size:10.5px; font-weight:700; color:{{ t.countColor }};">{{ t.count }}</span>
+            </span>
           </sc-for>
-          <sc-if value="{{ ctEmpty }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:44px 24px; text-align:center;">
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">{{ ctEmptyTitle }}</div>
-              <div style="font-size:12.5px; color:#8C8899; margin-top:4px; max-width:440px; margin-left:auto; margin-right:auto; line-height:1.6;">{{ ctEmptyBody }}</div>
+        </section>
+
+        <!-- The design's six columns. Role earns one of its own rather than sitting as grey text
+             under the name: it is the fact that decides whether this is the person to call, and
+             under the name it was the same weight as a job title nobody had filled in.
+
+             OWNER is the company's owner, not the contact's. A person has no owner of their own —
+             they are reached through the account they belong to — and inventing one here would
+             create a second answer to "who calls them". -->
+        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
+          <div style="overflow-x:auto;"><div style="min-width:880px;">
+            <div style="display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; padding:13px 22px; font-size:9.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+              <span>Person</span><span>Company</span><span>Role</span><span>Contact</span><span>Owner</span><span></span>
             </div>
-          </sc-if>
+            <sc-for list="{{ ctRows }}" as="p" hint-placeholder-count="8">
+              <div onClick="{{ p.open }}" style="display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; align-items:center; padding:13px 22px; border-bottom:1px solid #F7F5FB; cursor:pointer;" style-hover="background:#FBFAFE;">
+                <div style="display:flex; align-items:center; gap:11px; min-width:0;">
+                  <span style="width:36px; height:36px; border-radius:12px; background:{{ p.avBg }}; color:{{ p.avColor }}; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span>
+                  <div style="min-width:0;">
+                    <div style="display:flex; align-items:center; gap:7px; min-width:0;">
+                      <span style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.name }}</span>
+                      <sc-if value="{{ p.isPrimary }}" hint-placeholder-val="{{ true }}">
+                        <span title="The main contact at this company" style="flex-shrink:0; font-size:9px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:2px 8px; border-radius:99px;">main</span>
+                      </sc-if>
+                    </div>
+                  </div>
+                </div>
+                <div style="min-width:0;">
+                  <div style="font-size:12.5px; font-weight:500; color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.company }}</div>
+                  <span style="display:inline-block; font-size:9px; font-weight:700; color:{{ p.lcColor }}; background:{{ p.lcBg }}; padding:2px 8px; border-radius:99px; margin-top:3px;">{{ p.lcLabel }}</span>
+                </div>
+                <span style="min-width:0;">
+                  <sc-if value="{{ p.roleShown }}" hint-placeholder-val="{{ true }}">
+                    <span title="{{ p.role }}" style="display:inline-block; max-width:100%; box-sizing:border-box; font-size:10px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:4px 10px; border-radius:99px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.role }}</span>
+                  </sc-if>
+                </span>
+                <div style="min-width:0;">
+                  <div title="{{ p.email }}" style="font-size:11.5px; color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.email }}</div>
+                  <div style="font-size:10px; color:#B4AFC4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.phone }}</div>
+                  <!-- Neither address nor number: this is not a contact anybody can act on, and
+                       saying so is more use than two blank lines in a table. -->
+                  <sc-if value="{{ p.unreachable }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:9.5px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:2px 8px; border-radius:99px; white-space:nowrap;">No way to reach them</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                  <sc-if value="{{ p.hasOwner }}" hint-placeholder-val="{{ true }}">
+                    <span title="Their account is managed by {{ p.owner }}" style="width:24px; height:24px; border-radius:99px; background:#26074D; color:#fff; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.ownerInitials }}</span>
+                  </sc-if>
+                </div>
+                <!-- Real links, not decoration: mailto and tel open the thing somebody was about to
+                     open anyway. Greyed and inert when there is nothing to open rather than hidden,
+                     because a row whose icons move about is harder to use than one whose do not. -->
+                <div style="display:flex; gap:6px; justify-content:flex-end;">
+                  <a href="{{ p.mailHref }}" title="{{ p.mailTitle }}" style="width:30px; height:30px; border-radius:9px; background:#F7F5FB; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ p.mailOp }};" style-hover="background:#F3E8FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M22 6l-10 7L2 6"></path></svg></a>
+                  <a href="{{ p.telHref }}" title="{{ p.telTitle }}" style="width:30px; height:30px; border-radius:9px; background:#F7F5FB; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ p.telOp }};" style-hover="background:#F3E8FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"></path></svg></a>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ ctEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:44px; text-align:center; font-size:12.5px; color:#B4AFC4;">No contacts match this search.</div>
+            </sc-if>
+            <sc-if value="{{ ctPageShown }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:9px; padding:13px 22px; background:#FBFAFE;">
+                <span style="font-size:11px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ ctPageLabel }}</span>
+                <div style="flex:1;"></div>
+                <sc-if value="{{ ctHasPages }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:5px;">
+                    <span onClick="{{ ctPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ ctPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                    <sc-for list="{{ ctPageBtns }}" as="pg" hint-placeholder-count="2">
+                      <span onClick="{{ pg.go }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ pg.bd }}; background:{{ pg.bg }}; color:{{ pg.color }}; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;">{{ pg.n }}</span>
+                    </sc-for>
+                    <span onClick="{{ ctNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ ctNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div></div>
         </section>
       </div></sc-if>
 
@@ -27472,11 +27507,8 @@ class Component extends DCLogic {
 
       // ── Contacts ──
       ctSearch: this.state.ctSearch || '',
-      setCtSearch: (e) => this.setState({ ctSearch: e.target.value }),
-      ctSub: _contactRows.length
-        ? _contactRows.length + ' people across ' + new Set(_contactRows.map(c => c.companyId)).size + ' companies'
-        : 'Everyone you deal with, at every client and lead',
-      ctRows: _contactRows
+      setCtSearch: (e) => this.setState({ ctSearch: e.target.value, ctPage: 1 }),
+      ...(() => { const _ctAll9 = _contactRows
         .map(c => {
           const co = _coById[c.companyId] || null;
           const tone = _LC_TONE[(co && co.lifecycle) || 'client'] || _LC_TONE.client;
@@ -27503,9 +27535,40 @@ class Component extends DCLogic {
             phoneIconColor: c.whatsapp && !c.phone ? '#12B76A' : '#8C8899',
             initials: (String(c.name || '').replace(/\([^)]*\)/g, ' ').match(/[\p{L}\p{N}]+/gu) || [])
               .slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?',
-            avBg: ['#7C00FF', '#0284C7', '#12B76A', '#F59E0B', '#6D5BD0'][
-              String(c.id || c.name).split('').reduce((n, ch) => n + ch.charCodeAt(0), 0) % 5
-            ],
+            // A pale tint carrying dark initials, paired so the two always belong together — the
+            // same treatment the Leads table got, and for the same reason: a column of saturated
+            // squares pulls the eye off the names beside them, which are what is being read.
+            ...(() => {
+              const T = [
+                ['#F3E8FF', '#7C00FF'], ['#E4F4FD', '#0284C7'], ['#E7F8EF', '#0E9355'],
+                ['#FEF4E2', '#B7791F'], ['#EFEBFF', '#6D5BD0'],
+              ][String(c.id || c.name).split('').reduce((n, ch) => n + ch.charCodeAt(0), 0) % 5];
+              return { avBg: T[0], avColor: T[1] };
+            })(),
+            // Who owns the COMPANY this person belongs to. A contact has no owner of its own —
+            // people are reached through the account they belong to, and inventing a separate
+            // owner here would create a second answer to "who calls them".
+            ...(() => {
+              // Resolved from state right here rather than through _userName9, which is declared in
+              // another screen's block. Twice today a helper borrowed across a block boundary threw
+              // at render and took the whole screen with it.
+              const us9 = Array.isArray(this.state.usersData) ? this.state.usersData : [];
+              const u9 = co && co.ownerId ? us9.find(x => String(x.id) === String(co.ownerId)) : null;
+              const nm9 = u9 ? u9.name : '';
+              return {
+                owner: nm9,
+                hasOwner: !!nm9,
+                ownerInitials: nm9
+                  ? (String(nm9).match(/[\p{L}\p{N}]+/gu) || []).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+                  : '?',
+              };
+            })(),
+            mailHref: c.email ? 'mailto:' + c.email : '',
+            telHref: (c.phone || c.whatsapp) ? 'tel:' + String(c.phone || c.whatsapp).replace(/[^\d+]/g, '') : '',
+            mailOp: c.email ? '1' : '.35',
+            telOp: (c.phone || c.whatsapp) ? '1' : '.35',
+            mailTitle: c.email ? 'Email ' + c.email : 'No email address recorded',
+            telTitle: (c.phone || c.whatsapp) ? 'Call ' + (c.phone || c.whatsapp) : 'No number recorded',
             isPrimary: !!c.isPrimary,
             _hay: [c.name, c.jobTitle, c.email, c.phone, co && co.name].filter(Boolean).join(' ').toLowerCase(),
             // A contact belongs to a company, so the row opens the company. Leads have no client
@@ -27518,7 +27581,54 @@ class Component extends DCLogic {
           };
         })
         .filter(r => !_ctSearch || r._hay.includes(_ctSearch))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+        // WHICH PEOPLE, as tabs. The screen had one search box and no way to say "clients only" —
+        // and the two groups are asked about separately: a client contact is somebody to serve, a
+        // lead contact is somebody to win.
+        const _ctTab9 = this.state.ctTab || 'All';
+        const _ctKind9 = (r) => (r.lcLabel === 'Client' ? 'Client' : 'Lead');
+        const _ctFiltered9 = _ctTab9 === 'All' ? _ctAll9 : _ctAll9.filter(r => _ctKind9(r) === _ctTab9);
+        // Twelve to a page, the same as Leads. The page is clamped and reset by the same rules, for
+        // the same reason: a filter that strands somebody on page four of a two-page list shows an
+        // empty table with the fix scrolled off the bottom of it.
+        const CT_PER9 = 12;
+        const _ctPages9 = Math.max(1, Math.ceil(_ctFiltered9.length / CT_PER9));
+        const _ctPage9 = Math.min(Math.max(1, this.state.ctPage || 1), _ctPages9);
+        const _ctFrom9 = (_ctPage9 - 1) * CT_PER9;
+        return {
+          ctRows: _ctFiltered9.slice(_ctFrom9, _ctFrom9 + CT_PER9),
+          ctEmpty: _ctFiltered9.length === 0,
+          ctTabs: ['All', 'Client', 'Lead'].map(k => {
+            const on = _ctTab9 === k;
+            return {
+              label: k === 'All' ? 'All' : k + ' contacts',
+              count: String(k === 'All' ? _ctAll9.length : _ctAll9.filter(r => _ctKind9(r) === k).length),
+              color: on ? '#7C00FF' : '#6F6C7A',
+              bg: on ? '#fff' : 'transparent',
+              shadow: on ? '0 1px 3px rgba(38,7,77,.14)' : 'none',
+              countColor: on ? '#B98BFF' : '#B4AFC4',
+              pick: () => this.setState({ ctTab: k, ctPage: 1 }),
+            };
+          }),
+          ctPageLabel: _ctFiltered9.length
+            ? (_ctFrom9 + 1) + '\u2013' + Math.min(_ctFrom9 + CT_PER9, _ctFiltered9.length) + ' of ' + _ctFiltered9.length
+            : '',
+          ctPageShown: _ctFiltered9.length > 0,
+          ctHasPages: _ctPages9 > 1,
+          ctPageBtns: Array.from({ length: _ctPages9 }, (_, k) => k + 1).map(n => ({
+            n: String(n),
+            color: n === _ctPage9 ? '#fff' : '#6F6C7A',
+            bg: n === _ctPage9 ? '#7C00FF' : '#fff',
+            bd: n === _ctPage9 ? '#7C00FF' : '#EDEBF2',
+            go: () => this.setState({ ctPage: n }),
+          })),
+          ctPrevOp: _ctPage9 > 1 ? '1' : '.35',
+          ctNextOp: _ctPage9 < _ctPages9 ? '1' : '.35',
+          ctPrev: () => { if (_ctPage9 > 1) this.setState({ ctPage: _ctPage9 - 1 }); },
+          ctNext: () => { if (_ctPage9 < _ctPages9) this.setState({ ctPage: _ctPage9 + 1 }); },
+        };
+      })(),
       ctHasAny: _contactRows.length > 0,
       ctStats: (() => {
         const withEmail = _contactRows.filter(c => c.email).length;
@@ -27535,11 +27645,6 @@ class Component extends DCLogic {
             sub: stranded ? 'no email and no number' : 'everyone can be contacted' },
         ];
       })(),
-      ctEmpty: _contactRows.filter(c => {
-        const co = _coById[c.companyId];
-        const hay = [c.name, c.jobTitle, c.email, c.phone, co && co.name].filter(Boolean).join(' ').toLowerCase();
-        return !_ctSearch || hay.includes(_ctSearch);
-      }).length === 0,
       ctEmptyTitle: _contactRows.length ? 'Nobody matches "' + (this.state.ctSearch || '') + '"' : 'No contacts yet',
       ctEmptyBody: _contactRows.length
         ? 'Try a different name, company or email address.'
