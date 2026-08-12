@@ -21,6 +21,7 @@ import { statusOf, withMoney } from "./pipeline.js";
 import { openFollowUps, lastContactMap } from "./interactions.js";
 import { healthOf, byWorstFirst, HEALTH_ORDER, toneFor } from "./dealhealth.js";
 import { jobRules } from "./jobrules.js";
+import { lifecycleAnalytics } from "./lifecycle.js";
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const monthKey = (iso: string) => String(iso ?? "").slice(0, 7);
@@ -354,6 +355,40 @@ export async function crmDashboard(scope: CrmScope = {}) {
     .slice(0, 6)
     .map(a => ({ id: a.id, title: a.title, client: a.clientName ?? null, date: a.date, time: a.time ?? null, status: a.status, type: a.type ?? null }));
 
+  /**
+   * THE RELATIONSHIP FUNNEL — lead to prospect to client.
+   *
+   * A different question from the pipeline funnel already on this payload, and the one the screen
+   * leads with: that one asks how far DEALS get through the stages, this asks how far COMPANIES get
+   * through the relationship. Read from the lifecycle history, so each hop carries its own sample
+   * size — an average over two companies is an anecdote wearing a decimal point, and the card says
+   * so rather than printing it as a fact.
+   *
+   * Reused from lifecycle.ts rather than recomputed. The Sales Analytics screen already reports
+   * these hops; two derivations of "how long does a lead take to become a client" would disagree
+   * within a week and neither reader would know which they were looking at.
+   */
+  const lifecycle = await lifecycleAnalytics({ companyIds: scope.companyIds ?? null });
+
+  /**
+   * The four figures beside the funnel. Each is derived here rather than in the browser so the
+   * dashboard and any other reader cannot reach different answers from the same rows.
+   *
+   * `avgDealSize` is across OPEN deals with a figure on them — deals with no value would otherwise
+   * drag the average toward zero and report the book as cheaper than it is.
+   *
+   * `biggestLeak` is the stage that loses the largest share of what reached the one before it. Null
+   * until at least one hop has a previous step to be measured against, because "the biggest drop"
+   * across a single step is just that step.
+   */
+  const pricedOpen = open.filter(d => (d.valueMinor ?? 0) > 0);
+  const avgDealSizeMinor = pricedOpen.length
+    ? Math.round(pricedOpen.reduce((n, d) => n + (d.valueMinor ?? 0), 0) / pricedOpen.length)
+    : null;
+  const leak = funnel
+    .filter(f => f.fromPrevBp != null)
+    .sort((a, b) => (a.fromPrevBp ?? 0) - (b.fromPrevBp ?? 0))[0] ?? null;
+
   const followUps = await openFollowUps({ companyIds: scope.companyIds ?? null });
 
   /**
@@ -429,6 +464,12 @@ export async function crmDashboard(scope: CrmScope = {}) {
     },
     lostReasons,
     lostReasonsFrom: sixMonthsAgo,
+    /** lead -> prospect -> client, with each hop's average time and its sample size. */
+    lifecycle,
+    /** Across open deals that carry a figure; null when none do. */
+    avgDealSizeMinor,
+    /** The stage losing the largest share of what reached the one before it, or null. */
+    biggestLeak: leak ? { name: leak.name, keptBp: leak.fromPrevBp } : null,
     leadSources,
     /** The resolved target for this month, or null when none is set. Never invented from an average. */
     target: scope.target ?? null,

@@ -4250,35 +4250,126 @@
         </div>
       </section>
 
+      <!-- Conversion funnel / Deal outcomes + Why deals were lost, at the design's 1.35fr / 1fr.
+           This funnel is the RELATIONSHIP one — lead to prospect to client — not the pipeline
+           funnel further down. Different question: that one asks how far deals get through the
+           stages, this asks how far companies get through the relationship. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .13s both; display:grid; grid-template-columns:1.35fr 1fr; gap:20px; align-items:stretch;" class="cd-two">
 
-
-      <!-- Money + deal outcomes -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:18px;">
-        <!-- WON, not "revenue". The headline is the value of deals the CRM closed this month; the
-             two boxes underneath are money the FINANCE side saw. Three different numbers, all named,
-             none of them silently standing in for the others. -->
-
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Deal outcomes</span>
-            <span style="font-size:11.5px; color:#A9A6B4;">{{ cdOutcomeScope }}</span>
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Conversion funnel</div>
+            <span style="font-size:10.5px; color:#B4AFC4;">lead &rarr; prospect &rarr; client</span>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:14px; flex:1;">
-            <sc-for list="{{ cdOutcomes }}" as="o" hint-placeholder-count="4">
-              <div onClick="{{ o.go }}" style="border:1px solid #F0EDF6; border-radius:14px; padding:14px 15px; cursor:pointer; transition:border-color .12s, box-shadow .12s;" style-hover="border-color:#DDD1F5; box-shadow:0 4px 14px rgba(124,0,255,.07);">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                  <div style="width:30px; height:30px; border-radius:9px; background:{{ o.bg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{ o.color }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ o.icon }}"></path></svg>
+          <div style="display:flex; flex-direction:column; gap:13px; margin-top:20px;">
+            <sc-for list="{{ cdLcRows }}" as="c" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:14px;">
+                <span style="width:70px; font-size:11.5px; font-weight:700; color:{{ c.color }}; flex-shrink:0;">{{ c.stage }}</span>
+                <div style="flex:1; height:34px; background:#F8F6FC; border-radius:10px; overflow:hidden;">
+                  <div style="height:100%; width:{{ c.barW }}%; background:{{ c.color }}; border-radius:10px; display:flex; align-items:center; padding:0 13px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;">
+                    <span style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:14px; color:#fff;">{{ c.count }}</span>
                   </div>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ o.color }};">{{ o.value }}</span>
                 </div>
-                <div style="font-size:12px; font-weight:600; margin-top:9px;">{{ o.label }}</div>
-                <div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ o.sub }}</div>
+                <div style="width:104px; text-align:right; flex-shrink:0;">
+                  <div style="font-size:12px; font-weight:700; color:#4B4757;">{{ c.hop }}</div>
+                  <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ c.sample }}</div>
+                </div>
               </div>
             </sc-for>
           </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:20px;">
+            <sc-for list="{{ cdFunnelStats }}" as="s" hint-placeholder-count="4">
+              <div style="background:#FAF8FD; border-radius:14px; padding:13px 15px;">
+                <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.1em; text-transform:uppercase;">{{ s.label }}</div>
+                <div style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:19px; margin-top:5px; color:{{ s.color }};">{{ s.value }}</div>
+                <div style="font-size:10px; color:#B4AFC4; margin-top:2px;">{{ s.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:16px; border-top:1px solid #F5F3F9; padding-top:11px;">Each hop shows average time and its sample size &mdash; small samples are anecdotes, not averages.</div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:22px 24px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+              <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Deal outcomes</div>
+              <span style="font-size:10.5px; color:#B4AFC4;">{{ cdOutcomeScope }}</span>
+            </div>
+            <!-- One bar, two shares. Won and lost are the same denominator, so two separate
+                 figures make the reader do the division the bar can just show. -->
+            <sc-if value="{{ cdHasOutcomes }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; height:36px; border-radius:12px; overflow:hidden; margin-top:16px;">
+                <sc-for list="{{ cdOutcomeBar }}" as="o" hint-placeholder-count="2">
+                  <div style="width:{{ o.w }}%; background:{{ o.color }}; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    <span style="font-family:'space Grotesk',sans-serif; font-weight:700; font-size:13px; color:#fff;">{{ o.n }}</span>
+                    <span style="font-size:11px; font-weight:600; color:#fff; opacity:.9;">{{ o.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ cdOutcomesEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:18px; text-align:center; font-size:12px; color:#B4AFC4;">Nothing decided this period.</div>
+            </sc-if>
+          </div>
+
+          <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:22px 24px; flex:1;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+              <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Why deals were lost</div>
+              <span style="font-size:10.5px; color:#B4AFC4;">ranked</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
+              <sc-for list="{{ cdLostRows }}" as="r" hint-placeholder-count="3">
+                <div>
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+                    <span style="font-size:12px; font-weight:600; color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.reason }}</span>
+                    <span style="font-family:'space Grotesk',sans-serif; font-weight:700; font-size:12px; color:{{ r.color }}; flex-shrink:0;">{{ r.count }}</span>
+                  </div>
+                  <div style="height:5px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:7px;">
+                    <div style="height:100%; width:{{ r.w }}%; background:{{ r.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ cdLostEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:18px; text-align:center; font-size:12px; color:#B4AFC4;">{{ cdLostEmptyNote }}</div>
+              </sc-if>
+            </div>
+          </div>
         </div>
       </section>
+
+      <!-- Stalled deals keeps its own card. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .16s both;">
+        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div>
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Stalled deals</span>
+              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdStalledSub }}</div>
+            </div>
+            <span style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ cdStalledColor }}; flex-shrink:0;">{{ cdStalledCount }}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; margin-top:12px; flex:1;">
+            <sc-for list="{{ cdStalledRows }}" as="s" hint-placeholder-count="4">
+              <div onClick="{{ s.go }}" style="display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FDFBFF;">
+                <span style="flex-shrink:0; font-size:10.5px; font-weight:700; color:{{ s.ageColor }}; background:{{ s.ageBg }}; padding:3px 8px; border-radius:99px; min-width:52px; text-align:center;">{{ s.age }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.title }}</div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.meta }}</div>
+                </div>
+                <span style="flex-shrink:0; font-size:11px; color:#6F6C7A;">{{ s.value }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ cdStalledEmpty }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdStalledEmptyNote }}</div>
+            </sc-if>
+          </div>
+          <sc-if value="{{ cdStalledUnknownShown }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdStalledUnknown }}</div>
+          </sc-if>
+        </div>
+      </section>
+
+
+
 
       <!-- Pipeline + who is closing -->
       <!-- Lead sources / Pipeline by stage / Top salesperson, at the design's three-up.
@@ -4421,103 +4512,7 @@
 
       </section>
 
-      <!-- Funnel + stalled -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .17s both; display:grid; grid-template-columns:1fr 1fr; gap:18px;" class="cd-two">
-        <!-- CONVERSION FUNNEL, with its limits stated on the card rather than in a commit message.
-             Only the CURRENT stage is stored, so "reached this far" is exact for live and won deals
-             and unknowable for lost ones — those are shown as one unattributed figure instead of
-             being spread across the steps by guesswork. -->
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Conversion funnel</span>
-            <span style="font-size:11.5px; color:#A9A6B4;">{{ cdFunnelSub }}</span>
-          </div>
-          <!-- An ACTUAL funnel: each step is centred and as wide as its share of the entry step, so
-               the narrowing is the silhouette rather than a percentage the reader has to assemble.
-               Deliberately not the horizontal track-and-fill used by the pipeline card above it —
-               two cards showing different things in identical bars is how a dashboard turns into
-               wallpaper. -->
-          <div style="display:flex; flex-direction:column; gap:6px; margin-top:16px; flex:1;">
-            <sc-for list="{{ cdFunnel }}" as="f" hint-placeholder-count="4">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <span style="width:96px; flex-shrink:0; font-size:11.5px; font-weight:600; color:#4B4757; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.name }}</span>
-                <div style="flex:1; min-width:0; display:flex; justify-content:center;">
-                  <div style="width:{{ f.pct }}%; min-width:34px; height:32px; border-radius:9px; background:linear-gradient(180deg,{{ f.color }} 0%,{{ f.deep }} 100%); display:flex; align-items:center; justify-content:center; transform-origin:center; animation:funnelIn .6s cubic-bezier(.16,1,.3,1) both; animation-delay:{{ f.delay }};" style-hover="filter:brightness(1.08);">
-                    <span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; color:#fff;">{{ f.reached }}</span>
-                  </div>
-                </div>
-                <span style="width:70px; flex-shrink:0; text-align:right; font-size:10.5px; color:{{ f.dropColor }}; font-weight:700; white-space:nowrap;">{{ f.drop }}</span>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdFunnelEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">No pipeline stages are configured yet.</div>
-            </sc-if>
-          </div>
-          <div style="margin-top:14px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdFunnelNote }}</div>
-        </div>
 
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Stalled deals</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdStalledSub }}</div>
-            </div>
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ cdStalledColor }}; flex-shrink:0;">{{ cdStalledCount }}</span>
-          </div>
-          <div style="display:flex; flex-direction:column; margin-top:12px; flex:1;">
-            <sc-for list="{{ cdStalledRows }}" as="s" hint-placeholder-count="4">
-              <div onClick="{{ s.go }}" style="display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FDFBFF;">
-                <span style="flex-shrink:0; font-size:10.5px; font-weight:700; color:{{ s.ageColor }}; background:{{ s.ageBg }}; padding:3px 8px; border-radius:99px; min-width:52px; text-align:center;">{{ s.age }}</span>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.title }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.meta }}</div>
-                </div>
-                <span style="flex-shrink:0; font-size:11px; color:#6F6C7A;">{{ s.value }}</span>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdStalledEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdStalledEmptyNote }}</div>
-            </sc-if>
-          </div>
-          <sc-if value="{{ cdStalledUnknownShown }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdStalledUnknown }}</div>
-          </sc-if>
-        </div>
-      </section>
-
-      <!-- Where leads come from + why deals are lost -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .19s both; display:grid; grid-template-columns:1fr; gap:18px;" class="cd-two">
-
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Why deals were lost</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdLostSub }}</div>
-            </div>
-          </div>
-          <!-- A RANKED LIST, not a fourth row of bars. The question this answers is "what is the
-               biggest reason" — an ordinal — so the rank is the numeral and the magnitude is a thin
-               rule under the row rather than a full track competing with the cards above. -->
-          <div style="display:flex; flex-direction:column; margin-top:14px;">
-            <sc-for list="{{ cdLostReasons }}" as="r" hint-placeholder-count="4">
-              <div style="padding:10px 0; border-bottom:1px solid #FAF8FC;">
-                <div style="display:flex; align-items:center; gap:11px;">
-                  <span style="flex-shrink:0; width:22px; height:22px; border-radius:7px; background:{{ r.rankBg }}; color:{{ r.rankFg }}; font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ r.rank }}</span>
-                  <span style="flex:1; min-width:0; font-size:12.5px; color:{{ r.labelColor }}; font-weight:{{ r.labelWeight }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.reason }}</span>
-                  <span style="flex-shrink:0; font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:{{ r.color }};">{{ r.count }}</span>
-                  <span style="flex-shrink:0; font-size:10.5px; color:#A9A6B4; width:82px; text-align:right;">{{ r.value }}</span>
-                </div>
-                <div style="height:3px; border-radius:99px; background:#F3F1F7; margin-top:8px; margin-left:33px; overflow:hidden;">
-                  <div style="height:100%; width:{{ r.pct }}%; background:{{ r.color }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) .2s both;"></div>
-                </div>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdLostEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdLostEmptyNote }}</div>
-            </sc-if>
-          </div>
-        </div>
-      </section>
 
       <!-- Activity + meetings -->
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .21s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px;">
@@ -24220,6 +24215,8 @@ class Component extends DCLogic {
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
           cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
           cdSrcRows: [], cdSrcEmpty: false, cdStageRows: [], cdStageEmpty: false,
+          cdLcRows: [], cdFunnelStats: [], cdOutcomeBar: [], cdHasOutcomes: false, cdOutcomesEmpty: false,
+          cdLostRows: [],
           cdHasLeader: false, cdLeaderInitials: '', cdLeaderName: '', cdLeaderValue: '', cdLeaderRows: [], cdLeaderEmpty: false,
           cdQueue: [], cdUndatedShown: false, cdUndatedNote: '',
           cdSources: [], cdSourceArcs: [], cdSourceTotal: '0', cdSourcesEmpty: false, cdSourceSub: '', cdSourceNote: '', cdGoLeads: () => {},
@@ -24764,6 +24761,78 @@ class Component extends DCLogic {
                 color: pal9[i % pal9.length], bg: tint9[i % tint9.length],
               })),
               cdLeaderEmpty: lb9.length === 0,
+            };
+          })(),
+          /**
+           * THE RELATIONSHIP FUNNEL and the four figures beside it.
+           *
+           * Bars are drawn against the WIDEST state, not against the first: a book with more
+           * clients than leads — which this one has — would otherwise draw client wider than the
+           * track it sits in.
+           *
+           * Each hop prints its sample size next to its average, and the card says underneath why
+           * that matters. `n = 0` is shown as a dash rather than "0.0 days", because no measurement
+           * and a measurement of zero are different claims.
+           */
+          ...(() => {
+            const lc9 = D.lifecycle || { funnel: [], conversion: {} };
+            const f9 = Array.isArray(lc9.funnel) ? lc9.funnel : [];
+            const max9 = f9.reduce((n, x) => Math.max(n, x.count || 0), 0);
+            const tone9 = { lead: '#0284C7', prospect: '#7C00FF', client: '#0E9355' };
+            const hop9 = { lead: null, prospect: (lc9.conversion || {}).leadToProspect, client: (lc9.conversion || {}).prospectToClient };
+            const pct9 = (bp) => bp == null ? null : Math.round(bp / 100);
+            const cycle9 = ((lc9.conversion || {}).leadToClient) || { avgDays: null, samples: 0 };
+            const wr9 = pct9(D.deals.winRateBp);
+            return {
+              cdLcRows: f9.map(x => {
+                const h = hop9[x.state];
+                const prev = f9[f9.findIndex(y => y.state === x.state) - 1];
+                const rate = h && prev && prev.count ? Math.round((x.count / prev.count) * 100) : null;
+                return {
+                  stage: x.state.charAt(0).toUpperCase() + x.state.slice(1),
+                  count: String(x.count || 0),
+                  color: tone9[x.state] || '#7C00FF',
+                  barW: max9 ? Math.max(6, Math.round(((x.count || 0) / max9) * 100)) : 6,
+                  hop: h && h.avgDays != null ? h.avgDays + ' days' : '\u2014',
+                  sample: h && h.samples ? 'n = ' + h.samples + (rate != null ? ' \u00B7 ' + rate + '%' : '') : (h ? 'no completed hops' : ''),
+                };
+              }),
+              cdFunnelStats: [
+                { label: 'Overall win rate', value: wr9 == null ? '\u2014' : wr9 + '%', sub: 'of deals decided', color: '#0E9355' },
+                { label: 'Avg deal size', value: D.avgDealSizeMinor == null ? '\u2014' : _money9(D.avgDealSizeMinor, ccy), sub: 'across open deals', color: '#7C00FF' },
+                { label: 'Avg sales cycle', value: cycle9.avgDays == null ? '\u2014' : cycle9.avgDays + ' days', sub: 'lead to client', color: '#0284C7' },
+                // Named as the stage that KEEPS the least of what reached the one before it. With
+                // one step there is nothing to compare against, so it stays a dash rather than
+                // nominating the only candidate.
+                { label: 'Biggest leak', value: D.biggestLeak ? D.biggestLeak.name : '\u2014', sub: D.biggestLeak ? 'largest drop-off stage' : 'not enough stages yet', color: '#C0353A' },
+              ],
+            };
+          })(),
+          /** Won against lost as ONE bar: same denominator, so the split is the whole answer. */
+          ...(() => {
+            const w9 = D.deals.won.thisMonth || 0, l9 = D.deals.lost.thisMonth || 0;
+            const tot9 = w9 + l9;
+            return {
+              cdHasOutcomes: tot9 > 0,
+              cdOutcomesEmpty: tot9 === 0,
+              cdOutcomeBar: tot9 === 0 ? [] : [
+                { n: String(w9), label: w9 === 1 ? 'won' : 'won', w: Math.round((w9 / tot9) * 100), color: '#0E9355' },
+                { n: String(l9), label: 'lost', w: 100 - Math.round((w9 / tot9) * 100), color: '#E5484D' },
+              ].filter(x => x.w > 0),
+            };
+          })(),
+          /** Ranked, with the bar relative to the most common reason rather than to the total. */
+          ...(() => {
+            const rows9 = (Array.isArray(D.lostReasons) ? D.lostReasons : []).slice(0, 6);
+            const max9 = rows9.reduce((n, x) => Math.max(n, x.count || 0), 0);
+            const pal9 = ['#C0353A', '#6D5BD0', '#B8860B', '#0284C7', '#0E9355', '#8C8899'];
+            return {
+              cdLostRows: rows9.map((x, i) => ({
+                reason: x.reason || 'Not recorded',
+                count: String(x.count || 0),
+                color: pal9[i % pal9.length],
+                w: max9 ? Math.max(4, Math.round(((x.count || 0) / max9) * 100)) : 4,
+              })),
             };
           })(),
           cdAttention: D.needsAttention.map(a => ({
