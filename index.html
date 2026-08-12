@@ -4858,7 +4858,7 @@
                         <div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ o.role }}</div>
                       </div>
                     </div>
-                    <span onClick="{{ o.setTarget }}" title="A person’s target is their own — the firm-wide figure is not divided up. Click to set this one." style="font-size:12.5px; color:{{ o.targetColor }}; font-weight:{{ o.targetWeight }}; font-variant-numeric:tabular-nums; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.target }}</span>
+                    <span onClick="{{ o.setTarget }}" title="{{ o.targetTitle }}" style="font-size:12.5px; color:{{ o.targetColor }}; font-weight:{{ o.targetWeight }}; font-variant-numeric:tabular-nums; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.target }}</span>
                     <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ o.achieved }}</span>
                     <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                       <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></span></span>
@@ -26393,10 +26393,18 @@ class Component extends DCLogic {
           }),
           tfBoardTop: (D.leaderboard || []).length
             ? 'Top: ' + D.leaderboard[0].name + ' \u00b7 ' + k9(D.leaderboard[0].wonMinor)
-              + (D.leaderboard[0].pctBp != null ? ' \u00b7 ' + Math.round(D.leaderboard[0].pctBp / 100) + '% of quota' : '')
+              + (() => {
+                const t0 = D.leaderboard[0].targetMinor != null ? D.leaderboard[0].targetMinor : scTarget9;
+                return t0 && t0 > 0 ? ' \u00b7 ' + Math.round((D.leaderboard[0].wonMinor * 100) / t0) + '% of quota' : '';
+              })()
             : '',
           tfHasBoard: (D.leaderboard || []).length > 0,
-          tfBoard: (D.leaderboard || []).map((r, i) => ({
+          tfBoard: (D.leaderboard || []).map((r, i) => {
+            // Same rule as the officer table: the firm’s figure is the team’s, so attainment
+            // is measured against it when somebody has no target of their own.
+            const tgt = r.targetMinor != null ? r.targetMinor : scTarget9;
+            const pct = tgt != null && tgt > 0 ? Math.round((r.wonMinor * 10000) / tgt) : null;
+            return {
             name: r.name,
             initials: ini9(r.name),
             rank: i === 0 ? '\u{1F947}' : i === 1 ? '\u{1F948}' : i === 2 ? '\u{1F949}' : '#' + (i + 1),
@@ -26406,13 +26414,14 @@ class Component extends DCLogic {
             // A percentage of quota, or nothing at all where no quota was set. A leaderboard "by
             // quota attainment" that invents 0% for everybody without a target ranks them last for
             // an omission that is not theirs.
-            pct: r.pctBp != null ? Math.round(r.pctBp / 100) + '%' : 'no target',
-            pctColor: r.pctBp == null ? '#A9A6B4' : r.pctBp >= 10000 ? '#0E9355' : r.pctBp >= 7000 ? '#7C00FF' : '#8C8899',
-            barW: r.pctBp != null ? Math.max(2, Math.min(100, Math.round(r.pctBp / 100))) + '%' : '0%',
-            barColor: r.pctBp == null ? '#E4E1EC' : r.pctBp >= 10000 ? '#12B76A' : r.pctBp >= 7000 ? '#7C00FF' : '#C9C4D4',
+            pct: pct != null ? Math.round(pct / 100) + '%' : 'no target',
+            pctColor: pct == null ? '#A9A6B4' : pct >= 10000 ? '#0E9355' : pct >= 7000 ? '#7C00FF' : '#8C8899',
+            barW: pct != null ? Math.max(2, Math.min(100, Math.round(pct / 100))) + '%' : '0%',
+            barColor: pct == null ? '#E4E1EC' : pct >= 10000 ? '#12B76A' : pct >= 7000 ? '#7C00FF' : '#C9C4D4',
             rowBg: i === 0 ? '#F6FDF9' : '#fff',
             rowBd: i === 0 ? '#BFEBD2' : '#F0EDF6',
-          })),
+            };
+          }),
           // The firm's bill, and how much of it is actually known. A total quoted without saying
           // how many people it covers reads as the whole bill when it may be a fraction of it.
           // Reuses perfSaveTarget rather than posting again from here: that handler already knows
@@ -26457,7 +26466,24 @@ class Component extends DCLogic {
             ? 'all ' + (D.commissionPeople || 0) + ' rates set'
             : (D.commissionKnown || 0) + ' of ' + (D.commissionPeople || 0) + ' rates set',
           tfCommissionPartial: (D.commissionKnown || 0) < (D.commissionPeople || 0),
-          tfOfficers: (D.leaderboard || []).map(r => ({
+          tfOfficers: (D.leaderboard || []).map(r => {
+            /**
+             * THE FIRM’S TARGET IS THE TEAM’S TARGET.
+             *
+             * It is not divided between people — everybody is measured against the whole of it
+             * — so somebody with no target of their own is measured against the firm’s for the
+             * period on screen, and the row says that is what is happening. A person who HAS
+             * their own keeps it: a number agreed with them outranks the shared one.
+             *
+             * The percentage is recomputed here rather than read from the API, which only ever
+             * knew about the personal target — using its figure against a shared target would
+             * put the right number beside the wrong progress.
+             */
+            const own = r.targetMinor != null;
+            const tgt = own ? r.targetMinor : scTarget9;
+            const shared = !own && tgt != null;
+            const pct = tgt != null && tgt > 0 ? Math.round((r.wonMinor * 10000) / tgt) : null;
+            return {
             name: r.name,
             initials: ini9(r.name),
             role: ({ super_admin: 'Super Admin', admin: 'Admin', sales: 'Sales consultant',
@@ -26465,9 +26491,16 @@ class Component extends DCLogic {
             // "Set target", not an em dash. The firm-wide figure and a person’s are separate rows
             // and nothing divides one into the other, so this cell stays empty until somebody fills
             // it — and a dash reads as "nothing to see" when it means "nobody has set this".
-            target: r.targetMinor != null ? k9(r.targetMinor) : 'Set target',
-            targetColor: r.targetMinor != null ? '#6F6C7A' : '#7C00FF',
-            targetWeight: r.targetMinor != null ? '400' : '600',
+            target: tgt != null ? k9(tgt) : 'Set target',
+            targetColor: own ? '#6F6C7A' : shared ? '#A9A6B4' : '#7C00FF',
+            targetWeight: own ? '400' : '600',
+            // Marked, so a shared figure is never mistaken for one agreed with this person.
+            shared,
+            targetTitle: own
+              ? 'Set for ' + r.name + ' alone. Click to change it.'
+              : shared
+                ? 'The firm-wide target for this period, which is the whole team’s — it is not divided up. Click to give ' + r.name + ' one of their own.'
+                : 'Nobody has set a target for this period. Click to set one for ' + r.name + '.',
             // The TARGET column was permanently a dash: an officer's target is its own row, keyed
             // by ownerId, and nothing in the product could write one — the Set-target dialog only
             // ever sets the firm's. So the cell that reports it now sets it, for the month the
@@ -26491,20 +26524,22 @@ class Component extends DCLogic {
               }).catch(() => this.toast('Server unreachable — nothing changed', 'error'));
             }),
             achieved: k9(r.wonMinor),
-            barW: r.pctBp != null ? Math.max(2, Math.min(100, Math.round(r.pctBp / 100))) + '%' : '0%',
-            barColor: r.pctBp == null ? '#E4E1EC' : r.pctBp >= 10000 ? '#12B76A' : r.pctBp >= 7000 ? '#7C00FF' : '#F0A030',
+            barW: pct != null ? Math.max(2, Math.min(100, Math.round(pct / 100))) + '%' : '0%',
+            barColor: pct == null ? '#E4E1EC' : pct >= 10000 ? '#12B76A' : pct >= 7000 ? '#7C00FF' : '#F0A030',
             // The gap in money, or by how much they are past it. "82%" is a score; "SAR 88k to go"
             // is the thing somebody can still do something about this quarter.
-            gap: r.pctBp == null ? 'no target set'
-              : r.pctBp >= 10000 ? 'Target met \u00b7 +' + (Math.round(r.pctBp / 100) - 100) + '%'
-              : k9(Math.max(0, (r.targetMinor || 0) - r.wonMinor)) + ' to go',
+            gap: pct == null ? 'no target set'
+              : pct >= 10000 ? 'Target met \u00b7 +' + (Math.round(pct / 100) - 100) + '%'
+              : k9(Math.max(0, (tgt || 0) - r.wonMinor)) + ' to go',
             // Named, because the card above may be showing a FIRM target that is met while this
             // row says no target set — two true statements that look contradictory until you know
             // they are about different things.
-            gapTitle: r.pctBp == null
-              ? 'No target has been set for ' + r.name + '. The figure on the card above is the firm’s and is not divided between people.'
-              : '',
-            gapColor: r.pctBp == null ? '#A9A6B4' : r.pctBp >= 10000 ? '#0E9355' : r.pctBp >= 7000 ? '#7C00FF' : '#B7791F',
+            gapTitle: pct == null
+              ? 'No target has been set for this period — not for ' + r.name + ', and not for the firm.'
+              : shared
+                ? 'Measured against the firm-wide target, which is the whole team’s — not a share of it.'
+                : '',
+            gapColor: pct == null ? '#A9A6B4' : pct >= 10000 ? '#0E9355' : pct >= 7000 ? '#7C00FF' : '#B7791F',
             // A dash where no rate has been agreed, never 0% — see the note on the column.
             rate: r.rateBp != null ? (r.rateBp / 100) + '%' : '\u2014',
             rateColor: r.rateBp != null ? '#4B4757' : '#C9C4D4',
@@ -26534,7 +26569,8 @@ class Component extends DCLogic {
                 })
                 .catch(() => this.toast('Server unreachable'));
             }),
-          })),
+            };
+          }),
           tfHasOfficers: (D.leaderboard || []).length > 0,
           tfHasSources: (D.sources || []).length > 0,
           tfSources: (() => {
