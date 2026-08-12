@@ -2483,6 +2483,84 @@ app.get("/api/companies/:id/assignments", requireAuth, requireStaff, requireRead
   }
 });
 
+/**
+ * DELETE A LEAD THAT NEVER BECAME ANYTHING.
+ *
+ * A typo, a duplicate, a test row. Those should be removable — but 23 tables carry a companyId, and
+ * the generic CRUD delete simply called `model.delete` and handed back whatever Prisma said, which
+ * is either a foreign-key message nobody can act on or, where a column happens to be nullable, a
+ * silent orphan. A quotation whose client no longer exists is worse than a lead nobody tidied up.
+ *
+ * So the rule is: a lead may be deleted only when NOTHING real hangs off it, and "real" is listed
+ * explicitly below rather than inferred. Anything representing money, work, a document or a login
+ * blocks, and the refusal names what it found — "still has: 1 deal, 2 quotations" is something
+ * somebody can go and deal with; "cannot delete" is not.
+ *
+ * WHAT GOES WITH IT. Contacts, logged interactions, and the lead's own lifecycle and ownership
+ * history mean nothing without the company — they are part of the record, not attachments to it, so
+ * they are removed in the same transaction. Everything else blocks instead.
+ *
+ * CLIENTS ARE NEVER DELETED HERE. A company that reached client has a CR number, a portal login and
+ * a history that the business is required to keep. Ending a relationship is `lifecycle: churned`,
+ * which keeps the record and says what happened.
+ */
+const LEAD_DELETE_BLOCKERS: { label: (n: number) => string; count: (id: string) => Promise<number> }[] = [
+  { label: n => `${n} deal${n === 1 ? "" : "s"}`,            count: id => prisma.opportunity.count({ where: { companyId: id } }) },
+  { label: n => `${n} quotation${n === 1 ? "" : "s"}`,       count: id => prisma.quotation.count({ where: { companyId: id } }) },
+  { label: n => `${n} invoice${n === 1 ? "" : "s"}`,         count: id => prisma.invoice.count({ where: { companyId: id } }) },
+  { label: n => `${n} payment${n === 1 ? "" : "s"}`,         count: id => prisma.payment.count({ where: { companyId: id } }) },
+  { label: n => `${n} task${n === 1 ? "" : "s"}`,            count: id => prisma.task.count({ where: { companyId: id } }) },
+  { label: n => `${n} workflow run${n === 1 ? "" : "s"}`,    count: id => prisma.workflowInstance.count({ where: { companyId: id } }) },
+  { label: n => `${n} document${n === 1 ? "" : "s"}`,        count: id => prisma.document.count({ where: { companyId: id } }) },
+  { label: n => `${n} employee${n === 1 ? "" : "s"}`,        count: id => prisma.employee.count({ where: { companyId: id } }) },
+  { label: n => `${n} subscription${n === 1 ? "" : "s"}`,    count: id => prisma.subscription.count({ where: { companyId: id } }) },
+  { label: n => `${n} service request${n === 1 ? "" : "s"}`, count: id => prisma.serviceRequest.count({ where: { companyId: id } }) },
+  { label: n => `${n} upgrade request${n === 1 ? "" : "s"}`, count: id => prisma.upgradeRequest.count({ where: { companyId: id } }) },
+  { label: n => `${n} shipment${n === 1 ? "" : "s"}`,        count: id => prisma.courierShipment.count({ where: { companyId: id } }) },
+  { label: n => `${n} appointment${n === 1 ? "" : "s"}`,     count: id => prisma.appointment.count({ where: { companyId: id } }) },
+  { label: n => `${n} stored credential${n === 1 ? "" : "s"}`, count: id => prisma.siteCredential.count({ where: { companyId: id } }) },
+  { label: n => `${n} portal login${n === 1 ? "" : "s"}`,    count: id => prisma.user.count({ where: { companyId: id } }) },
+  { label: n => `${n} email${n === 1 ? "" : "s"}`,           count: id => prisma.emailMessage.count({ where: { companyId: id } }) },
+  { label: n => `${n} file${n === 1 ? "" : "s"}`,            count: id => prisma.fileAsset.count({ where: { companyId: id } }) },
+];
+
+app.delete("/api/companies/:id/lead", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+  if (!co) return res.status(404).json({ error: "Not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  if (co.lifecycle === ACTIVE_CLIENT) {
+    return res.status(409).json({ error: `${co.name} is a client — mark them churned instead, so the record and its history survive` });
+  }
+
+  const found = (await Promise.all(LEAD_DELETE_BLOCKERS.map(async b => {
+    const n = await b.count(co.id);
+    return n > 0 ? b.label(n) : null;
+  }))).filter(Boolean) as string[];
+
+  if (found.length) {
+    return res.status(409).json({
+      error: `${co.name} cannot be deleted — it still has ${found.join(", ")}`,
+      blockers: found,
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Its own record, not attachments to it: meaningless once the company is gone, and leaving them
+    // behind would leave rows pointing at an id nothing can resolve.
+    await tx.interaction.deleteMany({ where: { companyId: co.id } });
+    await tx.contact.deleteMany({ where: { companyId: co.id } });
+    await tx.lifecycleTransition.deleteMany({ where: { companyId: co.id } });
+    await tx.ownerAssignment.deleteMany({ where: { companyId: co.id } });
+    await tx.company.delete({ where: { id: co.id } });
+  });
+
+  await logAudit({ action: "lead.delete", actorId: a?.sub, target: co.name, detail: `lifecycle ${co.lifecycle}`, ip: clientIp(req) });
+  logActivity({ type: "sales", message: `Lead deleted: ${co.name}`, user: a?.email });
+  res.status(204).end();
+});
+
 app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const co = await prisma.company.findUnique({ where: { id: req.params.id } });

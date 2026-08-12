@@ -153,6 +153,18 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
     /** When anybody last logged contact. Null means never — which is not the same as "long ago". */
     lastContactAt: contactedBy.get(r.id) ?? null,
     /**
+     * How many deals this company has, of ANY kind — open, won or lost.
+     *
+     * The number was already being counted here and then spent entirely on `idleDays` below, which
+     * meant the screens could not see it. The Leads list needs it to decide whether a lead is safe
+     * to offer a delete on, and asking a second time from the browser would be a second count that
+     * could disagree with this one.
+     *
+     * Every kind counts because every kind is a reason not to delete: a lost deal is still a record
+     * of a decision, and the company it points at has to keep existing for it to mean anything.
+     */
+    deals: dealsBy.get(r.id) ?? 0,
+    /**
      * Days this lead has been neglected, or null when the question does not apply. From the SAME
      * function the hourly idle-lead notice uses, so the Leads screen's Idle tab and the message
      * somebody received cannot disagree.

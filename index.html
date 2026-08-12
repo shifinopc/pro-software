@@ -5299,6 +5299,9 @@
 
                      They now live on the lead panel, spelled out. One click further away, which is
                      the right distance for the actions that change what a record IS. -->
+                <sc-if value="{{ l.canDelete }}" hint-placeholder-val="{{ false }}">
+                  <span onClick="{{ l.del }}" title="Delete this lead — only possible while nothing is attached to it" style="width:28px; height:28px; border-radius:8px; border:1px solid #FBD5D5; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FEECEC; border-color:#F5A9A9;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg></span>
+                </sc-if>
                 <sc-if value="{{ l.canEdit }}" hint-placeholder-val="{{ true }}">
                   <span onClick="{{ l.edit }}" title="Correct these details" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#7C00FF; background:#F7F3FD;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg></span>
                 </sc-if>
@@ -25801,6 +25804,41 @@ class Component extends DCLogic {
           // lives on the lead panel (open the row) and on Follow-ups, both of which show what was
           // already said — which is the context you want before adding to it.
           canEdit: canWrite,
+          /**
+           * DELETE, for the typo and the duplicate — never for a lead that became something.
+           *
+           * Hidden the moment a deal exists, because that is the association the list already knows
+           * about and the one people actually create. It is NOT the whole rule: quotations,
+           * invoices, tasks, documents and portal logins all block too, and the server checks every
+           * one of them. This flag only spares somebody a refusal for the common case; the gate is
+           * on the route, where it cannot be clicked past.
+           *
+           * Never on a client. A company that got a CR number and a portal login has a history the
+           * business has to keep — ending that relationship is "churned", not deletion.
+           */
+          canDelete: canWrite && l.lifecycle !== 'client' && !(l.deals > 0),
+          del: (ev9) => {
+            ev9 && ev9.stopPropagation && ev9.stopPropagation();
+            this._confirm('Delete ' + l.name + '?', {
+              body: 'This removes the lead and everything that belongs to it — its contacts, logged calls and notes, and its own history. It cannot be undone.',
+              okLabel: 'Delete lead', danger: true,
+            }).then(ok9 => {
+              if (!ok9) return;
+              const tok9 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + l.id + '/lead', {
+                method: 'DELETE', headers: { Authorization: 'Bearer ' + tok9 } })
+                .then(r9 => (r9.status === 204 ? { ok: true, j9: null } : r9.json().catch(() => ({})).then(j9 => ({ ok: false, j9 }))))
+                .then(({ ok, j9 }) => {
+                  // The server's refusal NAMES what it found, so it is shown as-is rather than
+                  // replaced with a generic failure the reader cannot act on.
+                  if (!ok) return this.toast((j9 && j9.error) || 'Could not delete that lead', 'error');
+                  this.toast(l.name + ' deleted');
+                  this.setState({ leadPanel: null });
+                  this._crmReload && this._crmReload();
+                })
+                .catch(() => this.toast('Cannot reach the server — nothing was deleted', 'error'));
+            });
+          },
           edit: () => this.setState({
             ldForm: _ldDraft9(l, primary),
             ldfErr: '', ldfBad: '', dupMatches: [],
