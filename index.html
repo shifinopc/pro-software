@@ -4977,69 +4977,73 @@
             <div style="font-size:12.5px; color:#8C8899; margin-top:5px; max-width:520px; margin-left:auto; margin-right:auto; line-height:1.6;">A team is a lead and the people whose work they oversee. Without one, everybody sees only their own work — correct, but not much use to whoever is meant to be running things.</div>
           </section>
         </sc-if>
-
-        <sc-for list="{{ tmTeams }}" as="t" hint-placeholder-count="2">
-          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; padding:18px 22px 20px;">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap;">
-              <div style="min-width:0;">
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700;">{{ t.name }}</div>
-                <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ t.summary }}</div>
+        <!-- A GRID of team cards, not a stack of full-width ones.
+             A team is a small thing — a leader and a handful of names — and at full width each one
+             spent most of its row on nothing, which pushed the third team below the fold on a screen
+             that exists to be compared across. Two or three fit side by side now, and the cards
+             reflow to one column when there is no room, which is the same rule the pipeline columns
+             follow. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; align-items:start;">
+          <sc-for list="{{ tmTeams }}" as="t" hint-placeholder-count="2">
+            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px 20px;">
+              <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</span>
+                <span style="margin-left:auto; font-size:10.5px; color:#A9A6B4; white-space:nowrap;">{{ t.memberCount }} people</span>
               </div>
-              <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
-                <span onClick="{{ t.showHistory }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">{{ t.historyLabel }}</span>
+              <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+                <span onClick="{{ t.showHistory }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">History</span>
                 <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
-                  <span onClick="{{ t.rename }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Rename</span>
-                  <span onClick="{{ t.retire }}" style="font-size:10.5px; font-weight:700; color:#C0353A; background:#FEECEC; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#FBDADA;">Retire</span>
-                </sc-if>
-              </div>
-            </div>
-
-            <!-- A team nobody leads keeps working and silently stops being overseen. That is the one
-                 failure worth interrupting the layout for. -->
-            <sc-if value="{{ t.hasProblem }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:12px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8A6A16; line-height:1.5;">{{ t.leadProblem }}</div>
-            </sc-if>
-
-            <div style="display:grid; grid-template-columns:minmax(0,260px) minmax(0,1fr); gap:18px; margin-top:16px;">
-              <div>
-                <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Team lead</div>
-                <div style="font-size:13.5px; font-weight:700; margin-top:6px;">{{ t.leadLabel }}</div>
-                <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
-                  <div style="margin-top:8px;"><div style="position:relative;"><div onClick="{{ t.leadToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.leadPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.leadOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.leadQuery }}" onInput="{{ t.leadSetQuery }}" placeholder="{{ t.leadPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.leadOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.leadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div>
-                  <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Changing this moves no clients, deals or tasks — a lead oversees rather than carries. It changes who can see the team's work and hand steps between them.</div>
+                  <span onClick="{{ t.rename }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Rename</span>
+                  <span onClick="{{ t.retire }}" style="font-size:10.5px; font-weight:700; color:#C0353A; background:#FEECEC; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#FBDADA;">Retire</span>
                 </sc-if>
               </div>
 
-              <div>
-                <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Members · {{ t.memberCount }}</div>
-                <div style="display:flex; flex-wrap:wrap; gap:7px; margin-top:8px;">
-                  <sc-for list="{{ t.members }}" as="m" hint-placeholder-count="3">
-                    <span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; background:#F5EEFF; color:#3C1470; padding:6px 8px 6px 12px; border-radius:99px;">{{ m.label }}<sc-if value="{{ m.canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ m.remove }}" title="Remove from this team" style="display:inline-flex; cursor:pointer; opacity:.55;" style-hover="opacity:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3C1470" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span></sc-if></span>
-                  </sc-for>
-                  <sc-if value="{{ t.noMembers }}" hint-placeholder-val="{{ false }}">
-                    <span style="font-size:11.5px; color:#BFBCC9;">Nobody in this team yet.</span>
-                  </sc-if>
+              <!-- A team nobody leads keeps working and silently stops being overseen. That is the
+                   one failure worth interrupting the layout for. -->
+              <sc-if value="{{ t.hasProblem }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:12px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8A6A16; line-height:1.5;">{{ t.leadProblem }}</div>
+              </sc-if>
+
+              <!-- The leader, given a panel of their own. They were a label and a dropdown in the
+                   left half of a two-column grid — the same weight as the member list beside them,
+                   when the whole point of a team record is who answers for it. -->
+              <div style="display:flex; align-items:center; gap:11px; margin-top:14px; background:linear-gradient(100deg,#FBF7FF,#fff); border:1px solid #EEE0FF; border-radius:13px; padding:11px 13px;">
+                <span style="width:36px; height:36px; border-radius:99px; background:{{ t.leadAvBg }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ t.leadInitials }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">TEAM LEAD</div>
+                  <div style="font-size:13.5px; font-weight:700; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.leadLabel }}</div>
                 </div>
-                <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
-                  <div style="margin-top:10px; max-width:300px;"><div style="position:relative;"><div onClick="{{ t.memToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.memPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.memOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.memQuery }}" onInput="{{ t.memSetQuery }}" placeholder="{{ t.memPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.memOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.memNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div>
-                  <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Somebody already in another team moves here — one team per person, so their work can only ever count once.</div>
-                </sc-if>
               </div>
-            </div>
+              <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:9px;"><div style="margin-top:8px;"><div style="position:relative;"><div onClick="{{ t.leadToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.leadPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.leadOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.leadQuery }}" onInput="{{ t.leadSetQuery }}" placeholder="{{ t.leadPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.leadOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.leadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div></div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Changing this moves no clients, deals or tasks — a lead oversees rather than carries. It changes who the work rolls up to.</div>
+              </sc-if>
 
-            <sc-if value="{{ t.historyOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:16px; padding-top:14px; border-top:1px solid #F0EDF6;">
-                <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">What changed</div>
-                <sc-for list="{{ t.history }}" as="h" hint-placeholder-count="3">
-                  <div style="display:flex; gap:12px; font-size:11.5px; color:#4A4658; padding:6px 0; border-bottom:1px solid #FAF8FC;"><span style="color:#A9A6B4; flex-shrink:0; width:92px;">{{ h.at }}</span><span>{{ h.what }}</span></div>
-                </sc-for>
-                <sc-if value="{{ t.noHistory }}" hint-placeholder-val="{{ false }}">
-                  <div style="font-size:11.5px; color:#BFBCC9; padding:8px 0;">Nothing has changed since this team was made.</div>
+              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em; margin-top:15px;">MEMBERS</div>
+              <div style="display:flex; flex-wrap:wrap; gap:7px; margin-top:8px;">
+                <sc-for list="{{ t.members }}" as="m" hint-placeholder-count="3"><span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; background:#F5EEFF; color:#3C1470; padding:6px 8px 6px 12px; border-radius:99px;">{{ m.label }}<sc-if value="{{ m.canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ m.remove }}" title="Remove from this team" style="display:inline-flex; cursor:pointer; opacity:.55;" style-hover="opacity:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3C1470" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span></sc-if></span></sc-for>
+                <sc-if value="{{ t.noMembers }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:11.5px; color:#BFBCC9;">Nobody in this team yet.</span>
                 </sc-if>
               </div>
-            </sc-if>
-          </section>
-        </sc-for>
+              <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:10px;"><div style="margin-top:10px; max-width:300px;"><div style="position:relative;"><div onClick="{{ t.memToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.memPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.memOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.memQuery }}" onInput="{{ t.memSetQuery }}" placeholder="{{ t.memPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.memOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.memNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div></div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Somebody already in another team moves here — one team per person, so their work can only roll up once.</div>
+              </sc-if>
+              <sc-if value="{{ t.historyOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:16px; padding-top:14px; border-top:1px solid #F0EDF6;">
+              <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">What changed</div>
+              <sc-for list="{{ t.history }}" as="h" hint-placeholder-count="3">
+              <div style="display:flex; gap:12px; font-size:11.5px; color:#4A4658; padding:6px 0; border-bottom:1px solid #FAF8FC;"><span style="color:#A9A6B4; flex-shrink:0; width:92px;">{{ h.at }}</span><span>{{ h.what }}</span></div>
+              </sc-for>
+              <sc-if value="{{ t.noHistory }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#BFBCC9; padding:8px 0;">Nothing has changed since this team was made.</div>
+              </sc-if>
+              </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </section>
       </div></sc-if>
 
       <!-- ══ Checklist Rules ═════════════════════════════════════════════════════════════════════
@@ -25705,6 +25709,10 @@ class Component extends DCLogic {
             .catch(e => this.toast(String(e.message || 'That did not work'), 'error'));
         };
 
+        // Initials, local to this block. Every other one in this file lives inside a different
+        // screen's scope, and borrowing across is what took the Pipeline screen down today.
+        const tmInit9 = (n) => String(n || '').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w))
+          .map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
         const _tmRows9 = _tmMine9.map(t => {
           const openHist9 = this.state.tmHistoryFor === t.id;
           const hist9 = (this.state.tmHistory || {})[t.id] || [];
@@ -25737,6 +25745,12 @@ class Component extends DCLogic {
           return {
             id: t.id,
             name: t.name,
+            // The leader as a FACE, which is how the design leads the card and how people think
+            // about a team. `hasLead` is separate from the label because "Nobody yet" must not be
+            // rendered as somebody with the initials N.
+            leadInitials: t.leadName ? tmInit9(t.leadName) : '\u2014',
+            hasLead: !!t.leadName,
+            leadAvBg: t.leadName ? '#7C00FF' : '#DDD9E6',
             canWrite,
             summary: [
               t.memberIds.length + (t.memberIds.length === 1 ? ' member' : ' members'),
