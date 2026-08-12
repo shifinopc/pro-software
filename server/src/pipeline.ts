@@ -28,6 +28,35 @@ export type DealStatus = "open" | "won" | "lost";
 export const statusOf = (stage: Pick<PipelineStage, "isWon" | "isLost">): DealStatus =>
   stage.isWon ? "won" : stage.isLost ? "lost" : "open";
 
+/**
+ * A STAGE'S COLOUR, when nobody has chosen one.
+ *
+ * `PipelineStage.color` is optional and, on every install that did not come from a country pack,
+ * unset — so three separate readers each fell back to the same #7C00FF and every column on every
+ * chart came out identically purple. A colour that does not distinguish is not a colour; it is ink.
+ *
+ * Won and lost take green and red regardless of position, because those two carry meaning that
+ * survives reordering. The open stages cycle a fixed four in sort order, so a stage keeps its colour
+ * as long as its place in the sequence holds, and the same stage is the same colour on the board,
+ * the dashboard and the funnel.
+ *
+ * An explicitly chosen colour always wins. This only fills a gap.
+ */
+const OPEN_STAGE_COLORS = ["#7C00FF", "#6D5BD0", "#0284C7", "#B8860B"];
+const OPEN_STAGE_TINTS = ["#F5EEFF", "#EFEBFF", "#E4F4FD", "#FEF4E2"];
+
+export function stageTone(
+  stage: { color?: string | null; bg?: string | null; isWon?: boolean; isLost?: boolean },
+  index = 0,
+): { color: string; bg: string } {
+  if (stage.isWon) return { color: stage.color ?? "#0E9355", bg: stage.bg ?? "#E7F8EF" };
+  if (stage.isLost) return { color: stage.color ?? "#C0353A", bg: stage.bg ?? "#FEECEC" };
+  return {
+    color: stage.color ?? OPEN_STAGE_COLORS[index % OPEN_STAGE_COLORS.length],
+    bg: stage.bg ?? OPEN_STAGE_TINTS[index % OPEN_STAGE_TINTS.length],
+  };
+}
+
 /** The live stages for a country, left to right. */
 export async function stagesFor(country: string | null) {
   if (!country) return [];
@@ -197,10 +226,10 @@ export async function stageAnalytics(country: string | null) {
 
   return {
     lostTo,
-    stages: stages.filter(s => !s.isWon && !s.isLost).map(s => {
+    stages: stages.filter(s => !s.isWon && !s.isLost).map((s, i) => {
       const ds = dwell.get(s.id) ?? [];
       return {
-        id: s.id, name: s.name, color: s.color ?? "#7C00FF",
+        id: s.id, name: s.name, color: stageTone(s, i).color,
         /** Null, never 0, when no completed dwell exists — an empty sample is not a fast stage. */
         avgDays: ds.length ? Math.round((ds.reduce((a, b) => a + b, 0) / ds.length) * 10) / 10 : null,
         samples: ds.length,
@@ -336,10 +365,12 @@ export async function boardFor(country: string | null, opts: { ownerId?: string 
     (d as any).lastContactAt = contacted[(d as any).companyId] ?? null;
   }
 
-  const columns = stages.map(s => {
+  const columns = stages.map((s, i) => {
     const deals = resolved.filter(o => o.stageId === s.id);
     return {
-      stage: s,
+      // The stage with its colour resolved, so the board, the dashboard and the funnel cannot show
+      // the same column in three different shades — or, as they did, all in the same one.
+      stage: { ...s, ...stageTone(s, i) },
       deals,
       count: deals.length,
       // Totals per column, because "12 deals" says nothing about whether the month is safe.

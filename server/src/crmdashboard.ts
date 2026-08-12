@@ -17,7 +17,7 @@
  * rather than re-derived here, so this cannot be the one screen that forgets to scope.
  */
 import { prisma } from "./db.js";
-import { statusOf, withMoney } from "./pipeline.js";
+import { statusOf, withMoney, stageTone } from "./pipeline.js";
 import { openFollowUps, lastContactMap } from "./interactions.js";
 import { healthOf, byWorstFirst, HEALTH_ORDER, toneFor } from "./dealhealth.js";
 import { jobRules } from "./jobrules.js";
@@ -127,12 +127,12 @@ export async function crmDashboard(scope: CrmScope = {}) {
    * `deals.open`, the weighted total — compute from `open` and are unaffected.
    */
   const pipeline = stages
-    .map(s => {
+    .map((s, i) => {
       // Open deals for an open column; for Won and Lost the deals that ended there — an empty Won
       // column would otherwise be indistinguishable from one nobody has reached.
       const rows = (s.isWon || s.isLost ? priced : open).filter(d => d.stageId === s.id);
       return {
-        id: s.id, name: s.name, color: s.color ?? "#7C00FF", bg: s.bg ?? "#F5EEFF",
+        id: s.id, name: s.name, ...stageTone(s, i),
         isWon: s.isWon, isLost: s.isLost,
         count: rows.length,
         valueMinor: sum(rows),
@@ -265,7 +265,7 @@ export async function crmDashboard(scope: CrmScope = {}) {
     return {
       id: s.id,
       name: s.name,
-      color: s.color ?? "#7C00FF",
+      color: stageTone(s, i).color,
       reached,
       /** Share of the previous step that got this far. Null on the first step — nothing precedes it. */
       fromPrevBp: null as number | null,
