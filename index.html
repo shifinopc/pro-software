@@ -4976,16 +4976,16 @@
             <div style="font-size:12.5px; color:#8C8899; margin-top:5px; max-width:520px; margin-left:auto; margin-right:auto; line-height:1.6;">A team is a lead and the people whose work they oversee. Without one, everybody sees only their own work — correct, but not much use to whoever is meant to be running things.</div>
           </section>
         </sc-if>
-        <!-- A GRID of team cards, not a stack of full-width ones.
-             A team is a small thing — a leader and a handful of names — and at full width each one
-             spent most of its row on nothing, which pushed the third team below the fold on a screen
-             that exists to be compared across. Two or three fit side by side now, and the cards
-             reflow to one column when there is no room, which is the same rule the pipeline columns
-             follow. -->
+        <!-- A GRID of team cards. A team is a small thing — a leader and a handful of names —
+             and at full width each card spent most of its row on nothing. Two or three fit side by
+             side now and they reflow to one column when there is no room, which is the same rule
+             the pipeline columns follow. A single team still fills the row, which is why one team
+             looks full width. -->
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; align-items:start;">
           <sc-for list="{{ tmTeams }}" as="t" hint-placeholder-count="2">
-            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:18px 20px 20px;">
+            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 22px;">
               <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+                <span style="font-size:10px; font-weight:700; color:{{ t.domColor }}; background:{{ t.domBg }}; padding:3px 10px; border-radius:99px; letter-spacing:.04em;">{{ t.domain }}</span>
                 <span style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</span>
                 <span style="margin-left:auto; font-size:10.5px; color:#A9A6B4; white-space:nowrap;">{{ t.memberCount }} people</span>
               </div>
@@ -5003,32 +5003,62 @@
                 <div style="margin-top:12px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:11px; padding:10px 13px; font-size:11.5px; color:#8A6A16; line-height:1.5;">{{ t.leadProblem }}</div>
               </sc-if>
 
-              <!-- The leader, given a panel of their own. They were a label and a dropdown in the
-                   left half of a two-column grid — the same weight as the member list beside them,
-                   when the whole point of a team record is who answers for it. -->
+              <!-- The leader, with their job under their name and Change as a LINK. The picker used
+                   to be a full-width select sitting under the panel, which gave changing the leader
+                   the same visual weight as the leader themselves. The list it opens is unchanged. -->
               <div style="display:flex; align-items:center; gap:11px; margin-top:14px; background:linear-gradient(100deg,#FBF7FF,#fff); border:1px solid #EEE0FF; border-radius:13px; padding:11px 13px;">
                 <span style="width:36px; height:36px; border-radius:99px; background:{{ t.leadAvBg }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ t.leadInitials }}</span>
                 <div style="flex:1; min-width:0;">
-                  <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">TEAM LEAD</div>
-                  <div style="font-size:13.5px; font-weight:700; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.leadLabel }}</div>
+                  <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <span style="font-size:13.5px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis;">{{ t.leadLabel }}</span>
+                    <sc-if value="{{ t.hasLead }}" hint-placeholder-val="{{ true }}">
+                      <span style="font-size:9px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; letter-spacing:.04em;">LEADER</span>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ t.hasLeaderRole }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.leaderRole }}</div>
+                  </sc-if>
                 </div>
+                <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:relative; flex-shrink:0;">
+                    <span onClick="{{ t.leadToggle }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Change</span>
+                    <sc-if value="{{ t.leadOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.leadQuery }}" onInput="{{ t.leadSetQuery }}" placeholder="{{ t.leadPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.leadOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.leadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if>
+                  </div>
+                </sc-if>
               </div>
               <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
-                <div style="margin-top:9px;"><div style="margin-top:8px;"><div style="position:relative;"><div onClick="{{ t.leadToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.leadPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.leadOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.leadQuery }}" onInput="{{ t.leadSetQuery }}" placeholder="{{ t.leadPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.leadOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.leadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div></div>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Changing this moves no clients, deals or tasks — a lead oversees rather than carries. It changes who the work rolls up to.</div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:7px; line-height:1.5;">Changing this moves no clients, deals or tasks — a lead oversees rather than carries. It changes who the work rolls up to.</div>
               </sc-if>
 
-              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em; margin-top:15px;">MEMBERS</div>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:15px;">
+                <span style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">MEMBERS</span>
+                <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:relative; flex-shrink:0;">
+                    <span onClick="{{ t.memToggle }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">+ Add member</span>
+                    <sc-if value="{{ t.memOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.memQuery }}" onInput="{{ t.memSetQuery }}" placeholder="{{ t.memPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.memOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.memNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if>
+                  </div>
+                </sc-if>
+              </div>
               <div style="display:flex; flex-wrap:wrap; gap:7px; margin-top:8px;">
-                <sc-for list="{{ t.members }}" as="m" hint-placeholder-count="3"><span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; background:#F5EEFF; color:#3C1470; padding:6px 8px 6px 12px; border-radius:99px;">{{ m.label }}<sc-if value="{{ m.canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ m.remove }}" title="Remove from this team" style="display:inline-flex; cursor:pointer; opacity:.55;" style-hover="opacity:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3C1470" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span></sc-if></span></sc-for>
+                <sc-for list="{{ t.members }}" as="m" hint-placeholder-count="3"><sc-for list="{{ t.members }}" as="m" hint-placeholder-count="3"><span style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; background:#F5EEFF; color:#3C1470; padding:6px 8px 6px 12px; border-radius:99px;">{{ m.label }}<sc-if value="{{ m.canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ m.remove }}" title="Remove from this team" style="display:inline-flex; cursor:pointer; opacity:.55;" style-hover="opacity:1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#3C1470" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span></sc-if></span></sc-for></sc-for>
                 <sc-if value="{{ t.noMembers }}" hint-placeholder-val="{{ false }}">
                   <span style="font-size:11.5px; color:#BFBCC9;">Nobody in this team yet.</span>
                 </sc-if>
               </div>
               <sc-if value="{{ t.canWrite }}" hint-placeholder-val="{{ true }}">
-                <div style="margin-top:10px;"><div style="margin-top:10px; max-width:300px;"><div style="position:relative;"><div onClick="{{ t.memToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 11px; font-size:12.5px; color:#1A1523; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ t.memPickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ t.memOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:320px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input value="{{ t.memQuery }}" onInput="{{ t.memSetQuery }}" placeholder="{{ t.memPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12px; outline:none; margin-bottom:4px;"><sc-for list="{{ t.memOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for><sc-if value="{{ t.memNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if></div></sc-if></div></div></div>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Somebody already in another team moves here — one team per person, so their work can only roll up once.</div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:7px; line-height:1.5;">Somebody already in another team moves here — one team per person, so their work can only roll up once.</div>
               </sc-if>
+
+              <!-- What leading this team actually does, rather than a decorative list. See the note
+                   on `scopes`: the sales mount names the screens salesCompanyIds widens for a lead,
+                   and the PRO mount says plainly that nothing narrows PRO work by team. -->
+              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em; margin-top:15px;">LEADER OVERSEES</div>
+              <div style="display:flex; gap:5px; margin-top:8px; flex-wrap:wrap;">
+                <sc-for list="{{ t.scopes }}" as="sc" hint-placeholder-count="3">
+                  <span style="font-size:9.5px; font-weight:600; color:#6F6C7A; background:#F3F1F7; padding:3px 9px; border-radius:99px;">{{ sc.label }}</span>
+                </sc-for>
+              </div>
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:10px; border-top:1px solid #F5F3F9; padding-top:10px; line-height:1.5;">{{ t.scopesNote }}</div>
               <sc-if value="{{ t.historyOpen }}" hint-placeholder-val="{{ false }}">
               <div style="margin-top:16px; padding-top:14px; border-top:1px solid #F0EDF6;">
               <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">What changed</div>
@@ -5042,6 +5072,7 @@
               </sc-if>
             </div>
           </sc-for>
+        </section>
         </section>
       </div></sc-if>
 
@@ -9069,6 +9100,52 @@
             </div>
           </sc-if>
         </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- New team. A form rather than the single-field prompt this used to be: the prompt asked for
+       a name and returned a team that immediately tripped the card's own "nobody leads this"
+       warning, because there was nowhere to say who did. -->
+  <sc-if value="{{ ntOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ ntClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ ntStop }}" data-nt-panel="1" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 30px 70px rgba(38,7,77,.3); animation:popIn .22s cubic-bezier(.16,1,.3,1) both;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:20px 24px 0;">
+          <div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">{{ ntTitle }}</div>
+            <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ ntSub }}</div>
+          </div>
+          <div onClick="{{ ntClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <div><label class="fm-lab">Team name *</label>
+            <input value="{{ ntName }}" onInput="{{ setNtName }}" placeholder="{{ ntPlaceholder }}" class="fm-inp"></div>
+          <div style="margin-top:13px;"><label class="fm-lab">Team leader</label>
+            <div class="fm-selwrap" style="z-index:40;">
+              <div data-dd data-open="{{ ddNtLeadOpen }}" onClick="{{ ddNtLeadOpenList }}" class="fm-combo">
+                <input value="{{ ddNtLeadValue }}" onInput="{{ ddNtLeadSetQuery }}" onKeyDown="{{ ddNtLeadKey }}" placeholder="{{ ddNtLeadPlaceholder }}" class="fm-inp" style="border:none; background:transparent; padding:0; width:100%;">
+                <svg class="fm-combo-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddNtLeadOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="pill-dd" style="max-height:210px; overflow-y:auto;">
+                  <sc-for list="{{ ddNtLeadRows }}" as="o" hint-placeholder-count="5">
+                    <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                    <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                  </sc-for>
+                  <sc-if value="{{ ddNtLeadNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 11px; font-size:12px; color:#BFBCC9;">Nobody matches that.</div></sc-if>
+                </div>
+              </sc-if>
+            </div>
+            <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">A team with no leader keeps working and stops being overseen, so this screen will flag it until one is set.</div>
+          </div>
+          <sc-if value="{{ ntHasErr }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; font-weight:600; color:#C0353A; background:#FEECEC; border-radius:10px; padding:9px 12px; line-height:1.5;">{{ ntErr }}</div>
+          </sc-if>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:9px; align-items:center; padding:0 24px 20px;">
+          <span onClick="{{ ntClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ ntSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create team</button>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -25785,6 +25862,42 @@ class Component extends DCLogic {
             leadInitials: t.leadName ? tmInit9(t.leadName) : '\u2014',
             hasLead: !!t.leadName,
             leadAvBg: t.leadName ? '#7C00FF' : '#DDD9E6',
+            // Which side of the business, as the design's chip. It says nothing new on a screen
+            // already filtered to one kind — but these two screens are the same component mounted
+            // twice, and somebody looking at a screenshot cannot tell which mount they are in.
+            domain: _tmKind9 === 'sales' ? 'SALES' : 'PRO',
+            domColor: _tmKind9 === 'sales' ? '#0284C7' : '#7C00FF',
+            domBg: _tmKind9 === 'sales' ? '#E4F4FD' : '#F3E8FF',
+            // The leader's job, under their name. A team lead is a salesperson or an admin who has
+            // been given oversight — which of those they are changes what you expect of them.
+            // The API sends leadId and leadName but no role, so it is looked up in the staff list
+            // already in hand. ROLE_LABEL_MAP lives in another screen's block, so the few labels
+            // this screen can encounter are spelled out rather than borrowed across a scope.
+            ...(() => {
+              const RL9 = { super_admin: 'Super Admin', admin: 'Admin', sales: 'Sales consultant',
+                            pro_officer: 'PRO Officer', accountant: 'Accountant' };
+              const lu9 = t.leadId ? _tmStaff9.find(u => String(u.id) === String(t.leadId)) : null;
+              const rl9 = lu9 ? (RL9[lu9.roleId] || lu9.roleId || '') : '';
+              return { leaderRole: rl9, hasLeaderRole: !!rl9 };
+            })(),
+            /**
+             * WHAT LEADING THIS TEAM ACTUALLY DOES.
+             *
+             * Not decoration and not copied from the design's list. On the SALES mount these are the
+             * screens salesCompanyIds widens for a lead — it returns their own book or their TEAM's
+             * when they lead one, and every sales surface reads it — so a sales lead genuinely sees
+             * these three for the whole team.
+             *
+             * The PRO mount says something different, because nothing in this codebase narrows PRO
+             * work by team: the design lists Task List, Compliance and Government Centers there, and
+             * printing that here would promise oversight that does not exist.
+             */
+            scopes: _tmKind9 === 'sales'
+              ? [{ label: 'Leads' }, { label: 'Pipeline' }, { label: 'Follow-ups' }]
+              : [{ label: 'Reporting only' }],
+            scopesNote: _tmKind9 === 'sales'
+              ? 'Reports on: pipeline \u00b7 quota'
+              : 'Grouping and reporting only \u2014 PRO work is not narrowed by team.',
             canWrite,
             summary: [
               t.memberIds.length + (t.memberIds.length === 1 ? ' member' : ' members'),
@@ -25851,15 +25964,60 @@ class Component extends DCLogic {
           tmEyebrow: _tmKind9 === 'sales' ? 'SALES' : 'OPERATIONS',
           tmTitle: _tmKind9 === 'sales' ? 'Sales Teams' : 'PRO Teams',
           tmSub: 'A lead and the people whose work they oversee. Changing a lead is one press, and moves no work.',
-          tmAdd: () => this._prompt('Name the new ' + _tmWord9 + ' team', '', {
-            placeholder: _tmKind9 === 'sales' ? 'e.g. Riyadh Sales' : 'e.g. Visas & Immigration',
-            body: 'A team is a lead and the people whose work they oversee. You add both after this.',
-          }).then((name9) => {
-            if (name9 == null || !name9.trim()) return;
-            _tmSend9('/api/teams', { method: 'POST', body: JSON.stringify({ name: name9.trim(), kind: _tmKind9 }) }, 'Team created');
-          }),
+          // A form, not a one-field prompt. The leader is asked for HERE because a team created
+          // without one is immediately in the state this screen warns about — the amber "nobody
+          // leads this" banner appeared the moment the old prompt returned.
+          tmAdd: () => this.setState({ ntOpen: true, ntName: '', ntLead: '', ntErr: '' }),
         };
       })(),
+      // ── New team ──────────────────────────────────────────────────────────────────────────
+      ...(() => {
+        const open9 = !!this.state.ntOpen;
+        const kind9 = (this.state.active === 'PRO Teams') ? 'operations' : 'sales';
+        const word9 = kind9 === 'sales' ? 'sales' : 'PRO';
+        const staff9 = (Array.isArray(this.state.usersData) ? this.state.usersData : [])
+          .filter(u => u.type !== 'portal' && u.status === 'active');
+        const close9 = () => this.setState({ ntOpen: false, ntErr: '' });
+        return {
+          ntOpen: open9,
+          ntClose: close9,
+          ntStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+          ntTitle: 'New ' + word9 + ' team',
+          ntSub: 'Pick a leader now \u2014 add members after.',
+          ntName: this.state.ntName || '',
+          ntPlaceholder: kind9 === 'sales' ? 'e.g. Riyadh Sales' : 'e.g. Visas & Immigration',
+          setNtName: (e) => this.setState({ ntName: e.target.value, ntErr: '' }),
+          ntErr: this.state.ntErr || '',
+          ntHasErr: !!this.state.ntErr,
+          // Same searchable control as every other person picker on this screen, so choosing a
+          // leader here and changing one on the card are visibly the same act.
+          ...mkDdCombo('ddNtLead', [{ label: 'PEOPLE', options: staff9.map(u => ({ value: u.id, label: u.name })) }],
+            this.state.ntLead || '', (v) => this.setState({ ntLead: v, ntErr: '' }), 'Search people\u2026'),
+          ntSave: () => {
+            const nm = String(this.state.ntName || '').trim();
+            if (!nm) return this.setState({ ntErr: 'Give the team a name \u2014 it goes on reports.' });
+            const lead = this.state.ntLead || '';
+            const API = this._apiBase || 'http://localhost:4100';
+            const tok = localStorage.getItem('stimespro:token');
+            const hdr = { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) };
+            fetch(API + '/api/teams', { method: 'POST', headers: hdr, body: JSON.stringify({ name: nm, kind: kind9 }) })
+              .then(r => r.json().then(j => ({ ok: r.ok, j })))
+              .then(({ ok, j }) => {
+                if (!ok) return this.setState({ ntErr: (j && j.error) || 'Could not create that team' });
+                // The lead is a SECOND call, because /api/teams takes only a name and a kind. If it
+                // fails the team still exists and says it has no lead, which is the truth and is
+                // exactly what the card's amber banner is for — better than rolling back a team
+                // somebody has already been told was created.
+                const done = () => { close9(); this.toast('Team created'); if (this._loadTeams) this._loadTeams(); };
+                if (!lead || !j || !j.id) return done();
+                fetch(API + '/api/teams/' + j.id + '/lead', { method: 'POST', headers: hdr, body: JSON.stringify({ userId: lead }) })
+                  .then(() => done()).catch(() => done());
+              })
+              .catch(() => this.setState({ ntErr: 'Server unreachable \u2014 nothing was created' }));
+          },
+        };
+      })(),
+
       // ── A deal's checklist ──
       //
       // The summary is fetched when the dialog opens rather than carried on the board: the card
