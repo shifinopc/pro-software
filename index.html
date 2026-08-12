@@ -4515,7 +4515,7 @@
 
 
       <!-- Activity + meetings -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .21s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px;">
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .21s both; display:grid; grid-template-columns:1fr; gap:18px;">
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Recent activity</span>
@@ -4540,31 +4540,6 @@
           </div>
         </div>
 
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Upcoming meetings</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdMeetSub }}</div>
-            </div>
-            <span onClick="{{ cdGoAppointments }}" style="font-size:12px; color:#7C00FF; font-weight:600; cursor:pointer; white-space:nowrap;">All →</span>
-          </div>
-          <div style="display:flex; flex-direction:column; margin-top:14px;">
-            <sc-for list="{{ cdMeetings }}" as="m" hint-placeholder-count="4">
-              <div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #FAF8FC;">
-                <div style="flex-shrink:0; width:42px; text-align:center; background:#FAF7FE; border:1px solid #F0EDF6; border-radius:10px; padding:5px 0;">
-                  <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; line-height:1;">{{ m.day }}</div>
-                  <div style="font-size:9px; color:#A9A6B4; text-transform:uppercase; letter-spacing:.06em; margin-top:2px;">{{ m.mon }}</div>
-                </div>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.title }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.meta }}</div>
-                </div>
-                <span style="flex-shrink:0; font-size:9.5px; font-weight:700; color:{{ m.color }}; background:{{ m.bg }}; padding:3px 9px; border-radius:99px;">{{ m.status }}</span>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdMeetEmpty }}" hint-placeholder-val="{{ true }}"><div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">Nothing scheduled from today onward.</div></sc-if>
-          </div>
-        </div>
       </section>
       </div></sc-if>
 
@@ -24224,7 +24199,6 @@ class Component extends DCLogic {
           cdPipeBars: [], cdPipeEmpty: false, cdPipeEmptyNote: '', cdPipeSub: '',
           cdTop: [], cdTopEmpty: false, cdTopEmptyNote: '', cdTopSub: '',
           cdActivity: [], cdActEmpty: false,
-          cdMeetings: [], cdMeetEmpty: false, cdMeetSub: '',
           cdRefresh: () => {}, cdGoTimeline: () => {}, cdGoAppointments: () => {},
         };
 
@@ -24287,9 +24261,6 @@ class Component extends DCLogic {
           invoice: ['#E7F8EF', '#12B76A'], task: ['#FEF4E2', '#B8860B'], team: ['#EFEBFF', '#6D5BD0'],
         })[String(t || '')] || ['#F3F1F7', '#6F6C7A'];
 
-        const meetTone = (s) => /confirm|attend/i.test(s) ? { color: '#0E9355', bg: '#E7F7EF' }
-          : /request|resched/i.test(s) ? { color: '#B25A00', bg: '#FFF4E5' }
-            : { color: '#6F6C7A', bg: '#F3F1F7' };
 
         const pipeMax = D.pipeline.reduce((n, s) => Math.max(n, s.count), 0);
         // Health totals. `_openCount` comes from the health rows rather than deals.open.count so the
@@ -24931,26 +24902,6 @@ class Component extends DCLogic {
             };
           }),
 
-          // ── meetings ──
-          // The unreadable ones are named, not hidden. An appointment stored as "30 Jul" cannot be
-          // placed in time at all, so it is left out of the list — and saying so is the only way
-          // anybody will ever go and fix it.
-          cdMeetSub: [
-            D.upcoming.length ? D.upcoming.length + ' scheduled from today' : 'Nothing scheduled',
-            D.undatedUpcoming ? D.undatedUpcoming + (D.undatedUpcoming === 1 ? ' has a date that cannot be read' : ' have dates that cannot be read') : '',
-          ].filter(Boolean).join(' · '),
-          cdMeetEmpty: D.upcoming.length === 0,
-          cdMeetings: D.upcoming.map(m => {
-            const t = meetTone(m.status || '');
-            const dt = /^(\d{4})-(\d{2})-(\d{2})$/.exec(m.date || '');
-            return {
-              day: dt ? dt[3] : '—',
-              mon: dt ? new Date(Date.UTC(+dt[1], +dt[2] - 1, +dt[3])).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) : '',
-              title: m.title || 'Appointment',
-              meta: [m.time, m.client, m.type].filter(Boolean).join(' · ') || 'no time set',
-              status: m.status || 'scheduled', color: t.color, bg: t.bg,
-            };
-          }),
         };
       })(),
 
