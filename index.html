@@ -4858,11 +4858,11 @@
                         <div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ o.role }}</div>
                       </div>
                     </div>
-                    <span onClick="{{ o.setTarget }}" title="Set this person’s target for the selected month" style="font-size:12.5px; color:#6F6C7A; font-variant-numeric:tabular-nums; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.target }}</span>
+                    <span onClick="{{ o.setTarget }}" title="A person’s target is their own — the firm-wide figure is not divided up. Click to set this one." style="font-size:12.5px; color:{{ o.targetColor }}; font-weight:{{ o.targetWeight }}; font-variant-numeric:tabular-nums; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.target }}</span>
                     <span style="font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums;">{{ o.achieved }}</span>
                     <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                       <span style="flex:1; min-width:40px; height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></span></span>
-                      <span style="font-size:10.5px; font-weight:700; color:{{ o.gapColor }}; white-space:nowrap; flex-shrink:0;">{{ o.gap }}</span>
+                      <span title="{{ o.gapTitle }}" style="font-size:10.5px; font-weight:700; color:{{ o.gapColor }}; white-space:nowrap; flex-shrink:0;">{{ o.gap }}</span>
                     </div>
                     <sc-if value="{{ o.canSetRate }}" hint-placeholder-val="{{ true }}">
                       <span onClick="{{ o.setRate }}" title="Set this person's commission rate" style="font-size:12px; color:{{ o.rateColor }}; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;">{{ o.rate }}</span>
@@ -26462,7 +26462,12 @@ class Component extends DCLogic {
             initials: ini9(r.name),
             role: ({ super_admin: 'Super Admin', admin: 'Admin', sales: 'Sales consultant',
                      pro_officer: 'PRO Officer', accountant: 'Accountant' })[r.roleId] || r.roleId || 'Staff',
-            target: r.targetMinor != null ? k9(r.targetMinor) : '\u2014',
+            // "Set target", not an em dash. The firm-wide figure and a person’s are separate rows
+            // and nothing divides one into the other, so this cell stays empty until somebody fills
+            // it — and a dash reads as "nothing to see" when it means "nobody has set this".
+            target: r.targetMinor != null ? k9(r.targetMinor) : 'Set target',
+            targetColor: r.targetMinor != null ? '#6F6C7A' : '#7C00FF',
+            targetWeight: r.targetMinor != null ? '400' : '600',
             // The TARGET column was permanently a dash: an officer's target is its own row, keyed
             // by ownerId, and nothing in the product could write one — the Set-target dialog only
             // ever sets the firm's. So the cell that reports it now sets it, for the month the
@@ -26493,6 +26498,12 @@ class Component extends DCLogic {
             gap: r.pctBp == null ? 'no target set'
               : r.pctBp >= 10000 ? 'Target met \u00b7 +' + (Math.round(r.pctBp / 100) - 100) + '%'
               : k9(Math.max(0, (r.targetMinor || 0) - r.wonMinor)) + ' to go',
+            // Named, because the card above may be showing a FIRM target that is met while this
+            // row says no target set — two true statements that look contradictory until you know
+            // they are about different things.
+            gapTitle: r.pctBp == null
+              ? 'No target has been set for ' + r.name + '. The figure on the card above is the firm’s and is not divided between people.'
+              : '',
             gapColor: r.pctBp == null ? '#A9A6B4' : r.pctBp >= 10000 ? '#0E9355' : r.pctBp >= 7000 ? '#7C00FF' : '#B7791F',
             // A dash where no rate has been agreed, never 0% — see the note on the column.
             rate: r.rateBp != null ? (r.rateBp / 100) + '%' : '\u2014',
