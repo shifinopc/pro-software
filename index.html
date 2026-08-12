@@ -11258,6 +11258,51 @@ class Component extends DCLogic {
       // pointer, so what is under it changes without the pointer moving.
       _pipPaint(_pipCol(document.elementFromPoint(d.px, d.py)));
     };
+    /**
+     * THE THING UNDER THE CURSOR while a card is being dragged.
+     *
+     * Without it the card stayed exactly where it was, at .45 opacity, and nothing at all moved with
+     * the pointer — so mid-drag the board showed a faded card in its old column and a purple outline
+     * somewhere else, with no visible connection between them. The design gets this free from native
+     * HTML5 drag; this board cannot use native drag, because the runtime wires only onClick /
+     * onChange / onInput / onKeyDown and a dragstart binding would never be attached.
+     *
+     * A CLONE, not the card itself. Moving the real node would take it out of its column's flow and
+     * collapse the column under it mid-gesture, and the next re-render — which this runtime does on
+     * its own schedule, mid-drag — would rebuild the board and throw the moved node away entirely.
+     * The clone lives on document.body, outside anything the runtime rebuilds, so it survives.
+     *
+     * pointer-events:none matters: without it the clone sits under the cursor and every
+     * elementFromPoint call returns the ghost instead of the column being aimed at, which would stop
+     * the drop target highlighting at all.
+     */
+    const _pipGhostMake = (card, e) => {
+      const b = card.getBoundingClientRect();
+      const g = card.cloneNode(true);
+      g.removeAttribute('data-pip-deal');
+      g.style.cssText = card.style.cssText;
+      g.style.position = 'fixed';
+      g.style.left = '0';
+      g.style.top = '0';
+      g.style.width = Math.round(b.width) + 'px';
+      g.style.margin = '0';
+      g.style.pointerEvents = 'none';
+      g.style.zIndex = '9999';
+      g.style.opacity = '.95';
+      g.style.boxShadow = '0 18px 40px rgba(38,7,77,.28)';
+      g.style.cursor = 'grabbing';
+      g.style.transition = 'none';
+      document.body.appendChild(g);
+      return { el: g, dx: e.clientX - b.left, dy: e.clientY - b.top };
+    };
+    const _pipGhostMove = (gh, e) => {
+      if (!gh) return;
+      // A couple of degrees of tilt. It is the cheapest way to say "this is being carried, it is not
+      // where it lives" — a flat upright copy reads as a card that has simply been duplicated.
+      gh.el.style.transform = 'translate(' + Math.round(e.clientX - gh.dx) + 'px,' + Math.round(e.clientY - gh.dy) + 'px) rotate(2deg)';
+    };
+    const _pipGhostDrop = (gh) => { if (gh && gh.el && gh.el.parentNode) gh.el.parentNode.removeChild(gh.el); };
+
     this._pipDragDown = (e) => {
       if (e.button !== 0) return;
       const card = e.target && e.target.closest && e.target.closest('[data-pip-deal]');
@@ -11278,10 +11323,12 @@ class Component extends DCLogic {
         if (Math.abs(e.clientX - _pipDrag.x) + Math.abs(e.clientY - _pipDrag.y) < PIP_DRAG_SLOP) return;
         _pipDrag.live = true;
         _pipDrag.el.style.opacity = '.45';
+        _pipDrag.ghost = _pipGhostMake(_pipDrag.el, e);
         document.body.style.cursor = 'grabbing';
         document.body.style.userSelect = 'none';
         _pipDrag.timer = setInterval(_pipAutoScroll, 16);
       }
+      _pipGhostMove(_pipDrag.ghost, e);
       _pipPaint(_pipCol(document.elementFromPoint(e.clientX, e.clientY)));
     };
     this._pipDragUp = (e) => {
@@ -11291,6 +11338,9 @@ class Component extends DCLogic {
       // the whole page unselectable — or, worse, with the scroll timer still running.
       _pipDrag = null;
       if (drag.timer) clearInterval(drag.timer);
+      // Before anything that can throw. A ghost left on the body is a card floating over a page
+      // nobody can click through, and the only way out of it would be a reload.
+      _pipGhostDrop(drag.ghost);
       // Clears exactly what _pipPaint sets — outline — and NOTHING the markup declared.
       //
       // This line used to clear background and borderColor. The runtime writes each element's style
