@@ -4452,32 +4452,32 @@
 
 
 
-      <!-- Activity + meetings -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .21s both; display:grid; grid-template-columns:1fr; gap:18px;">
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Recent activity</span>
-            <span onClick="{{ cdGoTimeline }}" style="font-size:12px; color:#7C00FF; font-weight:600; cursor:pointer;">Timeline →</span>
-          </div>
-          <div style="display:flex; flex-direction:column; margin-top:14px;">
-            <sc-for list="{{ cdActivity }}" as="a" hint-placeholder-count="6">
-              <div style="display:flex; gap:11px; padding-bottom:15px;">
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                  <div style="width:27px; height:27px; border-radius:9px; background:{{ a.bg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ a.color }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ a.icon }}"></path></svg>
-                  </div>
-                  <div style="width:1.5px; flex:1; background:#F0EDF6; margin-top:4px;"></div>
-                </div>
-                <div style="padding-top:1px; min-width:0;">
-                  <div style="font-size:12.5px; font-weight:600; line-height:1.35;">{{ a.title }}</div>
-                  <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ a.meta }}</div>
-                </div>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdActEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">Nothing logged yet — events appear here as your team works.</div></sc-if>
-          </div>
+      <!-- Recent activity, at the design's shape: a flat list rather than the connector-line
+           timeline it was. The line implied a sequence worth tracing; these are five unrelated
+           things that happened, and the WHEN belongs hard right where the eye can compare it down
+           the column instead of buried in the subtitle. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .21s both; background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Recent activity</div>
+          <span onClick="{{ cdGoTimeline }}" style="font-size:10.5px; color:#B4AFC4; cursor:pointer;" style-hover="color:#7C00FF;">{{ cdActivitySub }}</span>
         </div>
-
+        <div style="display:flex; flex-direction:column; gap:1px; margin-top:14px;">
+          <sc-for list="{{ cdActivity }}" as="a" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:13px; padding:11px 10px; border-radius:12px;" style-hover="background:#FBFAFE;">
+              <span style="width:32px; height:32px; border-radius:11px; background:{{ a.bg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{ a.color }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ a.icon }}"></path></svg>
+              </span>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.title }}</div>
+                <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ a.who }}</div>
+              </div>
+              <span style="font-size:10.5px; color:#B4AFC4; flex-shrink:0;">{{ a.when }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ cdActEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:26px 12px; text-align:center; font-size:12px; color:#B4AFC4;">Nothing logged yet.</div>
+          </sc-if>
+        </div>
       </section>
       </div></sc-if>
 
@@ -24132,7 +24132,7 @@ class Component extends DCLogic {
           cdSources: [], cdSourceArcs: [], cdSourceTotal: '0', cdSourcesEmpty: false, cdSourceSub: '', cdSourceNote: '', cdGoLeads: () => {},
           cdLostReasons: [], cdLostEmpty: false, cdLostEmptyNote: '', cdLostSub: '',
           cdTop: [], cdTopEmpty: false, cdTopEmptyNote: '', cdTopSub: '',
-          cdActivity: [], cdActEmpty: false,
+          cdActivity: [], cdActEmpty: false, cdActivitySub: '',
           cdRefresh: () => {}, cdGoTimeline: () => {}, cdGoAppointments: () => {},
         };
 
@@ -24773,15 +24773,22 @@ class Component extends DCLogic {
 
           // ── activity ──
           cdActEmpty: D.recentActivity.length === 0,
+          cdActivitySub: D.recentActivity.length
+            ? 'last ' + D.recentActivity.length + ' · newest first'
+            : 'nothing logged',
           cdActivity: D.recentActivity.map(a => {
             const tone = actTone(a.type);
             return {
               icon: actIcon(a.type), bg: tone[0], color: tone[1],
               title: a.message || a.type || '—',
+              // Split rather than joined: the design puts WHO under the title and WHEN hard right,
+              // where a column of times can be compared at a glance instead of being read out of
+              // five different sentences.
+              who: a.user || 'system',
               // Worked out from the stored instant on every render. The row's own `time` column says
               // "Just now" — frozen when it was written and wrong a minute later — so it is not sent
               // and not used.
-              meta: [a.user, _ago9(a.at)].filter(Boolean).join(' · '),
+              when: _ago9(a.at),
             };
           }),
 
