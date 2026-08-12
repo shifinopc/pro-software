@@ -3890,6 +3890,71 @@
         </sc-if>
       </div></sc-if>
 
+      <!-- ── Inbox ───────────────────────────────────────────────────────────
+           One row per conversation, against the client it belongs to. Built on the email threads
+           the mailbox sync already stores — this screen fetches and folds, it does not parse mail.
+
+           The tabs are All / NEEDS A REPLY / Answered rather than the design's channels, for two
+           reasons. Email is the only channel this system syncs, so channel tabs would all show the
+           same list. And "needs a reply" is knowable where "unread" is not: there is no read flag on
+           a message, and there could not be an honest one while people also read their email in
+           Outlook. A thread whose latest message came from the client is a fact. -->
+      <sc-if value="{{ showInbox }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Inbox">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES · CRM</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Inbox</h1>
+          </div>
+          <span style="display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:700; color:{{ inboxStatusColor }}; background:{{ inboxStatusBg }}; padding:7px 14px; border-radius:99px;">
+            <span style="width:7px; height:7px; border-radius:99px; background:{{ inboxStatusColor }};"></span>{{ inboxStatus }}
+          </span>
+        </section>
+
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
+          <sc-for list="{{ inboxTabs }}" as="t" hint-placeholder-count="3">
+            <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 15px; border-radius:99px; cursor:pointer;">
+              {{ t.label }}
+              <span style="font-size:10.5px; font-weight:700; color:{{ t.countColor }};">{{ t.count }}</span>
+            </span>
+          </sc-for>
+        </section>
+
+        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .09s both; overflow:hidden;">
+          <sc-for list="{{ inboxRows }}" as="c" hint-placeholder-count="6">
+            <div onClick="{{ c.open }}" style="display:flex; align-items:center; gap:15px; padding:15px 22px; border-bottom:1px solid #F7F5FB; cursor:pointer; background:{{ c.rowBg }}; position:relative;" style-hover="background:#FBFAFE;">
+              <!-- The purple edge marks a thread waiting on us. It is the one thing somebody opens
+                   this screen to find, so it is the one thing drawn outside the text. -->
+              <sc-if value="{{ c.needsReply }}" hint-placeholder-val="{{ false }}">
+                <span style="position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:0 99px 99px 0; background:#7C00FF;"></span>
+              </sc-if>
+              <span style="width:42px; height:42px; border-radius:14px; background:linear-gradient(135deg,#F3E8FF,#EFEBFA); color:#7C00FF; font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</span>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                  <span style="font-size:13.5px; font-weight:{{ c.weight }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.company }}</span>
+                  <span style="font-size:10.5px; color:#B4AFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.contact }}</span>
+                  <!-- Mail that matched no client. Worth naming: it is somebody's job to attach it,
+                       and it is invisible on every other screen in the system. -->
+                  <sc-if value="{{ c.unmatched }}" hint-placeholder-val="{{ false }}">
+                    <span title="This thread is not attached to a client yet" style="flex-shrink:0; font-size:9px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:2px 8px; border-radius:99px;">unmatched</span>
+                  </sc-if>
+                </div>
+                <div style="font-size:12px; color:#8C8899; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.subject }}</div>
+              </div>
+              <sc-if value="{{ c.hasCount }}" hint-placeholder-val="{{ false }}">
+                <span title="Messages in this thread" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:3px 9px; border-radius:99px;">{{ c.count }}</span>
+              </sc-if>
+              <sc-if value="{{ c.hasOwner }}" hint-placeholder-val="{{ true }}">
+                <span title="Managed by {{ c.owner }}" style="width:26px; height:26px; border-radius:99px; background:#26074D; color:#fff; font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.ownerInitials }}</span>
+              </sc-if>
+              <span style="flex-shrink:0; width:40px; text-align:right; font-size:10.5px; color:#B4AFC4;">{{ c.when }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:50px 24px; text-align:center; font-size:12.5px; color:#A9A6B4; line-height:1.7; max-width:460px; margin:0 auto;">{{ inboxEmptyNote }}</div>
+          </sc-if>
+        </section>
+      </div></sc-if>
+
       <!-- ── Follow-ups ─────────────────────────────────────────────────────────────────────────
            The morning screen: everything somebody undertook to do, by the date they said. Overdue
            first, because the ones that slipped are the ones worth reading. -->
@@ -4614,11 +4679,11 @@
       <!-- ── Sales Analytics ────────────────────────────────────────────────────────────────────
            Every figure here is counted on the server when asked. Nothing is stored, so nothing can
            be stale, and the board and this screen cannot disagree about what was won. -->
-      <sc-if value="{{ showPerformance }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Sales Analytics">
+      <sc-if value="{{ showPerformance }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Targets &amp; Forecast">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
             <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
-            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Analytics</h1>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Targets &amp; Forecast</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ perfSub }}</div>
           </div>
           <div class="pill-selwrap">
@@ -11626,7 +11691,7 @@ class Component extends DCLogic {
       // active screen is decided by `act === '<label>'`. A second entry called Dashboard would put
       // two screens behind one name and light both up at once.
       'Sales Dashboard': 'Sales', 'Activities': 'Sales',
-      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Sales Analytics': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Operations Analytics': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure',
+      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Operations Analytics': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
@@ -11865,6 +11930,15 @@ class Component extends DCLogic {
       // second copy of those rules here would disagree with the one that raises the alerts.
       // Teams are loaded whole rather than per screen: the Edit user dialog shows somebody's team
       // too, and two loaders reading the same thing is two things that can be stale differently.
+      /**
+       * The conversation list. Fetched on demand rather than with the rest of the CRM: an inbox is
+       * a screen people open, not a number another screen needs, and a mailbox nobody has connected
+       * would otherwise cost every page load a round trip to be told so.
+       */
+      this._loadInbox = () => fetch(API + '/api/inbox', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v) this.setState({ inboxData: v }); })
+        .catch(() => {});
       this._loadTeams = () => fetch(API + '/api/teams?all=1', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ teamsData: v }); })
@@ -13390,7 +13464,7 @@ class Component extends DCLogic {
       // Ordered to follow the life of a deal: the board first because it is what people open, then
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
-      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Sales Teams', I.users], ['Sales Analytics', I.layers]]],
+      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers]]],
       ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Operations Analytics', I.layers]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
@@ -23709,7 +23783,8 @@ class Component extends DCLogic {
       // One screen, two mount points — the kind is read from which of them is active.
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
       showChecklistRules: act === 'Checklist Rules',
-      showFollowUps: act === 'Follow-ups', showPerformance: act === 'Sales Analytics', showSetupCheck: act === 'Setup Check',
+      showInbox: act === 'Inbox',
+      showFollowUps: act === 'Follow-ups', showPerformance: act === 'Targets & Forecast', showSetupCheck: act === 'Setup Check',
       showOpsPerf: act === 'Operations Analytics',
     };
 
@@ -25042,12 +25117,12 @@ class Component extends DCLogic {
             },
             {
               icon: I.alert, bg: '#FEECEC', color: '#E5484D', value: ord(D.deals.lost.thisMonth),
-              label: 'Lost', sub: _money9(D.deals.lost.thisMonthMinor, ccy), go: goTo('Sales Analytics', 'Sales'),
+              label: 'Lost', sub: _money9(D.deals.lost.thisMonthMinor, ccy), go: goTo('Targets & Forecast', 'Sales'),
             },
             {
               icon: I.stamp, bg: '#F3E8FF', color: '#7C00FF',
               value: D.deals.winRateBp == null ? '—' : (D.deals.winRateBp / 100).toFixed(0) + '%',
-              label: 'Win rate', sub: D.deals.winRateBp == null ? 'nothing decided yet' : 'of deals decided', go: goTo('Sales Analytics', 'Sales'),
+              label: 'Win rate', sub: D.deals.winRateBp == null ? 'nothing decided yet' : 'of deals decided', go: goTo('Targets & Forecast', 'Sales'),
             },
             {
               icon: I.layers, bg: '#EAF4FE', color: '#0284C7', value: ord(D.deals.open.count),
@@ -25970,6 +26045,81 @@ class Component extends DCLogic {
           tmAdd: () => this.setState({ ntOpen: true, ntName: '', ntLead: '', ntErr: '' }),
         };
       })(),
+      // ── Inbox ─────────────────────────────────────────────────────────────────────────────
+      ...(() => {
+        const D9 = this.state.inboxData || null;
+        // Asked for the first time the screen is opened, and never again from here — a binder that
+        // fetches on every render fetches on every keystroke.
+        if (this.state.active === 'Inbox' && !D9 && !this._inboxAsked) {
+          this._inboxAsked = true;
+          if (this._loadInbox) this._loadInbox();
+        }
+        const all9 = (D9 && Array.isArray(D9.threads)) ? D9.threads : [];
+        const tab9 = this.state.inboxTab || 'All';
+        const rows9 = tab9 === 'Needs a reply' ? all9.filter(t => t.needsReply)
+          : tab9 === 'Answered' ? all9.filter(t => !t.needsReply)
+          : all9;
+        const ini9 = (n) => (String(n || '').match(/[\p{L}\p{N}]+/gu) || []).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+        const ago9 = (iso) => {
+          const t = Date.parse(String(iso == null ? '' : iso));
+          if (!Number.isFinite(t)) return '';
+          const m = Math.round((Date.now() - t) / 60000);
+          if (m < 60) return Math.max(1, m) + 'm';
+          const h = Math.round(m / 60);
+          if (h < 24) return h + 'h';
+          const d = Math.round(h / 24);
+          return d < 7 ? d + 'd' : Math.round(d / 7) + 'w';
+        };
+        return {
+          inboxTabs: ['All', 'Needs a reply', 'Answered'].map(k => {
+            const on = tab9 === k;
+            const n = k === 'All' ? all9.length
+              : k === 'Needs a reply' ? all9.filter(t => t.needsReply).length
+              : all9.filter(t => !t.needsReply).length;
+            return {
+              label: k, count: String(n),
+              color: on ? '#7C00FF' : '#6F6C7A',
+              bg: on ? '#fff' : 'transparent',
+              shadow: on ? '0 1px 3px rgba(38,7,77,.14)' : 'none',
+              countColor: on ? '#B98BFF' : '#B4AFC4',
+              pick: () => this.setState({ inboxTab: k }),
+            };
+          }),
+          inboxRows: rows9.map(t => ({
+            company: t.company || t.counterparty || 'Unknown sender',
+            initials: ini9(t.company || t.counterparty),
+            // An address with no client behind it is the useful thing to see, not a blank: it means
+            // the matcher could not place them, which is a job for somebody.
+            contact: t.contact || t.counterparty || '',
+            subject: t.subject || '(no subject)',
+            count: t.messages > 1 ? String(t.messages) : '',
+            hasCount: t.messages > 1,
+            when: ago9(t.lastAt),
+            needsReply: !!t.needsReply,
+            rowBg: t.needsReply ? '#FDFBFF' : '#fff',
+            weight: t.needsReply ? '700' : '600',
+            owner: t.owner || 'Unassigned',
+            ownerInitials: ini9(t.owner),
+            hasOwner: !!t.owner,
+            unmatched: !t.companyId,
+            open: t.companyId
+              ? () => this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance', clientOpen: t.companyId })
+              : () => {},
+          })),
+          inboxEmpty: rows9.length === 0,
+          // Three different nothings, and they need three different sentences: no mailbox, a
+          // mailbox with nothing in it, and a filter that matched none of what is there.
+          inboxEmptyNote: !D9 ? 'Reading the mailbox\u2026'
+            : !D9.connected ? 'No mailbox is connected yet. Once one is, the conversations it syncs appear here against the client they belong to.'
+            : all9.length === 0 ? 'The mailbox is connected but nothing has synced yet.'
+            : 'Nothing on this filter.',
+          inboxConnected: !!(D9 && D9.connected),
+          inboxStatus: !D9 ? 'Loading' : (D9.connected ? 'Mailbox connected' : 'No mailbox connected'),
+          inboxStatusColor: (D9 && D9.connected) ? '#0E9355' : '#B7791F',
+          inboxStatusBg: (D9 && D9.connected) ? '#E7F8EF' : '#FFF6E5',
+        };
+      })(),
+
       // ── New team ──────────────────────────────────────────────────────────────────────────
       ...(() => {
         const open9 = !!this.state.ntOpen;

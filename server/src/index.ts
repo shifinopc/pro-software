@@ -4542,6 +4542,88 @@ app.get("/api", (_req, res) => {
 // A person connects their OWN mailbox, and only their own. There is no route by which an admin
 // connects somebody else's — a grant somebody did not personally give is not consent, and the
 // whole feature rests on being able to say that honestly to the staff it reads.
+/**
+ * THE INBOX — one row per conversation, newest first.
+ *
+ * Built on EmailMessage, which already stores a threadId, a direction and the company and contact a
+ * message was matched to. This route does not fetch or parse anything; it folds what the mailbox
+ * sync has already written into the shape a list wants.
+ *
+ * "NEEDS A REPLY" RATHER THAN "UNREAD". There is no read flag on a message and adding one would be
+ * a lie the moment somebody read an email in Outlook instead — nothing here could ever know. What a
+ * salesperson actually wants from an inbox is narrower and IS knowable: threads whose most recent
+ * message came from the client. That is a fact about the data, not a guess about a person.
+ */
+app.get("/api/inbox", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const scoped = await salesCompanyIds(req as any);
+  const msgs = await prisma.emailMessage.findMany({
+    where: scoped ? { companyId: { in: scoped } } : {},
+    orderBy: { sentAt: "desc" },
+    take: 1000,
+    select: {
+      id: true, threadId: true, companyId: true, contactId: true,
+      direction: true, subject: true, counterparty: true, sentAt: true,
+    },
+  });
+
+  // Newest first already, so the FIRST message seen for a thread is its latest.
+  const threads = new Map<string, any>();
+  for (const m of msgs) {
+    const t = threads.get(m.threadId);
+    if (!t) {
+      threads.set(m.threadId, {
+        threadId: m.threadId, companyId: m.companyId, contactId: m.contactId,
+        lastAt: m.sentAt, lastDirection: m.direction,
+        subject: m.subject, counterparty: m.counterparty, messages: 1,
+      });
+    } else {
+      t.messages += 1;
+      // Keep the first company/contact we can find: the newest message may be a bare reply the
+      // matcher could not attribute, while an earlier one in the same thread was matched.
+      if (!t.companyId && m.companyId) t.companyId = m.companyId;
+      if (!t.contactId && m.contactId) t.contactId = m.contactId;
+      if (!t.subject && m.subject) t.subject = m.subject;
+    }
+  }
+
+  const list = [...threads.values()];
+  const coIds = [...new Set(list.map(t => t.companyId).filter(Boolean))] as string[];
+  const ctIds = [...new Set(list.map(t => t.contactId).filter(Boolean))] as string[];
+  const [cos, cts] = await Promise.all([
+    coIds.length ? prisma.company.findMany({ where: { id: { in: coIds } }, select: { id: true, name: true, ownerId: true, lifecycle: true } }) : [],
+    ctIds.length ? prisma.contact.findMany({ where: { id: { in: ctIds } }, select: { id: true, name: true } }) : [],
+  ]);
+  const owners = [...new Set(cos.map(c => c.ownerId).filter(Boolean))] as string[];
+  const users = owners.length ? await prisma.user.findMany({ where: { id: { in: owners } }, select: { id: true, name: true } }) : [];
+  const coById = new Map(cos.map(c => [c.id, c]));
+  const ctById = new Map(cts.map(c => [c.id, c]));
+  const userById = new Map(users.map(u => [u.id, u.name]));
+
+  res.json({
+    // Said by the route rather than inferred from an empty list: a connected mailbox with nothing
+    // in it and no mailbox at all are the same picture and completely different problems.
+    connected: (await prisma.mailboxConnection.count()) > 0,
+    threads: list
+      .sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)))
+      .map(t => {
+        const co = t.companyId ? coById.get(t.companyId) : null;
+        return {
+          threadId: t.threadId,
+          company: co ? co.name : null,
+          companyId: t.companyId,
+          lifecycle: co ? co.lifecycle : null,
+          contact: t.contactId ? (ctById.get(t.contactId)?.name ?? null) : null,
+          counterparty: t.counterparty,
+          subject: t.subject,
+          messages: t.messages,
+          lastAt: t.lastAt,
+          needsReply: t.lastDirection === "in",
+          owner: co && co.ownerId ? (userById.get(co.ownerId) ?? null) : null,
+        };
+      }),
+  });
+});
+
 app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
   const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
