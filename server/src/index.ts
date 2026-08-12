@@ -23,7 +23,7 @@ import { salesRules } from "./salesrules.js";
 import { findDuplicates } from "./duplicates.js";
 import { nextOwner, nextOwnerFor, rotation, distributeUnowned, assignableOwners, recordAssignment, assignmentHistory } from "./assignment.js";
 import { routeFor } from "./routing.js";
-import { scoreOpenLeads } from "./leadscore.js";
+import { scoreOpenLeads, scoreLead, sourceConversion } from "./leadscore.js";
 import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
@@ -2539,6 +2539,36 @@ const LEAD_DELETE_BLOCKERS: { label: (n: number) => string; count: (id: string) 
   { label: n => `${n} email${n === 1 ? "" : "s"}`,           count: id => prisma.emailMessage.count({ where: { companyId: id } }) },
   { label: n => `${n} file${n === 1 ? "" : "s"}`,            count: id => prisma.fileAsset.count({ where: { companyId: id } }) },
 ];
+
+/**
+ * WHAT THIS LEAD WOULD SCORE, before it exists.
+ *
+ * The Add-lead form shows the score live as somebody types, so they can see that adding a phone
+ * number or naming the source is worth something rather than discovering it after saving.
+ *
+ * Scored by the SAME scoreLead the Leads screen and the hourly job use — handed a draft instead of
+ * a row. That is the whole point of routing it through here: a preview computed in the browser
+ * would be a second implementation of the model, and the number under the form would start
+ * disagreeing with the number on the row the first time either changed.
+ *
+ * A draft has no history, so the context is empty by definition: no interactions, no deal. The
+ * preview is therefore the floor — the score can only go up once somebody works it — and never
+ * flatters a lead by assuming activity that has not happened.
+ */
+app.post("/api/leads/score-preview", requireAuth, requireStaff, async (req, res) => {
+  const b = req.body ?? {};
+  const str = (v: unknown) => String(v ?? "").trim() || null;
+  const score = await scoreLead(
+    {
+      id: "preview",
+      source: str(b.source), city: str(b.city), cr: str(b.cr),
+      contact: str(b.contact), email: str(b.email), phone: str(b.phone),
+      createdAt: new Date().toISOString(),
+    },
+    { interactions: [], hasOpenDeal: false, dealHasValue: false, conv: await sourceConversion() },
+  );
+  res.json(score);
+});
 
 app.delete("/api/companies/:id/lead", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;

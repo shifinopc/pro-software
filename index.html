@@ -9341,6 +9341,25 @@
               <div style="font-size:11px; color:#8C6B1F; margin-top:10px; line-height:1.5;">If this really is a different company, carry on — saving is not blocked.</div>
             </div>
           </sc-if>
+          <!-- AUTO LEAD SCORE, from the design. Live as the form is typed, so somebody can see that
+               naming the source or adding a number is worth something — rather than finding out
+               after they have saved. Scored by the SAME function the Leads list uses; a preview
+               worked out in the browser would be a second copy of the model, and the number here
+               would start disagreeing with the number on the row. -->
+          <sc-if value="{{ ldfScoreShown }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:14px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:14px 16px;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+                <span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.08em;">AUTO LEAD SCORE</span>
+                <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
+              </div>
+              <div style="height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;">
+                <div style="height:100%; width:{{ ldfScore }}%; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
+              </div>
+              <div style="font-size:11px; color:#4B4757; margin-top:8px; font-weight:600;">{{ ldfScoreBand }}</div>
+              <!-- What moved it, in the model's own words, so the number is never just a number. -->
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ ldfScoreWhy }}</div>
+            </div>
+          </sc-if>
           <sc-if value="{{ ldfGeneralErr }}" hint-placeholder-val="{{ false }}">
             <div class="fm-err" style="margin-top:12px;">{{ ldfGeneralErr }}</div>
           </sc-if>
@@ -11461,6 +11480,27 @@ class Component extends DCLogic {
       // Takes its filters as ARGUMENTS rather than reading state, for the same reason the activity
       // loader does: the screen re-fetches the moment a control is pressed, and a closure that read
       // state would read the value from before the press.
+      /**
+       * Score the draft as it is typed. Debounced, because this fires on every keystroke in five
+       * fields and the answer only matters once somebody stops.
+       *
+       * The request is sequenced, not just debounced: a slow reply from an older draft would
+       * otherwise land after a newer one and put a stale score under a form that has moved on.
+       */
+      this._scoreSeq = 0;
+      this._previewScore = (draft) => {
+        clearTimeout(this._scoreT);
+        this._scoreT = setTimeout(() => {
+          const seq = ++this._scoreSeq;
+          fetch(API + '/api/leads/score-preview', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', ...hdr },
+            body: JSON.stringify(draft || {}),
+          })
+            .then(r => (r.ok ? r.json() : null))
+            .then(v => { if (v && seq === this._scoreSeq) this.setState({ ldfScoreData: v }); })
+            .catch(() => {});
+        }, 260);
+      };
       this._loadCrmDash = (opts) => {
         const o = opts || {};
         const qs = new URLSearchParams();
@@ -23853,7 +23893,13 @@ class Component extends DCLogic {
       // question was not answered, '__other' opens the free-text box beneath. No search field —
       // a handful of fixed options, where a filter box would be furniture.
       ...mkDdSearch('ddLdfSrc', _srcOpts9, _sourceSel9(_ldf && _ldf.source, _ldf && _ldf.sourceOther),
-        (v) => this.setState({ ldForm: _applySourceSel9(this.state.ldForm, v), ldfErr: '', ldfBad: '' })),
+        (v) => {
+          const next = _applySourceSel9(this.state.ldForm, v);
+          this.setState({ ldForm: next, ldfErr: '', ldfBad: '' });
+          if (!next.id && this._previewScore) {
+            this._previewScore({ contact: next.contact, email: next.email, phone: next.phone, source: next.source, city: next.city });
+          }
+        }),
       ...mkDdSearch('ddDlfSrc', _srcOpts9, _sourceSel9(_dl && _dl.source, _dl && _dl.sourceOther),
         (v) => this.setState({ dealEdit: _applySourceSel9(this.state.dealEdit, v), dlErr: '' })),
       lcReasonChips: _chips9(_reasonList, _lc && _lc.reason, v => this.setState({ lcOpen: { ...(this.state.lcOpen || {}), reason: v }, lcErr: '' })),
@@ -26383,7 +26429,7 @@ class Component extends DCLogic {
       // field is a required-looking one with a warning under it rather than a silent blank — but
       // the default was being accepted unread, and a picker whose answer is already filled in is
       // not a question anybody reads.
-      ldAdd: () => this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '' }),
+      ldAdd: () => { if (this._previewScore) this._previewScore({}); return this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null }); },
       // Typed into the field itself — see mkDdCombo. Sections come from _ownerSections9, so the
       // people who may carry a book are listed first and everybody else under their own heading.
       ...mkDdCombo('ddLdfOwner', _ownerSections9('Unassigned — nobody will see this in the sales views'),
@@ -26395,6 +26441,29 @@ class Component extends DCLogic {
       ldfOwnerWarn: !(_ldf && _ldf.owner),
 
       // ── Add-lead form ──
+      /**
+       * The live score panel. Shown only on a NEW lead: on an edit the row already has a real
+       * score, worked out from its actual history, and a preview beside it that ignores every
+       * conversation ever logged would be the lower and more visible of two numbers for one lead.
+       */
+      ldfScoreShown: !!_ldf && !_ldf.id,
+      ...(() => {
+        const sc = this.state.ldfScoreData || null;
+        const n = sc ? Math.max(0, Math.min(100, Number(sc.score) || 0)) : 0;
+        // Same bands the Leads list colours its score chip by, so a lead that reads warm here does
+        // not read cold on the row it becomes.
+        const band = n >= 70 ? ['Hot — worth calling today', '#0E9355']
+          : n >= 40 ? ['Warm — follow up within 24h', '#B8860B']
+          : n > 0 ? ['Cool — needs qualifying', '#0284C7']
+          : ['Not enough to score yet', '#A9A6B4'];
+        return {
+          ldfScore: String(n),
+          ldfScoreColor: band[1],
+          ldfScoreBand: band[0],
+          // The model's own sentence for the weakest component — what to fix next, not a verdict.
+          ldfScoreWhy: sc && sc.weakest ? sc.weakest : 'Weighted by how reachable they are, the source, and what is filled in.',
+        };
+      })(),
       ldFormOpen: !!_ldf,
       // One dialog, two jobs. An `id` on the draft means it is correcting a record that exists —
       // which changes the words, the verb on the button, and where the save goes.
@@ -26437,6 +26506,11 @@ class Component extends DCLogic {
         (e) => {
           const next = { ...(this.state.ldForm || {}), [k]: e.target.value };
           this.setState({ ldForm: next, ldfErr: '', ldfBad: '' });
+          // Re-score on the five fields the model actually reads. Firing on job title or notes
+          // would cost a request per keystroke for a number that cannot move.
+          if (!next.id && ['contact', 'email', 'phone', 'source', 'city'].includes(k) && this._previewScore) {
+            this._previewScore({ contact: next.contact, email: next.email, phone: next.phone, source: next.source, city: next.city });
+          }
           // Only the three fields that identify a company are worth asking about.
           if (k === 'name' || k === 'email' || k === 'phone') {
             // `excludeId` when editing, or the record would warn that it is a duplicate of itself —
