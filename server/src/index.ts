@@ -1755,6 +1755,194 @@ app.get("/api/ops-report", requireAuth, requireStaff, requireReadRole("super_adm
 });
 
 /**
+ * TEAM PERFORMANCE — the operations screen, in one call.
+ *
+ * The sales half of this app measures money. The officers running the government steps are measured
+ * on WORK: how much of it closed, whether it closed inside its SLA, how long it took, and which
+ * authority it was sitting at. Those are different questions with different units, which is why this
+ * is its own screen and its own endpoint rather than a tab on the sales report.
+ *
+ * Everything here is DERIVED from workflow steps except the target, which is a number a human
+ * agreed and therefore has to be stored. It lives in AppSetting rather than a table of its own —
+ * one small map of period → count, with no relations to keep straight.
+ *
+ * WHAT IT REFUSES TO CLAIM
+ *
+ * · A step with no SLA is not a step that met its SLA. The rate is over steps that HAD one, and is
+ *   null when none did — "100% on time" out of nothing measured is indefensible in a meeting.
+ * · Steps nobody is assigned to are not nobody's work, they are unattributed. They are counted and
+ *   named, never silently folded into the totals of whoever is on the board.
+ * · A future month has no throughput. Its bar is a projection from the run rate, drawn differently
+ *   and labelled as such, and it is never added to what actually closed.
+ */
+const OPS_TARGET_KEY = "opsTaskTarget";
+
+const opsTaskTargets = async (): Promise<Record<string, number>> => {
+  const row = await prisma.appSetting.findUnique({ where: { key: OPS_TARGET_KEY } });
+  const v = (row?.value ?? {}) as any;
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+};
+
+app.get("/api/team-performance", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), async (req, res) => {
+  const period = String(req.query.period ?? "").trim() || currentPeriod();
+  const range = periodRange(period);
+  if (!range) return res.status(400).json({ error: `"${period}" is not a period — use 2026-08` });
+
+  // The same visibility rungs as every other report: a lead sees their team, not the firm.
+  const vis = await visibleUserIds((req as any).auth, asAtFor(period));
+  const scopeWhere: any = vis.ids === null ? {} : { assigneeId: { in: vis.ids } };
+
+  const [report, targets, done6, openNow] = await Promise.all([
+    opsReport({ period, assigneeIds: vis.ids }),
+    opsTaskTargets(),
+    // Six months of completions in ONE query — six round trips for six bars is six times the cost
+    // for the same answer.
+    prisma.workflowTask.findMany({
+      where: { ...scopeWhere, status: { in: ["done", "approved"] }, completedAt: { not: null } },
+      select: { completedAt: true, govCenter: true, assigneeId: true },
+      take: 20000,
+    }),
+    prisma.workflowTask.findMany({
+      where: { ...scopeWhere, status: "active" },
+      select: { govCenter: true },
+      take: 5000,
+    }),
+  ]);
+
+  // ── the six-month strip, anchored on the period being viewed ────────────────────────────────
+  const anchor = new Date(range.from);
+  const months: Array<{ key: string; label: string }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() - i, 1));
+    months.push({
+      key: d.toISOString().slice(0, 7),
+      // Trimmed to three, for the same reason the sales strip is: en-GB returns "Sept" and one
+      // wider label in the middle of a row of bars reads as a mistake.
+      label: d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }).slice(0, 3),
+    });
+  }
+  const thisMonth = currentPeriod();
+  const closedIn = (key: string) => done6.filter(t => String(t.completedAt).slice(0, 7) === key).length;
+
+  // The RUN RATE that projects the months not yet finished: the mean of the last three months that
+  // are actually over. Months still running are excluded — a month three days old would drag the
+  // rate to near zero and make every projection after it look like a collapse.
+  const finished = months.map(m => m.key).filter(k => k < thisMonth);
+  const recent = finished.slice(-3).map(closedIn);
+  const runRate = recent.length ? Math.round(recent.reduce((a, b) => a + b, 0) / recent.length) : null;
+
+  const strip = months.map(m => {
+    const isFuture = m.key > thisMonth;
+    const isCurrent = m.key === thisMonth;
+    const actual = closedIn(m.key);
+    return {
+      key: m.key,
+      label: m.label,
+      /** What genuinely closed. A future month has none, and says so rather than showing zero. */
+      actualCount: isFuture ? null : actual,
+      /**
+       * The run rate, for months that have not finished. The CURRENT month projects what it is on
+       * course to reach — not a second bar beside its actual, which would double-count the work
+       * already done in it.
+       */
+      projectedCount: isFuture ? runRate : isCurrent ? runRate : null,
+      targetCount: targets[m.key] ?? null,
+      isFuture,
+      isCurrent,
+    };
+  });
+
+  // ── the month being viewed, against the number somebody agreed ──────────────────────────────
+  const target = targets[period] ?? null;
+  const completed = report.completed;
+
+  // ── load by authority ───────────────────────────────────────────────────────────────────────
+  // Closed in the period, plus what is open there right now. The two are separate facts: one is
+  // what an authority took, the other is what it is holding.
+  const inPeriod = done6.filter(t => String(t.completedAt).slice(0, 7) === period);
+  const byAuthority = new Map<string, { closed: number; open: number }>();
+  for (const t of inPeriod) {
+    if (!t.govCenter) continue;
+    const e = byAuthority.get(t.govCenter) ?? { closed: 0, open: 0 };
+    e.closed++; byAuthority.set(t.govCenter, e);
+  }
+  for (const t of openNow) {
+    if (!t.govCenter) continue;
+    const e = byAuthority.get(t.govCenter) ?? { closed: 0, open: 0 };
+    e.open++; byAuthority.set(t.govCenter, e);
+  }
+  const authorities = [...byAuthority.entries()]
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => (b.closed + b.open) - (a.closed + a.open));
+
+  /**
+   * Government submissions: closed steps that were carried out AT an authority. Null-govCenter
+   * steps are internal work, not submissions — counting them would inflate the one figure a client
+   * is most likely to ask to see evidence for.
+   */
+  const govSubmissions = inPeriod.filter(t => t.govCenter).length;
+  /** How much of the period's work records an authority at all — the honesty denominator. */
+  const govUnrecorded = inPeriod.length - govSubmissions;
+
+  res.json({
+    period,
+    label: range.label,
+    scope: vis.scope,
+    target,
+    completed,
+    /** Null rather than 0% when no target is set: unmeasured is not unachieved. */
+    pctBp: target && target > 0 ? Math.round((completed * 10000) / target) : null,
+    gap: target != null ? Math.max(0, target - completed) : null,
+    onTimeRateBp: report.onTimeRateBp,
+    withSla: report.withSla,
+    /** MEDIAN, not mean — one step parked for three months would drag an average past usefulness. */
+    medianDays: report.medianDays,
+    medianSample: report.medianSample,
+    govSubmissions,
+    govUnrecorded,
+    strip,
+    runRate,
+    authorities,
+    // Per-officer submissions, counted HERE rather than in opsReport: the authority lives on the
+    // step and the shared module has no reason to know about it, so this stays a fact of this
+    // screen instead of widening a report four other things depend on.
+    officers: report.officers.map(o => ({
+      ...o,
+      govSubmissions: inPeriod.filter(t => t.assigneeId === o.userId && t.govCenter).length,
+    })),
+    unattributed: report.unattributed,
+    openNow: report.openNow,
+    openBreached: report.openBreached,
+    periods: await opsPeriodsWithActivity(),
+  });
+});
+
+/**
+ * Set the team's task target for a month. Blank CLEARS it: "no target agreed" is a different fact
+ * from "a target of zero", and only the second should ever produce a 0% bar.
+ */
+app.put("/api/team-performance/target", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const period = String((req.body ?? {}).period ?? "").trim();
+  if (!periodRange(period)) return res.status(400).json({ error: `"${period}" is not a period — use 2026-08` });
+  const raw = (req.body ?? {}).count;
+  const map = await opsTaskTargets();
+  if (raw === null || raw === "" || raw === undefined) {
+    delete map[period];
+  } else {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: "A target is a whole number of tasks" });
+    map[period] = n;
+  }
+  await prisma.appSetting.upsert({
+    where: { key: OPS_TARGET_KEY },
+    create: { key: OPS_TARGET_KEY, value: map },
+    update: { value: map },
+  });
+  await logAudit({ action: "ops.task-target", actorId: (req as any).auth?.sub, target: period, detail: String(map[period] ?? "cleared"), ip: clientIp(req) });
+  res.json({ ok: true, period, count: map[period] ?? null });
+});
+
+/**
  * TARGETS & FORECAST — the four panels of that screen, counted here, in one call.
  *
  * Nothing is stored. Every figure is derived from deals, their stages and the targets somebody has

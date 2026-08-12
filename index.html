@@ -4897,6 +4897,167 @@
            This replaced a "reports to" box on each person. The operation that box could not do is
            the one this screen is built around: changing a lead is a single press here, whatever the
            membership, and it is recorded rather than overwritten. -->
+      <!-- ══ TEAM PERFORMANCE ══════════════════════════════════════════════════
+           The operations answer to Targets & Forecast. Same shape, different unit: that screen counts
+           money and this one counts work, which is why the two are not tabs of one thing. -->
+      <sc-if value="{{ showTeamPerf }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Team Performance">
+
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">OPERATIONS</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Team Performance</h1>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ tpSub }}</div>
+          </div>
+          <div class="pill-selwrap">
+            <div data-dd data-open="{{ ddTpPeriodOpen }}" onClick="{{ ddTpPeriodToggle }}" class="pill-sel">
+              <span>{{ ddTpPeriodLabel }}</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0; opacity:.6;"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+            <sc-if value="{{ ddTpPeriodOpen }}" hint-placeholder-val="{{ false }}">
+              <div data-dd data-hidescroll="true" class="pill-dd">
+                <sc-for list="{{ ddTpPeriodOptions }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <!-- Each chip carries WHAT IT WAS MEASURED OVER underneath it. A bare rate is the figure
+               that gets quoted in a meeting and cannot be defended when somebody asks. -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <sc-for list="{{ tpStats }}" as="s" hint-placeholder-count="3">
+              <div title="{{ s.title }}" style="min-width:118px; background:#fff; border:1px solid #EDEBF2; border-radius:14px; padding:11px 15px;">
+                <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.08em;">{{ s.label }}</div>
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:700; color:{{ s.color }}; margin-top:3px; font-variant-numeric:tabular-nums;">{{ s.value }}</div>
+                <div style="font-size:10px; color:#B4AFC4; margin-top:1px;">{{ s.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.6fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both;">
+          <!-- The month against the number somebody agreed. Clicking it sets that number. -->
+          <div onClick="{{ tpSetTarget }}" title="Click to set this month’s task target" style="background:linear-gradient(135deg,#3A0A76,#7C00FF); color:#fff; border-radius:18px; padding:22px 24px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; min-height:150px; box-shadow:0 16px 40px -18px rgba(124,0,255,.7);">
+            <div>
+              <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.75;">{{ tpTargetLabel }}</div>
+              <div style="display:flex; align-items:baseline; gap:9px; margin-top:8px;">
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; letter-spacing:-.02em; line-height:1;">{{ tpDone }}</span>
+                <span style="font-size:12.5px; opacity:.8;">{{ tpOf }}</span>
+              </div>
+            </div>
+            <div style="margin-top:18px;">
+              <div style="height:7px; background:rgba(255,255,255,.22); border-radius:99px; overflow:hidden;">
+                <div style="height:100%; width:{{ tpBarW }}; background:linear-gradient(90deg,#6FE7B7,#F5D06B); border-radius:99px;"></div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:11px;">
+                <span style="opacity:.9;">{{ tpPctLine }}</span>
+                <span style="font-weight:700;">{{ tpGapLine }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SOLID is what closed, PALE is what the run rate expects. A projection drawn like a
+               fact is the reason forecast charts stop being believed. -->
+          <div class="pg-card" style="padding:18px 20px 14px; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Throughput forecast</div>
+              <div style="display:flex; align-items:center; gap:12px; font-size:10.5px; color:#8C8899;">
+                <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#7C00FF;"></span>Closed</span>
+                <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#DDC2FF;"></span>Projected</span>
+                <span style="display:flex; align-items:center; gap:5px;"><span style="width:11px; height:2px; background:#A9A6B4;"></span>Target</span>
+              </div>
+            </div>
+            <div style="flex:1; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:12px; align-items:end; margin-top:16px; min-height:132px;">
+              <sc-for list="{{ tpBars }}" as="b" hint-placeholder-count="6">
+                <div title="{{ b.title }}" style="display:flex; flex-direction:column; align-items:stretch; gap:6px;">
+                  <div style="position:relative; height:118px; display:flex; flex-direction:column; justify-content:flex-end;">
+                    <sc-if value="{{ b.hasTarget }}" hint-placeholder-val="{{ true }}">
+                      <div style="position:absolute; left:0; right:0; top:{{ b.targetY }}; border-top:2px dashed #C9C4D4;"></div>
+                    </sc-if>
+                    <sc-if value="{{ b.hasProj }}" hint-placeholder-val="{{ true }}">
+                      <div style="height:{{ b.projH }}; background:#DDC2FF; border-radius:8px 8px 0 0;"></div>
+                    </sc-if>
+                    <div style="height:{{ b.actH }}; background:#7C00FF; border-radius:8px 8px 0 0;"></div>
+                  </div>
+                  <div style="text-align:center; font-size:10.5px; font-weight:{{ b.labelWeight }}; color:{{ b.labelColor }};">{{ b.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:10.5px; color:#B4AFC4; margin-top:10px;">{{ tpRunNote }}</div>
+          </div>
+        </section>
+
+        <section style="display:grid; grid-template-columns:minmax(340px,1.6fr) minmax(260px,1fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both;">
+          <div class="pg-card" style="padding:18px 20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div>
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">PRO officer leaderboard</div>
+                <div style="font-size:11.5px; font-weight:600; color:#0E9355; margin-top:2px;">{{ tpTopLine }}</div>
+              </div>
+              <span style="font-size:10.5px; color:#B4AFC4;">ranked by steps closed · % is SLA kept</span>
+            </div>
+
+            <sc-if value="{{ tpHasOfficers }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:9px; margin-top:14px;">
+                <sc-for list="{{ tpOfficers }}" as="o" hint-placeholder-count="4">
+                  <div style="display:flex; align-items:center; gap:12px; background:{{ o.rowBg }}; border:1px solid {{ o.rowBd }}; border-radius:14px; padding:11px 14px;">
+                    <span style="flex-shrink:0; width:24px; text-align:center; font-size:13px; font-weight:700; color:#A9A6B4;">{{ o.rank }}</span>
+                    <span style="flex-shrink:0; width:34px; height:34px; border-radius:50%; background:#7C00FF; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700;">{{ o.initials }}</span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:7px;">
+                        <span style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ o.name }}</span>
+                        <sc-if value="{{ o.top }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex-shrink:0; font-size:9px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:2px 6px; border-radius:6px; letter-spacing:.06em;">TOP</span>
+                        </sc-if>
+                      </div>
+                      <div style="font-size:11px; color:#8C8899; margin-top:1px;">{{ o.sub }}</div>
+                      <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:7px;">
+                        <div style="height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></div>
+                      </div>
+                    </div>
+                    <div style="flex-shrink:0; text-align:right;">
+                      <div title="{{ o.pctTitle }}" style="font-size:14px; font-weight:700; color:{{ o.pctColor }}; font-variant-numeric:tabular-nums;">{{ o.pct }}</div>
+                      <div style="font-size:10px; color:#B4AFC4; margin-top:2px;">{{ o.days }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ tpNoOfficers }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px; font-size:12px; color:#A9A6B4; line-height:1.6;">Nobody closed a step in this period, so there is nothing to rank.</div>
+            </sc-if>
+
+            <!-- Steps that closed with nobody’s id on them. Said out loud rather than folded into the
+                 rows above, which would credit them to whoever happens to be on the board. -->
+            <sc-if value="{{ tpUnattributed }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:11px; color:#B7791F; line-height:1.6;">{{ tpUnattributedNote }}</div>
+            </sc-if>
+            <div style="font-size:10.5px; color:#C9C4D4; margin-top:9px; line-height:1.6;">A closed step is not a unit of effort — a visa renewal and a document reprint both count one.</div>
+          </div>
+
+          <div class="pg-card" style="padding:18px 20px;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Load by authority</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ tpAuthSub }}</div>
+            <sc-if value="{{ tpHasAuth }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:11px; margin-top:15px;">
+                <sc-for list="{{ tpAuth }}" as="a" hint-placeholder-count="6">
+                  <div title="{{ a.title }}" style="display:flex; align-items:center; gap:11px;">
+                    <span style="flex-shrink:0; width:64px; font-size:11.5px; font-weight:700; color:{{ a.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.name }}</span>
+                    <span style="flex:1; min-width:30px; height:8px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ a.barW }}; background:{{ a.color }}; border-radius:99px;"></span></span>
+                    <span style="flex-shrink:0; width:26px; text-align:right; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums;">{{ a.count }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <!-- Empty because no STEP records an authority yet, not because no work happened. The
+                 templates already name them; steps created from here on will carry one. -->
+            <sc-if value="{{ tpNoAuth }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:15px; font-size:12px; color:#A9A6B4; line-height:1.65;">No step in this period records an authority. Workflow steps carry the authority set on their template node — set it in the Workflow Builder and this fills in as those steps run.</div>
+            </sc-if>
+          </div>
+        </section>
+
+      </div></sc-if>
+
       <sc-if value="{{ showTeams }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Teams">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
@@ -11667,7 +11828,7 @@ class Component extends DCLogic {
       // active screen is decided by `act === '<label>'`. A second entry called Dashboard would put
       // two screens behind one name and light both up at once.
       'Sales Dashboard': 'Sales', 'Activities': 'Sales',
-      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure',
+      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
@@ -11920,6 +12081,17 @@ class Component extends DCLogic {
        * opinion about the period, they just want fresh figures — do not silently drag the screen
        * back to the quarter under somebody who is looking at a month.
        */
+      // Remembers the month, so a save reloads the month being looked at rather than snapping back
+      // to today — the same trap the sales strip had.
+      this._loadTP = (period) => {
+        if (period) this._tpPeriod = period;
+        const p = period || this._tpPeriod || '';
+        return fetch(API + '/api/team-performance' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => { if (v && v.period) this.setState({ tpData: v }); })
+          .catch(() => {});
+      };
+
       this._loadTF = (period) => {
         if (period !== undefined) this._tfPeriod = period;
         const p = this._tfPeriod || '';
@@ -13453,7 +13625,7 @@ class Component extends DCLogic {
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
       ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers]]],
-      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users]]],
+      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Receipts', I.card], ['Reports', I.layers]]],
@@ -23770,6 +23942,7 @@ class Component extends DCLogic {
       showActivities: act === 'Activities',
       // One screen, two mount points — the kind is read from which of them is active.
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
+      showTeamPerf: act === 'Team Performance',
       showChecklistRules: act === 'Checklist Rules',
       showInbox: act === 'Inbox',
       showFollowUps: act === 'Follow-ups', showPerformance: act === 'Targets & Forecast', showSetupCheck: act === 'Setup Check',
@@ -26115,6 +26288,205 @@ class Component extends DCLogic {
             };
             run(0);
           },
+        };
+      })(),
+
+      // ── Team Performance ──────────────────────────────────────────────────
+      //
+      // The operations half of performance: work closed, SLA kept, time taken, authority load. It is
+      // measured in TASKS, not money, which is why it is its own screen rather than a tab on the
+      // sales report — the two share no unit and answer to different people.
+      ...(() => {
+        const D = this.state.tpData || null;
+        // Fetched when the screen is opened, not on boot — only somebody looking at it needs it,
+        // and the removed Analytics screen made every session pay for a report nobody read.
+        if (this.state.active === 'Team Performance' && !D && !this._tpAsking) {
+          this._tpAsking = true;
+          if (this._loadTP) this._loadTP();
+        }
+        const mon9 = (k) => {
+          const d = new Date(k + '-01T00:00:00Z');
+          return isNaN(d) ? k : d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        };
+        // Names here carry a parenthetical role — “Omar (PRO Officer)” — so splitting on spaces and
+        // taking first characters produced “O(”. Only real words can start an initial, and the role
+        // words are dropped so two officers are told apart by their names, not by their titles.
+        const inits = (n) => {
+          const words = String(n || '').match(/[A-Za-z\u0600-\u06FF]+/g) || [];
+          // Drop the role, but never to nothing: somebody actually called “Administrator” kept
+          // every word filtered out and came back as “?”.
+          const named = words.filter(w => !/^(pro|officer|accountant|admin|administrator|manager)$/i.test(w));
+          const use = named.length ? named : words;
+          return (use.slice(0, 2).map(w => w[0]).join('') || '?').toUpperCase();
+        };
+        const offs = (D && Array.isArray(D.officers)) ? D.officers : [];
+        // RANKED, unlike the report underneath it, which returns people alphabetically and says in
+        // its own comment that ordering by output is a claim. This screen makes that claim on
+        // purpose — it is a leaderboard — so the caption says what is being ranked, and the note
+        // under it says what a step count is not. Ranking silently would be the dishonest version.
+        const ranked = [...offs].sort((a, b) => (b.completed - a.completed) || a.name.localeCompare(b.name));
+        const topDone = ranked.length ? Math.max(1, ranked[0].completed) : 1;
+        // Nobody is “top” for closing nothing. When the whole board is on zero the medals, the
+        // badge and the headline come off — people still appear, because they are carrying open
+        // work, but the ranking claim is withdrawn rather than made about a tie at nought.
+        const anyDone9 = ranked.some(o => o.completed > 0);
+        const slaPct = (o) => {
+          const den = o.onTime + o.late;
+          return den > 0 ? Math.round((o.onTime * 100) / den) : null;
+        };
+        const bars = (D && Array.isArray(D.strip)) ? D.strip : [];
+        // One scale for every bar, including the projections — drawing each to its own maximum is
+        // how a chart shows a quiet month as a tall bar.
+        const peak = Math.max(1, ...bars.map(b => Math.max(b.actualCount || 0, b.projectedCount || 0, b.targetCount || 0)));
+        const authAll = (D && Array.isArray(D.authorities)) ? D.authorities : [];
+        const authPeak = Math.max(1, ...authAll.map(a => a.closed + a.open));
+        const AUTH_TONE = ['#7C00FF', '#0284C7', '#B7791F', '#6D5BD0', '#0E9355', '#E05252'];
+        const pctBp9 = D && D.pctBp != null ? Math.round(D.pctBp / 100) : null;
+
+        return {
+          tpLoading: !D,
+          // A MONTH PICKER, which the design does not show. Without it this screen can only ever
+          // report the current month, and a firm whose work all closed last month would see an
+          // empty screen with no way to reach the month that has the answers.
+          ...mkDd('ddTpPeriod',
+            ((D && D.periods) || []).map(p => ({ value: p, label: mon9(p) })),
+            (D && D.period) || '',
+            (v) => { if (this._loadTP) this._loadTP(v); }, 'This month'),
+          tpSub: !D ? 'Loading\u2026'
+            : 'PRO team targets, SLA & throughput \u2014 separate from sales quota'
+              + (D.scope === 'team' ? ' \u00b7 your team' : D.scope === 'self' ? ' \u00b7 your own work' : ''),
+
+          // ── the three chips ──────────────────────────────────────────────────
+          // Each one carries what it was measured over. A rate with no denominator beside it is the
+          // kind of figure that gets quoted in a meeting and cannot be defended.
+          tpStats: !D ? [] : [
+            {
+              label: 'SLA MET',
+              value: D.onTimeRateBp != null ? Math.round(D.onTimeRateBp / 100) + '%' : '\u2014',
+              color: D.onTimeRateBp == null ? '#A9A6B4' : D.onTimeRateBp >= 9000 ? '#0E9355' : D.onTimeRateBp >= 7500 ? '#7C00FF' : '#B7791F',
+              note: D.onTimeRateBp != null ? 'of ' + D.withSla + ' with an SLA' : 'no step had an SLA',
+              title: 'Counted only over steps that HAD an SLA. A step with none is not a step that met one.',
+            },
+            {
+              label: 'TURNAROUND',
+              value: D.medianDays != null ? D.medianDays + 'd' : '\u2014',
+              color: '#1A1523',
+              note: D.medianDays != null ? 'median of ' + D.medianSample : 'nothing closed yet',
+              title: 'The MEDIAN, not the average \u2014 one step parked for months would drag a mean past usefulness.',
+            },
+            {
+              label: 'GOV. SUBMISSIONS',
+              value: String(D.govSubmissions),
+              color: D.govSubmissions > 0 ? '#1A1523' : '#A9A6B4',
+              note: D.govUnrecorded > 0 ? D.govUnrecorded + ' name no authority' : 'all steps name one',
+              title: 'Closed steps carried out AT an authority. Internal steps are not submissions.',
+            },
+          ],
+
+          // ── the target card ─────────────────────────────────────────────────
+          tpTargetLabel: !D ? '' : 'TEAM TASK TARGET \u00b7 ' + mon9(D.period).toUpperCase(),
+          tpDone: D ? String(D.completed) : '\u2014',
+          tpOf: !D ? '' : D.target != null ? 'of ' + D.target + ' tasks' : 'tasks closed \u2014 no target set',
+          tpBarW: pctBp9 != null ? Math.max(2, Math.min(100, pctBp9)) + '%' : '0%',
+          tpPctLine: pctBp9 != null ? pctBp9 + '% achieved' : 'no target for this month',
+          tpGapLine: !D ? '' : D.gap == null ? 'Set one \u2192'
+            : D.gap > 0 ? D.gap + ' tasks to target' : 'Target met',
+          tpSetTarget: () => {
+            if (!D) return;
+            this._prompt('Task target for ' + mon9(D.period), D.target != null ? String(D.target) : '', {
+              placeholder: 'Number of tasks',
+              body: 'How many workflow steps this team should close in the month. Leave blank to clear it \u2014 '
+                + 'no target is a different thing from a target of zero, and only the second shows as 0%.',
+            }).then(v => {
+              if (v === null) return;
+              const API = this._apiBase || 'http://localhost:4100';
+              const tok = localStorage.getItem('stimespro:token');
+              fetch(API + '/api/team-performance/target', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
+                body: JSON.stringify({ period: D.period, count: String(v).trim() === '' ? null : v }),
+              }).then(r => r.json().then(j => ({ ok: r.ok, j })))
+                .then(({ ok, j }) => {
+                  if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
+                  this.toast(String(v).trim() === '' ? 'Target cleared' : 'Target set');
+                  if (this._loadTP) this._loadTP(D.period);
+                })
+                .catch(() => this.toast('Server unreachable \u2014 nothing changed', 'error'));
+            });
+          },
+
+          // ── the six-month strip ─────────────────────────────────────────────
+          tpBars: bars.map(b => {
+            const act = b.actualCount || 0;
+            const proj = b.projectedCount || 0;
+            return {
+              label: b.label,
+              // Solid for what closed, pale for what is only expected to. A projection drawn like a
+              // fact is the whole reason forecast charts get distrusted.
+              actH: Math.round((act / peak) * 100) + '%',
+              projH: proj > act ? Math.round(((proj - act) / peak) * 100) + '%' : '0%',
+              hasProj: proj > act,
+              targetY: b.targetCount != null ? (100 - Math.min(100, Math.round((b.targetCount / peak) * 100))) + '%' : '-100%',
+              hasTarget: b.targetCount != null,
+              labelColor: b.isCurrent ? '#1A1523' : '#A9A6B4',
+              labelWeight: b.isCurrent ? '700' : '500',
+              title: b.label + ' \u00b7 ' + (b.actualCount == null ? 'not started' : b.actualCount + ' closed')
+                + (b.projectedCount != null ? ', ' + b.projectedCount + ' projected at the current run rate' : '')
+                + (b.targetCount != null ? ', target ' + b.targetCount : ''),
+            };
+          }),
+          tpRunNote: !D ? '' : D.runRate != null
+            ? 'Projection is the mean of the last three finished months (' + D.runRate + ' a month).'
+            : 'No finished month has any completions yet, so nothing can be projected.',
+
+          // ── the leaderboard ─────────────────────────────────────────────────
+          tpTopLine: !ranked.length ? ''
+            : !anyDone9 ? 'Nobody has closed a step in this period'
+            : 'Most closed: ' + ranked[0].name + ' \u00b7 ' + ranked[0].completed + ' step' + (ranked[0].completed === 1 ? '' : 's')
+              + (slaPct(ranked[0]) != null ? ' \u00b7 ' + slaPct(ranked[0]) + '% SLA met' : ''),
+          tpTopColor: ranked.length && anyDone9 ? '#0E9355' : '#A9A6B4',
+          tpHasOfficers: ranked.length > 0,
+          tpNoOfficers: ranked.length === 0,
+          tpOfficers: ranked.map((o, i) => {
+            const p = slaPct(o);
+            return {
+              rank: anyDone9 && i === 0 ? '\ud83e\udd47' : anyDone9 && i === 1 ? '\ud83e\udd48' : anyDone9 && i === 2 ? '\ud83e\udd49' : '#' + (i + 1),
+              initials: inits(o.name),
+              name: o.name,
+              top: anyDone9 && i === 0,
+              rowBg: anyDone9 && i === 0 ? '#F2FBF6' : '#fff',
+              rowBd: anyDone9 && i === 0 ? '#BFEBD2' : '#F0EDF6',
+              sub: o.completed + ' closed'
+                + (o.govSubmissions > 0 ? ' \u00b7 ' + o.govSubmissions + ' gov. submissions' : '')
+                + (o.openNow > 0 ? ' \u00b7 ' + o.openNow + ' open' : ''),
+              // The PERCENTAGE is SLA kept; the BAR is share of the busiest person's throughput.
+              // Two different facts, which is what "throughput + SLA" in the caption means.
+              pct: p != null ? p + '%' : 'no SLA',
+              pctColor: p == null ? '#A9A6B4' : p >= 95 ? '#0E9355' : p >= 85 ? '#7C00FF' : '#B7791F',
+              pctTitle: p == null
+                ? 'None of their closed steps had an SLA, so there is nothing to keep or miss.'
+                : o.onTime + ' of ' + (o.onTime + o.late) + ' closed inside their SLA.',
+              days: o.medianDays != null ? o.medianDays + 'd typical' : '\u2014',
+              barW: Math.max(2, Math.round((o.completed / topDone) * 100)) + '%',
+              barColor: p == null ? '#C9C4D4' : p >= 95 ? '#12B76A' : p >= 85 ? '#7C00FF' : '#E8A33D',
+            };
+          }),
+          // Work that closed with nobody's id on it. Named rather than folded into the rows above,
+          // because attributing it to whoever is on the board would be inventing a fact.
+          tpUnattributed: !!(D && D.unattributed > 0),
+          tpUnattributedNote: !D ? '' : D.unattributed + ' of ' + (D.completed || 0) + ' closed steps have nobody assigned, so they count in the totals above but on no row here.',
+
+          // ── load by authority ──────────────────────────────────────────────
+          tpAuthSub: !D ? '' : D.govSubmissions + ' closed at an authority this period',
+          tpHasAuth: authAll.length > 0,
+          tpNoAuth: authAll.length === 0,
+          tpAuth: authAll.map((a, i) => ({
+            name: a.name,
+            color: AUTH_TONE[i % AUTH_TONE.length],
+            barW: Math.max(3, Math.round(((a.closed + a.open) / authPeak) * 100)) + '%',
+            count: String(a.closed + a.open),
+            title: a.closed + ' closed here this period, ' + a.open + ' still open',
+          })),
         };
       })(),
 
