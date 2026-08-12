@@ -4154,6 +4154,102 @@
         </div>
       </section>
 
+      <!-- Needs a look / Needs chasing, at the design's 1.45fr / 1fr. The wider card is the one
+           you read; the narrower one is the one you act from. Equal halves made the reading card
+           cramped while the queue ran out of things to say.
+
+           Softer and deeper than the app's usual hairline box: no border, and a long low shadow
+           that lifts this pair off the page because it is the pair somebody actually works from. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1.45fr 1fr; gap:20px; align-items:stretch;" class="cd-two">
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div>
+              <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs a look</div>
+              <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Ranked worst first &middot; tap a state to filter</div>
+            </div>
+            <span onClick="{{ cdGoPipeline }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">Open pipeline &rarr;</span>
+          </div>
+          <!-- Chips filter the list BELOW them, and both come from the same set. A count that
+               cannot be pressed through to its rows is the fastest way to lose trust in one. -->
+          <div style="display:flex; gap:6px; margin-top:15px; flex-wrap:wrap;">
+            <sc-for list="{{ cdLookChips }}" as="h" hint-placeholder-count="6">
+              <span onClick="{{ h.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; color:{{ h.chipColor }}; background:{{ h.chipBg }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ h.label }}<span style="opacity:.75;">{{ h.count }}</span></span>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:9px; margin-top:17px;">
+            <sc-for list="{{ cdLookRows }}" as="d" hint-placeholder-count="3">
+              <div onClick="{{ d.go }}" style="position:relative; overflow:hidden; background:#FCFBFE; border-radius:16px; padding:14px 16px 13px 18px; cursor:pointer; transition:background .12s;" style-hover="background:#F7F3FD;">
+                <span style="position:absolute; left:0; top:0; bottom:0; width:4px; background:{{ d.stateColor }};"></span>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <span style="width:36px; height:36px; border-radius:12px; background:{{ d.stateBg }}; color:{{ d.stateColor }}; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
+                      <span style="font-size:9px; font-weight:700; color:{{ d.stateColor }}; background:{{ d.stateBg }}; padding:2px 9px; border-radius:99px; flex-shrink:0;">{{ d.label }}</span>
+                    </div>
+                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ d.why }}</div>
+                  </div>
+                  <div style="text-align:right; flex-shrink:0;">
+                    <div style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:14px;">{{ d.value }}</div>
+                    <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ d.owner }}</div>
+                  </div>
+                </div>
+                <!-- Days in stage against what THIS stage allows, drawn and stated. The figure
+                     beside the bar is the point: a bar alone cannot say 19 out of 12. -->
+                <sc-if value="{{ d.hasMeter }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:11px;">
+                    <div style="flex:1; height:4px; background:#EFECF5; border-radius:99px; overflow:hidden;">
+                      <div style="height:100%; width:{{ d.meterW }}%; background:{{ d.meterColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div>
+                    </div>
+                    <span style="font-size:9.5px; font-weight:600; color:#B4AFC4; flex-shrink:0;">{{ d.meterLabel }}</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-if value="{{ cdLookEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:26px; text-align:center; font-size:12px; color:#B4AFC4;">{{ cdLookEmptyNote }}</div>
+            </sc-if>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="font-size:10px; color:#B4AFC4; margin-top:16px; padding-top:12px; border-top:1px solid #F5F3F9; line-height:1.6;"><b>Stalled</b> = days in stage vs that stage's limit &middot; <b>Quiet</b> = days since anyone made contact.</div>
+        </div>
+
+        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
+          <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs chasing</div>
+          <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Today's queue</div>
+          <sc-for list="{{ cdQueue }}" as="g" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:8px; margin-top:20px;">
+              <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.1em; text-transform:uppercase;">{{ g.label }}</span>
+              <span style="font-size:9.5px; font-weight:700; color:{{ g.pillColor }}; background:{{ g.pillBg }}; padding:2px 8px; border-radius:99px;">{{ g.count }}</span>
+              <div style="flex:1;"></div>
+              <span onClick="{{ g.go }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;">All &rarr;</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px; margin-top:9px;">
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                <div onClick="{{ r.go }}" style="display:flex; align-items:center; gap:11px; background:#FCFBFE; border-radius:13px; padding:10px 12px; cursor:pointer;" style-hover="background:#F7F3FD;">
+                  <span style="width:30px; height:30px; border-radius:{{ r.iconRadius }}; background:{{ r.iconBg }}; color:{{ r.iconColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.icon }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.title }}</div>
+                    <div style="font-size:9.5px; color:#A9A6B4; margin-top:2px;">{{ r.sub }}</div>
+                  </div>
+                  <span style="font-size:9.5px; font-weight:700; color:{{ r.tagColor }}; background:{{ r.tagBg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ r.tag }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px; text-align:center; font-size:11px; color:#B4AFC4;">{{ g.emptyNote }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <!-- Stated, never hidden: a meeting whose date cannot be read is a data problem somebody
+               should fix, not a row to quietly drop. -->
+          <sc-if value="{{ cdUndatedShown }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px; background:#FFF9EF; border:1px solid #FBE2B8; border-radius:12px; padding:11px 13px; font-size:10.5px; color:#8A6D1F; line-height:1.6;">&#9888; {{ cdUndatedNote }}</div>
+          </sc-if>
+          <div style="flex:1;"></div>
+        </div>
+      </section>
+
 
       <!-- What needs chasing. Every tile is a place to GO, not a number to admire — the same
            contract the main Dashboard's "What needs me today" row makes. -->
@@ -4254,101 +4350,6 @@
            weeks, and the board alone cannot tell them apart. Every verdict here carries the reasons
            that produced it, because a coloured badge nobody can decompose gets trusted blindly for
            a week and ignored for ever after. -->
-      <!-- Needs a look / Needs chasing, at the design'S 1.45fr / 1fr. The wider card is the one
-           you read; the narrower one is the one you act from. Equal halves made the reading card
-           cramped while the queue ran out of things to say.
-
-           Softer and deeper than the app'S usual hairline box: no border, and a long low shadow
-           that lifts this pair off the page because it is the pair somebody actually works from. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1.45fr 1fr; gap:20px; align-items:stretch;" class="cd-two">
-
-        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-            <div>
-              <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs a look</div>
-              <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Ranked worst first &middot; tap a state to filter</div>
-            </div>
-            <span onClick="{{ cdGoPipeline }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">Open pipeline &rarr;</span>
-          </div>
-          <!-- Chips filter the list BELOW them, and both come from the same set. A count that
-               cannot be pressed through to its rows is the fastest way to lose trust in one. -->
-          <div style="display:flex; gap:6px; margin-top:15px; flex-wrap:wrap;">
-            <sc-for list="{{ cdLookChips }}" as="h" hint-placeholder-count="6">
-              <span onClick="{{ h.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:10.5px; font-weight:700; color:{{ h.chipColor }}; background:{{ h.chipBg }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ h.label }}<span style="opacity:.75;">{{ h.count }}</span></span>
-            </sc-for>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:9px; margin-top:17px;">
-            <sc-for list="{{ cdLookRows }}" as="d" hint-placeholder-count="3">
-              <div onClick="{{ d.go }}" style="position:relative; overflow:hidden; background:#FCFBFE; border-radius:16px; padding:14px 16px 13px 18px; cursor:pointer; transition:background .12s;" style-hover="background:#F7F3FD;">
-                <span style="position:absolute; left:0; top:0; bottom:0; width:4px; background:{{ d.stateColor }};"></span>
-                <div style="display:flex; align-items:center; gap:12px;">
-                  <span style="width:36px; height:36px; border-radius:12px; background:{{ d.stateBg }}; color:{{ d.stateColor }}; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
-                  <div style="flex:1; min-width:0;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                      <span style="font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
-                      <span style="font-size:9px; font-weight:700; color:{{ d.stateColor }}; background:{{ d.stateBg }}; padding:2px 9px; border-radius:99px; flex-shrink:0;">{{ d.label }}</span>
-                    </div>
-                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ d.why }}</div>
-                  </div>
-                  <div style="text-align:right; flex-shrink:0;">
-                    <div style="font-family:'space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:14px;">{{ d.value }}</div>
-                    <div style="font-size:9.5px; color:#B4AFC4; margin-top:2px;">{{ d.owner }}</div>
-                  </div>
-                </div>
-                <!-- Days in stage against what THIS stage allows, drawn and stated. The figure
-                     beside the bar is the point: a bar alone cannot say 19 out of 12. -->
-                <sc-if value="{{ d.hasMeter }}" hint-placeholder-val="{{ true }}">
-                  <div style="display:flex; align-items:center; gap:9px; margin-top:11px;">
-                    <div style="flex:1; height:4px; background:#EFECF5; border-radius:99px; overflow:hidden;">
-                      <div style="height:100%; width:{{ d.meterW }}%; background:{{ d.meterColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div>
-                    </div>
-                    <span style="font-size:9.5px; font-weight:600; color:#B4AFC4; flex-shrink:0;">{{ d.meterLabel }}</span>
-                  </div>
-                </sc-if>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdLookEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="padding:26px; text-align:center; font-size:12px; color:#B4AFC4;">{{ cdLookEmptyNote }}</div>
-            </sc-if>
-          </div>
-          <div style="flex:1;"></div>
-          <div style="font-size:10px; color:#B4AFC4; margin-top:16px; padding-top:12px; border-top:1px solid #F5F3F9; line-height:1.6;"><b>Stalled</b> = days in stage vs that stage's limit &middot; <b>Quiet</b> = days since anyone made contact.</div>
-        </div>
-
-        <div style="background:#fff; border-radius:20px; box-shadow:0 1px 3px rgba(38,7,77,.05), 0 14px 32px -20px rgba(38,7,77,.28); padding:24px 26px; display:flex; flex-direction:column;">
-          <div style="font-family:'space Grotesk',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em;">Needs chasing</div>
-          <div style="font-size:11px; color:#B4AFC4; margin-top:3px;">Today's queue</div>
-          <sc-for list="{{ cdQueue }}" as="g" hint-placeholder-count="3">
-            <div style="display:flex; align-items:center; gap:8px; margin-top:20px;">
-              <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.1em; text-transform:uppercase;">{{ g.label }}</span>
-              <span style="font-size:9.5px; font-weight:700; color:{{ g.pillColor }}; background:{{ g.pillBg }}; padding:2px 8px; border-radius:99px;">{{ g.count }}</span>
-              <div style="flex:1;"></div>
-              <span onClick="{{ g.go }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;">All &rarr;</span>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:7px; margin-top:9px;">
-              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
-                <div onClick="{{ r.go }}" style="display:flex; align-items:center; gap:11px; background:#FCFBFE; border-radius:13px; padding:10px 12px; cursor:pointer;" style-hover="background:#F7F3FD;">
-                  <span style="width:30px; height:30px; border-radius:{{ r.iconRadius }}; background:{{ r.iconBg }}; color:{{ r.iconColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.icon }}</span>
-                  <div style="flex:1; min-width:0;">
-                    <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.title }}</div>
-                    <div style="font-size:9.5px; color:#A9A6B4; margin-top:2px;">{{ r.sub }}</div>
-                  </div>
-                  <span style="font-size:9.5px; font-weight:700; color:{{ r.tagColor }}; background:{{ r.tagBg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ r.tag }}</span>
-                </div>
-              </sc-for>
-              <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:14px; text-align:center; font-size:11px; color:#B4AFC4;">{{ g.emptyNote }}</div>
-              </sc-if>
-            </div>
-          </sc-for>
-          <!-- Stated, never hidden: a meeting whose date cannot be read is a data problem somebody
-               should fix, not a row to quietly drop. -->
-          <sc-if value="{{ cdUndatedShown }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:16px; background:#FFF9EF; border:1px solid #FBE2B8; border-radius:12px; padding:11px 13px; font-size:10.5px; color:#8A6D1F; line-height:1.6;">&#9888; {{ cdUndatedNote }}</div>
-          </sc-if>
-          <div style="flex:1;"></div>
-        </div>
-      </section>
 
       <!-- Deal health keeps its own card: the chips above answer "how many", this answers "why",
            and the stacked bar is the only place the whole open book is shown at once. -->
