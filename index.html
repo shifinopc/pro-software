@@ -4735,6 +4735,19 @@
               <sc-if value="{{ tfPartial }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative; font-size:10px; opacity:.75; margin-top:8px; line-height:1.5;">{{ tfPartialNote }}</div>
               </sc-if>
+              <!-- SETTING the target lives on the card that reports it. This control was the only
+                   way to set one anywhere in the product, and it sat in the band below that this
+                   screen no longer has — removing it with the rest would have left a quota card, a
+                   leaderboard and a per-officer table all measuring against something nobody could
+                   ever enter. It sets the month, which is what the API stores; the card above adds
+                   the quarter's three months up. -->
+              <sc-if value="{{ perfCanSetTarget }}" hint-placeholder-val="{{ true }}">
+                <div style="position:relative; display:flex; gap:8px; align-items:center; margin-top:14px; padding-top:13px; border-top:1px solid rgba(255,255,255,.18);">
+                  <input value="{{ perfTargetInput }}" onInput="{{ setPerfTargetInput }}" placeholder="{{ perfTargetWhose }}" style="flex:1; min-width:0; box-sizing:border-box; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.12); color:#fff; border-radius:9px; padding:8px 12px; font-size:12px; font-family:inherit; outline:none;">
+                  <span onClick="{{ perfSaveTarget }}" style="font-size:11.5px; font-weight:700; color:#26074D; background:#fff; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#F3E8FF;">Set target</span>
+                </div>
+                <div style="position:relative; font-size:9.5px; opacity:.7; margin-top:6px; line-height:1.5;">{{ perfLabel }} · sets the month; the quarter above is its three months added up.</div>
+              </sc-if>
             </div>
 
             <div class="pg-card" style="padding:20px 22px;">
@@ -4859,231 +4872,6 @@
 
         <!-- The target, and how far along it is. Shown first because it is the only thing that makes
              the figures below mean anything — "SAR 180,000 won" is not good or bad on its own. -->
-        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; padding:18px 22px;">
-          <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap;">
-            <div>
-              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.07em; text-transform:uppercase;">Target · {{ perfLabel }}</div>
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:5px;">{{ perfWonValue }}</div>
-              <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ perfTargetLine }}</div>
-              <sc-if value="{{ perfAsAtShown }}" hint-placeholder-val="{{ false }}">
-                <div style="font-size:10.5px; color:#A9A6B4; margin-top:6px; line-height:1.5; max-width:460px;">{{ perfAsAtLine }}</div>
-              </sc-if>
-            </div>
-            <sc-if value="{{ perfCanSetTarget }}" hint-placeholder-val="{{ true }}">
-              <div style="display:flex; gap:8px; align-items:center;">
-                <input value="{{ perfTargetInput }}" onInput="{{ setPerfTargetInput }}" placeholder="{{ perfTargetWhose }}" style="border:1px solid #DDD9E6; border-radius:99px; padding:9px 15px; font-size:12.5px; background:#fff; width:230px;">
-                <span onClick="{{ perfSaveTarget }}" style="font-size:12px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Set target</span>
-              </div>
-            </sc-if>
-          </div>
-          <sc-if value="{{ perfHasTarget }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:14px; height:9px; border-radius:99px; background:#F3F1F7; overflow:hidden;">
-              <div style="height:100%; width:{{ perfBarWidth }}; background:{{ perfBarColor }}; border-radius:99px;"></div>
-            </div>
-          </sc-if>
-        </section>
-
-        <section class="pg-stats" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both;">
-          <sc-for list="{{ perfStats }}" as="s" hint-placeholder-count="4">
-            <div class="pg-card" style="padding:15px 18px;">
-              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.07em; text-transform:uppercase;">{{ s.k }}</div>
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; margin-top:5px; color:{{ s.color }};">{{ s.v }}</div>
-              <div style="font-size:11px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ s.sub }}</div>
-            </div>
-          </sc-for>
-        </section>
-
-        <section class="pg-split" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both;">
-          <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
-            <sc-for list="{{ perfTables }}" as="t" hint-placeholder-count="2">
-              <div class="pg-card">
-                <div class="pg-card-h"><div><div class="pg-card-t">{{ t.title }}</div><div class="pg-card-s">{{ t.sub }}</div></div></div>
-                <div class="pg-card-b" style="padding-top:6px;">
-                  <sc-for list="{{ t.rows }}" as="r" hint-placeholder-count="3">
-                    <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #FAF8FC;">
-                      <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.key }}</span>
-                      <span style="width:110px; height:7px; border-radius:99px; background:#F3F1F7; overflow:hidden; flex-shrink:0;"><span style="display:block; height:100%; width:{{ r.bar }}; background:{{ r.color }};"></span></span>
-                      <span style="font-size:11.5px; color:#8C8899; width:104px; text-align:right; flex-shrink:0;">{{ r.detail }}</span>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ t.empty }}" hint-placeholder-val="{{ false }}">
-                    <div style="font-size:12px; color:#A9A6B4; padding:12px 0; line-height:1.6;">{{ t.emptyNote }}</div>
-                  </sc-if>
-                </div>
-              </div>
-            </sc-for>
-          </div>
-
-          <div class="pg-card">
-            <div class="pg-card-h"><div><div class="pg-card-t">Still open</div><div class="pg-card-s">Not counted above — nothing is decided yet</div></div></div>
-            <div class="pg-card-b">
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700;">{{ perfOpenValue }}</div>
-              <div style="font-size:11.5px; color:#8C8899; margin-top:3px; line-height:1.6;">{{ perfOpenLine }}</div>
-              <div style="margin-top:14px; padding-top:13px; border-top:1px solid #F0EDF6; font-size:11.5px; color:#6F6C7A; line-height:1.65;">{{ perfCaveat }}</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- FOLLOW-UP COMPLETION. Counted against the ORIGINAL due date, so pushing a commitment
-             out of the period cannot remove it from the denominator. Cancellations are shown in
-             their own column and never as success — a rate that improved when somebody abandoned
-             their queue would be worse than no rate at all. -->
-        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .115s both; padding:18px 22px;">
-          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-            <div>
-              <div class="pg-card-t">Follow-ups kept</div>
-              <div class="pg-card-s">{{ fcSub }}</div>
-            </div>
-            <div style="display:flex; gap:18px; flex-shrink:0;">
-              <sc-for list="{{ fcHeadline }}" as="h" hint-placeholder-count="2">
-                <div style="text-align:right;">
-                  <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; color:{{ h.color }};">{{ h.value }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ h.label }}</div>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-
-          <sc-if value="{{ fcHas }}" hint-placeholder-val="{{ true }}">
-            <!-- The split as one bar: kept-on-time, kept-late, dropped, still owed. Reading it is
-                 faster than reading four numbers, and it makes a big dropped block impossible to
-                 miss beside a flattering headline rate. -->
-            <div style="display:flex; height:12px; border-radius:99px; overflow:hidden; margin-top:16px; background:#F3F1F7; gap:2px;">
-              <sc-for list="{{ fcBar }}" as="b" hint-placeholder-count="4">
-                <div title="{{ b.tip }}" style="width:{{ b.pct }}%; background:{{ b.color }}; animation:slideRight .8s cubic-bezier(.16,1,.3,1) .2s both;"></div>
-              </sc-for>
-            </div>
-            <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px;">
-              <sc-for list="{{ fcLegend }}" as="l" hint-placeholder-count="4">
-                <div style="display:flex; align-items:center; gap:7px;">
-                  <span style="width:9px; height:9px; border-radius:3px; background:{{ l.color }};"></span>
-                  <span style="font-size:11.5px; color:#4B4757;">{{ l.label }}</span>
-                  <span style="font-size:11.5px; font-weight:700;">{{ l.count }}</span>
-                </div>
-              </sc-for>
-            </div>
-
-            <sc-if value="{{ fcHasPeople }}" hint-placeholder-val="{{ false }}">
-              <div style="overflow-x:auto; margin-top:16px;"><div style="min-width:560px;">
-                <div style="display:grid; grid-template-columns:minmax(0,1.4fr) 62px 74px 74px 70px 76px; gap:10px; padding-bottom:8px; border-bottom:1px solid #F0EDF6; font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.07em;">
-                  <span>PERSON</span><span style="text-align:right;">DUE</span><span style="text-align:right;">ON TIME</span><span style="text-align:right;">LATE</span><span style="text-align:right;">DROPPED</span><span style="text-align:right;">OPEN</span>
-                </div>
-                <sc-for list="{{ fcPeople }}" as="p" hint-placeholder-count="3">
-                  <div style="display:grid; grid-template-columns:minmax(0,1.4fr) 62px 74px 74px 70px 76px; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #FAF8FC; font-size:12.5px;">
-                    <span style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</span>
-                    <span style="text-align:right; color:#6F6C7A;">{{ p.due }}</span>
-                    <span style="text-align:right; font-weight:700; color:{{ p.onTimeColor }};">{{ p.onTime }}</span>
-                    <span style="text-align:right; color:#6F6C7A;">{{ p.late }}</span>
-                    <span style="text-align:right; color:#6F6C7A;">{{ p.dropped }}</span>
-                    <span style="text-align:right; color:#6F6C7A;">{{ p.open }}</span>
-                  </div>
-                </sc-for>
-              </div></div>
-            </sc-if>
-          </sc-if>
-          <sc-if value="{{ fcEmpty }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:12px; color:#A9A6B4; padding:16px 0 4px; line-height:1.6;">Nothing came due in this period, so there is no rate to report.</div>
-          </sc-if>
-          <div style="margin-top:14px; padding-top:12px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ fcNote }}</div>
-        </section>
-
-        <!-- Stage history: how long deals dwell where, and who they are lost to. Fed by
-             StageTransition, which began recording on a known day — said on the card, because six
-             days of history presented as an eternal truth is how averages get believed too early. -->
-        <section class="pg-split" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .13s both;">
-          <div class="pg-card">
-            <div class="pg-card-h"><div><div class="pg-card-t">Time in each stage</div><div class="pg-card-s">{{ saSub }}</div></div></div>
-            <div class="pg-card-b" style="padding-top:6px;">
-              <sc-for list="{{ saStages }}" as="s" hint-placeholder-count="4">
-                <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #FAF8FC;">
-                  <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.name }}</span>
-                  <span style="width:110px; height:7px; border-radius:99px; background:#F3F1F7; overflow:hidden; flex-shrink:0;"><span style="display:block; height:100%; width:{{ s.bar }}%; background:{{ s.color }};"></span></span>
-                  <span style="font-size:11.5px; color:#4B4757; font-weight:700; width:64px; text-align:right; flex-shrink:0;">{{ s.avg }}</span>
-                  <span style="font-size:10.5px; color:#A9A6B4; width:110px; text-align:right; flex-shrink:0;">{{ s.detail }}</span>
-                </div>
-              </sc-for>
-              <sc-if value="{{ saEmpty }}" hint-placeholder-val="{{ true }}">
-                <div style="font-size:12px; color:#A9A6B4; padding:12px 0; line-height:1.6;">{{ saEmptyNote }}</div>
-              </sc-if>
-              <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ saNote }}</div>
-            </div>
-          </div>
-
-          <div class="pg-card">
-            <div class="pg-card-h"><div><div class="pg-card-t">Lost to</div><div class="pg-card-s">Which rivals actually take deals</div></div></div>
-            <div class="pg-card-b" style="padding-top:6px;">
-              <sc-for list="{{ saLostTo }}" as="c" hint-placeholder-count="4">
-                <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #FAF8FC;">
-                  <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.name }}</span>
-                  <span style="width:110px; height:7px; border-radius:99px; background:#F3F1F7; overflow:hidden; flex-shrink:0;"><span style="display:block; height:100%; width:{{ c.bar }}%; background:#E5484D;"></span></span>
-                  <span style="font-size:11.5px; color:#4B4757; font-weight:700; width:56px; text-align:right; flex-shrink:0;">{{ c.count }}</span>
-                </div>
-              </sc-for>
-              <sc-if value="{{ saLostToEmpty }}" hint-placeholder-val="{{ true }}">
-                <div style="font-size:12px; color:#A9A6B4; padding:12px 0; line-height:1.6;">No lost deal names a competitor yet. Record who you were up against on the deal — the "Up against" box — and this fills in.</div>
-              </sc-if>
-            </div>
-          </div>
-        </section>
-
-        <!-- THE OTHER FUNNEL. The pipeline above is deals; this is companies — lead → prospect →
-             client — a different question with different owners. Counts are the book as it stands;
-             the speeds come from LifecycleTransition and begin the day recording began. -->
-        <section class="pg-split" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .16s both;">
-          <div class="pg-card">
-            <div class="pg-card-h"><div><div class="pg-card-t">Relationship funnel</div><div class="pg-card-s">{{ saLcSub }}</div></div></div>
-            <div class="pg-card-b" style="padding-top:6px;">
-              <sc-for list="{{ saFunnel }}" as="f" hint-placeholder-count="3">
-                <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #FAF8FC;">
-                  <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600;">{{ f.label }}</span>
-                  <span style="width:130px; height:7px; border-radius:99px; background:#F3F1F7; overflow:hidden; flex-shrink:0;"><span style="display:block; height:100%; width:{{ f.bar }}%; background:{{ f.color }};"></span></span>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; width:44px; text-align:right; flex-shrink:0; color:{{ f.color }};">{{ f.count }}</span>
-                </div>
-              </sc-for>
-              <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ saLcEmptyNote }}</div>
-            </div>
-          </div>
-
-          <div class="pg-card">
-            <div class="pg-card-h"><div><div class="pg-card-t">Conversion speed</div><div class="pg-card-s">First time each state was reached, completed hops only</div></div></div>
-            <div class="pg-card-b" style="padding-top:6px;">
-              <sc-for list="{{ saConversion }}" as="c" hint-placeholder-count="3">
-                <div style="display:flex; align-items:baseline; gap:10px; padding:10px 0; border-bottom:1px solid #FAF8FC;">
-                  <span style="flex:1; min-width:0; font-size:12.5px; font-weight:600;">{{ c.label }}</span>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; flex-shrink:0;">{{ c.value }}</span>
-                  <span style="font-size:10.5px; color:#A9A6B4; width:120px; text-align:right; flex-shrink:0;">{{ c.detail }}</span>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-        </section>
-
-        <!-- Campaign performance: what each marketing effort actually produced. Revenue here is
-             WON-DEAL value — attribution is about what the campaign's companies signed for, and the
-             collected/invoiced split already lives on the dashboard under its own names. -->
-        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .19s both; padding:18px 22px;">
-          <div class="pg-card-t">Campaign performance</div>
-          <div class="pg-card-s">{{ saCampSub }}</div>
-          <sc-if value="{{ saCampHas }}" hint-placeholder-val="{{ false }}">
-            <div style="overflow-x:auto; margin-top:12px;"><div style="min-width:560px;">
-              <div style="display:grid; grid-template-columns:minmax(0,1.6fr) 80px 80px 80px 120px; gap:10px; padding-bottom:8px; border-bottom:1px solid #F0EDF6; font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.07em;">
-                <span>CAMPAIGN</span><span style="text-align:right;">LEADS</span><span style="text-align:right;">CLIENTS</span><span style="text-align:right;">WON</span><span style="text-align:right;">REVENUE</span>
-              </div>
-              <sc-for list="{{ saCampaigns }}" as="c" hint-placeholder-count="3">
-                <div style="display:grid; grid-template-columns:minmax(0,1.6fr) 80px 80px 80px 120px; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #FAF8FC; font-size:12.5px;">
-                  <span style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.name }}</span>
-                  <span style="text-align:right; color:#6F6C7A;">{{ c.companies }}</span>
-                  <span style="text-align:right; color:#6F6C7A;">{{ c.clients }}</span>
-                  <span style="text-align:right; color:#6F6C7A;">{{ c.won }}</span>
-                  <span style="text-align:right; font-weight:700;">{{ c.revenue }}</span>
-                </div>
-              </sc-for>
-            </div></div>
-          </sc-if>
-          <sc-if value="{{ saCampEmpty }}" hint-placeholder-val="{{ true }}">
-            <div style="font-size:12px; color:#A9A6B4; padding:14px 0 4px; line-height:1.6;">No lead carries a campaign yet. Set the campaigns up in Sales Settings, pick one on the leads an effort produced, and this table answers which efforts pay for themselves.</div>
-          </sc-if>
-        </section>
       </div></sc-if>
 
       <!-- ── Operations Performance ──────────────────────────────────────────────────────────────
