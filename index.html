@@ -4735,18 +4735,20 @@
               <sc-if value="{{ tfPartial }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative; font-size:10px; opacity:.75; margin-top:8px; line-height:1.5;">{{ tfPartialNote }}</div>
               </sc-if>
-              <!-- SETTING the target lives on the card that reports it. This control was the only
-                   way to set one anywhere in the product, and it sat in the band below that this
-                   screen no longer has — removing it with the rest would have left a quota card, a
-                   leaderboard and a per-officer table all measuring against something nobody could
-                   ever enter. It sets the month, which is what the API stores; the card above adds
-                   the quarter's three months up. -->
+              <!-- SETTING the target, as a link rather than a form.
+                   The artifact has no control here at all — its targets are fixed mock data — so
+                   there is nothing to copy, and an input and a button embedded in the gradient was
+                   the one thing on this card that did not look like the design. But this is the only
+                   place in the product that can set a target, and the quota figure, the leaderboard
+                   and the per-officer table are all measured against one: removing it to match a
+                   drawing would leave three panels reporting on a number nobody could enter.
+
+                   So the card reads as the design's at a glance and the capability sits one press
+                   inside it, in the same prompt the commission rate uses. -->
               <sc-if value="{{ perfCanSetTarget }}" hint-placeholder-val="{{ true }}">
-                <div style="position:relative; display:flex; gap:8px; align-items:center; margin-top:14px; padding-top:13px; border-top:1px solid rgba(255,255,255,.18);">
-                  <input value="{{ perfTargetInput }}" onInput="{{ setPerfTargetInput }}" placeholder="{{ perfTargetWhose }}" style="flex:1; min-width:0; box-sizing:border-box; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.12); color:#fff; border-radius:9px; padding:8px 12px; font-size:12px; font-family:inherit; outline:none;">
-                  <span onClick="{{ perfSaveTarget }}" style="font-size:11.5px; font-weight:700; color:#26074D; background:#fff; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#F3E8FF;">Set target</span>
+                <div style="position:relative; margin-top:13px;">
+                  <span onClick="{{ tfSetTarget }}" style="font-size:11px; font-weight:700; color:#fff; opacity:.85; cursor:pointer; border-bottom:1px dotted rgba(255,255,255,.5); padding-bottom:1px;" style-hover="opacity:1;">{{ tfSetTargetLabel }}</span>
                 </div>
-                <div style="position:relative; font-size:9.5px; opacity:.7; margin-top:6px; line-height:1.5;">{{ perfLabel }} · sets the month; the quarter above is its three months added up.</div>
               </sc-if>
             </div>
 
@@ -24477,6 +24479,34 @@ class Component extends DCLogic {
     const _repScope = (_repEnv && _repEnv.scope) || 'self';
     const _repPeriods = Array.isArray(this.state.salesPeriods) ? this.state.salesPeriods : [];
     const _repCcy = (_rep && _rep.target && _rep.target.currency) || 'SAR';
+    /**
+     * Save a target for the period being reported on. ONE function, because two callers need it —
+     * the quota card's link and the binding the old form used — and the three facts it depends on
+     * (which period, whose target, which currency) are worked out here rather than twice.
+     *
+     * An empty string CLEARS the target: the server takes 0 as "no target", which is what the
+     * screen then says instead of drawing a bar against nothing.
+     */
+    const _saveTarget9 = (raw9) => {
+      const raw = String(raw9 ?? '').trim();
+      if (raw && !Number.isFinite(Number(raw))) return this.toast('The target has to be a number', 'error');
+      return this._crmFetch('/api/sales-targets', {
+        method: 'PUT',
+        body: JSON.stringify({
+          period: (_rep && _rep.period) || '',
+          teamId: (_repEnv && _repEnv.teamId) || null,
+          amountMinor: raw ? Math.round(Number(raw) * 100) : 0, currency: _repCcy,
+        }),
+      }).then(({ ok, j }) => {
+        if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
+        this.toast(raw ? 'Target set' : 'Target cleared');
+        this.setState({ perfTargetInput: '' });
+        if (this._loadSalesReport) this._loadSalesReport((_rep && _rep.period) || '');
+        // The quota card, the leaderboard and the officer table all measure against this, and they
+        // come from a different endpoint — without this they would keep showing the old target.
+        if (this._loadTF) this._loadTF();
+      }).catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
     const _pctOf = (bp) => (bp == null ? null : (bp / 100).toFixed(bp % 100 ? 1 : 0) + '%');
     // One table shape for loss reasons, sources and owners: they are the same question asked three
     // ways, and three near-identical renderers is how they drift apart.
@@ -24619,25 +24649,7 @@ class Component extends DCLogic {
         : _repEnv.teamName ? 'Target for ' + _repEnv.teamName
           : _repScope === 'firm' ? 'Target for the whole firm'
             : 'Target for this period',
-      perfSaveTarget: () => {
-        const raw = String(this.state.perfTargetInput || '').trim();
-        if (raw && !Number.isFinite(Number(raw))) return this.toast('The target has to be a number', 'error');
-        this._crmFetch('/api/sales-targets', {
-          method: 'PUT',
-          body: JSON.stringify({
-            period: (_rep && _rep.period) || '',
-            // Set against whatever the report is actually showing. Null for a firm-wide view, which
-            // is what the server already understood before teams could hold a target.
-            teamId: (_repEnv && _repEnv.teamId) || null,
-            amountMinor: raw ? Math.round(Number(raw) * 100) : 0, currency: _repCcy,
-          }),
-        }).then(({ ok, j }) => {
-          if (!ok) return this.toast((j && j.error) || 'Could not set that target', 'error');
-          this.toast(raw ? 'Target set' : 'Target cleared');
-          this.setState({ perfTargetInput: '' });
-          if (this._loadSalesReport) this._loadSalesReport((_rep && _rep.period) || '');
-        }).catch(() => this.toast('Server unreachable — nothing changed', 'error'));
-      },
+      perfSaveTarget: () => _saveTarget9(this.state.perfTargetInput),
 
       perfStats: !_rep ? [] : [
         {
@@ -26111,6 +26123,19 @@ class Component extends DCLogic {
           })),
           // The firm's bill, and how much of it is actually known. A total quoted without saying
           // how many people it covers reads as the whole bill when it may be a fraction of it.
+          // Reuses perfSaveTarget rather than posting again from here: that handler already knows
+          // the period being reported on, whether a team or the firm owns the target, and which
+          // currency — three things this panel would otherwise have to work out a second time and
+          // could get differently.
+          tfSetTargetLabel: q.targetMinor != null ? 'Change this month’s target' : 'Set this month’s target',
+          tfSetTarget: () => this._prompt('Target for ' + ((_rep && _rep.label) || 'this month'), '', {
+            placeholder: 'Amount for the whole firm',
+            body: 'Targets are set a MONTH at a time — the quarter figure above is its three months '
+              + 'added together, and it only appears once all three have one. Leave it blank to clear.',
+          }).then(v => {
+            if (v === null) return;
+            _saveTarget9(v);
+          }),
           tfCommission: k9(D.commissionMinor),
           tfCommissionSub: (D.commissionKnown || 0) === (D.commissionPeople || 0)
             ? 'all ' + (D.commissionPeople || 0) + ' rates set'
