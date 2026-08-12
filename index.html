@@ -211,17 +211,17 @@
   /* The one scrolling region. Header and footer stay put, so the primary action is
      never scrolled off the bottom of a long form. */
   /* position:relative so it is the offsetParent the scroll-to-error walk stops at. */
-  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:18px 26px 22px;}
+  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:16px 24px 16px;}
   .fm-foot{display:flex;align-items:center;gap:10px;padding:13px 26px;border-top:1px solid #F0EDF6;background:#fff;flex-shrink:0;}
 
   .fm-sec + .fm-sec{margin-top:20px;padding-top:18px;border-top:1px solid #F5F2FA;}
   .fm-sec-h{font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:700;color:#26074D;}
   .fm-sec-s{font-size:11px;color:#A9A6B4;margin-top:2px;}
-  .fm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 16px;margin-top:12px;}
+  .fm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 14px;margin-top:10px;}
   .fm-wide{grid-column:1 / -1;}
   @media (max-width:640px){.fm-grid{grid-template-columns:minmax(0,1fr);}}
 
-  .fm-lab{display:block;font-size:9.5px;font-weight:700;color:#A9A6B4;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px;}
+  .fm-lab{display:block;font-size:9.5px;font-weight:700;color:#A9A6B4;letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px;}
   .fm-req{color:#7C00FF;}
   /* One height for every control, typed or picked, so a row of them lines up. */
   .fm-inp{width:100%;box-sizing:border-box;height:40px;border:1px solid #DDD9E6;border-radius:11px;padding:0 13px;font-size:13px;font-family:inherit;color:#1A1523;background:#FCFBFE;transition:border-color .12s,box-shadow .12s;}
@@ -9293,7 +9293,6 @@
             </div>
             <div class="fm-wide">
               <label class="fm-lab">Managed by</label>
-              <div class="fm-hint" style="margin:-2px 0 6px;">Who in your team looks after this client. Not the client's own owner.</div>
               <!-- The FIELD is the search box. One control: it shows the answer when closed and
                    takes the search when open, rather than a box showing a name above a second box
                    for finding one. -->
@@ -9317,7 +9316,7 @@
             </div>
             <div class="fm-wide">
               <label class="fm-lab">Notes</label>
-              <input value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp">
+              <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:60px; padding:9px 13px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
             </div>
           </div>
           <!-- Possible duplicates. A warning, never a block: two real companies can share a name,
@@ -9347,13 +9346,13 @@
                worked out in the browser would be a second copy of the model, and the number here
                would start disagreeing with the number on the row. -->
           <sc-if value="{{ ldfScoreShown }}" hint-placeholder-val="{{ true }}">
-            <div style="margin-top:14px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:14px 16px;">
+            <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:12px 16px;">
               <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
                 <span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.08em;">AUTO LEAD SCORE</span>
                 <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
               </div>
               <div style="height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;">
-                <div style="height:100%; width:{{ ldfScore }}%; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
+                <div style="height:100%; width:{{ ldfScore }}%; min-width:{{ ldfScoreMin }}; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
               </div>
               <div style="font-size:11px; color:#4B4757; margin-top:8px; font-weight:600;">{{ ldfScoreBand }}</div>
               <!-- What moved it, in the model's own words, so the number is never just a number. -->
@@ -26458,6 +26457,9 @@ class Component extends DCLogic {
           : ['Not enough to score yet', '#A9A6B4'];
         return {
           ldfScore: String(n),
+          // A zero-width fill is invisible, and an invisible bar reads as a broken one. Nothing
+          // scored shows an empty track instead — which is the honest picture.
+          ldfScoreMin: n > 0 ? '10px' : '0',
           ldfScoreColor: band[1],
           ldfScoreBand: band[0],
           // The model's own sentence for the weakest component — what to fix next, not a verdict.
