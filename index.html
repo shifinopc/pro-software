@@ -4528,9 +4528,7 @@
       <sc-if value="{{ showActivities }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Activities">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Activities</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ acSub }}</div>
           </div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <span onClick="{{ acToggleMine }}" style="font-size:12px; font-weight:700; color:{{ acMineColor }}; background:{{ acMineBg }}; border:1px solid {{ acMineBd }}; padding:8px 15px; border-radius:99px; cursor:pointer;">{{ acMineLabel }}</span>
@@ -4546,43 +4544,64 @@
         <!-- Kind filters. Every kind is shown with its own count, including the zeroes: a chip that
              disappears when nothing matches makes the bar change shape as it is used, and hides that
              the kind exists at all. -->
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; display:flex; gap:8px; flex-wrap:wrap;">
-          <sc-for list="{{ acKinds }}" as="k" hint-placeholder-count="7">
-            <span onClick="{{ k.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:{{ k.weight }}; color:{{ k.color }}; background:{{ k.bg }}; border:1px solid {{ k.bd }}; padding:7px 14px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF;">
-              {{ k.label }}
-              <span style="font-size:10.5px; font-weight:700; color:{{ k.countColor }}; background:{{ k.countBg }}; padding:1px 7px; border-radius:99px;">{{ k.count }}</span>
-            </span>
-          </sc-for>
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center; background:#F3EFFA; border-radius:99px; padding:3px;">
+            <sc-for list="{{ acKinds }}" as="k" hint-placeholder-count="7">
+              <span onClick="{{ k.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ k.color }}; background:{{ k.bg }}; box-shadow:{{ k.shadow }}; padding:6px 13px; border-radius:99px; cursor:pointer;">
+                {{ k.label }}
+                <span style="font-size:10.5px; font-weight:700; color:{{ k.countColor }};">{{ k.count }}</span>
+              </span>
+            </sc-for>
+          </div>
         </section>
 
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; flex-direction:column; gap:16px;">
+        <!-- ONE card, banded by day — not a card per day.
+             A card for Today, a gap, a card for Yesterday, a gap, a card for This week reads as
+             three separate logs. It is one log; the band is where the day changes. Same reasoning
+             as the follow-up queue, and the two screens now look like siblings, which they are. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
           <sc-for list="{{ acGroups }}" as="g" hint-placeholder-count="3">
-            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:15px 22px 11px; border-bottom:1px solid #F5F2FA;">
-                <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ g.label }}</span>
-                <span style="font-size:11.5px; color:#A9A6B4;">{{ g.count }}</span>
-              </div>
-              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
-                <div onClick="{{ r.go }}" style="display:flex; align-items:flex-start; gap:13px; padding:13px 22px; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FDFBFF;">
-                  <div style="flex-shrink:0; width:32px; height:32px; border-radius:10px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ r.color }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ r.icon }}"></path></svg>
-                  </div>
-                  <div style="flex:1; min-width:0;">
-                    <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;">
-                      <span style="font-size:10px; font-weight:700; color:{{ r.color }}; letter-spacing:.05em; text-transform:uppercase;">{{ r.kindLabel }}</span>
-                      <span style="font-size:12.5px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.company }}</span>
-                      <!-- Written by a stage rule, not by a person. Said plainly, because a log full
-                           of automatic notes read as effort would flatter everybody. -->
-                      <sc-if value="{{ r.auto }}" hint-placeholder-val="{{ false }}">
-                        <span style="font-size:9.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 8px; border-radius:99px;">automatic</span>
-                      </sc-if>
-                    </div>
-                    <div style="font-size:12.5px; color:#4B4757; margin-top:3px; line-height:1.5;">{{ r.summary }}</div>
-                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ r.meta }}</div>
-                  </div>
-                  <span style="flex-shrink:0; font-size:10.5px; color:#A9A6B4; text-align:right;">{{ r.when }}</span>
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 22px; background:#FBFAFE; border-bottom:1px solid #F5F3F9;">
+              <span style="font-size:11px; font-weight:700; color:#6F6C7A; letter-spacing:.08em; text-transform:uppercase;">{{ g.label }}</span>
+              <span style="font-size:10.5px; color:#B4AFC4;">{{ g.count }}</span>
+            </div>
+            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+              <div onClick="{{ r.go }}" style="display:flex; align-items:flex-start; gap:14px; padding:14px 22px; border-bottom:1px solid #F7F5FB; cursor:pointer;" style-hover="background:#FBFAFE;">
+                <div style="flex-shrink:0; width:36px; height:36px; border-radius:12px; background:{{ r.bg }}; display:flex; align-items:center; justify-content:center;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ r.color }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ r.icon }}"></path></svg>
                 </div>
-              </sc-for>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:13px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.company }}</span>
+                    <span style="font-size:9px; font-weight:700; color:{{ r.color }}; background:{{ r.bg }}; padding:2px 8px; border-radius:99px; text-transform:lowercase;">{{ r.kindLabel }}</span>
+                    <!-- Written by a stage rule, not by a person. Said plainly, because a log full
+                         of automatic notes read as effort would flatter everybody. -->
+                    <sc-if value="{{ r.auto }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:9px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:2px 8px; border-radius:99px;">auto</span>
+                    </sc-if>
+                  </div>
+                  <div style="font-size:11px; color:#A9A6B4; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.meta }}</div>
+                  <!-- What was actually said, in its own quoted box. It was a plain line of body text
+                       between two grey lines, so the one part of the row somebody wrote by hand
+                       looked exactly like the parts the system filled in. -->
+                  <div style="font-size:11.5px; color:#4B4757; margin-top:6px; background:#FCFBFE; border-radius:10px; padding:9px 12px; line-height:1.55;">“{{ r.summary }}”</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:9px; flex-shrink:0;">
+                  <sc-if value="{{ r.hasTime }}" hint-placeholder-val="{{ true }}">
+                    <span style="font-size:10.5px; font-weight:600; color:#8C8899; font-variant-numeric:tabular-nums;">{{ r.when }}</span>
+                  </sc-if>
+                  <sc-if value="{{ r.hasWho }}" hint-placeholder-val="{{ true }}">
+                    <span title="Logged by {{ r.who }}" style="width:26px; height:26px; border-radius:99px; background:#26074D; color:#fff; font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ r.whoInitials }}</span>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </sc-for>
+          <!-- The two rules that decide what this list looks like, said once at the bottom. Both get
+               asked about: why an entry logged this morning sits under last Tuesday, and why some
+               rows carry a time and others do not. -->
+          <div style="padding:13px 22px; background:#FBFAFE; font-size:10.5px; color:#B4AFC4; line-height:1.7;">Entries are ordered by <b style="color:#8C8899;">when it happened</b>, not when it was typed. A time is shown only when one was recorded.</div>
+        </section>
             </div>
           </sc-for>
           <sc-if value="{{ acEmpty }}" hint-placeholder-val="{{ true }}">
@@ -24527,6 +24546,11 @@ class Component extends DCLogic {
               : d >= weekAgo ? 'This week' : 'Earlier';
         const ORDER = ['Scheduled ahead', 'Today', 'Yesterday', 'This week', 'Earlier'];
 
+        // Initials, worked out here rather than through one of this file's other helpers. Each of
+        // those sits inside a different screen's block, and reaching across for one is what took the
+        // Pipeline screen down earlier today.
+        const inits9 = (n) => String(n || '').replace(/\([^)]*\)/g, ' ').split(/\s+/)
+          .filter(w => /[A-Za-z0-9]/.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
         const shaped = rows.map(r => {
           const tone = KIND_TONE[r.kind] || ['#F3F1F7', '#6F6C7A'];
           const t = Date.parse(r.at);
@@ -24541,13 +24565,21 @@ class Component extends DCLogic {
             meta: [
               r.contact ? r.contact.name + (r.contact.jobTitle ? ' · ' + r.contact.jobTitle : '') : null,
               r.deal ? r.deal.title : null,
-              r.owner ? 'logged by ' + r.owner : null,
             ].filter(Boolean).join(' · ') || 'no further detail recorded',
             // A time ONLY when one was recorded. Rows whose `at` is a bare day were rendering as
             // "05:30" — midnight UTC read in local time — which invents a precision nobody entered.
+            // A time ONLY when one was recorded, and NOTHING at all when it was not — "no time" on
+            // two rows in three is a column of apology. The card's footer says the rule once, which
+            // is where an explanation of the whole list belongs.
+            hasTime: !!(r.hasTime && Number.isFinite(t)),
             when: r.hasTime && Number.isFinite(t)
               ? new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-              : 'no time',
+              : '',
+            // Who logged it, as a face. It was buried at the end of the meta line behind the contact
+            // and the deal — the last thing on the third line of a row people scan the first line of.
+            who: r.owner || 'Unknown',
+            whoInitials: inits9(r.owner),
+            hasWho: !!r.owner,
             go: r.company ? () => this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance', clientOpen: r.company.id }) : () => {},
           };
         });
@@ -24567,11 +24599,6 @@ class Component extends DCLogic {
         const total = counts.reduce((n, c) => n + c.count, 0);
 
         return {
-          acSub: !A ? 'Loading…'
-            : (rows.length ? rows.length + (rows.length === 1 ? ' activity' : ' activities') : 'Nothing logged')
-              + ' in the last ' + days + ' days'
-              + (A.scope === 'own' ? ' · your clients' : '')
-              + (mine ? ' · logged by you' : ''),
           acWindows: WINDOWS.map(w => ({
             label: w.label, pick: () => reload({ days: w.d }),
             weight: days === w.d ? '700' : '500',
@@ -24602,10 +24629,11 @@ class Component extends DCLogic {
               pick: () => reload({ kind: on && c.kind ? '' : c.kind }),
               weight: on ? '700' : '500',
               color: on ? '#7C00FF' : '#4B4757',
-              bg: on ? '#F5EEFF' : '#fff',
-              bd: on ? '#DDD1F5' : '#EDEBF2',
-              countColor: on ? '#7C00FF' : tone[1],
-              countBg: on ? '#EBDBFF' : tone[0],
+              // Raised in a shared track, the same control the Leads tabs are. Nine outlined chips
+              // read as nine buttons; a track with one raised chip reads as one control.
+              bg: on ? '#fff' : 'transparent',
+              shadow: on ? '0 1px 3px rgba(38,7,77,.14)' : 'none',
+              countColor: on ? '#B98BFF' : '#B4AFC4',
             };
           }),
           acGroups: groups,
