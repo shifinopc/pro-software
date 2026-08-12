@@ -12048,6 +12048,14 @@ class Component extends DCLogic {
       // `orgSet` that meant invoices printing with no seller name at all.
       fetch(API + '/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
       this._load('/api/users', 'usersData', (v) => this.setState({ usersData: v }));
+      // The resolved matrix, from the server. Presets used to live only in this file, so the
+      // screen could draw a grid the backend had never heard of — which is exactly how it ended
+      // up showing 11 modules while the enforcement knew 12.
+      this._loadPerms = () => fetch(API + '/api/permissions', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v && v.modules) this.setState({ permsApi: v }); })
+        .catch(() => {});
+      this._loadPerms();
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
@@ -13459,7 +13467,12 @@ class Component extends DCLogic {
       this._permT = setTimeout(() => {
         const t2 = localStorage.getItem('stimespro:token');
         fetch(API + '/api/settings/perms', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(grid) })
-          .then(r => { if (r.ok) this.toast('Permissions saved'); else if (r.status === 401) this.toast('Sign in to the console first to save permissions', 'error'); })
+          .then(r => {
+            if (r.ok) { this.toast('Permissions saved'); return this._loadPerms && this._loadPerms(); }
+            // A non-admin used to get NOTHING here: the tick moved, the save 403'd, and the screen
+            // said nothing at all.
+            if (r.status === 403) return this.toast('Only an administrator can change permissions', 'error');
+            if (r.status === 401) this.toast('Sign in to the console first to save permissions', 'error'); })
           .catch(() => {});
       }, 600);
     };
@@ -13621,13 +13634,40 @@ class Component extends DCLogic {
     };
     // Role-aware menu: screens a role cannot use are HIDDEN (mirrors the Permissions matrix and the
     // server guards — e.g. sales is read-only, row-scoped to assigned clients, no admin/config access).
-    const _navRole = (this.state.meUser || {}).role || null;
-    const _NAV_HIDE = {
-      sales: new Set(['Approvals', 'Requests Queue', 'Government Centers', 'Appointments', 'Courier',
-        'Receipts', 'Service Catalog', 'Plan & Billing', 'Country Rules', 'Document Types',
-        'Record Sequence', 'Form Builder', 'Print Layout', 'Workflow Builder', 'Settings']),
+    // WHICH SIDEBAR ITEMS APPEAR — driven by the permission matrix, as the Permissions screen has
+    // always claimed. It used to be this one hardcoded blacklist for the `sales` role, which is why
+    // every new screen was visible to every role by default and a PRO Officer could open Settings
+    // while the matrix said they had no View on it.
+    //
+    // A screen is hidden when its MODULE has no View. The map below is the only thing this file
+    // needs to know; the grid itself comes from the server that enforces it, so a hidden item and a
+    // 403 can no longer disagree.
+    const _SCREEN_MODULE = {
+      'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks',
+      'Approvals': 'Approvals', 'SLA Monitor': 'SLA Monitor', 'Activity Timeline': 'Activity Log',
+      'Clients': 'Clients', 'Employees': 'Clients', 'Requests Queue': 'Clients', 'Client Groups': 'Clients',
+      'Documents': 'Compliance', 'Government Centers': 'Compliance', 'Appointments': 'Compliance',
+      'Courier': 'Compliance', 'Document Types': 'Compliance', 'Compliance': 'Compliance',
+      'Invoices': 'Finance', 'Payments': 'Finance', 'Receipts': 'Finance', 'Plan & Billing': 'Finance',
+      'Service Catalog': 'Finance', 'Quotations': 'Sales',
+      'Pipeline': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Follow-ups': 'Sales', 'Inbox': 'Sales',
+      'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Sales', 'Sales Settings': 'Sales',
+      'Reports': 'Reports', 'Workflow Builder': 'Workflow', 'Checklist Rules': 'Workflow',
+      'Settings': 'Settings', 'Profile Settings': 'Settings', 'Notifications': 'Settings',
+      'Problem Reports': 'Settings', 'Country Rules': 'Settings', 'Record Sequence': 'Settings',
+      'Form Builder': 'Settings', 'Print Layout': 'Settings', 'Setup Check': 'Settings',
     };
-    const _navHidden = (_navRole && _NAV_HIDE[_navRole]) || null;
+    const _myPerm = (this.state.permsApi && this.state.permsApi.mine && this.state.permsApi.mine.grid) || null;
+    const _navHidden = (() => {
+      // Until the grid arrives, hide NOTHING. Blanking the sidebar for a second on every load is a
+      // worse failure than showing one item a moment too long.
+      if (!_myPerm) return null;
+      const hide = new Set();
+      Object.keys(_SCREEN_MODULE).forEach(scr => {
+        if (!_myPerm[_SCREEN_MODULE[scr] + '|View']) hide.add(scr);
+      });
+      return hide.size ? hide : null;
+    })();
     // Badge text, or '' for no badge — the rail renders whatever string it is given.
     const _newReportCount = (() => {
       const c = this.state.errReportCounts && this.state.errReportCounts.new;
@@ -22108,8 +22148,12 @@ class Component extends DCLogic {
       'Super Admin': [1,1,1,1,1,1], 'Admin': [1,1,1,1,1,1], 'PRO Officer': [1,1,1,0,0,1],
       'Accountant': [1,1,1,0,0,1], 'Sales': [1,0,0,0,0,1], 'Client Admin': [1,0,0,0,0,0],
     };
-    const permModuleList = ['Dashboard', 'Tasks', 'Approvals', 'SLA Monitor', 'Activity Log', 'Clients', 'Compliance', 'Finance', 'Reports', 'Workflow', 'Settings'];
-    const permActions = ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
+    // MODULES AND ACTIONS COME FROM THE SERVER, which is what enforces them. The literals below are
+    // the shape used before the payload arrives, not a second opinion — once it lands, the screen
+    // shows what the API will actually do.
+    const _pmApi = this.state.permsApi || null;
+    const permModuleList = (_pmApi && _pmApi.modules) || ['Dashboard', 'Tasks', 'Approvals', 'SLA Monitor', 'Activity Log', 'Clients', 'Compliance', 'Finance', 'Sales', 'Reports', 'Workflow', 'Settings'];
+    const permActions = (_pmApi && _pmApi.actions) || ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
     // per-role, per-module tweaks so it's not uniform
     const permTune = {
       'PRO Officer': { Finance: [1,0,0,0,0,0], Reports: [1,0,0,0,0,1], Workflow: [1,0,0,0,0,0], Settings: [0,0,0,0,0,0] },
@@ -22123,6 +22167,9 @@ class Component extends DCLogic {
     // audit entries. Those cells are forced OFF and locked so the permission model can't grant a
     // mutation the backend would never honor (SOX / ISO 27001 / GDPR expectation).
     const APPEND_ONLY_LOCKED = { 'Activity Log': ['Create', 'Edit', 'Approve', 'Delete'] };
+    // The server's resolved row for the role being edited. Falls back to the local presets only
+    // while the payload is in flight.
+    const _pmRow = (_pmApi && _pmApi.roles && _pmApi.roles[setRoleSel]) || null;
     const permMatrix = permModuleList.map(mod => {
       const preset = (permTune[setRoleSel] && permTune[setRoleSel][mod]) || permPreset[setRoleSel] || [1,0,0,0,0,0];
       return {
@@ -22130,11 +22177,21 @@ class Component extends DCLogic {
         cells: permActions.map((act, ai) => {
           const key = setRoleSel + '|' + mod + '|' + act;
           const appendLocked = (APPEND_ONLY_LOCKED[mod] || []).includes(act);
-          const on = appendLocked ? false : (grid[key] != null ? grid[key] : !!preset[ai]);
+          const on = appendLocked ? false
+            : _pmRow ? !!_pmRow[mod + '|' + act]
+            : (grid[key] != null ? grid[key] : !!preset[ai]);
           const locked = setRoleSel === 'Super Admin' || appendLocked;
           return { act, on, locked,
             cellBg: on ? '#7C00FF' : (appendLocked ? '#F3F1F7' : '#fff'), cellBorder: on ? '#7C00FF' : '#DDD9E6', cursor: locked ? 'not-allowed' : 'pointer',
-            toggle: () => { if (locked) return; const ng = { ...grid, [key]: !on }; this.setState({ permGrid: ng }); this._savePerms && this._savePerms(ng); } };
+            toggle: () => {
+              if (locked) return;
+              const ng = { ...grid, [key]: !on };
+              this.setState({ permGrid: ng });
+              // Optimistic locally, then re-read: the server merges the change with its presets and
+              // its answer is the one that governs, so the ticks must come back from it.
+              if (_pmRow) this.setState({ permsApi: { ..._pmApi, roles: { ..._pmApi.roles, [setRoleSel]: { ..._pmRow, [mod + '|' + act]: !on } } } });
+              this._savePerms && this._savePerms(ng);
+            } };
         }),
       };
     });

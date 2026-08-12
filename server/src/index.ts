@@ -59,6 +59,7 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
+import { MODULES, ACTIONS, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, type InviteResult } from "./invitations.js";
@@ -5359,6 +5360,26 @@ app.post("/api/email-config/test", requireAuth, requireStaff, requireReadRole("s
 // Org-wide settings (console Settings → General etc.) — one JSON row per area, keyed ("org", …).
 // Readable by any staff; writes gated by the role matrix like every other admin write.
 const SETTINGS_PROTECTED = new Set(["email"]); // has secrets — use /api/email-config instead
+/**
+ * The resolved matrix, from the server that enforces it.
+ *
+ * The screen used to draw its own presets out of index.html, which is how it could show a grid the
+ * backend had never heard of. It now renders THIS — one set of numbers, one authority.
+ *
+ * `mine` is the caller's own row, so the console can hide what they cannot open instead of letting
+ * them walk into a 403.
+ */
+app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
+  const labels = [...new Set([...Object.values(ROLE_LABEL), ...(await customRoleLabels())])];
+  const roles: Record<string, Record<string, boolean>> = {};
+  for (const l of labels) roles[l] = await gridFor(l);
+  const mineLabel = await labelForRole((req as any).auth?.role);
+  res.json({
+    modules: MODULES, actions: ACTIONS, roles,
+    mine: { label: mineLabel, grid: mineLabel ? roles[mineLabel] ?? await gridFor(mineLabel) : {} },
+  });
+});
+
 app.get("/api/settings/:key", requireAuth, requireStaff, async (req, res) => {
   if (SETTINGS_PROTECTED.has(req.params.key)) return res.status(403).json({ error: "Use /api/email-config" });
   const row = await prisma.appSetting.findUnique({ where: { key: req.params.key } });
@@ -5373,6 +5394,9 @@ app.put("/api/settings/:key", requireAuth, requireStaff, requireWriteRole, async
       update: { value },
       create: { key: req.params.key, value },
     });
+    // The matrix and the role list are read on every request through a cache; saving must drop it
+    // or an admin watches their own change do nothing for half a minute and concludes it is broken.
+    if (req.params.key === "perms" || req.params.key === "roles") invalidatePermissions();
     await logAudit({ action: "settings.update", actorId: (req as any).auth?.sub, target: req.params.key, detail: JSON.stringify(value).slice(0, 400) });
     res.json(row.value);
   } catch (e: any) { res.status(400).json({ error: e.message }); }

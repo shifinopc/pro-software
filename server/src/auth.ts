@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./db.js";
+import { can, permFor } from "./permissions.js";
 
 // ── Secrets: fail fast rather than silently booting with a known key ──
 // Falling back to a published default in production means anyone can forge a super_admin token and
@@ -181,9 +182,31 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * Staff, AND allowed to do this.
+ *
+ * The permission matrix is enforced here because this one middleware sits on all 168 staff routes
+ * — the single choke point. Checking it per-route would mean 168 chances to forget one, and a
+ * permission system with holes in it is just a slower way of having none.
+ *
+ * A route the matrix does not map falls through untouched and keeps the gate it already had.
+ */
 export function requireStaff(req: Request, res: Response, next: NextFunction) {
-  if ((req as any).auth?.type !== "staff") return res.status(403).json({ error: "Staff access only" });
-  next();
+  const a = (req as any).auth;
+  if (a?.type !== "staff") return res.status(403).json({ error: "Staff access only" });
+  const full = (req.baseUrl || "") + (req.path || "");
+  const need = permFor(req.method, full);
+  if (!need) return next();
+  (req as any).perm = need;   // remembered so requireWriteRole knows this route was already judged
+  can(a?.role, need.module, need.action)
+    .then(ok => ok ? next() : res.status(403).json({
+      // Names the cell, so the answer to "why can't I" is on screen instead of in a log somebody
+      // has to be asked for.
+      error: `Your role does not have ${need.action} access to ${need.module}`,
+      module: need.module, action: need.action,
+    }))
+    // Never fail open. A permission check that cannot run is a refusal, not an allowance.
+    .catch(() => res.status(403).json({ error: "Permission check failed" }));
 }
 
 export function requirePortal(req: Request, res: Response, next: NextFunction) {
@@ -214,7 +237,12 @@ export async function resolveEffectiveRole(role: string | undefined): Promise<st
 export function requireWriteRole(req: Request, res: Response, next: NextFunction) {
   const a = (req as any).auth;
   const writeRoles = ["admin", "super_admin"];
-  if (!["POST", "PUT", "DELETE"].includes(req.method)) return next();
+  if (!["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) return next();
+  // ALREADY JUDGED. When the matrix governs this route, requireStaff has just applied it, and
+  // applying an admin-only rule on top would make every box the matrix ticks unreachable — the
+  // screen would grant a permission the next middleware silently refuses. Unmapped routes keep
+  // the admin-only rule, so nothing is opened by accident.
+  if ((req as any).perm) return next();
   resolveEffectiveRole(a?.role).then(eff => {
     if (!writeRoles.includes(eff || "")) return res.status(403).json({ error: "Write access requires admin role" });
     next();
@@ -228,6 +256,11 @@ export function requireWriteRole(req: Request, res: Response, next: NextFunction
 export function requireReadRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     const a = (req as any).auth;
+    // Same deferral as requireWriteRole, and for the same reason. These hand-written lists predate
+    // the matrix; leaving them on top would mean an admin could tick View on for a role and still
+    // be refused by a list written months earlier, with nothing on screen explaining why. The
+    // matrix has already decided for any route it maps.
+    if ((req as any).perm) return next();
     resolveEffectiveRole(a?.role).then(eff => {
       if (!roles.includes(eff || "")) return res.status(403).json({ error: "Your role does not have access to this resource" });
       next();
