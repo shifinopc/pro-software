@@ -3801,48 +3801,6 @@
           </section>
         </sc-if>
 
-        <!-- LIST VIEW — the queue reading of the pipeline: every deal flat, worst health first.
-             Same payload as the board; no drag. Moving a deal from here is the card's own controls. -->
-        <sc-if value="{{ pipShowList }}" hint-placeholder-val="{{ false }}">
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; flex-direction:column; gap:10px;">
-            <sc-for list="{{ pipListRows }}" as="d" hint-placeholder-count="6">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px; position:relative; overflow:hidden;" style-hover="border-color:#DDD1F5;">
-                <sc-if value="{{ d.hlShow }}" hint-placeholder-val="{{ false }}">
-                  <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:{{ d.hlColor }};"></div>
-                </sc-if>
-                <div style="flex:1; min-width:0;">
-                  <div style="display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;">
-                    <span style="font-size:13px; font-weight:700;">{{ d.title }}</span>
-                    <span style="font-size:11.5px; color:#8C8899;">{{ d.company }}</span>
-                    <span style="font-size:10px; font-weight:700; color:{{ d.stageColor }}; background:{{ d.stageBg }}; padding:2px 9px; border-radius:99px;">{{ d.stageName }}</span>
-                    <sc-if value="{{ d.hlShow }}" hint-placeholder-val="{{ false }}">
-                      <span style="font-size:10px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:2px 9px; border-radius:99px;">{{ d.hlLabel }}</span>
-                    </sc-if>
-                  </div>
-                  <!-- The why, on the row itself. A list ordered by health that cannot say WHY a row
-                       is where it is would just be a mysteriously shuffled board. -->
-                  <div style="font-size:11px; color:#A9A6B4; margin-top:4px; line-height:1.5;">{{ d.hlWhy }} · {{ d.owner }}</div>
-                </div>
-                <div style="flex-shrink:0; text-align:right;">
-                  <div style="font-size:13px; font-weight:700;">{{ d.value }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ d.odds }} · close {{ d.closeDate }}</div>
-                </div>
-                <sc-if value="{{ d.canAct }}" hint-placeholder-val="{{ true }}">
-                  <div style="flex-shrink:0; display:flex; gap:6px;">
-                    <span onClick="{{ d.open }}" style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Open</span>
-                    <sc-if value="{{ d.canMove }}" hint-placeholder-val="{{ true }}">
-                      <span onClick="{{ d.next }}" style="font-size:10.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:5px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
-                    </sc-if>
-                  </div>
-                </sc-if>
-              </div>
-            </sc-for>
-            <sc-if value="{{ pipListEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:14px; padding:34px 24px; text-align:center; font-size:12.5px; color:#A9A6B4;">No deals on the board yet.</div>
-            </sc-if>
-          </section>
-        </sc-if>
-
         <!-- TABLE VIEW — the manager reading: sortable columns, dense rows, no controls but Open. -->
         <sc-if value="{{ pipShowTable }}" hint-placeholder-val="{{ false }}">
           <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden; padding:0;">
@@ -3871,45 +3829,6 @@
               </sc-if>
             </div></div>
           </section>
-        </sc-if>
-
-        <!-- FORECAST VIEW — the fourth dimension read as money. Not another drawing of the columns:
-             it answers "what may be promised upward", which the stage cannot say because two deals
-             in Negotiation can carry entirely different promises. -->
-        <sc-if value="{{ pipShowForecast }}" hint-placeholder-val="{{ false }}">
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; align-items:start;">
-            <sc-for list="{{ pipFcBuckets }}" as="b" hint-placeholder-count="3">
-              <div class="pg-card" style="overflow:hidden;">
-                <div style="padding:16px 20px 13px; border-bottom:1px solid #F5F2FA;">
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <span style="font-size:11.5px; font-weight:700; color:{{ b.color }}; background:{{ b.bg }}; padding:3px 12px; border-radius:99px;">{{ b.label }}</span>
-                    <span style="font-size:11px; font-weight:700; color:#A9A6B4;">{{ b.count }}</span>
-                  </div>
-                  <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:10px;">{{ b.total }}</div>
-                  <!-- Both figures, always: the promise and what the odds say it is worth. -->
-                  <div style="font-size:11px; color:#8C8899; margin-top:3px;">weighted {{ b.weighted }}<sc-if value="{{ b.unpriced }}" hint-placeholder-val="{{ false }}"> · {{ b.unpriced }} unpriced</sc-if></div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:5px; line-height:1.5;">{{ b.note }}</div>
-                </div>
-                <sc-for list="{{ b.rows }}" as="d" hint-placeholder-count="3">
-                  <div onClick="{{ d.open }}" style="display:flex; align-items:center; gap:10px; padding:11px 20px; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FAF7FE;">
-                    <div style="flex:1; min-width:0;">
-                      <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.title }}</div>
-                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.company }} · {{ d.stageName }} · {{ d.odds }}</div>
-                    </div>
-                    <!-- Somebody put it here on purpose, against the arithmetic. Worth a mark. -->
-                    <sc-if value="{{ d.fcSet }}" hint-placeholder-val="{{ false }}">
-                      <span title="Set by hand — not derived from the odds" style="flex-shrink:0; font-size:9px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 7px; border-radius:99px;">SET</span>
-                    </sc-if>
-                    <span style="flex-shrink:0; font-size:12px; font-weight:700;">{{ d.value }}</span>
-                  </div>
-                </sc-for>
-                <sc-if value="{{ b.empty }}" hint-placeholder-val="{{ false }}">
-                  <div style="padding:22px 20px; text-align:center; font-size:11.5px; color:#BFBCC9;">Nothing in this bucket</div>
-                </sc-if>
-              </div>
-            </sc-for>
-          </section>
-          <div style="font-size:11px; color:#8C8899; line-height:1.6; padding:0 4px;">{{ pipFcNote }}</div>
         </sc-if>
 
         <sc-if value="{{ pipNoStages }}" hint-placeholder-val="{{ false }}">
@@ -25782,7 +25701,13 @@ class Component extends DCLogic {
       // is remembered in localStorage rather than state alone, because "which view do I work in" is
       // a preference about the person, not about the session.
       ...(() => {
-        const view = this.state.pipView || localStorage.getItem('stimespro:pipView') || 'kanban';
+        // Coerced, not trusted. This preference is remembered in localStorage, so anybody who was
+        // last in the list or the forecast still has that word saved — and with neither view left to
+        // render it, the screen would come up with a header, a toggle and nothing underneath, on a
+        // page they cannot fix from the page. An unrecognised name falls back to the board.
+        const VIEWS9 = ['kanban', 'table'];
+        const stored9 = this.state.pipView || localStorage.getItem('stimespro:pipView') || 'kanban';
+        const view = VIEWS9.includes(stored9) ? stored9 : 'kanban';
         const setView = (v) => () => { localStorage.setItem('stimespro:pipView', v); this.setState({ pipView: v }); };
         const allDeals = _pipeCols.flatMap(col => col.deals.map(d => _shapeDeal9(d, col)));
 
@@ -25805,53 +25730,18 @@ class Component extends DCLogic {
           // state, and a view toggle over an unconfigured pipeline would switch between three
           // different kinds of empty.
           pipShowKanban: _pipeCols.length > 0 && view === 'kanban',
-          pipShowList: _pipeCols.length > 0 && view === 'list',
           pipShowTable: _pipeCols.length > 0 && view === 'table',
-          pipShowForecast: _pipeCols.length > 0 && view === 'forecast',
-          // ── Forecast ──
-          // Open deals only, bucketed by the promise their money carries. Weighted AND face value on
-          // every bucket: "commit SAR 400k" is what was promised, "weighted 320k" is what the odds
-          // say — showing one of them invites reading it as the other.
-          ...(() => {
-            const open = allDeals.filter(d => d.fcCat);
-            const buckets = [
-              { key: 'commit', label: 'Commit', color: '#0E9355', bg: '#E7F8EF', note: 'Promised upward — expected to close' },
-              { key: 'best_case', label: 'Best case', color: '#7C00FF', bg: '#F5EEFF', note: 'Closes if the month goes well' },
-              { key: 'pipeline', label: 'Pipeline', color: '#6F6C7A', bg: '#F3F1F7', note: 'Real, but nobody is promising it' },
-            ].map(b => {
-              const rows = open.filter(d => d.fcCat === b.key)
-                .sort((x, y) => y._value - x._value);
-              return {
-                ...b,
-                rows,
-                count: rows.length,
-                total: _money9(rows.reduce((n, d) => n + Math.max(0, d._value), 0), _ccy9),
-                weighted: _money9(rows.reduce((n, d) => n + (d._weighted || 0), 0), _ccy9),
-                unpriced: rows.filter(d => d._value < 0).length,
-                empty: rows.length === 0,
-                setCount: rows.filter(d => d.fcSet).length,
-              };
-            });
-            return {
-              pipFcBuckets: buckets,
-              pipFcEmpty: open.length === 0,
-              pipFcNote: 'A deal is committed at 75%+ odds and best-case at 50%+, unless somebody set its category by hand — those are marked. Change either on the deal itself.',
-            };
-          })(),
           // Selected is a FILLED purple pill, matching the My-pipeline half of the same control
           // three pixels to its left. It was a white chip with purple text, so one segmented control
           // marked its selection two different ways depending on which side of the hairline you were
           // looking at — and the white chip was nearly invisible against the pale track it sits in.
-          pipViews: [['kanban', 'Board'], ['list', 'List'], ['table', 'Table'], ['forecast', 'Forecast']].map(([v, label]) => ({
+          pipViews: [['kanban', 'Board'], ['table', 'Table']].map(([v, label]) => ({
             label, pick: setView(v),
             weight: '600',
             color: view === v ? '#fff' : '#6F6C7A',
             bg: view === v ? '#7C00FF' : 'transparent',
             shadow: 'none',
           })),
-          // LIST: every deal flat, worst health first — the queue reading of the pipeline.
-          pipListRows: [...allDeals].sort((a, b) => b._sev - a._sev || b._value - a._value),
-          pipListEmpty: allDeals.length === 0,
           // TABLE: sortable columns; the arrow on the active one says which way.
           pipTableRows: sorted,
           pipTableEmpty: allDeals.length === 0,
