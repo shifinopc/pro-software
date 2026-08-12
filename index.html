@@ -8938,13 +8938,52 @@
             </sc-if>
           </div>
 
+          <!-- What CHANGED, as against what people did. They were one list, which put "Moved to
+               Qualified" in among the phone calls: somebody scanning for the last conversation had
+               to step over the bookkeeping, and somebody asking when this became a prospect had to
+               find it among the chatter. -->
+          <sc-if value="{{ ddHasHistory }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:22px;">CHANGE HISTORY</div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:11px;">
+              <sc-for list="{{ ddHistory }}" as="h" hint-placeholder-count="4">
+                <div style="border:1px solid #F0EDF6; border-radius:12px; padding:10px 13px;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px;">
+                    <span style="font-weight:700;">{{ h.label }}</span>
+                    <sc-if value="{{ h.hasFrom }}" hint-placeholder-val="{{ true }}">
+                      <span style="color:#A9A6B4;">{{ h.from }}</span>
+                    </sc-if>
+                    <span style="color:#C9C4D4;">→</span>
+                    <span style="font-weight:700; color:#7C00FF;">{{ h.to }}</span>
+                  </div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ h.sub }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
           <sc-if value="{{ ddCanAct }}" hint-placeholder-val="{{ true }}">
             <div style="display:flex; gap:8px; margin-top:22px; padding-top:16px; border-top:1px solid #F0EDF6; flex-wrap:wrap;">
+              <sc-if value="{{ ddCanMove }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ ddNext }}" style="flex:1; min-width:150px; text-align:center; font-size:12px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #C9A2FF; padding:10px 15px; border-radius:11px; cursor:pointer;" style-hover="background:#FBF7FF;">{{ ddNextLabel }}</span>
+              </sc-if>
+              <sc-if value="{{ ddCanWin }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ ddWin }}" style="flex:1; min-width:170px; text-align:center; font-size:12px; font-weight:700; color:#fff; background:linear-gradient(112deg,#12B76A,#0E9355); padding:11px 15px; border-radius:11px; cursor:pointer; box-shadow:0 6px 16px -6px rgba(14,147,85,.7);" style-hover="filter:brightness(1.05);">Mark won</span>
+              </sc-if>
+            </div>
+            <!-- THE CAUSALITY, said plainly, because the design has it backwards for this system.
+                 Its button is "Mark won → convert", as though winning provisions the client. Here
+                 the client ACCEPTING THE QUOTATION is what provisions them, raises the first
+                 invoice and closes the deal won — one path, run by both the portal and the console.
+                 Marking won by hand is still offered, because a deal can be won off-system; it just
+                 is not the thing that converts anybody, and a button claiming otherwise would send
+                 people looking for a portal login that was never created. -->
+            <sc-if value="{{ ddWinWarn }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px; font-size:11px; font-weight:700; color:#B7791F; line-height:1.55;">⚠ {{ ddWinWarnText }}</div>
+            </sc-if>
+            <div style="margin-top:8px; font-size:10.5px; color:#A9A6B4; line-height:1.6;">{{ ddWinNote }}</div>
+            <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
               <span onClick="{{ ddEdit }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Edit deal</span>
               <span onClick="{{ ddLog }}" style="font-size:11.5px; font-weight:700; color:#4B4757; background:#F3F1F7; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#EAE7F0;">Log contact</span>
-              <sc-if value="{{ ddCanMove }}" hint-placeholder-val="{{ true }}">
-                <span onClick="{{ ddNext }}" style="font-size:11.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#D3F1E1;">{{ ddNextLabel }}</span>
-              </sc-if>
             </div>
           </sc-if>
         </sc-if>
@@ -26208,6 +26247,33 @@ class Component extends DCLogic {
             _k: a.id,
           })),
           ddNoActivity: !(D9.activity || []).length,
+          ddHistory: (D9.history || []).map(h => ({
+            label: h.label,
+            from: h.from || '',
+            hasFrom: !!h.from,
+            to: h.to,
+            sub: [h.by, ago9(h.at)].filter(Boolean).join(' \u00b7 '),
+            _k: h.id,
+          })),
+          ddHasHistory: !!(D9.history || []).length,
+          // Winning by hand. Offered while the deal is open and there is a won column to move it
+          // to — a board with no won stage configured cannot mark anything won, and a button that
+          // errors on press is worse than one that is not there.
+          ddCanWin: canWrite && !term9 && !!(D9.stages || []).find(x => x.isWon),
+          ddWin: () => {
+            const w = (D9.stages || []).find(x => x.isWon);
+            close9();
+            if (w) this._moveDeal(D9.id, w.id);
+          },
+          // The warning the design carries, shown only when it is TRUE — with no quotation at all
+          // it says the more useful thing, which is that there is nothing for a client to accept.
+          ddWinWarn: canWrite && !term9 && !(q9 && q9.status === 'accepted'),
+          ddWinWarnText: !q9
+            ? 'Nothing has been quoted, so there is nothing for this client to accept.'
+            : 'Record client acceptance before marking this deal won.',
+          ddWinNote: 'Accepting the quotation is what provisions the company, its portal login and '
+            + 'its subscription, and raises the first invoice \u2014 and it closes this deal won on its '
+            + 'own. Marking won here moves the card only.',
           ddCanAct: canWrite,
           // Routed through the one shape every view reads, so the drawer's Edit opens exactly the
           // form the board's own card would have opened.

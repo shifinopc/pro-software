@@ -1847,7 +1847,7 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
     }),
     prisma.stageTransition.findMany({
       where: { opportunityId: id }, orderBy: { movedAt: "desc" }, take: 12,
-      select: { id: true, movedAt: true, toStageId: true, movedById: true, isBackward: true },
+      select: { id: true, movedAt: true, fromStageId: true, toStageId: true, movedById: true, isBackward: true },
     }),
   ]);
   const who = new Map((await prisma.user.findMany({
@@ -1856,18 +1856,53 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
   })).map(u => [u.id, u.name]));
   const stageName = (sid: string | null) => stages.find(x => x.id === sid)?.name ?? "a stage";
 
-  const activity = [
-    ...touches.map(t => ({
-      id: t.id, at: t.at, kind: t.kind,
-      label: (KIND_LABEL[t.kind] ?? "Contact") + (t.summary ? ": " + t.summary : ""),
-      by: (t.ownerId && who.get(t.ownerId)) || null,
-    })),
+  /**
+   * TWO LISTS, not one.
+   *
+   * Activity is what PEOPLE did — calls, meetings, notes. Change history is what CHANGED about the
+   * record. They were merged, which put "Moved to Qualified" in among the phone calls and made both
+   * harder to read: somebody scanning for the last conversation had to step over the bookkeeping,
+   * and somebody asking "when did this become a prospect" had to find it among the chatter.
+   */
+  const activity = touches.map(t => ({
+    id: t.id, at: t.at, kind: t.kind,
+    label: (KIND_LABEL[t.kind] ?? "Contact") + (t.summary ? ": " + t.summary : ""),
+    by: (t.ownerId && who.get(t.ownerId)) || null,
+  }));
+
+  /**
+   * What changed, from the records that actually keep history.
+   *
+   * Every row here is READ, never inferred. The design's panel also carries a Value row — "SAR
+   * 40,500 → SAR 45,000" — and there is no such row here, because nothing in this schema records
+   * what a deal's value used to be. Drawing one would mean inventing a previous figure, and an
+   * invented number in a history panel is worse than an absent one: the whole purpose of the panel
+   * is to be the thing you trust when the current state looks wrong.
+   */
+  const history = [
+    {
+      id: "created", at: (deal as any).createdAt ?? null, label: "Record",
+      from: null, to: "deal opened", by: null,
+    },
     ...moves.map(m => ({
-      id: m.id, at: m.movedAt, kind: "stage",
-      label: (m.isBackward ? "Moved back to " : "Moved to ") + stageName(m.toStageId),
+      id: m.id, at: m.movedAt, label: "Stage",
+      from: m.fromStageId ? stageName(m.fromStageId) : "opened at",
+      to: stageName(m.toStageId),
       by: (m.movedById && who.get(m.movedById)) || null,
     })),
-  ].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 12);
+    // Quotation has no createdAt. `date` is the issue date printed on the document — the date this
+    // quotation exists AS OF — and `sentAt` is when it actually went out. Both earn a row when they
+    // differ: raising an offer and releasing it are two different events, and the gap between them
+    // is often exactly what somebody reading this panel is trying to account for.
+    ...(q ? [{
+      id: "quotation", at: (q as any).date ?? null, label: "Quotation",
+      from: null, to: q.number + " raised", by: null,
+    }] : []),
+    ...(q && (q as any).sentAt ? [{
+      id: "quotation-sent", at: (q as any).sentAt, label: "Quotation",
+      from: q.number, to: "sent to client", by: null,
+    }] : []),
+  ].filter(r => r.at).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 12);
 
   res.json({
     id: deal.id,
@@ -1895,6 +1930,8 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
       vatRateBp: q.vatRateBp,
     } : null,
     activity,
+    history,
+    createdAt: (deal as any).createdAt ?? null,
   });
 });
 
