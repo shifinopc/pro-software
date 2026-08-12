@@ -31,6 +31,16 @@ export interface CrmScope {
   /** Deal owners this caller may see, or null for everyone. */
   ownerIds?: string[] | null;
   /**
+   * Which month the MONEY is read for, as YYYY-MM. Defaults to the current one.
+   *
+   * Only the period figures move with it — won, invoiced, collected, the six-month strip and the
+   * target it is measured against. The "today" cards do NOT: new leads today, follow-ups due and
+   * upcoming appointments are a live queue, and rewriting them to a month in the past would turn a
+   * list of things to do into a list of things somebody once did. Picking July should re-read July's
+   * money, not pretend it is July.
+   */
+  month?: string | null;
+  /**
    * The target this screen is measured against, already RESOLVED by the route.
    *
    * Passed in rather than looked up here so the dashboard and the Performance report cannot answer
@@ -46,7 +56,9 @@ export interface CrmScope {
 
 export async function crmDashboard(scope: CrmScope = {}) {
   const today = day(new Date());
-  const thisMonth = today.slice(0, 7);
+  // The selected month, or this one. Validated rather than trusted: an unparseable value would
+  // otherwise make every period figure zero and look like a month with no business in it.
+  const thisMonth = /^\d{4}-\d{2}$/.test(String(scope.month ?? "")) ? String(scope.month) : today.slice(0, 7);
   const coWhere = scope.companyIds ? { id: { in: scope.companyIds } } : {};
 
   const [companies, stages, allDeals, payments, invoices, appointments, activities, users] = await Promise.all([
@@ -120,8 +132,12 @@ export async function crmDashboard(scope: CrmScope = {}) {
   // Built from a fixed list of months rather than from whatever the data happens to contain, so a
   // month with no wins is a ZERO on the line instead of vanishing and making the gap look like growth.
   const months: { key: string; label: string; wonMinor: number; wonCount: number }[] = [];
+  // Anchored to the SELECTED month rather than to now, so the strip always ends on the month the
+  // headline figure is quoting. Ending it on the calendar month while the headline read July would
+  // put the number being discussed somewhere in the middle of its own chart.
+  const anchor = new Date(thisMonth + "-01T00:00:00Z");
   for (let i = 5; i >= 0; i--) {
-    const d = new Date();
+    const d = new Date(anchor);
     d.setUTCDate(1);
     d.setUTCMonth(d.getUTCMonth() - i);
     const key = d.toISOString().slice(0, 7);

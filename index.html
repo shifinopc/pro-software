@@ -4060,7 +4060,28 @@
       <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
         <h1 style="margin:0; font-family:'Space Grotesk',sans-serif; font-weight:700; letter-spacing:-.02em; font-size:26px;">Sales</h1>
         <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
-          <span onClick="{{ cdRefresh }}" style="display:inline-flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:#4B4757; background:#fff; padding:7px 15px; border-radius:99px; cursor:pointer; box-shadow:0 1px 3px rgba(38,7,77,.08);" style-hover="color:#7C00FF;">{{ cdMonthLabelShort }} · Refresh</span>
+          <!-- Period. A real query parameter, not a label: it moves the won figure, invoiced,
+               collected, the six-month strip and the target they are judged against — together,
+               because a July headline measured against August's target compares nothing. -->
+          <div class="fm-selwrap" style="z-index:60;">
+            <span data-dd onClick="{{ cdPeriodToggle }}" style="display:inline-flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:#4B4757; background:#fff; padding:7px 15px; border-radius:99px; cursor:pointer; box-shadow:0 1px 3px rgba(38,7,77,.08); white-space:nowrap;">
+              {{ cdPeriodLabel }}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+            </span>
+            <sc-if value="{{ cdPeriodOpen }}" hint-placeholder-val="{{ false }}">
+              <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 7px); right:0; left:auto; width:172px; background:#fff; border-radius:14px; box-shadow:0 16px 40px rgba(38,7,77,.2); padding:6px; z-index:80; animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+                <sc-for list="{{ cdPeriods }}" as="p" hint-placeholder-count="6">
+                  <div onClick="{{ p.pick }}" style="font-size:12px; font-weight:600; color:{{ p.color }}; background:{{ p.bg }}; padding:8px 12px; border-radius:10px; cursor:pointer; margin-bottom:3px;">{{ p.label }}</div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <!-- Whose. Narrows to the caller's own book; it can only ever be narrower than what they
+               are already allowed to see, which is enforced on the route rather than here. -->
+          <div style="display:flex; gap:2px; background:#EFEBF7; border-radius:99px; padding:3px;">
+            <span onClick="{{ cdPickMine }}" style="font-size:11.5px; font-weight:600; color:{{ cdMineColor }}; background:{{ cdMineBg }}; padding:6px 15px; border-radius:99px; cursor:pointer;">Mine</span>
+            <span onClick="{{ cdPickAll }}" style="font-size:11.5px; font-weight:600; color:{{ cdAllColor }}; background:{{ cdAllBg }}; padding:6px 15px; border-radius:99px; cursor:pointer;">Everyone</span>
+          </div>
           <button onClick="{{ cdAddLead }}" style="background:#fff; color:#4B4757; border:none; font-size:12.5px; font-weight:600; padding:10px 17px; border-radius:99px; cursor:pointer; box-shadow:0 1px 3px rgba(38,7,77,.08);" style-hover="color:#7C00FF;">+ Lead</button>
           <button onClick="{{ cdAddDeal }}" style="background:#1A1523; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 19px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Deal</button>
         </div>
@@ -11442,11 +11463,21 @@ class Component extends DCLogic {
       // screen then adds up — the server already holds every table involved, and a dashboard
       // assembled in the browser is a dashboard that shows six correct numbers and two stale ones
       // whenever a fetch loses the race.
-      this._loadCrmDash = () => fetch(API + '/api/crm-dashboard', { headers: hdr })
-        .then(r => (r.ok ? r.json() : null))
-        .then(v => { if (v && v.leads) this.setState({ crmDash: v }); })
-        .catch(() => {});
-      this._loadCrmDash();
+      // Takes its filters as ARGUMENTS rather than reading state, for the same reason the activity
+      // loader does: the screen re-fetches the moment a control is pressed, and a closure that read
+      // state would read the value from before the press.
+      this._loadCrmDash = (opts) => {
+        const o = opts || {};
+        const qs = new URLSearchParams();
+        if (o.month) qs.set('month', o.month);
+        if (o.mine) qs.set('mine', '1');
+        const q = qs.toString();
+        return fetch(API + '/api/crm-dashboard' + (q ? '?' + q : ''), { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => { if (v && v.leads) this.setState({ crmDash: v }); })
+          .catch(() => {});
+      };
+      this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
       // The activity log across every client. Takes its filters as arguments rather than reading
       // state, so the screen can re-fetch on a chip press without this closure going stale.
       this._loadActivities = (opts) => {
@@ -24107,6 +24138,9 @@ class Component extends DCLogic {
           cdCollected: '—', cdCollectedSub: '', cdInvoiced: '—', cdInvoicedSub: '',
           cdOpenValue: '—', cdOpenSub: '', cdCollectedPct: 0, cdHasCollectedBar: false, cdOutstandingColor: 'rgba(255,255,255,.65)',
           cdAddLead: () => {}, cdAddDeal: () => {},
+          cdPeriodLabel: 'This month', cdPeriodOpen: false, cdPeriodToggle: () => {}, cdPeriods: [],
+          cdMineColor: '#fff', cdMineBg: '#7C00FF', cdAllColor: '#6F6C7A', cdAllBg: 'transparent',
+          cdPickMine: () => {}, cdPickAll: () => {},
           cdOutcomes: [], cdOutcomeScope: '',
           cdHasTarget: false, cdTargetPct: 0, cdTargetLabel: '', cdTargetLine: '',
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
@@ -24223,7 +24257,7 @@ class Component extends DCLogic {
         });
 
         return {
-          cdRefresh: () => { if (this._loadCrmDash) this._loadCrmDash(); this.toast('Refreshed'); },
+          cdRefresh: () => { if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine }); this.toast('Refreshed'); },
           cdGoTimeline: goTo('Activity Timeline', 'Overview'),
           cdGoAppointments: goTo('Appointments', 'Operations'),
           cdMonthLabelShort: _monthName(D.month, { month: 'long' }),
@@ -24289,6 +24323,47 @@ class Component extends DCLogic {
           // Both open the SAME dialogs the Leads and Pipeline screens use — reached from here rather
           // than reimplemented, so a lead added from the dashboard cannot end up with a different
           // shape from one added on the screen that owns it.
+          /**
+           * The last six months, newest first, built from the SAME anchor the server uses so the
+           * label a person picked and the month the figures were read for cannot drift apart.
+           * Labelled by name rather than by "3 months ago" — a period picker whose entries are
+           * relative has to be re-read every time the calendar turns over.
+           */
+          ...(() => {
+            const sel = this.state.cdMonth || new Date().toISOString().slice(0, 7);
+            const opts = [];
+            for (let i = 0; i < 6; i++) {
+              const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i);
+              const key = d.toISOString().slice(0, 7);
+              opts.push({
+                key,
+                label: i === 0 ? 'This month' : i === 1 ? 'Last month'
+                  : d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+              });
+            }
+            const cur = opts.find(o => o.key === sel) || opts[0];
+            return {
+              cdPeriodLabel: cur.label,
+              cdPeriodOpen: this.state.openDd === 'cdPeriod',
+              cdPeriodToggle: () => this.setState({ openDd: this.state.openDd === 'cdPeriod' ? null : 'cdPeriod' }),
+              cdPeriods: opts.map(o => ({
+                label: o.label,
+                color: o.key === sel ? '#7C00FF' : '#4B4757',
+                bg: o.key === sel ? '#F5EEFF' : 'transparent',
+                pick: () => {
+                  this.setState({ cdMonth: o.key, openDd: null });
+                  if (this._loadCrmDash) this._loadCrmDash({ month: o.key, mine: this.state.cdMine });
+                },
+              })),
+            };
+          })(),
+          // Segmented, so the state is visible without pressing anything.
+          cdMineColor: this.state.cdMine ? '#fff' : '#6F6C7A',
+          cdMineBg: this.state.cdMine ? '#7C00FF' : 'transparent',
+          cdAllColor: this.state.cdMine ? '#6F6C7A' : '#fff',
+          cdAllBg: this.state.cdMine ? 'transparent' : '#7C00FF',
+          cdPickMine: () => { this.setState({ cdMine: true }); if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: true }); },
+          cdPickAll: () => { this.setState({ cdMine: false }); if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: false }); },
           cdAddLead: () => this.setState({
             active: 'Leads', activeGroup: 'Sales',
             ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' },
@@ -24793,7 +24868,7 @@ class Component extends DCLogic {
               this.toast('Follow-up dropped');
               if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine);
               if (this._loadInteractions) this._loadInteractions();
-              if (this._loadCrmDash) this._loadCrmDash();
+              if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
             }).catch(() => this.setState({ cnErr: 'Server unreachable — nothing changed' }));
           },
         };
@@ -24841,7 +24916,7 @@ class Component extends DCLogic {
               this.toast('Rescheduled to ' + s.date);
               if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine);
               if (this._loadInteractions) this._loadInteractions();
-              if (this._loadCrmDash) this._loadCrmDash();
+              if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
             }).catch(() => this.setState({ snErr: 'Server unreachable — nothing changed' }));
           },
         };

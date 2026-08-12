@@ -1622,7 +1622,20 @@ app.get("/api/crm-dashboard", requireAuth, requireStaff, requireReadRole("super_
   // team you lead, or your own. Resolved here rather than inside the dashboard module so there is
   // one rule in one place; a second copy is how two screens end up measuring against two targets
   // and neither reader knows which they are looking at.
-  const period = new Date().toISOString().slice(0, 7);
+  /**
+   * WHICH MONTH, and WHOSE — the two controls the sales header carries.
+   *
+   * `month` moves the period figures and the target they are measured against, together, because a
+   * July headline judged against August's target is a comparison nobody asked for.
+   *
+   * `mine` narrows to the caller's own book. It INTERSECTS with what they may see rather than
+   * replacing it: a rep asking for "everyone" still gets their own visibility, and asking for
+   * "mine" can only ever be narrower than that. A scope parameter that widened access would be a
+   * permission bug wearing a filter's clothes.
+   */
+  const asked = String(req.query.month ?? "").trim();
+  const period = /^\d{4}-\d{2}$/.test(asked) ? asked : new Date().toISOString().slice(0, 7);
+  const mine = ["1", "true", "yes"].includes(String(req.query.mine ?? "").toLowerCase());
   const led = await actableTeamIds((req as any).auth);
   const teamId = led && led.length === 1 ? led[0] : null;
   const ownerId = vis.scope === "self" ? (req as any).auth.sub : null;
@@ -1636,7 +1649,10 @@ app.get("/api/crm-dashboard", requireAuth, requireStaff, requireReadRole("super_
       }
     : null;
   try {
-    res.json(await crmDashboard({ companyIds: scoped, ownerIds: vis.ids, target }));
+    const ownerIds = mine
+      ? (vis.ids === null ? [(req as any).auth.sub] : vis.ids.filter((id: string) => id === (req as any).auth.sub))
+      : vis.ids;
+    res.json(await crmDashboard({ companyIds: scoped, ownerIds, target, month: period }));
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
