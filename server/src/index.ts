@@ -2181,10 +2181,18 @@ app.get("/api/pipeline", requireAuth, requireStaff, requireReadRole("super_admin
   // `supersededAt: null` matters as much as the status: a replaced quotation keeps `sent`, because
   // it was sent and the client did not reject it — but nobody is waiting on it any more. Without
   // this, revising an offer INCREASES the number of answers you appear to be waiting for.
-  const awaiting = await prisma.quotation.count({
+  //
+  // The VALUE travels with the count, because they answer different questions and the screen shows
+  // the money first: "two quotations unanswered" is a chase list, "SAR 388k unanswered" is why the
+  // chasing matters. `totalMinor` falls back to `amount` in riyals for rows written before the
+  // minor-unit columns existed — a quotation missing from the total reads as money nobody is owed.
+  const awaitingRows = await prisma.quotation.findMany({
     where: { status: "sent", supersededAt: null, ...(scoped ? { companyId: { in: scoped } } : {}) },
+    select: { totalMinor: true, amount: true },
   });
-  res.json({ ...board, awaitingAnswer: awaiting });
+  const awaiting = awaitingRows.length;
+  const awaitingMinor = awaitingRows.reduce((n, q) => n + (q.totalMinor ?? Math.round((q.amount || 0) * 100)), 0);
+  res.json({ ...board, awaitingAnswer: awaiting, awaitingAnswerMinor: awaitingMinor });
 });
 
 app.get("/api/opportunities", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {

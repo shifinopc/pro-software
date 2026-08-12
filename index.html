@@ -3659,47 +3659,57 @@
            Columns and totals come from the SERVER already grouped. Adding them up here would be a
            second opinion about how much business is open. -->
       <sc-if value="{{ showPipeline }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Pipeline">
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+        <!-- ── Header, in the design's arrangement ───────────────────────────────────
+             ONE row, not two. The name of the screen and the controls stack on the left; the four
+             figures sit on the right of the same line. They were a separate strip underneath, which
+             cost a whole band of vertical space before the board began and made the numbers read as
+             a section of the page rather than as its heading.
+
+             The old sub-line under the title is gone with it: it said how many deals and what they
+             weighed, which is what two of these tiles say. One owner per question. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES</div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES · CRM</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Pipeline</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">{{ pipSub }}</div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;">
+              <!-- One control, not two. Whose board and which view are different questions, but they
+                   are asked in the same breath and the design keeps them in one pill with a hairline
+                   between — two separate pills read as two unrelated filters. -->
+              <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content;">
+                <span onClick="{{ pipPickMine }}" style="font-size:11.5px; font-weight:600; color:{{ pipMineColor }}; background:{{ pipMineBg }}; padding:5px 14px; border-radius:99px; cursor:pointer;">My pipeline</span>
+                <span onClick="{{ pipPickAll }}" style="font-size:11.5px; font-weight:600; color:{{ pipAllColor }}; background:{{ pipAllBg }}; padding:5px 14px; border-radius:99px; cursor:pointer;">Whole team</span>
+                <span style="width:1px; background:#DDD9E6; margin:2px 6px;"></span>
+                <sc-for list="{{ pipViews }}" as="v" hint-placeholder-count="3">
+                  <span onClick="{{ v.pick }}" style="font-size:11.5px; font-weight:{{ v.weight }}; color:{{ v.color }}; background:{{ v.bg }}; padding:5px 13px; border-radius:99px; box-shadow:{{ v.shadow }}; cursor:pointer;">{{ v.label }}</span>
+                </sc-for>
+              </div>
+              <!-- Kept, though the design has no button here: the design opens a deal from a row at
+                   the foot of its list view, and this board is the view people live in. Dropping the
+                   only way to start one to match a drawing would be a worse screen. -->
+              <sc-if value="{{ pipCanAdd }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ pipAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:600; padding:7px 16px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New deal</button>
+              </sc-if>
+            </div>
           </div>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <!-- One control, not two. Whose board and which view are different questions, but they
-                 are asked in the same breath and the design keeps them in one pill with a hairline
-                 between — two separate pills read as two unrelated filters. -->
-            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
-              <span onClick="{{ pipPickMine }}" style="font-size:11.5px; font-weight:600; color:{{ pipMineColor }}; background:{{ pipMineBg }}; padding:5px 14px; border-radius:99px; cursor:pointer;">My pipeline</span>
-              <span onClick="{{ pipPickAll }}" style="font-size:11.5px; font-weight:600; color:{{ pipAllColor }}; background:{{ pipAllBg }}; padding:5px 14px; border-radius:99px; cursor:pointer;">Whole team</span>
-              <span style="width:1px; background:#DDD9E6; margin:2px 6px;"></span>
-              <sc-for list="{{ pipViews }}" as="v" hint-placeholder-count="3">
-                <span onClick="{{ v.pick }}" style="font-size:11.5px; font-weight:{{ v.weight }}; color:{{ v.color }}; background:{{ v.bg }}; padding:5px 14px; border-radius:99px; box-shadow:{{ v.shadow }}; cursor:pointer;">{{ v.label }}</span>
+
+          <!-- Open, weighted, won and awaiting — said once, at the top. A single "pipeline value" is
+               the figure people mistake for money they are going to receive.
+
+               Each tile is drawn for what it IS rather than to one uniform recipe: WON is filled
+               green because it is the only one that is already money, and AWAITING wears an amber
+               border because it is the only one that is somebody's move this morning. -->
+          <sc-if value="{{ pipHasStages }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <sc-for list="{{ pipStats }}" as="s" hint-placeholder-count="4">
+                <div title="{{ s.exact }}" style="background:{{ s.tileBg }}; border:1px solid {{ s.tileBd }}; border-radius:14px; padding:10px 16px;">
+                  <div style="font-size:9.5px; font-weight:700; color:{{ s.labelColor }}; letter-spacing:.06em; text-transform:uppercase;">{{ s.k }}</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:2px; color:{{ s.color }};">{{ s.v }}</div>
+                  <div style="font-size:9.5px; color:{{ s.subColor }}; margin-top:2px;">{{ s.sub }}</div>
+                </div>
               </sc-for>
             </div>
-            <sc-if value="{{ pipCanAdd }}" hint-placeholder-val="{{ true }}">
-              <button onClick="{{ pipAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New deal</button>
-            </sc-if>
-          </div>
+          </sc-if>
         </section>
-
-        <!-- Open, weighted and won, said once at the top. A single "pipeline value" is the figure
-             people mistake for money they are going to receive. -->
-        <sc-if value="{{ pipHasStages }}" hint-placeholder-val="{{ true }}">
-          <!-- Compact tiles in a row, not a grid of cards. The design gives each its own treatment
-               rather than one uniform box with a coloured number: WON is a filled green tile because
-               it is the only figure that is already money, and AWAITING wears an amber border
-               because it is the only one that is somebody's move. -->
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; display:flex; gap:10px; flex-wrap:wrap;">
-            <sc-for list="{{ pipStats }}" as="s" hint-placeholder-count="4">
-              <div style="background:{{ s.tileBg }}; border:1px solid {{ s.tileBd }}; border-radius:14px; padding:10px 16px; min-width:150px;">
-                <div style="font-size:9.5px; font-weight:700; color:{{ s.labelColor }}; letter-spacing:.06em; text-transform:uppercase;">{{ s.k }}</div>
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin-top:2px; color:{{ s.color }};">{{ s.v }}</div>
-                <div style="font-size:9.5px; color:{{ s.subColor }}; margin-top:2px;">{{ s.sub }}</div>
-              </div>
-            </sc-for>
-          </section>
-        </sc-if>
 
         <sc-if value="{{ pipShowKanban }}" hint-placeholder-val="{{ true }}">
           <!-- ── THE BOARD, laid out the way the design lays it out ──────────────────────
@@ -25725,20 +25735,26 @@ class Component extends DCLogic {
       pipAdd: () => this._openDealForm(),
       pipGoSettings: () => this.setState({ active: 'Sales Settings', activeGroup: 'Configure' }),
       pipStats: [
+        // Compact, like the column headings and for the same reason: these are magnitudes to be
+        // compared with each other, not amounts anybody reconciles. The exact figure is the tile's
+        // tooltip, so the precision is one hover away rather than gone.
         {
-          k: 'Open pipeline', v: _money9(_openCols.reduce((n, c) => n + c.totalMinor, 0), _ccy9), color: '#1A1523',
+          k: 'Open pipeline', v: _moneyK9(_openCols.reduce((n, c) => n + c.totalMinor, 0), _ccy9), color: '#1A1523',
+          exact: _money9(_openCols.reduce((n, c) => n + c.totalMinor, 0), _ccy9),
           tileBg: '#fff', tileBd: '#EDEBF2', labelColor: '#A9A6B4', subColor: '#B4AFC4',
           sub: _openCols.reduce((n, c) => n + c.unpriced, 0) + ' with no figure yet',
         },
         {
-          k: 'Weighted', v: _money9(_openCols.reduce((n, c) => n + c.weightedMinor, 0), _ccy9), color: '#B8860B',
+          k: 'Weighted', v: _moneyK9(_openCols.reduce((n, c) => n + c.weightedMinor, 0), _ccy9), color: '#B8860B',
+          exact: _money9(_openCols.reduce((n, c) => n + c.weightedMinor, 0), _ccy9),
           tileBg: '#fff', tileBd: '#EDEBF2', labelColor: '#A9A6B4', subColor: '#B4AFC4',
-          sub: 'Each deal at its own odds of closing',
+          sub: "At each column's odds",
         },
         {
           // The only figure on the row that is already money rather than a forecast, so it is the
           // only one that gets to be a filled tile.
-          k: 'Won', v: _wonCol ? _money9(_wonCol.totalMinor, _ccy9) : '—', color: '#fff',
+          k: 'Won', v: _wonCol ? _moneyK9(_wonCol.totalMinor, _ccy9) : '—', color: '#fff',
+          exact: _wonCol ? _money9(_wonCol.totalMinor, _ccy9) : '',
           tileBg: 'linear-gradient(112deg,#12B76A,#0E9355)', tileBd: 'transparent',
           labelColor: 'rgba(255,255,255,.85)', subColor: 'rgba(255,255,255,.8)',
           sub: _wonCol ? _wonCol.count + ' closed' : 'No won column configured',
@@ -25748,10 +25764,15 @@ class Component extends DCLogic {
         // salesperson should be picking the phone up about.
         {
           // Amber-bordered rather than plain: this is the only tile that is somebody's move.
-          k: 'Awaiting an answer', v: String((_pipe && _pipe.awaitingAnswer) || 0), color: '#B8860B',
+          // The MONEY leads and the count explains it, which is the way round the design has it and
+          // the right way round: "2" beside three money tiles reads as two riyals for a moment every
+          // time, and "SAR 388k unanswered" is the reason the chasing matters at all.
+          k: 'Awaiting an answer',
+          v: _moneyK9((_pipe && _pipe.awaitingAnswerMinor) || 0, _ccy9), color: '#B8860B',
+          exact: _money9((_pipe && _pipe.awaitingAnswerMinor) || 0, _ccy9),
           tileBg: '#fff', tileBd: '#FBE2B8', labelColor: '#B8860B', subColor: '#B4AFC4',
           sub: (_pipe && _pipe.awaitingAnswer)
-            ? 'quotation' + (_pipe.awaitingAnswer === 1 ? '' : 's') + ' sent, no reply yet'
+            ? _pipe.awaitingAnswer + ' quotation' + (_pipe.awaitingAnswer === 1 ? '' : 's') + ' sent, no reply'
             : 'every quotation has been answered',
         },
       ],
