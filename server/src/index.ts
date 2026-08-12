@@ -1783,7 +1783,11 @@ const opsTaskTargets = async (): Promise<Record<string, number>> => {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 };
 
-app.get("/api/team-performance", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), async (req, res) => {
+// The SAME read audience as the Operations Analytics screen this replaced. Narrowing it here
+// would have quietly taken the screen away from accountants and sales, who could read the old
+// one — and the nav does not hide it from them, so they would have got a permanent "Loading".
+// Setting a target stays admin-only: reading how the work is going is not deciding the target.
+app.get("/api/team-performance", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "accountant", "sales"), async (req, res) => {
   const period = String(req.query.period ?? "").trim() || currentPeriod();
   const range = periodRange(period);
   if (!range) return res.status(400).json({ error: `"${period}" is not a period — use 2026-08` });

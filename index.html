@@ -5009,128 +5009,142 @@
           </div>
         </section>
 
-        <section style="display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.6fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both;">
-          <!-- The month against the number somebody agreed. Clicking it sets that number. -->
-          <div onClick="{{ tpSetTarget }}" title="Click to set this month’s task target" style="background:linear-gradient(135deg,#3A0A76,#7C00FF); color:#fff; border-radius:18px; padding:22px 24px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; min-height:150px; box-shadow:0 16px 40px -18px rgba(124,0,255,.7);">
-            <div>
-              <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.75;">{{ tpTargetLabel }}</div>
-              <div style="display:flex; align-items:baseline; gap:9px; margin-top:8px;">
-                <span style="font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; letter-spacing:-.02em; line-height:1;">{{ tpDone }}</span>
-                <span style="font-size:12.5px; opacity:.8;">{{ tpOf }}</span>
-              </div>
-            </div>
-            <div style="margin-top:18px;">
-              <div style="height:7px; background:rgba(255,255,255,.22); border-radius:99px; overflow:hidden;">
-                <div style="height:100%; width:{{ tpBarW }}; background:linear-gradient(90deg,#6FE7B7,#F5D06B); border-radius:99px;"></div>
-              </div>
-              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:11px;">
-                <span style="opacity:.9;">{{ tpPctLine }}</span>
-                <span style="font-weight:700;">{{ tpGapLine }}</span>
-              </div>
-            </div>
+        <!-- A refusal or an outage, said plainly. The screen used to sit on “Loading…” instead,
+             which reads as a slow server no matter what actually happened. -->
+        <sc-if value="{{ tpHasError }}" hint-placeholder-val="{{ false }}">
+          <div class="pg-card" style="padding:22px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+            <div style="font-size:12.5px; color:#6F6C7A; line-height:1.6;">{{ tpErrorText }}</div>
+            <span onClick="{{ tpRetry }}" style="font-size:12px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Try again</span>
           </div>
+        </sc-if>
 
-          <!-- SOLID is what closed, PALE is what the run rate expects. A projection drawn like a
-               fact is the reason forecast charts stop being believed. -->
-          <div class="pg-card" style="padding:18px 20px 14px; display:flex; flex-direction:column;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-              <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Throughput forecast</div>
-              <div style="display:flex; align-items:center; gap:12px; font-size:10.5px; color:#8C8899;">
-                <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#7C00FF;"></span>Closed</span>
-                <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#DDC2FF;"></span>Projected</span>
-                <span style="display:flex; align-items:center; gap:5px;"><span style="width:11px; height:2px; background:#A9A6B4;"></span>Target</span>
-              </div>
-            </div>
-            <div style="flex:1; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:12px; align-items:end; margin-top:16px; min-height:132px;">
-              <sc-for list="{{ tpBars }}" as="b" hint-placeholder-count="6">
-                <div title="{{ b.title }}" style="display:flex; flex-direction:column; align-items:stretch; gap:6px;">
-                  <div style="position:relative; height:118px; display:flex; flex-direction:column; justify-content:flex-end;">
-                    <sc-if value="{{ b.hasTarget }}" hint-placeholder-val="{{ true }}">
-                      <div style="position:absolute; left:0; right:0; top:{{ b.targetY }}; border-top:2px dashed #C9C4D4;"></div>
-                    </sc-if>
-                    <sc-if value="{{ b.hasProj }}" hint-placeholder-val="{{ true }}">
-                      <div style="height:{{ b.projH }}; background:#DDC2FF; border-radius:8px 8px 0 0;"></div>
-                    </sc-if>
-                    <div style="height:{{ b.actH }}; background:#7C00FF; border-radius:8px 8px 0 0;"></div>
-                  </div>
-                  <div style="text-align:center; font-size:10.5px; font-weight:{{ b.labelWeight }}; color:{{ b.labelColor }};">{{ b.label }}</div>
-                </div>
-              </sc-for>
-            </div>
-            <div style="font-size:10.5px; color:#B4AFC4; margin-top:10px;">{{ tpRunNote }}</div>
-          </div>
-        </section>
+        <!-- Nothing below this point can say anything true when the payload never arrived,
+             so it is not drawn at all rather than drawn as a screen of dashes. -->
+        <sc-if value="{{ tpShowPanels }}" hint-placeholder-val="{{ true }}">
 
-        <section style="display:grid; grid-template-columns:minmax(340px,1.6fr) minmax(260px,1fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both;">
-          <div class="pg-card" style="padding:18px 20px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <section style="display:grid; grid-template-columns:minmax(260px,1fr) minmax(320px,1.6fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both;">
+            <!-- The month against the number somebody agreed. Clicking it sets that number. -->
+            <div onClick="{{ tpSetTarget }}" title="{{ tpTargetTitle }}" style="background:linear-gradient(135deg,#3A0A76,#7C00FF); color:#fff; border-radius:18px; padding:22px 24px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; min-height:150px; box-shadow:0 16px 40px -18px rgba(124,0,255,.7);">
               <div>
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">PRO officer leaderboard</div>
-                <div style="font-size:11.5px; font-weight:600; color:#0E9355; margin-top:2px;">{{ tpTopLine }}</div>
+                <div style="font-size:10px; font-weight:700; letter-spacing:.1em; opacity:.75;">{{ tpTargetLabel }}</div>
+                <div style="display:flex; align-items:baseline; gap:9px; margin-top:8px;">
+                  <span style="font-family:'Space Grotesk',sans-serif; font-size:38px; font-weight:700; letter-spacing:-.02em; line-height:1;">{{ tpDone }}</span>
+                  <span style="font-size:12.5px; opacity:.8;">{{ tpOf }}</span>
+                </div>
               </div>
-              <span style="font-size:10.5px; color:#B4AFC4;">ranked by steps closed · % is SLA kept</span>
+              <div style="margin-top:18px;">
+                <div style="height:7px; background:rgba(255,255,255,.22); border-radius:99px; overflow:hidden;">
+                  <div style="height:100%; width:{{ tpBarW }}; background:linear-gradient(90deg,#6FE7B7,#F5D06B); border-radius:99px;"></div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:11px;">
+                  <span style="opacity:.9;">{{ tpPctLine }}</span>
+                  <span style="font-weight:700;">{{ tpGapLine }}</span>
+                </div>
+              </div>
             </div>
 
-            <sc-if value="{{ tpHasOfficers }}" hint-placeholder-val="{{ true }}">
-              <div style="display:flex; flex-direction:column; gap:9px; margin-top:14px;">
-                <sc-for list="{{ tpOfficers }}" as="o" hint-placeholder-count="4">
-                  <div style="display:flex; align-items:center; gap:12px; background:{{ o.rowBg }}; border:1px solid {{ o.rowBd }}; border-radius:14px; padding:11px 14px;">
-                    <span style="flex-shrink:0; width:24px; text-align:center; font-size:13px; font-weight:700; color:#A9A6B4;">{{ o.rank }}</span>
-                    <span style="flex-shrink:0; width:34px; height:34px; border-radius:50%; background:#7C00FF; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700;">{{ o.initials }}</span>
-                    <div style="flex:1; min-width:0;">
-                      <div style="display:flex; align-items:center; gap:7px;">
-                        <span style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ o.name }}</span>
-                        <sc-if value="{{ o.top }}" hint-placeholder-val="{{ false }}">
-                          <span style="flex-shrink:0; font-size:9px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:2px 6px; border-radius:6px; letter-spacing:.06em;">TOP</span>
-                        </sc-if>
-                      </div>
-                      <div style="font-size:11px; color:#8C8899; margin-top:1px;">{{ o.sub }}</div>
-                      <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:7px;">
-                        <div style="height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></div>
-                      </div>
+            <!-- SOLID is what closed, PALE is what the run rate expects. A projection drawn like a
+                 fact is the reason forecast charts stop being believed. -->
+            <div class="pg-card" style="padding:18px 20px 14px; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Throughput forecast</div>
+                <div style="display:flex; align-items:center; gap:12px; font-size:10.5px; color:#8C8899;">
+                  <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#7C00FF;"></span>Closed</span>
+                  <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#DDC2FF;"></span>Projected</span>
+                  <span style="display:flex; align-items:center; gap:5px;"><span style="width:11px; height:2px; background:#A9A6B4;"></span>Target</span>
+                </div>
+              </div>
+              <div style="flex:1; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:12px; align-items:end; margin-top:16px; min-height:132px;">
+                <sc-for list="{{ tpBars }}" as="b" hint-placeholder-count="6">
+                  <div title="{{ b.title }}" style="display:flex; flex-direction:column; align-items:stretch; gap:6px;">
+                    <div style="position:relative; height:118px; display:flex; flex-direction:column; justify-content:flex-end;">
+                      <sc-if value="{{ b.hasTarget }}" hint-placeholder-val="{{ true }}">
+                        <div style="position:absolute; left:0; right:0; top:{{ b.targetY }}; border-top:2px dashed #C9C4D4;"></div>
+                      </sc-if>
+                      <sc-if value="{{ b.hasProj }}" hint-placeholder-val="{{ true }}">
+                        <div style="height:{{ b.projH }}; background:#DDC2FF; border-radius:8px 8px 0 0;"></div>
+                      </sc-if>
+                      <div style="height:{{ b.actH }}; background:#7C00FF; border-radius:8px 8px 0 0;"></div>
                     </div>
-                    <div style="flex-shrink:0; text-align:right;">
-                      <div title="{{ o.pctTitle }}" style="font-size:14px; font-weight:700; color:{{ o.pctColor }}; font-variant-numeric:tabular-nums;">{{ o.pct }}</div>
-                      <div style="font-size:10px; color:#B4AFC4; margin-top:2px;">{{ o.days }}</div>
-                    </div>
+                    <div style="text-align:center; font-size:10.5px; font-weight:{{ b.labelWeight }}; color:{{ b.labelColor }};">{{ b.label }}</div>
                   </div>
                 </sc-for>
               </div>
-            </sc-if>
-            <sc-if value="{{ tpNoOfficers }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:14px; font-size:12px; color:#A9A6B4; line-height:1.6;">Nobody closed a step in this period, so there is nothing to rank.</div>
-            </sc-if>
+              <div style="font-size:10.5px; color:#B4AFC4; margin-top:10px;">{{ tpRunNote }}</div>
+            </div>
+          </section>
 
-            <!-- Steps that closed with nobody’s id on them. Said out loud rather than folded into the
-                 rows above, which would credit them to whoever happens to be on the board. -->
-            <sc-if value="{{ tpUnattributed }}" hint-placeholder-val="{{ true }}">
-              <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:11px; color:#B7791F; line-height:1.6;">{{ tpUnattributedNote }}</div>
-            </sc-if>
-            <div style="font-size:10.5px; color:#C9C4D4; margin-top:9px; line-height:1.6;">A closed step is not a unit of effort — a visa renewal and a document reprint both count one.</div>
-          </div>
-
-          <div class="pg-card" style="padding:18px 20px;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Load by authority</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ tpAuthSub }}</div>
-            <sc-if value="{{ tpHasAuth }}" hint-placeholder-val="{{ true }}">
-              <div style="display:flex; flex-direction:column; gap:11px; margin-top:15px;">
-                <sc-for list="{{ tpAuth }}" as="a" hint-placeholder-count="6">
-                  <div title="{{ a.title }}" style="display:flex; align-items:center; gap:11px;">
-                    <span style="flex-shrink:0; width:64px; font-size:11.5px; font-weight:700; color:{{ a.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.name }}</span>
-                    <span style="flex:1; min-width:30px; height:8px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ a.barW }}; background:{{ a.color }}; border-radius:99px;"></span></span>
-                    <span style="flex-shrink:0; width:26px; text-align:right; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums;">{{ a.count }}</span>
-                  </div>
-                </sc-for>
+          <section style="display:grid; grid-template-columns:minmax(340px,1.6fr) minmax(260px,1fr); gap:16px; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both;">
+            <div class="pg-card" style="padding:18px 20px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">PRO officer leaderboard</div>
+                  <div style="font-size:11.5px; font-weight:600; color:#0E9355; margin-top:2px;">{{ tpTopLine }}</div>
+                </div>
+                <span style="font-size:10.5px; color:#B4AFC4;">ranked by steps closed · % is SLA kept</span>
               </div>
-            </sc-if>
-            <!-- Empty because no STEP records an authority yet, not because no work happened. The
-                 templates already name them; steps created from here on will carry one. -->
-            <sc-if value="{{ tpNoAuth }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:15px; font-size:12px; color:#A9A6B4; line-height:1.65;">No step in this period records an authority. Workflow steps carry the authority set on their template node — set it in the Workflow Builder and this fills in as those steps run.</div>
-            </sc-if>
-          </div>
-        </section>
 
+              <sc-if value="{{ tpHasOfficers }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-direction:column; gap:9px; margin-top:14px;">
+                  <sc-for list="{{ tpOfficers }}" as="o" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:center; gap:12px; background:{{ o.rowBg }}; border:1px solid {{ o.rowBd }}; border-radius:14px; padding:11px 14px;">
+                      <span style="flex-shrink:0; width:24px; text-align:center; font-size:13px; font-weight:700; color:#A9A6B4;">{{ o.rank }}</span>
+                      <span style="flex-shrink:0; width:34px; height:34px; border-radius:50%; background:#7C00FF; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:700;">{{ o.initials }}</span>
+                      <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:7px;">
+                          <span style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ o.name }}</span>
+                          <sc-if value="{{ o.top }}" hint-placeholder-val="{{ false }}">
+                            <span style="flex-shrink:0; font-size:9px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:2px 6px; border-radius:6px; letter-spacing:.06em;">TOP</span>
+                          </sc-if>
+                        </div>
+                        <div style="font-size:11px; color:#8C8899; margin-top:1px;">{{ o.sub }}</div>
+                        <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:7px;">
+                          <div style="height:100%; width:{{ o.barW }}; background:{{ o.barColor }}; border-radius:99px;"></div>
+                        </div>
+                      </div>
+                      <div style="flex-shrink:0; text-align:right;">
+                        <div title="{{ o.pctTitle }}" style="font-size:14px; font-weight:700; color:{{ o.pctColor }}; font-variant-numeric:tabular-nums;">{{ o.pct }}</div>
+                        <div style="font-size:10px; color:#B4AFC4; margin-top:2px;">{{ o.days }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tpNoOfficers }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px; font-size:12px; color:#A9A6B4; line-height:1.6;">Nobody closed a step in this period, so there is nothing to rank.</div>
+              </sc-if>
+
+              <!-- Steps that closed with nobody’s id on them. Said out loud rather than folded into the
+                   rows above, which would credit them to whoever happens to be on the board. -->
+              <sc-if value="{{ tpUnattributed }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:11px; color:#B7791F; line-height:1.6;">{{ tpUnattributedNote }}</div>
+              </sc-if>
+              <div style="font-size:10.5px; color:#C9C4D4; margin-top:9px; line-height:1.6;">A closed step is not a unit of effort — a visa renewal and a document reprint both count one.</div>
+            </div>
+
+            <div class="pg-card" style="padding:18px 20px;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700;">Load by authority</div>
+              <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ tpAuthSub }}</div>
+              <sc-if value="{{ tpHasAuth }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-direction:column; gap:11px; margin-top:15px;">
+                  <sc-for list="{{ tpAuth }}" as="a" hint-placeholder-count="6">
+                    <div title="{{ a.title }}" style="display:flex; align-items:center; gap:11px;">
+                      <span style="flex-shrink:0; width:64px; font-size:11.5px; font-weight:700; color:{{ a.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.name }}</span>
+                      <span style="flex:1; min-width:30px; height:8px; background:#F0EDF6; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ a.barW }}; background:{{ a.color }}; border-radius:99px;"></span></span>
+                      <span style="flex-shrink:0; width:26px; text-align:right; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums;">{{ a.count }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <!-- Empty because no STEP records an authority yet, not because no work happened. The
+                   templates already name them; steps created from here on will carry one. -->
+              <sc-if value="{{ tpNoAuth }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:15px; font-size:12px; color:#A9A6B4; line-height:1.65;">No step in this period records an authority. Workflow steps carry the authority set on their template node — set it in the Workflow Builder and this fills in as those steps run.</div>
+              </sc-if>
+            </div>
+          </section>
+
+        </sc-if>
       </div></sc-if>
 
       <sc-if value="{{ showTeams }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Teams">
@@ -12152,10 +12166,19 @@ class Component extends DCLogic {
       this._loadTP = (period) => {
         if (period) this._tpPeriod = period;
         const p = period || this._tpPeriod || '';
+        // A REFUSAL IS AN ANSWER. Swallowing it left the screen saying "Loading…" for as long as
+        // somebody cared to look at it — no data and no explanation, which is the worst of both.
         return fetch(API + '/api/team-performance' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
-          .then(r => (r.ok ? r.json() : null))
-          .then(v => { if (v && v.period) this.setState({ tpData: v }); })
-          .catch(() => {});
+          .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, j })).catch(() => ({ ok: false, status: r.status, j: null })))
+          .then(({ ok, status, j }) => {
+            if (ok && j && j.period) return this.setState({ tpData: j, tpError: '' });
+            this.setState({
+              tpError: status === 403
+                ? 'Your role cannot read this screen. An administrator can change that in Settings.'
+                : (j && j.error) || 'That did not load. Try again in a moment.',
+            });
+          })
+          .catch(() => this.setState({ tpError: 'Server unreachable — nothing could be loaded.' }));
       };
 
       this._loadTF = (period) => {
@@ -26467,7 +26490,7 @@ class Component extends DCLogic {
         const D = this.state.tpData || null;
         // Fetched when the screen is opened, not on boot — only somebody looking at it needs it,
         // and the removed Analytics screen made every session pay for a report nobody read.
-        if (this.state.active === 'Team Performance' && !D && !this._tpAsking) {
+        if (this.state.active === 'Team Performance' && !D && !this._tpAsking && !this.state.tpError) {
           this._tpAsking = true;
           if (this._loadTP) this._loadTP();
         }
@@ -26511,7 +26534,11 @@ class Component extends DCLogic {
         const pctBp9 = D && D.pctBp != null ? Math.round(D.pctBp / 100) : null;
 
         return {
-          tpLoading: !D,
+          tpLoading: !D && !this.state.tpError,
+          tpHasError: !!this.state.tpError && !D,
+          tpShowPanels: !this.state.tpError || !!D,
+          tpErrorText: this.state.tpError || '',
+          tpRetry: () => { this._tpAsking = false; this.setState({ tpError: '' }); },
           // A MONTH PICKER, which the design does not show. Without it this screen can only ever
           // report the current month, and a firm whose work all closed last month would see an
           // empty screen with no way to reach the month that has the answers.
@@ -26519,7 +26546,7 @@ class Component extends DCLogic {
             ((D && D.periods) || []).map(p => ({ value: p, label: mon9(p) })),
             (D && D.period) || '',
             (v) => { if (this._loadTP) this._loadTP(v); }, 'This month'),
-          tpSub: !D ? 'Loading\u2026'
+          tpSub: this.state.tpError ? 'Could not load this screen' : !D ? 'Loading…'
             : 'PRO team targets, SLA & throughput \u2014 separate from sales quota'
               + (D.scope === 'team' ? ' \u00b7 your team' : D.scope === 'self' ? ' \u00b7 your own work' : ''),
 
@@ -26556,10 +26583,17 @@ class Component extends DCLogic {
           tpOf: !D ? '' : D.target != null ? 'of ' + D.target + ' tasks' : 'tasks closed \u2014 no target set',
           tpBarW: pctBp9 != null ? Math.max(2, Math.min(100, pctBp9)) + '%' : '0%',
           tpPctLine: pctBp9 != null ? pctBp9 + '% achieved' : 'no target for this month',
-          tpGapLine: !D ? '' : D.gap == null ? 'Set one \u2192'
+          tpGapLine: !D ? '' : D.gap == null ? (canWrite ? 'Set one \u2192' : 'none set')
             : D.gap > 0 ? D.gap + ' tasks to target' : 'Target met',
+          // Reading how the work is going is not deciding the target, and the API agrees: the PUT is
+          // admin-only. Offering the click to anybody else is a button whose only outcome is a refusal.
+          tpCanSetTarget: canWrite,
+          tpTargetTitle: canWrite
+            ? 'Click to set this month’s task target'
+            : 'Only an administrator can set the target',
           tpSetTarget: () => {
             if (!D) return;
+            if (!canWrite) return this.toast('Only an administrator can set the target', 'error');
             this._prompt('Task target for ' + mon9(D.period), D.target != null ? String(D.target) : '', {
               placeholder: 'Number of tasks',
               body: 'How many workflow steps this team should close in the month. Leave blank to clear it \u2014 '
