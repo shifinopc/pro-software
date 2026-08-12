@@ -964,6 +964,81 @@
         </div>
       </section>
 
+      <!-- Sales pipeline — what is coming IN, as opposed to the requests row below it, which is
+           what is already being worked. Only rendered once the dashboard payload has arrived: a
+           panel of dashes is worse than no panel while a page is still loading. -->
+      <sc-if value="{{ dspReady }}" hint-placeholder-val="{{ true }}">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="font-size:15px;">💼</span>
+              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Sales pipeline</span>
+              <span style="font-size:11.5px; color:#A9A6B4;">{{ dspSub }}</span>
+            </div>
+            <span onClick="{{ dspGo }}" style="font-size:12px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Open pipeline →</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-top:16px;">
+            <div style="background:#F7F9FC; border:1px solid #E8EDF4; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:9.5px; font-weight:700; color:#8C8899; letter-spacing:.08em;">OPEN PIPELINE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:4px;">{{ dspOpenValue }}</div>
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ dspOpenSub }}</div>
+            </div>
+            <div style="background:#F4FAFF; border:1px solid #DCEDFA; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:9.5px; font-weight:700; color:#8C8899; letter-spacing:.08em;">NEW LEADS</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:4px; color:{{ dspLeadsColor }};">{{ dspLeads }}</div>
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ dspLeadsSub }}</div>
+            </div>
+            <div style="background:#FFFBF2; border:1px solid #F5E6C8; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:9.5px; font-weight:700; color:#8C8899; letter-spacing:.08em;">FOLLOW-UPS DUE</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:4px; color:{{ dspFollowColor }};">{{ dspFollow }}</div>
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ dspFollowSub }}</div>
+            </div>
+            <div style="background:#F3FBF6; border:1px solid #CFEEDD; border-radius:14px; padding:14px 16px;">
+              <div style="font-size:9.5px; font-weight:700; color:#8C8899; letter-spacing:.08em;">{{ dspWonLabel }}</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:4px; color:#0E9355;">{{ dspWon }}</div>
+              <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">{{ dspWonSub }}</div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:22px; margin-top:20px;">
+            <div>
+              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.08em;">BY STAGE</div>
+              <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
+                <sc-for list="{{ dspStages }}" as="g" hint-placeholder-count="6">
+                  <div title="{{ g.title }}" style="display:flex; align-items:center; gap:11px;">
+                    <span style="flex-shrink:0; width:78px; font-size:11.5px; font-weight:700; color:{{ g.color }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.label }}</span>
+                    <span style="flex:1; min-width:30px; height:9px; background:#F2EFF8; border-radius:99px; overflow:hidden;"><span style="display:block; height:100%; width:{{ g.barW }}; background:{{ g.color }}; border-radius:99px;"></span></span>
+                    <span style="flex-shrink:0; width:74px; text-align:right; font-size:11px; color:#6F6C7A; font-variant-numeric:tabular-nums;">{{ g.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.08em;">DEALS AT RISK</div>
+              <sc-if value="{{ dspHasRisk }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
+                  <sc-for list="{{ dspRisk }}" as="r" hint-placeholder-count="3">
+                    <div onClick="{{ r.open }}" style="display:flex; align-items:center; gap:12px; border:1px solid #EDEBF2; border-left:3px solid {{ r.color }}; border-radius:11px; padding:9px 13px; cursor:pointer;" style-hover="background:#FBFAFE;">
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</div>
+                        <div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ r.sub }}</div>
+                      </div>
+                      <span style="flex-shrink:0; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums;">{{ r.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:10.5px; color:#B4AFC4; margin-top:7px;">{{ dspRiskMore }}</div>
+              </sc-if>
+              <sc-if value="{{ dspNoRisk }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:11px; font-size:12px; color:#A9A6B4; line-height:1.6;">No open deal has gone quiet past its stage's limit.</div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+
       <!-- Pipeline + Team workload -->
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.14s both; display:grid; grid-template-columns:1.15fr 1fr; gap:18px;">
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
@@ -24943,6 +25018,101 @@ class Component extends DCLogic {
 
       // ── Sales Dashboard ──
       //
+      // ── Sales pipeline, on the main dashboard ───────────────────────────────────────
+      //
+      // The operations home had no sight of new business at all: the "Requests pipeline" on it is
+      // PRO work in flight, which is a different question from what is being sold. This reads the
+      // SAME payload the Sales Dashboard already loads — no second request, and no second opinion
+      // about a figure both screens show.
+      //
+      // ONE CONSEQUENCE, MADE VISIBLE RATHER THAN HIDDEN: that payload carries the Sales
+      // Dashboard's own month and "mine" controls. Every figure here except the won total is a
+      // fact about NOW and is unaffected by the month; the won total is not, so it is labelled with
+      // the quarter it actually covers instead of claiming "this quarter", and the panel says when
+      // the payload has been narrowed to one person's book.
+      ...(() => {
+        const D = this.state.crmDash || null;
+        const ccy9 = 'SAR';
+        const k9 = (minor) => {
+          if (minor == null) return '\u2014';
+          const n = minor / 100, a = Math.abs(n);
+          if (a >= 1e6) return ccy9 + ' ' + (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm';
+          // Only above ten thousand — below that "SAR 3k" hides the difference between 3,000 and
+          // 3,900, and this firm's stages are often in the low thousands.
+          if (a >= 10000) return ccy9 + ' ' + Math.round(n / 1000) + 'k';
+          return ccy9 + ' ' + Math.round(n).toLocaleString();
+        };
+        if (!D) return { dspReady: false };
+
+        const open9 = (D.deals && D.deals.open) || { count: 0, valueMinor: 0, weightedMinor: 0 };
+        const stages9 = Array.isArray(D.pipeline) ? D.pipeline : [];
+        const peak9 = Math.max(1, ...stages9.map(x => x.valueMinor || 0));
+        const risk9 = (D.stalled && Array.isArray(D.stalled.rows)) ? D.stalled.rows : [];
+
+        // The quarter the payload's month falls in, summed from the six-month strip. Named, not
+        // called "this quarter": when somebody has the Sales Dashboard on July, this is July's.
+        const mk9 = String(D.month || '').slice(0, 7);
+        const q9 = mk9 ? Math.floor((Number(mk9.slice(5, 7)) - 1) / 3) : null;
+        const qMonths9 = q9 == null ? [] : (D.months || []).filter(m => {
+          const mm = Number(String(m.key).slice(5, 7));
+          return String(m.key).slice(0, 4) === mk9.slice(0, 4) && Math.floor((mm - 1) / 3) === q9;
+        });
+        const qWon9 = qMonths9.reduce((n, m) => n + (m.wonMinor || 0), 0);
+        // How much of the quarter the six-month strip actually reaches. A quarter reported from one
+        // of its three months is not that quarter's total, and saying "Q3" over it would be a lie
+        // of omission rather than an approximation.
+        const qFull9 = qMonths9.length === 3;
+
+        return {
+          dspReady: true,
+          dspSub: 'new business feeding the operation' + (this.state.cdMine ? ' \u00b7 your book only' : ''),
+          dspGo: () => this.setState({ active: 'Pipeline', activeGroup: 'Sales' }),
+
+          dspOpenValue: k9(open9.valueMinor),
+          dspOpenSub: open9.count + ' deal' + (open9.count === 1 ? '' : 's')
+            + ' \u00b7 ' + k9(open9.weightedMinor) + ' weighted',
+
+          // The lead figure is the UNTOUCHED ones, not the lead total — a total says how much you
+          // have, this says how much of it nobody has rung.
+          dspLeads: String((D.leads && D.leads.uncontacted) != null ? D.leads.uncontacted : '\u2014'),
+          dspLeadsSub: (D.leads && D.leads.uncontacted) === 0
+            ? 'every lead has been contacted'
+            : 'awaiting first contact',
+          dspLeadsColor: (D.leads && D.leads.uncontacted) > 0 ? '#0284C7' : '#0E9355',
+
+          dspFollow: String((D.followUpsToday && D.followUpsToday.total) || 0),
+          dspFollowSub: (D.followUpsToday && D.followUpsToday.overdue)
+            ? (D.followUpsToday.overdue + ' already overdue')
+            : 'due today',
+          dspFollowColor: (D.followUpsToday && D.followUpsToday.overdue) ? '#B7791F' : '#0E9355',
+
+          dspWonLabel: q9 == null ? 'WON' : 'WON \u00b7 Q' + (q9 + 1) + ' ' + mk9.slice(0, 4),
+          dspWon: k9(qWon9),
+          dspWonSub: qFull9 ? 'closed and converted' : qMonths9.length + ' of 3 months in view',
+
+          dspStages: stages9.map(x => ({
+            label: x.name,
+            color: x.color,
+            barW: Math.max(1, Math.round(((x.valueMinor || 0) / peak9) * 100)) + '%',
+            value: k9(x.valueMinor || 0),
+            title: x.count + ' deal' + (x.count === 1 ? '' : 's') + ' in ' + x.name,
+          })),
+          dspHasStages: stages9.length > 0,
+
+          dspHasRisk: risk9.length > 0,
+          dspNoRisk: risk9.length === 0,
+          dspRisk: risk9.slice(0, 3).map(r => ({
+            name: r.company || r.title,
+            // `days` is time in the CURRENT STAGE, which is what "idle" means here — not age.
+            sub: r.days != null ? 'idle ' + r.days + ' day' + (r.days === 1 ? '' : 's') : 'idle for an unknown time',
+            value: r.valueMinor != null ? k9(r.valueMinor) : 'no figure',
+            color: r.days != null && r.days >= 21 ? '#E05252' : r.days != null && r.days >= 14 ? '#E8A33D' : '#C9A227',
+            open: () => this.setState({ active: 'Pipeline', activeGroup: 'Sales', dealOpen: r.id }),
+          })),
+          dspRiskMore: risk9.length > 3 ? '+' + (risk9.length - 3) + ' more' : '',
+        };
+      })(),
+
       // Presentation ONLY. Every figure arrives counted from /api/crm-dashboard and is not
       // re-derived, re-summed or cross-checked here — the moment a screen recomputes something the
       // server already answered, there are two opinions about it and they diverge on the first

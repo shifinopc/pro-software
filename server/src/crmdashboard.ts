@@ -169,6 +169,10 @@ export async function crmDashboard(scope: CrmScope = {}) {
   // contact, and both reported "stalled" — so the two disagreed by design and neither said why.
   const rules = await jobRules();
   const contacted = await lastContactMap(open.map(d => d.companyId));
+  // Leads are a different set from open-deal companies, so they need their own lookup — reusing
+  // `contacted` above would mark every lead without a deal as never contacted.
+  const leadContact = leads.length ? await lastContactMap(leads.map(c => c.id)) : {};
+  const uncontactedLeads = leads.filter(c => !leadContact[c.id]).length;
   // The earliest still-open commitment per deal, so health can tell a missed promise from silence.
   const dueByDeal = new Map<string, string>();
   for (const f of await openFollowUps({ companyIds: scope.companyIds ?? null })) {
@@ -441,7 +445,20 @@ export async function crmDashboard(scope: CrmScope = {}) {
   return {
     on: today,
     month: thisMonth,
-    leads: { total: leads.length, newToday: newLeadsToday },
+    leads: {
+      total: leads.length,
+      newToday: newLeadsToday,
+      /**
+       * Leads NOBODY HAS SPOKEN TO YET — no call, no email, no meeting on record.
+       *
+       * Not the same as the lead total, which includes everybody already in conversation, and the
+       * difference is the whole point: a total says how much you have, this says how much of it is
+       * still sitting untouched. Absence of an interaction is the test, so a lead contacted before
+       * interactions were recorded reads as untouched — a lead that gets chased twice is a smaller
+       * cost than one nobody ever rings.
+       */
+      uncontacted: uncontactedLeads,
+    },
     followUpsToday: { total: followUps.length, overdue: followUps.filter(f => f.overdue).length },
     chase,
     deals: {
