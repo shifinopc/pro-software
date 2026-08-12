@@ -3793,6 +3793,13 @@
                   <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
                     <div style="padding:18px; text-align:center; font-size:11px; color:#B4AFC4;">Nothing here</div>
                   </sc-if>
+                  <!-- Starting a deal, from the board. It sits at the foot of the ENTRY column only,
+                       not every column: the form has no stage field, so a new deal always lands in
+                       the first stage, and a button under Negotiation promising otherwise would be
+                       the kind of control people trust once. -->
+                  <sc-if value="{{ col.canAdd }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ pipAdd }}" title="New deals start in {{ col.name }}" style="border:1px dashed #D9CBF2; border-radius:13px; padding:11px; text-align:center; font-size:11px; font-weight:700; color:#8C7BA6; cursor:pointer;" style-hover="background:#F3E8FF; color:#7C00FF; border-color:#C9A2FF;">＋ New deal</div>
+                  </sc-if>
                 </div>
               </div>
             </sc-for>
@@ -5296,9 +5303,9 @@
         </sc-if>
 
         <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <div style="display:grid; grid-template-columns:26px minmax(0,1.5fr) minmax(0,1.2fr) 110px 110px 100px 210px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:13px;">{{ ldAllMark }}</span><span>Company</span><span>Main contact</span><span>Source</span><span>Managed by</span><span>Stage</span><span></span></div>
+          <div style="display:grid; grid-template-columns:26px minmax(0,1.35fr) minmax(0,1.05fr) 104px minmax(0,1.15fr) 116px 104px 116px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:13px;">{{ ldAllMark }}</span><span>Company</span><span>Contact</span><span>Source</span><span>Need</span><span>Score</span><span>Stage</span><span></span></div>
           <sc-for list="{{ ldRows }}" as="l" hint-placeholder-count="4">
-            <div style="display:grid; grid-template-columns:26px minmax(0,1.5fr) minmax(0,1.2fr) 110px 110px 100px 210px; gap:10px; align-items:center; padding:13px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+            <div style="display:grid; grid-template-columns:26px minmax(0,1.35fr) minmax(0,1.05fr) 104px minmax(0,1.15fr) 116px 104px 116px; gap:10px; align-items:center; padding:13px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:13px;">{{ l.tick }}</span>
               <div onClick="{{ l.open }}" style="min-width:0; cursor:pointer; display:flex; align-items:center; gap:10px;" title="Open this lead">
                 <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; flex-shrink:0;">{{ l.initials }}</span>
@@ -5324,15 +5331,31 @@
                 <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.contact }}</div>
                 <div style="font-size:11px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.reach }}</div>
               </div>
-              <span style="color:#8C8899;">{{ l.source }}</span>
-              <span style="color:#8C8899;">{{ l.owner }}</span>
-              <div style="display:flex; align-items:center; gap:7px; justify-self:start;">
-                <span style="font-size:10px; font-weight:700; color:{{ l.stColor }}; background:{{ l.stBg }}; padding:3px 10px; border-radius:99px;">{{ l.stage }}</span>
-                <!-- The score, with its whole arithmetic in the tooltip. Absent rather than zero
-                     when it has not been worked out — see the note on `hasScore`. -->
-                <sc-if value="{{ l.hasScore }}" hint-placeholder-val="{{ true }}">
-                  <span title="{{ l.scoreTitle }}" style="font-size:10px; font-weight:700; color:{{ l.scoreFg }}; background:{{ l.scoreBg }}; padding:3px 8px; border-radius:99px; font-variant-numeric:tabular-nums; cursor:help;">{{ l.score }}</span>
+              <!-- A chip, like every other categorical value on the screen. As plain grey text it
+                   was the only one that read as prose. -->
+              <span style="justify-self:start;">
+                <sc-if value="{{ l.sourceShown }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:10px; font-weight:600; color:#6F6C7A; background:#F3F1F7; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ l.source }}</span>
                 </sc-if>
+              </span>
+              <span title="{{ l.need }}" style="color:#4B4757; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.need }}</span>
+              <!-- The score, with its whole arithmetic in the tooltip. Absent rather than zero when
+                   it has not been worked out — see the note on `hasScore`. -->
+              <div style="display:flex; align-items:center; gap:7px; min-width:0;">
+                <sc-if value="{{ l.hasScore }}" hint-placeholder-val="{{ true }}">
+                  <span title="{{ l.scoreTitle }}" style="flex:1; min-width:34px; height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden; cursor:help;"><span style="display:block; height:100%; width:{{ l.scorePct }}; background:{{ l.scoreBar }}; border-radius:99px;"></span></span>
+                  <span title="{{ l.scoreTitle }}" style="font-size:11.5px; font-weight:700; color:{{ l.scoreFg }}; font-variant-numeric:tabular-nums; cursor:help; flex-shrink:0;">{{ l.score }}</span>
+                  <sc-if value="{{ l.isHot }}" hint-placeholder-val="{{ false }}">
+                    <span title="Scored hot" style="font-size:10px; flex-shrink:0;">🔥</span>
+                  </sc-if>
+                </sc-if>
+              </div>
+              <!-- Stage and who owns it, stacked. They were two columns; one of them had to give way
+                   to Need, and these two are read together anyway — "Prospect, Rashid" is one answer
+                   about a row, not two. -->
+              <div style="min-width:0; justify-self:start;">
+                <span style="display:inline-block; font-size:10px; font-weight:700; color:{{ l.stColor }}; background:{{ l.stBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ l.stage }}</span>
+                <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.owner }}</div>
               </div>
               <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; align-items:center;">
                 <!-- Real links, not decoration: mailto and tel open the thing the officer was about
@@ -25974,6 +25997,8 @@ class Component extends DCLogic {
           // Where a dragged card may be dropped. Empty for a reader, so the drag never starts at
           // all rather than starting and being refused by the server at the end of the gesture.
           dropId: canWrite ? col.stage.id : '',
+          // Only under the first column, and only for somebody who may write.
+          canAdd: canWrite && _openCols.length > 0 && col.stage.id === _openCols[0].stage.id,
           deals: col.deals.map(d => _shapeDeal9(d, col)),
         };
       }),
@@ -26473,7 +26498,9 @@ class Component extends DCLogic {
           name: l.name,
           // Industry earns its place here: it was captured on the form and shown nowhere, and it is
           // the fact that makes a company name mean something to somebody who has not met them.
-          meta: [l.industry, l.city, l.sourceDetail].filter(Boolean).join(' · ')
+          // `sourceDetail` has left this line — it is the Need column now, and saying it twice on
+          // one row is how a table stops being scannable.
+          meta: [l.industry, l.city].filter(Boolean).join(' · ')
             || (l.lostReason ? 'Lost: ' + l.lostReason : 'No details yet'),
           // Amber past the threshold, red past double it — the same two-band treatment stalled deals
           // use, so "left too long" reads identically wherever it appears.
@@ -26488,6 +26515,15 @@ class Component extends DCLogic {
           contact: (primary && primary.name) || l.contact || '—',
           reach: (primary && (primary.email || primary.phone)) || l.email || l.phone || '—',
           source: l.source || '—',
+          sourceShown: !!l.source,
+          // WHAT THEY WANT, as its own column.
+          //
+          // This is `sourceDetail`, which the Add-lead form calls Notes and asks for as "what they
+          // need, who referred them". It was buried in the grey line under the company name, third
+          // after industry and city — so the one fact that tells a salesperson whether to pick this
+          // row up was the least visible thing on it.
+          need: l.sourceDetail || '',
+          needShown: !!l.sourceDetail,
           owner: _ownerOf(l),
           stage: tone.label, stColor: tone.color, stBg: tone.bg,
           // A lead not yet scored shows NOTHING, never 0 — "we have not worked this out" and
@@ -26495,6 +26531,15 @@ class Component extends DCLogic {
           hasScore: !!sc,
           score: sc ? String(sc.score) : '',
           scoreFg: scTone[0], scoreBg: scTone[1],
+          // The score drawn as well as written. Seven numbers in a column are compared one pair at a
+          // time; seven bars are read at a glance, which is the whole point of ordering by score.
+          //
+          // Band, not a threshold of my own: 'hot'/'warm'/'cold' is the scorer's own verdict and is
+          // already what colours the number, so the bar and the flame cannot come to disagree with
+          // it. A minimum width keeps a score of 2 visible — a bar rounded to nothing reads broken.
+          scorePct: sc ? Math.max(4, Math.min(100, sc.score)) + '%' : '0%',
+          scoreBar: scTone[0],
+          isHot: !!(sc && sc.band === 'hot'),
           scoreTitle: sc
             ? sc.components.map(c => `${c.earned === null ? '—' : c.earned}/${c.max}  ${c.label}: ${c.why}`).join('\n')
               + `\n\nScored out of the ${sc.coveragePct}% of the model that could be measured.`
