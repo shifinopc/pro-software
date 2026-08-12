@@ -4337,36 +4337,6 @@
         </div>
       </section>
 
-      <!-- Stalled deals keeps its own card. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .16s both;">
-        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px; display:flex; flex-direction:column;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div>
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Stalled deals</span>
-              <div style="font-size:12px; color:#8C8899; margin-top:1px;">{{ cdStalledSub }}</div>
-            </div>
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ cdStalledColor }}; flex-shrink:0;">{{ cdStalledCount }}</span>
-          </div>
-          <div style="display:flex; flex-direction:column; margin-top:12px; flex:1;">
-            <sc-for list="{{ cdStalledRows }}" as="s" hint-placeholder-count="4">
-              <div onClick="{{ s.go }}" style="display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid #FAF8FC; cursor:pointer;" style-hover="background:#FDFBFF;">
-                <span style="flex-shrink:0; font-size:10.5px; font-weight:700; color:{{ s.ageColor }}; background:{{ s.ageBg }}; padding:3px 8px; border-radius:99px; min-width:52px; text-align:center;">{{ s.age }}</span>
-                <div style="flex:1; min-width:0;">
-                  <div style="font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.title }}</div>
-                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.meta }}</div>
-                </div>
-                <span style="flex-shrink:0; font-size:11px; color:#6F6C7A;">{{ s.value }}</span>
-              </div>
-            </sc-for>
-            <sc-if value="{{ cdStalledEmpty }}" hint-placeholder-val="{{ true }}">
-              <div style="padding:26px 12px; text-align:center; font-size:12px; color:#A9A6B4;">{{ cdStalledEmptyNote }}</div>
-            </sc-if>
-          </div>
-          <sc-if value="{{ cdStalledUnknownShown }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6; font-size:11px; color:#8C8899; line-height:1.6;">{{ cdStalledUnknown }}</div>
-          </sc-if>
-        </div>
-      </section>
 
 
 
@@ -24151,8 +24121,6 @@ class Component extends DCLogic {
           cdOutcomes: [], cdOutcomeScope: '',
           cdHasTarget: false, cdTargetPct: 0, cdTargetLabel: '', cdTargetLine: '',
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
-          cdStalledRows: [], cdStalledEmpty: false, cdStalledEmptyNote: '', cdStalledSub: '',
-          cdStalledCount: '0', cdStalledColor: '#26074D', cdStalledUnknown: '', cdStalledUnknownShown: false,
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
           cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
           cdSrcRows: [], cdSrcEmpty: false, cdStageRows: [], cdStageEmpty: false,
@@ -24761,27 +24729,6 @@ class Component extends DCLogic {
             value: a.valueMinor == null ? '—' : _money9(a.valueMinor, ccy),
             go: goTo('Pipeline', 'Sales'),
           })),
-
-          // ── stalled ──
-          cdStalledCount: ord(D.stalled.count),
-          cdStalledColor: D.stalled.count ? '#C0353A' : '#0E9355',
-          cdStalledSub: 'Past the stage’s own limit · ' + _money9(D.stalled.valueMinor, ccy),
-          cdStalledEmpty: D.stalled.count === 0,
-          cdStalledEmptyNote: 'Nothing has sat in one stage past its limit.',
-          cdStalledRows: D.stalled.rows.map(r => ({
-            age: r.days + 'd',
-            // Banded against THIS STAGE's limit rather than a fixed number: twice the tolerance of a
-            // column that allows 5 days is a different conversation from twice a column allowing 60.
-            ageColor: r.days >= r.limit * 2 ? '#C0353A' : '#B25A00',
-            ageBg: r.days >= r.limit * 2 ? '#FEECEC' : '#FFF4E5',
-            title: r.title,
-            meta: [r.company, r.stage + ' (allows ' + r.limit + 'd)', r.owner || 'unassigned'].filter(Boolean).join(' · '),
-            value: r.valueMinor == null ? '—' : _money9(r.valueMinor, ccy),
-            go: goTo('Pipeline', 'Sales'),
-          })),
-          cdStalledUnknownShown: D.stalled.unknownAge > 0,
-          cdStalledUnknown: D.stalled.unknownAge + (D.stalled.unknownAge === 1 ? ' open deal has' : ' open deals have')
-            + ' no stage date recorded, so how long they have been sitting is unknown. They are not counted above.',
 
           // ── lead sources ──
           cdGoLeads: goTo('Leads', 'Sales'),
