@@ -81,7 +81,8 @@ import {
 
 const app = express();
 app.set("trust proxy", 1); // behind a reverse proxy in prod → correct client IPs + rate limiting
-app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HSTS (API is JSON-only)
+app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HSTS. NOT quite JSON-only:
+// /files serves images the console embeds cross-origin, and overrides helmet's CORP for that reason.
 
 // Throttle auth endpoints to blunt brute-force (per IP).
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts — try again later" } });
@@ -5623,6 +5624,19 @@ app.use("/files", express.static(FILES_DIR, {
   setHeaders: (res, filePath) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+    // THE CONSOLE IS A DIFFERENT ORIGIN AND THESE ARE MEANT TO BE EMBEDDED BY IT.
+    //
+    // helmet's default Cross-Origin-Resource-Policy is `same-origin`, applied to every response —
+    // reasonable for the JSON the header above it calls this API, and wrong for the only files it
+    // serves that another origin puts in an <img>. The browser fetched the letterhead, got a clean
+    // 200, and threw it away: no console error, no failed request, just a broken-image glyph. So
+    // the uploaded header, footer and watermark never appeared, in the Print Layout preview OR on
+    // a real printed invoice — the console is pro.ionob.in and the files are on proapi.ionob.in.
+    //
+    // Widened only here, and only for the public folder. These files already answer to anyone
+    // holding the URL, and the URL is 16 random bytes; private files keep same-origin, and they are
+    // fetched with a token rather than embedded, so nothing about them depends on this.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     if (/\.(svg|html?|xml|xhtml)$/i.test(filePath)) res.setHeader("Content-Disposition", "attachment");
   },
 }));
