@@ -5748,13 +5748,26 @@
              OWNER is the company's owner, not the contact's. A person has no owner of their own —
              they are reached through the account they belong to — and inventing one here would
              create a second answer to "who calls them". -->
+        <!-- Only once something is ticked, and it says how many. ARCHIVE, not delete: the same
+             reasoning the leads bar states out loud — a bulk action one press from a checkbox has to
+             be one you can undo, and the Archived tab is where it is undone. -->
+        <sc-if value="{{ ctBulkOpen }}" hint-placeholder-val="{{ false }}">
+          <section style="animation:fadeUp .3s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; background:#26074D; border-radius:14px; padding:12px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <span style="font-size:12.5px; font-weight:700; color:#fff;">{{ ctBulkCount }}</span>
+            <span style="font-size:11.5px; color:#C9AEEA; flex:1; min-width:220px;">{{ ctBulkNote }}</span>
+            <span onClick="{{ ctBulkApply }}" style="font-size:12px; font-weight:700; color:#26074D; background:#fff; padding:7px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#F3E8FF;">{{ ctBulkLabel }}</span>
+            <span onClick="{{ ctBulkClear }}" style="font-size:12px; font-weight:600; color:#C9AEEA; cursor:pointer;" style-hover="color:#fff;">Clear selection</span>
+          </section>
+        </sc-if>
+
         <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
           <div style="overflow-x:auto;"><div style="min-width:880px;">
-            <div style="display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; padding:13px 22px; font-size:9.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
-              <span>Person</span><span>Company</span><span>Role</span><span>Contact</span><span>Owner</span><span></span>
+            <div style="display:grid; grid-template-columns:26px minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; padding:13px 22px; font-size:9.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+              <span onClick="{{ ctToggleAll }}" title="Select all on this page" style="cursor:pointer; color:{{ ctAllFg }}; font-size:13px;">{{ ctAll }}</span><span>Person</span><span>Company</span><span>Role</span><span>Contact</span><span>Owner</span><span></span>
             </div>
             <sc-for list="{{ ctRows }}" as="p" hint-placeholder-count="8">
-              <div onClick="{{ p.open }}" style="display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; align-items:center; padding:13px 22px; border-bottom:1px solid #F7F5FB; cursor:pointer;" style-hover="background:#FBFAFE;">
+              <div onClick="{{ p.open }}" style="display:grid; grid-template-columns:26px minmax(0,2fr) minmax(0,1.6fr) 128px minmax(0,1.5fr) 104px 84px; gap:12px; align-items:center; padding:13px 22px; border-bottom:1px solid #F7F5FB; cursor:pointer;" style-hover="background:#FBFAFE;">
+                <span onClick="{{ p.toggle }}" title="Select" style="cursor:pointer; color:{{ p.tickFg }}; font-size:13px;">{{ p.tick }}</span>
                 <div style="display:flex; align-items:center; gap:11px; min-width:0;">
                   <span style="width:36px; height:36px; border-radius:12px; background:{{ p.avBg }}; color:{{ p.avColor }}; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span>
                   <div style="min-width:0;">
@@ -12174,6 +12187,10 @@ class Component extends DCLogic {
         .then(v => { if (Array.isArray(v)) this.setState({ contactsData: v }); })
         .catch(() => {});
       this._loadContacts();
+      this._loadContactsArchived = () => fetch(API + '/api/contacts?includeArchived=1', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (Array.isArray(v)) this.setState({ contactsArchivedData: v.filter(c => c.archived) }); })
+        .catch(() => {});
       // The board comes from the SERVER already grouped and totalled. Summing it here would be a
       // second opinion about how much is in the pipeline, and the two would disagree the first time
       // either changed — the same reason the workforce ratios are not computed in the console.
@@ -29081,7 +29098,17 @@ class Component extends DCLogic {
           // A person with neither an email nor a phone cannot be contacted, which makes them a row
           // rather than a contact. Called out rather than shown as two em-dashes nobody reads.
           const reach = [c.email, c.phone, c.whatsapp].filter(Boolean).length;
+          const sel9 = (this.state.ctSel || []).includes(c.id);
           return {
+            id: c.id,
+            tick: sel9 ? '\u2611' : '\u2610',
+            tickFg: sel9 ? '#7C00FF' : '#C9C6D2',
+            // stopPropagation, or ticking a box also opens the company behind it.
+            toggle: (e) => {
+              if (e && e.stopPropagation) e.stopPropagation();
+              const cur = this.state.ctSel || [];
+              this.setState({ ctSel: cur.includes(c.id) ? cur.filter(x => x !== c.id) : [...cur, c.id] });
+            },
             name: c.name,
             // Blank, not "Role not recorded". On a list where most rows lack a job title, that
             // sentence repeats down the whole column and reads as the loudest thing on the screen —
@@ -29154,7 +29181,46 @@ class Component extends DCLogic {
         // lead contact is somebody to win.
         const _ctTab9 = this.state.ctTab || 'All';
         const _ctKind9 = (r) => (r.lcLabel === 'Client' ? 'Client' : 'Lead');
-        const _ctFiltered9 = _ctTab9 === 'All' ? _ctAll9 : _ctAll9.filter(r => _ctKind9(r) === _ctTab9);
+        // ARCHIVED IS A VIEW, not a filter of the same list — it comes from its own fetch, because
+        // the shared one deliberately never returns archived people.
+        const _ctArch9 = _ctTab9 === 'Archived';
+        const _ctArchRows9 = (Array.isArray(this.state.contactsArchivedData) ? this.state.contactsArchivedData : [])
+          .map(c => {
+            const co = _coById[c.companyId] || null;
+            const tone = _LC_TONE[(co && co.lifecycle) || 'client'] || _LC_TONE.client;
+            const sel9 = (this.state.ctSel || []).includes(c.id);
+            return {
+              id: c.id,
+              tick: sel9 ? '\u2611' : '\u2610',
+              tickFg: sel9 ? '#7C00FF' : '#C9C6D2',
+              toggle: (e) => {
+                if (e && e.stopPropagation) e.stopPropagation();
+                const cur = this.state.ctSel || [];
+                this.setState({ ctSel: cur.includes(c.id) ? cur.filter(x => x !== c.id) : [...cur, c.id] });
+              },
+              name: c.name, role: c.jobTitle || '', roleShown: !!c.jobTitle,
+              company: (co && co.name) || 'Unknown company',
+              lcLabel: tone.label, lcColor: tone.color, lcBg: tone.bg || '#F3F1F7',
+              email: c.email || '', phone: c.phone || c.whatsapp || '',
+              hasEmail: !!c.email, hasPhone: !!(c.phone || c.whatsapp), hasWhatsapp: !!c.whatsapp,
+              unreachable: ![c.email, c.phone, c.whatsapp].filter(Boolean).length,
+              phoneIconColor: '#8C8899',
+              initials: (String(c.name || '').replace(/\([^)]*\)/g, ' ').match(/[\p{L}\p{N}]+/gu) || [])
+                .slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?',
+              avBg: '#F3F1F7', avColor: '#8C8899',
+              owner: '', hasOwner: false, ownerInitials: '?',
+              mailHref: '', telHref: '', mailOp: '.35', telOp: '.35',
+              mailTitle: 'Archived', telTitle: 'Archived',
+              isPrimary: false,
+              _hay: [c.name, c.jobTitle, c.email, co && co.name].filter(Boolean).join(' ').toLowerCase(),
+              open: () => {},
+            };
+          })
+          .filter(r => !_ctSearch || r._hay.includes(_ctSearch))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const _ctFiltered9 = _ctArch9 ? _ctArchRows9
+          : _ctTab9 === 'All' ? _ctAll9
+          : _ctAll9.filter(r => _ctKind9(r) === _ctTab9);
         // Twelve to a page, the same as Leads. The page is clamped and reset by the same rules, for
         // the same reason: a filter that strands somebody on page four of a two-page list shows an
         // empty table with the fix scrolled off the bottom of it.
@@ -29162,19 +29228,79 @@ class Component extends DCLogic {
         const _ctPages9 = Math.max(1, Math.ceil(_ctFiltered9.length / CT_PER9));
         const _ctPage9 = Math.min(Math.max(1, this.state.ctPage || 1), _ctPages9);
         const _ctFrom9 = (_ctPage9 - 1) * CT_PER9;
+        const _ctShown9 = _ctFiltered9.slice(_ctFrom9, _ctFrom9 + CT_PER9);
+        const _ctSel9 = this.state.ctSel || [];
+        const _ctSelHere9 = _ctFiltered9.filter(r => _ctSel9.includes(r.id));
+        const _ctApi9 = () => this._apiBase || 'http://localhost:4100';
+        const _ctHdr9 = () => {
+          const t = localStorage.getItem('stimespro:token');
+          return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+        };
         return {
-          ctRows: _ctFiltered9.slice(_ctFrom9, _ctFrom9 + CT_PER9),
+          ctRows: _ctShown9,
           ctEmpty: _ctFiltered9.length === 0,
-          ctTabs: ['All', 'Client', 'Lead'].map(k => {
+
+          // ── selection ─────────────────────────────────────────────────────────
+          // Select-all covers THE PAGE, not the filtered set. Ticking one box and getting 200 people
+          // selected — 190 of them off-screen — is how a bulk action archives somebody nobody looked at.
+          ctAll: _ctShown9.length && _ctShown9.every(r => _ctSel9.includes(r.id)) ? '\u2611' : '\u2610',
+          ctAllFg: _ctShown9.length && _ctShown9.every(r => _ctSel9.includes(r.id)) ? '#7C00FF' : '#C9C6D2',
+          ctToggleAll: () => {
+            const ids = _ctShown9.map(r => r.id);
+            const every = ids.length && ids.every(id => _ctSel9.includes(id));
+            this.setState({ ctSel: every ? _ctSel9.filter(id => !ids.includes(id)) : [...new Set([..._ctSel9, ...ids])] });
+          },
+          ctBulkOpen: _ctSelHere9.length > 0,
+          ctBulkCount: _ctSelHere9.length + (_ctSelHere9.length === 1 ? ' contact selected' : ' contacts selected'),
+          ctBulkClear: () => this.setState({ ctSel: [] }),
+          // ARCHIVE, not delete. It is the reversible one — the Archived tab restores it — and the
+          // same reasoning the leads bar states: a bulk action that cannot be undone should not be
+          // one press away from a checkbox.
+          ctBulkLabel: _ctArch9 ? 'Restore' : 'Archive',
+          ctBulkNote: _ctArch9
+            ? 'They return to the address book and to their company\u2019s page.'
+            : 'They leave the address book but stay on their company\u2019s record \u2014 and the Archived tab brings them back.',
+          ctBulkApply: () => {
+            const ids = _ctSelHere9.map(r => r.id);
+            if (!ids.length) return;
+            const want = !_ctArch9;
+            // ONE REQUEST PER PERSON, through the same route a single edit uses — the same choice the
+            // leads bar makes. A bulk endpoint would be a second way to write a contact, and the two
+            // would drift the first time one of them learned a new rule.
+            Promise.all(ids.map(id =>
+              fetch(_ctApi9() + '/api/contacts/' + id, { method: 'PUT', headers: _ctHdr9(), body: JSON.stringify({ archived: want }) })
+                .then(r => r.ok).catch(() => false)
+            )).then(res => {
+              const ok = res.filter(Boolean).length;
+              const failed = res.length - ok;
+              // Says how many, and says the failures out loud rather than reporting a clean success
+              // for a batch that was only partly written.
+              if (ok) this.toast(ok + (want ? ' archived' : ' restored') + (failed ? ' \u00b7 ' + failed + ' could not be changed' : ''), failed ? 'warn' : undefined);
+              else this.toast('Nothing could be changed', 'error');
+              this.setState({ ctSel: [] });
+              if (this._loadContacts) this._loadContacts();
+              if (this._loadContactsArchived) this._loadContactsArchived();
+            });
+          },
+
+          ctTabs: ['All', 'Client', 'Lead', 'Archived'].map(k => {
             const on = _ctTab9 === k;
             return {
-              label: k === 'All' ? 'All' : k + ' contacts',
-              count: String(k === 'All' ? _ctAll9.length : _ctAll9.filter(r => _ctKind9(r) === k).length),
+              label: k === 'All' ? 'All' : k === 'Archived' ? 'Archived' : k + ' contacts',
+              count: String(k === 'Archived'
+                ? (Array.isArray(this.state.contactsArchivedData) ? this.state.contactsArchivedData.length : 0)
+                : k === 'All' ? _ctAll9.length
+                : _ctAll9.filter(r => _ctKind9(r) === k).length),
               color: on ? '#7C00FF' : '#6F6C7A',
               bg: on ? '#fff' : 'transparent',
               shadow: on ? '0 1px 3px rgba(38,7,77,.14)' : 'none',
               countColor: on ? '#B98BFF' : '#B4AFC4',
-              pick: () => this.setState({ ctTab: k, ctPage: 1 }),
+              pick: () => {
+                // Fetched when the tab is opened rather than on boot: only somebody looking at the
+                // archive needs it, and it is the one list the other six screens must never see.
+                if (k === 'Archived' && this._loadContactsArchived) this._loadContactsArchived();
+                this.setState({ ctTab: k, ctPage: 1, ctSel: [] });
+              },
             };
           }),
           ctPageLabel: _ctFiltered9.length
