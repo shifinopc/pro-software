@@ -34,6 +34,7 @@ export type Pack = {
   documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[];
   workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
   pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[]; courierJobTypes?: PackRow[];
+  appointmentTypes?: PackRow[]; courierStatuses?: PackRow[]; appointmentStatuses?: PackRow[];
 };
 
 /**
@@ -74,6 +75,15 @@ export const KINDS = [
   // rather than being retyped per installation — the same argument the stages and the loss reasons make.
   { key: "courierJobTypes", model: "courierJobType", label: "courier job types", one: "courier job type",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  { key: "appointmentTypes", model: "appointmentType", label: "appointment types", one: "appointment type",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, icon: r.icon }) },
+  // The status ladders travel too, because what a market calls the states of a run is part of how
+  // that market works — a pack that ships the documents and the job types but not the ladder leaves
+  // the receiving installation reading its own board in somebody else's words.
+  { key: "courierStatuses", model: "courierStatus", label: "courier statuses", one: "courier status",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, terminal: r.terminal, offLadder: r.offLadder }) },
+  { key: "appointmentStatuses", model: "appointmentStatus", label: "appointment statuses", one: "appointment status",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, terminal: r.terminal, offLadder: r.offLadder }) },
   { key: "leadSources", model: "leadSource", label: "lead sources", one: "lead source",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
   { key: "lostReasons", model: "lostReason", label: "loss reasons", one: "loss reason",

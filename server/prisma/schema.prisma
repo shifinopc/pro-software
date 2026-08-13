@@ -1081,6 +1081,77 @@ model PipelineStage {
 /// SUGGESTIONS, NOT CONSTRAINTS. Nothing validates a shipment's description against this list —
 /// every job booked before the list existed would fail, and a country with no list configured could
 /// not book at all.
+/// A kind of appointment — "Medical test", "Biometrics", "Labour office". Five of these were written
+/// into the booking form, so an authority this firm visits under any other name could not be booked
+/// by its own name. Suggestions, not constraints: a type off the list still books.
+model AppointmentType {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  /// One emoji, drawn on the row. The board carried a fixed table of five icons keyed by a type
+  /// vocabulary that did not match the booking form's, so every real type fell through to the
+  /// generic one — a decoration that only ever decorated.
+  icon         String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// One rung of a status ladder. Shared shape for courier shipments and appointments.
+///
+/// A STATUS IS NOT A LABEL, which is what makes these two tables different from every other list
+/// here. A job type is a word describing work that happened; a status is the state the record is
+/// IN, and code branches on it. So:
+///   - `sort` is the order of the ladder, not just display order — "advance" moves to the next rung
+///   - `terminal` says nothing advances from here, rather than inferring it from being last, which
+///     silently breaks the moment somebody adds a rung after Delivered
+///   - `offLadder` marks the exceptions (Returned, Cancelled, No-show). They are real states but not
+///     progress, and drawing them as steps would say every job passes through being cancelled
+///   - renaming a rung MIGRATES the records carrying it, because it is the same state under a new
+///     word — for a label that would rewrite history, for a state, not doing it strands the record
+model CourierStatus {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  terminal     Boolean @default(false)
+  offLadder    Boolean @default(false)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+model AppointmentStatus {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  terminal     Boolean @default(false)
+  offLadder    Boolean @default(false)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
 model CourierJobType {
   id           String  @id @default(cuid())
   country      String?
@@ -1600,7 +1671,7 @@ model Appointment {
   location          String?
   date              String?
   time              String?
-  status            String  @default("scheduled") // Requested | Confirmed | Rescheduled | Attended | No-show | Cancelled
+  status            String  @default("Requested") // the ladder in index.ts LADDERS.appointmentStatus, or whatever replaces it
   notes             String?
   history           Json?   @default("[]") // audit trail: [{ at, by, event, detail }] from creation onward
   taskId            String? // optional link to the Task this meeting belongs to (shown on the task)
@@ -1620,7 +1691,7 @@ model CourierShipment {
   clientName  String?
   carrier     String?
   direction   String  @default("outbound") // outbound | inbound
-  status      String  @default("in_transit") // preparing | in_transit | delivered | returned
+  status      String  @default("Requested") // the ladder in index.ts LADDERS.courierStatus, or whatever replaces it
   eta         String?
   at          String?
   /// WHERE IT GOES, both ends, by name. `direction` only ever said inbound/outbound, so every row

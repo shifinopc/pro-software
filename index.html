@@ -1365,6 +1365,7 @@
           <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Courier</h1>
           <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Passport &amp; document pickup / delivery — tracked to the client</div></div>
           <div style="display:flex; align-items:center; gap:16px;">
+            <span onClick="{{ cslShow }}" title="The states a shipment moves through" style="font-size:12px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Statuses</span>
             <span onClick="{{ cjtShow }}" title="Which kinds of job this firm runs" style="font-size:12px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Job types</span>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ courNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New shipment</button></sc-if>
           </div>
@@ -3395,7 +3396,11 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Appointments</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Medical, biometrics, government visits &amp; meetings across clients</div>
           </div>
-          <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openBook }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Book appointment</button></sc-if>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <span onClick="{{ aptShow }}" title="What kinds of appointment this firm books" style="font-size:12px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Types</span>
+            <span onClick="{{ aslShow }}" title="The states an appointment moves through" style="font-size:12px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Statuses</span>
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openBook }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Book appointment</button></sc-if>
+          </div>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px;">
           <sc-for list="{{ apptStats }}" as="s" hint-placeholder-count="4">
@@ -7488,6 +7493,128 @@
           </sc-if>
           <div style="flex:1;"></div>
           <span onClick="{{ seClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Done</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- APPOINTMENT TYPES -->
+  <sc-if value="{{ aptOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ aptClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:480px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">Appointment types</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">What kinds of appointment this firm books</div>
+          </div>
+          <div onClick="{{ aptClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <sc-if value="{{ aptHasErr }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-bottom:12px;">{{ aptErr }}</div>
+          </sc-if>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <sc-for list="{{ aptRows }}" as="t" hint-placeholder-count="5">
+              <span style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:#3C1470; background:#F5EEFF; border:1px solid #E6D6FF; padding:6px 11px; border-radius:99px;"><input value="{{ t.icon }}" onInput="{{ t.setIcon }}" placeholder="·" title="One emoji, drawn on the row" maxlength="2" style="width:22px; text-align:center; border:none; background:transparent; outline:none; font-size:13px; font-family:inherit;"><input value="{{ t.name }}" onInput="{{ t.setName }}" placeholder="e.g. Labour office visit" style="width:{{ t.width }}; border:none; background:transparent; outline:none; font-size:12px; font-weight:600; color:inherit; font-family:inherit;">
+                <span onClick="{{ t.remove }}" title="Remove" style="cursor:pointer; opacity:.5; font-size:13px; line-height:1;" style-hover="opacity:1;">×</span>
+              </span>
+            </sc-for>
+            <span onClick="{{ aptAdd }}" style="display:inline-flex; align-items:center; align-self:flex-start; font-size:12px; font-weight:700; color:#7C00FF; border:1px dashed #C9A2FF; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Add</span>
+          </div>
+          <sc-if value="{{ aptEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; color:#A9A6B4; line-height:1.6;">Nothing here yet.</div>
+          </sc-if>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">These fill the Type chips when booking. Removing one that appointments already use keeps it on those records — it just stops being offered.</div>
+        </div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <span onClick="{{ aptClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ aptSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save list</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- APPOINTMENT STATUSES -->
+  <sc-if value="{{ aslOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ aslClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:480px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">Appointment statuses</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">The states an appointment moves through</div>
+          </div>
+          <div onClick="{{ aslClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <sc-if value="{{ aslBuiltIn }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#FBFAFE; border:1px solid #F0EDF6; border-radius:11px; padding:10px 14px; margin-bottom:13px; font-size:11px; color:#6F6C7A; line-height:1.55;">These are the built-in states, which is what the board runs on until somebody saves their own. Editing here replaces them.</div>
+          </sc-if>
+          <sc-if value="{{ aslHasErr }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-bottom:12px;">{{ aslErr }}</div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <sc-for list="{{ aslRows }}" as="t" hint-placeholder-count="5">
+              <span style="display:flex; align-items:center; gap:9px; font-size:12px; font-weight:600; color:#3C1470; background:#F5EEFF; border:1px solid #E6D6FF; padding:7px 12px; border-radius:12px;"><input value="{{ t.name }}" onInput="{{ t.setName }}" placeholder="e.g. Awaiting documents" style="flex:1; min-width:0; border:none; background:transparent; outline:none; font-size:12px; font-weight:600; color:inherit; font-family:inherit;">
+                <sc-if value="{{ t.canUp }}" hint-placeholder-val="{{ true }}"><span onClick="{{ t.up }}" title="Earlier" style="cursor:pointer; opacity:.45; font-size:11px;" style-hover="opacity:1;">▲</span></sc-if>
+                <sc-if value="{{ t.canDown }}" hint-placeholder-val="{{ true }}"><span onClick="{{ t.down }}" title="Later" style="cursor:pointer; opacity:.45; font-size:11px;" style-hover="opacity:1;">▼</span></sc-if>
+                <span onClick="{{ t.toggleStep }}" title="A step is part of the track everything passes through. An exception is a real state that is not progress — cancelled, returned, no-show." style="font-size:9.5px; font-weight:700; color:{{ t.stepFg }}; background:{{ t.stepBg }}; padding:2px 7px; border-radius:99px; cursor:pointer;">{{ t.stepLabel }}</span>
+                <span onClick="{{ t.toggleTerm }}" title="Nothing advances from here" style="font-size:9.5px; font-weight:700; color:{{ t.termFg }}; background:{{ t.termBg }}; padding:2px 7px; border-radius:99px; cursor:pointer;">end</span>
+                <span onClick="{{ t.remove }}" title="Remove" style="cursor:pointer; opacity:.5; font-size:13px; line-height:1;" style-hover="opacity:1;">×</span>
+              </span>
+            </sc-for>
+            <span onClick="{{ aslAdd }}" style="display:inline-flex; align-items:center; align-self:flex-start; font-size:12px; font-weight:700; color:#7C00FF; border:1px dashed #C9A2FF; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Add</span>
+          </div>
+          <sc-if value="{{ aslEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; color:#A9A6B4; line-height:1.6;">Nothing here yet.</div>
+          </sc-if>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">Order is the order of the work. Renaming a state MOVES the appointments sitting on it, because it is the same state under a new word — the count is reported when you save.</div>
+        </div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <span onClick="{{ aslClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ aslSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save list</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- COURIER STATUSES -->
+  <sc-if value="{{ cslOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ cslClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:480px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">Courier statuses</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">The states a shipment moves through</div>
+          </div>
+          <div onClick="{{ cslClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <sc-if value="{{ cslBuiltIn }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#FBFAFE; border:1px solid #F0EDF6; border-radius:11px; padding:10px 14px; margin-bottom:13px; font-size:11px; color:#6F6C7A; line-height:1.55;">These are the built-in states, which is what the board runs on until somebody saves their own. Editing here replaces them.</div>
+          </sc-if>
+          <sc-if value="{{ cslHasErr }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-bottom:12px;">{{ cslErr }}</div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <sc-for list="{{ cslRows }}" as="t" hint-placeholder-count="5">
+              <span style="display:flex; align-items:center; gap:9px; font-size:12px; font-weight:600; color:#3C1470; background:#F5EEFF; border:1px solid #E6D6FF; padding:7px 12px; border-radius:12px;"><input value="{{ t.name }}" onInput="{{ t.setName }}" placeholder="e.g. Handed to driver" style="flex:1; min-width:0; border:none; background:transparent; outline:none; font-size:12px; font-weight:600; color:inherit; font-family:inherit;">
+                <sc-if value="{{ t.canUp }}" hint-placeholder-val="{{ true }}"><span onClick="{{ t.up }}" title="Earlier" style="cursor:pointer; opacity:.45; font-size:11px;" style-hover="opacity:1;">▲</span></sc-if>
+                <sc-if value="{{ t.canDown }}" hint-placeholder-val="{{ true }}"><span onClick="{{ t.down }}" title="Later" style="cursor:pointer; opacity:.45; font-size:11px;" style-hover="opacity:1;">▼</span></sc-if>
+                <span onClick="{{ t.toggleStep }}" title="A step is part of the track everything passes through. An exception is a real state that is not progress — cancelled, returned, no-show." style="font-size:9.5px; font-weight:700; color:{{ t.stepFg }}; background:{{ t.stepBg }}; padding:2px 7px; border-radius:99px; cursor:pointer;">{{ t.stepLabel }}</span>
+                <span onClick="{{ t.toggleTerm }}" title="Nothing advances from here" style="font-size:9.5px; font-weight:700; color:{{ t.termFg }}; background:{{ t.termBg }}; padding:2px 7px; border-radius:99px; cursor:pointer;">end</span>
+                <span onClick="{{ t.remove }}" title="Remove" style="cursor:pointer; opacity:.5; font-size:13px; line-height:1;" style-hover="opacity:1;">×</span>
+              </span>
+            </sc-for>
+            <span onClick="{{ cslAdd }}" style="display:inline-flex; align-items:center; align-self:flex-start; font-size:12px; font-weight:700; color:#7C00FF; border:1px dashed #C9A2FF; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Add</span>
+          </div>
+          <sc-if value="{{ cslEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; color:#A9A6B4; line-height:1.6;">Nothing here yet.</div>
+          </sc-if>
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">Order is the order of the work, and “Mark …” on the board advances to the next step. Renaming a state MOVES the shipments sitting on it — the count is reported when you save.</div>
+        </div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <span onClick="{{ cslClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ cslSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save list</button>
         </div>
       </div>
     </div>
@@ -11992,7 +12119,7 @@ const CLIENT_TABS = ['Overview', 'Contacts', 'Package', 'Employees', 'Credential
 class Component extends DCLogic {
   state = { active: 'Dashboard', prefs: { email: true, whatsapp: true, renewals: true, statement: false },
     ticketModal: false, tSubject: '', tDesc: '', tCategory: 'Visa & Immigration',
-    bookModal: false, bType: 'Medical test', bDay: '21', bSlot: '9:30 AM', booked: [],
+    bookModal: false, bType: '', bDay: '21', bSlot: '9:30 AM', booked: [],
     auth: 'in', lEmail: '', lPass: '', lShow: false, lError: '',
     nPass: '', cPass: '', nShow: false, pError: '',
     empModal: false, eName: '', eRole: '', eDept: 'Engineering', eVisaQuota: '1', eJoinDate: '', eError: '', eErrField: '', eClient: '', eClientLocked: false, clientSlug: null, routeRecord: null,
@@ -12692,6 +12819,22 @@ class Component extends DCLogic {
         .then(v => { if (Array.isArray(v)) this.setState({ courierTypesData: v }); })
         .catch(() => {});
       this._loadCourierTypes();
+      // The two status LADDERS and the appointment types. The ladders arrive from the server rather
+      // than being spelled out here, because the browser having its own copy is precisely what went
+      // wrong: this file said "Requested / Picked up / In transit / Delivered" while the database
+      // default and the workflow engine wrote "in_transit" and "preparing", and nothing reconciled
+      // them. Every shipment the software raised itself therefore read as Requested however far it
+      // had actually got, and matched no tab. One definition, served.
+      this._loadLadders = () => {
+        const get = (p, k) => fetch(API + p, { headers: hdr }).then(r => (r.ok ? r.json() : null))
+          .then(v => { if (v) this.setState({ [k]: v }); }).catch(() => {});
+        return Promise.all([
+          get('/api/courier-statuses', 'courierStatusData'),
+          get('/api/appointment-statuses', 'apptStatusData'),
+          get('/api/appointment-types', 'apptTypesData'),
+        ]);
+      };
+      this._loadLadders();
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
@@ -14625,8 +14768,17 @@ class Component extends DCLogic {
     ]).map(([title, sub, due, cta, prColor]) => ({ title, sub, due, cta, prColor }));
 
     const chip = (on) => ({ color: on ? '#7C00FF' : '#4B4757', bg: on ? '#F3E8FF' : '#fff', border: on ? '#C9A2FF' : '#DDD9E6' });
-    const bTypes = ['Medical test', 'Biometrics', 'Document collection', 'Labour office', 'Immigration visit'].map(label =>
-      ({ label, select: () => this.setState({ bType: label }), ...chip(this.state.bType === label) }));
+    // What kinds of appointment this firm books, configured rather than the five that used to be
+    // written here — a firm visiting an authority under any other name could not book it by name.
+    // The five remain as the fallback while nothing is configured: an empty picker is not a blank
+    // slate, it is a form that cannot be completed.
+    const _bTypeNames = (() => {
+      const live5 = (Array.isArray(this.state.apptTypesData) ? this.state.apptTypesData : []).map(t5 => t5.name).filter(Boolean);
+      return live5.length ? live5 : ['Medical test', 'Biometrics', 'Document collection', 'Labour office', 'Immigration visit'];
+    })();
+    const _bTypeSel = this.state.bType || _bTypeNames[0] || '';
+    const bTypes = _bTypeNames.map(label =>
+      ({ label, select: () => this.setState({ bType: label }), ...chip((this.state.bType || _bTypeNames[0]) === label) }));
     // WIRED: a paged 6-day window starting today — ‹ › page into ANY upcoming week (was locked to
     // the next 6 days only, so nothing next month was bookable).
     const _bToday = new Date(); _bToday.setHours(0, 0, 0, 0);
@@ -14709,13 +14861,25 @@ class Component extends DCLogic {
       return [{ label: 'Not linked' }, ...tasks5, ...reqs5, ...docs5];
     })();
     // Infer the visit type from the linked work so SERVICE doesn't have to be picked by hand.
-    const _bTypeFor = (kind5) => { const s5 = String(kind5 || '').toLowerCase();
-      return /medical|fitness/.test(s5) ? 'Medical test'
+    // Guessing the appointment type from the work it is linked to, now that the types are the
+    // firm's own words. A configured name that shares a real word with the linked work wins first,
+    // so a firm that renamed "Medical test" to "Medical fitness" keeps the inference. The built-in
+    // families are the fallback, and they only answer if the firm actually has a type of that name
+    // — an inference that fills the box with a type nobody offers is worse than not guessing.
+    const _bTypeFor = (kind5) => {
+      const s5 = String(kind5 || '').toLowerCase();
+      if (!s5) return null;
+      const words5 = s5.split(/[^a-z]+/).filter(w5 => w5.length > 3);
+      const byWord5 = _bTypeNames.find(n5 => String(n5).toLowerCase().split(/[^a-z]+/).some(w5 => w5.length > 3 && words5.includes(w5)));
+      if (byWord5) return byWord5;
+      const family5 = /medical|fitness/.test(s5) ? 'Medical test'
         : /biometric|eid|emirates id|fingerprint/.test(s5) ? 'Biometrics'
         : /labour|mohre|tasheel|contract/.test(s5) ? 'Labour office'
         : /visa|immigration|iqama|entry|residen/.test(s5) ? 'Immigration visit'
         : /passport|collect|deliver|courier|document/.test(s5) ? 'Document collection'
-        : null; };
+        : null;
+      return (family5 && _bTypeNames.some(n5 => String(n5).toLowerCase() === family5.toLowerCase())) ? family5 : null;
+    };
     const bAgainstList = _bAgainstItems.map(it5 =>
       ({ label: it5.label, select: () => { const inferred5 = _bTypeFor(it5.kind); this.setState({ bAgainst: it5.label, bAgainstTaskId: it5.taskId || null, ...(inferred5 ? { bType: inferred5 } : {}) }); }, ...chip((this.state.bAgainst || 'Not linked') === it5.label) }));
     const bAgainstEmpty = _bAgainstItems.length <= 1;
@@ -14750,7 +14914,7 @@ class Component extends DCLogic {
         return { label, active: on, weight: on ? 700 : 500, color: on ? '#7C00FF' : '#1A1523', bg: on ? '#F7F3FD' : 'transparent', pick: () => this.setState({ bClient: label, openDd: null, bApplicant: null, bAgainst: 'Not linked', bAgainstTaskId: null }) };
       }),
       bClientVal: this.state.bClient || (realClientNames ? realClientNames[0] : ''),
-      bSummary: this.state.bType + ' · ' + (this.state.bClient || (realClientNames ? realClientNames[0] : '')) + ' · ' + _bDateLabel + ', ' + this.state.bSlot,
+      bSummary: _bTypeSel + ' · ' + (this.state.bClient || (realClientNames ? realClientNames[0] : '')) + ' · ' + _bDateLabel + ', ' + this.state.bSlot,
       openBook: () => this.setState({ bookModal: true }),
       closeBook: () => this.setState({ bookModal: false }),
       // WIRED: booking creates a real Appointment row (real client list in the dropdown above).
@@ -14760,14 +14924,14 @@ class Component extends DCLogic {
         const co5 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c5 => c5.name === client5);
         const mon5 = new Date().toLocaleDateString('en-GB', { month: 'short' });
         const t5 = localStorage.getItem('stimespro:token');
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t5 ? { Authorization: 'Bearer ' + t5 } : {}) }, body: JSON.stringify({ title: s5.bType + ' — ' + (_bSelEmp || client5), type: s5.bType, companyId: co5 ? co5.id : null, clientName: client5, date: _bDateLabel, time: s5.bSlot, status: 'Requested', taskId: s5.bAgainstTaskId || null,
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/appointments', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t5 ? { Authorization: 'Bearer ' + t5 } : {}) }, body: JSON.stringify({ title: (s5.bType || _bTypeNames[0] || '') + ' — ' + (_bSelEmp || client5), type: s5.bType || _bTypeNames[0] || '', companyId: co5 ? co5.id : null, clientName: client5, date: _bDateLabel, time: s5.bSlot, status: 'Requested', taskId: s5.bAgainstTaskId || null,
           // APPLICANT / SUBJECT was picked and dropped — the Appointment has an `employee` column
           // for exactly this, and the meeting is meaningless without knowing who it's for.
           employee: _bSelEmp || null, history: [{ at: new Date().toISOString(), by: (this.state.meUser || {}).name || 'Staff', event: 'Created', detail: 'Requested for ' + _bDateLabel + ' ' + s5.bSlot + (s5.bAgainst && s5.bAgainst !== 'Not linked' ? ' · linked to ' + s5.bAgainst : '') }] }) })
           .then(r5 => { if (r5.ok) { this.toast('Appointment requested'); this._opReload('appointments', 'appointmentsData'); } else this.toast('Could not book'); })
           .catch(() => this.toast('Server unreachable'));
         this.setState(s => ({
-          booked: [{ month: String(_bDateLabel).split(' ')[1] ? String(_bDateLabel).split(' ')[1].toUpperCase() : mon5.toUpperCase(), day: String(_bDateLabel).split(' ')[0], title: s.bType, meta: 'STIMES will confirm venue · ' + s.bSlot, tag: 'Pending', tagBg: '#FEF4E2', tagColor: '#B8860B' }, ...s.booked],
+          booked: [{ month: String(_bDateLabel).split(' ')[1] ? String(_bDateLabel).split(' ')[1].toUpperCase() : mon5.toUpperCase(), day: String(_bDateLabel).split(' ')[0], title: s.bType || _bTypeNames[0] || '', meta: 'STIMES will confirm venue · ' + s.bSlot, tag: 'Pending', tagBg: '#FEF4E2', tagColor: '#B8860B' }, ...s.booked],
           bookModal: false,
         }));
       },
@@ -30731,14 +30895,60 @@ class Component extends DCLogic {
       ].map(([label, icon, color, bg, go]) => ({ label, icon, color, bg, go })),
     };
 
+    // ── ONE READING OF A STATUS, for both boards ──────────────────────────────────
+    //
+    // Takes what the server serves (the configured ladder, or the built-in one, plus the map of
+    // values older versions wrote) and answers the four questions both screens ask: what is this
+    // status called, what colour is it, how far along is it, and what comes next.
+    //
+    // AN UNRECOGNISED STATUS IS SHOWN AS ITSELF. The tempting shortcut — fall back to the first
+    // rung — is the bug being fixed here: it is how every "in_transit" shipment came to read as
+    // "Requested". A value nobody configured gets its own grey chip and its own tab, so it is
+    // visibly outside the ladder instead of quietly wearing another rung's clothes.
+    const _mkLadder = (raw) => {
+      const src = (raw && typeof raw === 'object' && Array.isArray(raw.rungs)) ? raw : { rungs: [], legacy: {} };
+      const rungs = src.rungs.filter(r => r && r.name);
+      const legacy = src.legacy || {};
+      const norm = (v) => String(v == null ? '' : v).trim().toLowerCase().replace(/[\s\-]+/g, '_');
+      const byKey = {};
+      rungs.forEach(r => { byKey[norm(r.name)] = r; });
+      const canon = (v) => {
+        const k = norm(v);
+        if (!k) return rungs.length ? rungs[0].name : '';
+        if (byKey[k]) return byKey[k].name;
+        const l = legacy[k] || legacy[String(v).trim()];
+        if (l && byKey[norm(l)]) return byKey[norm(l)].name;
+        return String(v).trim();
+      };
+      const rungOf = (v) => byKey[norm(canon(v))] || null;
+      const track = rungs.filter(r => !r.offLadder);
+      return {
+        rungs, track, names: rungs.map(r => r.name), canon, rungOf,
+        // Grey means "this is not on the ladder", and it should read as unusual.
+        tone: (v) => { const r = rungOf(v); return r ? [r.bg || '#F3F1F7', r.color || '#6F6C7A'] : ['#F3F1F7', '#8C8899']; },
+        known: (v) => !!rungOf(v),
+        atIndex: (v) => track.findIndex(r => r.name === canon(v)),
+        terminal: (v) => { const r = rungOf(v); return !!(r && r.terminal); },
+        // What "advance" means here: the next rung of the track, never an exception. Nothing
+        // advances INTO Cancelled or Returned — those are decisions somebody makes, not progress.
+        next: (v) => { const i = track.findIndex(r => r.name === canon(v)); return (i >= 0 && i + 1 < track.length) ? track[i + 1].name : null; },
+      };
+    };
+    const _apLadder = _mkLadder(this.state.apptStatusData);
+    const _courLadder = _mkLadder(this.state.courierStatusData);
+    // What kinds of appointment this firm books. The board keyed a five-emoji table off a type
+    // vocabulary the booking form did not use, so every real type fell through to the generic
+    // icon — decoration that only ever decorated. Configured types carry their own.
+    const _apTypes = Array.isArray(this.state.apptTypesData) ? this.state.apptTypesData : [];
+
     // ---- Appointments management ----
-    const apStatusTone2 = { Requested: ['#FEF4E2', '#B8860B'], Confirmed: ['#E7F8EF', '#0E9355'], Rescheduled: ['#EFEBFF', '#6D5BD0'], Attended: ['#E4F4FD', '#0284C7'], 'No-show': ['#FEECEC', '#C0353A'], Scheduled: ['#EFEBFF', '#6D5BD0'], Cancelled: ['#F3F1F7', '#6F6C7A'] };
-    const apTypeTone = { Medical: ['🩺', '#12B76A', '#E7F8EF'], Biometrics: ['🖐', '#6D5BD0', '#EFEBFF'], 'Gov visit': ['🏛', '#7C00FF', '#F3E8FF'], Meeting: ['💬', '#0284C7', '#E4F4FD'], Collection: ['📦', '#B8860B', '#FEF4E2'] };
+    // Colours come from the ladder now, so a firm that renames a rung renames its chip too.
+    const _apTypeOf = (name) => _apTypes.find(t => String(t.name).toLowerCase() === String(name || '').trim().toLowerCase()) || null;
     const apMgmtStatus = this.state.apMgmtStatus || {};
     // WIRED: real appointments from /api/appointments; status changes persist via PUT.
     const apData = this.state.appointmentsData;
     const apptDefs = (Array.isArray(apData)
-      ? apData.map(a2 => [a2.id, a2.type || 'Meeting', a2.employee || '—', a2.clientName || '—', a2.location || '—', a2.date || '—', a2.time || '—', 'Unassigned', a2.status || 'Scheduled', a2.notes || '', Array.isArray(a2.history) ? a2.history : [], a2.taskId || null, (a2.pendingReschedule && typeof a2.pendingReschedule === 'object') ? a2.pendingReschedule : null])
+      ? apData.map(a2 => [a2.id, a2.type || 'Meeting', a2.employee || '—', a2.clientName || '—', a2.location || '—', a2.date || '—', a2.time || '—', 'Unassigned', a2.status || '', a2.notes || '', Array.isArray(a2.history) ? a2.history : [], a2.taskId || null, (a2.pendingReschedule && typeof a2.pendingReschedule === 'object') ? a2.pendingReschedule : null])
       : (_authed ? [] : [
         ['APT-311', 'Medical', 'Maria Fernandes', 'Falcon Technologies', 'Smart Salem · Riyadh', '21 Jul', '9:30 AM', 'Rashid', 'Confirmed', '', [], null, null],
         ['APT-303', 'Meeting', 'Founder', 'Zenith Contracting', 'STIMES office', '23 Jul', '2:00 PM', 'Rashid', 'Scheduled', '', [], null, null],
@@ -30761,9 +30971,15 @@ class Component extends DCLogic {
     };
     const apMgmtFilter = this.state.apMgmtFilter || 'All';
     const allAppts = apptDefs.map(([id, type, person, client, location, date, time, officer, status0, notes0, history0, taskId0, pend0]) => {
-      const status = apMgmtStatus[id] || status0;
-      const t = apStatusTone2[status] || apStatusTone2.Scheduled; const ty = apTypeTone[type] || apTypeTone.Meeting;
-      const open9 = status === 'Requested' || status === 'Scheduled' || status === 'Confirmed' || status === 'Rescheduled';
+      // Read through the ladder: "scheduled" written by an older version and "Scheduled" typed by
+      // a person are the same rung, and neither is guessed at.
+      const status = _apLadder.canon(apMgmtStatus[id] || status0);
+      const t = _apLadder.tone(status);
+      const ty9 = _apTypeOf(type);
+      const ty = [ty9 && ty9.icon ? ty9.icon : '•', (ty9 && ty9.color) || '#8C8899', (ty9 && ty9.bg) || '#F3F1F7'];
+      // Still open = the ladder says something can still happen to it, rather than a list of four
+      // status names that stopped being true the moment somebody added a fifth.
+      const open9 = !_apLadder.terminal(status);
       // A READABLE REFERENCE, not the raw cuid. The design shows “APT-311”; the real path printed
       // cmrpzwibh000qica2bajs1e0b — 25 characters nobody can quote down a phone. Derived from the id
       // rather than invented: the same last-four convention the submission queue already uses.
@@ -30970,27 +31186,31 @@ class Component extends DCLogic {
         ? 'Showing all ' + allAppts.length + ' appointment' + (allAppts.length === 1 ? '' : 's')
         : 'Showing ' + apptRows.length + ' of ' + allAppts.length + ' appointments',
       ...apManageApi,
-      apptTabs: ['All', 'Requested', 'Confirmed', 'Rescheduled', 'Attended', 'No-show', 'Cancelled'].map(k => ({
+      // The tabs ARE the ladder, plus any status on a record that the ladder does not contain —
+      // otherwise a value nobody configured is a row you can see but never filter to.
+      apptTabs: ['All'].concat(_apLadder.names, [...new Set(allAppts.map(a => a.status))].filter(x => x && !_apLadder.known(x))).map(k => ({
         label: k, count: k === 'All' ? allAppts.length : apCount2(k),
         select: () => this.setState({ apMgmtFilter: k }),
         color: apMgmtFilter === k ? '#7C00FF' : '#8C8899', bg: apMgmtFilter === k ? '#fff' : 'transparent',
         shadow: apMgmtFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
       })),
+      // Derived from the ladder rather than naming rungs, so these keep counting the right thing
+      // after somebody renames one. "Still open" is everything the ladder can still move.
       apptStats: [
         ['Today', _apptReal ? allAppts.filter(a => { const d8 = new Date(a.date); return !isNaN(+d8) && d8.toDateString() === new Date().toDateString(); }).length : 2, '#7C00FF', '#F3E8FF'],
         ['Total', allAppts.length, '#0284C7', '#E4F4FD'],
-        ['Awaiting confirm', apCount2('Requested') + apCount2('Scheduled'), '#B8860B', '#FEF4E2'], ['Confirmed', apCount2('Confirmed'), '#0E9355', '#E7F8EF'],
+        ['Still open', allAppts.filter(a => !_apLadder.terminal(a.status)).length, '#B8860B', '#FEF4E2'],
+        [(_apLadder.track[_apLadder.track.length - 1] || {}).name || 'Done', allAppts.filter(a => a.status === ((_apLadder.track[_apLadder.track.length - 1] || {}).name)).length, '#0E9355', '#E7F8EF'],
       ].map(([label, count, color, bg]) => ({ label, count, color, bg })),
       apptEmpty: apptRows.length === 0,
     };
 
     // ---- Courier board ----
-    const courStatusTone = { Requested: ['#FEF4E2', '#B8860B'], 'Picked up': ['#EFEBFF', '#6D5BD0'], 'In transit': ['#E4F4FD', '#0284C7'], Delivered: ['#E7F8EF', '#0E9355'] };
     const courStatusMap = this.state.courStatus || {};
     // WIRED: real courier shipments from /api/courier-shipments; advance persists via PUT.
     const crData2 = this.state.courierData;
     const courierDefs = (Array.isArray(crData2)
-      ? crData2.map(c2 => [c2.id, c2.description || (c2.direction === 'inbound' ? 'Document pickup' : 'Document delivery'), [c2.clientName, c2.ref].filter(Boolean).join(' · ') || '—', (c2.fromPlace && c2.toPlace) ? (c2.fromPlace + ' → ' + c2.toPlace) : (c2.direction === 'inbound' ? 'Authority → office' : 'Office → client'), c2.carrier || '—', c2.status || 'Requested',
+      ? crData2.map(c2 => [c2.id, c2.description || (c2.direction === 'inbound' ? 'Document pickup' : 'Document delivery'), [c2.clientName, c2.ref].filter(Boolean).join(' · ') || '—', (c2.fromPlace && c2.toPlace) ? (c2.fromPlace + ' → ' + c2.toPlace) : (c2.direction === 'inbound' ? 'Authority → office' : 'Office → client'), c2.carrier || '—', c2.status || '',
           // What is actually in the envelope. A shipment that names its document can be traced from
           // either end; one that does not is a reference number and a hope.
           c2.documentId || null, c2.taskId || null, c2.note || null])
@@ -31005,7 +31225,7 @@ class Component extends DCLogic {
     const _crDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
     const _crTasks = Array.isArray(this.state.tasksData) ? this.state.tasksData : [];
     const allCourier = courierDefs.map(([id, type, subject, route, courier, status0, docId9, taskId9, note9]) => {
-      const status = courStatusMap[id] || status0; const t = courStatusTone[status] || courStatusTone.Requested;
+      const status = _courLadder.canon(courStatusMap[id] || status0); const t = _courLadder.tone(status);
       const d9 = docId9 ? _crDocs.find(x9 => x9.id === docId9) : null;
       const k9 = taskId9 ? _crTasks.find(x9 => x9.id === taskId9) : null;
       const carries9 = d9 ? (d9.docType + (d9.person ? ' — ' + d9.person : '')) : (k9 ? (k9.ref ? k9.ref + ' · ' : '') + k9.title : '');
@@ -31016,12 +31236,13 @@ class Component extends DCLogic {
       // from → to pill without inventing a second source for the same fact.
       const _inb9 = String(route).toLowerCase().indexOf('office') > 0;   // "Authority → office"
       const _parts9 = String(route).split(/\s*→\s*/);
-      // The four stages every shipment passes through, and how far this one has got. Fixed rather
-      // than derived from history: a job that skipped a scan should still read as further along, not
-      // as a gap in the track.
-      const _ST9 = ['Requested', 'Picked up', 'In transit', 'Delivered'];
-      const _at9 = Math.max(0, _ST9.indexOf(status));
-      const _next9 = { Requested: 'Mark picked up', 'Picked up': 'Mark in transit', 'In transit': 'Mark delivered' }[status] || 'Mark delivered';
+      // The stages a shipment passes through, from the configured ladder. Read off the status
+      // rather than derived from history: a job nobody scanned at the door is still further along,
+      // not a gap in the track.
+      const _ST9 = _courLadder.track;
+      const _at9 = _courLadder.atIndex(status);
+      const _nx9 = _courLadder.next(status);
+      const _next9 = _nx9 ? 'Mark ' + _nx9.toLowerCase() : '';
       return { id, ref: ref9, type, subject, route, courier, status, stBg: t[0], stColor: t[1],
         carries: carries9, hasCarries: !!carries9,
         // Handling instructions, shown rather than stored and forgotten. A note nobody sees is a
@@ -31039,18 +31260,22 @@ class Component extends DCLogic {
         dirTitle: _inb9 ? 'Coming in \u2014 collected and brought to the office' : 'Going out \u2014 leaving the office',
         from: (_parts9[0] || 'Office').trim(),
         to: (_parts9[1] || 'Client').trim(),
-        stages: _ST9.map((lbl, ix) => ({
-          label: lbl,
-          current: ix === _at9 && status !== 'Delivered',
-          notCurrent: !(ix === _at9 && status !== 'Delivered'),
+        stages: _ST9.map((r9, ix) => ({
+          label: r9.name,
+          current: ix === _at9 && !_courLadder.terminal(status),
+          notCurrent: !(ix === _at9 && !_courLadder.terminal(status)),
           // Done and now are coloured; what has not happened stays grey, so the track cannot be
           // read as four things that all took place.
           dot: ix < _at9 ? '#12B76A' : ix === _at9 ? t[1] : '#DDD9E6',
         })),
         nextAction: _next9,
-        pending: status !== 'Delivered',
+        // Only offered when the ladder actually has a next rung. The old map ended every unknown
+        // status at "Mark delivered", so a shipment sitting on a word nobody recognised could be
+        // jumped straight to the end by one press.
+        pending: !!_nx9,
         advance: () => {
-          const nx = { Requested: 'Picked up', 'Picked up': 'In transit', 'In transit': 'Delivered', preparing: 'In transit', in_transit: 'Delivered' }[status] || 'Delivered';
+          const nx = _nx9;
+          if (!nx) return;
           if (_courReal) this._opPut('courier-shipments', id, { status: nx }, () => { this.toast('Shipment → ' + nx); this._opReload('courier-shipments', 'courierData'); });
           else this.setState({ courStatus: { ...courStatusMap, [id]: nx } });
         } };
@@ -31068,11 +31293,19 @@ class Component extends DCLogic {
       courShown: courRows.length === allCourier.length
         ? 'Showing all ' + allCourier.length + ' job' + (allCourier.length === 1 ? '' : 's')
         : 'Showing ' + courRows.length + ' of ' + allCourier.length + ' jobs',
-      courTabs: ['All', 'Requested', 'Picked up', 'In transit', 'Delivered'].map(k => ({
+      // The tabs ARE the ladder, plus any status on a shipment the ladder does not contain.
+      courTabs: ['All'].concat(_courLadder.names, [...new Set(allCourier.map(c => c.status))].filter(x => x && !_courLadder.known(x))).map(k => ({
         label: k, count: k === 'All' ? allCourier.length : courCount(k),
         select: () => this.setState({ courFilter: k }),
         color: courFilter === k ? '#7C00FF' : '#8C8899', bg: courFilter === k ? '#fff' : 'transparent', shadow: courFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none' })),
-      courStats: [['Requested', courCount('Requested'), '#B8860B', '#FEF4E2'], ['In transit', courCount('In transit') + courCount('Picked up'), '#0284C7', '#E4F4FD'], ['Delivered today', courCount('Delivered'), '#0E9355', '#E7F8EF'], ['Total jobs', allCourier.length, '#7C00FF', '#F3E8FF']].map(([label, count, color, bg]) => ({ label, count, color, bg })),
+      // Derived, so renaming a rung does not leave a stat counting a word nobody uses. The third
+      // one said "Delivered today" and counted every delivery ever — it counts what it says now.
+      courStats: [
+        [(_courLadder.track[0] || {}).name || 'New', courCount((_courLadder.track[0] || {}).name), '#B8860B', '#FEF4E2'],
+        ['On the way', allCourier.filter(c => _courLadder.known(c.status) && !_courLadder.terminal(c.status) && c.status !== (_courLadder.track[0] || {}).name).length, '#0284C7', '#E4F4FD'],
+        [(_courLadder.track[_courLadder.track.length - 1] || {}).name || 'Done', courCount((_courLadder.track[_courLadder.track.length - 1] || {}).name), '#0E9355', '#E7F8EF'],
+        ['Total jobs', allCourier.length, '#7C00FF', '#F3E8FF'],
+      ].map(([label, count, color, bg]) => ({ label, count, color, bg })),
       courEmpty: courRows.length === 0,
       // WIRED: guided create → POST /api/courier-shipments.
       // WIRED: opens the New-shipment modal (was a chain of window.prompt dialogs).
@@ -31081,6 +31314,104 @@ class Component extends DCLogic {
       // passport against whichever company happens to sort first, and the form looked correctly
       // filled in while doing it. An empty required field is a question; a pre-filled one is an
       // answer nobody gave.
+      // THE LIST EDITORS
+      //
+      // One mechanism behind three lists: appointment types, and the two status ladders. A ladder
+      // carries two things a flat list does not - the ORDER is the order of the work, and each rung
+      // says whether anything follows it and whether it is a step or an exception.
+      //
+      // Both are edited beside the board they govern, on the precedent that Government Centers
+      // keeps its authority list on its own screen. Configuration nobody passes while working is
+      // configuration nobody maintains.
+      ...(() => {
+        const api9 = () => this._apiBase || 'http://localhost:4100';
+        const hdr9 = () => {
+          const t = localStorage.getItem('stimespro:token');
+          return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+        };
+        // `key` is the state prefix, `path` the route, `live` what is on screen now, `ladder` says
+        // whether the rows carry the two extra flags.
+        const mk9 = (key, path, live, ladder, reload) => {
+          // `builtin` rides along untouched. It is how the server tells "renamed rung 3" from
+          // "added a rung" on the very first save, when there is no stored row to compare to.
+          const rows9 = this.state[key + 'Draft'] || live.map(r => ({ id: r.id, builtin: r.builtin || null, name: r.name, icon: r.icon || '', terminal: !!r.terminal, offLadder: !!r.offLadder }));
+          const put9 = (next) => this.setState({ [key + 'Draft']: next, [key + 'Err']: '' });
+          const patch9 = (i, p) => put9(rows9.map((x, j) => (j === i ? { ...x, ...p } : x)));
+          const out = {};
+          out[key + 'Open'] = !!this.state[key + 'Open'];
+          out[key + 'Show'] = () => this.setState({ [key + 'Open']: true, [key + 'Draft']: null, [key + 'Err']: '' });
+          out[key + 'Close'] = () => this.setState({ [key + 'Open']: false, [key + 'Draft']: null, [key + 'Err']: '' });
+          out[key + 'Err'] = this.state[key + 'Err'] || '';
+          out[key + 'HasErr'] = !!this.state[key + 'Err'];
+          out[key + 'Empty'] = rows9.length === 0;
+          out[key + 'Rows'] = rows9.map((r, i) => ({
+            name: r.name,
+            icon: r.icon || '',
+            width: Math.max(70, Math.min(240, String(r.name || '').length * 7.6 + 18)) + 'px',
+            setName: (e) => patch9(i, { name: e.target.value }),
+            setIcon: (e) => patch9(i, { icon: e.target.value }),
+            remove: () => put9(rows9.filter((_x, j) => j !== i)),
+            // Order is the order of the work, so it is moved rather than typed.
+            canUp: i > 0, canDown: i < rows9.length - 1,
+            up: () => { if (i === 0) return; const n = rows9.slice(); n.splice(i - 1, 0, n.splice(i, 1)[0]); put9(n); },
+            down: () => { if (i >= rows9.length - 1) return; const n = rows9.slice(); n.splice(i + 1, 0, n.splice(i, 1)[0]); put9(n); },
+            isTerminal: !!r.terminal, isStep: !r.offLadder,
+            termFg: r.terminal ? '#C0353A' : '#A9A6B4', termBg: r.terminal ? '#FEECEC' : '#F7F6FA',
+            stepFg: r.offLadder ? '#A9A6B4' : '#0E9355', stepBg: r.offLadder ? '#F7F6FA' : '#E7F8EF',
+            stepLabel: r.offLadder ? 'exception' : 'step',
+            toggleTerm: () => patch9(i, { terminal: !r.terminal }),
+            // An exception is never a step, so ticking one settles the other rather than allowing a
+            // combination that only fails later on the board.
+            toggleStep: () => patch9(i, { offLadder: !r.offLadder, ...(r.offLadder ? {} : { terminal: true }) }),
+          }));
+          out[key + 'IsLadder'] = !!ladder;
+          out[key + 'Add'] = () => put9([...rows9, { name: '', builtin: null, terminal: false, offLadder: false }]);
+          out[key + 'Save'] = () => {
+            const named = rows9.filter(r => String(r.name || '').trim());
+            const seen = new Set();
+            for (const r of named) {
+              const k = String(r.name).trim().toLowerCase();
+              if (seen.has(k)) return this.setState({ [key + 'Err']: '“' + String(r.name).trim() + '” is in the list twice.' });
+              seen.add(k);
+            }
+            // A ladder with no ordinary steps left has nothing to draw and nothing to advance.
+            if (ladder && named.length && !named.some(r => !r.offLadder)) {
+              return this.setState({ [key + 'Err']: 'Every entry is marked an exception, so the track would have no steps at all. Leave at least one as a step.' });
+            }
+            fetch(api9() + path, { method: 'PUT', headers: hdr9(), body: JSON.stringify({ rows: named }) })
+              .then(r => r.json().then(j => ({ ok: r.ok, j })))
+              .then(({ ok, j }) => {
+                if (!ok) return this.setState({ [key + 'Err']: (j && j.error) || 'Could not save the list' });
+                this.setState({ [key + 'Open']: false, [key + 'Draft']: null, [key + 'Err']: '' });
+                // Renaming a rung moves the records that were on it. Said out loud, because it is a
+                // write to real records that nobody asked for in so many words.
+                const moved = j && j.migrated;
+                this.toast(moved ? ('Saved — ' + moved + ' record' + (moved === 1 ? '' : 's') + ' moved with the rename') : 'Saved');
+                reload();
+              })
+              .catch(() => this.setState({ [key + 'Err']: 'Server unreachable — nothing was saved' }));
+          };
+          return out;
+        };
+        const rungsOf = (v) => (v && typeof v === 'object' && Array.isArray(v.rungs)) ? v.rungs : [];
+        // A rename rewrites RECORDS, so the records have to come back too — reloading only the
+        // ladder leaves the board showing the word that was just migrated away, which reads exactly
+        // like the rename silently failed.
+        const reloadLadders = () => {
+          if (this._loadLadders) this._loadLadders();
+          this._opReload('courier-shipments', 'courierData');
+          this._opReload('appointments', 'appointmentsData');
+        };
+        return {
+          ...mk9('apt', '/api/appointment-types', Array.isArray(this.state.apptTypesData) ? this.state.apptTypesData : [], false, reloadLadders),
+          ...mk9('asl', '/api/appointment-statuses', rungsOf(this.state.apptStatusData), true, reloadLadders),
+          ...mk9('csl', '/api/courier-statuses', rungsOf(this.state.courierStatusData), true, reloadLadders),
+          // Whether the board runs on the firm's own ladder or the built-in one, said plainly on the
+          // editor so "nothing configured" never looks like "nothing there".
+          aslBuiltIn: !((this.state.apptStatusData || {}).configured),
+          cslBuiltIn: !((this.state.courierStatusData || {}).configured),
+        };
+      })(),
       // \u2500\u2500 the job-type list, edited where the jobs are booked \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
       // Same place Government Centers keeps its authority list: operations configuration lives on
       // the operational screen here, rather than in a settings area nobody visits while working.

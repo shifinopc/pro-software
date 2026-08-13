@@ -554,7 +554,12 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             direction,
             // Not "in transit": nobody has handed it to a courier yet. Claiming otherwise would put a
             // parcel on the board that does not exist.
-            status: "preparing",
+            //
+            // "Requested", not "preparing", because that is the first rung of the ladder the board
+            // actually draws. The old word was in no ladder at all, so every shipment this step
+            // raised sat outside its own status filter — visible on the board, findable under
+            // nothing. Rows written before this still resolve, through the legacy map in index.ts.
+            status: "Requested",
             eta: c.eta || null,
             at: nowISO().slice(0, 10),
             documentId,

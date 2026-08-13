@@ -1362,12 +1362,70 @@ app.delete("/api/contacts/:id", requireAuth, requireStaff, requireWriteRole, asy
 const PICKLISTS = {
   "lead-sources": "leadSource", "lost-reasons": "lostReason", "competitors": "competitor",
   "industries": "industry", "campaigns": "campaign", "cancel-reasons": "cancelReason",
-  "courier-job-types": "courierJobType",
+  "courier-job-types": "courierJobType", "appointment-types": "appointmentType",
+  "courier-statuses": "courierStatus", "appointment-statuses": "appointmentStatus",
 } as const;
+
+/**
+ * THE TWO STATUS LADDERS, and why they are not just two more name lists.
+ *
+ * The console spoke "Requested / Picked up / In transit / Delivered" while the schema default and
+ * workflow.ts wrote "in_transit" and "preparing" — two vocabularies for one fact, with nothing
+ * reconciling them. Every shipment the software raised itself therefore read as Requested however
+ * far along it was, and never matched the tab named after its own state. Appointments had the same
+ * split ("scheduled" against a tab list that has no such entry).
+ *
+ * So the ladder is served from here, one definition, and the console renders from it instead of
+ * carrying its own copy. Three things follow:
+ *
+ *   DEFAULTS, NOT AN EMPTY LIST. A firm that has configured nothing gets the ladder the app always
+ *   had. An empty ladder is not a blank slate, it is a board that cannot say where anything is.
+ *
+ *   LEGACY VALUES ARE CODE, NOT CONFIGURATION. `preparing` and `scheduled` are strings this
+ *   software wrote in earlier versions. They are history, closed and finite, and no admin should
+ *   have to know they exist — so they map here and are never shown. This is also what makes the
+ *   change safe to deploy onto records that already exist: nothing is rewritten, old values simply
+ *   resolve to the rung they always meant.
+ *
+ *   EXCEPTIONS ARE NOT PROGRESS. Returned, Cancelled and No-show are real states but they are not
+ *   steps everything passes through, so they sit off the ladder and the track does not draw them.
+ */
+type Rung = { name: string; color: string; bg: string; terminal?: boolean; offLadder?: boolean };
+const LADDERS: Record<string, { rungs: Rung[]; legacy: Record<string, string> }> = {
+  courierStatus: {
+    rungs: [
+      { name: "Requested", color: "#B8860B", bg: "#FEF4E2" },
+      { name: "Picked up", color: "#6D5BD0", bg: "#EFEBFF" },
+      { name: "In transit", color: "#0284C7", bg: "#E4F4FD" },
+      { name: "Delivered", color: "#0E9355", bg: "#E7F8EF", terminal: true },
+      { name: "Returned", color: "#C0353A", bg: "#FEECEC", terminal: true, offLadder: true },
+    ],
+    // "preparing" is what the workflow's courier step wrote: raised, nobody has carried it yet.
+    legacy: { preparing: "Requested", pending: "Requested", collected: "Picked up", picked_up: "Picked up", in_transit: "In transit", transit: "In transit", delivered: "Delivered", returned: "Returned" },
+  },
+  appointmentStatus: {
+    rungs: [
+      { name: "Requested", color: "#B8860B", bg: "#FEF4E2" },
+      { name: "Scheduled", color: "#6D5BD0", bg: "#EFEBFF" },
+      { name: "Confirmed", color: "#0E9355", bg: "#E7F8EF" },
+      { name: "Attended", color: "#0284C7", bg: "#E4F4FD", terminal: true },
+      { name: "Rescheduled", color: "#6D5BD0", bg: "#EFEBFF", offLadder: true },
+      { name: "No-show", color: "#C0353A", bg: "#FEECEC", terminal: true, offLadder: true },
+      { name: "Cancelled", color: "#6F6C7A", bg: "#F3F1F7", terminal: true, offLadder: true },
+    ],
+    legacy: { scheduled: "Scheduled", requested: "Requested", pending: "Requested", confirmed: "Confirmed", attended: "Attended", rescheduled: "Rescheduled", no_show: "No-show", noshow: "No-show", cancelled: "Cancelled", canceled: "Cancelled" },
+  },
+};
+/** The rungs carry two extra columns the flat lists do not; the factory copies these through. */
+const PICKLIST_EXTRA: Record<string, Record<string, "bool" | "str">> = {
+  courierStatus: { terminal: "bool", offLadder: "bool" },
+  appointmentStatus: { terminal: "bool", offLadder: "bool" },
+  appointmentType: { icon: "str" },
+};
 // Which columns actually carry each list's wording — the retire-vs-delete check below reads these.
 // Competitor lives only on the deal; sources and reasons on both the deal and the company;
 // industry and campaign only on the company.
-const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interaction" | "courierShipment", string]>> = {
+const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interaction" | "courierShipment" | "appointment", string]>> = {
   leadSource: [["opportunity", "source"], ["company", "source"]],
   lostReason: [["opportunity", "lostReason"], ["company", "lostReason"]],
   competitor: [["opportunity", "competitor"]],
@@ -1381,18 +1439,34 @@ const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interac
   // zero, so removing a job type would delete it outright even with shipments booked under that
   // wording — exactly the retire-don't-delete rule the others get.
   courierJobType: [["courierShipment", "description"]],
+  appointmentType: [["appointment", "type"]],
+  // A status lives on the record as state. Same retire-don't-delete rule, and additionally the
+  // rename migration below, which the flat lists deliberately do not get.
+  courierStatus: [["courierShipment", "status"]],
+  appointmentStatus: [["appointment", "status"]],
 };
 
 for (const [path, model] of Object.entries(PICKLISTS)) {
   app.get(`/api/${path}`, requireAuth, requireStaff, async (req, res) => {
     const country = String(req.query.country ?? "").trim() || (await homeCountry());
-    res.json(await (prisma as any)[model].findMany({
+    const rows = await (prisma as any)[model].findMany({
       where: { country, retired: false },
       orderBy: [{ sort: "asc" }, { name: "asc" }],
-    }));
+    });
+    const ladder = LADDERS[model];
+    if (!ladder) return res.json(rows);
+    // A ladder never answers empty. Nothing configured means the ladder the app has always had —
+    // an empty one is not a blank slate, it is a board that cannot say where anything is.
+    // `builtin` is the name this rung shipped under. The editor hands it back untouched, which is
+    // the only way the first save can tell "the user renamed rung 3" from "the user created a
+    // rung" — there is no stored row to compare against yet, and without it the records sitting
+    // on that rung would be left behind by the very first edit anybody makes.
+    const out = rows.length ? rows : ladder.rungs.map((r, i) => ({ id: null, country, sort: i, retired: false, terminal: false, offLadder: false, builtin: r.name, ...r }));
+    res.json({ rungs: out, legacy: ladder.legacy, configured: rows.length > 0 });
   });
 
   app.put(`/api/${path}`, requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+   try {
     const country = String((req.body ?? {}).country ?? "").trim() || (await homeCountry());
     const rows: any[] = Array.isArray((req.body ?? {}).rows ? req.body.rows : []) ? req.body.rows : [];
     const named = rows.filter(r => String(r?.name ?? "").trim());
@@ -1404,6 +1478,7 @@ for (const [path, model] of Object.entries(PICKLISTS)) {
     }
 
     const existing = await (prisma as any)[model].findMany({ where: { country } });
+
     const keep = new Set(named.map(r => r.id).filter(Boolean));
     // Removing an entry RETIRES it: records already carrying that wording keep their meaning, and
     // the loss report still groups them. Only an entry nothing has ever used is deleted outright.
@@ -1416,13 +1491,63 @@ for (const [path, model] of Object.entries(PICKLISTS)) {
       if (used > 0) await (prisma as any)[model].update({ where: { id: row.id }, data: { retired: true } });
       else await (prisma as any)[model].delete({ where: { id: row.id } });
     }
+    const extra = Object.entries(PICKLIST_EXTRA[model] ?? {});
+    let migrated = 0;
+    // Which records a rename may touch. Records with no client attached are counted as the home
+    // installation's own, which is the only country they can sensibly belong to; when some other
+    // country's ladder is being edited they are left alone rather than guessed at.
+    const scopeIds = LADDERS[model]
+      ? [
+          ...(await prisma.company.findMany({ where: { country }, select: { id: true } })).map(c => c.id),
+          ...(country === (await homeCountry()) ? [null as any] : []),
+        ]
+      : [];
     for (const [i, r] of named.entries()) {
-      const data = { country, name: String(r.name).trim(), color: r.color ?? null, bg: r.bg ?? null, sort: i, retired: false, ...(r.id ? { packModified: true } : {}) };
-      if (r.id) await (prisma as any)[model].update({ where: { id: r.id }, data });
-      else await (prisma as any)[model].create({ data });
+      const name = String(r.name).trim();
+      const data: any = { country, name, color: r.color ?? null, bg: r.bg ?? null, sort: i, retired: false, ...(r.id ? { packModified: true } : {}) };
+      for (const [f, kind] of extra) data[f] = kind === "bool" ? r[f] === true : (String(r[f] ?? "").trim() || null);
+      // What this rung was called a moment ago: the stored row for one that exists, or the name it
+      // shipped under for one still on the built-in ladder.
+      const wasCalled = r.id
+        ? (existing.find((x: any) => x.id === r.id) ?? {}).name
+        : (typeof r.builtin === "string" && r.builtin ? r.builtin : null);
+      if (r.id || (LADDERS[model] && wasCalled && wasCalled !== name)) {
+        // Update if it is still there, create if it is not. An id can go missing between the screen
+        // loading and Save — somebody else edited the list, or a pack was reinstalled — and losing
+        // the whole save to one stale row would be a poor trade for a list this small.
+        if (r.id && existing.some((x: any) => x.id === r.id)) await (prisma as any)[model].update({ where: { id: r.id }, data });
+        else await (prisma as any)[model].create({ data });
+        // RENAMING A STATUS MOVES THE RECORDS WITH IT. A status is the state a record is in, not a
+        // word describing something that happened, so the same state under a new name is still the
+        // same state — leaving the old string behind would strand every one of those records off
+        // the ladder, showing as the first rung whatever they had actually reached. Flat lists get
+        // no such migration on purpose: renaming a lead source there must not rewrite history.
+        if (LADDERS[model] && wasCalled && wasCalled !== name) {
+          // Everything that MEANS this rung moves, not only the rows spelling it the current way.
+          // A record written by an older version still says "in_transit"; if the rename only
+          // matched "In transit" that record would be left pointing at a rung that no longer
+          // exists — off the ladder, on a board that had just been reorganised around it.
+          const legacy = LADDERS[model].legacy;
+          const olds = [wasCalled, ...Object.keys(legacy).filter(k => legacy[k] === wasCalled)];
+          for (const [table, field] of PICKLIST_USAGE[model]) {
+            // ONLY THIS COUNTRY'S RECORDS. The ladder is country-scoped configuration, and an
+            // unscoped rewrite would rename the states of shipments belonging to markets whose
+            // ladder nobody touched — a destructive edit to data the person saving cannot see.
+            // Neither of these tables carries a country of its own, so it comes from the client.
+            const r2 = await (prisma as any)[table].updateMany({ where: { [field]: { in: olds }, companyId: { in: scopeIds } }, data: { [field]: name } });
+            migrated += r2.count;
+          }
+        }
+      } else await (prisma as any)[model].create({ data });
     }
-    await logAudit({ action: `${path}.save`, actorId: (req as any).auth?.sub, target: country, detail: `${named.length} entries`, ip: clientIp(req) });
-    res.json(await (prisma as any)[model].findMany({ where: { country, retired: false }, orderBy: [{ sort: "asc" }, { name: "asc" }] }));
+    await logAudit({ action: `${path}.save`, actorId: (req as any).auth?.sub, target: country, detail: `${named.length} entries${migrated ? ` · ${migrated} record(s) moved by a rename` : ""}`, ip: clientIp(req) });
+    const saved = await (prisma as any)[model].findMany({ where: { country, retired: false }, orderBy: [{ sort: "asc" }, { name: "asc" }] });
+    res.json(LADDERS[model] ? { rungs: saved, legacy: LADDERS[model].legacy, configured: saved.length > 0, migrated } : saved);
+   } catch (e: any) {
+     // Without this the failure surfaced as an unhandled rejection and the request simply never
+     // answered — the editor sat there having neither saved nor said why.
+     res.status(400).json({ error: e?.message ? String(e.message).split(String.fromCharCode(10))[0] : "Could not save the list" });
+   }
   });
 }
 
