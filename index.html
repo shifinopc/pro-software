@@ -5491,6 +5491,24 @@
                 <!-- WHICH WORDS MEAN ANYTHING HERE. A condition naming a fact the vocabulary does not
                      contain can never match, and nothing about the rule itself says so. -->
                 <div style="background:#FBFAFE; border:1px solid #F0EDF6; border-radius:11px; padding:10px 14px; margin-top:13px; font-size:11px; color:#6F6C7A; line-height:1.55;">{{ crFieldsNote }}</div>
+                <!-- WHAT YOU CAN ACTUALLY TEST. A list of legal words is the easy half; the useful
+                     half is how many clients hold a value for each, because a field everybody
+                     leaves blank is a condition that silently never fires — indistinguishable from
+                     a broken rule engine unless the screen says so. -->
+                <sc-if value="{{ crHasFacts }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;">
+                    <sc-for list="{{ crFacts }}" as="f" hint-placeholder-count="9">
+                      <span title="{{ f.note }}" style="display:inline-flex; align-items:baseline; gap:6px; font-size:11px; font-weight:600; color:{{ f.fg }}; background:{{ f.bg }}; padding:4px 10px; border-radius:99px;">
+                        <span>{{ f.name }}</span>
+                        <span style="font-size:9.5px; font-weight:600; color:{{ f.coverFg }};">{{ f.cover }}</span>
+                      </span>
+                    </sc-for>
+                  </div>
+                  <sc-if value="{{ crHasClashes }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:10.5px; color:#B7791F; margin-top:9px; line-height:1.55;">{{ crClashes }}</div>
+                  </sc-if>
+                  <div style="font-size:10.5px; color:#B4AFC4; margin-top:9px; line-height:1.55;">The number is how many clients have a value for that field. Purple ones are your own fields on the client record. Nothing is counted for facts that live on the deal rather than the client.</div>
+                </sc-if>
               </div>
 
               <sc-for list="{{ crRules }}" as="r" hint-placeholder-count="1">
@@ -12835,6 +12853,11 @@ class Component extends DCLogic {
         ]);
       };
       this._loadLadders();
+      // What a checklist rule may be written against, with how many clients hold a value for each.
+      fetch(API + '/api/checklist-vocabulary', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v) this.setState({ checklistVocabData: v }); })
+        .catch(() => {});
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
@@ -28341,21 +28364,29 @@ class Component extends DCLogic {
           ...(() => {
             const sel = _crAll9.find(r => r.id === this.state.crSelId) || _crAll9[0] || null;
             const usedOf = (r) => (Array.isArray(r && r.usedBy) ? r.usedBy : []);
+            // A rule hung on BOTH is read in two languages, one per place it runs, and saying only
+            // one of them is how somebody writes a condition that works on the pipeline and quietly
+            // never fires in the workflow. Reported as both rather than resolved by precedence.
             const vocabOf = (r) => {
               const u = usedOf(r);
-              if (u.some(x => /^Workflow /.test(x))) return 'run';
-              if (u.some(x => /^Pipeline stage /.test(x))) return 'deal';
-              return null;
+              const run = u.some(x => /^Workflow /.test(x));
+              const deal = u.some(x => /^Pipeline stage /.test(x));
+              return (run && deal) ? 'both' : run ? 'run' : deal ? 'deal' : null;
             };
-            // The deal vocabulary is a FIXED list — these are the only facts factsFor() assembles, and
-            // a condition on anything else can never match. Run variables are open-ended: a workflow
-            // supplies whatever its template collects, so the honest answer is the ones this rule
-            // already uses plus a note.
-            const DEAL_FIELDS = ['source', 'country', 'value', 'hasQuotation', 'lifecycle', 'industry', 'city', 'employees', 'stage'];
+            // THE DEAL VOCABULARY COMES FROM THE SERVER. It used to be spelled out here, which meant
+            // the rule editor and the evaluator each held their own idea of what words mean anything
+            // - the way an editor comes to bless a condition that can never match. The list now also
+            // includes the admin's own fields on the client record, so it grows with the data rather
+            // than with a code change.
+            //
+            // Run variables stay open-ended: a workflow supplies whatever its template collects, so
+            // the honest answer there is the ones this rule already names, plus a note.
+            const _vocab9 = this.state.checklistVocabData || null;
+            const DEAL_FIELDS = (_vocab9 && Array.isArray(_vocab9.deal)) ? _vocab9.deal.map(f => f.name) : [];
             const usedVars = (r) => [...new Set(_rowsOf9(r || {}).flatMap(row =>
               (Array.isArray(row.conditions) ? row.conditions : []).map(c => String(c && c.var || '').trim()).filter(Boolean)))];
             const voc = vocabOf(sel);
-            const fields = voc === 'deal' ? DEAL_FIELDS : usedVars(sel);
+            const fields = (voc === 'deal' || voc === 'both') ? DEAL_FIELDS : usedVars(sel);
             const facts = this.state.crTryFacts || {};
             const res = this.state.crTryResult || null;
             return {
@@ -28364,12 +28395,35 @@ class Component extends DCLogic {
               crSelWhere: sel ? (usedOf(sel)[0] || 'Not attached to anything yet') : '',
               crVocabLabel: voc === 'run' ? 'Vocabulary \u00b7 Run variables'
                 : voc === 'deal' ? 'Vocabulary \u00b7 Deal & client'
+                : voc === 'both' ? 'Vocabulary \u00b7 Both, depending on where it runs'
                 : 'Vocabulary \u00b7 not decided yet',
-              crVocabBg: voc === 'run' ? '#F3E8FF' : voc === 'deal' ? '#E4F4FD' : '#F3F1F7',
-              crVocabFg: voc === 'run' ? '#7C00FF' : voc === 'deal' ? '#0284C7' : '#8C8899',
+              crVocabBg: voc === 'run' ? '#F3E8FF' : voc === 'deal' ? '#E4F4FD' : voc === 'both' ? '#FEF4E2' : '#F3F1F7',
+              crVocabFg: voc === 'run' ? '#7C00FF' : voc === 'deal' ? '#0284C7' : voc === 'both' ? '#B7791F' : '#8C8899',
+              // Each fact with how many clients actually hold a value for it. Knowing `package` is
+              // a legal word is nearly worthless; knowing four of six clients have one is what says
+              // whether a rule written on it will ever fire. A field everybody leaves blank is a
+              // condition that silently never matches, and that looks exactly like a broken engine.
+              crFacts: ((voc === 'deal' || voc === 'both') && _vocab9) ? _vocab9.deal.map(f => ({
+                name: f.name,
+                note: f.note,
+                custom: !!f.custom,
+                fg: f.custom ? '#7C00FF' : '#3C1470',
+                bg: f.custom ? '#F5EEFF' : '#F3F1F7',
+                // Only counted where counting means something: source, value and stage live on the
+                // deal rather than the client, so a client-coverage number there would be invented.
+                cover: f.filled == null ? '' : (f.filled + ' of ' + _vocab9.total),
+                coverFg: f.filled === 0 ? '#C0353A' : '#A9A6B4',
+              })) : [],
+              crHasFacts: (voc === 'deal' || voc === 'both') && !!_vocab9,
+              crClashes: (_vocab9 && _vocab9.clashes.length)
+                ? ('Ignored, because the deal already has facts by these names: ' + _vocab9.clashes.join(', '))
+                : '',
+              crHasClashes: !!(_vocab9 && _vocab9.clashes.length),
               crFieldsNote: voc === 'deal'
-                ? 'Fields available in this vocabulary: ' + DEAL_FIELDS.join(' \u00b7 ')
-                : voc === 'run'
+                ? (DEAL_FIELDS.length ? '' : 'Loading the vocabulary…')
+                : voc === 'both'
+                  ? 'This rule is used in two places and is read differently in each: on the pipeline stage it sees the facts below, and in the workflow it sees whatever variables that run collects. A condition naming one will not match in the other.'
+                  : voc === 'run'
                   ? (fields.length
                     ? 'This rule reads: ' + fields.join(' \u00b7 ') + ' \u2014 a workflow can supply any variable its template collects.'
                     : 'A workflow supplies whatever variables its template collects; name one in a condition below.')

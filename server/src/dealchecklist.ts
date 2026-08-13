@@ -110,7 +110,55 @@ export function normalizeItems(raw: unknown): DealChecklistItem[] {
  * The facts a rule may test. Everything here is already on the deal or its client — nothing asks a
  * salesperson to fill in a form so that a checklist can decide what to ask them for.
  */
-export function factsFor(deal: any, company: any): Record<string, any> {
+/**
+ * THE FACTS A RULE MAY BE WRITTEN AGAINST, and where each one comes from.
+ *
+ * Declared rather than only assembled, because the console used to carry its own copy of this list
+ * to draw the vocabulary panel. Two copies of "what words mean anything here" is how a rule editor
+ * comes to offer a field the evaluator has never heard of — a condition that can never match, on a
+ * screen insisting it is valid.
+ *
+ * `note` is shown to whoever is writing the rule. It says what the fact actually holds, because the
+ * failure mode is not a typo, it is testing `value gte 50000` without knowing the units.
+ */
+export const DEAL_FACTS: Array<{ name: string; note: string }> = [
+  { name: "source", note: "Where the deal came from" },
+  { name: "country", note: "The deal's country, or the client's" },
+  { name: "value", note: "Deal value in major units - riyals, not halalas" },
+  { name: "hasQuotation", note: "yes / no" },
+  { name: "lifecycle", note: "lead / prospect / client / lost / churned" },
+  { name: "industry", note: "The client's industry" },
+  { name: "city", note: "The client's city" },
+  { name: "employees", note: "Headcount on the client record" },
+  { name: "stage", note: "The pipeline stage the deal is in" },
+  // Added because they decide document requirements in practice and were unreachable: a rule could
+  // not ask "is this client on the premium package" or "do we hold their CR" at all.
+  { name: "clientStatus", note: "active / suspended - the client record's own status" },
+  { name: "hasCr", note: "yes / no - whether a commercial registration is on file" },
+  { name: "group", note: "The client group, blank if the client is not in one" },
+  { name: "package", note: "The client's current subscription package, blank if none" },
+];
+
+/**
+ * The facts of one deal.
+ *
+ * Async because two of them are relationships rather than columns. Worth the lookup: "which package
+ * is this client on" is exactly the sort of thing that decides which documents a case needs, and it
+ * was previously unaskable.
+ */
+export async function factsFor(deal: any, company: any): Promise<Record<string, any>> {
+  // Both are one row each and only fetched when there is a client to fetch them for.
+  const [group, sub] = company?.id
+    ? await Promise.all([
+        company.groupId ? prisma.clientGroup.findUnique({ where: { id: company.groupId }, select: { name: true } }).catch(() => null) : null,
+        prisma.subscription.findFirst({
+          where: { companyId: company.id },
+          orderBy: { id: "desc" },
+          select: { package: { select: { name: true } } },
+        }).catch(() => null),
+      ])
+    : [null, null];
+
   return {
     source: deal?.source ?? "",
     country: deal?.country ?? company?.country ?? "",
@@ -126,7 +174,41 @@ export function factsFor(deal: any, company: any): Record<string, any> {
     /** Headcount, so a rule can read "employees gte 50 → needs a GOSI certificate". */
     employees: company?.employees ?? 0,
     stage: deal?.stage?.name ?? "",
+    clientStatus: company?.status ?? "",
+    hasCr: company?.cr ? "yes" : "no",
+    group: group?.name ?? "",
+    package: (sub as any)?.package?.name ?? "",
+    // THE ADMIN'S OWN FIELDS, if any exist. Whatever the Form Builder (or anything else) has put on
+    // the client record is conditionable without a code change — which is the whole point of a rule
+    // engine that a firm is supposed to configure for itself.
+    //
+    // A custom field may not shadow a fact above. Letting it would mean a field innocently named
+    // "country" quietly replaced the real country for every rule in the system, and nothing on
+    // screen would say so; `customFieldClashes` reports them instead.
+    ...customFacts(company),
   };
+}
+
+/** Custom client fields, minus any that would shadow a built-in fact. */
+export function customFacts(company: any): Record<string, any> {
+  const d = company?.customData;
+  if (!d || typeof d !== "object" || Array.isArray(d)) return {};
+  const builtin = new Set(DEAL_FACTS.map(f => f.name));
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(d)) {
+    if (builtin.has(k)) continue;
+    if (v == null || typeof v === "object") continue;  // only scalars can be compared
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Custom field names that were dropped for clashing with a built-in, so the screen can say so. */
+export function customFieldClashes(company: any): string[] {
+  const d = company?.customData;
+  if (!d || typeof d !== "object" || Array.isArray(d)) return [];
+  const builtin = new Set(DEAL_FACTS.map(f => f.name));
+  return Object.keys(d).filter(k => builtin.has(k));
 }
 
 /**
@@ -149,7 +231,7 @@ export async function itemsForStage(stage: any, deal: any, company: any): Promis
   if (stage.checklistSource === "dynamic" && stage.checklistRuleId) {
     const rule = await prisma.checklistRule.findUnique({ where: { id: String(stage.checklistRuleId) } });
     const rows: any[] = Array.isArray((rule as any)?.rows) ? (rule as any).rows : [];
-    const { items } = evaluateRule(rows, factsFor(deal, company));
+    const { items } = evaluateRule(rows, await factsFor(deal, company));
     // Falls through to the static list rather than returning nothing: a rule whose conditions all
     // missed should not silently mean "this stage asks for nothing".
     if (items.length) return items;

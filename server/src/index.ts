@@ -27,7 +27,7 @@ import { scoreOpenLeads, scoreLead, sourceConversion } from "./leadscore.js";
 import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
-import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule } from "./dealchecklist.js";
+import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
 import { syncMailbox, saveConnection } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 
@@ -1701,6 +1701,51 @@ app.get("/api/companies/duplicates", requireAuth, requireStaff, async (req, res)
  * browser would be a second opinion, and the first time the two disagreed the one on screen would
  * be the one nobody could trust.
  */
+/**
+ * WHAT WORDS MEAN ANYTHING IN A CHECKLIST RULE, and how many clients actually have a value.
+ *
+ * The console drew this list from its own hardcoded copy, so the rule editor and the evaluator each
+ * believed a different thing about the vocabulary — which is how an editor comes to bless a
+ * condition on a field that can never match. One definition, here, and the screen renders it.
+ *
+ * THE COVERAGE NUMBER IS THE USEFUL HALF. Knowing `package` is a legal word is nearly worthless;
+ * knowing that four of six clients have one is what tells somebody whether a rule written on it
+ * will do anything. A field every client leaves blank is a condition that silently never fires, and
+ * that is indistinguishable from a broken rule engine unless the screen says so.
+ */
+app.get("/api/checklist-vocabulary", requireAuth, requireStaff, async (_req, res) => {
+  const companies = await prisma.company.findMany({
+    select: { id: true, country: true, industry: true, city: true, employees: true, lifecycle: true, status: true, cr: true, groupId: true, customData: true },
+  });
+  const total = companies.length;
+  const filled = (f: (c: any) => any) => companies.filter(c => { const v = f(c); return v != null && v !== "" && v !== 0; }).length;
+  const cover: Record<string, number> = {
+    country: filled(c => c.country), industry: filled(c => c.industry), city: filled(c => c.city),
+    employees: filled(c => c.employees), lifecycle: filled(c => c.lifecycle), clientStatus: filled(c => c.status),
+    hasCr: filled(c => c.cr), group: filled(c => c.groupId),
+    package: await prisma.subscription.findMany({ select: { companyId: true } }).then(r => new Set(r.map(x => x.companyId)).size),
+  };
+  // Custom fields are whatever is actually on the client records, so the vocabulary grows with the
+  // data rather than with a code change. Counted the same way, and never invented from a form
+  // definition — a field that has been designed but never captured is not a fact.
+  const customCount = new Map<string, number>();
+  const clashes = new Set<string>();
+  for (const c of companies) {
+    for (const k of Object.keys(customFacts(c))) customCount.set(k, (customCount.get(k) ?? 0) + 1);
+    for (const k of customFieldClashes(c)) clashes.add(k);
+  }
+  res.json({
+    total,
+    deal: [
+      ...DEAL_FACTS.map(f => ({ ...f, custom: false, filled: cover[f.name] ?? null })),
+      ...[...customCount.entries()].map(([name, n]) => ({ name, note: "Your own field on the client record", custom: true, filled: n })),
+    ],
+    // Named so the screen can say why a field somebody added is being ignored, rather than the
+    // field simply not appearing and looking like the list is broken.
+    clashes: [...clashes],
+  });
+});
+
 app.post("/api/checklist-rules/:id/test", requireAuth, requireStaff, async (req, res) => {
   const rule = await prisma.checklistRule.findUnique({ where: { id: String(req.params.id) } });
   if (!rule) return res.status(404).json({ error: "No such rule" });
