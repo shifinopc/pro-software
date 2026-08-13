@@ -20,7 +20,7 @@ import { nextNumber } from "./sequence.js";
  * done in a particular country, so a second country pack must be able to keep them apart — otherwise
  * an Emirates ID document type is offered to a Saudi client.
  */
-export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "workforceBand", "pipelineStage", "leadSource", "lostReason"];
+export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "workforceBand", "pipelineStage", "leadSource", "lostReason", "courierJobType"];
 
 /**
  * Configuration that can be RETIRED instead of deleted.
@@ -30,7 +30,7 @@ export const COUNTRY_SCOPED_CONFIG = ["documentType", "workflowTemplate", "servi
  * everywhere, still readable, so old records keep their meaning. Includes workflowTemplate, which the
  * workflow router serves rather than this helper — it filters separately.
  */
-export const RETIREABLE = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "govCenter", "workforceBand", "pipelineStage", "leadSource", "lostReason"];
+export const RETIREABLE = ["documentType", "workflowTemplate", "serviceItem", "package", "checklistRule", "govCenter", "workforceBand", "pipelineStage", "leadSource", "lostReason", "courierJobType"];
 
 
 // Build a friendly activity line for a newly-created record (persisted feed).

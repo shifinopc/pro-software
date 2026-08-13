@@ -1364,7 +1364,10 @@
           <div><div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">OPERATIONS</div>
           <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Courier</h1>
           <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Passport &amp; document pickup / delivery — tracked to the client</div></div>
-          <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ courNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New shipment</button></sc-if>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <span onClick="{{ cjtShow }}" title="Which kinds of job this firm runs" style="font-size:12px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Job types</span>
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ courNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New shipment</button></sc-if>
+          </div>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px;">
           <sc-for list="{{ courStats }}" as="s" hint-placeholder-count="4">
@@ -7490,6 +7493,51 @@
     </div>
   </sc-if>
 
+  <!-- ══ COURIER JOB TYPES ════════════════════════════════════════════════
+       Edited where the jobs are booked, the same way Government Centers keeps its authority list —
+       operations configuration lives on the operational screen in this app, not in a settings area
+       nobody opens while working. -->
+  <sc-if value="{{ cjtOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ cjtClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:480px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">Courier job types</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">What the kinds of run are called here</div>
+          </div>
+          <div onClick="{{ cjtClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <sc-if value="{{ cjtHasErr }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-bottom:12px;">{{ cjtErr }}</div>
+          </sc-if>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <sc-for list="{{ cjtRows }}" as="t" hint-placeholder-count="5">
+              <span style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:#3C1470; background:#F5EEFF; border:1px solid #E6D6FF; padding:6px 11px; border-radius:99px;">
+                <input value="{{ t.name }}" onInput="{{ t.setName }}" placeholder="e.g. Visa stamping pickup" style="border:none; background:transparent; outline:none; font-size:12px; font-weight:600; color:inherit; font-family:inherit; width:{{ t.width }};">
+                <span onClick="{{ t.remove }}" title="Remove" style="cursor:pointer; opacity:.5; font-size:13px; line-height:1;" style-hover="opacity:1;">×</span>
+              </span>
+            </sc-for>
+            <span onClick="{{ cjtAdd }}" style="display:inline-flex; align-items:center; font-size:12px; font-weight:700; color:#7C00FF; border:1px dashed #C9A2FF; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Add</span>
+          </div>
+          <sc-if value="{{ cjtEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; color:#A9A6B4; line-height:1.6;">Nothing configured, so the booking form offers the five it always did. Add your own here and they replace them.</div>
+          </sc-if>
+          <!-- Said out loud because it is the surprising half: the list is a set of suggestions, and
+               removing one never rewrites a job already booked under that wording. -->
+          <div style="font-size:10.5px; color:#B4AFC4; margin-top:14px; line-height:1.6;">These fill the Job type box on a new job. Removing one that jobs already use keeps it on those records — it just stops being offered.</div>
+        </div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <sc-if value="{{ cjtEmpty }}" hint-placeholder-val="{{ false }}">
+            <span onClick="{{ cjtSeed }}" style="font-size:12px; font-weight:600; color:#7C00FF; cursor:pointer; margin-right:auto; padding:9px 0;" style-hover="text-decoration:underline;">Use a starter set</span>
+          </sc-if>
+          <span onClick="{{ cjtClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ cjtSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save list</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ══ NEW COURIER JOB ═══════════════════════════════════════════════════
        The design's fields, with three of them made real rather than drawn: FROM and TO are stored
        by name (the row used to say a generic "Authority → office" whichever authority it was),
@@ -12637,6 +12685,13 @@ class Component extends DCLogic {
         .then(v => { if (v) this.setState({ mboxData: v }); })
         .catch(() => {});
       this._loadMailbox();
+      // The kinds of courier job this firm runs. Was five words hardcoded in the booking form, so a
+      // firm running anything else had to ask for a code change.
+      this._loadCourierTypes = () => fetch(API + '/api/courier-job-types', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (Array.isArray(v)) this.setState({ courierTypesData: v }); })
+        .catch(() => {});
+      this._loadCourierTypes();
       fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
@@ -31026,7 +31081,57 @@ class Component extends DCLogic {
       // passport against whichever company happens to sort first, and the form looked correctly
       // filled in while doing it. An empty required field is a question; a pre-filled one is an
       // answer nobody gave.
-      courNew: () => this.setState({ nsOpen: true, nsType: 'Passport pickup', nsDesc: '', nsClient: '',
+      // \u2500\u2500 the job-type list, edited where the jobs are booked \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      // Same place Government Centers keeps its authority list: operations configuration lives on
+      // the operational screen here, rather than in a settings area nobody visits while working.
+      ...(() => {
+        const live9 = Array.isArray(this.state.courierTypesData) ? this.state.courierTypesData : [];
+        const rows9 = this.state.cjtDraft || live9.map(t => ({ id: t.id, name: t.name }));
+        const put9 = (next) => this.setState({ cjtDraft: next, cjtErr: '' });
+        const api9 = () => this._apiBase || 'http://localhost:4100';
+        const hdr9 = () => {
+          const t = localStorage.getItem('stimespro:token');
+          return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+        };
+        return {
+          cjtOpen: !!this.state.cjtOpen,
+          cjtShow: () => this.setState({ cjtOpen: true, cjtDraft: null, cjtErr: '' }),
+          cjtClose: () => this.setState({ cjtOpen: false, cjtDraft: null, cjtErr: '' }),
+          cjtErr: this.state.cjtErr || '',
+          cjtHasErr: !!this.state.cjtErr,
+          cjtEmpty: rows9.length === 0,
+          cjtDirty: !!this.state.cjtDraft,
+          cjtRows: rows9.map((r, i) => ({
+            name: r.name,
+            width: Math.max(70, Math.min(240, String(r.name || '').length * 7.6 + 18)) + 'px',
+            setName: (e) => put9(rows9.map((x, j) => (j === i ? { ...x, name: e.target.value } : x))),
+            remove: () => put9(rows9.filter((_x, j) => j !== i)),
+          })),
+          cjtAdd: () => put9([...rows9, { name: '' }]),
+          cjtSeed: () => put9(['Passport pickup', 'Passport delivery', 'Document pickup', 'Document delivery', 'Other'].map(n => ({ name: n }))),
+          cjtSave: () => {
+            const named = rows9.filter(r => String(r.name || '').trim());
+            const seen = new Set();
+            for (const r of named) {
+              const k = String(r.name).trim().toLowerCase();
+              if (seen.has(k)) return this.setState({ cjtErr: '\u201c' + String(r.name).trim() + '\u201d is in the list twice.' });
+              seen.add(k);
+            }
+            fetch(api9() + '/api/courier-job-types', { method: 'PUT', headers: hdr9(), body: JSON.stringify({ rows: named }) })
+              .then(r => r.json().then(j => ({ ok: r.ok, j })))
+              .then(({ ok, j }) => {
+                if (!ok) return this.setState({ cjtErr: (j && j.error) || 'Could not save the list' });
+                this.setState({ cjtOpen: false, cjtDraft: null, cjtErr: '' });
+                // A type somebody has already booked under is RETIRED, not deleted \u2014 the shipments
+                // keep their wording. The server decides which; this just reloads the result.
+                this.toast('Job types saved');
+                if (this._loadCourierTypes) this._loadCourierTypes();
+              })
+              .catch(() => this.setState({ cjtErr: 'Server unreachable \u2014 nothing was saved' }));
+          },
+        };
+      })(),
+      courNew: () => this.setState({ nsOpen: true, nsType: (((Array.isArray(this.state.courierTypesData) && this.state.courierTypesData[0]) || {}).name) || 'Passport pickup', nsDesc: '', nsClient: '',
         nsFrom: '', nsTo: 'Office', nsCarrier: '', nsWhen: '', nsNote: '', nsErr: '' }),
       // ---- New shipment modal ----
       showNsModal: !!this.state.nsOpen,
@@ -31036,8 +31141,14 @@ class Component extends DCLogic {
       setNsCarrier: (e) => this.setState({ nsCarrier: e.target.value }),
       ...mkDd('ddNsClient', realClientNames || [], this.state.nsClient || '', (v) => this.setState({ nsClient: v, nsErr: '' }), 'Choose a client'),
       // JOB TYPE. What the row shows as its heading, and what `description` has always held.
-      ...mkDd('ddNsType', ['Passport pickup', 'Passport delivery', 'Document pickup', 'Document delivery', 'Other'],
-        this.state.nsType || 'Passport pickup', (v) => this.setState({ nsType: v })),
+      // FROM THE LIST, not from this file. Falls back to the five it used to hardcode only while
+      // nobody has configured any \u2014 an empty picker would make the form unusable, and these five
+      // are what every installation had until now.
+      ...(() => {
+        const live9 = (Array.isArray(this.state.courierTypesData) ? this.state.courierTypesData : []).map(t => t.name).filter(Boolean);
+        const opts9 = live9.length ? live9 : ['Passport pickup', 'Passport delivery', 'Document pickup', 'Document delivery', 'Other'];
+        return mkDd('ddNsType', opts9, this.state.nsType || opts9[0], (v) => this.setState({ nsType: v }));
+      })(),
       // FROM and TO by NAME. Both ends are stored now, so a row can say “Qiwa → Office” instead of
       // the generic “Authority → office” every job used to render whichever authority it was.
       // Derived HERE rather than borrowed from the client-detail block that also builds this list.

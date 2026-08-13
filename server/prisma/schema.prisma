@@ -1071,6 +1071,32 @@ model PipelineStage {
 ///
 /// Two tables rather than one picklist with a `kind` column: the pack machinery maps one key to one
 /// model, and a shared table would put sources and loss reasons in the same pack section.
+/// The kinds of courier job this firm actually runs.
+///
+/// Was five words hardcoded in the booking form — "Passport pickup", "Document delivery" and so on
+/// — so a firm that also runs, say, a visa-stamping collection had to ask a developer for it. Same
+/// shape as every other picklist here, and it travels in a country pack for the same reason: what a
+/// market's courier runs are called is part of that market, not of this installation.
+///
+/// SUGGESTIONS, NOT CONSTRAINTS. Nothing validates a shipment's description against this list —
+/// every job booked before the list existed would fail, and a country with no list configured could
+/// not book at all.
+model CourierJobType {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
 model LeadSource {
   id           String  @id @default(cuid())
   country      String?

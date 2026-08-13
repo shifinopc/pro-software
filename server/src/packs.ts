@@ -33,7 +33,7 @@ export type Pack = {
   generatedAt?: string; contains?: string;
   documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[];
   workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
-  pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[];
+  pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[]; courierJobTypes?: PackRow[];
 };
 
 /**
@@ -70,6 +70,10 @@ export const KINDS = [
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, probabilityBp: r.probabilityBp, isWon: r.isWon, isLost: r.isLost, followUpDays: r.followUpDays, followUpAction: r.followUpAction }) },
   // Where business comes from and why it is lost. Both are wording, and wording is exactly the thing
   // that differs between markets — "walk-in" means something in Riyadh that it does not in Dubai.
+  // What a market's courier runs are CALLED is part of that market, so the names travel with it
+  // rather than being retyped per installation — the same argument the stages and the loss reasons make.
+  { key: "courierJobTypes", model: "courierJobType", label: "courier job types", one: "courier job type",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
   { key: "leadSources", model: "leadSource", label: "lead sources", one: "lead source",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
   { key: "lostReasons", model: "lostReason", label: "loss reasons", one: "loss reason",

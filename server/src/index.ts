@@ -1362,11 +1362,12 @@ app.delete("/api/contacts/:id", requireAuth, requireStaff, requireWriteRole, asy
 const PICKLISTS = {
   "lead-sources": "leadSource", "lost-reasons": "lostReason", "competitors": "competitor",
   "industries": "industry", "campaigns": "campaign", "cancel-reasons": "cancelReason",
+  "courier-job-types": "courierJobType",
 } as const;
 // Which columns actually carry each list's wording — the retire-vs-delete check below reads these.
 // Competitor lives only on the deal; sources and reasons on both the deal and the company;
 // industry and campaign only on the company.
-const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interaction", string]>> = {
+const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interaction" | "courierShipment", string]>> = {
   leadSource: [["opportunity", "source"], ["company", "source"]],
   lostReason: [["opportunity", "lostReason"], ["company", "lostReason"]],
   competitor: [["opportunity", "competitor"]],
@@ -1376,6 +1377,10 @@ const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interac
   // array here would have made `used` always zero, so removing a reason would delete it outright
   // even with cancellations recorded under that wording, breaking the retire-don't-delete rule.
   cancelReason: [["interaction", "cancelReason"]],
+  // The only list whose wording lives on a SHIPMENT. Without this entry `used` would always be
+  // zero, so removing a job type would delete it outright even with shipments booked under that
+  // wording — exactly the retire-don't-delete rule the others get.
+  courierJobType: [["courierShipment", "description"]],
 };
 
 for (const [path, model] of Object.entries(PICKLISTS)) {
