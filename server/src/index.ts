@@ -59,7 +59,7 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
-import { MODULES, ACTIONS, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels } from "./permissions.js";
+import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, type InviteResult } from "./invitations.js";
@@ -5568,6 +5568,17 @@ app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
     modules: MODULES, actions: ACTIONS, roles,
     mine: { label: mineLabel, grid: mineLabel ? roles[mineLabel] ?? await gridFor(mineLabel) : {} },
   });
+});
+
+/**
+ * WHAT THE PERMISSIONS GRID GOVERNS, AND WHAT IT DOES NOT.
+ *
+ * Asked of the router itself, not of a maintained list — a list of what we think we registered
+ * drifts from what we registered, and drifts silently. A route no module governs keeps the
+ * hardcoded gate it always had, which is safe but invisible; this is what makes it visible.
+ */
+app.get("/api/permissions/coverage", requireAuth, requireStaff, async (_req, res) => {
+  res.json(coverageOf(((app as any)._router?.stack ?? [])));
 });
 
 app.get("/api/settings/:key", requireAuth, requireStaff, async (req, res) => {

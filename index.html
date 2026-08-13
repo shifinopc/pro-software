@@ -6609,6 +6609,41 @@
                       </div>
                     </sc-for>
                   </div></div>
+
+                  <!-- WHAT THIS GRID ACTUALLY GOVERNS.
+                       Two questions this screen could never answer. First, why there is no "+ Add
+                       module" beside "+ Create role" - because a module means something only where
+                       code binds routes to it, so an invented one would govern nothing and every box
+                       ticked under it would enforce nothing, which is the exact lie this matrix was
+                       built to end. Second, which routes the grid does NOT cover: they keep their old
+                       admin-only rule, which is safe but was invisible.
+                       Counted from the router itself, not from a list somebody maintains. -->
+                  <div style="margin-top:20px; padding-top:16px; border-top:1px solid #F5F3F9;">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                      <span style="font-size:12.5px; font-weight:700;">What this grid governs</span>
+                      <span style="font-size:11px; color:#A9A6B4;">{{ covSummary }}</span>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:11px;">
+                      <sc-for list="{{ covModules }}" as="c" hint-placeholder-count="12">
+                        <span title="{{ c.title }}" style="display:inline-flex; align-items:baseline; gap:6px; font-size:11px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; padding:4px 10px; border-radius:99px;">
+                          <span>{{ c.module }}</span><span style="font-size:9.5px; font-weight:700; opacity:.65;">{{ c.routes }}</span>
+                        </span>
+                      </sc-for>
+                    </div>
+                    <div style="font-size:11px; color:#8C8899; margin-top:12px; line-height:1.6;">A module exists because code binds routes to it, so there is no way to add one here &mdash; an invented module would govern nothing, and every box ticked under it would enforce nothing.</div>
+
+                    <sc-if value="{{ covHasGaps }}" hint-placeholder-val="{{ true }}">
+                      <div style="margin-top:13px; background:#FEF9EE; border:1px solid #F7E4C0; border-radius:12px; padding:12px 15px;">
+                        <div style="font-size:11.5px; font-weight:700; color:#B7791F;">{{ covGapCount }}</div>
+                        <div style="font-size:11px; color:#8C6A2F; margin-top:4px; line-height:1.6;">These keep the rule they always had &mdash; anyone signed in as staff may read them, and only an admin may change them. Nothing here is unguarded; the grid simply is not the whole story for these, and that is worth knowing before trusting a row of it.</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:9px;">
+                          <sc-for list="{{ covUngoverned }}" as="u" hint-placeholder-count="8">
+                            <span style="font-family:ui-monospace,monospace; font-size:10px; color:#8C6A2F; background:#FDF3E2; padding:3px 8px; border-radius:7px;">{{ u.path }}</span>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
                 </div>
               </div>
             </sc-if>
@@ -12822,6 +12857,12 @@ class Component extends DCLogic {
         .then(v => { if (v && v.modules) this.setState({ permsApi: v }); })
         .catch(() => {});
       this._loadPerms();
+      // What the grid covers, asked of the router. Failure is silent and the panel simply does not
+      // draw: a diagnostic that cannot answer should say nothing rather than imply full coverage.
+      fetch(API + '/api/permissions/coverage', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (v && Array.isArray(v.modules)) this.setState({ permCoverage: v }); })
+        .catch(() => {});
       // The mailbox connection. Four working endpoints had no UI at all, so a firm could not
       // connect a mailbox from the console — the Inbox could only ever show what a sync had already
       // fetched, and nothing could start one.
@@ -22972,6 +23013,11 @@ class Component extends DCLogic {
       stopImpersonate: () => this._stopLoginAs ? this._stopLoginAs() : this.setState({ impersonate: null }),
     };
     // Permissions — roles + full matrix
+    // ── WHAT THE GRID GOVERNS ───────────────────────────────────────────
+    // A module with no routes bound to it is a row of switches that turn nothing on or off, and the
+    // number beside each name is the only thing that says which is which.
+    const _cov9 = this.state.permCoverage || null;
+
     const setRoleSel = this.state.setRole || 'PRO Officer';
     // Built-in roles (fixed) + admin-defined custom roles (AppSetting "roles" → state.customRoles).
     const builtInRoles = [
@@ -23977,6 +24023,23 @@ class Component extends DCLogic {
       ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
       permMatrix, permActions,
+      // What the grid covers, counted from the router. Drawn only when the answer arrived: a
+      // diagnostic that could not run should say nothing rather than imply full coverage.
+      covModules: _cov9 ? _cov9.modules.map(m => ({
+        module: m.module,
+        routes: m.routes,
+        // A module bound to nothing is the one worth seeing. Its switches are real in the grid and
+        // reach no route, so it reads as configuration that does something when it does not.
+        fg: m.routes === 0 ? '#B7791F' : '#3C1470',
+        bg: m.routes === 0 ? '#FEF4E2' : '#F3F1F7',
+        title: m.routes === 0
+          ? m.module + ' governs no routes yet - its switches change nothing until code binds some to it'
+          : m.module + ' governs ' + m.routes + ' route' + (m.routes === 1 ? '' : 's'),
+      })) : [],
+      covSummary: _cov9 ? (_cov9.total + ' routes · ' + _cov9.exempt + ' need no permission (sign-in, the client portal, file streams)') : '',
+      covHasGaps: !!(_cov9 && _cov9.ungoverned.length),
+      covGapCount: _cov9 ? (_cov9.ungoverned.length + ' route' + (_cov9.ungoverned.length === 1 ? '' : 's') + ' no module governs') : '',
+      covUngoverned: _cov9 ? _cov9.ungoverned.map(p => ({ path: p })) : [],
       ...dialogApi, ...stateBannerApi, setNotifRules, ...notifDigestApi, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, ...mailLogApi, ...autoRulesApi, auditLog, auditFilters, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 

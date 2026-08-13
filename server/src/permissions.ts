@@ -245,6 +245,10 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/stage-analytics", "Reports"],
   ["/api/email-log", "Reports"],
   ["/api/settings", "Settings"],
+  // An admin diagnostic about the grid itself. /api/permissions stays UNMAPPED on purpose, a few
+  // lines down: it is how a role discovers its own grid, and gating that behind a permission would
+  // mean needing the permission to find out you lack it.
+  ["/api/permissions/coverage", "Settings"],
   ["/api/users", "Settings"],
   ["/api/api-keys", "Settings"],
   ["/api/email-config", "Settings"],
@@ -276,6 +280,57 @@ const EXEMPT = [
 ];
 
 const isExempt = (path: string) => EXEMPT.some(p => path === p || path.startsWith(p + "/") || path.startsWith(p));
+
+/**
+ * WHAT THIS GRID ACTUALLY GOVERNS.
+ *
+ * The modules are not a list somebody may add to, and that is worth saying plainly rather than
+ * leaving people to discover it. A module means something only because MODULE_OF binds route
+ * prefixes to it; a module an admin invented would bind to no routes, so every box ticked under it
+ * would enforce precisely nothing — which is the exact lie this file was written to end. Adding one
+ * is a code change because the thing being named has to exist in code.
+ *
+ * What CAN be fixed without code is the gap this reports: a route that no module governs keeps its
+ * old hardcoded gate, which is safe but invisible. It means the grid is not the whole story for
+ * that route, and until now nothing said which ones. Answering it from the router itself rather
+ * than a maintained list is the point — a list of what we think we registered drifts from what we
+ * registered, and drifts silently.
+ */
+export type Coverage = {
+  modules: Array<{ module: PermModule; routes: number }>;
+  ungoverned: string[];
+  exempt: number;
+  total: number;
+};
+
+export function coverageOf(stack: any[]): Coverage {
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  for (const layer of stack ?? []) {
+    const p = layer?.route?.path;
+    if (typeof p !== "string" || !p.startsWith("/api")) continue;
+    // One entry per path: the same path registered for GET and PUT is one thing to govern, and
+    // counting it twice would overstate how much of the app each module covers.
+    if (seen.has(p)) continue;
+    seen.add(p);
+    paths.push(p);
+  }
+  const counts = new Map<PermModule, number>();
+  const ungoverned: string[] = [];
+  let exempt = 0;
+  for (const p of paths) {
+    if (isExempt(p)) { exempt++; continue; }
+    const m = moduleOf(p);
+    if (m) counts.set(m, (counts.get(m) ?? 0) + 1);
+    else ungoverned.push(p);
+  }
+  return {
+    modules: MODULES.map(m => ({ module: m, routes: counts.get(m) ?? 0 })),
+    ungoverned: ungoverned.sort(),
+    exempt,
+    total: paths.length,
+  };
+}
 
 export function moduleOf(path: string): PermModule | null {
   let best: [string, PermModule] | null = null;
