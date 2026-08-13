@@ -1597,6 +1597,15 @@ model CourierShipment {
   status      String  @default("in_transit") // preparing | in_transit | delivered | returned
   eta         String?
   at          String?
+  /// WHERE IT GOES, both ends, by name. `direction` only ever said inbound/outbound, so every row
+  /// rendered the same generic "Authority → office" whichever authority it actually was — the one
+  /// fact a courier job is about. Nullable: rows written before this fall back to the
+  /// direction-derived route, which is still true, just vaguer.
+  fromPlace   String?
+  toPlace     String?
+  /// Handling instructions for whoever carries it ("collect the receipt", "original passport only").
+  /// The booking form asked for this and had nowhere to put it.
+  note        String? @db.Text
   // What is in the envelope, and what it belongs to.
   //
   // A shipment used to be a bare row: a reference, a carrier and a status. So a renewed passport went

@@ -1403,6 +1403,9 @@
                   </div>
                   <!-- What is actually in the envelope. Kept from the previous build and absent from
                        the design: a shipment that names its document can be traced from either end. -->
+                  <sc-if value="{{ c.hasNote }}" hint-placeholder-val="{{ false }}">
+                    <span title="{{ c.note }}" style="font-size:10.5px; color:#B7791F; background:#FEF4E2; padding:3px 9px; border-radius:99px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px;">✎ {{ c.note }}</span>
+                  </sc-if>
                   <sc-if value="{{ c.hasCarries }}" hint-placeholder-val="{{ false }}">
                     <span title="What this shipment carries" style="font-size:10.5px; color:#8C8899; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">\ud83d\udcc4 {{ c.carries }}</span>
                   </sc-if>
@@ -7212,18 +7215,21 @@
   </sc-if>
 
   <!-- New shipment modal -->
-  <!-- ══ NEW COURIER SHIPMENT ═════════════════════════════════════════════════════════════════
-       Rebuilt on the shared modal furniture. It was the one dialog in the app wearing none of it —
-       no .fm-modal, no .fm-head/.fm-body/.fm-foot, its own hand-written label and input styles, and
-       a bordered Cancel button where every other modal has plain text. Different padding, different
-       field height and a different button pair, all for a form that does the same thing as the rest. -->
+    <!-- ══ NEW COURIER JOB ═══════════════════════════════════════════════════
+       The design's fields, with three of them made real rather than drawn: FROM and TO are stored
+       by name (the row used to say a generic "Authority → office" whichever authority it was),
+       PICKUP BY writes the `eta` column the form never set, and HANDLING NOTE has a column now.
+
+       CLIENT stays a picker where the design has free text. A shipment is "tracked to the client",
+       which is this screen's own subtitle, and that needs the company id — a typed name gives a
+       shipment nobody can find from the client's page. -->
   <sc-if value="{{ showNsModal }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeNsModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:460px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:500px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
         <div class="fm-head">
           <div style="min-width:0;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">New courier shipment</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Passport &amp; document pickup / delivery, tracked to the client</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">New courier job</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Starts at Requested and tracks to Delivered</div>
           </div>
           <div onClick="{{ closeNsModal }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
@@ -7234,55 +7240,97 @@
           </sc-if>
 
           <div>
-            <label class="fm-lab">What is being shipped <span class="fm-req">*</span></label>
-            <input value="{{ nsDesc }}" onInput="{{ setNsDesc }}" placeholder="e.g. Passport delivery — A. Khan" class="fm-inp">
-          </div>
-
-          <div style="display:flex; gap:12px; margin-top:13px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:180px;">
-              <label class="fm-lab">Client <span class="fm-req">*</span></label>
-              <div class="fm-selwrap" style="z-index:40;">
-                <div data-dd data-open="{{ ddNsClientOpen }}" onClick="{{ ddNsClientToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ nsClientColor }};">{{ ddNsClientLabel }}</span>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
-                </div>
-                <sc-if value="{{ ddNsClientOpen }}" hint-placeholder-val="{{ false }}">
-                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:50;">
-                    <sc-for list="{{ ddNsClientOptions }}" as="o" hint-placeholder-count="4">
-                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                    </sc-for>
-                  </div>
-                </sc-if>
+            <label class="fm-lab">Job type</label>
+            <div class="fm-selwrap" style="z-index:60;">
+              <div data-dd data-open="{{ ddNsTypeOpen }}" onClick="{{ ddNsTypeToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddNsTypeLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
               </div>
-            </div>
-
-            <div style="flex:1; min-width:180px;">
-              <label class="fm-lab">Direction</label>
-              <div class="fm-selwrap" style="z-index:30;">
-                <div data-dd data-open="{{ ddNsDirOpen }}" onClick="{{ ddNsDirToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddNsDirLabel }}</span>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+              <sc-if value="{{ ddNsTypeOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:70;">
+                  <sc-for list="{{ ddNsTypeOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                  </sc-for>
                 </div>
-                <sc-if value="{{ ddNsDirOpen }}" hint-placeholder-val="{{ false }}">
-                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:50;">
-                    <sc-for list="{{ ddNsDirOptions }}" as="o" hint-placeholder-count="2">
-                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                    </sc-for>
-                  </div>
-                </sc-if>
-              </div>
+              </sc-if>
             </div>
           </div>
 
           <div style="margin-top:13px;">
-            <label class="fm-lab">Courier / carrier <span style="color:#C9C4D4; font-weight:600;">(optional)</span></label>
-            <input value="{{ nsCarrier }}" onInput="{{ setNsCarrier }}" placeholder="e.g. Aramex · own driver" class="fm-inp">
+            <label class="fm-lab">Client <span class="fm-req">*</span></label>
+            <div class="fm-selwrap" style="z-index:50;">
+              <div data-dd data-open="{{ ddNsClientOpen }}" onClick="{{ ddNsClientToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ nsClientColor }};">{{ ddNsClientLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddNsClientOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:70;">
+                  <sc-for list="{{ ddNsClientOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:flex-end; gap:10px; margin-top:13px;">
+            <div style="flex:1; min-width:0;">
+              <label class="fm-lab">From</label>
+              <div class="fm-selwrap" style="z-index:40;">
+                <div data-dd data-open="{{ ddNsFromOpen }}" onClick="{{ ddNsFromToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddNsFromLabel }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddNsFromOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; max-height:190px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:70;">
+                    <sc-for list="{{ ddNsFromOptions }}" as="o" hint-placeholder-count="4">
+                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-bottom:12px;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+            <div style="flex:1; min-width:0;">
+              <label class="fm-lab">To</label>
+              <div class="fm-selwrap" style="z-index:40;">
+                <div data-dd data-open="{{ ddNsToOpen }}" onClick="{{ ddNsToToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddNsToLabel }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddNsToOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; max-height:190px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:70;">
+                    <sc-for list="{{ ddNsToOptions }}" as="o" hint-placeholder-count="4">
+                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:13px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:170px;">
+              <label class="fm-lab">Assign courier</label>
+              <!-- Free text, not a staff picker: a carrier here is as often "Aramex" as it is a
+                   member of staff, and a list of names cannot say the first. -->
+              <input value="{{ nsCarrier }}" onInput="{{ setNsCarrier }}" placeholder="e.g. Aramex · or a colleague" class="fm-inp">
+            </div>
+            <div style="flex:1; min-width:150px;">
+              <label class="fm-lab">Pickup by</label>
+              <input value="{{ nsWhen }}" onInput="{{ setNsWhen }}" type="date" class="fm-inp">
+            </div>
+          </div>
+
+          <div style="margin-top:13px;">
+            <label class="fm-lab">Handling note</label>
+            <textarea value="{{ nsNote }}" onInput="{{ setNsNote }}" rows="2" placeholder="e.g. Collect receipt, original passport only" class="fm-inp" style="height:auto; padding:10px 13px; resize:vertical; font-family:inherit;"></textarea>
           </div>
         </div>
 
         <div class="fm-foot" style="justify-content:flex-end;">
           <span onClick="{{ closeNsModal }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
-          <button onClick="{{ submitNsModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(124,0,255,.6);" style-hover="background:#6900D6;">Create shipment</button>
+          <button onClick="{{ submitNsModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(124,0,255,.6);" style-hover="background:#6900D6;">Create job</button>
         </div>
       </div>
     </div>
@@ -30314,10 +30362,10 @@ class Component extends DCLogic {
     // WIRED: real courier shipments from /api/courier-shipments; advance persists via PUT.
     const crData2 = this.state.courierData;
     const courierDefs = (Array.isArray(crData2)
-      ? crData2.map(c2 => [c2.id, c2.description || (c2.direction === 'inbound' ? 'Document pickup' : 'Document delivery'), [c2.clientName, c2.ref].filter(Boolean).join(' · ') || '—', c2.direction === 'inbound' ? 'Authority → office' : 'Office → client', c2.carrier || '—', c2.status || 'Requested',
+      ? crData2.map(c2 => [c2.id, c2.description || (c2.direction === 'inbound' ? 'Document pickup' : 'Document delivery'), [c2.clientName, c2.ref].filter(Boolean).join(' · ') || '—', (c2.fromPlace && c2.toPlace) ? (c2.fromPlace + ' → ' + c2.toPlace) : (c2.direction === 'inbound' ? 'Authority → office' : 'Office → client'), c2.carrier || '—', c2.status || 'Requested',
           // What is actually in the envelope. A shipment that names its document can be traced from
           // either end; one that does not is a reference number and a hope.
-          c2.documentId || null, c2.taskId || null])
+          c2.documentId || null, c2.taskId || null, c2.note || null])
       : (_authed ? [] : [
         ['CR-812', 'Passport pickup', 'M. Fernandes · Falcon Technologies', 'GDRFA → office', 'Rashid', 'Requested'],
         ['CR-809', 'Passport delivery', 'A. Khan · Falcon Trading', 'Office → client', 'Omar', 'In transit'],
@@ -30328,7 +30376,7 @@ class Component extends DCLogic {
     // guessed from the free-text description.
     const _crDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
     const _crTasks = Array.isArray(this.state.tasksData) ? this.state.tasksData : [];
-    const allCourier = courierDefs.map(([id, type, subject, route, courier, status0, docId9, taskId9]) => {
+    const allCourier = courierDefs.map(([id, type, subject, route, courier, status0, docId9, taskId9, note9]) => {
       const status = courStatusMap[id] || status0; const t = courStatusTone[status] || courStatusTone.Requested;
       const d9 = docId9 ? _crDocs.find(x9 => x9.id === docId9) : null;
       const k9 = taskId9 ? _crTasks.find(x9 => x9.id === taskId9) : null;
@@ -30348,6 +30396,9 @@ class Component extends DCLogic {
       const _next9 = { Requested: 'Mark picked up', 'Picked up': 'Mark in transit', 'In transit': 'Mark delivered' }[status] || 'Mark delivered';
       return { id, ref: ref9, type, subject, route, courier, status, stBg: t[0], stColor: t[1],
         carries: carries9, hasCarries: !!carries9,
+        // Handling instructions, shown rather than stored and forgotten. A note nobody sees is a
+        // field that wasted somebody's time twice — once typing it, once not reading it.
+        note: note9 || '', hasNote: !!note9,
         isPickup: type.indexOf('pickup') > -1, initials: (courier && courier !== '\u2014') ? courier.slice(0, 2).toUpperCase() : '\u2014',
         // A carrier nobody recorded is not a person. "\u2014" renders where the previous build drew a
         // dark avatar reading as somebody's initials.
@@ -30402,7 +30453,8 @@ class Component extends DCLogic {
       // passport against whichever company happens to sort first, and the form looked correctly
       // filled in while doing it. An empty required field is a question; a pre-filled one is an
       // answer nobody gave.
-      courNew: () => this.setState({ nsOpen: true, nsDesc: '', nsClient: '', nsDir: 'Outbound — office → client', nsCarrier: '', nsErr: '' }),
+      courNew: () => this.setState({ nsOpen: true, nsType: 'Passport pickup', nsDesc: '', nsClient: '',
+        nsFrom: '', nsTo: 'Office', nsCarrier: '', nsWhen: '', nsNote: '', nsErr: '' }),
       // ---- New shipment modal ----
       showNsModal: !!this.state.nsOpen,
       nsDesc: this.state.nsDesc || '', nsCarrier: this.state.nsCarrier || '', nsErr: this.state.nsErr || false,
@@ -30410,6 +30462,23 @@ class Component extends DCLogic {
       setNsDesc: (e) => this.setState({ nsDesc: e.target.value, nsErr: '' }),
       setNsCarrier: (e) => this.setState({ nsCarrier: e.target.value }),
       ...mkDd('ddNsClient', realClientNames || [], this.state.nsClient || '', (v) => this.setState({ nsClient: v, nsErr: '' }), 'Choose a client'),
+      // JOB TYPE. What the row shows as its heading, and what `description` has always held.
+      ...mkDd('ddNsType', ['Passport pickup', 'Passport delivery', 'Document pickup', 'Document delivery', 'Other'],
+        this.state.nsType || 'Passport pickup', (v) => this.setState({ nsType: v })),
+      // FROM and TO by NAME. Both ends are stored now, so a row can say “Qiwa → Office” instead of
+      // the generic “Authority → office” every job used to render whichever authority it was.
+      // Derived HERE rather than borrowed from the client-detail block that also builds this list.
+      // Helpers in this file are block-scoped and reading one across a boundary throws at render —
+      // the failure that took the Pipeline screen down earlier in this project.
+      // The options are the real government centres plus the two ends of every job.
+      ...mkDd('ddNsFrom', ['Office', 'Client', ...((Array.isArray(this.state.govCentersData) ? this.state.govCentersData : []).map(g => g.name))], this.state.nsFrom || '',
+        (v) => this.setState({ nsFrom: v, nsErr: '' }), 'Where from'),
+      ...mkDd('ddNsTo', ['Office', 'Client', ...((Array.isArray(this.state.govCentersData) ? this.state.govCentersData : []).map(g => g.name))], this.state.nsTo || 'Office',
+        (v) => this.setState({ nsTo: v, nsErr: '' }), 'Where to'),
+      nsWhen: this.state.nsWhen || '',
+      setNsWhen: (e) => this.setState({ nsWhen: e.target.value }),
+      nsNote: this.state.nsNote || '',
+      setNsNote: (e) => this.setState({ nsNote: e.target.value }),
       ...mkDd('ddNsDir', ['Outbound — office → client', 'Inbound — authority → office'], this.state.nsDir || 'Outbound — office → client', (v) => this.setState({ nsDir: v })),
       // Grey while it is still the placeholder, so a client nobody chose cannot be misread as
       // a choice somebody made.
@@ -30417,9 +30486,15 @@ class Component extends DCLogic {
       nsDirVal: this.state.nsDir || 'Outbound — office → client',
       submitNsModal: () => {
         const st5 = this.state;
-        if (!(st5.nsDesc || '').trim()) return this.setState({ nsErr: 'Describe what is being shipped' });
         const co5 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c5 => c5.name === st5.nsClient);
-        if (!co5) return this.setState({ nsErr: 'Pick the client this shipment belongs to' });
+        if (!co5) return this.setState({ nsErr: 'Pick the client this job belongs to' });
+        // WHERE IT IS GOING, both ends. `direction` stays written because every existing row and
+        // every reader still uses it — it is derived from the ends rather than asked for twice.
+        const from5 = (st5.nsFrom || '').trim();
+        const to5 = (st5.nsTo || 'Office').trim();
+        if (!from5) return this.setState({ nsErr: 'Say where this is being collected from' });
+        if (from5 === to5) return this.setState({ nsErr: 'A job cannot start and end in the same place' });
+        const dir5 = to5 === 'Office' ? 'inbound' : 'outbound';
         const t5 = localStorage.getItem('stimespro:token');
         const H5 = { 'Content-Type': 'application/json', ...(t5 ? { Authorization: 'Bearer ' + t5 } : {}) };
         // The reference comes from the configured sequence, not from the clock. It used to be
@@ -30429,7 +30504,7 @@ class Component extends DCLogic {
         fetch((this._apiBase || 'http://localhost:4100') + '/api/courier-shipments/next-number', { headers: t5 ? { Authorization: 'Bearer ' + t5 } : {} })
           .then(rn => (rn.ok ? rn.json() : {})).then((jn) => {
         return fetch((this._apiBase || 'http://localhost:4100') + '/api/courier-shipments', { method: 'POST', headers: H5,
-          body: JSON.stringify({ ref: (jn && jn.number) || 'CR-0001', description: st5.nsDesc.trim(), companyId: co5.id, clientName: co5.name, carrier: (st5.nsCarrier || '').trim() || null, direction: st5.nsDir.indexOf('Inbound') === 0 ? 'inbound' : 'outbound', status: 'Requested', at: new Date().toISOString().slice(0, 10) }) })
+          body: JSON.stringify({ ref: (jn && jn.number) || 'CR-0001', description: (st5.nsType || 'Document delivery'), companyId: co5.id, clientName: co5.name, carrier: (st5.nsCarrier || '').trim() || null, direction: dir5, fromPlace: from5, toPlace: to5, eta: (st5.nsWhen || '').trim() || null, note: (st5.nsNote || '').trim() || null, status: 'Requested' }) })
           .then(r5 => { if (!r5.ok) return r5.json().catch(() => ({})).then(j5 => this.setState({ nsErr: (j5 && j5.error) || 'Could not create the shipment' })); this.setState({ nsOpen: false }); this.toast('Shipment created'); this._opReload('courier-shipments', 'courierData'); })
           .catch(() => this.setState({ nsErr: 'Cannot reach the server — nothing was saved' }));
         })
