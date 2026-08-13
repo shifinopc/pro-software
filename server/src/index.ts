@@ -27,7 +27,7 @@ import { scoreOpenLeads, scoreLead, sourceConversion } from "./leadscore.js";
 import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
-import { itemsForStage, effectiveItems, blockersFor, summaryFor } from "./dealchecklist.js";
+import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule } from "./dealchecklist.js";
 import { syncMailbox, saveConnection } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 
@@ -1563,6 +1563,38 @@ app.get("/api/companies/duplicates", requireAuth, requireStaff, async (req, res)
  * What is not set up yet. Counted on request — a cached score would keep congratulating somebody
  * for work they have not done.
  */
+/**
+ * TRY A RULE against a set of facts.
+ *
+ * The screen shows what a rule resolves to, and it asks the SERVER — through the very evaluator the
+ * workflow engine and the pipeline both run. A tester that re-implemented the matching in the
+ * browser would be a second opinion, and the first time the two disagreed the one on screen would
+ * be the one nobody could trust.
+ */
+app.post("/api/checklist-rules/:id/test", requireAuth, requireStaff, async (req, res) => {
+  const rule = await prisma.checklistRule.findUnique({ where: { id: String(req.params.id) } });
+  if (!rule) return res.status(404).json({ error: "No such rule" });
+  const facts = (req.body ?? {}).facts;
+  const { items, matched } = evaluateRule(
+    Array.isArray((rule as any).rows) ? (rule as any).rows : [],
+    (facts && typeof facts === "object") ? facts : {},
+  );
+  // WHICH row produced each document, so the result can be read back to the rule that caused it
+  // rather than arriving as an unexplained list.
+  const rows: any[] = Array.isArray((rule as any).rows) ? (rule as any).rows : [];
+  const from: Record<string, number> = {};
+  for (const ix of matched) {
+    for (const it of (rows[ix]?.documents || rows[ix]?.items || [])) {
+      const k = String(it?.key ?? it?.label ?? "").trim();
+      if (k) from[k] = ix;
+    }
+  }
+  res.json({
+    matched,
+    items: items.map(it => ({ ...it, fromRow: from[it.key] ?? null })),
+  });
+});
+
 app.get("/api/setup-check", requireAuth, requireStaff, async (req, res) => {
   const country = String(req.query.country ?? "").trim() || (await homeCountry());
   res.json(await setupCheck(country));

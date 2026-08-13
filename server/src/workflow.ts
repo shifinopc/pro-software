@@ -9,6 +9,7 @@ import { homeCurrency, homeCountry } from "./orgsettings.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
 import { validateGraph, stepsMissingRole } from "./workflow-validate.js";
+import { evaluateRule } from "./dealchecklist.js";
 import { figuresForFee } from "./money.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
@@ -35,28 +36,13 @@ export function runProgress(graph: any, tasks: { status: string }[]): { done: nu
   return { done, total, pct: total ? Math.min(100, Math.round((done / total) * 100)) : 0 };
 }
 
-function matchCond(left: any, op: string, right: any): boolean {
-  const L = String(left ?? "").toLowerCase(), R = String(right ?? "").toLowerCase();
-  switch (op) {
-    case "eq": return L === R;
-    case "ne": return L !== R;
-    case "contains": return L.includes(R);
-    case "in": return R.split(",").map(s => s.trim()).includes(L);
-    default: return true; // blank op → always applies (base document set)
-  }
-}
+// matchCond used to live here with a SHORTER operator list — no gte/lte — so a rule that
+// filtered on a pipeline stage matched every time on a workflow step. It lives in
+// dealchecklist.ts now, with the evaluator, so a rule means one thing wherever it is used.
 // Union of document sets from a ChecklistRule's rows whose conditions all match the instance variables.
 async function resolveDynamic(ruleId: string, vars: Record<string, any>): Promise<ChecklistItem[]> {
   const rule = await prisma.checklistRule.findUnique({ where: { id: ruleId } });
-  const rows: any[] = Array.isArray((rule as any)?.rows) ? (rule as any).rows : [];
-  const out: Record<string, ChecklistItem> = {};
-  for (const row of rows) {
-    const conds: any[] = Array.isArray(row.conditions) ? row.conditions : [];
-    if (conds.every(c => matchCond(vars[c.var], c.op, c.value))) {
-      for (const it of normalizeItems(row.documents || [])) out[it.key] = it;
-    }
-  }
-  return Object.values(out);
+  return evaluateRule(Array.isArray((rule as any)?.rows) ? (rule as any).rows : [], vars).items as ChecklistItem[];
 }
 /**
  * Choose who a new step belongs to: the ACTIVE staff member holding that role with the fewest open

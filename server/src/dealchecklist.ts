@@ -46,7 +46,16 @@ export interface ItemStatus extends DealChecklistItem {
 const str = (v: unknown) => String(v ?? "").trim();
 
 /** Same operators the workflow's checklist rules use, so one rule syntax covers both halves. */
-function matchCond(left: any, op: string, right: any): boolean {
+/**
+ * THE one condition test, and THE one rule evaluator.
+ *
+ * There were two. workflow.ts carried its own copy that knew eq/ne/contains/in but NOT gte/lte, so
+ * a rule reading "employees gte 50" filtered correctly on a pipeline stage and, on a workflow step,
+ * fell through to the default and matched EVERY time — quietly adding documents to cases that
+ * should not have asked for them. The same rule cannot mean two things depending on where it is
+ * attached, so both callers and the rule tester now come here.
+ */
+export function matchCond(left: any, op: string, right: any): boolean {
   const L = String(left ?? "").toLowerCase(), R = String(right ?? "").toLowerCase();
   switch (op) {
     case "eq": return L === R;
@@ -57,6 +66,25 @@ function matchCond(left: any, op: string, right: any): boolean {
     case "lte": return Number(left) <= Number(right);
     default: return true;   // blank op → always applies, the base set
   }
+}
+
+/**
+ * Which rows match these facts, and the documents that results in.
+ *
+ * Every matching row CONTRIBUTES; the result is the union keyed by document, so a document named by
+ * two rows appears once and the later row wins its required flag. A row with no conditions always
+ * applies — that is the base set.
+ */
+export function evaluateRule(rows: any[], facts: Record<string, any>): { items: DealChecklistItem[]; matched: number[] } {
+  const merged: Record<string, DealChecklistItem> = {};
+  const matched: number[] = [];
+  (Array.isArray(rows) ? rows : []).forEach((row, ix) => {
+    const conds: any[] = Array.isArray(row?.conditions) ? row.conditions : [];
+    if (!conds.every(c => matchCond(facts[String(c?.var ?? "")], String(c?.op ?? ""), c?.value))) return;
+    matched.push(ix);
+    for (const it of normalizeItems(row?.documents || row?.items || [])) merged[it.key] = it;
+  });
+  return { items: Object.values(merged), matched };
 }
 
 export function normalizeItems(raw: unknown): DealChecklistItem[] {
@@ -121,14 +149,7 @@ export async function itemsForStage(stage: any, deal: any, company: any): Promis
   if (stage.checklistSource === "dynamic" && stage.checklistRuleId) {
     const rule = await prisma.checklistRule.findUnique({ where: { id: String(stage.checklistRuleId) } });
     const rows: any[] = Array.isArray((rule as any)?.rows) ? (rule as any).rows : [];
-    const facts = factsFor(deal, company);
-    const merged: Record<string, DealChecklistItem> = {};
-    for (const row of rows) {
-      const conds: any[] = Array.isArray(row?.conditions) ? row.conditions : [];
-      if (!conds.every(c => matchCond(facts[str(c?.var)], str(c?.op), c?.value))) continue;
-      for (const it of normalizeItems(row?.documents || row?.items || [])) merged[it.key] = it;
-    }
-    const items = Object.values(merged);
+    const { items } = evaluateRule(rows, factsFor(deal, company));
     // Falls through to the static list rather than returning nothing: a rule whose conditions all
     // missed should not silently mean "this stage asks for nothing".
     if (items.length) return items;
