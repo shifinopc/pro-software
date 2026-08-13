@@ -7095,18 +7095,78 @@
   </sc-if>
 
   <!-- New shipment modal -->
+  <!-- ══ NEW COURIER SHIPMENT ═════════════════════════════════════════════════════════════════
+       Rebuilt on the shared modal furniture. It was the one dialog in the app wearing none of it —
+       no .fm-modal, no .fm-head/.fm-body/.fm-foot, its own hand-written label and input styles, and
+       a bordered Cancel button where every other modal has plain text. Different padding, different
+       field height and a different button pair, all for a form that does the same thing as the rest. -->
   <sc-if value="{{ showNsModal }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeNsModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px;">
-      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:460px; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3);">
-        <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">New courier shipment</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Passport &amp; document pickup / delivery, tracked to the client</div></div><div onClick="{{ closeNsModal }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
-        <sc-if value="{{ nsErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ nsErr }}</div></sc-if>
-        <div style="margin-top:16px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHAT IS BEING SHIPPED *</div><input value="{{ nsDesc }}" onChange="{{ setNsDesc }}" placeholder="e.g. Passport delivery — A. Khan" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div>
-        <div style="display:flex; gap:12px; margin-top:14px;">
-          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT *</div><div style="position:relative;"><div data-dd onClick="{{ ddNsClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ nsClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddNsClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddNsClientOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DIRECTION</div><div style="position:relative;"><div data-dd onClick="{{ ddNsDirToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ nsDirVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddNsDirOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddNsDirOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+    <div onClick="{{ closeNsModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:460px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .18s cubic-bezier(.16,1,.3,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">New courier shipment</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Passport &amp; document pickup / delivery, tracked to the client</div>
+          </div>
+          <div onClick="{{ closeNsModal }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
-        <div style="margin-top:14px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COURIER / CARRIER (OPTIONAL)</div><input value="{{ nsCarrier }}" onChange="{{ setNsCarrier }}" placeholder="e.g. Aramex · own driver" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div>
-        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;"><button onClick="{{ closeNsModal }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitNsModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create shipment</button></div>
+
+        <div class="fm-body">
+          <sc-if value="{{ nsErr }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-bottom:13px;">{{ nsErr }}</div>
+          </sc-if>
+
+          <div>
+            <label class="fm-lab">What is being shipped <span class="fm-req">*</span></label>
+            <input value="{{ nsDesc }}" onInput="{{ setNsDesc }}" placeholder="e.g. Passport delivery — A. Khan" class="fm-inp">
+          </div>
+
+          <div style="display:flex; gap:12px; margin-top:13px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:180px;">
+              <label class="fm-lab">Client <span class="fm-req">*</span></label>
+              <div class="fm-selwrap" style="z-index:40;">
+                <div data-dd data-open="{{ ddNsClientOpen }}" onClick="{{ ddNsClientToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ nsClientColor }};">{{ ddNsClientLabel }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddNsClientOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:50;">
+                    <sc-for list="{{ ddNsClientOptions }}" as="o" hint-placeholder-count="4">
+                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+
+            <div style="flex:1; min-width:180px;">
+              <label class="fm-lab">Direction</label>
+              <div class="fm-selwrap" style="z-index:30;">
+                <div data-dd data-open="{{ ddNsDirOpen }}" onClick="{{ ddNsDirToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddNsDirLabel }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddNsDirOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:50;">
+                    <sc-for list="{{ ddNsDirOptions }}" as="o" hint-placeholder-count="2">
+                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:13px;">
+            <label class="fm-lab">Courier / carrier <span style="color:#C9C4D4; font-weight:600;">(optional)</span></label>
+            <input value="{{ nsCarrier }}" onInput="{{ setNsCarrier }}" placeholder="e.g. Aramex · own driver" class="fm-inp">
+          </div>
+        </div>
+
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <span onClick="{{ closeNsModal }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ submitNsModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(124,0,255,.6);" style-hover="background:#6900D6;">Create shipment</button>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -30132,16 +30192,23 @@ class Component extends DCLogic {
       courEmpty: courRows.length === 0,
       // WIRED: guided create → POST /api/courier-shipments.
       // WIRED: opens the New-shipment modal (was a chain of window.prompt dialogs).
-      courNew: () => this.setState({ nsOpen: true, nsDesc: '', nsClient: (realClientNames && realClientNames[0]) || '', nsDir: 'Outbound — office → client', nsCarrier: '', nsErr: '' }),
+      // NO PRE-PICKED CLIENT. This used to open with realClientNames[0] already chosen — the
+      // first client alphabetically — on a REQUIRED field. Anybody who did not touch it shipped a
+      // passport against whichever company happens to sort first, and the form looked correctly
+      // filled in while doing it. An empty required field is a question; a pre-filled one is an
+      // answer nobody gave.
+      courNew: () => this.setState({ nsOpen: true, nsDesc: '', nsClient: '', nsDir: 'Outbound — office → client', nsCarrier: '', nsErr: '' }),
       // ---- New shipment modal ----
       showNsModal: !!this.state.nsOpen,
       nsDesc: this.state.nsDesc || '', nsCarrier: this.state.nsCarrier || '', nsErr: this.state.nsErr || false,
       closeNsModal: () => this.setState({ nsOpen: false }),
       setNsDesc: (e) => this.setState({ nsDesc: e.target.value, nsErr: '' }),
       setNsCarrier: (e) => this.setState({ nsCarrier: e.target.value }),
-      ...mkDd('ddNsClient', realClientNames || ['Select a client'], this.state.nsClient || (realClientNames && realClientNames[0]) || '', (v) => this.setState({ nsClient: v })),
+      ...mkDd('ddNsClient', realClientNames || [], this.state.nsClient || '', (v) => this.setState({ nsClient: v, nsErr: '' }), 'Choose a client'),
       ...mkDd('ddNsDir', ['Outbound — office → client', 'Inbound — authority → office'], this.state.nsDir || 'Outbound — office → client', (v) => this.setState({ nsDir: v })),
-      nsClientVal: this.state.nsClient || (realClientNames && realClientNames[0]) || 'Select a client',
+      // Grey while it is still the placeholder, so a client nobody chose cannot be misread as
+      // a choice somebody made.
+      nsClientColor: this.state.nsClient ? '#1A1523' : '#A9A6B4',
       nsDirVal: this.state.nsDir || 'Outbound — office → client',
       submitNsModal: () => {
         const st5 = this.state;
