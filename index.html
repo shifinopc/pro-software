@@ -13999,7 +13999,24 @@ class Component extends DCLogic {
       // totals width together — so nothing drifts out of proportion at other sizes.
       const fscale = Math.max(60, Math.min(180, Number(L.fontScale) || 100)) / 100;
       const fs = (px) => +(px * fscale).toFixed(2) + 'px';
-      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative;font-size:' + fs(16) + '}'
+      // ── THE FOOTER SITS AT THE BOTTOM OF THE PAGE, not wherever the content happens to stop ──
+      //
+      // It was simply last in the flow, so on a short invoice the letterhead strip floated up in the
+      // middle of the sheet with a hand's width of blank paper beneath it. A letterhead is fixed to
+      // the paper, not to the text.
+      //
+      // Done by making the page a column and letting the footer take the slack, which needs the page
+      // to KNOW its own height — hence the min-height. The number differs by context and that is not
+      // a fudge: printing, this box sits inside the @page margin and must be that much shorter, while
+      // on screen the preview sheet draws its own margin as padding and is the full sheet.
+      //
+      // Only when there IS a footer. Nothing to pin means nothing should change, which keeps the
+      // create-invoice preview and the Open drawer hugging their content exactly as before.
+      const _pageH = (L.pageSize === 'Letter') ? 279.4 : 297;
+      const _pinFooter = !!b.footer;
+      const _sheetH = (opts && opts.forPrint) ? Math.max(60, _pageH - 2 * (L.margin ?? 0)) : _pageH;
+      const css = 'body{font-family:Segoe UI,Arial,sans-serif;color:#1A1523;margin:0;position:relative;font-size:' + fs(16)
+        + (_pinFooter ? ';display:flex;flex-direction:column;min-height:' + _sheetH + 'mm' : '') + '}'
         + '*{box-sizing:border-box}'
         + '.pad{padding:0 ' + inset + 'mm ' + inset + 'mm}'
         + '.band{background:linear-gradient(110deg,#26074D,' + accent + ');color:#fff;padding:' + fs(24) + ' ' + fs(28) + ';display:flex;align-items:flex-start;justify-content:space-between;gap:16px}'
@@ -14016,6 +14033,10 @@ class Component extends DCLogic {
         + '.qr svg{width:' + fs(124) + ';height:' + fs(124) + ';display:block}'
         + '.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:0;pointer-events:none}.wm img{max-width:70%;max-height:60%;opacity:.08}'
         + '.hdr img,.ftr img{width:100%;display:block}'
+        // Takes the leftover height, which puts it on the bottom edge. On a document that runs past
+        // one page there is no leftover, so it lands at the end of the last page instead — after
+        // the content rather than through it, which is the safe way for it to fail.
+        + (_pinFooter ? '.ftr{margin-top:auto}' : '')
         + '.tot{width:' + fs(290) + ';font-size:' + fs(16) + '}.tot div{display:flex;justify-content:space-between;padding:6px 0}'
         + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(20) + ';padding-top:9px;color:' + accent + '}'
         + '.notes{margin-top:' + fs(22) + ';font-size:' + fs(13.5) + ';color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:11px}'
@@ -23792,8 +23813,8 @@ class Component extends DCLogic {
     const _pbClear = (key2) => { const next2 = { ...(this.state.printBranding || {}) }; delete next2[key2]; this.setState({ printBranding: next2, pbDirty: true }); };
     const _pbApi = (this._apiBase || 'http://localhost:4100');
     const pbSlots = [
-      ['header', 'Header', 'Full-width banner at the top of every page'],
-      ['footer', 'Footer', 'Full-width strip at the bottom of every page'],
+      ['header', 'Header', 'Full-width banner across the top, in place of the letterhead band'],
+      ['footer', 'Footer', 'Full-width strip held at the bottom of the page'],
       ['watermark', 'Watermark', 'Faint image centered behind the content'],
     ].map(([key2, label2, sub2]) => ({
       label: label2, sub: sub2,
