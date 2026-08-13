@@ -3353,27 +3353,55 @@
             <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:15px 18px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:{{ s.color }};"></span><span style="font-size:11px; color:#6F6C7A; font-weight:600;">{{ s.label }}</span></div><div style="font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700; margin-top:6px; color:{{ s.color }};">{{ s.count }}</div></div>
           </sc-for>
         </section>
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-wrap:wrap;">
           <sc-for list="{{ apptTabs }}" as="t" hint-placeholder-count="5"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }} <span style="opacity:.6; font-size:10.5px;">{{ t.count }}</span></span></sc-for>
+        </div>
+          <div style="flex:1;"></div>
+          <!-- SEARCH, from the design. The tabs answer "which status"; this answers "which one",
+               which is the question actually asked of a list somebody is scanning for a name. -->
+          <div style="display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:7px 14px; min-width:230px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+            <input value="{{ apptQuery }}" onInput="{{ setApptQuery }}" placeholder="Search type, client, venue, officer…" style="flex:1; min-width:0; border:none; background:transparent; font-size:12px; color:#1A1523; outline:none;">
+          </div>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
           <div style="overflow-x:auto;"><div style="min-width:900px;">
-            <div style="display:grid; grid-template-columns:1.4fr 1.2fr 1.1fr 100px 80px 210px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Appointment</span><span>Client / subject</span><span>Location</span><span>When</span><span>Officer</span><span>Status</span></div>
+            <div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1.25fr) minmax(0,1.25fr) 104px 60px 104px 136px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Appointment</span><span>Client / subject</span><span>Location</span><span>When</span><span>Officer</span><span>Status</span><span></span></div>
             <sc-for list="{{ apptRows }}" as="a" hint-placeholder-count="6">
-              <div style="display:grid; grid-template-columns:1.4fr 1.2fr 1.1fr 100px 80px 210px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+              <div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1.25fr) minmax(0,1.25fr) 104px 60px 104px 136px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
                 <div style="display:flex; align-items:center; gap:10px; min-width:0;"><span style="width:32px; height:32px; border-radius:9px; background:{{ a.tBg }}; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">{{ a.icon }}</span><div style="min-width:0;"><div style="font-weight:700;">{{ a.type }}</div><div style="font-size:10px; color:#A9A6B4;">{{ a.id }}</div></div></div>
                 <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.subject }}</span>
                 <span style="color:#8C8899; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ a.location }}</span>
                 <div><div style="font-weight:700; font-size:12px;">{{ a.date }}</div><div style="font-size:10.5px; color:#A9A6B4;">{{ a.time }}</div></div>
-                <div style="display:flex; align-items:center; gap:6px;"><span style="width:22px; height:22px; border-radius:99px; background:#26074D; color:#fff; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ a.officerInitials }}</span></div>
-                <div style="display:flex; align-items:center; gap:7px; justify-content:flex-end;">
-                  <sc-if value="{{ a.hasReqBadge }}" hint-placeholder-val="{{ false }}"><span title="Client requested a reschedule — open Manage to approve" style="font-size:10px; font-weight:700; color:#B8860B; background:#FEF4E2; border:1px solid #F7E3B8; padding:3px 9px; border-radius:99px; white-space:nowrap;">{{ a.reqBadge }}</span></sc-if>
-                  <span style="font-size:10.5px; font-weight:700; color:{{ a.stColor }}; background:{{ a.stBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ a.status }}</span>
-                  <sc-if value="{{ a.canManage }}" hint-placeholder-val="{{ true }}"><span onClick="{{ a.manage }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Manage</span></sc-if>
+                <div style="display:flex; align-items:center; gap:6px;"><span title="{{ a.officer }}" style="width:22px; height:22px; border-radius:99px; background:{{ a.officerBg }}; color:{{ a.officerFg }}; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ a.officerInitials }}</span></div>
+                <span style="font-size:10.5px; font-weight:700; color:{{ a.stColor }}; background:{{ a.stBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap; width:fit-content;">{{ a.status }}</span>
+                <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">
+                  <!-- The client has asked to move this one. Kept from the previous build and absent
+                       from the design: it is a request waiting on an answer, and hiding it would leave
+                       the answer to whoever happened to open the row. -->
+                  <sc-if value="{{ a.hasReqBadge }}" hint-placeholder-val="{{ false }}">
+                    <span title="The client asked to move this — open reschedule to agree or decline" style="font-size:9.5px; font-weight:700; color:#B8860B; background:#FEF4E2; border:1px solid #F7E3B8; padding:2px 7px; border-radius:99px; white-space:nowrap;">{{ a.reqBadge }}</span>
+                  </sc-if>
+                  <!-- Confirm and Attended are the two decisions this row is usually waiting for, so
+                       they are IN the row. Both already existed as handlers and were only reachable
+                       through the Manage dialog — two clicks and a modal for a yes. -->
+                  <sc-if value="{{ a.canConfirm }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ a.confirm }}" title="Confirm this appointment" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EADCFF;">Confirm</span>
+                  </sc-if>
+                  <sc-if value="{{ a.canAttend }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ a.attended }}" title="Mark as attended" style="font-size:10.5px; font-weight:700; color:#fff; background:#12B76A; padding:5px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.94);">Attended</span>
+                  </sc-if>
+                  <sc-if value="{{ a.canManage }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ a.manage }}" title="Reschedule, mark a no-show, or cancel" style="width:24px; height:24px; border-radius:7px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; background:#FBF7FF;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"></path></svg>
+                    </span>
+                  </sc-if>
                 </div>
               </div>
             </sc-for>
             <sc-if value="{{ apptEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:30px; text-align:center; font-size:12.5px; color:#A9A6B4;">No appointments in this view.</div></sc-if>
+              <div style="padding:10px 22px; font-size:10.5px; color:#A9A6B4; border-top:1px solid #F5F3F9;">{{ apptShown }}</div>
           </div></div>
         </section>
         <div style="display:none;">
@@ -30017,16 +30045,36 @@ class Component extends DCLogic {
       const status = apMgmtStatus[id] || status0;
       const t = apStatusTone2[status] || apStatusTone2.Scheduled; const ty = apTypeTone[type] || apTypeTone.Meeting;
       const open9 = status === 'Requested' || status === 'Scheduled' || status === 'Confirmed' || status === 'Rescheduled';
-      return { id, type, person, client, location, date, time, officer, status, notes: notes0 || '', history: history0 || [], taskId: taskId0 || null,
+      // A READABLE REFERENCE, not the raw cuid. The design shows “APT-311”; the real path printed
+      // cmrpzwibh000qica2bajs1e0b — 25 characters nobody can quote down a phone. Derived from the id
+      // rather than invented: the same last-four convention the submission queue already uses.
+      const ref = /^APT-/.test(String(id)) ? String(id) : 'APT-' + String(id).slice(-4).toUpperCase();
+      return { id: ref, realId: id, type, person, client, location, date, time, officer, status, notes: notes0 || '', history: history0 || [], taskId: taskId0 || null,
         pend: pend0 || null, hasReqBadge: !!pend0,
         reqBadge: pend0 ? ('↻ ' + [pend0.date, pend0.time].filter(Boolean).join(' ')) : '',
         subject: person === '—' ? client : person + ' · ' + client,
         icon: ty[0], tColor: ty[1], tBg: ty[2], stBg: t[0], stColor: t[1],
-        officerInitials: officer.slice(0, 2).toUpperCase(),
+        // APPOINTMENTS HAVE NO OFFICER. There is no such column on the model — the mapping above
+        // hardcodes “Unassigned” — so slicing two letters off it drew a dark “UN” avatar on every
+        // row, reading exactly like somebody’s initials. The design has an officer; the data does
+        // not, and a grey dash holds the column honestly until it does.
+        officerInitials: (officer && officer !== 'Unassigned') ? officer.slice(0, 2).toUpperCase() : '—',
+        officerBg: (officer && officer !== 'Unassigned') ? '#26074D' : '#F0EDF6',
+        officerFg: (officer && officer !== 'Unassigned') ? '#fff' : '#A9A6B4',
+        officer: (officer && officer !== 'Unassigned') ? officer : 'No officer is recorded against appointments yet',
         pending: open9,
         // Manage is offered while there is still something to decide (incl. No-show → reschedule).
         // Managing is a WRITE — hidden for read-only roles (server requires admin for appointment PUTs).
         canManage: canWrite && status !== 'Cancelled' && status !== 'Attended',
+        // The two decisions a row is usually waiting for, offered where the row is — both handlers
+        // below already existed and were reachable only through the Manage dialog.
+        //
+        // Each appears only where it is the NEXT honest step: you confirm something that was asked
+        // for, and you record attendance for something that was agreed. A "Confirm" on an already
+        // confirmed booking, or an "Attended" on a request nobody accepted, would be an action that
+        // means nothing having happened.
+        canConfirm: canWrite && status === 'Requested',
+        canAttend: canWrite && (status === 'Confirmed' || status === 'Rescheduled'),
         manage: () => this.setState({ apManage: id, amDate: '', amTime: '', amReason: '', amErr: '' }),
         confirm: () => _apptSet(id, 'Confirmed'),
         attended: () => _apptSet(id, 'Attended'),
@@ -30108,7 +30156,13 @@ class Component extends DCLogic {
       },
     };
     const apCount2 = (s2) => allAppts.filter(a => a.status === s2).length;
-    const apptRows = allAppts.filter(a => apMgmtFilter === 'All' || a.status === apMgmtFilter);
+    // Tab first, then the search box. Searching within a status is the useful order: "the confirmed
+    // one for Falcon" is a question people ask, "everything called Falcon regardless of status" is not.
+    const _apQ9 = String(this.state.apptQuery || '').trim().toLowerCase();
+    const apptRows = allAppts
+      .filter(a => apMgmtFilter === 'All' || a.status === apMgmtFilter)
+      .filter(a => !_apQ9 || [a.type, a.person, a.client, a.location, a.officer, a.id]
+        .filter(Boolean).join(' ').toLowerCase().includes(_apQ9));
     // ── Booking links ─────────────────────────────────────────────────────────────────────────
     // Edits accumulate in a draft and nothing reaches the server until Save, so a half-typed slug
     // is never a live public URL. The "Copy link" button appears only on a SAVED row for the same
@@ -30189,6 +30243,13 @@ class Component extends DCLogic {
 
     const apptApi = {
       apptRows,
+      apptQuery: this.state.apptQuery || '',
+      setApptQuery: (e) => this.setState({ apptQuery: e.target.value }),
+      // Says what is on screen AND what was filtered out. "Showing 6" on a list of forty is a
+      // half-truth that reads as a total.
+      apptShown: apptRows.length === allAppts.length
+        ? 'Showing all ' + allAppts.length + ' appointment' + (allAppts.length === 1 ? '' : 's')
+        : 'Showing ' + apptRows.length + ' of ' + allAppts.length + ' appointments',
       ...apManageApi,
       apptTabs: ['All', 'Requested', 'Confirmed', 'Rescheduled', 'Attended', 'No-show', 'Cancelled'].map(k => ({
         label: k, count: k === 'All' ? allAppts.length : apCount2(k),
