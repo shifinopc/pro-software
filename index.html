@@ -210,6 +210,11 @@
      label sizes, dropdowns that pushed the layout down next to dropdowns that
      floated over it, and no focus ring anywhere. Defined once here instead.
      Classes (not style attributes) so :hover and :focus can exist at all. */
+  /* Row actions on the authority table. Hidden until the row is hovered so Edit/Retire do not
+     compete with the figures, which are what the row is read for. Focus shows them too, or they
+     would be unreachable from the keyboard. */
+  .gc-act{opacity:0;transition:opacity .12s;}
+  [style*="border-left:3px solid"]:hover .gc-act,.gc-act:focus{opacity:1;}
   .fm-modal{display:flex;flex-direction:column;max-height:90vh;overflow:hidden;}
   .fm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 26px 15px;border-bottom:1px solid #F0EDF6;flex-shrink:0;}
   /* The one scrolling region. Header and footer stay put, so the primary action is
@@ -1410,31 +1415,73 @@
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openGcNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add center</button></sc-if>
           </div>
         </section>
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:14px;">
-          <sc-for list="{{ govCenters }}" as="g" hint-placeholder-count="6">
-            <div onClick="{{ g.select }}" style="position:relative; overflow:hidden; background:{{ g.cardBg }}; border:1.5px solid {{ g.cardBorder }}; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:17px 19px; cursor:pointer; transition:border-color .15s, box-shadow .15s, transform .15s;" style-hover="transform:translateY(-3px); box-shadow:0 12px 28px rgba(124,0,255,.1);">
-              <div style="position:absolute; right:-24px; top:-24px; width:88px; height:88px; border-radius:99px; background:{{ g.bg }}; opacity:.5;"></div>
-              <div style="position:relative; display:flex; align-items:center; gap:11px;">
-                <div style="width:40px; height:40px; border-radius:12px; background:{{ g.color }}; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(38,7,77,.15);">{{ g.initials }}</div>
-                <div style="flex:1; min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ g.name }}</div><div style="font-size:10px; color:#8C8899; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.sub }}</div></div>
-                <sc-if value="{{ g.canManage }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; gap:4px; flex-shrink:0;">
-                    <div onClick="{{ g.edit }}" title="Edit center" style="width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg></div>
-                    <div onClick="{{ g.remove }}" title="Delete center" style="width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg></div>
+        <!-- The authorities as ONE table rather than six cards, per the design. A card each spread
+             the same five facts over three times the height, so the queue underneath — which is what
+             this screen is actually for — started below the fold on a laptop.
+
+             KEPT FROM THE CARDS AND NOT IN THE DESIGN: Edit and Retire per authority. The mock has no
+             way to manage the list it draws, and dropping working controls to match a picture would
+             be redesigning the product by accident. They live in the row and appear on hover. -->
+        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden; padding:0;">
+          <div style="display:grid; grid-template-columns:minmax(0,1.5fr) 64px minmax(0,1.4fr) 172px 84px; gap:10px; padding:9px 18px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; background:#FBFAFE; border-bottom:1px solid #F0EDF6;">
+            <span>Authority</span><span style="text-align:right;">Open</span><span>Mix</span><span>Breakdown</span><span style="text-align:right;">Officer</span>
+          </div>
+          <div data-hidescroll="true" style="max-height:264px; overflow-y:auto;">
+            <sc-for list="{{ govCenters }}" as="g" hint-placeholder-count="6">
+              <div onClick="{{ g.select }}" title="{{ g.filterTitle }}" style="display:grid; grid-template-columns:minmax(0,1.5fr) 64px minmax(0,1.4fr) 172px 84px; gap:10px; align-items:center; padding:10px 18px; border-bottom:1px solid #F7F5FA; border-left:3px solid {{ g.cardBorder }}; background:{{ g.cardBg }}; cursor:pointer;" style-hover="background:#FAF7FE;">
+                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                  <span style="width:28px; height:28px; border-radius:8px; background:{{ g.color }}; color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ g.initials }}</span>
+                  <div style="min-width:0;">
+                    <div style="font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.name }}</div>
+                    <div style="font-size:9.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.sub }}</div>
+                  </div>
+                </div>
+
+                <span style="text-align:right; font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:{{ g.openColor }};">{{ g.total }}</span>
+
+                <!-- The mix only means something when there IS work: four segments of nothing is a
+                     grey bar pretending to be a chart, so an authority with none says so instead. -->
+                <sc-if value="{{ g.hasWork }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; height:6px; border-radius:99px; overflow:hidden; background:#F0EDF6;">
+                    <div style="width:{{ g.pendW }}; background:#F59E0B;"></div>
+                    <div style="width:{{ g.subW }}; background:#6D5BD0;"></div>
+                    <div style="width:{{ g.apprW }}; background:#12B76A;"></div>
+                    <div style="width:{{ g.rejW }}; background:#E5484D;"></div>
                   </div>
                 </sc-if>
+                <sc-if value="{{ g.noWork }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:10px; color:#C9C4D4;">nothing here yet</span>
+                </sc-if>
+
+                <sc-if value="{{ g.hasWork }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; gap:9px; font-size:10px; font-weight:700; white-space:nowrap;">
+                    <span style="color:#B8860B;">{{ g.pending }} pend</span>
+                    <span style="color:#6D5BD0;">{{ g.submitted }} sub</span>
+                    <span style="color:#0E9355;">{{ g.approved }} appr</span>
+                    <span style="color:#C0353A;">{{ g.rejected }} rej</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ g.noWork }}" hint-placeholder-val="{{ false }}">
+                  <span></span>
+                </sc-if>
+
+                <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+                  <!-- Managing the list the design forgot. Hidden until the row is hovered so they do
+                       not compete with the figures, which are what the row is read for. -->
+                  <sc-if value="{{ g.canManage }}" hint-placeholder-val="{{ false }}">
+                    <span class="gc-act" onClick="{{ g.edit }}" title="Rename or reassign this authority" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;">Edit</span>
+                  </sc-if>
+                  <sc-if value="{{ g.canManage }}" hint-placeholder-val="{{ false }}">
+                    <span class="gc-act" onClick="{{ g.remove }}" title="Remove this authority" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer;">Retire</span>
+                  </sc-if>
+                  <span title="{{ g.officerTitle }}" style="width:22px; height:22px; border-radius:99px; background:{{ g.officerBg }}; color:{{ g.officerFg }}; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ g.officerInitials }}</span>
+                </div>
               </div>
-              <div style="position:relative; display:flex; align-items:baseline; gap:6px; margin-top:14px;"><span style="font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700;">{{ g.total }}</span><span style="font-size:10.5px; color:#8C8899; font-weight:600;">active submissions</span></div>
-              <div style="position:relative; display:flex; height:7px; border-radius:99px; overflow:hidden; margin-top:11px; background:#F0EDF6;">
-                <div style="width:{{ g.pendW }}; background:#F59E0B;"></div><div style="width:{{ g.subW }}; background:#6D5BD0;"></div><div style="width:{{ g.apprW }}; background:#12B76A;"></div><div style="width:{{ g.rejW }}; background:#E5484D;"></div>
-              </div>
-              <div style="position:relative; display:flex; gap:12px; margin-top:10px; font-size:10px; font-weight:700;">
-                <span style="color:#B8860B;">● {{ g.pending }} pend</span><span style="color:#6D5BD0;">● {{ g.submitted }} sub</span><span style="color:#0E9355;">● {{ g.approved }} appr</span>
-              </div>
-              <div style="position:relative; display:flex; align-items:center; gap:7px; margin-top:12px; border-top:1px solid #F0EDF6; padding-top:11px;"><span style="width:22px; height:22px; border-radius:99px; background:#26074D; color:#fff; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ g.officerInitials }}</span><span style="font-size:10.5px; color:#8C8899;">{{ g.officer }} · officer on duty</span></div>
-            </div>
-          </sc-for>
-          <sc-if value="{{ govCentersEmpty }}" hint-placeholder-val="{{ false }}">
+            </sc-for>
+          </div>
+        </section>
+
+        <sc-if value="{{ govCentersEmpty }}" hint-placeholder-val="{{ false }}">
             <div style="grid-column:1/-1; background:#fff; border:1px dashed #DDD1F5; border-radius:18px; padding:48px 24px; text-align:center;">
               <div style="width:52px; height:52px; border-radius:15px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"></path></svg></div>
               <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700; margin-top:14px;">No government centers yet</div>
@@ -1442,9 +1489,8 @@
               <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openGcNew }}" style="margin-top:16px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add your first center</button></sc-if>
             </div>
           </sc-if>
-        </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px 12px;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Submission queue</div><sc-if value="{{ govShowingAll }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px; color:#A9A6B4;">All authorities</span></sc-if><sc-if value="{{ govShowingAll }}" hint-placeholder-val="{{ false }}"></sc-if><span onClick="{{ govClearFilter }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;">Filtered: {{ govFilterLabel }} · clear</span></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px 12px;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Submission queue</div><sc-if value="{{ govShowingAll }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px; color:#A9A6B4;">All authorities</span></sc-if><sc-if value="{{ govNotShowingAll }}" hint-placeholder-val="{{ false }}"><span onClick="{{ govClearFilter }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;">Filtered: {{ govFilterLabel }} · clear</span></sc-if></div>
           <div style="overflow-x:auto;"><div style="min-width:860px;">
             <div style="display:grid; grid-template-columns:96px 1.5fr 1.2fr 100px 110px 96px 96px 104px; gap:10px; padding:10px 22px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Ref</span><span>Service</span><span>Client</span><span>Center</span><span>Status</span><span>Officer</span><span>SLA</span><span></span></div>
             <sc-for list="{{ govSubs }}" as="s" hint-placeholder-count="8">
@@ -19628,10 +19674,23 @@ class Component extends DCLogic {
         name, sub, color, bg, pending, submitted, approved, rejected, officer, total,
         pendW: pct(pending), subW: pct(submitted), apprW: pct(approved), rejW: pct(rejected),
         initials: name.slice(0, 2).toUpperCase(),
-        officerInitials: officer.slice(0, 2).toUpperCase(),
         active: govFilter === name,
         cardBorder: govFilter === name ? color : '#EDEBF2',
         cardBg: govFilter === name ? bg : '#fff',
+        // An authority with nothing at it draws no mix bar and no breakdown — four segments of
+        // nothing is a grey bar pretending to be a chart, and "0 pend 0 sub 0 appr 0 rej" is a row
+        // of zeroes where one honest phrase does the job.
+        hasWork: total > 0,
+        noWork: total === 0,
+        openColor: total > 0 ? color : '#C9C4D4',
+        // “Unassigned” IS nobody. The defs default an empty officer to that word, so slicing two
+        // letters off it produced a dark “UN” avatar that reads exactly like a person’s initials —
+        // a name where there is no name.
+        officerInitials: (officer && officer !== 'Unassigned') ? officer.slice(0, 2).toUpperCase() : '—',
+        officerBg: (officer && officer !== 'Unassigned') ? '#26074D' : '#F0EDF6',
+        officerFg: (officer && officer !== 'Unassigned') ? '#fff' : '#A9A6B4',
+        officerTitle: (officer && officer !== 'Unassigned') ? officer + ' on duty' : 'Nobody is assigned to ' + name,
+        filterTitle: govFilter === name ? 'Showing only ' + name + ' \u2014 click to clear' : 'Show only ' + name + '\u2019s submissions',
         select: () => this.setState({ govFilter: govFilter === name ? 'All' : name }),
       };
     });
@@ -19746,6 +19805,9 @@ class Component extends DCLogic {
     });
     const govCentersApi = {
       govCenters, govSubs, govFilterLabel: govFilter, govShowingAll: govFilter === 'All',
+      // The queue header had an EMPTY sc-if here and the “Filtered · clear” span outside it, so
+      // it advertised a filter that was not on, next to “All authorities” saying otherwise.
+      govNotShowingAll: govFilter !== 'All',
       govClearFilter: () => this.setState({ govFilter: 'All' }),
       govPendingTotal: govCenterDefs.reduce((s2, c) => s2 + c[4], 0),
       govSubmittedTotal: govCenterDefs.reduce((s2, c) => s2 + c[5], 0),
