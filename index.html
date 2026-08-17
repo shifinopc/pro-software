@@ -214,6 +214,18 @@
        nothing to separate on one row, so it stands down and margin-left:auto does the aligning. */
     .hdr-gap{display:none !important;}
     .hdr-first{margin-left:auto !important;}
+    /* The panels these controls open are anchored right:0 to their own trigger, which is a 34px box
+       sitting mid-bar on a phone. A 300px calendar therefore grew LEFTWARDS off the screen — it
+       opened at -34 and its first column was simply gone.
+
+       position:fixed re-parents them to the header, because backdrop-filter on the bar makes it the
+       containing block for fixed descendants. That is what makes this work with no magic numbers:
+       the header is pinned to the top and spans the width, so left/right are viewport edges and the
+       100% in the inline `top` becomes the bar's own height — which follows it when it wraps.
+       Capped in height too, since a phone screen is shorter than a calendar. */
+    .hdr-pop{position:fixed !important; left:10px !important; right:10px !important;
+             width:auto !important; max-width:none !important;
+             max-height:calc(100vh - 130px) !important; overflow-y:auto !important;}
   }
   /* Row one needs 370px with the word "Create" on the button. Below that it would wrap a third time,
      so the plus sign carries it alone — it is the same control, and the menu it opens is labelled. */
@@ -730,7 +742,7 @@
           <span style="font-size:9.5px; font-weight:700; color:#A9A6B4; background:#fff; border-radius:6px; padding:2px 6px; flex-shrink:0;">⌘K</span>
         </div>
         <sc-if value="{{ gsOpen }}" hint-placeholder-val="{{ false }}">
-          <div data-pop style="position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:14px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .18s ease both; max-height:360px; overflow-y:auto;" data-hidescroll="true">
+          <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:14px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .18s ease both; max-height:360px; overflow-y:auto;" data-hidescroll="true">
             <sc-for list="{{ gsResults }}" as="r" hint-placeholder-count="4">
               <div onClick="{{ r.go }}" style="display:flex; align-items:center; gap:11px; padding:9px 11px; border-radius:10px; cursor:pointer;" style-hover="background:#F7F3FD;">
                 <span style="width:28px; height:28px; border-radius:8px; background:{{ r.bg }}; color:{{ r.color }}; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ r.tag }}</span>
@@ -746,7 +758,7 @@
       <div class="hdr-first" style="position:relative; flex-shrink:0;">
         <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleQuickCreate }}" style="display:flex; align-items:center; gap:6px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 15px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="hdr-cta">Create</span></button></sc-if>
         <sc-if value="{{ showQuickCreate }}" hint-placeholder-val="{{ false }}">
-          <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:210px; background:#fff; border:1px solid #EDEBF2; border-radius:14px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:7px; z-index:60; animation:popIn .18s ease both;">
+          <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); right:0; width:210px; background:#fff; border:1px solid #EDEBF2; border-radius:14px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:7px; z-index:60; animation:popIn .18s ease both;">
             <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; padding:6px 10px 4px;">QUICK CREATE</div>
             <sc-for list="{{ quickCreateItems }}" as="q" hint-placeholder-count="6">
               <div onClick="{{ q.go }}" style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; cursor:pointer; font-size:12.5px; font-weight:600; color:#4B4757;" style-hover="background:#F7F3FD;">
@@ -762,7 +774,7 @@
           <span style="position:absolute; top:5px; right:6px; width:6px; height:6px; border-radius:99px; background:#E5484D; border:1.5px solid #FCFBFE; animation:pulseBadge 2.4s ease-in-out infinite;"></span>
         </div>
         <sc-if value="{{ showCal }}" hint-placeholder-val="{{ false }}">
-          <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:300px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:16px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
+          <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); right:0; width:300px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:16px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
             <div style="display:flex; align-items:center; justify-content:space-between;">
               <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">July 2026</span>
               <span onClick="{{ calGoRenewals }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">Open Renewals →</span>
@@ -801,7 +813,7 @@
           </sc-if>
         </div>
         <sc-if value="{{ showNotifPop }}" hint-placeholder-val="{{ false }}">
-          <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:320px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
+          <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); right:0; width:320px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px 6px;">
               <span style="font-family:'Space Grotesk',sans-serif; font-size:13.5px; font-weight:700;">Notifications</span>
               <span onClick="{{ markAllRead }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; cursor:pointer;">Mark all read</span>
@@ -870,7 +882,7 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
         </div>
         <sc-if value="{{ showUserMenu }}" hint-placeholder-val="{{ false }}">
-          <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:250px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
+          <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); right:0; width:250px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
             <div style="display:flex; align-items:center; gap:11px; padding:10px 11px;">
               <div style="width:40px; height:40px; border-radius:99px; background:#26074D; color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ hdrUserInitials }}</div>
               <div style="min-width:0;">
