@@ -194,6 +194,36 @@
     [style*="grid-template-columns:1fr 1fr"],[style*="grid-template-columns: 1fr 1fr"],
     [style*="grid-template-columns:repeat(2"],[style*="grid-template-columns: repeat(2"]{grid-template-columns:1fr !important;}
   }
+  /* ── THE TOP BAR ON A PHONE ───────────────────────────────────────────────
+     Every control was flex-shrink:0 except the search, so the search absorbed the entire shortfall
+     and collapsed to ZERO width while the client filter and the user chip still ran off the right
+     edge — at 375px the bar measured 570 and the page scrolled sideways. The one thing that gave way
+     was the one thing that had to stay usable.
+
+     So the search takes its own row instead of being crushed, and the two chips drop the text that
+     their icon already says. Nothing is removed: the filter and the user menu still open, they are
+     just a funnel and an avatar until there is room to name them. */
+  @media (max-width:720px){
+    .app-hdr{height:auto !important; flex-wrap:wrap !important; padding:8px 14px !important; gap:8px !important;}
+    /* order:1 puts it after everything else, and a full basis forces the wrap — a second row rather
+       than a sliver. max-width has to go too or it would only ever be 460 of it. */
+    .hdr-search{order:1 !important; flex:1 0 100% !important; max-width:none !important;}
+    .hdr-lbl{display:none !important;}
+    /* The spacer that right-aligns the controls on a wide screen turns hostile once the bar wraps:
+       flex:1 makes it eat the leftover width and push the last chip onto a line of its own. It has
+       nothing to separate on one row, so it stands down and margin-left:auto does the aligning. */
+    .hdr-gap{display:none !important;}
+    .hdr-first{margin-left:auto !important;}
+  }
+  /* Row one needs 370px with the word "Create" on the button. Below that it would wrap a third time,
+     so the plus sign carries it alone — it is the same control, and the menu it opens is labelled. */
+  @media (max-width:400px){
+    .hdr-cta{display:none !important;}
+    /* At 320 the controls came to 319 against a 320 viewport and tipped onto a third row over one
+       pixel. Six is still a comfortable target separation and buys ten. */
+    .app-hdr{gap:6px !important; padding:8px 10px !important;}
+  }
+
   /* Two-panel edit dialog: the record on the left, its list on the right. Columns live here rather
      than in a style attribute so the query below can actually win — an inline value outranks a class. */
   .split-modal{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;min-height:0;}
@@ -687,13 +717,13 @@
     </sc-if>
 
     <!-- Header -->
-    <header style="position:sticky; top:0; z-index:30; background:rgba(252,251,254,.88); backdrop-filter:blur(10px); border-bottom:1px solid #EDEBF2; padding:0 26px; height:58px; display:flex; align-items:center; gap:12px;">
+    <header class="app-hdr" style="position:sticky; top:0; z-index:30; background:rgba(252,251,254,.88); backdrop-filter:blur(10px); border-bottom:1px solid #EDEBF2; padding:0 26px; height:58px; display:flex; align-items:center; gap:12px;">
       <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
         <div onClick="{{ openMobileNav }}" style="width:36px; height:36px; border-radius:10px; border:1px solid #EDEBF2; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B4757" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
         </div>
       </sc-if>
-      <div style="position:relative; flex:1; min-width:0; max-width:460px;">
+      <div class="hdr-search" style="position:relative; flex:1; min-width:0; max-width:460px;">
         <div style="display:flex; align-items:center; gap:9px; background:#F3EFFA; border-radius:99px; padding:9px 16px; transition:background .15s;" style-hover="background:#EEE8F8;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
           <input value="{{ gsQuery }}" onChange="{{ setGsQuery }}" placeholder="Search clients, tasks, invoices, requests…" style="flex:1; min-width:0; border:none; outline:none; background:none; font-size:13px; color:#1A1523;">
@@ -712,9 +742,9 @@
           </div>
         </sc-if>
       </div>
-      <div style="flex:1;"></div>
-      <div style="position:relative; flex-shrink:0;">
-        <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleQuickCreate }}" style="display:flex; align-items:center; gap:6px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 15px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Create</button></sc-if>
+      <div class="hdr-gap" style="flex:1;"></div>
+      <div class="hdr-first" style="position:relative; flex-shrink:0;">
+        <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleQuickCreate }}" style="display:flex; align-items:center; gap:6px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 15px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg><span class="hdr-cta">Create</span></button></sc-if>
         <sc-if value="{{ showQuickCreate }}" hint-placeholder-val="{{ false }}">
           <div data-pop style="position:absolute; top:calc(100% + 8px); right:0; width:210px; background:#fff; border:1px solid #EDEBF2; border-radius:14px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:7px; z-index:60; animation:popIn .18s ease both;">
             <div style="font-size:9.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; padding:6px 10px 4px;">QUICK CREATE</div>
@@ -804,11 +834,11 @@
       <div style="position:relative; flex-shrink:0;">
         <div data-pop onClick="{{ toggleClientFilter }}" title="Filter by client" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:7px 12px; border-radius:99px; border:1px solid #EDEBF2; background:#fff;" style-hover="border-color:#C9A2FF; background:#FAF7FE;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></svg>
-          <div style="line-height:1.1; min-width:0; max-width:150px;">
+          <div class="hdr-lbl" style="line-height:1.1; min-width:0; max-width:150px;">
             <div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div>
             <div style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ clientFilter }}</div>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+          <svg class="hdr-lbl" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
         </div>
         <sc-if value="{{ showClientFilter }}" hint-placeholder-val="{{ false }}">
           <div data-pop data-hidescroll="true" style="position:absolute; top:calc(100% + 8px); right:0; width:270px; max-height:340px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:8px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
@@ -833,7 +863,7 @@
       <div style="position:relative; flex-shrink:0;">
         <div data-pop onClick="{{ toggleUserMenu }}" style="display:flex; align-items:center; gap:9px; cursor:pointer; padding:4px 8px 4px 4px; border-radius:99px; border:1px solid #EDEBF2; background:#fff;" style-hover="border-color:#C9A2FF; background:#FAF7FE;">
           <div style="width:32px; height:32px; border-radius:99px; background:#26074D; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ hdrUserInitials }}</div>
-          <div style="line-height:1.15; min-width:0; max-width:130px;">
+          <div class="hdr-lbl" style="line-height:1.15; min-width:0; max-width:130px;">
             <div style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ hdrUserName }}</div>
             <div style="font-size:10.5px; color:#8C8899; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ hdrUserRole }}</div>
           </div>
