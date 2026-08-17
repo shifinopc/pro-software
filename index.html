@@ -180,6 +180,10 @@
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{outline:2px solid #7C00FF;outline-offset:2px;border-radius:6px;}
   /* Responsive: collapse the design's fixed multi-column layouts on small screens. Auto-fit grids and
      tables (which sit in overflow-x:auto wrappers) already reflow; these are the fixed 2-col sections. */
+  /* COLLAPSING USES minmax(0,1fr), NOT 1fr. An fr track carries an automatic minimum of auto, so it
+     refuses to shrink below its content's min-content width — a "collapsed" single column still
+     measured 372px inside a 315px card, and the page kept scrolling sideways. Zero as the floor lets
+     the track match the screen and pushes the squeeze inward, where the cards already ellipsize. */
   @media (max-width:900px){
     [style*="grid-template-columns:1.4fr"],[style*="grid-template-columns: 1.4fr"],
     [style*="grid-template-columns:1.5fr"],[style*="grid-template-columns: 1.5fr"],
@@ -188,12 +192,48 @@
     [style*="grid-template-columns:2fr"],[style*="grid-template-columns: 2fr"],
     [style*="grid-template-columns:250px"],[style*="grid-template-columns: 250px"],
     [style*="grid-template-columns:210px"],[style*="grid-template-columns: 210px"],
-    [style*="grid-template-columns:320px"],[style*="grid-template-columns: 320px"]{grid-template-columns:1fr !important;}
+    [style*="grid-template-columns:320px"],[style*="grid-template-columns: 320px"],
+    /* 1.15fr and 230px were simply missing from this list, which is why the dashboard's paired
+       panels — Requests pipeline beside Team workload, Client portfolio health beside Receivables —
+       stayed two-up on a phone and pushed the page 269px wider than the screen. A ratio absent here
+       does not fail loudly; it just never collapses. */
+    [style*="grid-template-columns:1.15fr"],[style*="grid-template-columns: 1.15fr"],
+    [style*="grid-template-columns:1.1fr"],[style*="grid-template-columns: 1.1fr"],
+    [style*="grid-template-columns:230px"],[style*="grid-template-columns: 230px"]{grid-template-columns:minmax(0,1fr) !important;}
   }
   @media (max-width:560px){
     [style*="grid-template-columns:1fr 1fr"],[style*="grid-template-columns: 1fr 1fr"],
-    [style*="grid-template-columns:repeat(2"],[style*="grid-template-columns: repeat(2"]{grid-template-columns:1fr !important;}
+    [style*="grid-template-columns:repeat(2"],[style*="grid-template-columns: repeat(2"]{grid-template-columns:minmax(0,1fr) !important;}
+    /* auto-fit cannot go below its own floor, so minmax(320px,1fr) stays 320 wide inside a 315px
+       card and takes the page with it — the throughput chart hung 21px off the screen for exactly
+       this reason. Only the floors wider than a phone are released; 150-200px ones still pair up
+       two-across, which is what they are for. */
+    [style*="minmax(220px"],[style*="minmax(230px"],[style*="minmax(240px"],[style*="minmax(260px"],
+    [style*="minmax(280px"],[style*="minmax(300px"],[style*="minmax(320px"],
+    [style*="minmax(330px"],[style*="minmax(340px"]{grid-template-columns:minmax(0,1fr) !important;}
   }
+  /* Twelve months of bars have a floor: each column is as wide as its month label, so the row cannot
+     be squeezed below roughly 360px however narrow the card gets — it was hanging 21px off the
+     screen. Scrolling it inside the card keeps every month readable and reachable, which squashing
+     would not. Only on phones; on a wide screen the row fits and nothing scrolls. */
+  @media (max-width:560px){
+    .thr-bars{overflow-x:auto !important; padding-bottom:4px;}
+    .thr-col{min-width:26px;}
+    /* The pill tab strips (All / Client contacts / Lead contacts / Archived and its nine siblings).
+       width:fit-content means exactly that — the strip is as wide as its tabs and takes the page
+       with it. Scrolling keeps every tab reachable; wrapping would break the pill into two halves
+       with a rounded end floating mid-row. */
+    [style*="border-radius:99px"][style*="width:fit-content"],
+    [style*="border-radius: 99px"][style*="width: fit-content"]{max-width:100% !important; overflow-x:auto !important;}
+    /* A list beside its detail pane. The 220px floor on the list column is right on a desktop and
+       impossible on a phone, where the two together need more than the screen — so they stack. */
+    .pg-two{grid-template-columns:minmax(0,1fr) !important;}
+    /* A condition is field / operator / value / remove across one line. 234px of that is fixed
+       columns, which is more than a 320px phone has left after the page padding — so the parts
+       stack. Same fields, one per line. */
+    .cond-row{grid-template-columns:minmax(0,1fr) !important;}
+  }
+
   /* ── THE TOP BAR ON A PHONE ───────────────────────────────────────────────
      Every control was flex-shrink:0 except the search, so the search absorbed the entire shortfall
      and collapsed to ZERO width while the client filter and the user chip still ran off the right
@@ -1152,9 +1192,9 @@
             <div style="width:1px; height:28px; background:#F0EDF6;"></div>
             <div><div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; line-height:1; color:#12B76A;">{{ thrCompTotal }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:3px;">completed · {{ thrPct }}%</div></div>
           </div>
-          <div style="flex:1; display:flex; align-items:flex-end; gap:10px; margin-top:22px; min-height:170px;">
+          <div class="thr-bars" style="flex:1; display:flex; align-items:flex-end; gap:10px; margin-top:22px; min-height:170px;">
             <sc-for list="{{ trendBars }}" as="t" hint-placeholder-count="12">
-              <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; height:100%;">
+              <div class="thr-col" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; height:100%;">
                 <div style="position:relative; width:100%; max-width:30px; flex:1; background:{{ t.trackBg }}; border-radius:9px; overflow:visible;">
                   <sc-if value="{{ t.showTip }}" hint-placeholder-val="{{ false }}">
                     <div style="position:absolute; bottom:calc({{ t.sub }}% + 10px); left:50%; transform:translateX(-50%); background:#26074D; color:#fff; font-size:10px; font-weight:600; padding:5px 9px; border-radius:8px; white-space:nowrap; box-shadow:0 4px 12px rgba(38,7,77,.3); z-index:2; animation:bob 3s ease-in-out 1.4s infinite;">{{ t.subN }} sub · {{ t.compN }} done<div style="position:absolute; top:100%; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#26074D;"></div></div>
@@ -3338,8 +3378,8 @@
           </div>
           <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:14px 18px;">
             <div style="font-size:11px; font-weight:700; color:#A9A6B4; letter-spacing:.08em;">BILLED · 6 MONTHS</div>
-            <div style="display:flex; align-items:flex-end; gap:6px; height:44px; margin-top:8px;">
-              <sc-for list="{{ invChart }}" as="b" hint-placeholder-count="6"><div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end;"><div style="width:100%; height:{{ b.h }}; background:{{ b.color }}; border-radius:4px 4px 2px 2px;"></div><span style="font-size:8px; color:#A9A6B4;">{{ b.m }}</span></div></sc-for>
+            <div class="thr-bars" style="display:flex; align-items:flex-end; gap:6px; height:44px; margin-top:8px;">
+              <sc-for list="{{ invChart }}" as="b" hint-placeholder-count="6"><div class="thr-col" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end;"><div style="width:100%; height:{{ b.h }}; background:{{ b.color }}; border-radius:4px 4px 2px 2px;"></div><span style="font-size:8px; color:#A9A6B4;">{{ b.m }}</span></div></sc-for>
             </div>
           </div>
         </section>
@@ -5500,7 +5540,7 @@
           </section>
         </sc-if>
 
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:minmax(220px,290px) minmax(0,1fr); gap:16px; align-items:start;">
+        <section class="pg-two" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:minmax(220px,290px) minmax(0,1fr); gap:16px; align-items:start;">
           <!-- THE SET, on the left. Every rule used to be expanded down the page at once, so three
                rules meant three editors and no view of the set. -->
           <div style="display:flex; flex-direction:column; gap:10px;">
@@ -5613,7 +5653,7 @@
                 <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6;">
                   <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Then these are needed</div>
                   <sc-for list="{{ row.items }}" as="it" hint-placeholder-count="2">
-                    <div style="display:grid; grid-template-columns:minmax(0,1.2fr) 108px minmax(0,1fr) 92px 34px; gap:7px; align-items:center; margin-top:8px;">
+                    <div class="cond-row" style="display:grid; grid-template-columns:minmax(0,1.2fr) 108px minmax(0,1fr) 92px 34px; gap:7px; align-items:center; margin-top:8px;">
                       <input value="{{ it.label }}" onInput="{{ it.setLabel }}" placeholder="What is needed" class="fm-inp">
                       <!-- The whole point of this screen: a MANUAL item is somebody's word, a
                            DOCUMENT item is satisfied by a record and can never be ticked by hand. -->
