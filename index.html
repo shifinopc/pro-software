@@ -22768,6 +22768,53 @@ class Component extends DCLogic {
         n9.config.branches.push({ var: '', op: 'eq', value: '', key: 'branch_' + (n9.config.branches.length + 1) });
       }),
     };
+    // ── THE STEP'S SETTINGS, IN WORDS ─────────────────────────────────────────────────────────
+    //
+    // This panel used to print the stored config as-is: the key as its own label and the value
+    // however it happened to be typed. So the rule that decides which documents a case asks for
+    // appeared as "checklistRuleId  cmsy6n9hc00002aii38h7athi" — a cuid, which tells the reader
+    // nothing and cannot be checked against anything. Same for "assigneeRole pro_officer" and
+    // "checklistSource dynamic", which are the names the DATABASE uses, not the ones on screen
+    // anywhere else in this app.
+    //
+    // Every id is resolved to the thing it points at. Where it cannot be — a rule that has been
+    // deleted — the panel says so, because "(rule not found)" is the one case the reader most needs
+    // to see and the raw id was hiding it behind something that merely looked configured.
+    const _cfgLabel = (k) => ({
+      assigneeRole: 'Assigned role', approverRole: 'Approver role',
+      slaHours: 'Time allowed', checklistRuleId: 'Checklist rule', checklistSource: 'Documents come from',
+      checklist: 'Checklist', captures: 'Asks the person for', docType: 'Document type',
+      govCenter: 'Authority', branches: 'Branches', days: 'Wait', hours: 'Wait',
+      title: 'Step title', direction: 'Direction', description: 'Description',
+      expiryVar: 'Expiry taken from', numberVar: 'Number taken from', issueVar: 'Issue date taken from',
+      feeVar: 'Fee taken from', receiptVar: 'Receipt taken from', builtin: 'Shipped as',
+    }[k] || k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()));
+
+    const _cfgValue = (k, v) => {
+      const rules9 = Array.isArray(this.state.checklistRulesData) ? this.state.checklistRulesData : [];
+      if (k === 'checklistRuleId') {
+        const hit9 = rules9.find(r9 => r9.id === v);
+        // Naming the missing rule matters more than showing its id: a step pointing at a deleted
+        // rule silently falls back to its own list, which is usually empty.
+        return hit9 ? hit9.name : 'Rule not found — this step would fall back to its own list';
+      }
+      if (k === 'assigneeRole' || k === 'approverRole') return ROLE_LABEL_MAP[v] || v || 'Nobody';
+      if (k === 'checklistSource') return ({ dynamic: 'A rule, decided per case', service: "The service's own required documents", list: 'The list set on this step' })[v] || v;
+      if (k === 'slaHours') { const n9 = Number(v); return !n9 ? String(v) : (n9 % 24 === 0 ? (n9 / 24) + (n9 === 24 ? ' day' : ' days') : n9 + ' hours'); }
+      if (k === 'days') return Number(v) === 1 ? '1 day' : v + ' days';
+      if (k === 'hours') return Number(v) === 1 ? '1 hour' : v + ' hours';
+      if (Array.isArray(v)) {
+        if (k === 'branches') return v.map(b9 => `${b9.var} ${b9.op} ${b9.value} → ${b9.key}`).join('  ·  ');
+        if (k === 'captures') return v.map(c9 => c9.label || c9.var).join(' · ');
+        if (k === 'checklist') return v.map(c9 => c9.label || c9.key).join(' · ');
+        return v.length + (v.length === 1 ? ' item' : ' items');   // "1 items" read as a bug of its own
+      }
+      if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+      if (v === null || v === undefined || v === '') return '—';
+      if (typeof v === 'object') return JSON.stringify(v).slice(0, 60);
+      return String(v);
+    };
+
     const _gSelReal = _gRealNode(gSel);
     const gCfg = {
       wfCfgTitle: gSelDef[1], wfCfgTag: wfTagMap[gSelType] || 'STEP',
@@ -22776,7 +22823,7 @@ class Component extends DCLogic {
       // REAL node config when a template graph is loaded; design hints otherwise.
       wfCfgFields: (_gSelReal
         ? (Object.keys(_gSelReal.config || {}).length
-          ? Object.entries(_gSelReal.config).map(([k3, v3]) => ({ label: k3, value: Array.isArray(v3) ? v3.length + ' items' : (typeof v3 === 'object' && v3 !== null ? JSON.stringify(v3).slice(0, 40) : String(v3)) }))
+          ? Object.entries(_gSelReal.config).map(([k3, v3]) => ({ label: _cfgLabel(k3), value: _cfgValue(k3, v3) }))
           : [{ label: 'No configuration yet', value: 'Use Edit step to set this node up' }])
         : (wfCfgMap[gSelType] || []).map(([label, value]) => ({ label, value }))),
       // Mirrors the guard in _wfRemoveNode: Start never, End only while another End remains — so the
