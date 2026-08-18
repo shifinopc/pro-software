@@ -10,7 +10,8 @@
  * workflow binding, and that a dropped row still in use is retired rather than deleted.
  */
 import { prisma } from "../src/db.js";
-import { readPack, applyInstall, planUpgrade, applyUpgrade, installedPacks, type Pack } from "../src/packs.js";
+import { readPack, applyInstall, planUpgrade, applyUpgrade, installedPacks, type Pack , KINDS } from "../src/packs.js";
+import { newestPackFile } from "./_pickpack.js";
 import { requireScratchDatabase } from "./_scratch-guard.js";
 
 async function main() {
@@ -18,10 +19,20 @@ async function main() {
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
   await requireScratchDatabase("This probe");
 
-  const v1: Pack = JSON.parse(JSON.stringify(readPack("pack-sa-2026.2.json")));
+  const v1: Pack = JSON.parse(JSON.stringify(readPack(newestPackFile())));
   // A row nothing will ever reference, so that "dropped and unused" can actually be tested. Every
   // real checklist rule in this pack is used by a workflow step, which makes them all retire cases.
   v1.checklistRules!.push({ key: "sa.checklist.zz-unused", name: "ZZ Unused Rule", rows: [] } as any);
+  // A service of the probe's own, bound to whichever workflow the pack ships.
+  //
+  // The "you edited it, the upgrade leaves it alone" case used to be tested on v2.serviceItems[0] —
+  // fine while every pack carried a catalogue, and a crash the moment one did not. A pack is whatever
+  // that market needs, so a probe that must exercise services has to bring its own.
+  v1.serviceItems ??= [];
+  v1.serviceItems.push({
+    key: "sa.service.zz-probe", name: "ZZ Probe Service", govFee: 500, time: "3d",
+    workflowKey: v1.workflowTemplates?.[0]?.key ?? null,
+  } as any);
   console.log("installing v1…");
   const ins = await applyInstall(v1, { adopt: false });
   console.log(`  ${ins.created} rows created\n`);
@@ -34,7 +45,7 @@ async function main() {
   CHANGED.defaultFee = (CHANGED.defaultFee ?? 0) + 250;
   CHANGED.leadDays = 99;
 
-  const EDITED = v2.serviceItems![0];                 // user edited it → yours, left alone
+  const EDITED = v2.serviceItems!.find(x => x.key === "sa.service.zz-probe")!;   // user edited it → yours, left alone
   EDITED.govFee = 4242;
 
   const RETIRED = v2.documentTypes![1];               // retired earlier → revive
@@ -79,8 +90,12 @@ async function main() {
   if (row(RETIRED.key)?.outcome !== "revive") fail(`"${RETIRED.name}" should be REVIVE`);
 
   // The whole point of the stable comparison: untouched rows must not drift into "update".
-  console.log(`untouched rows reported unchanged:     ${t.unchanged}`);
-  if (t.unchanged < 40) fail(`only ${t.unchanged} unchanged — identical rows are being reported as changed`);
+  // Relative to the pack, not an absolute floor: a market being built one flow at a time ships far
+  // fewer rows than a finished one, and "< 40" turned that into a failure about nothing.
+  const packRowCount = KINDS.reduce((n, k) => n + (((v2 as any)[k.key] ?? []).length), 0);
+  const touched = t.add + t.update + t.yours + t.revive;
+  console.log(`untouched rows reported unchanged:     ${t.unchanged} of ${packRowCount} in the pack`);
+  if (t.unchanged < packRowCount - touched - 1) fail(`only ${t.unchanged} of ${packRowCount} unchanged — identical rows are being reported as changed`);
   if (t.update !== 1) fail(`${t.update} updates, expected exactly 1`);
 
   const ch = row(CHANGED.key)!.changes;

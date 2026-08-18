@@ -11,12 +11,13 @@
  */
 import { prisma } from "../src/db.js";
 import { readPack, applyInstall, planUninstall, applyUninstall } from "../src/packs.js";
+import { newestPackFile } from "./_pickpack.js";
 import { requireScratchDatabase } from "./_scratch-guard.js";
 
 async function main() {
   await requireScratchDatabase("This probe");
   let bad = 0;
-  const pack = readPack("pack-sa-2026.2.json");
+  const pack = readPack(newestPackFile());
 
   console.log("installing…");
   const ins = await applyInstall(pack, { adopt: false });

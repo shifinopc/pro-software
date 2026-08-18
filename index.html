@@ -11261,6 +11261,16 @@
             </div>
           </sc-if>
 
+          <sc-if value="{{ upgHasAdopt }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:10px; font-weight:800; color:#A9A6B4; letter-spacing:.07em; margin-top:18px;">RECOGNISED AS YOURS</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:4px; line-height:1.5;">You built these here and this version of the pack carries them too. They are linked to the pack so future updates can reach them — your settings are kept exactly as they are, and nothing is duplicated.</div>
+            <div style="margin-top:8px; background:#F7F3FD; border-radius:12px; padding:6px 14px;">
+              <sc-for list="{{ upgAdoptRows }}" as="r" hint-placeholder-count="1">
+                <div style="padding:8px 0; border-bottom:1px solid #E4D9F7;"><div style="font-size:12.5px; font-weight:600; color:#5B00BC;">{{ r.label }}</div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
           <sc-if value="{{ upgHasRevive }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10px; font-weight:800; color:#A9A6B4; letter-spacing:.07em; margin-top:18px;">BROUGHT BACK</div>
             <div style="font-size:11.5px; color:#8C8899; margin-top:4px; line-height:1.5;">Retired by an earlier uninstall. This version includes them again, so they return to the pickers.</div>
@@ -21263,6 +21273,11 @@ class Component extends DCLogic {
       })) : [],
       // Revived rows were retired by an earlier uninstall and this version brings them back. Worth
       // naming: it is the one outcome that makes something reappear in pickers on its own.
+      // Adoption: the pack turns out to carry a row this installation built by hand. Named here
+      // because it is a real change of ownership — the row becomes something future upgrades touch —
+      // and because 22 of them going by in silence is how somebody discovers it much later.
+      upgHasAdopt: !!(_ugPlan && _ugPlan.totals.adopt),
+      upgAdoptRows: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'adopt').map(r9 => ({ label: r9.one + ' · ' + r9.name })) : [],
       upgHasRevive: !!(_ugPlan && _ugPlan.totals.revive),
       upgReviveRows: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'revive').map(r9 => ({ label: r9.one + ' · ' + r9.name })) : [],
       // The promise the whole flow rests on: your edits are not touched. The pack's version of each
@@ -21280,7 +21295,7 @@ class Component extends DCLogic {
         color: r9.outcome === 'remove' ? '#C0353A' : r9.outcome === 'retire' ? '#B8860B' : '#0E9355',
       })) : [],
       upgNothingToDo: !!(_ugPlan && !_ugPlan.totals.add && !_ugPlan.totals.update && !_ugPlan.totals.revive
-        && !_ugPlan.totals.remove && !_ugPlan.totals.retire && !_ugPlan.totals.keep),
+        && !_ugPlan.totals.adopt && !_ugPlan.totals.remove && !_ugPlan.totals.retire && !_ugPlan.totals.keep),
       closeUpgrade: () => this.setState({ upgOpen: false, upgPlan: null, upgErr: '' }),
       confirmUpgrade: () => {
         if (!_ugPlan || this.state.upgBusy) return;

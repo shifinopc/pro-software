@@ -18,6 +18,7 @@
  */
 import { prisma } from "../src/db.js";
 import { readPack, savePack, listPacks, applyInstall, planUpgrade, applyUpgrade, installedPacks, PACKS_DIR } from "../src/packs.js";
+import { newestPackFile } from "./_pickpack.js";
 import { requireScratchDatabase } from "./_scratch-guard.js";
 import { unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -30,7 +31,7 @@ async function main() {
 
   try {
     // Install the current version so there is something to update FROM.
-    const v1 = readPack("pack-sa-2026.2.json");
+    const v1 = readPack(newestPackFile());
     await applyInstall(v1, { adopt: true });
     const inst0 = (await installedPacks())["SA"];
     console.log(`installed: SA ${inst0?.version} · ${inst0?.rows} rows`);

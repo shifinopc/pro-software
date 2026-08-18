@@ -519,7 +519,7 @@ const same = (a: any, b: any) => JSON.stringify(stable(a)) === JSON.stringify(st
 export type UpgradeChange = { field: string; from: any; to: any };
 export type UpgradeRow = {
   model: string; one: string; label: string; key: string; name: string;
-  outcome: "add" | "update" | "unchanged" | "yours" | "revive";
+  outcome: "add" | "adopt" | "update" | "unchanged" | "yours" | "revive";
   changes: UpgradeChange[];
   id?: string;
 };
@@ -557,13 +557,35 @@ export async function planUpgrade(pack: Pack): Promise<UpgradePlan> {
     const local = await (prisma as any)[kind.model].findMany({ where: { country, packKey: { not: null } } });
     const localByKey = new Map<string, any>(local.map((r: any) => [r.packKey, r]));
 
+    // ROWS THIS INSTALLATION MADE BY HAND, loaded SEPARATELY and deliberately kept out of `local`.
+    //
+    // They are candidates for adoption and nothing else. `dropped` below is every row in `local`
+    // whose key the new pack no longer carries — so widening that query to include unstamped rows
+    // would classify every hand-made row as withdrawn and hand it to planRemoval, which deletes what
+    // nothing depends on. An upgrade would quietly destroy the configuration somebody built.
+    const unstamped = await (prisma as any)[kind.model].findMany({ where: { country, packKey: null } });
+    const localByName = new Map<string, any>(unstamped.map((r: any) => [String(r.name).trim().toLowerCase(), r]));
+
     for (const r of local) if (r.packVersion) from = r.packVersion;
 
     for (const r of packRows) {
       const cur = localByKey.get(r.key);
       const base = { model: kind.model, one: kind.one, label: kind.label, key: r.key, name: r.name };
 
-      if (!cur) { rows.push({ ...base, outcome: "add", changes: [] }); continue; }
+      if (!cur) {
+        // A pack row whose key is not installed, but whose NAME is already here on a row somebody
+        // made by hand. Creating it is what the code used to do, and `name` is globally unique, so
+        // the upgrade died on a raw Prisma constraint error partway through — after earlier rows had
+        // already been written. Real case: Qiwa Employment Contract and GOSI Employee Registration
+        // were built by the onboarding script, then exported into the pack with keys derived from
+        // their names, so re-installing that same pack could not recognise its own rows.
+        //
+        // Adopting matches what planInstall has always done for the same situation.
+        const mine = localByName.get(String(r.name).trim().toLowerCase());
+        if (mine) { rows.push({ ...base, id: mine.id, outcome: "adopt", changes: [] }); continue; }
+        rows.push({ ...base, outcome: "add", changes: [] });
+        continue;
+      }
 
       // What the pack wants this row to look like. Templates carry checklist references by KEY, while
       // the stored graph holds resolved ids — comparing those two directly would flag every template
@@ -589,7 +611,7 @@ export async function planUpgrade(pack: Pack): Promise<UpgradePlan> {
   }
 
   const gonePlan = await planRemoval(country, dropped);
-  const totals: any = { add: 0, update: 0, unchanged: 0, yours: 0, revive: 0, ...gonePlan.totals };
+  const totals: any = { add: 0, adopt: 0, update: 0, unchanged: 0, yours: 0, revive: 0, ...gonePlan.totals };
   for (const r of rows) totals[r.outcome]++;
 
   return { country, countryName: pack.countryName ?? country, from, to: pack.version, rows, gone: gonePlan.rows, totals };
@@ -616,11 +638,11 @@ async function resolveGraph(graph: any): Promise<any> {
  * it is at this moment — a preview looked at ten minutes ago cannot authorise a change to something
  * that has since been edited.
  */
-export async function applyUpgrade(pack: Pack): Promise<{ added: number; updated: number; revived: number; yours: number; removed: number; retired: number; kept: number; unresolved: string[] }> {
+export async function applyUpgrade(pack: Pack): Promise<{ added: number; adopted: number; updated: number; revived: number; yours: number; removed: number; retired: number; kept: number; unresolved: string[] }> {
   const plan = await planUpgrade(pack);
   const country = pack.country;
   const byKind = new Map<string, (typeof KINDS)[number]>(KINDS.map(k => [k.model as string, k]));
-  let added = 0, updated = 0, revived = 0;
+  let added = 0, updated = 0, revived = 0, adopted = 0;
 
   for (const r of plan.rows) {
     const kind = byKind.get(r.model)!;
@@ -630,6 +652,11 @@ export async function applyUpgrade(pack: Pack): Promise<{ added: number; updated
     if (r.outcome === "add") {
       await model.create({ data: { ...kind.fields(src as any), country, packKey: r.key, packVersion: pack.version, packModified: false } });
       added++;
+    } else if (r.outcome === "adopt") {
+      // Provenance only. The row keeps the values somebody set here and is marked as a local variant,
+      // so this upgrade does not overwrite their work and the next one offers a diff instead.
+      await model.update({ where: { id: r.id }, data: { packKey: r.key, packVersion: pack.version, packModified: true } });
+      adopted++;
     } else if (r.outcome === "update") {
       await model.update({ where: { id: r.id }, data: { ...kind.fields(src as any), packVersion: pack.version } });
       updated++;
@@ -655,7 +682,7 @@ export async function applyUpgrade(pack: Pack): Promise<{ added: number; updated
   const skip = new Set(plan.rows.filter(r => r.outcome === "yours").map(r => r.key));
   const unresolved = await wireReferences(pack, skip);
 
-  return { added, updated, revived, yours: plan.totals.yours, removed, retired, kept, unresolved };
+  return { added, adopted, updated, revived, yours: plan.totals.yours, removed, retired, kept, unresolved };
 }
 
 /**

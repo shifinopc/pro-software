@@ -12,7 +12,8 @@
  * so an install could not be undone from the screen it was started on.
  */
 import { prisma } from "../src/db.js";
-import { readPack, planInstall, applyInstall, installedPacks, planUninstall } from "../src/packs.js";
+import { readPack, planInstall, applyInstall, installedPacks, planUninstall, KINDS } from "../src/packs.js";
+import { newestPackFile } from "./_pickpack.js";
 import { requireScratchDatabase } from "./_scratch-guard.js";
 
 const countryRow = async () => {
@@ -25,7 +26,7 @@ async function main() {
   await requireScratchDatabase("This probe", "copy");
   let bad = 0;
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
-  const pack = readPack("pack-sa-2026.2.json");
+  const pack = readPack(newestPackFile());
 
   const plan = await planInstall(pack);
   console.log(`the plan against your own configuration:`);
@@ -51,15 +52,34 @@ async function main() {
   if (!inst || !inst.rows) fail("nothing became pack-managed, so there is still no Uninstall button");
 
   // Adoption must not have changed a single value — that is its whole promise.
-  const svc = await prisma.serviceItem.findFirst({ where: { packKey: { not: null } }, select: { name: true, packModified: true } });
-  console.log(`  adopted rows are marked as yours: ${svc?.packModified ? "YES" : "NO"} (e.g. "${svc?.name}")`);
-  if (!svc?.packModified) fail("an adopted row is not marked as edited by you, so an upgrade could overwrite it");
+  // Looked for across every kind rather than on serviceItem specifically: a pack carries whichever
+  // kinds that market has, so asking one table meant this assertion silently checked nothing the
+  // moment a pack shipped without services — `undefined` is not a passing row.
+  let marked: { kind: string; name: string } | null = null;
+  for (const kind of KINDS) {
+    for (const row of await (prisma as any)[kind.model].findMany({ where: { packKey: { not: null }, packModified: true }, select: { name: true } })) {
+      marked ??= { kind: kind.one, name: row.name };
+    }
+  }
+  console.log(`  adopted rows are marked as yours: ${marked ? `YES (e.g. ${marked.kind} "${marked.name}")` : "NO - none found"}`);
+  if (!marked) fail("no adopted row is marked as edited by you, so an upgrade could overwrite it");
 
   // ── and now it can be undone ──
   const un = await planUninstall("SA");
   console.log(`\nUninstall would now: ${un.totals.remove} removed · ${un.totals.retire} retired · ${un.totals.keep} kept`);
   console.log(`  (everything adopted is KEPT — your rows stay, they just stop being pack-managed)`);
-  if (un.totals.remove > 0) fail(`${un.totals.remove} of YOUR rows would be DELETED by an uninstall — adoption should make them all "keep"`);
+  // The promise is about ADOPTED rows — the ones marked packModified. A row the pack itself created
+  // and nobody has touched is correctly removed by an uninstall; asserting `remove === 0` made this
+  // fail the moment the installation held any genuinely pack-owned row, which says nothing at all
+  // about whether adoption protects your work.
+  const removedIds = new Set(un.rows.filter(r => r.outcome === "remove").map(r => r.id));
+  let yoursRemoved = 0;
+  for (const kind of KINDS) {
+    for (const row of await (prisma as any)[kind.model].findMany({ where: { packModified: true }, select: { id: true, name: true } }))
+      if (removedIds.has(row.id)) { console.log(`      would delete YOUR ${kind.one} "${row.name}"`); yoursRemoved++; }
+  }
+  console.log(`  rows you edited that uninstall would delete: ${yoursRemoved}`);
+  if (yoursRemoved > 0) fail(`${yoursRemoved} row(s) you edited would be DELETED by an uninstall - adoption should make them "keep"`);
   if (!un.totals.keep) fail("uninstall found nothing to release");
 
   console.log(`\nfailures: ${bad}`);
