@@ -27,6 +27,31 @@ export const PACKS_DIR = (() => {
   return candidates.find(existsSync) ?? candidates[0];
 })();
 
+/**
+ * The packs the IMAGE was built with, which is a different thing from the packs this server has.
+ *
+ * PACKS_DIR is a docker volume so that a pack uploaded on Tuesday still exists on Wednesday. But a
+ * named volume is seeded from the image exactly once, when it is created, and shadows the image
+ * forever after. That cost a real correction: the Saudi pack shipped in August carried five UAE
+ * document types under sa.doctype.* keys, the repaired pack went out in the image five days later,
+ * and the server went on offering the broken one because the volume still held it. Nothing failed
+ * and nothing was logged — the fix simply never arrived, which is not visible from the console.
+ *
+ * So the image keeps its own read-only copy where the volume cannot cover it, and both are listed.
+ * A name present in both wins from the volume: an upload is a deliberate act by somebody here and
+ * must not be silently reverted by the next redeploy.
+ */
+export const PACKS_BUILTIN_DIR = (() => {
+  if (process.env.PACKS_BUILTIN_DIR) return resolve(process.env.PACKS_BUILTIN_DIR);
+  const candidates = [resolve(process.cwd(), "packs-builtin"), resolve(process.cwd(), "..", "packs-builtin")];
+  return candidates.find(existsSync) ?? candidates[0];
+})();
+
+/** Where a pack file may be read from, most authoritative first. */
+function packDirs(): string[] {
+  return [PACKS_DIR, PACKS_BUILTIN_DIR].filter((d, i, a) => a.indexOf(d) === i && existsSync(d));
+}
+
 export type PackRow = { key: string; name: string; [k: string]: any };
 export type Pack = {
   pack: string; country: string; countryName: string; version: string;
@@ -119,19 +144,23 @@ export type InstallPlan = {
 
 /** Packs available to install, newest name first. Unreadable files are reported, not thrown. */
 export function listPacks(): { file: string; country: string; countryName: string; version: string; error?: string }[] {
-  if (!existsSync(PACKS_DIR)) return [];
-  return readdirSync(PACKS_DIR)
-    .filter(f => f.toLowerCase().endsWith(".json"))
-    .map(file => {
+  const seen = new Set<string>();
+  const out: { file: string; country: string; countryName: string; version: string; error?: string }[] = [];
+  for (const dir of packDirs()) {
+    for (const file of readdirSync(dir).filter(f => f.toLowerCase().endsWith(".json"))) {
+      if (seen.has(file)) continue;   // the volume's copy was already listed
+      seen.add(file);
       try {
-        const p = JSON.parse(readFileSync(join(PACKS_DIR, file), "utf8"));
-        return { file, country: p.country, countryName: p.countryName ?? p.country, version: p.version };
+        const p = JSON.parse(readFileSync(join(dir, file), "utf8"));
+        out.push({ file, country: p.country, countryName: p.countryName ?? p.country, version: p.version });
       } catch (e: any) {
         // A malformed file is listed with its problem rather than hidden — a pack that silently
         // vanishes from the list is harder to diagnose than one that says it cannot be read.
-        return { file, country: "", countryName: file, version: "", error: String(e?.message ?? e) };
+        out.push({ file, country: "", countryName: file, version: "", error: String(e?.message ?? e) });
       }
-    });
+    }
+  }
+  return out;
 }
 
 /**
@@ -173,7 +202,11 @@ export function savePack(raw: unknown): { file: string; country: string; version
 export function readPack(file: string): Pack {
   // Basename only: a file name is user input, and "../../.env" must not be readable through it.
   const safe = String(file).replace(/[\\/]/g, "");
-  return JSON.parse(readFileSync(join(PACKS_DIR, safe), "utf8"));
+  for (const dir of packDirs()) {
+    const full = join(dir, safe);
+    if (existsSync(full)) return JSON.parse(readFileSync(full, "utf8"));
+  }
+  throw new Error(`No pack named ${safe} on this server`);
 }
 
 /**
