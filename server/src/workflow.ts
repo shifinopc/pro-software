@@ -1143,7 +1143,35 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     const caps0: any[] = Array.isArray(task.captures)
       ? (task.captures as any[])
       : (Array.isArray((node0?.config as any)?.captures) ? (node0!.config as any).captures : []);
-    const supplied = (opts.variables && typeof opts.variables === "object") ? opts.variables as Record<string, any> : {};
+    // A STEP MAY ONLY ANSWER ITS OWN QUESTIONS.
+    //
+    // Completion merged whatever it was sent, so any task could write any variable. That is the root
+    // of three separate bypasses, and the nationality rules did not close them: complete the profile
+    // honestly as a Saudi national, then send `hiringType: "expat_new_hire"` from the NEXT step —
+    // Eligibility, which declares no such field — and the run walks the expatriate path and issues
+    // that Saudi citizen a Work Visa, an Iqama and a Work Permit. One extra call defeated the rules
+    // entirely, because the rules only run where they are declared and the write happened elsewhere.
+    //
+    // Scoped to the node's own captures. `decisionNote` is the one engine-recognised extra: it is a
+    // comment on the decision, not an answer to it.
+    const declared = new Set<string>(caps0.map((c: any) => String(c?.var ?? "")).filter(Boolean));
+    const ENGINE_KEYS = new Set(["decisionNote"]);
+    const rawSupplied = (opts.variables && typeof opts.variables === "object") ? opts.variables as Record<string, any> : {};
+    const supplied: Record<string, any> = {};
+    const foreign: string[] = [];
+    for (const [k, v] of Object.entries(rawSupplied)) {
+      if (declared.has(k) || ENGINE_KEYS.has(k)) supplied[k] = v;
+      else foreign.push(k);
+    }
+    if (foreign.length) {
+      console.warn(`[workflow] "${task.title}" tried to write variables it does not declare: ${foreign.join(", ")}`);
+      await prisma.workflowLog.create({ data: {
+        instanceId: task.instanceId, action: "task.foreign_variables", nodeId: task.nodeId,
+        detail: `${task.title}: ignored ${foreign.join(", ")} — this step does not collect them`,
+        actor: "engine", at: nowISO(),
+      } }).catch(() => {});
+    }
+    opts = { ...opts, variables: supplied } as any;
     // WHAT THE STEP ASKS FOR, IT MUST GET.
     //
     // Required CHECKLIST items were enforced; required capture FIELDS were not enforced at all.
@@ -1158,12 +1186,20 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     for (const cap of caps0) {
       if (!cap || !cap.var) continue;
       if (cap.required === false || cap.optional === true) continue;
+      // CHECKED AGAINST THIS SUBMISSION, not against the run.
+      //
+      // Accepting an existing value was meant to spare a step re-entered after a loop from asking
+      // twice. What it actually bought was this: a PRO officer completing Collect Documents could
+      // send `employeeJoined: "yes"` as a spare key, and the HR officer's Joining Confirmation —
+      // three steps and a parallel block later — could then be submitted empty and pass, because the
+      // answer was already on the run. Nobody confirmed the employee joined. It worked in reverse
+      // too, terminating a hire at Joining Cancelled with no one deciding it.
+      //
+      // A step re-entered after a loop asks again, which is the correct behaviour anyway: it is being
+      // re-entered precisely because the answer needs revisiting.
       const raw = supplied[cap.var];
-      // An existing value on the run satisfies it — a step re-entered after a loop should not demand
-      // the same answer twice.
-      const already = (inst.variables as any)?.[cap.var];
       const has = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
-      if (!has(raw) && !has(already)) missing.push(String(cap.label || cap.var));
+      if (!has(raw)) missing.push(String(cap.label || cap.var));
     }
     if (missing.length) {
       throw new Error(missing.length === 1
@@ -1196,7 +1232,15 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     // Cross-field rules, against the run's variables WITH this step's answers applied — a rule about
     // nationality and hiring type has to see both, whichever step supplied each of them.
     const merged = { ...((inst.variables as any) ?? {}), ...supplied };
-    const broken = brokenRules(node0?.config, merged);
+    // The completing node's rules, AND the rules of any node that owns one of the variables being
+    // written. Scoping above means a variable can now only be written where it is declared, so this
+    // is belt and braces — but the hold step also declares hiringType, and a rule that lives on the
+    // profile has to hold there too.
+    const written = new Set(Object.keys(supplied));
+    const owners = (g.nodes ?? []).filter((n: any) =>
+      n?.id === node0?.id ||
+      (n?.config?.captures ?? []).some((c: any) => written.has(String(c?.var ?? ""))));
+    const broken = [...new Set(owners.flatMap((n: any) => brokenRules(n?.config, merged)))];
     if (broken.length) throw new Error(broken.join(" · "));
   }
 
@@ -1746,6 +1790,20 @@ async function mayActOnTask(
   if (!task.assigneeRole && !task.assignee) return true;
 
   if (!task.assigneeId || task.assigneeId === a.sub) return false;
+
+  // A LEAD MAY COVER THEIR TEAM'S WORK — NOT ANOTHER DISCIPLINE'S.
+  //
+  // This rung exists so a lead can act on a step sitting with somebody in their team. It was not
+  // scoped by role, so a PRO officer leading a team that includes the accountant could complete
+  // Payroll & WPS Setup: the officer running the government transactions also certifying the bank
+  // details, the WPS registration and the GOSI number. That is the segregation this step exists to
+  // create, undone. The same officer was refused the IT and HR steps, which is what made the hole
+  // look arbitrary rather than structural — those assignees simply were not in his team.
+  //
+  // Covering is now limited to steps that call for the lead's OWN role. A lead can take over their
+  // accountant's accounting; they cannot become the accountant.
+  if (task.assigneeRole && task.assigneeRole !== a.role) return false;
+
   const { visibleUserIds } = await import("./visibility.js");
   const vis = await visibleUserIds(a);
   return vis.scope === "team" && !!vis.ids && vis.ids.includes(task.assigneeId);

@@ -144,6 +144,47 @@ async function main() {
   if (!hist.length) fail("an issued document's expiry was rewritten with history still empty — the edit is invisible");
   await prisma.document.delete({ where: { id: doc.id } });
 
+  // N1/N7 — a step may only answer its own questions
+  //
+  // The nationality rules alone did not close C3: complete the profile honestly as a Saudi national,
+  // then send hiringType from the NEXT step, which declares no such field, and the run walks the
+  // expatriate path.
+  const r2 = await call("POST", "/api/workflow/instances", tok, { templateId: tpl.id, title: TITLE, companyId: co?.id ?? null });
+  const id2 = r2.body?.id ?? r2.body?.instance?.id;
+  const prof = await prisma.workflowTask.findFirst({ where: { instanceId: id2, nodeId: "profile", status: "active" }, select: { id: true } });
+  const honest = await call("POST", `/api/workflow/tasks/${prof!.id}/complete`, tok, {
+    variables: { applicant: "Faisal Al-Otaibi", nationality: "Saudi", mobile: "0500000000", email: "f@b.c",
+      hiringType: "saudi_national", employmentType: "permanent", profession: "Analyst", department: "Ops",
+      reportingManager: "M", expectedJoining: "2026-09-01", currentLocationStatus: "inside_ksa" },
+  });
+  console.log("");
+  console.log(`an honest Saudi profile is accepted:       ${honest.status === 200 ? "YES" : "NO (" + honest.status + ")"}`);
+  if (honest.status !== 200) fail("a legitimate Saudi profile was rejected: " + JSON.stringify(honest.body).slice(0, 120));
+
+  const elig = await prisma.workflowTask.findFirst({ where: { instanceId: id2, status: "active" }, select: { id: true, title: true } });
+  await call("POST", `/api/workflow/tasks/${elig!.id}/complete`, tok, {
+    checklistState: {}, variables: { hiringType: "expat_new_hire", currentLocationStatus: "outside_ksa", evil: "yes" },
+  });
+  const after2 = (await prisma.workflowInstance.findUnique({ where: { id: id2 }, select: { variables: true } }))?.variables as any;
+  console.log(`a later step cannot rewrite hiring type:   ${after2?.hiringType === "saudi_national" ? "YES" : "NO — now " + after2?.hiringType}`);
+  if (after2?.hiringType !== "saudi_national") fail("hiringType was rewritten by a step that does not declare it — a Saudi national walks the expatriate path again");
+  console.log(`...and undeclared keys are not persisted:  ${after2?.evil === undefined ? "YES" : "NO"}`);
+  if (after2?.evil !== undefined) fail("an undeclared variable was merged onto the run");
+
+  // N2 — a required answer must be given HERE, not found lying on the run
+  const joinTask = await prisma.workflowTask.create({ data: {
+    instanceId: id2, nodeId: "joined", nodeType: "task", title: "N2 Joining probe",
+    assigneeRole: null, status: "active", createdAt: new Date().toISOString(),
+    captures: [{ var: "employeeJoined", type: "select", label: "Employee Joined?", options: "yes,no" }] as any,
+  } });
+  await prisma.workflowInstance.update({ where: { id: id2 }, data: { variables: { ...(after2 ?? {}), employeeJoined: "yes" } } });
+  const blank = await call("POST", `/api/workflow/tasks/${joinTask.id}/complete`, tok, { variables: {} });
+  console.log("");
+  console.log(`a pre-seeded answer does NOT satisfy a step: ${blank.status >= 400 ? "YES" : "NO (" + blank.status + ")"}`);
+  console.log(`  "${String(blank.body?.error ?? "").slice(0, 100)}"`);
+  if (blank.status < 400) fail("Joining Confirmation passed on a value seeded by another step — nobody confirmed the employee joined");
+  await prisma.workflowTask.deleteMany({ where: { id: joinTask.id } });
+
   await sweep();
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);
   process.exit(bad === 0 ? 0 : 1);
