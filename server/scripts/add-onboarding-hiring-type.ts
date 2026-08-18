@@ -205,7 +205,7 @@ async function main() {
     // Where an unrecognised hiring type goes. A person fixes the profile and it is asked again —
     // better than picking a path on the run's behalf and doing the wrong body of work silently.
     { id: "hold", type: "task", label: "Hiring type not recognised — check the profile", config: {
-      assigneeRole: "pro_officer",
+      assigneeRole: "pro_officer", slaHours: 24,
       captures: [{ var: "hiringType", type: "select", label: "Hiring Type",
         options: "saudi_national,expat_new_hire,expat_transfer" }],
     } },
@@ -214,11 +214,21 @@ async function main() {
     { id: "visa_apply", type: "task", label: "Work Visa Application", config: {
       assigneeRole: "pro_officer", govCenter: "MOFA", slaHours: 240,
       captures: [
-        { var: "docNumber", type: "text", label: "Visa number" },
-        { var: "newExpiry", type: "date", label: "Visa expiry" },
+        { var: "visaNumber", type: "text", label: "Visa number" },
+        { var: "visaExpiry", type: "date", label: "Visa expiry" },
       ],
     } },
-    { id: "visa_doc", type: "issue_document", label: "Work Visa", config: { docType: "Work Visa" } },
+    // EVERY ISSUED DOCUMENT NAMES ITS OWN VARIABLES.
+    //
+    // issue_document reads `vars.docNumber` and `vars.newExpiry` unless the node says otherwise, and
+    // run variables are flat — so four steps writing `docNumber` meant four documents reading
+    // whichever was written last. Simulated on the expat path with real-looking entries, four of the
+    // six documents came out wrong: the Iqama took the VISA's number, the Work Permit took the
+    // contract's number AND end date, and the Health Insurance policy took the GOSI number and the
+    // contract's end date. Those expiries drive the renewal engine, so the platform would have chased
+    // insurance renewals on the date the employment contract ends.
+    { id: "visa_doc", type: "issue_document", label: "Work Visa",
+      config: { docType: "Work Visa", numberVar: "visaNumber", expiryVar: "visaExpiry" } },
     { id: "arrival", type: "task", label: "Arrival, Medical & Biometrics", config: {
       assigneeRole: "pro_officer", slaHours: 168,
       checklist: [
@@ -226,9 +236,13 @@ async function main() {
         doc("medical_ksa", "Medical test completed in KSA"),
         doc("biometrics", "Biometrics captured"),
       ],
-      captures: [{ var: "newExpiry", type: "date", label: "Iqama expiry" }],
+      captures: [
+        { var: "iqamaNumber", type: "text", label: "Iqama number" },
+        { var: "iqamaExpiry", type: "date", label: "Iqama expiry" },
+      ],
     } },
-    { id: "iqama_doc", type: "issue_document", label: "Iqama", config: { docType: "Iqama" } },
+    { id: "iqama_doc", type: "issue_document", label: "Iqama",
+      config: { docType: "Iqama", numberVar: "iqamaNumber", expiryVar: "iqamaExpiry" } },
 
     // ── expatriate already inside KSA: the case the old template had no answer for ───────────
     { id: "qiwa_req", type: "task", label: "Qiwa Employee Transfer Request", config: {
@@ -261,29 +275,43 @@ async function main() {
         doc("job_title_matches", "Job title matches the work permit profession"),
       ],
       captures: [
-        { var: "docNumber", type: "text", label: "Contract number on Qiwa" },
-        { var: "newExpiry", type: "date", label: "Contract end date" },
+        { var: "contractNumber", type: "text", label: "Contract number on Qiwa" },
+        { var: "contractEnd", type: "date", label: "Contract end date" },
       ],
     } },
     { id: "contract_doc", type: "issue_document", label: "Qiwa Employment Contract",
-      config: { docType: "Qiwa Employment Contract" } },
+      config: { docType: "Qiwa Employment Contract", numberVar: "contractNumber", expiryVar: "contractEnd" } },
     // Reads hiringType rather than nationality: that is the field the profile actually captures, and
     // the two expatriate branches are exactly the ones that need a permit.
+    // One key per branch. Two entries sharing the key "expat" routed correctly — both expatriate
+    // values reached the same edge — but a branch list with a repeated key is a list the editor cannot
+    // show honestly, and the next person adding an edge for one of them changes both.
     { id: "d_permit", type: "decision", label: "Work Permit Required?", config: { branches: [
-      { var: "hiringType", op: "eq", value: "expat_new_hire", key: "expat" },
-      { var: "hiringType", op: "eq", value: "expat_transfer", key: "expat" },
+      { var: "hiringType", op: "eq", value: "expat_new_hire", key: "expat_new" },
+      { var: "hiringType", op: "eq", value: "expat_transfer", key: "expat_move" },
       { var: "hiringType", op: "eq", value: "saudi_national", key: "saudi" },
     ] } },
-    { id: "permit_doc", type: "issue_document", label: "Work Permit", config: { docType: "Work Permit" } },
+    // A permit has a number and an expiry of its own, and nothing was capturing them — so the document
+    // inherited the contract's. One step, and the record means what it says.
+    { id: "permit_task", type: "task", label: "Work Permit Issuance", config: {
+      assigneeRole: "pro_officer", govCenter: "Qiwa", slaHours: 72,
+      checklist: [doc("permit_fees", "Work permit fees paid"), doc("permit_profession", "Profession on the permit matches the contract")],
+      captures: [
+        { var: "permitNumber", type: "text", label: "Work permit number" },
+        { var: "permitExpiry", type: "date", label: "Work permit expiry" },
+      ],
+    } },
+    { id: "permit_doc", type: "issue_document", label: "Work Permit",
+      config: { docType: "Work Permit", numberVar: "permitNumber", expiryVar: "permitExpiry" } },
 
     { id: "split", type: "parallel_split", label: "Set Up In Parallel", config: {} },
     { id: "payroll", type: "task", label: "Payroll & WPS Setup", config: { assigneeRole: "accountant", slaHours: 72,
       checklist: [doc("wps_registered", "Registered on WPS"), doc("bank_ok", "Salary account confirmed")],
-      captures: [{ var: "docNumber", type: "text", label: "GOSI number" }] } },
+      captures: [{ var: "gosiNumber", type: "text", label: "GOSI number" }] } },
     // "Added to GOSI" was one tick on the payroll list. As a document it is a record with a number,
     // an authority and a date, which is what anyone asking "is this employee registered?" needs.
     { id: "gosi_doc", type: "issue_document", label: "GOSI Employee Registration",
-      config: { docType: "GOSI Employee Registration" } },
+      config: { docType: "GOSI Employee Registration", numberVar: "gosiNumber", expiryVar: "gosiExpiry" } },
     // Accounts and devices are not PRO work. A PRO officer deals with government.
     { id: "access", type: "task", label: "System Access", config: { assigneeRole: "it_officer", slaHours: 48,
       checklist: [doc("email", "Corporate email"), doc("erp", "ERP account"), doc("attendance", "Attendance / biometric enrolment"),
@@ -291,11 +319,22 @@ async function main() {
     { id: "assets", type: "task", label: "Assets & Accommodation", config: { assigneeRole: "hr_officer", slaHours: 72,
       checklist: [doc("laptop", "Laptop / equipment issued"), doc("sim", "SIM card"), doc("id_card", "Company ID card"),
                   doc("accommodation", "Accommodation arranged", false)] } },
-    { id: "insurance", type: "issue_document", label: "Health Insurance", config: { docType: "Health Insurance" } },
+    // The policy is issued by an insurer and carries its own number and period. As a bare
+    // issue_document it was picking up the GOSI number and the contract's end date.
+    { id: "insurance_task", type: "task", label: "Health Insurance Enrolment", config: {
+      assigneeRole: "pro_officer", govCenter: "CCHI", slaHours: 72,
+      checklist: [doc("policy_active", "Policy active with the insurer"), doc("class_matches", "Class matches the employee's grade")],
+      captures: [
+        { var: "policyNumber", type: "text", label: "Policy number" },
+        { var: "policyExpiry", type: "date", label: "Policy expiry" },
+      ],
+    } },
+    { id: "insurance", type: "issue_document", label: "Health Insurance",
+      config: { docType: "Health Insurance", numberVar: "policyNumber", expiryVar: "policyExpiry" } },
     { id: "join", type: "parallel_join", label: "All Departments Complete", config: {} },
 
     // Joined means the employee has entered the operational lifecycle, not that they walked in.
-    { id: "joined", type: "task", label: "Joining Confirmation", config: { assigneeRole: "hr_officer",
+    { id: "joined", type: "task", label: "Joining Confirmation", config: { assigneeRole: "hr_officer", slaHours: 48,
       checklist: [doc("attendance_on", "Attendance enabled"), doc("contract_active", "Qiwa contract active"),
                   doc("payroll_active", "Payroll active"), doc("insurance_active", "Insurance active")],
       captures: [{ var: "employeeJoined", type: "select", label: "Employee Joined?", options: "yes,no" }] } },
@@ -379,11 +418,14 @@ async function main() {
     // so a Saudi national was issued one — a document that does not exist for them, on their record,
     // with an expiry the compliance screens would then chase. Saudis go straight to the shared setup.
     e("contract_doc", "d_permit"),
-    e("d_permit", "permit_doc", "expat"),
+    e("d_permit", "permit_task", "expat_new"),
+    e("d_permit", "permit_task", "expat_move"),
     e("d_permit", "split", "saudi"),
-    e("d_permit", "permit_doc", "else"),      // unknown: issue it and let a person correct the profile
+    e("d_permit", "permit_task", "else"),     // unknown: issue it and let a person correct the profile
+    e("permit_task", "permit_doc"),
     e("permit_doc", "split"),
-    e("split", "payroll"), e("split", "access"), e("split", "assets"), e("split", "insurance"),
+    e("split", "payroll"), e("split", "access"), e("split", "assets"), e("split", "insurance_task"),
+    e("insurance_task", "insurance"),
     e("payroll", "gosi_doc"), e("gosi_doc", "join"),
     e("access", "join"), e("assets", "join"), e("insurance", "join"),
     e("join", "joined"),

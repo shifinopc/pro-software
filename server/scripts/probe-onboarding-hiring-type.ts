@@ -173,6 +173,66 @@ async function main() {
     }
   }
 
+  // ── no document may be issued carrying another document's number or expiry ─────────────────
+  //
+  // issue_document reads `vars.docNumber` and `vars.newExpiry` unless the node names its own, and run
+  // variables are flat. Four steps wrote `docNumber`, so four documents read whichever was written
+  // last: the Iqama took the VISA's number, the Work Permit took the contract's number and end date,
+  // and the Health Insurance policy took the GOSI number and the contract's end date. Nothing fails —
+  // the documents are created, they simply describe the wrong thing, and their expiries then drive
+  // the renewal engine.
+  //
+  // Each step is given a value nobody else uses, and every issued document must come back with its
+  // own or with nothing. Blank is allowed: a GOSI registration has no expiry, and an empty field is
+  // visibly incomplete where a borrowed one is silently wrong.
+  const stamp: Record<string, Record<string, string>> = {};
+  for (const n of nodes.filter(x => x.type === "task")) {
+    for (const c of (n.config?.captures ?? [])) {
+      if (c.type === "select") continue;
+      (stamp[n.id] ??= {})[c.var] = `${n.id}:${c.var}`;
+    }
+  }
+  const issued: { doc: string; from: string; field: string }[] = [];
+  {
+    const vars: Record<string, string> = { hiringType: "expat_new_hire", documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes" };
+    const seen = new Set<string>();
+    const step = (id: string) => {
+      if (seen.has(id)) return; seen.add(id);
+      const n = byId.get(id); if (!n) return;
+      if (stamp[n.id]) Object.assign(vars, stamp[n.id]);
+      if (n.type === "issue_document") {
+        const c = n.config ?? {};
+        const pick = (own: string | undefined, fallback: string) => String(vars[own ?? ""] ?? vars[fallback] ?? "");
+        for (const [field, own, fb] of [["number", c.numberVar, "docNumber"], ["expiry", c.expiryVar, "newExpiry"]] as const) {
+          const v = pick(own, fb);
+          if (v) issued.push({ doc: String(c.docType), from: v.split(":")[0], field });
+        }
+      }
+      if (n.type === "decision") {
+        const hit = (n.config?.branches ?? []).find((b: any) => String(vars[b.var] ?? "") === String(b.value));
+        const key = hit ? hit.key : "else";
+        let nx = out(id).filter(e => String(e.condition ?? "") === key);
+        if (!nx.length) nx = out(id).filter(e => ["else", "default", ""].includes(String(e.condition ?? "")));
+        for (const e of nx) step(e.to);
+        return;
+      }
+      for (const e of out(id)) if (String(e.condition ?? "") !== "reject") step(e.to);
+    };
+    step("start");
+  }
+  console.log("");
+  console.log("where each issued document's details come from:");
+  // The step that feeds a document is the one immediately before it on the path.
+  const feeder = new Map<string, string>();
+  for (const n of nodes.filter(x => x.type === "issue_document"))
+    for (const e of edges.filter(e2 => e2.to === n.id)) feeder.set(String(n.config?.docType), e.from);
+  for (const i of issued) {
+    const want = feeder.get(i.doc);
+    const ok = i.from === want;
+    console.log(`  ${i.doc.padEnd(28)} ${i.field.padEnd(7)} from "${i.from}"${ok ? "" : `  — expected "${want}"`}`);
+    if (!ok) fail(`"${i.doc}" is issued with the ${i.field} captured at "${i.from}", which belongs to a different document`);
+  }
+
   // ── the rule really does produce three different lists ─────────────────────────────────────
   const rule = await prisma.checklistRule.findFirst({ where: { name: RULE } });
   if (!rule) { fail("the document rule is missing"); process.exit(1); }

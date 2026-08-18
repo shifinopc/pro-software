@@ -2,8 +2,8 @@
   "pack": "sa",
   "country": "SA",
   "countryName": "Saudi Arabia",
-  "version": "2026.4",
-  "generatedAt": "2026-08-18T07:42:51.143Z",
+  "version": "2026.5",
+  "generatedAt": "2026-08-18T08:38:43.445Z",
   "contains": "configuration only — no companies, employees, documents, invoices or credentials",
   "documentTypes": [
     {
@@ -295,9 +295,14 @@
             "condition": ""
           },
           {
-            "to": "permit_doc",
+            "to": "permit_task",
             "from": "d_permit",
-            "condition": "expat"
+            "condition": "expat_new"
+          },
+          {
+            "to": "permit_task",
+            "from": "d_permit",
+            "condition": "expat_move"
           },
           {
             "to": "split",
@@ -305,9 +310,14 @@
             "condition": "saudi"
           },
           {
-            "to": "permit_doc",
+            "to": "permit_task",
             "from": "d_permit",
             "condition": "else"
+          },
+          {
+            "to": "permit_doc",
+            "from": "permit_task",
+            "condition": ""
           },
           {
             "to": "split",
@@ -330,8 +340,13 @@
             "condition": ""
           },
           {
-            "to": "insurance",
+            "to": "insurance_task",
             "from": "split",
+            "condition": ""
+          },
+          {
+            "to": "insurance",
+            "from": "insurance_task",
             "condition": ""
           },
           {
@@ -641,6 +656,7 @@
                   "options": "saudi_national,expat_new_hire,expat_transfer"
                 }
               ],
+              "slaHours": 24,
               "assigneeRole": "pro_officer"
             }
           },
@@ -651,12 +667,12 @@
             "config": {
               "captures": [
                 {
-                  "var": "docNumber",
+                  "var": "visaNumber",
                   "type": "text",
                   "label": "Visa number"
                 },
                 {
-                  "var": "newExpiry",
+                  "var": "visaExpiry",
                   "type": "date",
                   "label": "Visa expiry"
                 }
@@ -671,7 +687,9 @@
             "type": "issue_document",
             "label": "Work Visa",
             "config": {
-              "docType": "Work Visa"
+              "docType": "Work Visa",
+              "expiryVar": "visaExpiry",
+              "numberVar": "visaNumber"
             }
           },
           {
@@ -681,7 +699,12 @@
             "config": {
               "captures": [
                 {
-                  "var": "newExpiry",
+                  "var": "iqamaNumber",
+                  "type": "text",
+                  "label": "Iqama number"
+                },
+                {
+                  "var": "iqamaExpiry",
                   "type": "date",
                   "label": "Iqama expiry"
                 }
@@ -715,7 +738,9 @@
             "type": "issue_document",
             "label": "Iqama",
             "config": {
-              "docType": "Iqama"
+              "docType": "Iqama",
+              "expiryVar": "iqamaExpiry",
+              "numberVar": "iqamaNumber"
             }
           },
           {
@@ -801,12 +826,12 @@
             "config": {
               "captures": [
                 {
-                  "var": "docNumber",
+                  "var": "contractNumber",
                   "type": "text",
                   "label": "Contract number on Qiwa"
                 },
                 {
-                  "var": "newExpiry",
+                  "var": "contractEnd",
                   "type": "date",
                   "label": "Contract end date"
                 }
@@ -840,7 +865,9 @@
             "type": "issue_document",
             "label": "Qiwa Employment Contract",
             "config": {
-              "docType": "Qiwa Employment Contract"
+              "docType": "Qiwa Employment Contract",
+              "expiryVar": "contractEnd",
+              "numberVar": "contractNumber"
             }
           },
           {
@@ -851,13 +878,13 @@
               "branches": [
                 {
                   "op": "eq",
-                  "key": "expat",
+                  "key": "expat_new",
                   "var": "hiringType",
                   "value": "expat_new_hire"
                 },
                 {
                   "op": "eq",
-                  "key": "expat",
+                  "key": "expat_move",
                   "var": "hiringType",
                   "value": "expat_transfer"
                 },
@@ -871,11 +898,49 @@
             }
           },
           {
+            "id": "permit_task",
+            "type": "task",
+            "label": "Work Permit Issuance",
+            "config": {
+              "captures": [
+                {
+                  "var": "permitNumber",
+                  "type": "text",
+                  "label": "Work permit number"
+                },
+                {
+                  "var": "permitExpiry",
+                  "type": "date",
+                  "label": "Work permit expiry"
+                }
+              ],
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "permit_fees",
+                  "label": "Work permit fees paid",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "permit_profession",
+                  "label": "Profession on the permit matches the contract",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "govCenter": "Qiwa",
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
             "id": "permit_doc",
             "type": "issue_document",
             "label": "Work Permit",
             "config": {
-              "docType": "Work Permit"
+              "docType": "Work Permit",
+              "expiryVar": "permitExpiry",
+              "numberVar": "permitNumber"
             }
           },
           {
@@ -891,7 +956,7 @@
             "config": {
               "captures": [
                 {
-                  "var": "docNumber",
+                  "var": "gosiNumber",
                   "type": "text",
                   "label": "GOSI number"
                 }
@@ -919,7 +984,9 @@
             "type": "issue_document",
             "label": "GOSI Employee Registration",
             "config": {
-              "docType": "GOSI Employee Registration"
+              "docType": "GOSI Employee Registration",
+              "expiryVar": "gosiExpiry",
+              "numberVar": "gosiNumber"
             }
           },
           {
@@ -993,11 +1060,49 @@
             }
           },
           {
+            "id": "insurance_task",
+            "type": "task",
+            "label": "Health Insurance Enrolment",
+            "config": {
+              "captures": [
+                {
+                  "var": "policyNumber",
+                  "type": "text",
+                  "label": "Policy number"
+                },
+                {
+                  "var": "policyExpiry",
+                  "type": "date",
+                  "label": "Policy expiry"
+                }
+              ],
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "policy_active",
+                  "label": "Policy active with the insurer",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "class_matches",
+                  "label": "Class matches the employee's grade",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "govCenter": "CCHI",
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
             "id": "insurance",
             "type": "issue_document",
             "label": "Health Insurance",
             "config": {
-              "docType": "Health Insurance"
+              "docType": "Health Insurance",
+              "expiryVar": "policyExpiry",
+              "numberVar": "policyNumber"
             }
           },
           {
@@ -1019,6 +1124,7 @@
                   "options": "yes,no"
                 }
               ],
+              "slaHours": 48,
               "checklist": [
                 {
                   "key": "attendance_on",
