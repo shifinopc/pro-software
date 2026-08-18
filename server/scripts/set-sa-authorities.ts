@@ -29,6 +29,13 @@ const NEW_AUTHORITIES = [
   { name: "Ministry of Commerce", sub: "Commercial register · company formation" },
   { name: "CCHI", sub: "Mandatory health insurance · Council of Health Insurance" },
   { name: "MOH", sub: "Medical fitness certificates · licensed centres" },
+  // The Work Visa Application step files its work under MOFA, and MOFA was in no database — so that
+  // step pointed at an authority that did not exist, and the Government Centers queue had nowhere to
+  // put it. Caught by the pack exporter, which refuses to ship a reference it cannot resolve.
+  //
+  // Deliberately NOT the same body as the Work Visa document type, which is filed under MHRSD: the
+  // ministry authorises the recruitment, and Foreign Affairs issues the visa itself.
+  { name: "MOFA", sub: "Work visa authorisation · Saudi Visa platform" },
 ];
 
 /** null = no authority issues this in this country, and that is the correct answer. */
@@ -73,8 +80,15 @@ async function main() {
   }
 
   console.log(`\n${set} set · ${already} already correct · ${missing} unmapped`);
+  // Document types are not the only thing that names an authority — a workflow step files its work
+  // under one too. Checking only the map reported MOFA as unused while the Work Visa Application step
+  // was pointing straight at it.
+  const fromSteps = new Set<string>();
+  for (const t of await prisma.workflowTemplate.findMany({ select: { graph: true } }))
+    for (const n of (((t.graph as any)?.nodes ?? []) as any[]))
+      if (n?.config?.govCenter) fromSteps.add(String(n.config.govCenter));
   const orphans = (await prisma.govCenter.findMany({ where: { country: COUNTRY } }))
-    .filter(g => !Object.values(MAP).includes(g.name)).map(g => g.name);
+    .filter(g => !Object.values(MAP).includes(g.name) && !fromSteps.has(g.name)).map(g => g.name);
   console.log("authorities nothing points at: " + (orphans.length ? orphans.join(", ") : "none"));
   await prisma.$disconnect();
 }

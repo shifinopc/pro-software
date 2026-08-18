@@ -37,8 +37,24 @@ async function main() {
   const nodes: any[] = ((tpl.graph as any)?.nodes ?? []);
   const keepDocs = new Set(nodes.filter(n => n.type === "issue_document").map(n => String(n.config?.docType)));
   const keepRuleIds = new Set(nodes.map(n => String(n?.config?.checklistRuleId ?? "")).filter(Boolean));
+  // A document type the flow does not ISSUE can still be one it depends on. Iqama and Work Visa both
+  // carry a prerequisite naming Passport — nobody issues a passport, but retiring it left two
+  // prerequisites that could never resolve, which is the same defect as a step naming a type that
+  // does not exist. Pulled in transitively, so a prerequisite added later is kept automatically.
+  for (const d of await prisma.documentType.findMany({ where: { name: { in: [...keepDocs] } }, select: { prereqs: true } }))
+    for (const r of (Array.isArray(d.prereqs) ? (d.prereqs as any[]) : []))
+      if (r?.requiresDocType) keepDocs.add(String(r.requiresDocType));
+
+  // Checklist rows may ask for a document BY TYPE rather than as a manual upload.
+  for (const r of await prisma.checklistRule.findMany({ where: { id: { in: [...keepRuleIds] } }, select: { rows: true } }))
+    for (const row of (Array.isArray(r.rows) ? (r.rows as any[]) : []))
+      for (const it of (row?.documents ?? row?.items ?? []))
+        if (it?.source === "document" && it?.docType) keepDocs.add(String(it.docType));
+
+  // Authorities: read AFTER the set above is complete, and include the ones workflow steps file under.
   const keepAuth = new Set((await prisma.documentType.findMany({ where: { name: { in: [...keepDocs] } }, select: { authority: true } }))
     .map(d => d.authority).filter(Boolean) as string[]);
+  for (const n of nodes) if (n?.config?.govCenter) keepAuth.add(String(n.config.govCenter));
 
   if (keepDocs.size === 0) { console.log("the workflow issues no documents — that cannot be right, refusing"); process.exit(1); }
   console.log(`keeping: ${KEEP_WORKFLOW} · ${keepDocs.size} document types · ${keepRuleIds.size} checklist rule · ${keepAuth.size} authorities\n`);
@@ -56,7 +72,9 @@ async function main() {
       const out: string[] = [];
       const docs = await prisma.document.count({ where: { docType: r.name } });
       if (docs) out.push(`${docs} client document(s)`);
-      const svc = await prisma.serviceItem.count({ where: { docType: r.name } });
+      // A RETIRED service is not a holder: it is already off the catalogue and cannot be ordered, so
+      // counting it would keep a document type alive for something nobody can reach.
+      const svc = await prisma.serviceItem.count({ where: { docType: r.name, retired: false } });
       if (svc && !WITH_CATALOGUE) out.push(`${svc} service(s)`);
       return out;
     });

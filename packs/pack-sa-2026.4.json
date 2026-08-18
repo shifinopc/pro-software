@@ -1,0 +1,1561 @@
+{
+  "pack": "sa",
+  "country": "SA",
+  "countryName": "Saudi Arabia",
+  "version": "2026.4",
+  "generatedAt": "2026-08-18T07:42:51.143Z",
+  "contains": "configuration only — no companies, employees, documents, invoices or credentials",
+  "documentTypes": [
+    {
+      "key": "sa.doctype.health-insurance",
+      "name": "Health Insurance",
+      "subjectKind": "employee",
+      "defaultFee": 75,
+      "leadDays": 30,
+      "authority": "CCHI",
+      "fields": [],
+      "prereqs": [],
+      "requiresApproval": true,
+      "defaultAssigneeRole": "pro_officer"
+    },
+    {
+      "key": "sa.doctype.iqama",
+      "name": "Iqama",
+      "subjectKind": "employee",
+      "defaultFee": 650,
+      "leadDays": 60,
+      "authority": "Muqeem",
+      "fields": [
+        {
+          "id": "f17853238996620",
+          "type": "text",
+          "label": "Iqama Number",
+          "purpose": "",
+          "required": false
+        },
+        {
+          "id": "f17853238996621",
+          "type": "text",
+          "label": "Renewal Reference No",
+          "purpose": "",
+          "required": false
+        },
+        {
+          "id": "f17853238996622",
+          "type": "date",
+          "label": "New Expiry Date",
+          "purpose": "",
+          "required": true
+        }
+      ],
+      "prereqs": [
+        {
+          "minMonths": 1,
+          "requiresDocType": "Health Insurance"
+        },
+        {
+          "minMonths": 6,
+          "requiresDocType": "Passport"
+        }
+      ],
+      "requiresApproval": false,
+      "defaultAssigneeRole": "pro_officer"
+    },
+    {
+      "key": "sa.doctype.work-visa",
+      "name": "Work Visa",
+      "subjectKind": "employee",
+      "defaultFee": null,
+      "leadDays": 30,
+      "authority": "MHRSD",
+      "fields": [],
+      "prereqs": [
+        {
+          "minMonths": 6,
+          "requiresDocType": "Passport"
+        }
+      ],
+      "requiresApproval": false,
+      "defaultAssigneeRole": null
+    },
+    {
+      "key": "sa.doctype.passport",
+      "name": "Passport",
+      "subjectKind": "employee",
+      "defaultFee": 0,
+      "leadDays": 30,
+      "authority": null,
+      "fields": [
+        {
+          "id": "f17853253343800",
+          "type": "number",
+          "label": "Passport Number",
+          "purpose": "number",
+          "required": false
+        },
+        {
+          "id": "f17853253343801",
+          "type": "date",
+          "label": "Expiry Date",
+          "purpose": "expiry",
+          "required": false
+        }
+      ],
+      "prereqs": [],
+      "requiresApproval": false,
+      "defaultAssigneeRole": "pro_officer"
+    },
+    {
+      "key": "sa.doctype.work-permit",
+      "name": "Work Permit",
+      "subjectKind": "employee",
+      "defaultFee": null,
+      "leadDays": 30,
+      "authority": "Qiwa",
+      "fields": [],
+      "prereqs": [],
+      "requiresApproval": false,
+      "defaultAssigneeRole": "pro_officer"
+    },
+    {
+      "key": "sa.doctype.qiwa-employment-contract",
+      "name": "Qiwa Employment Contract",
+      "subjectKind": "employee",
+      "defaultFee": null,
+      "leadDays": 30,
+      "authority": "Qiwa",
+      "fields": [
+        {
+          "key": "contractNo",
+          "type": "text",
+          "label": "Contract number"
+        },
+        {
+          "key": "wage",
+          "type": "text",
+          "label": "Basic wage"
+        }
+      ],
+      "prereqs": [],
+      "requiresApproval": false,
+      "defaultAssigneeRole": "pro_officer"
+    },
+    {
+      "key": "sa.doctype.gosi-employee-registration",
+      "name": "GOSI Employee Registration",
+      "subjectKind": "employee",
+      "defaultFee": null,
+      "leadDays": 14,
+      "authority": "GOSI",
+      "fields": [
+        {
+          "key": "gosiNo",
+          "type": "text",
+          "label": "GOSI number"
+        }
+      ],
+      "prereqs": [],
+      "requiresApproval": false,
+      "defaultAssigneeRole": "accountant"
+    }
+  ],
+  "workflowTemplates": [
+    {
+      "key": "sa.workflow.employee-onboarding",
+      "name": "Employee Onboarding",
+      "trigger": "manual",
+      "triggerConfig": null,
+      "entityType": "employee",
+      "active": true,
+      "graph": {
+        "edges": [
+          {
+            "to": "profile",
+            "from": "start",
+            "condition": ""
+          },
+          {
+            "to": "elig",
+            "from": "profile",
+            "condition": ""
+          },
+          {
+            "to": "collect",
+            "from": "elig",
+            "condition": ""
+          },
+          {
+            "to": "d_docs",
+            "from": "collect",
+            "condition": ""
+          },
+          {
+            "to": "hiring_appr",
+            "from": "d_docs",
+            "condition": "pass"
+          },
+          {
+            "to": "collect",
+            "from": "d_docs",
+            "condition": "fail"
+          },
+          {
+            "to": "collect",
+            "from": "d_docs",
+            "condition": "else"
+          },
+          {
+            "to": "d_hiring",
+            "from": "hiring_appr",
+            "condition": "approve"
+          },
+          {
+            "to": "end_nohire",
+            "from": "hiring_appr",
+            "condition": "reject"
+          },
+          {
+            "to": "contract",
+            "from": "d_hiring",
+            "condition": "saudi"
+          },
+          {
+            "to": "visa_apply",
+            "from": "d_hiring",
+            "condition": "new_hire"
+          },
+          {
+            "to": "qiwa_req",
+            "from": "d_hiring",
+            "condition": "transfer"
+          },
+          {
+            "to": "hold",
+            "from": "d_hiring",
+            "condition": "else"
+          },
+          {
+            "to": "d_hiring",
+            "from": "hold",
+            "condition": ""
+          },
+          {
+            "to": "visa_doc",
+            "from": "visa_apply",
+            "condition": ""
+          },
+          {
+            "to": "arrival",
+            "from": "visa_doc",
+            "condition": ""
+          },
+          {
+            "to": "iqama_doc",
+            "from": "arrival",
+            "condition": ""
+          },
+          {
+            "to": "contract",
+            "from": "iqama_doc",
+            "condition": ""
+          },
+          {
+            "to": "d_transfer",
+            "from": "qiwa_req",
+            "condition": ""
+          },
+          {
+            "to": "contract",
+            "from": "d_transfer",
+            "condition": "approved"
+          },
+          {
+            "to": "end_transfer",
+            "from": "d_transfer",
+            "condition": "rejected"
+          },
+          {
+            "to": "end_transfer",
+            "from": "d_transfer",
+            "condition": "expired"
+          },
+          {
+            "to": "end_transfer",
+            "from": "d_transfer",
+            "condition": "else"
+          },
+          {
+            "to": "contract_doc",
+            "from": "contract",
+            "condition": ""
+          },
+          {
+            "to": "d_permit",
+            "from": "contract_doc",
+            "condition": ""
+          },
+          {
+            "to": "permit_doc",
+            "from": "d_permit",
+            "condition": "expat"
+          },
+          {
+            "to": "split",
+            "from": "d_permit",
+            "condition": "saudi"
+          },
+          {
+            "to": "permit_doc",
+            "from": "d_permit",
+            "condition": "else"
+          },
+          {
+            "to": "split",
+            "from": "permit_doc",
+            "condition": ""
+          },
+          {
+            "to": "payroll",
+            "from": "split",
+            "condition": ""
+          },
+          {
+            "to": "access",
+            "from": "split",
+            "condition": ""
+          },
+          {
+            "to": "assets",
+            "from": "split",
+            "condition": ""
+          },
+          {
+            "to": "insurance",
+            "from": "split",
+            "condition": ""
+          },
+          {
+            "to": "gosi_doc",
+            "from": "payroll",
+            "condition": ""
+          },
+          {
+            "to": "join",
+            "from": "gosi_doc",
+            "condition": ""
+          },
+          {
+            "to": "join",
+            "from": "access",
+            "condition": ""
+          },
+          {
+            "to": "join",
+            "from": "assets",
+            "condition": ""
+          },
+          {
+            "to": "join",
+            "from": "insurance",
+            "condition": ""
+          },
+          {
+            "to": "joined",
+            "from": "join",
+            "condition": ""
+          },
+          {
+            "to": "d_joined",
+            "from": "joined",
+            "condition": ""
+          },
+          {
+            "to": "probation",
+            "from": "d_joined",
+            "condition": "yes"
+          },
+          {
+            "to": "end_cancel",
+            "from": "d_joined",
+            "condition": "no"
+          },
+          {
+            "to": "end_cancel",
+            "from": "d_joined",
+            "condition": "else"
+          },
+          {
+            "to": "prob_review",
+            "from": "probation",
+            "condition": ""
+          },
+          {
+            "to": "d_prob",
+            "from": "prob_review",
+            "condition": ""
+          },
+          {
+            "to": "confirm_appr",
+            "from": "d_prob",
+            "condition": "yes"
+          },
+          {
+            "to": "extend",
+            "from": "d_prob",
+            "condition": "extend"
+          },
+          {
+            "to": "end_term",
+            "from": "d_prob",
+            "condition": "no"
+          },
+          {
+            "to": "prob_review",
+            "from": "d_prob",
+            "condition": "else"
+          },
+          {
+            "to": "prob_review",
+            "from": "extend",
+            "condition": ""
+          },
+          {
+            "to": "notify",
+            "from": "confirm_appr",
+            "condition": "approve"
+          },
+          {
+            "to": "end_term",
+            "from": "confirm_appr",
+            "condition": "reject"
+          },
+          {
+            "to": "end_ok",
+            "from": "notify",
+            "condition": ""
+          }
+        ],
+        "nodes": [
+          {
+            "id": "start",
+            "type": "start",
+            "label": "Employee Request Created",
+            "config": {}
+          },
+          {
+            "id": "profile",
+            "type": "task",
+            "label": "Create Employee Profile",
+            "config": {
+              "captures": [
+                {
+                  "var": "applicant",
+                  "type": "text",
+                  "label": "Full name (exactly as printed in the passport)"
+                },
+                {
+                  "var": "nationality",
+                  "type": "text",
+                  "label": "Nationality"
+                },
+                {
+                  "var": "mobile",
+                  "type": "text",
+                  "label": "Mobile"
+                },
+                {
+                  "var": "email",
+                  "type": "text",
+                  "label": "Email"
+                },
+                {
+                  "var": "hiringType",
+                  "type": "select",
+                  "label": "Hiring Type",
+                  "options": "saudi_national,expat_new_hire,expat_transfer"
+                },
+                {
+                  "var": "employmentType",
+                  "type": "select",
+                  "label": "Employment Type",
+                  "options": "permanent,contract,temporary"
+                },
+                {
+                  "var": "profession",
+                  "type": "text",
+                  "label": "Profession / job title on Qiwa"
+                },
+                {
+                  "var": "department",
+                  "type": "text",
+                  "label": "Department"
+                },
+                {
+                  "var": "reportingManager",
+                  "type": "text",
+                  "label": "Reporting manager"
+                },
+                {
+                  "var": "expectedJoining",
+                  "type": "date",
+                  "label": "Expected joining date"
+                },
+                {
+                  "var": "currentLocationStatus",
+                  "type": "select",
+                  "label": "Currently",
+                  "options": "inside_ksa,outside_ksa"
+                }
+              ],
+              "slaHours": 24,
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "elig",
+            "type": "task",
+            "label": "Eligibility & Nitaqat Check",
+            "config": {
+              "slaHours": 48,
+              "checklist": [
+                {
+                  "key": "nitaqat_band",
+                  "label": "Nitaqat band impact checked — hire does not drop the band",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "profession_allowed",
+                  "label": "Profession permitted for this nationality",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "establishment_ok",
+                  "label": "Establishment eligible on Qiwa (no blocks)",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "quota_available",
+                  "label": "Visa / work-permit quota available",
+                  "source": "manual",
+                  "required": false
+                }
+              ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "collect",
+            "type": "task",
+            "label": "Collect Documents",
+            "config": {
+              "captures": [
+                {
+                  "var": "documentsVerified",
+                  "type": "select",
+                  "label": "All Documents Verified?",
+                  "options": "pass,fail"
+                }
+              ],
+              "slaHours": 72,
+              "assigneeRole": "pro_officer",
+              "checklistSource": "dynamic",
+              "checklistRuleKey": "sa.checklist.onboarding-documents-by-hiring-type"
+            }
+          },
+          {
+            "id": "d_docs",
+            "type": "decision",
+            "label": "Documents Verified?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "pass",
+                  "var": "documentsVerified",
+                  "value": "pass"
+                },
+                {
+                  "op": "eq",
+                  "key": "fail",
+                  "var": "documentsVerified",
+                  "value": "fail"
+                }
+              ]
+            }
+          },
+          {
+            "id": "hiring_appr",
+            "type": "approval",
+            "label": "Hiring Approval",
+            "config": {
+              "title": "Approve this hire before government processing begins",
+              "approverRole": "hr_officer"
+            }
+          },
+          {
+            "id": "end_nohire",
+            "type": "end",
+            "label": "Hire Not Approved",
+            "config": {}
+          },
+          {
+            "id": "d_hiring",
+            "type": "decision",
+            "label": "Hiring Type?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "saudi",
+                  "var": "hiringType",
+                  "value": "saudi_national"
+                },
+                {
+                  "op": "eq",
+                  "key": "new_hire",
+                  "var": "hiringType",
+                  "value": "expat_new_hire"
+                },
+                {
+                  "op": "eq",
+                  "key": "transfer",
+                  "var": "hiringType",
+                  "value": "expat_transfer"
+                }
+              ]
+            }
+          },
+          {
+            "id": "hold",
+            "type": "task",
+            "label": "Hiring type not recognised — check the profile",
+            "config": {
+              "captures": [
+                {
+                  "var": "hiringType",
+                  "type": "select",
+                  "label": "Hiring Type",
+                  "options": "saudi_national,expat_new_hire,expat_transfer"
+                }
+              ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "visa_apply",
+            "type": "task",
+            "label": "Work Visa Application",
+            "config": {
+              "captures": [
+                {
+                  "var": "docNumber",
+                  "type": "text",
+                  "label": "Visa number"
+                },
+                {
+                  "var": "newExpiry",
+                  "type": "date",
+                  "label": "Visa expiry"
+                }
+              ],
+              "slaHours": 240,
+              "govCenter": "MOFA",
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "visa_doc",
+            "type": "issue_document",
+            "label": "Work Visa",
+            "config": {
+              "docType": "Work Visa"
+            }
+          },
+          {
+            "id": "arrival",
+            "type": "task",
+            "label": "Arrival, Medical & Biometrics",
+            "config": {
+              "captures": [
+                {
+                  "var": "newExpiry",
+                  "type": "date",
+                  "label": "Iqama expiry"
+                }
+              ],
+              "slaHours": 168,
+              "checklist": [
+                {
+                  "key": "arrived",
+                  "label": "Employee arrived in KSA",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "medical_ksa",
+                  "label": "Medical test completed in KSA",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "biometrics",
+                  "label": "Biometrics captured",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "iqama_doc",
+            "type": "issue_document",
+            "label": "Iqama",
+            "config": {
+              "docType": "Iqama"
+            }
+          },
+          {
+            "id": "qiwa_req",
+            "type": "task",
+            "label": "Qiwa Employee Transfer Request",
+            "config": {
+              "captures": [
+                {
+                  "var": "transferOutcome",
+                  "type": "select",
+                  "label": "Transfer Outcome",
+                  "options": "approved,rejected,expired"
+                }
+              ],
+              "slaHours": 240,
+              "checklist": [
+                {
+                  "key": "qiwa_raised",
+                  "label": "Transfer request raised on Qiwa",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "contract_attached",
+                  "label": "Employment contract attached to the request",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "employee_accepted",
+                  "label": "Employee accepted on Qiwa",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "employer_response",
+                  "label": "Current employer responded",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "d_transfer",
+            "type": "decision",
+            "label": "Transfer Approved?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "approved",
+                  "var": "transferOutcome",
+                  "value": "approved"
+                },
+                {
+                  "op": "eq",
+                  "key": "rejected",
+                  "var": "transferOutcome",
+                  "value": "rejected"
+                },
+                {
+                  "op": "eq",
+                  "key": "expired",
+                  "var": "transferOutcome",
+                  "value": "expired"
+                }
+              ]
+            }
+          },
+          {
+            "id": "end_transfer",
+            "type": "end",
+            "label": "Transfer Not Completed",
+            "config": {}
+          },
+          {
+            "id": "contract",
+            "type": "task",
+            "label": "Qiwa Contract Authentication",
+            "config": {
+              "captures": [
+                {
+                  "var": "docNumber",
+                  "type": "text",
+                  "label": "Contract number on Qiwa"
+                },
+                {
+                  "var": "newExpiry",
+                  "type": "date",
+                  "label": "Contract end date"
+                }
+              ],
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "contract_authenticated",
+                  "label": "Contract authenticated on Qiwa",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "wage_matches",
+                  "label": "Wage matches the contract and WPS record",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "job_title_matches",
+                  "label": "Job title matches the work permit profession",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "contract_doc",
+            "type": "issue_document",
+            "label": "Qiwa Employment Contract",
+            "config": {
+              "docType": "Qiwa Employment Contract"
+            }
+          },
+          {
+            "id": "d_permit",
+            "type": "decision",
+            "label": "Work Permit Required?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "expat",
+                  "var": "hiringType",
+                  "value": "expat_new_hire"
+                },
+                {
+                  "op": "eq",
+                  "key": "expat",
+                  "var": "hiringType",
+                  "value": "expat_transfer"
+                },
+                {
+                  "op": "eq",
+                  "key": "saudi",
+                  "var": "hiringType",
+                  "value": "saudi_national"
+                }
+              ]
+            }
+          },
+          {
+            "id": "permit_doc",
+            "type": "issue_document",
+            "label": "Work Permit",
+            "config": {
+              "docType": "Work Permit"
+            }
+          },
+          {
+            "id": "split",
+            "type": "parallel_split",
+            "label": "Set Up In Parallel",
+            "config": {}
+          },
+          {
+            "id": "payroll",
+            "type": "task",
+            "label": "Payroll & WPS Setup",
+            "config": {
+              "captures": [
+                {
+                  "var": "docNumber",
+                  "type": "text",
+                  "label": "GOSI number"
+                }
+              ],
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "wps_registered",
+                  "label": "Registered on WPS",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "bank_ok",
+                  "label": "Salary account confirmed",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "accountant"
+            }
+          },
+          {
+            "id": "gosi_doc",
+            "type": "issue_document",
+            "label": "GOSI Employee Registration",
+            "config": {
+              "docType": "GOSI Employee Registration"
+            }
+          },
+          {
+            "id": "access",
+            "type": "task",
+            "label": "System Access",
+            "config": {
+              "slaHours": 48,
+              "checklist": [
+                {
+                  "key": "email",
+                  "label": "Corporate email",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "erp",
+                  "label": "ERP account",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "attendance",
+                  "label": "Attendance / biometric enrolment",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "permissions",
+                  "label": "Application permissions and role assigned",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "it_officer"
+            }
+          },
+          {
+            "id": "assets",
+            "type": "task",
+            "label": "Assets & Accommodation",
+            "config": {
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "laptop",
+                  "label": "Laptop / equipment issued",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "sim",
+                  "label": "SIM card",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "id_card",
+                  "label": "Company ID card",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "accommodation",
+                  "label": "Accommodation arranged",
+                  "source": "manual",
+                  "required": false
+                }
+              ],
+              "assigneeRole": "hr_officer"
+            }
+          },
+          {
+            "id": "insurance",
+            "type": "issue_document",
+            "label": "Health Insurance",
+            "config": {
+              "docType": "Health Insurance"
+            }
+          },
+          {
+            "id": "join",
+            "type": "parallel_join",
+            "label": "All Departments Complete",
+            "config": {}
+          },
+          {
+            "id": "joined",
+            "type": "task",
+            "label": "Joining Confirmation",
+            "config": {
+              "captures": [
+                {
+                  "var": "employeeJoined",
+                  "type": "select",
+                  "label": "Employee Joined?",
+                  "options": "yes,no"
+                }
+              ],
+              "checklist": [
+                {
+                  "key": "attendance_on",
+                  "label": "Attendance enabled",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "contract_active",
+                  "label": "Qiwa contract active",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "payroll_active",
+                  "label": "Payroll active",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "insurance_active",
+                  "label": "Insurance active",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "hr_officer"
+            }
+          },
+          {
+            "id": "d_joined",
+            "type": "decision",
+            "label": "Joined?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "yes",
+                  "var": "employeeJoined",
+                  "value": "yes"
+                },
+                {
+                  "op": "eq",
+                  "key": "no",
+                  "var": "employeeJoined",
+                  "value": "no"
+                }
+              ]
+            }
+          },
+          {
+            "id": "end_cancel",
+            "type": "end",
+            "label": "Joining Cancelled",
+            "config": {}
+          },
+          {
+            "id": "probation",
+            "type": "delay",
+            "label": "Probation (90 days)",
+            "config": {
+              "days": 90
+            }
+          },
+          {
+            "id": "prob_review",
+            "type": "task",
+            "label": "Probation Review",
+            "config": {
+              "captures": [
+                {
+                  "var": "probationOutcome",
+                  "type": "select",
+                  "label": "Confirmed?",
+                  "options": "yes,no,extend"
+                },
+                {
+                  "var": "probationNotes",
+                  "type": "text",
+                  "label": "Reason for the decision"
+                },
+                {
+                  "var": "probationEffective",
+                  "type": "date",
+                  "label": "Effective from"
+                }
+              ],
+              "slaHours": 72,
+              "checklist": [
+                {
+                  "key": "manager_appraisal",
+                  "label": "Line manager's appraisal completed and signed",
+                  "required": true
+                },
+                {
+                  "key": "objectives_reviewed",
+                  "label": "Probation objectives reviewed against the job description",
+                  "required": true
+                },
+                {
+                  "key": "attendance_reviewed",
+                  "label": "Attendance and punctuality record reviewed",
+                  "required": true
+                },
+                {
+                  "key": "conduct_checked",
+                  "label": "Warnings and disciplinary record checked",
+                  "required": true
+                },
+                {
+                  "key": "training_complete",
+                  "label": "Mandatory induction and training completed",
+                  "required": false
+                },
+                {
+                  "key": "meeting_held",
+                  "label": "Outcome discussed with the employee",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "hr_officer"
+            }
+          },
+          {
+            "id": "d_prob",
+            "type": "decision",
+            "label": "Confirmed?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "yes",
+                  "var": "probationOutcome",
+                  "value": "yes"
+                },
+                {
+                  "op": "eq",
+                  "key": "extend",
+                  "var": "probationOutcome",
+                  "value": "extend"
+                },
+                {
+                  "op": "eq",
+                  "key": "no",
+                  "var": "probationOutcome",
+                  "value": "no"
+                }
+              ]
+            }
+          },
+          {
+            "id": "extend",
+            "type": "delay",
+            "label": "Extend Probation (30 days)",
+            "config": {
+              "days": 30
+            }
+          },
+          {
+            "id": "end_term",
+            "type": "end",
+            "label": "Not Confirmed — Termination",
+            "config": {}
+          },
+          {
+            "id": "confirm_appr",
+            "type": "approval",
+            "label": "Employee Confirmation Approval",
+            "config": {
+              "approverRole": "admin"
+            }
+          },
+          {
+            "id": "notify",
+            "type": "notify",
+            "label": "Notify Employee",
+            "config": {}
+          },
+          {
+            "id": "end_ok",
+            "type": "end",
+            "label": "Employee Confirmed",
+            "config": {}
+          }
+        ]
+      }
+    }
+  ],
+  "serviceItems": [],
+  "govCenters": [
+    {
+      "key": "sa.center.muqeem",
+      "name": "Muqeem",
+      "sub": "Iqama · exit-reentry · final exit",
+      "color": "#0284C7",
+      "bg": "#E4F4FD"
+    },
+    {
+      "key": "sa.center.gosi",
+      "name": "GOSI",
+      "sub": "Social insurance registration",
+      "color": "#B8860B",
+      "bg": "#FEF4E2"
+    },
+    {
+      "key": "sa.center.mhrsd",
+      "name": "MHRSD",
+      "sub": "Saudization & labor policy",
+      "color": "#E5484D",
+      "bg": "#FEECEC"
+    },
+    {
+      "key": "sa.center.qiwa",
+      "name": "Qiwa",
+      "sub": "Work permits & contracts · MHRSD",
+      "color": "#7C00FF",
+      "bg": "#F3E8FF"
+    },
+    {
+      "key": "sa.center.cchi",
+      "name": "CCHI",
+      "sub": "Mandatory health insurance · Council of Health Insurance",
+      "color": null,
+      "bg": null
+    },
+    {
+      "key": "sa.center.mofa",
+      "name": "MOFA",
+      "sub": "Work visa authorisation · Saudi Visa platform",
+      "color": null,
+      "bg": null
+    }
+  ],
+  "packages": [],
+  "checklistRules": [
+    {
+      "key": "sa.checklist.onboarding-documents-by-hiring-type",
+      "name": "Onboarding documents by hiring type",
+      "rows": [
+        {
+          "documents": [
+            {
+              "key": "passport_copy",
+              "label": "Passport copy",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "photo",
+              "label": "Photograph — white background",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "offer_signed",
+              "label": "Signed offer letter",
+              "source": "manual",
+              "required": true
+            }
+          ],
+          "conditions": []
+        },
+        {
+          "documents": [
+            {
+              "key": "national_id",
+              "label": "National ID (Hawiyya) copy",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "gosi_number",
+              "label": "GOSI number",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "bank_iban",
+              "label": "Bank IBAN for WPS",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "qualification",
+              "label": "Qualification certificate",
+              "source": "manual",
+              "required": false
+            }
+          ],
+          "conditions": [
+            {
+              "op": "eq",
+              "var": "hiringType",
+              "value": "saudi_national"
+            }
+          ]
+        },
+        {
+          "documents": [
+            {
+              "key": "passport_validity",
+              "label": "Passport valid 6+ months",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "degree_attested",
+              "label": "Attested degree certificate",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "medical_fitness",
+              "label": "Medical fitness certificate — home country",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "visa_application",
+              "label": "Work visa application form",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "police_clearance",
+              "label": "Police clearance certificate",
+              "source": "manual",
+              "required": false
+            }
+          ],
+          "conditions": [
+            {
+              "op": "eq",
+              "var": "hiringType",
+              "value": "expat_new_hire"
+            }
+          ]
+        },
+        {
+          "documents": [
+            {
+              "key": "iqama_copy",
+              "label": "Current Iqama copy",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "qiwa_consent",
+              "label": "Qiwa transfer consent — employee",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "current_employer_release",
+              "label": "Release / no-objection from current employer",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "current_contract",
+              "label": "Current employment contract copy",
+              "source": "manual",
+              "required": true
+            },
+            {
+              "key": "iqama_validity",
+              "label": "Iqama valid for the transfer window",
+              "source": "manual",
+              "required": true
+            }
+          ],
+          "conditions": [
+            {
+              "op": "eq",
+              "var": "hiringType",
+              "value": "expat_transfer"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "workforceBands": [],
+  "pipelineStages": [
+    {
+      "key": "sa.stage.enquiry",
+      "name": "Enquiry",
+      "color": null,
+      "bg": null,
+      "sort": 0,
+      "probabilityBp": 1000,
+      "isWon": false,
+      "isLost": false,
+      "followUpDays": 2,
+      "followUpAction": "Call them and establish what they actually need"
+    },
+    {
+      "key": "sa.stage.qualified",
+      "name": "Qualified",
+      "color": null,
+      "bg": null,
+      "sort": 1,
+      "probabilityBp": 2500,
+      "isWon": false,
+      "isLost": false,
+      "followUpDays": 3,
+      "followUpAction": "Send the quotation"
+    },
+    {
+      "key": "sa.stage.quoted",
+      "name": "Quoted",
+      "color": null,
+      "bg": null,
+      "sort": 2,
+      "probabilityBp": 5000,
+      "isWon": false,
+      "isLost": false,
+      "followUpDays": 3,
+      "followUpAction": "Chase for a decision on the quotation"
+    },
+    {
+      "key": "sa.stage.won",
+      "name": "Won",
+      "color": null,
+      "bg": null,
+      "sort": 4,
+      "probabilityBp": 10000,
+      "isWon": true,
+      "isLost": false,
+      "followUpDays": null,
+      "followUpAction": null
+    },
+    {
+      "key": "sa.stage.lost",
+      "name": "Lost",
+      "color": null,
+      "bg": null,
+      "sort": 5,
+      "probabilityBp": 0,
+      "isWon": false,
+      "isLost": true,
+      "followUpDays": null,
+      "followUpAction": null
+    },
+    {
+      "key": "sa.stage.negotiation",
+      "name": "Negotiation",
+      "color": null,
+      "bg": null,
+      "sort": 3,
+      "probabilityBp": 7500,
+      "isWon": false,
+      "isLost": false,
+      "followUpDays": 2,
+      "followUpAction": "Agree final terms and get it signed"
+    }
+  ],
+  "leadSources": [
+    {
+      "key": "sa.source.referral",
+      "name": "Referral",
+      "color": null,
+      "bg": null,
+      "sort": 0
+    },
+    {
+      "key": "sa.source.website",
+      "name": "Website",
+      "color": null,
+      "bg": null,
+      "sort": 1
+    },
+    {
+      "key": "sa.source.walk-in",
+      "name": "Walk-in",
+      "color": null,
+      "bg": null,
+      "sort": 2
+    },
+    {
+      "key": "sa.source.existing-client",
+      "name": "Existing client",
+      "color": null,
+      "bg": null,
+      "sort": 3
+    },
+    {
+      "key": "sa.source.campaign",
+      "name": "Campaign",
+      "color": null,
+      "bg": null,
+      "sort": 4
+    }
+  ],
+  "lostReasons": [
+    {
+      "key": "sa.lostreason.price",
+      "name": "Price",
+      "color": null,
+      "bg": null,
+      "sort": 0
+    },
+    {
+      "key": "sa.lostreason.went-to-a-competitor",
+      "name": "Went to a competitor",
+      "color": null,
+      "bg": null,
+      "sort": 1
+    },
+    {
+      "key": "sa.lostreason.postponed",
+      "name": "Postponed",
+      "color": null,
+      "bg": null,
+      "sort": 2
+    },
+    {
+      "key": "sa.lostreason.no-budget",
+      "name": "No budget",
+      "color": null,
+      "bg": null,
+      "sort": 3
+    },
+    {
+      "key": "sa.lostreason.no-response",
+      "name": "No response",
+      "color": null,
+      "bg": null,
+      "sort": 4
+    }
+  ],
+  "courierJobTypes": [],
+  "appointmentTypes": [],
+  "courierStatuses": [],
+  "appointmentStatuses": [],
+  "competitors": [],
+  "industries": [],
+  "campaigns": [],
+  "cancelReasons": []
+}
