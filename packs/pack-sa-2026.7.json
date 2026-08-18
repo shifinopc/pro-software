@@ -2,8 +2,8 @@
   "pack": "sa",
   "country": "SA",
   "countryName": "Saudi Arabia",
-  "version": "2026.6",
-  "generatedAt": "2026-08-18T09:44:24.415Z",
+  "version": "2026.7",
+  "generatedAt": "2026-08-18T11:36:42.913Z",
   "contains": "configuration only — no companies, employees, documents, invoices or credentials",
   "documentTypes": [
     {
@@ -508,6 +508,60 @@
             "type": "task",
             "label": "Create Employee Profile",
             "config": {
+              "rules": [
+                {
+                  "then": {
+                    "op": "in",
+                    "var": "hiringType",
+                    "value": "saudi_national"
+                  },
+                  "when": {
+                    "op": "matches",
+                    "var": "nationality",
+                    "value": "^s*saudi"
+                  },
+                  "message": "A Saudi national cannot be onboarded on an expatriate path — a work visa, Iqama and work permit are for foreign nationals"
+                },
+                {
+                  "then": {
+                    "op": "matches",
+                    "var": "nationality",
+                    "value": "^s*saudi"
+                  },
+                  "when": {
+                    "op": "eq",
+                    "var": "hiringType",
+                    "value": "saudi_national"
+                  },
+                  "message": "The Saudi national path needs a Saudi nationality — an expatriate needs a visa or a Qiwa transfer"
+                },
+                {
+                  "then": {
+                    "op": "in",
+                    "var": "currentLocationStatus",
+                    "value": "outside_ksa"
+                  },
+                  "when": {
+                    "op": "eq",
+                    "var": "hiringType",
+                    "value": "expat_new_hire"
+                  },
+                  "message": "A new expatriate hire is recruited from outside the Kingdom — somebody already inside it is a Qiwa transfer"
+                },
+                {
+                  "then": {
+                    "op": "in",
+                    "var": "currentLocationStatus",
+                    "value": "inside_ksa"
+                  },
+                  "when": {
+                    "op": "eq",
+                    "var": "hiringType",
+                    "value": "expat_transfer"
+                  },
+                  "message": "A Qiwa employee transfer moves somebody already working inside the Kingdom"
+                }
+              ],
               "captures": [
                 {
                   "var": "applicant",

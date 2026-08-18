@@ -518,7 +518,25 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
               logActivity({ type: "alert", message: `⚠ Workflow finished but could not issue ${docType} — ${why}${inst.clientName ? ` (${inst.clientName})` : ""}` });
             }
           }
-        } catch { /* non-fatal */ }
+        } catch (e: any) {
+          // A BARE `catch {}` HERE WAS THE SILENT FAILURE.
+          //
+          // Everything above — resolving the subject, creating the record, notifying — sat inside a
+          // swallow-everything catch, so an exception produced no document, no log line and no sign
+          // on the run, and the workflow marched on to joining. Two runs of the same expatriate path
+          // in the same audit: one wrote all six documents, the other wrote none and its log has no
+          // `document.*` entry of any kind. Nobody reviewing it would see a problem.
+          //
+          // Still non-fatal — a compliance write must not strand a run that has already done its
+          // government work — but it is now impossible for it to be invisible: the run carries the
+          // failure, the log names it, and an alert is raised for a human.
+          const why = String(e?.message ?? e);
+          await log("document.failed", nodeId, `${String(node.config?.docType ?? node.label)}: ${why}`).catch(() => {});
+          logActivity({ type: "alert", message: `⚠ ${String(node.config?.docType ?? "Document")} was NOT created by ${inst.title ?? "the workflow"} — ${why}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+          const failures: any[] = Array.isArray((vars as any)._documentFailures) ? (vars as any)._documentFailures : [];
+          failures.push({ node: nodeId, docType: String(node.config?.docType ?? ""), why, at: nowISO() });
+          (vars as any)._documentFailures = failures;
+        }
         queue.push(...nextTargets(g, nodeId));
         break;
       }
@@ -791,7 +809,7 @@ export async function startInstance(templateId: string, opts: { title?: string; 
       title: opts.title || tpl.name,
       companyId: opts.companyId ?? null,
       clientName: opts.clientName ?? null,
-      variables: (opts.variables && typeof opts.variables === "object") ? opts.variables : {},
+      variables: callerVariables(opts.variables).vars,
       status: "running",
       startedAt: nowISO(),
     },
@@ -880,6 +898,80 @@ async function supersede(rows: { id: string; docNumber?: string | null; expiryDa
   }
 }
 
+/**
+ * Variables a CALLER is allowed to set.
+ *
+ * The engine keeps its own bookkeeping in the very same bag the request body is merged into:
+ * `_joins` counts arrivals at a parallel join, `_delays` holds wake times, `_result` carries the
+ * outcome. Merging a body straight in therefore handed the caller the engine's controls.
+ *
+ * Demonstrated, not theorised: completing ONE branch of the four-way split with
+ * `{"variables":{"_joins":{"join":3}}}` fired the join immediately, and the run reached Joining
+ * Confirmation while payroll, assets and health insurance were still open — an employee joined with
+ * no salary account, no GOSI number and no insurance policy, and nothing in the run looked wrong.
+ *
+ * Any key beginning with an underscore is dropped and reported. This is a prefix rule rather than a
+ * list of names so a control variable added later is protected the day it is written.
+ */
+/**
+ * Cross-field rules on a step, checked when it is completed.
+ *
+ * Every validation the engine had looked at one field at a time — is it present, is it a date, is it
+ * one of the listed options. Nothing could express a relationship BETWEEN two answers, and that is
+ * where the impossible records came from: a profile saying nationality "Saudi" and hiring type
+ * "expat new hire" was accepted, and the run went on to issue that Saudi citizen a Work Visa, an
+ * Iqama and a Work Permit — three documents that cannot exist for a Saudi national.
+ *
+ * Declarative and stored on the node, so a market's rules stay configuration rather than becoming
+ * code somebody has to deploy. Each rule reads: WHEN this is true, THEN that must be true.
+ *
+ *   { when: { var, op, value }, then: { var, op, value }, message }
+ *
+ * ops: eq · ne · in (comma-separated) · notIn · matches (case-insensitive regex) · present
+ * A rule whose `when` does not match is simply not applied — it is a condition, not a filter.
+ */
+type FieldTest = { var?: string; op?: string; value?: any };
+function testField(t: FieldTest | undefined, vars: Record<string, any>): boolean {
+  if (!t || !t.var) return true;
+  const raw = vars[t.var];
+  const v = raw === undefined || raw === null ? "" : String(raw).trim();
+  const want = t.value === undefined || t.value === null ? "" : String(t.value).trim();
+  const list = () => want.split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+  switch (String(t.op ?? "eq")) {
+    case "eq":      return v.toLowerCase() === want.toLowerCase();
+    case "ne":      return v.toLowerCase() !== want.toLowerCase();
+    case "in":      return list().includes(v.toLowerCase());
+    case "notIn":   return !list().includes(v.toLowerCase());
+    case "present": return v !== "";
+    case "matches": { try { return new RegExp(want, "i").test(v); } catch { return false; } }
+    default:        return true;
+  }
+}
+
+/** Every rule on this node that the answers break, in the words the rule author wrote. */
+export function brokenRules(config: any, vars: Record<string, any>): string[] {
+  const rules: any[] = Array.isArray(config?.rules) ? config.rules : [];
+  const out: string[] = [];
+  for (const r of rules) {
+    if (!r || !r.then?.var) continue;
+    if (!testField(r.when, vars)) continue;      // the rule does not apply to this answer
+    if (testField(r.then, vars)) continue;       // it applies and it holds
+    out.push(String(r.message || `${r.then.var} is not valid for ${r.when?.var ?? "this combination"}`));
+  }
+  return out;
+}
+
+export function callerVariables(raw: unknown): { vars: Record<string, any>; rejected: string[] } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { vars: {}, rejected: [] };
+  const vars: Record<string, any> = {};
+  const rejected: string[] = [];
+  for (const [k, v] of Object.entries(raw as Record<string, any>)) {
+    if (k.startsWith("_")) { rejected.push(k); continue; }
+    vars[k] = v;
+  }
+  return { vars, rejected };
+}
+
 /** Is this instance parked on a `delay` node? Its waits live in variables._delays as { nodeId: ISO }. */
 function hasPendingDelay(inst: any): boolean {
   const d = (inst?.variables as any)?._delays;
@@ -937,6 +1029,16 @@ export async function resumeDueDelays(): Promise<{ waiting: number; resumed: num
 }
 
 export async function completeTask(taskId: string, opts: { actor?: string; outcome?: string; checklist?: any; variables?: any }) {
+  // Sanitised ONCE, here, and `opts` rebound to the clean object — a dozen places downstream read
+  // `opts.variables`, and filtering at each of them is a rule that holds only until somebody adds
+  // the thirteenth.
+  {
+    const clean = callerVariables(opts.variables);
+    if (clean.rejected.length) {
+      console.warn(`[workflow] refused caller-set internal variable(s) on task ${taskId}: ${clean.rejected.join(", ")}`);
+    }
+    opts = { ...opts, variables: clean.vars, __rejected: clean.rejected } as any;
+  }
   const task = await prisma.workflowTask.findUnique({ where: { id: taskId } });
   if (!task) throw new Error("Task not found");
   if (task.status !== "active") throw new Error("This task is already completed");
@@ -969,14 +1071,60 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       ? (task.captures as any[])
       : (Array.isArray((node0?.config as any)?.captures) ? (node0!.config as any).captures : []);
     const supplied = (opts.variables && typeof opts.variables === "object") ? opts.variables as Record<string, any> : {};
+    // WHAT THE STEP ASKS FOR, IT MUST GET.
+    //
+    // Required CHECKLIST items were enforced; required capture FIELDS were not enforced at all.
+    // Completing the profile step with an empty body returned 200 and the run advanced to
+    // Eligibility with no name, no nationality and no hiring type — and every decision downstream
+    // routes on those, while every document is stamped with `applicant`. A blank run is unroutable
+    // and unauditable, and nothing said so.
+    //
+    // A capture counts as required unless it says otherwise: these are the fields a step exists to
+    // collect, so opting out should be the deliberate act.
+    const missing: string[] = [];
     for (const cap of caps0) {
-      if (!cap || String(cap.type) !== "date") continue;
+      if (!cap || !cap.var) continue;
+      if (cap.required === false || cap.optional === true) continue;
+      const raw = supplied[cap.var];
+      // An existing value on the run satisfies it — a step re-entered after a loop should not demand
+      // the same answer twice.
+      const already = (inst.variables as any)?.[cap.var];
+      const has = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
+      if (!has(raw) && !has(already)) missing.push(String(cap.label || cap.var));
+    }
+    if (missing.length) {
+      throw new Error(missing.length === 1
+        ? `${missing[0]} is required to complete this step`
+        : `These are required to complete this step: ${missing.join(", ")}`);
+    }
+
+    for (const cap of caps0) {
+      if (!cap) continue;
       const raw = supplied[cap.var];
       if (raw === undefined || raw === null || String(raw).trim() === "") continue;
-      const t0 = new Date(String(raw)).getTime();
-      // Also rejects 31/13/2026, which Date parses as Invalid rather than rolling over.
-      if (isNaN(t0)) throw new Error(`${cap.label || cap.var}: "${raw}" is not a valid date`);
+
+      if (String(cap.type) === "date") {
+        const t0 = new Date(String(raw)).getTime();
+        // Also rejects 31/13/2026, which Date parses as Invalid rather than rolling over.
+        if (isNaN(t0)) throw new Error(`${cap.label || cap.var}: "${raw}" is not a valid date`);
+      }
+
+      // A select is a closed list, and it was not being treated as one: any string was accepted, so
+      // a decision reading it fell through to `else`. A value outside the list is a typo or a
+      // tampered request, and both should be refused where they enter rather than routed on.
+      if (String(cap.type) === "select" && String(cap.options ?? "").trim()) {
+        const allowed = String(cap.options).split(",").map((o: string) => o.trim()).filter(Boolean);
+        if (allowed.length && !allowed.includes(String(raw).trim())) {
+          throw new Error(`${cap.label || cap.var}: "${raw}" is not one of ${allowed.join(", ")}`);
+        }
+      }
     }
+
+    // Cross-field rules, against the run's variables WITH this step's answers applied — a rule about
+    // nationality and hiring type has to see both, whichever step supplied each of them.
+    const merged = { ...((inst.variables as any) ?? {}), ...supplied };
+    const broken = brokenRules(node0?.config, merged);
+    if (broken.length) throw new Error(broken.join(" · "));
   }
 
   // Merge captured variables into the instance before routing.

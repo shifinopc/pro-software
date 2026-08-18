@@ -146,6 +146,30 @@ async function main() {
     // onboarding onto their history, so the same field joins the run to the employee record.
     { id: "profile", type: "task", label: "Create Employee Profile", config: {
       assigneeRole: "pro_officer", slaHours: 24,
+      // WHAT THE THREE PATHS MEAN, ENFORCED WHERE THEY ARE CHOSEN.
+      //
+      // Nothing checked nationality against hiring type, so a profile reading nationality "Saudi" and
+      // hiring type "expat new hire" was accepted and the run issued that Saudi citizen a Work Visa,
+      // an Iqama and a Work Permit. All three are instruments for foreign nationals; the records are
+      // not merely wrong, they describe something that cannot exist. The location contradictions went
+      // through the same gap — a transfer from inside the Kingdom, filed as being outside it.
+      //
+      // Matched on a prefix rather than the exact word "Saudi", because this is a free-text field and
+      // people write Saudi, saudi, Saudi Arabian.
+      rules: [
+        { when: { var: "nationality", op: "matches", value: "^\s*saudi" },
+          then: { var: "hiringType", op: "in", value: "saudi_national" },
+          message: "A Saudi national cannot be onboarded on an expatriate path — a work visa, Iqama and work permit are for foreign nationals" },
+        { when: { var: "hiringType", op: "eq", value: "saudi_national" },
+          then: { var: "nationality", op: "matches", value: "^\s*saudi" },
+          message: "The Saudi national path needs a Saudi nationality — an expatriate needs a visa or a Qiwa transfer" },
+        { when: { var: "hiringType", op: "eq", value: "expat_new_hire" },
+          then: { var: "currentLocationStatus", op: "in", value: "outside_ksa" },
+          message: "A new expatriate hire is recruited from outside the Kingdom — somebody already inside it is a Qiwa transfer" },
+        { when: { var: "hiringType", op: "eq", value: "expat_transfer" },
+          then: { var: "currentLocationStatus", op: "in", value: "inside_ksa" },
+          message: "A Qiwa employee transfer moves somebody already working inside the Kingdom" },
+      ],
       captures: [
         { var: "applicant", type: "text", label: "Full name (exactly as printed in the passport)" },
         { var: "nationality", type: "text", label: "Nationality" },
