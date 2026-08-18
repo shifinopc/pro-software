@@ -60,18 +60,23 @@ async function main() {
       defaultAssigneeRole: "pro_officer",
       fields: [{ key: "contractNo", label: "Contract number", type: "text" },
                { key: "wage", label: "Basic wage", type: "text" }] },
-    { name: "GOSI Employee Registration", authority: "GOSI", leadDays: 14,
+    // Registering somebody with GOSI is a fact about their employment, not a permit with a validity
+    // period — it has no expiry to track, and saying so is what keeps it out of the deadline reports.
+    { name: "GOSI Employee Registration", authority: "GOSI", leadDays: 14, neverExpires: true,
       defaultAssigneeRole: "accountant",
       fields: [{ key: "gosiNo", label: "GOSI number", type: "text" }] },
   ]) {
     const found = await prisma.documentType.findFirst({ where: { name: dt.name, country: COUNTRY } });
     if (found) {
-      await prisma.documentType.update({ where: { id: found.id }, data: { retired: false } });
+      // neverExpires is corrected on an existing row too: this is the difference between "no expiry"
+      // and "nobody has entered one yet", and the records already issued are the ones sitting in the
+      // monitor at 0 days left.
+      await prisma.documentType.update({ where: { id: found.id }, data: { retired: false, neverExpires: !!(dt as any).neverExpires } });
       console.log(`document type "${dt.name}" already exists`);
     } else {
       await prisma.documentType.create({ data: {
         name: dt.name, country: COUNTRY, subjectKind: "employee",
-        authority: dt.authority, leadDays: dt.leadDays,
+        authority: dt.authority, leadDays: dt.leadDays, neverExpires: !!(dt as any).neverExpires,
         defaultAssigneeRole: dt.defaultAssigneeRole, fields: dt.fields as any,
       } });
       console.log(`created document type "${dt.name}" (employee · ${dt.authority})`);

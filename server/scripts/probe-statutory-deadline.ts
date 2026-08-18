@@ -75,6 +75,33 @@ async function main() {
   if (row?.statutoryDays !== 15) fail("a pack drops the deadline, so a new installation would start again with none");
   if (row?.statutoryBasis !== "GOSI FAQ") fail("the source did not travel, leaving a bare number nobody can check");
 
+  // A RECORD THAT CANNOT EXPIRE IS NOT OVERDUE.
+  //
+  // Removing a dangling expiryVar left GOSI registrations with no expiry date, and the SLA Monitor
+  // read the missing date as due today: seven sat in the at-risk column at "0d left" with an Escalate
+  // button beside them. The records were fine — nothing could say they had no deadline, so "no
+  // expiry" and "nobody has entered one yet" were the same null.
+  const { recomputeCompliance } = await import("../src/scheduler.js");
+  await prisma.documentType.update({ where: { id }, data: { neverExpires: true } });
+  const co = await prisma.company.findFirst({ select: { id: true } });
+  const permDoc = await prisma.document.create({ data: {
+    companyId: co!.id, person: "ZS Probe Person", docType: NAME,
+    expiryDate: null, status: "unknown", daysLeft: 0,
+  } });
+  await recomputeCompliance();
+  const perm = await prisma.document.findUnique({ where: { id: permDoc.id }, select: { status: true } });
+  console.log("");
+  console.log(`a non-expiring record is valid, not unknown: ${perm?.status === "valid" ? "YES" : "NO (" + perm?.status + ")"}`);
+  if (perm?.status !== "valid") fail("a record that cannot expire is still reported as unknown, so it stays in the deadline reports");
+
+  // The SLA Monitor's own rule, applied here so the screen and this check cannot drift apart.
+  const rows = (await prisma.document.findMany({ where: { supersededAt: null }, select: { docType: true, status: true, daysLeft: true, expiryDate: true } }))
+    .filter(d => d.expiryDate && (d.status !== "valid" || (Number(d.daysLeft) || 99) <= 30));
+  console.log(`...and nothing without an expiry is shown:  ${rows.every(r => r.expiryDate) ? "YES" : "NO"}`);
+  if (rows.some(r => !r.expiryDate)) fail("a document with no expiry date is still shown against a deadline");
+  if (rows.some(r => r.docType === NAME)) fail("the non-expiring type is still in the deadline report");
+  await prisma.document.delete({ where: { id: permDoc.id } });
+
   await sweep();
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);
   process.exit(bad === 0 ? 0 : 1);

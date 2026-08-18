@@ -42,12 +42,30 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
   // Superseded rows keep their old status as history; recomputing them would resurrect an expired
   // passport into the overdue counters after it had already been replaced.
   const docs = await prisma.document.findMany({ where: { supersededAt: null } });
+  // Types that have no expiry at all, so a missing date on one of their documents is the answer
+  // rather than a gap. Without this, "nobody has entered the expiry yet" and "this record does not
+  // have one" were the same null and both came out as "unknown".
+  const permanent = new Set((await prisma.documentType.findMany({ where: { neverExpires: true }, select: { name: true } })).map(t => t.name));
 
   const now = Date.now();
   const out: RecomputeResult = { scanned: 0, changed: 0, skippedInProgress: 0, undated: 0, transitions: [] };
 
   for (const d of docs) {
     const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN;
+
+    // A record that cannot expire is permanently valid, not permanently unknown. It has no deadline,
+    // so it belongs in no deadline report — which is what put seven GOSI registrations in the SLA
+    // Monitor at "0d left" with an Escalate button beside them.
+    if (permanent.has(d.docType)) {
+      if (d.status !== "valid" || d.daysLeft !== 0 || d.expiryDate != null) {
+        await prisma.document.update({ where: { id: d.id }, data: { status: "valid", daysLeft: 0, expiryDate: null } });
+        out.changed++;
+        out.transitions.push({ docType: d.docType, person: d.person, from: d.status, to: "valid", daysLeft: 0 });
+      }
+      out.scanned++;
+      continue;
+    }
+
     if (isNaN(t)) {
       // Missing or unparseable ("6786786"). We cannot invent an expiry date — the honest state is
       // "we don't know", and an unparseable string is normalised away so it can't masquerade as one.

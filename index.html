@@ -9749,6 +9749,7 @@
               <div style="margin-top:9px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">SOURCE</div><input value="{{ dtnStatBasis }}" onChange="{{ setDtnStatBasis }}" placeholder="the regulation or service page this comes from" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px;"></div>
             </div>
             <div style="margin-top:11px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DEFAULT ASSIGNEE ROLE</div><div style="position:relative;"><div data-dd onClick="{{ ddDtnAssigneeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; color:#1A1523; background:#FBFAFE; margin-top:6px; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; text-transform:capitalize;">{{ dtnAssigneeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddDtnAssigneeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddDtnAssigneeOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+            <div onClick="{{ toggleDtnNeverExpires }}" title="Turn this on for records that have no validity period at all, like a GOSI registration. They stay off the SLA Monitor because there is no deadline to measure them against." style="display:flex; align-items:center; gap:9px; margin-top:11px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><span style="font-size:12px; font-weight:600; color:#4B4757;">This document never expires</span><sc-if value="{{ dtnNeverOn }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnNeverOff }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
             <div onClick="{{ toggleDtnApproval }}" style="display:flex; align-items:center; gap:9px; margin-top:11px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><span style="font-size:12px; font-weight:600; color:#4B4757;">Renewal requires approval</span><sc-if value="{{ dtnApprovalOn }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnApprovalOff }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
           </div>
           <div style="border:1px solid #F0EDF6; border-radius:14px; padding:14px 16px; min-width:0;">
@@ -21532,7 +21533,7 @@ class Component extends DCLogic {
             : [p.requiresDocType, p.minMonths])),
           d.id,
           // Appended rather than inserted: everything above reads this tuple by position.
-          d.statutoryDays == null ? '' : String(d.statutoryDays), d.statutoryFrom || '', d.statutoryBasis || '',
+          d.statutoryDays == null ? '' : String(d.statutoryDays), d.statutoryFrom || '', d.statutoryBasis || '', d.neverExpires === true,
         ])
       : (dtReal ? [] : docTypeDefs));
     // Opening a type now loads it into the SAME editor used to create one — the old read-only
@@ -21542,7 +21543,7 @@ class Component extends DCLogic {
       this.setState({
         dtNewOpen: true, dtEditId: row9[9], dtnName: row9[0], dtnSubject: row9[1],
         dtnAuthority: row9[2] === '—' ? '' : row9[2], dtnLead: String(row9[3]),
-        dtnStatDays: row9[10] || '', dtnStatFrom: row9[11] || '', dtnStatBasis: row9[12] || '',
+        dtnStatDays: row9[10] || '', dtnStatFrom: row9[11] || '', dtnStatBasis: row9[12] || '', dtnNever: row9[13] === true,
         dtnFee: String(row9[4]).replace(/[^0-9]/g, ''), dtnApproval: !!row9[5], dtnAssignee: row9[6],
         // Fifth element = the field's existing id, carried so submit can reuse it.
         dtnFields: (row9[7] || []).map(f9 => [f9[0], f9[1], f9[2], f9[3] || '', f9[4] || '']).concat((row9[7] || []).length ? [] : [['', 'text', true, '', '']]),
@@ -21735,11 +21736,15 @@ class Component extends DCLogic {
       // Empty by default and it stays empty until somebody enters one WITH its source. A deadline the
       // platform invented is worse than no deadline at all.
       dtnStatDays: this.state.dtnStatDays || '', dtnStatFrom: this.state.dtnStatFrom || '', dtnStatBasis: this.state.dtnStatBasis || '',
+      // Off by default: almost everything expires, and a wrong "never expires" silently removes a
+      // record from every deadline report there is.
+      dtnNeverOn: this.state.dtnNever === true,
+      dtnNeverOff: this.state.dtnNever !== true,
       dtnApprovalOn: this.state.dtnApproval !== false,
       ...mkDd('ddDtnSubject', ['Employee', 'Company'], this.state.dtnSubject || 'Employee', (v) => this.setState({ dtnSubject: v })),
       ...mkDd('ddDtnAssignee', ['PRO Officer', 'Accountant', 'Admin'], this.state.dtnAssignee || 'PRO Officer', (v) => this.setState({ dtnAssignee: v })),
       dtnSubjectVal: this.state.dtnSubject || 'Employee', dtnAssigneeVal: this.state.dtnAssignee || 'PRO Officer',
-      openDtNew: () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' }),
+      openDtNew: () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' }),
       closeDtNew: () => this.setState({ dtNewOpen: false, dtEditId: null }),
       setDtnName: (e) => this.setState({ dtnName: e.target.value, dtnErr: '' }),
       setDtnAuthority: (e) => this.setState({ dtnAuthority: e.target.value }),
@@ -21749,6 +21754,7 @@ class Component extends DCLogic {
       setDtnStatBasis: (e) => this.setState({ dtnStatBasis: e.target.value }),
       setDtnFee: (e) => this.setState({ dtnFee: e.target.value }),
       toggleDtnApproval: () => this.setState({ dtnApproval: this.state.dtnApproval === false }),
+      toggleDtnNeverExpires: () => this.setState({ dtnNever: this.state.dtnNever !== true }),
       addDtnField: () => this.setState({ dtnFields: [...(this.state.dtnFields || []), ['', 'text', false, '', '']] }),
       // WIRED: creates a real DocumentType (name unique; fields with generated ids).
       submitDtNew: () => {
@@ -21770,6 +21776,7 @@ class Component extends DCLogic {
           statutoryDays: String(st.dtnStatDays || '').trim() === '' ? null : (parseInt(st.dtnStatDays) || null),
           statutoryFrom: (st.dtnStatFrom || '').trim() || null,
           statutoryBasis: (st.dtnStatBasis || '').trim() || null,
+          neverExpires: st.dtnNever === true,
           defaultFee: parseInt(String(st.dtnFee || '').replace(/[^0-9]/g, '')) || 0,
           requiresApproval: st.dtnApproval !== false,
           defaultAssigneeRole: ROLE_BACK[st.dtnAssignee] || 'pro_officer',
@@ -24369,7 +24376,13 @@ class Component extends DCLogic {
     const TONE = { on: ['On track', '#0E9355', '#E7F8EF'], risk: ['At risk', '#B8860B', '#FEF4E2'], breach: ['Breached', '#C0353A', '#FEECEC'] };
     // 1) Compliance documents — WIRED: real docs classified by daysLeft (<0 breach, ≤7 risk, else on).
     const slaComplianceDocs = (Array.isArray(this.state.documentsData) && this.state.documentsData.length
-      ? this.state.documentsData.filter(d2 => d2.status !== 'valid' || (Number(d2.daysLeft) || 99) <= 30).slice(0, 20).map(d2 => [
+      // NO EXPIRY MEANS NO DEADLINE, so it cannot be measured against one.
+      //
+      // The filter took anything not "valid", and a document with no expiry date is "unknown" — so
+      // every GOSI registration landed here, `daysLeft || 0` read as 0, and a record that cannot
+      // expire was shown as due today with an Escalate button. This screen is documents and steps
+      // against their deadlines; a record without one belongs on Compliance, not here.
+      ? this.state.documentsData.filter(d2 => d2.expiryDate && (d2.status !== 'valid' || (Number(d2.daysLeft) || 99) <= 30)).slice(0, 20).map(d2 => [
           d2.docType + (d2.person && !(coNameById[d2.companyId] === d2.person) ? ' — ' + d2.person : ''),
           (coNameById[d2.companyId] || '—') + (d2.issuingAuthority ? ' · ' + d2.issuingAuthority : ''),
           Number(d2.daysLeft) || 0, d2.id])

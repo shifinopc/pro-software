@@ -397,6 +397,11 @@ model DocumentType {
   // external reviewer read it exactly that way — and the platform would be asserting a compliance
   // date nobody had established. These three are deliberately separate and default to null: a
   // deadline appears only once somebody enters one, together with the source it comes from.
+  // Some records simply do not expire — a GOSI registration is a fact about an employment, not a
+  // permit with a validity period. Without a way to say so, "no expiry" and "expiry not captured yet"
+  // are the same null, and the compliance engine had to guess: it marked them "unknown" and the SLA
+  // Monitor read the missing date as due today, so seven GOSI rows sat there with an Escalate button.
+  neverExpires        Boolean @default(false)
   statutoryDays       Int?    // days allowed after the trigger event
   statutoryFrom       String? // the event the clock starts from — entry to the country, employment start…
   statutoryBasis      String? // the regulation or service page it comes from, so nobody takes the number on trust

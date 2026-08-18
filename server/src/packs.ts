@@ -75,7 +75,7 @@ export const KINDS = [
   // in, so every installed type silently took the default and company-scoped types (CR, GOSI, VAT)
   // arrived pointing at employees. "sub" was not a column either.
   { key: "documentTypes", model: "documentType", label: "document types", one: "document type",
-    fields: (r: any) => ({ name: r.name, subjectKind: r.subjectKind, defaultFee: r.defaultFee, leadDays: r.leadDays, statutoryDays: r.statutoryDays, statutoryFrom: r.statutoryFrom, statutoryBasis: r.statutoryBasis, authority: r.authority, fields: r.fields, prereqs: r.prereqs, requiresApproval: r.requiresApproval, defaultAssigneeRole: r.defaultAssigneeRole }) },
+    fields: (r: any) => ({ name: r.name, subjectKind: r.subjectKind, defaultFee: r.defaultFee, leadDays: r.leadDays, neverExpires: r.neverExpires, statutoryDays: r.statutoryDays, statutoryFrom: r.statutoryFrom, statutoryBasis: r.statutoryBasis, authority: r.authority, fields: r.fields, prereqs: r.prereqs, requiresApproval: r.requiresApproval, defaultAssigneeRole: r.defaultAssigneeRole }) },
   { key: "govCenters", model: "govCenter", label: "authorities", one: "authority",
     fields: (r: any) => ({ name: r.name, sub: r.sub, color: r.color, bg: r.bg }) },
   { key: "checklistRules", model: "checklistRule", label: "checklist rules", one: "checklist rule",
@@ -956,7 +956,7 @@ export async function buildPack(
       // here as "entity", which is not a column, so it exported as undefined and JSON.stringify
       // dropped it — every pack shipped without it and every installed type defaulted to employee.
       name: d.name, subjectKind: d.subjectKind, defaultFee: d.defaultFee,
-      leadDays: d.leadDays, statutoryDays: d.statutoryDays, statutoryFrom: d.statutoryFrom, statutoryBasis: d.statutoryBasis,
+      leadDays: d.leadDays, neverExpires: d.neverExpires, statutoryDays: d.statutoryDays, statutoryFrom: d.statutoryFrom, statutoryBasis: d.statutoryBasis,
       authority: d.authority,
       fields: d.fields ?? [], prereqs: d.prereqs ?? [],
       requiresApproval: d.requiresApproval, defaultAssigneeRole: d.defaultAssigneeRole,
