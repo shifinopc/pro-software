@@ -6385,7 +6385,7 @@
                     <div style="display:flex; align-items:center; gap:9px;">
                       <span style="font-size:13.5px; font-weight:650; color:#1A1523;">{{ w.name }}</span>
                       <span style="display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700; color:{{ w.activeColor }}; background:{{ w.activeBg }}; padding:2px 8px; border-radius:99px; flex-shrink:0;"><span style="width:5px; height:5px; border-radius:99px; background:{{ w.activeColor }};"></span>{{ w.activeLabel }}</span>
-                      <sc-if value="{{ w.hasCountry }}" hint-placeholder-val="{{ true }}"><span title="{{ w.countryTitle }}" style="display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:700; color:#5B00BA; background:#F3E8FF; border:1px solid #E3CCFF; padding:2px 9px; border-radius:99px; flex-shrink:0;"><span style="font-size:11px; line-height:1;">{{ w.countryFlag }}</span>{{ w.countryCode }}</span></sc-if>
+                      <sc-if value="{{ w.hasCountry }}" hint-placeholder-val="{{ true }}"><span title="{{ w.countryTitle }}" style="display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:700; color:#5B00BA; background:#F3E8FF; border:1px solid #E3CCFF; padding:2px 9px; border-radius:99px; flex-shrink:0;">{{ w.countryLabel }}</span></sc-if>
                     </div>
                     <div style="font-size:11.5px; color:#A9A6B4; margin-top:3px;">{{ w.meta }}</div>
                     <!-- What this template is actually for. Said only when a service points at it:
@@ -21937,8 +21937,14 @@ class Component extends DCLogic {
       // becomes noise on twenty, and cannot be filtered or counted because it is just characters in
       // a string. The flag is derived from the code, so it can never disagree with it.
       hasCountry: !!r.country,
-      countryCode: r.country || '',
-      countryFlag: r.country ? _cnFlag(r.country) : '',
+      // The NAME, not the flag and the code. A regional-indicator pair only renders as a flag where
+      // the platform ships one — on Windows it falls back to the two letters, so "flag + code" came
+      // out as "SA SA" and read like a mistake. The name says the same thing on every machine, and
+      // the code is still there in the tooltip for anyone who wants it.
+      countryLabel: r.country
+        ? (((Array.isArray(this.state.countriesData) ? this.state.countriesData : [])
+            .find(c9 => String(c9.code).toUpperCase() === String(r.country).toUpperCase()) || {}).name || r.country)
+        : '',
       countryTitle: r.country ? ('Part of the ' + r.country + ' country rules') : '',
       activeColor: r.active ? '#0E9355' : '#8C8899',
       activeBg: r.active ? '#E7F8EF' : '#F3F1F7',
