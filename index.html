@@ -6353,6 +6353,17 @@
                 </div>
               </div>
             </sc-for>
+            <sc-if value="{{ docTypesEmpty }}" hint-placeholder-val="{{ false }}">
+              <!-- A table with a header and nothing under it reads as broken, or as still loading.
+                   Every other list here says what it means; this one said nothing at all. -->
+              <div style="padding:40px 24px; text-align:center;">
+                <div style="font-size:14px; font-weight:700;">No document types yet</div>
+                <div style="font-size:12.5px; color:#8C8899; margin-top:5px; max-width:520px; margin-left:auto; margin-right:auto; line-height:1.6;">A document type is what turns a passport or an Iqama into something the system can track — an authority, a lead time, an expiry and a renewal. Workflow steps that issue documents name one of these.</div>
+                <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
+                  <span onClick="{{ openDtNew }}" style="display:inline-block; margin-top:14px; background:#7C00FF; color:#fff; font-size:12.5px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add the first type</span>
+                </sc-if>
+              </div>
+            </sc-if>
           </div></div>
         </section>
       </div></sc-if>
@@ -21740,7 +21751,11 @@ class Component extends DCLogic {
       },
     };
     const docTypesApi = {
-      docTypes, ...dtNewApi,
+      docTypes,
+      // A table with a header and no rows reads as broken or as still loading. Every other list in
+      // this app says what it means when it is empty; this one said nothing.
+      docTypesEmpty: docTypes.length === 0,
+      ...dtNewApi,
     };
 
     // ===== Workflow Builder =====
