@@ -1224,11 +1224,41 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     res.json({ ...t, validation: validateGraph(t.graph, t) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+/**
+ * Remove a template — but never its history.
+ *
+ * This used to delete every instance of the template first, so removing a workflow erased the record
+ * of every case that had ever run through it. That is not a template being deleted, it is a year of
+ * work disappearing, and there was no way to tell from the button which one you were about to do.
+ *
+ * So it follows the rule the rest of this app already uses. A template nothing has ever run is
+ * DELETED; one with runs behind it is RETIRED — it leaves the builder and every picker, its runs stay
+ * exactly where they are, and `?force=1` is refused rather than offered, because there is no version
+ * of "delete the history too" that is safe by accident.
+ */
 R.delete("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    await prisma.workflowInstance.deleteMany({ where: { templateId: req.params.id } }); // cascade instances
-    await prisma.workflowTemplate.delete({ where: { id: req.params.id } });
-    res.status(204).end();
+    const id = String(req.params.id);
+    const tpl = await prisma.workflowTemplate.findUnique({ where: { id } });
+    if (!tpl) return res.status(404).json({ error: "No such workflow" });
+
+    const runs = await prisma.workflowInstance.count({ where: { templateId: id } });
+    const live = await prisma.workflowInstance.count({ where: { templateId: id, status: "running" } });
+    // A running case has open tasks on somebody's list. Retiring it out from under them would leave
+    // work nobody can finish and no template to explain it.
+    if (live) {
+      return res.status(409).json({
+        error: `${live} case${live === 1 ? " is" : "s are"} still running on this workflow. Finish or cancel ${live === 1 ? "it" : "them"} first.`,
+        running: live, runs,
+      });
+    }
+    if (runs) {
+      await prisma.workflowTemplate.update({ where: { id }, data: { retired: true, active: false } });
+      return res.json({ retired: true, runs,
+        message: `Retired — ${runs} case${runs === 1 ? " keeps its" : "s keep their"} history.` });
+    }
+    await prisma.workflowTemplate.delete({ where: { id } });
+    res.json({ deleted: true, runs: 0, message: "Deleted — nothing had ever run on it." });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 

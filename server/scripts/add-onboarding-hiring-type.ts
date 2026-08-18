@@ -39,6 +39,40 @@ const RULE = "Onboarding documents by hiring type";
 const doc = (key: string, label: string, required = true) => ({ key, label, required, source: "manual" });
 
 async function main() {
+  // ── the two document types these steps produce ─────────────────────────────────────────────
+  //
+  // Both were checklist TEXT before: somebody ticked "contract authenticated" and nothing was left
+  // behind. As document types they become records with an authority, a lead time and an expiry, so
+  // Compliance can chase them and a renewal workflow can pick them up. That is the whole difference
+  // between a workflow that records work and one that only remembers it happened.
+  //
+  // GOSI Employee Registration is deliberately separate from the existing "GOSI Registration",
+  // which is a COMPANY document — the establishment's own registration. An employee being added to
+  // GOSI is a different fact about a different subject, and folding them into one type would put
+  // every employee's registration on the company record.
+  for (const dt of [
+    { name: "Qiwa Employment Contract", authority: "Qiwa", leadDays: 30,
+      defaultAssigneeRole: "pro_officer",
+      fields: [{ key: "contractNo", label: "Contract number", type: "text" },
+               { key: "wage", label: "Basic wage", type: "text" }] },
+    { name: "GOSI Employee Registration", authority: "GOSI", leadDays: 14,
+      defaultAssigneeRole: "accountant",
+      fields: [{ key: "gosiNo", label: "GOSI number", type: "text" }] },
+  ]) {
+    const found = await prisma.documentType.findFirst({ where: { name: dt.name, country: COUNTRY } });
+    if (found) {
+      await prisma.documentType.update({ where: { id: found.id }, data: { retired: false } });
+      console.log(`document type "${dt.name}" already exists`);
+    } else {
+      await prisma.documentType.create({ data: {
+        name: dt.name, country: COUNTRY, subjectKind: "employee",
+        authority: dt.authority, leadDays: dt.leadDays,
+        defaultAssigneeRole: dt.defaultAssigneeRole, fields: dt.fields as any,
+      } });
+      console.log(`created document type "${dt.name}" (employee · ${dt.authority})`);
+    }
+  }
+
   // ── the document rule the collect step reads ───────────────────────────────────────────────
   //
   // Row 0 has no conditions, so it applies to everyone; the other three add to it. evaluateRule
@@ -181,6 +215,8 @@ async function main() {
 
     // ── everyone converges here. A plain task, NOT a parallel join: a join waits for every
     //    in-edge to arrive, and only one of the three branches ever will. ────────────────────
+    // The checks stay a task, because somebody has to do them; what the task PRODUCES is then
+    // recorded as a document rather than as a tick that evaporates.
     { id: "contract", type: "task", label: "Qiwa Contract Authentication", config: {
       assigneeRole: "pro_officer", slaHours: 72,
       checklist: [
@@ -188,12 +224,23 @@ async function main() {
         doc("wage_matches", "Wage matches the contract and WPS record"),
         doc("job_title_matches", "Job title matches the work permit profession"),
       ],
+      captures: [
+        { var: "docNumber", type: "text", label: "Contract number on Qiwa" },
+        { var: "newExpiry", type: "date", label: "Contract end date" },
+      ],
     } },
+    { id: "contract_doc", type: "issue_document", label: "Qiwa Employment Contract",
+      config: { docType: "Qiwa Employment Contract" } },
     { id: "permit_doc", type: "issue_document", label: "Work Permit", config: { docType: "Work Permit" } },
 
     { id: "split", type: "parallel_split", label: "Set Up In Parallel", config: {} },
     { id: "payroll", type: "task", label: "Payroll & WPS Setup", config: { assigneeRole: "accountant", slaHours: 72,
-      checklist: [doc("wps_registered", "Registered on WPS"), doc("gosi_added", "Added to GOSI"), doc("bank_ok", "Salary account confirmed")] } },
+      checklist: [doc("wps_registered", "Registered on WPS"), doc("bank_ok", "Salary account confirmed")],
+      captures: [{ var: "docNumber", type: "text", label: "GOSI number" }] } },
+    // "Added to GOSI" was one tick on the payroll list. As a document it is a record with a number,
+    // an authority and a date, which is what anyone asking "is this employee registered?" needs.
+    { id: "gosi_doc", type: "issue_document", label: "GOSI Employee Registration",
+      config: { docType: "GOSI Employee Registration" } },
     { id: "access", type: "task", label: "System Access", config: { assigneeRole: "pro_officer", slaHours: 48 } },
     { id: "assets", type: "task", label: "Assets & Accommodation", config: { assigneeRole: "pro_officer", slaHours: 72 } },
     { id: "insurance", type: "issue_document", label: "Health Insurance", config: { docType: "Health Insurance" } },
@@ -249,10 +296,12 @@ async function main() {
     e("d_transfer", "end_transfer", "expired"),
     e("d_transfer", "end_transfer", "else"),
 
-    e("contract", "permit_doc"),
+    e("contract", "contract_doc"),
+    e("contract_doc", "permit_doc"),
     e("permit_doc", "split"),
     e("split", "payroll"), e("split", "access"), e("split", "assets"), e("split", "insurance"),
-    e("payroll", "join"), e("access", "join"), e("assets", "join"), e("insurance", "join"),
+    e("payroll", "gosi_doc"), e("gosi_doc", "join"),
+    e("access", "join"), e("assets", "join"), e("insurance", "join"),
     e("join", "joined"),
 
     e("joined", "d_joined"),

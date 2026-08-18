@@ -67,8 +67,18 @@ async function main() {
     const inDeg = edges.filter(e => e.to === j.id).length;
     const split = nodes.find(n => n.type === "parallel_split" || n.type === "split");
     const fanOut = split ? out(split.id).length : 0;
-    console.log(`join waits for ${inDeg}, split opens ${fanOut}:                  ${inDeg === fanOut ? "YES" : "NO"}`);
-    if (inDeg !== fanOut) fail("the join waits for a different number of paths than the split opens — it would hang");
+    // NOT a plain fan-out comparison: a branch may be a chain (payroll -> GOSI document -> join), so
+    // what matters is how many of the split's branches eventually reach the join, counted by walking
+    // each one. Comparing the split's edge count to the join's would have called this a hang.
+    const reaches = (from: string, target: string, seen = new Set<string>()): boolean => {
+      if (from === target) return true;
+      if (seen.has(from)) return false;
+      seen.add(from);
+      return out(from).some(e => reaches(e.to, target, seen));
+    };
+    const arriving = split ? out(split.id).filter(e => reaches(e.to, j.id)).length : 0;
+    console.log(`join waits for ${inDeg}, ${arriving} of ${fanOut} branches reach it:  ${inDeg === arriving ? "YES" : "NO"}`);
+    if (inDeg !== arriving) fail("the join waits for a different number of paths than actually arrive — it would hang");
   }
 
   // ── converge point must not be a join ──────────────────────────────────────────────────────
