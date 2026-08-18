@@ -129,11 +129,17 @@ async function main() {
   console.log(`...and the graph sends it to a person:          ${elseEdge ? byId.get(elseEdge.to)?.label : "NOWHERE"}`);
   if (!elseEdge) fail("an unknown hiring type has no route");
 
-  // ── the old template is untouched ──────────────────────────────────────────────────────────
-  const old = await prisma.workflowTemplate.findFirst({ where: { name: "Employee Onboarding" } });
-  const oldNodes = ((old?.graph as any)?.nodes ?? []).length;
-  console.log(`\nthe original template is untouched:            ${oldNodes === 23 ? "YES (23 nodes, still active=" + old?.active + ")" : "CHANGED (" + oldNodes + " nodes)"}`);
-  if (oldNodes !== 23) fail("the existing Employee Onboarding template changed");
+  // ── this is the only workflow now ─────────────────────────────────────────────────────────
+  //
+  // Every other template was removed on request, so the check that used to guard the original
+  // Employee Onboarding is gone with it. What matters instead is that nothing else crept back and
+  // that this one is the live one — an installation whose only workflow is a draft can run nothing.
+  const all = await prisma.workflowTemplate.findMany({ select: { name: true, active: true } });
+  console.log(`
+workflow templates on this installation:       ${all.length}`);
+  for (const t of all) console.log(`  ${t.active ? "ACTIVE" : "draft "}  ${t.name}`);
+  if (all.length !== 1) fail(`expected one workflow, found ${all.length}`);
+  if (!all.every(t => t.active)) fail("the only workflow is a draft, so nothing can run");
 
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);
   process.exit(bad === 0 ? 0 : 1);
