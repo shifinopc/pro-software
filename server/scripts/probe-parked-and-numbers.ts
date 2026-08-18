@@ -26,22 +26,40 @@ const tok = (await (await fetch(API + "/api/auth/login", { method: "POST", heade
 const H = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
 
 // C7 — a parked run says what it is waiting for, and can be resumed on demand
-const parked = await prisma.workflowInstance.findFirst({ where: { status: "running" }, select: { id: true, title: true, variables: true } });
-const withDelay = parked && Object.keys((parked.variables as any)?._delays ?? {}).length ? parked
-  : (await prisma.workflowInstance.findMany({ where: { status: "running" } })).find(i => Object.keys((i.variables as any)?._delays ?? {}).length);
-if (!withDelay) { console.log("  no parked run to test with"); }
-else {
-  const det = await (await fetch(`${API}/api/workflow/instances/${withDelay.id}`, { headers: H })).json() as any;
+// ITS OWN PARKED RUN, NOT SOMEBODY ELSE'S.
+//
+// This used to grab the first real instance sitting on a delay and force-resume it. On a development
+// database that looked harmless; on any installation with real work it advances a client's run past
+// a waiting period nobody agreed to skip — and it did exactly that here, pulling four instances out
+// of probation and leading the next audit to conclude the scheduler ignored due dates.
+const tpl2 = await prisma.workflowTemplate.findFirst({ where: { name: "Employee Onboarding" } });
+const mine = await prisma.workflowInstance.create({ data: {
+  templateId: tpl2!.id, title: "C7 probe run", status: "running", startedAt: new Date().toISOString(),
+  variables: { _delays: { probation: new Date(Date.now() + 90 * 86400000).toISOString() } } as any,
+} });
+{
+  const det = await (await fetch(`${API}/api/workflow/instances/${mine.id}`, { headers: H })).json() as any;
   console.log(`  a parked run reports its wait: ${det.isWaiting ? "YES" : "NO"}`);
   if (!det.isWaiting) bad++;
   for (const w of (det.waiting ?? [])) console.log(`    waiting on "${w.label}" until ${String(w.until).slice(0, 10)} (${w.daysLeft}d, due=${w.due})`);
-  const before = await prisma.workflowTask.count({ where: { instanceId: withDelay.id, status: "active" } });
-  const r = await fetch(`${API}/api/workflow/instances/${withDelay.id}/resume`, { method: "POST", headers: H });
-  const j = await r.json().catch(() => ({})) as any;
-  const after = await prisma.workflowTask.count({ where: { instanceId: withDelay.id, status: "active" } });
+
+  // The scheduler must NOT take a wait that is not due — that is the whole point of a wait.
+  const { resumeDueDelays } = await import("../src/workflow.js");
+  await resumeDueDelays();
+  const still = await prisma.workflowInstance.findUnique({ where: { id: mine.id }, select: { variables: true } });
+  const held = Object.keys(((still?.variables as any)?._delays) ?? {}).length > 0;
+  console.log(`  a tick leaves a future wait alone: ${held ? "YES" : "NO — it resumed early"}`);
+  if (!held) bad++;
+
+  const before = await prisma.workflowTask.count({ where: { instanceId: mine.id, status: "active" } });
+  const r = await fetch(`${API}/api/workflow/instances/${mine.id}/resume`, { method: "POST", headers: H });
+  const after = await prisma.workflowTask.count({ where: { instanceId: mine.id, status: "active" } });
   console.log(`  resume on demand: ${r.status} — active tasks ${before} -> ${after}`);
   if (r.status !== 200 || after <= before) { console.log("  x the run did not advance — the delay half of the workflow stays unreachable"); bad++; }
 }
+await prisma.workflowLog.deleteMany({ where: { instanceId: mine.id } });
+await prisma.workflowTask.deleteMany({ where: { instanceId: mine.id } });
+await prisma.workflowInstance.delete({ where: { id: mine.id } });
 
 // N6 — one number, one person
 const co = await prisma.company.findFirst({ select: { id: true } });
