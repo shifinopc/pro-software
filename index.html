@@ -12401,6 +12401,18 @@ class Component extends DCLogic {
       // bought two lines with the second one hidden — which is what "Managed by" looked like,
       // opening into a box whose options ran under Cancel/Save.
       dd.style.maxHeight = Math.min(MAX, Math.max(0, room)) + 'px';
+      // A CEILING WITHOUT AN OVERFLOW RULE IS NOT A CEILING — it is a crop line the content
+      // ignores. `.fm-dd` and `.pill-dd` declare `overflow-y:auto` beside their max-height, but the
+      // 59 hand-rolled panels declare neither, so capping one here left its surplus painted OUTSIDE
+      // the panel: the Create-user role list drew six options in a white box and the seventh loose
+      // on the page behind it, unreadable and unclickable. It only appeared once a seventh role
+      // existed, which is why it survived every earlier pass over this code.
+      //
+      // Written every time rather than read-then-set: the value here is one we wrote ourselves last
+      // pass, so testing it would just confirm our own work. Panels that already declare auto are
+      // unaffected.
+      dd.style.overflowY = 'auto';
+      dd.style.overscrollBehavior = 'contain';
       // A LAST RESORT, not the usual path: move the field when the room is unusable.
       //
       // Scrolling the dialog to clear the footer wins the panel its room back, but it also moves

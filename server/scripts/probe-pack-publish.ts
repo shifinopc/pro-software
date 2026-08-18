@@ -9,15 +9,23 @@
  *   3. upgrading applies it                            (how it takes effect)
  *
  * Run against a COPY of the real database. Restores the packs folder afterwards.
+ *
+ * That sentence used to be the only thing standing between this probe and the working database, and
+ * it did not hold: run against dev on 18 August it installed the whole Saudi pack — seventeen
+ * workflow templates into an installation deliberately kept at one, a pipeline stage, and pack
+ * provenance stamped onto fourteen rows the firm had made by hand — and then reported PASS. It reads
+ * as a test and behaves as an install. The guard below is now what enforces the header.
  */
 import { prisma } from "../src/db.js";
 import { readPack, savePack, listPacks, applyInstall, planUpgrade, applyUpgrade, installedPacks, PACKS_DIR } from "../src/packs.js";
+import { requireScratchDatabase } from "./_scratch-guard.js";
 import { unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 async function main() {
   let bad = 0;
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
+  await requireScratchDatabase("This probe", "copy");
   const NEW_FILE = join(PACKS_DIR, "pack-sa-2026.9.json");
 
   try {

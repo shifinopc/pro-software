@@ -12,8 +12,20 @@
  * That already happened here: a run against the working database left every Saudi workforce band
  * duplicated and a probe's invented document type sitting in the live configuration.
  *
- * A comment in a header cannot stop anybody, so this does. Imported by every probe that writes pack
- * provenance — one definition, so a new pack probe cannot quietly be written without it.
+ * A comment in a header cannot stop anybody, so this does.
+ *
+ * IMPORTING IT IS STILL A CONVENTION, NOT A MECHANISM. This file cannot reach out and protect a
+ * probe that never imports it, and that gap has now cost something twice: first the duplicated
+ * workforce bands above, then probe-pack-publish.ts, which called applyInstall on the real Saudi
+ * pack, said in its own header that it must be run against a copy, imported nothing to enforce it,
+ * and reported PASS after installing seventeen workflow templates into the working database.
+ *
+ * So: any probe that calls applyInstall, applyUpgrade or savePack belongs on this list.
+ *
+ *   probe-install-visible · probe-pack-uninstall · probe-pack-upgrade · probe-pack-publish
+ *
+ * probe-pack-roundtrip and probe-pack-export are deliberately absent — they build and destroy their
+ * own fixture country (ZX, ZZ) and never touch a row that belongs to anybody.
  */
 import { prisma } from "../src/db.js";
 
