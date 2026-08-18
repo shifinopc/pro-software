@@ -265,6 +265,17 @@ async function main() {
         doc("medical_ksa", "Medical test completed in KSA"),
         doc("biometrics", "Biometrics captured"),
       ],
+    } },
+    // The Iqama's own step, and it could not have had one before: under the old order the residence
+    // permit was issued at arrival, so its number was captured there — weeks before the work permit
+    // that has to precede it. Now it is applied for after the permit exists, which is when anybody
+    // actually has a number to record.
+    { id: "iqama_task", type: "task", label: "Iqama Issuance", config: {
+      assigneeRole: "pro_officer", govCenter: "Muqeem", slaHours: 168,
+      checklist: [
+        doc("iqama_fees", "Iqama fees and levy paid"),
+        doc("iqama_insurance", "Health insurance active and covering the residence period"),
+      ],
       captures: [
         { var: "iqamaNumber", type: "text", label: "Iqama number" },
         { var: "iqamaExpiry", type: "date", label: "Iqama expiry" },
@@ -345,6 +356,10 @@ async function main() {
         { var: "permitExpiry", type: "date", label: "Work permit expiry" },
       ],
     } },
+    { id: "d_iqama", type: "decision", label: "Residence Permit Required?", config: { branches: [
+      { var: "hiringType", op: "eq", value: "expat_new_hire", key: "new_hire" },
+      { var: "hiringType", op: "eq", value: "expat_transfer", key: "transfer" },
+    ] } },
     { id: "permit_doc", type: "issue_document", label: "Work Permit",
       config: { docType: "Work Permit", numberVar: "permitNumber", expiryVar: "permitExpiry" } },
 
@@ -391,7 +406,9 @@ async function main() {
     ] } },
     { id: "end_cancel", type: "end", label: "Joining Cancelled", config: {} },
 
-    { id: "probation", type: "delay", label: "Probation (90 days)", config: { days: 90 } },
+        // COUNTED, because Article 53 caps the TOTAL. Each wait adds its own days to probationDaysUsed,
+    // which is the only way a decision can ask how much probation this employee has actually served.
+    { id: "probation", type: "delay", label: "Probation (90 days)", config: { days: 90, accumulateInto: "probationDaysUsed" } },
     // A VERDICT NEEDS SOMETHING BEHIND IT.
     //
     // This step used to be one dropdown: Confirmed? yes / no / extend. Chosen from that alone, a
@@ -403,6 +420,11 @@ async function main() {
     // Required items gate completion, so the step cannot be closed by opening it and picking "no".
     { id: "prob_review", type: "task", label: "Probation Review", config: { assigneeRole: "hr_officer",
       slaHours: 72,
+      rules: [
+        { when: { var: "probationOutcome", op: "eq", value: "extend" },
+          then: { var: "extensionAgreed", op: "eq", value: "yes" },
+          message: "Probation can only be extended by prior written agreement with the employee (Labour Law art. 53)" },
+      ],
       checklist: [
         { key: "manager_appraisal", label: "Line manager's appraisal completed and signed", required: true },
         { key: "objectives_reviewed", label: "Probation objectives reviewed against the job description", required: true },
@@ -413,17 +435,36 @@ async function main() {
       ],
       captures: [
         { var: "probationOutcome", type: "select", label: "Confirmed?", options: "yes,no,extend" },
+        // Article 53 allows the period to be extended only by prior WRITTEN agreement. Optional as a
+        // field and mandatory as a rule: it is only asked of somebody who is extending.
+        { var: "extensionAgreed", type: "select", label: "Written agreement to extend obtained?", options: "yes,no", required: false },
         // Free text rather than a reason code: at this end of the process the specifics are the
         // point, and a fixed list would be answered with whichever option is least wrong.
         { var: "probationNotes", type: "text", label: "Reason for the decision" },
         { var: "probationEffective", type: "date", label: "Effective from" },
       ] } },
+    // 180 DAYS IN ALL CASES. The extend branch used to loop straight back into another 30 days with
+    // no counter and no exit — a fourth, tenth or fiftieth extension was possible, and each one past
+    // the ceiling is unlawful. An employee who has already served 180 days cannot be extended again,
+    // so the only answers left are the two this step exists to choose between.
+    { id: "d_cap", type: "decision", label: "Probation Limit Reached?", config: { branches: [
+      { var: "probationDaysUsed", op: "gte", value: 180, key: "capped" },
+    ] } },
+    { id: "prob_final", type: "task", label: "Probation Limit Reached — Confirm or End", config: {
+      assigneeRole: "hr_officer", slaHours: 48,
+      checklist: [doc("cap_explained", "Employee told the probation period has run to its statutory limit")],
+      captures: [{ var: "probationFinal", type: "select", label: "Confirm or end employment?", options: "confirm,terminate" }],
+    } },
+    { id: "d_final", type: "decision", label: "Final Outcome", config: { branches: [
+      { var: "probationFinal", op: "eq", value: "confirm", key: "confirm" },
+      { var: "probationFinal", op: "eq", value: "terminate", key: "terminate" },
+    ] } },
     { id: "d_prob", type: "decision", label: "Confirmed?", config: { branches: [
       { var: "probationOutcome", op: "eq", value: "yes", key: "yes" },
       { var: "probationOutcome", op: "eq", value: "extend", key: "extend" },
       { var: "probationOutcome", op: "eq", value: "no", key: "no" },
     ] } },
-    { id: "extend", type: "delay", label: "Extend Probation (30 days)", config: { days: 30 } },
+        { id: "extend", type: "delay", label: "Extend Probation (30 days)", config: { days: 30, accumulateInto: "probationDaysUsed" } },
     { id: "end_term", type: "end", label: "Not Confirmed — Termination", config: {} },
     { id: "confirm_appr", type: "approval", label: "Employee Confirmation Approval", config: { approverRole: "admin" } },
     { id: "notify", type: "notify", label: "Notify Employee", config: {} },
@@ -443,7 +484,14 @@ async function main() {
     e("hiring_appr", "d_hiring", "approve"),
     e("hiring_appr", "end_nohire", "reject"),
 
-    e("d_hiring", "contract", "saudi"),
+    // THE ORDER THE GOVERNMENT ACTUALLY REQUIRES.
+    //
+    // Every branch now reaches health insurance before anything else it gates. CCHI cover starts from
+    // the employment relationship for a Saudi and from entry or transfer for an expatriate, and a
+    // residence permit cannot be granted without a policy covering it — so insurance sits on the
+    // trunk, ahead of the contract, rather than in the parallel block ten nodes later where the Iqama
+    // had already been issued against a policy that did not exist.
+    e("d_hiring", "insurance_task", "saudi"),
     e("d_hiring", "visa_apply", "new_hire"),
     e("d_hiring", "qiwa_req", "transfer"),
     e("d_hiring", "hold", "else"),
@@ -451,11 +499,10 @@ async function main() {
 
     e("visa_apply", "visa_doc"),
     e("visa_doc", "arrival"),
-    e("arrival", "iqama_doc"),
-    e("iqama_doc", "contract"),
+    e("arrival", "insurance_task"),
 
     e("qiwa_req", "d_transfer"),
-    e("d_transfer", "contract", "approved"),
+    e("d_transfer", "insurance_task", "approved"),
     e("d_transfer", "end_transfer", "rejected"),
     e("d_transfer", "end_transfer", "expired"),
     e("d_transfer", "end_transfer", "cancelled"),
@@ -467,6 +514,9 @@ async function main() {
     // An unrecognised value is not a failed transfer — it goes back to a person, like the hiring type.
     e("d_transfer", "qiwa_req", "else"),
 
+    e("insurance_task", "insurance"),
+    e("insurance", "contract"),
+
     e("contract", "contract_doc"),
     // A WORK PERMIT IS AN EXPATRIATE INSTRUMENT. The three hiring types converged before this node,
     // so a Saudi national was issued one — a document that does not exist for them, on their record,
@@ -477,11 +527,20 @@ async function main() {
     e("d_permit", "split", "saudi"),
     e("d_permit", "permit_task", "else"),     // unknown: issue it and let a person correct the profile
     e("permit_task", "permit_doc"),
-    e("permit_doc", "split"),
-    e("split", "payroll"), e("split", "access"), e("split", "assets"), e("split", "insurance_task"),
-    e("insurance_task", "insurance"),
+    // MHRSD issues the work licence and then directs the establishment to the Passport Office for the
+    // residence permit — the permit is a precondition of the Iqama, and the graph had them the other
+    // way round, so every expatriate run recorded an Iqama whose real counterpart could not exist yet.
+    e("permit_doc", "d_iqama"),
+    e("d_iqama", "iqama_task", "new_hire"),
+    e("iqama_task", "iqama_doc"),
+    // A transfer keeps the Iqama it already has: the number and expiry stay, and the employer on it
+    // is updated rather than a new one issued. Recording a fresh Iqama here would invent a document.
+    e("d_iqama", "split", "transfer"),
+    e("d_iqama", "split", "else"),
+    e("iqama_doc", "split"),
+    e("split", "payroll"), e("split", "access"), e("split", "assets"),
     e("payroll", "gosi_doc"), e("gosi_doc", "join"),
-    e("access", "join"), e("assets", "join"), e("insurance", "join"),
+    e("access", "join"), e("assets", "join"),
     e("join", "joined"),
 
     e("joined", "d_joined"),
@@ -495,7 +554,13 @@ async function main() {
     e("probation", "prob_review"),
     e("prob_review", "d_prob"),
     e("d_prob", "confirm_appr", "yes"),
-    e("d_prob", "extend", "extend"),
+    e("d_prob", "d_cap", "extend"),
+    e("d_cap", "prob_final", "capped"),      // 180 days served — extending again would be unlawful
+    e("d_cap", "extend", "else"),
+    e("prob_final", "d_final"),
+    e("d_final", "confirm_appr", "confirm"),
+    e("d_final", "end_term", "terminate"),
+    e("d_final", "prob_final", "else"),      // no answer is not a termination
     e("d_prob", "end_term", "no"),
     e("d_prob", "prob_review", "else"),       // no answer is not a termination
     e("extend", "prob_review"),

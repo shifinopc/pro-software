@@ -2,8 +2,8 @@
   "pack": "sa",
   "country": "SA",
   "countryName": "Saudi Arabia",
-  "version": "2026.9",
-  "generatedAt": "2026-08-18T12:21:04.910Z",
+  "version": "2026.10",
+  "generatedAt": "2026-08-18T13:07:37.420Z",
   "contains": "configuration only — no companies, employees, documents, invoices or credentials",
   "documentTypes": [
     {
@@ -243,7 +243,7 @@
             "condition": "reject"
           },
           {
-            "to": "contract",
+            "to": "insurance_task",
             "from": "d_hiring",
             "condition": "saudi"
           },
@@ -278,13 +278,8 @@
             "condition": ""
           },
           {
-            "to": "iqama_doc",
+            "to": "insurance_task",
             "from": "arrival",
-            "condition": ""
-          },
-          {
-            "to": "contract",
-            "from": "iqama_doc",
             "condition": ""
           },
           {
@@ -293,7 +288,7 @@
             "condition": ""
           },
           {
-            "to": "contract",
+            "to": "insurance_task",
             "from": "d_transfer",
             "condition": "approved"
           },
@@ -338,6 +333,16 @@
             "condition": "else"
           },
           {
+            "to": "insurance",
+            "from": "insurance_task",
+            "condition": ""
+          },
+          {
+            "to": "contract",
+            "from": "insurance",
+            "condition": ""
+          },
+          {
             "to": "contract_doc",
             "from": "contract",
             "condition": ""
@@ -373,8 +378,33 @@
             "condition": ""
           },
           {
-            "to": "split",
+            "to": "d_iqama",
             "from": "permit_doc",
+            "condition": ""
+          },
+          {
+            "to": "iqama_task",
+            "from": "d_iqama",
+            "condition": "new_hire"
+          },
+          {
+            "to": "iqama_doc",
+            "from": "iqama_task",
+            "condition": ""
+          },
+          {
+            "to": "split",
+            "from": "d_iqama",
+            "condition": "transfer"
+          },
+          {
+            "to": "split",
+            "from": "d_iqama",
+            "condition": "else"
+          },
+          {
+            "to": "split",
+            "from": "iqama_doc",
             "condition": ""
           },
           {
@@ -390,16 +420,6 @@
           {
             "to": "assets",
             "from": "split",
-            "condition": ""
-          },
-          {
-            "to": "insurance_task",
-            "from": "split",
-            "condition": ""
-          },
-          {
-            "to": "insurance",
-            "from": "insurance_task",
             "condition": ""
           },
           {
@@ -420,11 +440,6 @@
           {
             "to": "join",
             "from": "assets",
-            "condition": ""
-          },
-          {
-            "to": "join",
-            "from": "insurance",
             "condition": ""
           },
           {
@@ -468,9 +483,39 @@
             "condition": "yes"
           },
           {
-            "to": "extend",
+            "to": "d_cap",
             "from": "d_prob",
             "condition": "extend"
+          },
+          {
+            "to": "prob_final",
+            "from": "d_cap",
+            "condition": "capped"
+          },
+          {
+            "to": "extend",
+            "from": "d_cap",
+            "condition": "else"
+          },
+          {
+            "to": "d_final",
+            "from": "prob_final",
+            "condition": ""
+          },
+          {
+            "to": "confirm_appr",
+            "from": "d_final",
+            "condition": "confirm"
+          },
+          {
+            "to": "end_term",
+            "from": "d_final",
+            "condition": "terminate"
+          },
+          {
+            "to": "prob_final",
+            "from": "d_final",
+            "condition": "else"
           },
           {
             "to": "end_term",
@@ -804,18 +849,6 @@
             "type": "task",
             "label": "Arrival, Medical & Biometrics",
             "config": {
-              "captures": [
-                {
-                  "var": "iqamaNumber",
-                  "type": "text",
-                  "label": "Iqama number"
-                },
-                {
-                  "var": "iqamaExpiry",
-                  "type": "date",
-                  "label": "Iqama expiry"
-                }
-              ],
               "slaHours": 168,
               "checklist": [
                 {
@@ -837,6 +870,42 @@
                   "required": true
                 }
               ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "iqama_task",
+            "type": "task",
+            "label": "Iqama Issuance",
+            "config": {
+              "captures": [
+                {
+                  "var": "iqamaNumber",
+                  "type": "text",
+                  "label": "Iqama number"
+                },
+                {
+                  "var": "iqamaExpiry",
+                  "type": "date",
+                  "label": "Iqama expiry"
+                }
+              ],
+              "slaHours": 168,
+              "checklist": [
+                {
+                  "key": "iqama_fees",
+                  "label": "Iqama fees and levy paid",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "iqama_insurance",
+                  "label": "Health insurance active and covering the residence period",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "govCenter": "Muqeem",
               "assigneeRole": "pro_officer"
             }
           },
@@ -1068,6 +1137,27 @@
               ],
               "govCenter": "Qiwa",
               "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "d_iqama",
+            "type": "decision",
+            "label": "Residence Permit Required?",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "new_hire",
+                  "var": "hiringType",
+                  "value": "expat_new_hire"
+                },
+                {
+                  "op": "eq",
+                  "key": "transfer",
+                  "var": "hiringType",
+                  "value": "expat_transfer"
+                }
+              ]
             }
           },
           {
@@ -1322,7 +1412,8 @@
             "type": "delay",
             "label": "Probation (90 days)",
             "config": {
-              "days": 90
+              "days": 90,
+              "accumulateInto": "probationDaysUsed"
             }
           },
           {
@@ -1330,12 +1421,34 @@
             "type": "task",
             "label": "Probation Review",
             "config": {
+              "rules": [
+                {
+                  "then": {
+                    "op": "eq",
+                    "var": "extensionAgreed",
+                    "value": "yes"
+                  },
+                  "when": {
+                    "op": "eq",
+                    "var": "probationOutcome",
+                    "value": "extend"
+                  },
+                  "message": "Probation can only be extended by prior written agreement with the employee (Labour Law art. 53)"
+                }
+              ],
               "captures": [
                 {
                   "var": "probationOutcome",
                   "type": "select",
                   "label": "Confirmed?",
                   "options": "yes,no,extend"
+                },
+                {
+                  "var": "extensionAgreed",
+                  "type": "select",
+                  "label": "Written agreement to extend obtained?",
+                  "options": "yes,no",
+                  "required": false
                 },
                 {
                   "var": "probationNotes",
@@ -1385,6 +1498,67 @@
             }
           },
           {
+            "id": "d_cap",
+            "type": "decision",
+            "label": "Probation Limit Reached?",
+            "config": {
+              "branches": [
+                {
+                  "op": "gte",
+                  "key": "capped",
+                  "var": "probationDaysUsed",
+                  "value": 180
+                }
+              ]
+            }
+          },
+          {
+            "id": "prob_final",
+            "type": "task",
+            "label": "Probation Limit Reached — Confirm or End",
+            "config": {
+              "captures": [
+                {
+                  "var": "probationFinal",
+                  "type": "select",
+                  "label": "Confirm or end employment?",
+                  "options": "confirm,terminate"
+                }
+              ],
+              "slaHours": 48,
+              "checklist": [
+                {
+                  "key": "cap_explained",
+                  "label": "Employee told the probation period has run to its statutory limit",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "assigneeRole": "hr_officer"
+            }
+          },
+          {
+            "id": "d_final",
+            "type": "decision",
+            "label": "Final Outcome",
+            "config": {
+              "branches": [
+                {
+                  "op": "eq",
+                  "key": "confirm",
+                  "var": "probationFinal",
+                  "value": "confirm"
+                },
+                {
+                  "op": "eq",
+                  "key": "terminate",
+                  "var": "probationFinal",
+                  "value": "terminate"
+                }
+              ]
+            }
+          },
+          {
             "id": "d_prob",
             "type": "decision",
             "label": "Confirmed?",
@@ -1416,7 +1590,8 @@
             "type": "delay",
             "label": "Extend Probation (30 days)",
             "config": {
-              "days": 30
+              "days": 30,
+              "accumulateInto": "probationDaysUsed"
             }
           },
           {

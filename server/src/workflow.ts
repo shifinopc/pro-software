@@ -626,6 +626,20 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           queue.push(...nextTargets(g, nodeId));
           break;
         }
+        // A WAITING PERIOD THE ENGINE CAN COUNT.
+        //
+        // Probation could be extended without limit — 90 days then 30, then 30, then 30, with no
+        // counter, no cap and no exit. Saudi Labour Law Article 53 puts a hard ceiling of 180 days on
+        // the total in all cases, so a workflow that cannot add up its own waits cannot express the
+        // one rule that matters here. `accumulateInto` names a variable that each pass adds its own
+        // days to, which a decision can then test with the operators it already has.
+        if (c.accumulateInto) {
+          const key = String(c.accumulateInto);
+          const days = hours / 24;
+          const before = Number(vars[key]) || 0;
+          vars[key] = Math.round((before + days) * 100) / 100;
+          await log("delay.counted", nodeId, `${node.label ?? "Delay"} — ${key} ${before} → ${vars[key]} days`);
+        }
         const until = new Date(Date.now() + hours * 3600_000).toISOString();
         vars._delays = vars._delays || {};
         vars._delays[nodeId] = until;
