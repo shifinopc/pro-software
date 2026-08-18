@@ -8,7 +8,7 @@ import { prisma } from "./db.js";
 import { homeCurrency, homeCountry } from "./orgsettings.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
-import { validateGraph, stepsMissingRole } from "./workflow-validate.js";
+import { validateGraph, stepsMissingRole, type GraphIssue } from "./workflow-validate.js";
 import { evaluateRule } from "./dealchecklist.js";
 import { figuresForFee } from "./money.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
@@ -1151,6 +1151,82 @@ export const workflowRouter = Router();
 const R = workflowRouter;
 
 // Templates (design-time) — admin/super_admin only for writes
+/**
+ * THE CHECKS THAT NEED THE DATABASE.
+ *
+ * validateGraph is deliberately pure — it reads the graph and nothing else, which is why it can run
+ * anywhere and never lies about what the engine does. But the most damaging mistakes in a template
+ * are not shape mistakes, they are REFERENCE mistakes: a step issuing a document type that belongs
+ * to another country, a checklist rule that was deleted last month, a role nobody holds. Every one
+ * of those saves cleanly, reads correctly, and fails on a real client.
+ *
+ * The country check is the one worth having. Nothing stops a Saudi workflow naming a document type
+ * filed under AE — it resolves here only because this database holds every country, and it issues a
+ * document against the wrong market's rules, with the wrong authority and the wrong lead days.
+ *
+ * Reported on every save alongside the graph issues; ENFORCED only on the draft → active
+ * transition, the same line the roleless-step rule already draws.
+ */
+async function validateReferences(graph: any, tpl: { country?: string | null }): Promise<GraphIssue[]> {
+  const out: GraphIssue[] = [];
+  const nodes: any[] = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const country = String(tpl?.country ?? "").trim().toUpperCase();
+
+  const docNodes = nodes.filter(n => n?.type === "issue_document");
+  if (docNodes.length) {
+    const wanted = [...new Set(docNodes.map(n => String(n?.config?.docType ?? "").trim()).filter(Boolean))];
+    const rows = await prisma.documentType.findMany({ where: { name: { in: wanted } }, select: { name: true, country: true, retired: true } });
+    for (const n of docNodes) {
+      const name = String(n?.config?.docType ?? "").trim();
+      const label = n.label || n.id;
+      if (!name) { out.push({ level: "error", nodeId: n.id, node: label, message: `"${label}" issues a document but names no type.` }); continue; }
+      const hits = rows.filter(r => r.name === name);
+      if (!hits.length) {
+        out.push({ level: "error", nodeId: n.id, node: label, message: `"${label}" issues "${name}", which is not a document type on this installation. It would still create a document — with no authority and default lead days.` });
+        continue;
+      }
+      if (hits.every(h => h.retired)) {
+        out.push({ level: "error", nodeId: n.id, node: label, message: `"${label}" issues "${name}", which is retired.` });
+        continue;
+      }
+      // The one that matters: right name, wrong market.
+      if (country && !hits.some(h => String(h.country ?? "").toUpperCase() === country)) {
+        const where = [...new Set(hits.map(h => h.country ?? "no country"))].join(", ");
+        out.push({ level: "error", nodeId: n.id, node: label, message: `"${label}" issues "${name}", which is filed under ${where} — this workflow is ${country}. It resolves here only because this database holds every country.` });
+      }
+    }
+  }
+
+  const ruleIds = [...new Set(nodes.map(n => String(n?.config?.checklistRuleId ?? "").trim()).filter(Boolean))];
+  if (ruleIds.length) {
+    const found = await prisma.checklistRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true, retired: true } });
+    for (const n of nodes) {
+      const id = String(n?.config?.checklistRuleId ?? "").trim();
+      if (!id || n?.config?.checklistSource !== "dynamic") continue;
+      const hit = found.find(f => f.id === id);
+      const label = n.label || n.id;
+      if (!hit) out.push({ level: "error", nodeId: n.id, node: label, message: `"${label}" uses a checklist rule that no longer exists, so it falls back to its own list — which is usually empty.` });
+      else if (hit.retired) out.push({ level: "warning", nodeId: n.id, node: label, message: `"${label}" uses the retired rule "${hit.name}".` });
+    }
+  }
+
+  // A role nobody holds is work that lands on an empty desk.
+  const roles = [...new Set(nodes.flatMap(n => [n?.config?.assigneeRole, n?.config?.approverRole]).map(r => String(r ?? "").trim()).filter(Boolean))];
+  if (roles.length) {
+    const builtIn = new Set(["super_admin", "admin", "pro_officer", "accountant", "sales", "client_admin"]);
+    const rolesRow = await prisma.appSetting.findUnique({ where: { key: "roles" } });
+    const custom = new Set((Array.isArray(rolesRow?.value) ? (rolesRow!.value as any[]) : []).map(r => String(r?.id ?? "")));
+    for (const n of nodes) {
+      for (const key of ["assigneeRole", "approverRole"]) {
+        const r = String(n?.config?.[key] ?? "").trim();
+        if (!r || builtIn.has(r) || custom.has(r)) continue;
+        out.push({ level: "error", nodeId: n.id, node: n.label || n.id, message: `"${n.label || n.id}" is owned by the role "${r}", which does not exist.` });
+      }
+    }
+  }
+  return out;
+}
+
 R.get("/templates", requireAuth, requireStaff, async (req, res) => {
   // Templates are served here rather than by the generic CRUD helper, so the retired filter that
   // covers every other collection does NOT reach them. Without this line a workflow retired by a pack
@@ -1165,15 +1241,21 @@ R.get("/templates", requireAuth, requireStaff, async (req, res) => {
 R.get("/templates/:id", requireAuth, requireStaff, async (req, res) => {
   const t = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id }, include: { instances: { select: { id: true, status: true } } } });
   if (!t) return res.status(404).json({ error: "Not found" });
-  res.json({ ...t, validation: validateGraph(t.graph, t) });
+  res.json({ ...t, validation: [...validateGraph(t.graph, t), ...(await validateReferences(t.graph, t))] });
 });
 R.post("/templates", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { name, description, trigger, triggerConfig, entityType, graph, active } = req.body ?? {};
+    // `country` was silently dropped here and in the PUT below, so every workflow built in the
+    // Builder was country-less for ever — only the pack installer ever set one. That is why nothing
+    // could show which market a workflow belongs to, and why a cross-country document reference
+    // could not be caught: the check has nothing to compare against when the template names no
+    // country at all.
+    const { name, description, trigger, triggerConfig, entityType, graph, active, country } = req.body ?? {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: "Name is required" });
     const t = await prisma.workflowTemplate.create({
       data: { name: String(name).trim(), description: description ?? null, trigger: trigger || "manual",
               triggerConfig: triggerConfig ?? undefined, entityType: entityType || "generic",
+              country: country ? String(country).trim().toUpperCase() : null,
               graph: graph ?? { nodes: [], edges: [] }, active: !!active, createdAt: nowISO() },
     });
     logActivity({ type: "task", message: `Workflow template created: ${t.name}` });
@@ -1182,7 +1264,7 @@ R.post("/templates", requireAuth, requireStaff, requireWriteRole, async (req, re
 });
 R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { name, description, trigger, triggerConfig, entityType, graph, active, version } = req.body ?? {};
+    const { name, description, trigger, triggerConfig, entityType, graph, active, version, country } = req.body ?? {};
     const data: any = {};
     if (name !== undefined) data.name = String(name).trim();
     if (description !== undefined) data.description = description;
@@ -1192,6 +1274,7 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     if (graph !== undefined) data.graph = graph;
     if (active !== undefined) data.active = !!active;
     if (version !== undefined) data.version = version;
+    if (country !== undefined) data.country = country ? String(country).trim().toUpperCase() : null;
 
     // ── Going live is the moment the roles have to exist ──────────────────────────────────────
     // Saving stays unblocked — a half-built template is a normal thing to leave the Builder holding,
@@ -1215,13 +1298,25 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
             steps: missing.map(n => ({ id: n.id, label: n.label || n.type || n.id })),
           });
         }
+        // Same line, for the references. A document type from the wrong country, a checklist rule
+        // that was deleted, a role nobody holds: each of these saves cleanly and fails on a real
+        // client, which is exactly the kind of thing that must not reach one.
+        const tplNow = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id }, select: { country: true } });
+        const refs = (await validateReferences(graph !== undefined ? graph : current.graph, tplNow ?? {}))
+          .filter(i => i.level === "error");
+        if (refs.length) {
+          return res.status(400).json({
+            error: `${refs.length === 1 ? "One reference does" : `${refs.length} references do`} not resolve: ${refs.slice(0, 3).map(i => i.message).join(" ")}${refs.length > 3 ? ` (and ${refs.length - 3} more)` : ""}`,
+            issues: refs,
+          });
+        }
       }
     }
 
     const t = await prisma.workflowTemplate.update({ where: { id: req.params.id }, data });
     // Told on the way out, every time, whatever changed. Never blocking: a half-built template is a
     // normal thing to leave the Builder holding. The point is that "saved" stops implying "will work".
-    res.json({ ...t, validation: validateGraph(t.graph, t) });
+    res.json({ ...t, validation: [...validateGraph(t.graph, t), ...(await validateReferences(t.graph, t))] });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 /**

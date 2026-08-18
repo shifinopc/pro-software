@@ -166,6 +166,17 @@ async function main() {
       { var: "documentsVerified", op: "eq", value: "fail", key: "fail" },
     ] } },
 
+    // ── THE HIRING GATE ────────────────────────────────────────────────────────────────────
+    // The template this replaced had an Internal Approval here and dropping it was a real loss: it
+    // is the only point between "the documents are in" and "we start spending government fees on
+    // this person" where somebody with authority says yes. Government work is expensive and some of
+    // it is irreversible, so it should never begin on the strength of a document check alone.
+    { id: "hiring_appr", type: "approval", label: "Hiring Approval", config: {
+      approverRole: "hr_officer",
+      title: "Approve this hire before government processing begins",
+    } },
+    { id: "end_nohire", type: "end", label: "Hire Not Approved", config: {} },
+
     { id: "d_hiring", type: "decision", label: "Hiring Type?", config: { branches: [
       { var: "hiringType", op: "eq", value: "saudi_national", key: "saudi" },
       { var: "hiringType", op: "eq", value: "expat_new_hire", key: "new_hire" },
@@ -246,12 +257,20 @@ async function main() {
     // an authority and a date, which is what anyone asking "is this employee registered?" needs.
     { id: "gosi_doc", type: "issue_document", label: "GOSI Employee Registration",
       config: { docType: "GOSI Employee Registration" } },
-    { id: "access", type: "task", label: "System Access", config: { assigneeRole: "pro_officer", slaHours: 48 } },
-    { id: "assets", type: "task", label: "Assets & Accommodation", config: { assigneeRole: "pro_officer", slaHours: 72 } },
+    // Accounts and devices are not PRO work. A PRO officer deals with government.
+    { id: "access", type: "task", label: "System Access", config: { assigneeRole: "it_officer", slaHours: 48,
+      checklist: [doc("email", "Corporate email"), doc("erp", "ERP account"), doc("attendance", "Attendance / biometric enrolment"),
+                  doc("permissions", "Application permissions and role assigned")] } },
+    { id: "assets", type: "task", label: "Assets & Accommodation", config: { assigneeRole: "hr_officer", slaHours: 72,
+      checklist: [doc("laptop", "Laptop / equipment issued"), doc("sim", "SIM card"), doc("id_card", "Company ID card"),
+                  doc("accommodation", "Accommodation arranged", false)] } },
     { id: "insurance", type: "issue_document", label: "Health Insurance", config: { docType: "Health Insurance" } },
     { id: "join", type: "parallel_join", label: "All Departments Complete", config: {} },
 
-    { id: "joined", type: "task", label: "Joining Confirmation", config: { assigneeRole: "pro_officer",
+    // Joined means the employee has entered the operational lifecycle, not that they walked in.
+    { id: "joined", type: "task", label: "Joining Confirmation", config: { assigneeRole: "hr_officer",
+      checklist: [doc("attendance_on", "Attendance enabled"), doc("contract_active", "Qiwa contract active"),
+                  doc("payroll_active", "Payroll active"), doc("insurance_active", "Insurance active")],
       captures: [{ var: "employeeJoined", type: "select", label: "Employee Joined?", options: "yes,no" }] } },
     { id: "d_joined", type: "decision", label: "Joined?", config: { branches: [
       { var: "employeeJoined", op: "eq", value: "yes", key: "yes" },
@@ -260,7 +279,7 @@ async function main() {
     { id: "end_cancel", type: "end", label: "Joining Cancelled", config: {} },
 
     { id: "probation", type: "delay", label: "Probation (90 days)", config: { days: 90 } },
-    { id: "prob_review", type: "task", label: "Probation Review", config: { assigneeRole: "pro_officer",
+    { id: "prob_review", type: "task", label: "Probation Review", config: { assigneeRole: "hr_officer",
       captures: [{ var: "probationOutcome", type: "select", label: "Confirmed?", options: "yes,no,extend" }] } },
     { id: "d_prob", type: "decision", label: "Confirmed?", config: { branches: [
       { var: "probationOutcome", op: "eq", value: "yes", key: "yes" },
@@ -280,9 +299,12 @@ async function main() {
     e("profile", "elig"),
     e("elig", "collect"),
     e("collect", "d_docs"),
-    e("d_docs", "d_hiring", "pass"),
+    e("d_docs", "hiring_appr", "pass"),
     e("d_docs", "collect", "fail"),
     e("d_docs", "collect", "else"),          // an unanswered verification asks again
+
+    e("hiring_appr", "d_hiring", "approve"),
+    e("hiring_appr", "end_nohire", "reject"),
 
     e("d_hiring", "contract", "saudi"),
     e("d_hiring", "visa_apply", "new_hire"),

@@ -126,8 +126,14 @@ async function load() {
     const v = p?.value as any;
     if (v && typeof v === "object" && !Array.isArray(v)) grid = v;
     for (const row of (Array.isArray(r?.value) ? (r!.value as any[]) : [])) {
-      if (row?.id && row?.name) {
-        labels[row.id] = String(row.name);
+      // `label` is what the console has always written; `name` was what this read. So a role created
+      // in Settings never reached the engine: labels[id] stayed undefined, can() found no grid and no
+      // preset, and every holder of that role was refused everything the matrix governs — while the
+      // role itself showed up perfectly in the picker and on the user. Both spellings accepted, the
+      // console's first, because that is the one on disk.
+      const rowLabel = row?.label ?? row?.name;
+      if (row?.id && rowLabel) {
+        labels[row.id] = String(rowLabel);
         if (row.base && PRESET[String(row.base)]) bases[row.id] = String(row.base);
       }
     }
