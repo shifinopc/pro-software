@@ -6299,6 +6299,7 @@
                 </div>
                                 <button onClick="{{ c.openBands }}" title="Nationalisation bands for this country" style="background:#fff; color:#4B4757; border:1px solid #EDEBF2; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ c.bandsLabel }}</button>
                 <sc-if value="{{ c.canUpgrade }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.upgrade }}" style="background:#F3E8FF; color:#7C00FF; border:1px solid #E3CCFF; font-size:11px; font-weight:700; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#E9D8FF;">{{ c.upgradeLabel }}</button></sc-if>
+                <button onClick="{{ c.exportPack }}" title="Download this country's whole configuration as a pack file, to install on another system" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ c.exportLabel }}</button>
                 <sc-if value="{{ c.fromPack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.uninstall }}" style="background:#fff; color:#8C8899; border:1px solid #EDEBF2; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#C0353A; color:#C0353A;">Uninstall</button></sc-if>
                 <button onClick="{{ c.configure }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Configure</button>
               </div>
@@ -21038,6 +21039,42 @@ class Component extends DCLogic {
               .then(({ ok, j9 }) => this.setState(ok ? { upgPlan: j9, upgBusy: false } : { upgBusy: false, upgErr: (j9 && j9.error) || 'Could not work out what would change' }))
               .catch(() => this.setState({ upgBusy: false, upgErr: 'Server unreachable' }));
           },
+          // ── EXPORT THIS COUNTRY ───────────────────────────────────────────────
+          // Import has been here for a while with no counterpart: a firm could receive a country and
+          // never send one, so standing up a second installation needed somebody with shell access.
+          //
+          // The server does the building and also returns what it is unsure about. Those warnings are
+          // SHOWN rather than swallowed — a pack whose references only resolve on the database it came
+          // from is exactly the pack that breaks on the far side, and this is the last moment anyone
+          // can see both halves at once.
+          exportPack: () => {
+            if (!code9) return;
+            const t9 = localStorage.getItem('stimespro:token');
+            this.setState({ pkExBusy: code9 });
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/packs/export?country=' + encodeURIComponent(code9),
+              { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                this.setState({ pkExBusy: null });
+                if (!ok) return this.toast((j9 && j9.error) || 'Could not export that country', 'error');
+                // Straight to a file. The pack is the deliverable; showing it on screen would only mean
+                // somebody copying it out by hand.
+                const blob9 = new Blob([JSON.stringify(j9.pack, null, 2)], { type: 'application/json' });
+                const url9 = URL.createObjectURL(blob9);
+                const a9 = document.createElement('a');
+                a9.href = url9; a9.download = j9.filename || ('pack-' + code9.toLowerCase() + '.json');
+                document.body.appendChild(a9); a9.click(); a9.remove();
+                setTimeout(() => URL.revokeObjectURL(url9), 4000);
+                const w9 = j9.warnings || {};
+                const n9 = (w9.empty || []).length + (w9.dangling || []).length + (w9.unresolved || []).length;
+                this.toast(n9
+                  ? (j9.filename + ' downloaded — ' + n9 + ' thing' + (n9 === 1 ? '' : 's') + ' to check before you install it elsewhere')
+                  : (j9.filename + ' downloaded'), n9 ? 'error' : undefined);
+                if (n9) this.setState({ pkExWarn: w9, pkExCountry: code9 });
+              })
+              .catch(() => { this.setState({ pkExBusy: null }); this.toast('Server unreachable', 'error'); });
+          },
+          exportLabel: (this.state.pkExBusy === code9) ? 'Exporting…' : 'Export',
           uninstall: () => {
             if (!code9) return;
             const t9 = localStorage.getItem('stimespro:token');

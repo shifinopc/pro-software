@@ -35,6 +35,7 @@ export type Pack = {
   workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
   pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[]; courierJobTypes?: PackRow[];
   appointmentTypes?: PackRow[]; courierStatuses?: PackRow[]; appointmentStatuses?: PackRow[];
+  competitors?: PackRow[]; industries?: PackRow[]; campaigns?: PackRow[]; cancelReasons?: PackRow[];
 };
 
 /**
@@ -85,6 +86,18 @@ export const KINDS = [
   { key: "appointmentStatuses", model: "appointmentStatus", label: "appointment statuses", one: "appointment status",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort, terminal: r.terminal, offLadder: r.offLadder }) },
   { key: "leadSources", model: "leadSource", label: "lead sources", one: "lead source",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  // The rest of the market's CRM vocabulary. These never travelled at all until now — a pack could
+  // carry a country's authorities and workflows and still land somewhere that had never heard of its
+  // competitors. Declared here as well as written by the exporter, because the installer walks THIS
+  // list: a section in the file that is not named here is read and thrown away.
+  { key: "competitors", model: "competitor", label: "competitors", one: "competitor",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  { key: "industries", model: "industry", label: "industries", one: "industry",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  { key: "campaigns", model: "campaign", label: "campaigns", one: "campaign",
+    fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
+  { key: "cancelReasons", model: "cancelReason", label: "cancellation reasons", one: "cancellation reason",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
   { key: "lostReasons", model: "lostReason", label: "loss reasons", one: "loss reason",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, sort: r.sort }) },
@@ -644,4 +657,380 @@ export async function installedPacks(): Promise<Record<string, { version: string
     out[c] = { version: ranked[0]?.[0] ?? "", rows: a.rows, edited: a.edited, mixed: ranked.length > 1 };
   }
   return out;
+}
+
+/** `Commercial Register Renewal` → `commercial-register-renewal`. Deterministic, so re-exporting the
+ *  same configuration produces the same keys and an import can recognise what it already has. */
+const packSlug = (s: string) =>
+  String(s ?? "").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "unnamed";
+
+/**
+ * Rows that look like somebody's scratch work rather than a country's configuration.
+ *
+ * Not deleted and not silently skipped — REPORTED, so the decision to ship "QA PROBE (INERT — do not
+ * use)" inside a Saudi country pack is a deliberate one. Shipping it by accident is how a pack starts
+ * looking untrustworthy.
+ */
+const packSuspect = (name: string) => {
+  const n = String(name ?? "").trim();
+  // An ALL-CAPS marker is somebody labelling their own scratch work, and it is never how a real row
+  // gets named. Checked before the length rule below, which was letting "DEMO — Issue Iqama" (18
+  // characters) through and shipping two demo templates inside a country pack.
+  if (/^(TEST|DEMO|SAMPLE|DUMMY|TEMP|TMP|XX+|ZZ+)\b/.test(n)) return true;
+  // A whole name that is just "test" or "new" is scratch work. A word inside a real name is not:
+  // matching "new" anywhere flagged "New Company Formation" and "New Employment Visa", and "test"
+  // flagged "Medical Test" — all legitimate. A warning that fires on real rows teaches people to
+  // ignore it, which costs more than not having one.
+  if (/^(test|new|tmp|temp|demo|sample|dummy|untitled|copy)\b/i.test(n) && n.length < 14) return true;
+  return /\b(probe|inert|do not use|placeholder)\b/i.test(n);
+};
+
+/**
+ * BUILD A COUNTRY PACK FROM THIS INSTALLATION.
+ *
+ * Lifted out of scripts/export-country-pack.ts so the command line and the Export button in the
+ * console run the same code. Two builders would be two answers to "what is in a pack", and the one
+ * nobody runs is the one that quietly stops matching the installer.
+ *
+ * Read-only: it queries and returns. It writes no file and touches no row. The caller decides what
+ * to do with the result, and whether an empty section is fatal.
+ */
+export type PackBuild = {
+  pack: any;
+  /** Rows deliberately left out, and why. */
+  dropped: string[];
+  /** References that could not be turned into a key, removed rather than left dead. */
+  unresolved: string[];
+  /** Keys kept or re-derived, with the reason. */
+  rekeyed: string[];
+  /** Names that resolve on THIS database only because it holds every country. */
+  dangling: string[];
+  /** Kinds the installer expects for which this country has nothing. */
+  empty: string[];
+};
+
+export async function buildPack(
+  countryRaw: string,
+  opts: { version?: string; exclude?: string[]; clean?: boolean } = {},
+): Promise<PackBuild> {
+  const country = String(countryRaw || "").toUpperCase();
+  const version = opts.version || new Date().toISOString().slice(0, 7).replace("-", ".");
+  const exclude = (opts.exclude ?? []).map(s => s.trim().toLowerCase()).filter(Boolean);
+  const excluded = (name: string) => exclude.some(e => String(name ?? "").toLowerCase().includes(e));
+  const clean = opts.clean === true;
+  const p = country.toLowerCase();
+
+  const where = { country, retired: false };
+  const [docTypes, templates, services, centers, packages, checklists, bands, stages, sources, reasons,
+         courierTypes, apptTypes, courierStatuses, apptStatuses, competitors, industries, campaigns, cancelReasons] = await Promise.all([
+    prisma.documentType.findMany({ where }),
+    prisma.workflowTemplate.findMany({ where }),
+    prisma.serviceItem.findMany({ where }),
+    prisma.govCenter.findMany({ where }),
+    prisma.package.findMany({ where }),
+    prisma.checklistRule.findMany({ where }),
+    prisma.workforceBand.findMany({ where }),
+    prisma.pipelineStage.findMany({ where }),
+    prisma.leadSource.findMany({ where }),
+    prisma.lostReason.findMany({ where }),
+    prisma.courierJobType.findMany({ where }),
+    prisma.appointmentType.findMany({ where }),
+    prisma.courierStatus.findMany({ where }),
+    prisma.appointmentStatus.findMany({ where }),
+    prisma.competitor.findMany({ where }),
+    prisma.industry.findMany({ where }),
+    prisma.campaign.findMany({ where }),
+    prisma.cancelReason.findMany({ where }),
+  ]);
+
+  const dropped: string[] = [];
+  const unresolved: string[] = [];
+  const rekeyed: string[] = [];
+
+  /**
+   * Leave out the rows that should not travel — and say which, every time.
+   *
+   * Runs BEFORE the key maps below are built, so a service can never end up holding a valid-looking
+   * key for a workflow this pack does not contain. Filtering after the maps were built produced
+   * exactly that: a reference that resolves on the machine it was exported from and nowhere else.
+   */
+  const keep = <T extends { name: string }>(rows: T[], kind: string) =>
+    rows.filter(r => {
+      if (excluded(r.name)) { dropped.push(`${kind}: ${r.name}  (--exclude)`); return false; }
+      if (clean && packSuspect(r.name)) { dropped.push(`${kind}: ${r.name}  (--clean)`); return false; }
+      return true;
+    });
+
+  const kDocTypes  = keep(docTypes,  "document type");
+  const kTemplates = keep(templates, "workflow");
+  const kServices  = keep(services,  "service");
+  const kCenters   = keep(centers,   "authority");
+  const kPackages  = keep(packages,  "package");
+  const kChecklists= keep(checklists,"checklist rule");
+  const kBands     = keep(bands,     "workforce band");
+  const kStages    = keep(stages,    "pipeline stage");
+  const kSources   = keep(sources,   "lead source");
+  const kReasons   = keep(reasons,   "loss reason");
+  const kCourTypes = keep(courierTypes,   "courier job type");
+  const kApptTypes = keep(apptTypes,      "appointment type");
+  const kCourStat  = keep(courierStatuses,"courier status");
+  const kApptStat  = keep(apptStatuses,   "appointment status");
+  const kCompets   = keep(competitors,    "competitor");
+  const kIndustries= keep(industries,     "industry");
+  const kCampaigns = keep(campaigns,      "campaign");
+  const kCancels   = keep(cancelReasons,  "cancellation reason");
+
+  /**
+   * The key this row travels under.
+   *
+   * An existing packKey WINS over anything derived from the name, because the installer matches on
+   * packKey alone. Rename a row and a name-derived key matches nothing on the far end, so the next
+   * upgrade adds a second copy beside the one people have been editing rather than upgrading it.
+   *
+   * The exception is a key from another country's prefix, which happens when a row was filed under
+   * the wrong country and later moved. Carrying `sa.doctype.emirates-id` into an AE pack would make
+   * the two packs fight over one row, so the key is re-derived and the change is reported.
+   */
+  const keyOf = (row: { name: string; packKey?: string | null }, seg: string) => {
+    const derived = `${p}.${seg}.${packSlug(row.name)}`;
+    const existing = String(row.packKey ?? "").trim();
+    if (!existing) return derived;
+    if (!existing.startsWith(`${p}.`)) {
+      rekeyed.push(`${seg} "${row.name}": ${existing} → ${derived} (key belonged to another country)`);
+      return derived;
+    }
+    if (existing !== derived) rekeyed.push(`${seg} "${row.name}": kept ${existing} (name would have derived ${derived})`);
+    return existing;
+  };
+
+  // cuid → key, so the id-based references can be rewritten. Built from the KEPT rows only.
+  const tplKey = new Map(kTemplates.map(t => [t.id, keyOf(t, "workflow")]));
+  const svcKey = new Map(kServices.map(s => [s.id, keyOf(s, "service")]));
+  const chkKey = new Map(kChecklists.map(c => [c.id, keyOf(c, "checklist")]));
+
+  /**
+   * Swap database ids inside a workflow graph for pack keys.
+   *
+   * Only touches what it recognises; every other node property is copied through untouched, because a
+   * builder that gains a new config field must not have it silently dropped by the exporter.
+   */
+  const rewriteGraph = (graph: any, tplName: string) => {
+    const g = (graph && typeof graph === "object") ? graph : {};
+    const nodes = Array.isArray(g.nodes) ? g.nodes : [];
+    return {
+      ...g,
+      nodes: nodes.map((n: any) => {
+        const c = n?.config;
+        if (!c || typeof c !== "object" || !c.checklistRuleId) return n;
+        const { checklistRuleId, ...rest } = c;
+        const key = chkKey.get(String(checklistRuleId));
+        if (!key) {
+          unresolved.push(`workflow "${tplName}" step "${n.label ?? n.id}" → checklist rule ${checklistRuleId} (not in this country)`);
+          return { ...n, config: rest };   // dropped deliberately, and reported — never left as a dead id
+        }
+        return { ...n, config: { ...rest, checklistRuleKey: key } };
+      }),
+    };
+  };
+  const pack = {
+    pack: p,
+    country,
+    countryName: countryName(country),
+    version,
+    generatedAt: new Date().toISOString(),
+    // Stated in the file itself so nobody has to take it on trust.
+    contains: "configuration only — no companies, employees, documents, invoices or credentials",
+
+    documentTypes: kDocTypes.map(d => ({
+      key: keyOf(d, "doctype"),
+      // subjectKind decides whether a type belongs to an employee or to the company. It was written
+      // here as "entity", which is not a column, so it exported as undefined and JSON.stringify
+      // dropped it — every pack shipped without it and every installed type defaulted to employee.
+      name: d.name, subjectKind: d.subjectKind, defaultFee: d.defaultFee,
+      leadDays: d.leadDays, authority: d.authority,
+      fields: d.fields ?? [], prereqs: d.prereqs ?? [],
+      requiresApproval: d.requiresApproval, defaultAssigneeRole: d.defaultAssigneeRole,
+    })),
+
+    workflowTemplates: kTemplates.map(t => ({
+      key: tplKey.get(t.id),
+      name: t.name, trigger: t.trigger, triggerConfig: t.triggerConfig ?? null,
+      entityType: t.entityType, active: t.active,
+      // The graph mostly names things as strings — document types, authorities — so those survive.
+      // One node config does NOT: a checklist step points at its rule by cuid, which would arrive on
+      // another installation pointing at nothing. Found by the leak check rather than by reading the
+      // schema, which is the argument for having the leak check.
+      graph: rewriteGraph(t.graph, t.name),
+    })),
+
+    serviceItems: kServices.map(s => {
+      // The one place a service points at a workflow by id.
+      let workflowKey: string | null = null;
+      if (s.workflowId) {
+        workflowKey = tplKey.get(s.workflowId) ?? null;
+        if (!workflowKey) unresolved.push(`service "${s.name}" → workflow ${s.workflowId} (not in this country)`);
+      }
+      return {
+        key: svcKey.get(s.id),
+        name: s.name, govFee: s.govFee, time: s.time, sla: s.sla,
+        docType: s.docType, included: s.included, docs: s.docs,
+        requiredDocs: s.requiredDocs ?? [],
+        workflowKey,
+      };
+    }),
+
+    govCenters: kCenters.map(g => ({
+      key: keyOf(g, "center"),
+      name: g.name, sub: g.sub, color: g.color, bg: g.bg,
+      // `officer` is a person at THIS firm, not a fact about the country.
+    })),
+
+    packages: kPackages.map(k => {
+      const ids: string[] = Array.isArray(k.serviceIds) ? (k.serviceIds as any[]).map(String) : [];
+      const keys = ids.map(id => {
+        const key = svcKey.get(id);
+        if (!key) unresolved.push(`package "${k.name}" → service ${id} (not in this country)`);
+        return key;
+      }).filter(Boolean) as string[];
+      return {
+        key: keyOf(k, "package"),
+        name: k.name, tier: k.tier, basePrice: k.basePrice, billingCycle: k.billingCycle,
+        empMin: k.empMin, empMax: k.empMax, features: k.features ?? [], color: k.color,
+        serviceKeys: keys,
+      };
+    }),
+
+    checklistRules: kChecklists.map(c => ({
+      key: keyOf(c, "checklist"),
+      name: c.name, rows: c.rows ?? [],
+    })),
+
+    // Nationalisation bands. The install side already knew how to receive these; the exporter did
+    // not produce them, so a pack carried a market's workflows but not the thresholds it is judged
+    // by — and an installation on the far end would compute no band at all.
+    workforceBands: kBands.map(b => ({
+      key: keyOf(b, "band"),
+      name: b.name, color: b.color, bg: b.bg, minBp: b.minBp, maxBp: b.maxBp, sort: b.sort,
+    })),
+
+    // Sales stages. Same lesson as the bands above: the install side accepts these, so an exporter
+    // that does not produce them ships a market with nowhere to put a deal.
+    pipelineStages: kStages.map(s => ({
+      key: keyOf(s, "stage"),
+      name: s.name, color: s.color, bg: s.bg, sort: s.sort,
+      probabilityBp: s.probabilityBp, isWon: s.isWon, isLost: s.isLost,
+      followUpDays: s.followUpDays, followUpAction: s.followUpAction,
+    })),
+
+    // Where business comes from and why it is lost. Wording is exactly the thing that differs
+    // between markets, which is why these travel with the country rather than living in code.
+    leadSources: kSources.map(x => ({
+      key: keyOf(x, "source"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+    lostReasons: kReasons.map(x => ({
+      key: keyOf(x, "lostreason"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+
+    // ── THE LISTS THAT WERE DECLARED AND NEVER WRITTEN ───────────────────────────
+    // KINDS named these and the installer accepted them, but nothing here produced them — the same
+    // omission the workforce bands and the pipeline stages each had before, for the same reason:
+    // adding a kind to the install side is the visible half, and the export side is easy to forget.
+    // A pack shipped without them installs a market that cannot say what state a courier run is in.
+    courierJobTypes: kCourTypes.map(x => ({
+      key: keyOf(x, "courierjob"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+    appointmentTypes: kApptTypes.map(x => ({
+      key: keyOf(x, "appttype"), name: x.name, color: x.color, bg: x.bg, sort: x.sort, icon: x.icon,
+    })),
+    // The two ladders carry the shape of the track as well as its wording: which rungs end a job and
+    // which are exceptions rather than steps. Ship the names alone and the far end gets a board whose
+    // "Cancelled" is a stage everything passes through.
+    courierStatuses: kCourStat.map(x => ({
+      key: keyOf(x, "courierstatus"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+      terminal: x.terminal, offLadder: x.offLadder,
+    })),
+    appointmentStatuses: kApptStat.map(x => ({
+      key: keyOf(x, "apptstatus"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+      terminal: x.terminal, offLadder: x.offLadder,
+    })),
+
+    // Country-scoped CRM vocabulary that has never travelled at all. A market's competitors and its
+    // industries are as much a fact about that market as its authorities are.
+    competitors: kCompets.map(x => ({
+      key: keyOf(x, "competitor"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+    industries: kIndustries.map(x => ({
+      key: keyOf(x, "industry"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+    campaigns: kCampaigns.map(x => ({
+      key: keyOf(x, "campaign"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+    cancelReasons: kCancels.map(x => ({
+      key: keyOf(x, "cancelreason"), name: x.name, color: x.color, bg: x.bg, sort: x.sort,
+    })),
+  };
+
+  /**
+   * The references that travel as plain names, checked against what this pack actually contains.
+   *
+   * A workflow step naming the document type "Trade License", or the authority "ICP", resolves fine
+   * on the machine it was exported from — because that machine also holds the rows of every OTHER
+   * country. On a fresh installation of this one pack there is nothing behind the name. The export is
+   * the only moment both halves are visible together, so it is the only place this can be caught.
+   */
+  const docTypeNames = new Set(pack.documentTypes.map(d => String(d.name).trim().toLowerCase()));
+  const centerNames = new Set(pack.govCenters.map(g => String(g.name).trim().toLowerCase()));
+  // Everything of that kind ANYWHERE in this database, so the report can tell the two cases apart: a
+  // name filed under another country is a tagging mistake, a name that exists nowhere is a typo or a
+  // row somebody never created. They read the same in a pack and need completely different fixes.
+  const [allDocs, allCenters] = await Promise.all([
+    prisma.documentType.findMany({ select: { name: true, country: true, retired: true } }),
+    prisma.govCenter.findMany({ select: { name: true, country: true, retired: true } }),
+  ]);
+  const elsewhere = (rows: { name: string; country: string | null; retired: boolean }[], v: string) =>
+    rows.filter(r => String(r.name).trim().toLowerCase() === v.toLowerCase())
+        .map(r => (r.country ?? "no country") + (r.retired ? " (retired)" : ""));
+
+  const dangling: string[] = [];
+  const needs = (value: unknown, pool: Set<string>, what: string, where: string) => {
+    const v = String(value ?? "").trim();
+    if (!v || pool.has(v.toLowerCase())) return;
+    const found = elsewhere(what === "authority" ? allCenters : allDocs, v);
+    dangling.push(`${where} → ${what} "${v}"  —  ${found.length ? `exists, but filed under ${found.join(", ")}` : "exists nowhere in this database"}`);
+  };
+  for (const t of pack.workflowTemplates) {
+    // The TRIGGER names a document type too, and checking only the steps missed it entirely: a
+    // renewal template can sit there looking configured while triggering on a document type nothing
+    // will ever create, so it simply never fires and nobody is told why.
+    needs((t.triggerConfig as any)?.docType, docTypeNames, "document type", `workflow "${t.name}" trigger`);
+    for (const node of ((t.graph as any)?.nodes ?? [])) {
+      const c = node?.config ?? {};
+      const at = `workflow "${t.name}" step "${node.label ?? node.id}"`;
+      needs(c.docType, docTypeNames, "document type", at);
+      needs(c.govCenter, centerNames, "authority", at);
+    }
+  }
+  for (const s of pack.serviceItems) needs(s.docType, docTypeNames, "document type", `service "${s.name}"`);
+  for (const d of pack.documentTypes) {
+    // A document type's authority is the government body that issues it, and it is shown on screen.
+    needs(d.authority, centerNames, "authority", `document type "${d.name}"`);
+    // A prerequisite names the document it waits for. Pointing at nothing does not fail loudly — it
+    // simply never blocks anything, so the rule reads as satisfied every time it is evaluated.
+    for (const pre of ((d.prereqs as any[]) ?? []))
+      needs(pre?.requiresDocType, docTypeNames, "document type", `document type "${d.name}" prerequisite`);
+  }
+
+  // A kind the installer expects but this pack has nothing for. Refused rather than written, because
+  // the cost lands on whoever installs it — a country with no pipeline stages has nowhere to put a
+  // deal, and they have no way to know the pack was the reason.
+  const empty = ([
+    ["document types", pack.documentTypes], ["workflow templates", pack.workflowTemplates],
+    ["services", pack.serviceItems], ["authorities", pack.govCenters],
+    ["packages", pack.packages], ["checklist rules", pack.checklistRules],
+    ["workforce bands", pack.workforceBands], ["pipeline stages", pack.pipelineStages],
+    ["lead sources", pack.leadSources], ["loss reasons", pack.lostReasons],
+  ] as const).filter(([, rows]) => !rows.length).map(([label]) => label);
+  return { pack, dropped, unresolved, rekeyed, dangling, empty: empty as unknown as string[] };
 }

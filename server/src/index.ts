@@ -70,7 +70,7 @@ import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from ".
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
 import { COUNTRIES, countryName, countryCurrency } from "./countries.js";
 import { workforceAll, workforceFor, recordBand, workforceHistory } from "./workforce.js";
-import { listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
+import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
 import { homeCountry, homeCurrency, homeMarket } from "./orgsettings.js";
 import { figuresFromAmount } from "./money.js";
 import {
@@ -214,6 +214,47 @@ app.get("/api/countries", (_req, res) => {
 // as any other admin change.
 app.get("/api/packs", requireAuth, requireStaff, (_req, res) => {
   res.json({ packs: listPacks(), installed: null });
+});
+/**
+ * EXPORT A COUNTRY'S CONFIGURATION AS A PACK.
+ *
+ * The other half of Import, which has been in the console for a while against an exporter that only
+ * existed on the command line — so a firm could receive a country but never send one, and setting up
+ * a second installation meant somebody with shell access.
+ *
+ * Read-only, hence a GET and no requireWriteRole: it queries and returns a file. Same audience as
+ * uploading a pack, because what comes back is this market's entire configuration in one document
+ * and that is not something every staff member should be able to walk out with.
+ *
+ * The diagnostics travel WITH the pack rather than being dropped on the floor. The command line
+ * prints them; the button had nowhere to put them, and silently exporting a pack whose references
+ * resolve on this database alone is how a broken pack reaches somebody else's installation.
+ */
+app.get("/api/packs/export", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const country = String(req.query.country ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) return res.status(400).json({ error: "A two-letter country code is required" });
+  try {
+    const built = await buildPack(country, {
+      version: String(req.query.version ?? "").trim() || undefined,
+      clean: String(req.query.clean ?? "") === "1",
+    });
+    await logAudit({
+      action: "pack.export", actorId: (req as any).auth?.sub, target: `${country} ${built.pack.version}`,
+      detail: `${Object.values(built.pack).filter(Array.isArray).reduce((n, r: any) => n + r.length, 0)} rows`,
+      ip: clientIp(req),
+    });
+    res.json({
+      pack: built.pack,
+      // Named so the console can offer the same filename the installer expects to see.
+      filename: `pack-${country.toLowerCase()}-${built.pack.version}.json`,
+      warnings: {
+        empty: built.empty, dropped: built.dropped, dangling: built.dangling,
+        unresolved: built.unresolved, rekeyed: built.rekeyed,
+      },
+    });
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
 });
 app.get("/api/packs/installed", requireAuth, requireStaff, async (_req, res) => {
   res.json(await installedPacks());
