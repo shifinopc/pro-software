@@ -21,12 +21,16 @@
  * Own country, own rows. Deletes all of it afterwards.
  */
 import { prisma } from "../src/db.js";
-import { planUpgrade, applyUpgrade, applyInstall, KINDS, type Pack } from "../src/packs.js";
+import { planUpgrade, applyUpgrade, applyInstall, KINDS, type Pack, forgetCountryRow } from "../src/packs.js";
 
 const C = "ZU";
 
 async function wipe() {
   for (const k of KINDS) await (prisma as any)[k.model].deleteMany({ where: { country: C } });
+  // applyInstall also puts the country on the Country Rules screen. Deleting the rows is not enough:
+  // without this the fixture market stays listed, with Configure and Export leading to nothing. A
+  // "ZU" appeared on the production screen exactly this way.
+  await forgetCountryRow(C);
 }
 
 const packV = (version: string, docs: { key: string; name: string }[]): Pack => ({

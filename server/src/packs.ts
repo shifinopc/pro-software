@@ -286,6 +286,29 @@ export async function applyInstall(pack: Pack, opts: { adopt?: boolean } = {}): 
  * Only ever ADDS. The row carries a name, flag, currency and status the user can edit afterwards, and
  * an existing row is left exactly as they set it.
  */
+/**
+ * Take a country off the Country Rules screen.
+ *
+ * The exact inverse of registerCountryRow, and it was missing — so Install added a row and Uninstall
+ * left it there. A market with nothing configured went on being listed as Active, with Configure and
+ * Export buttons leading to nothing, and no way to remove it from the screen it was added to.
+ *
+ * Only ever REMOVES, and only by name, so a country somebody added by hand is untouched unless it is
+ * the one being forgotten.
+ */
+export async function forgetCountryRow(country: string) {
+  const code = String(country || "").toUpperCase();
+  if (!code) return;
+  const row = await prisma.appSetting.findUnique({ where: { key: "countryRules" } });
+  const value: any = (row?.value && typeof row.value === "object") ? row.value : {};
+  const list: any[] = Array.isArray(value.countries) ? value.countries : [];
+  if (!list.length) return;
+  const name = countryName(code).trim().toLowerCase();
+  const next = list.filter(c => !(Array.isArray(c) && String(c[0]).trim().toLowerCase() === name));
+  if (next.length === list.length) return;
+  await prisma.appSetting.update({ where: { key: "countryRules" }, data: { value: { ...value, countries: next } } });
+}
+
 async function registerCountryRow(country: string) {
   const code = String(country || "").toUpperCase();
   if (!code) return;
@@ -494,6 +517,13 @@ export async function applyUninstall(country: string): Promise<{ removed: number
     // Kept rows lose theirs — they are the user's now, and a future pack must not claim them silently.
     else { await model.update({ where: { id: r.id }, data: { packKey: null, packVersion: null, packModified: false } }); kept++; }
   }
+  // Off the screen only when there is genuinely nothing left. Rows that were kept (yours) or retired
+  // (something depends on them) are still this country's configuration, and a market with
+  // configuration belongs on the list.
+  let left = 0;
+  for (const kind of KINDS) left += await (prisma as any)[kind.model].count({ where: { country } });
+  if (left === 0) await forgetCountryRow(country);
+
   return { removed, retired, kept };
 }
 
