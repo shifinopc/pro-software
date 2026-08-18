@@ -566,6 +566,20 @@ export async function planUpgrade(pack: Pack): Promise<UpgradePlan> {
     const unstamped = await (prisma as any)[kind.model].findMany({ where: { country, packKey: null } });
     const localByName = new Map<string, any>(unstamped.map((r: any) => [String(r.name).trim().toLowerCase(), r]));
 
+    // ROWS FROM BEFORE CONFIGURATION HAD A COUNTRY.
+    //
+    // Early packs installed rows with no country at all. `local` above is scoped to this country, so
+    // those rows are invisible to the planner and every one of them gets planned as an ADD — which,
+    // on a table whose name is not unique, quietly creates a SECOND copy rather than failing. That is
+    // where the duplicate Muqeem, GOSI, MHRSD and Qiwa on the live installation came from.
+    //
+    // Matched on packKey ONLY, and only for keys this pack actually carries: a packKey is already
+    // country-prefixed (`sa.center.gosi`), so it identifies the row unambiguously where the null
+    // country cannot. Deliberately NOT added to `local`, so they can never reach `dropped` — an
+    // unmarked row belonging to some other market must not be removed by this country's upgrade.
+    const legacy = await (prisma as any)[kind.model].findMany({ where: { country: null, packKey: { in: [...byKey.keys()] } } });
+    for (const r of legacy) if (!localByKey.has(r.packKey)) localByKey.set(r.packKey, { ...r, __adoptCountry: true });
+
     for (const r of local) if (r.packVersion) from = r.packVersion;
 
     for (const r of packRows) {
@@ -658,15 +672,18 @@ export async function applyUpgrade(pack: Pack): Promise<{ added: number; adopted
       await model.update({ where: { id: r.id }, data: { packKey: r.key, packVersion: pack.version, packModified: true } });
       adopted++;
     } else if (r.outcome === "update") {
-      await model.update({ where: { id: r.id }, data: { ...kind.fields(src as any), packVersion: pack.version } });
+      // `country` is written here rather than left alone so a row installed before configuration had
+      // a country stops being invisible to the next upgrade. Setting it is what makes the fix stick.
+      await model.update({ where: { id: r.id }, data: { ...kind.fields(src as any), country, packVersion: pack.version } });
       updated++;
     } else if (r.outcome === "revive") {
       await model.update({ where: { id: r.id }, data: { ...kind.fields(src as any), retired: false, packVersion: pack.version } });
       revived++;
     } else {
-      // unchanged and yours: only the version stamp moves. An edited row keeps packModified so it
-      // stays recognisable as a local variant rather than quietly becoming pack-owned again.
-      await model.update({ where: { id: r.id }, data: { packVersion: pack.version } });
+      // unchanged and yours: only the version stamp moves, and the country if it was never set. An
+      // edited row keeps packModified so it stays recognisable as a local variant rather than quietly
+      // becoming pack-owned again.
+      await model.update({ where: { id: r.id }, data: { country, packVersion: pack.version } });
     }
   }
 

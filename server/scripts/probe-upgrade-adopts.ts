@@ -66,6 +66,33 @@ async function main() {
   console.log(`an unrelated hand-made row is NOT dropped:  ${goneNames.includes("ZU Unrelated") ? "NO" : "YES"}`);
   if (goneNames.includes("ZU Unrelated")) fail("a row this installation built is queued for removal — an upgrade would purge hand-made configuration");
 
+  // ── a row installed before configuration had a country ────────────────────────────────────
+  //
+  // Early packs wrote rows with country: null. planUpgrade scopes its lookup by country, so those
+  // rows were invisible and every one was planned as an ADD — and on a table whose name is not
+  // unique that does not fail, it silently makes a second copy. Four duplicate authorities on the
+  // live installation came from exactly this, and were removed by hand before the cause was known.
+  await prisma.govCenter.deleteMany({ where: { OR: [{ country: C }, { packKey: "zu.center.legacy" }] } });
+  await prisma.govCenter.create({ data: { name: "ZU Legacy Authority", country: null, packKey: "zu.center.legacy", packVersion: "1.0", sub: "installed before countries existed" } });
+  const v3: any = JSON.parse(JSON.stringify(v2));
+  v3.version = "3.0";
+  v3.govCenters = [{ key: "zu.center.legacy", name: "ZU Legacy Authority", sub: "installed before countries existed" }];
+
+  const p3 = await planUpgrade(v3);
+  const legacyRow = p3.rows.find(r => r.key === "zu.center.legacy");
+  console.log(`
+a country-less row is recognised, not re-added: ${legacyRow && legacyRow.outcome !== "add" ? `YES (${legacyRow.outcome})` : "NO (" + legacyRow?.outcome + ")"}`);
+  if (!legacyRow || legacyRow.outcome === "add") fail("planned as an add — the upgrade would silently create a duplicate authority");
+
+  await applyUpgrade(v3);
+  const copies = await prisma.govCenter.count({ where: { name: "ZU Legacy Authority" } });
+  console.log(`there is one of it afterwards:              ${copies === 1 ? "YES" : "NO (" + copies + ")"}`);
+  if (copies !== 1) fail(`the upgrade produced ${copies} copies of the same authority`);
+  const fixed = await prisma.govCenter.findFirst({ where: { name: "ZU Legacy Authority" } });
+  console.log(`…and it now carries a country:             ${fixed?.country ?? "still null"}`);
+  if (!fixed?.country) fail("country was not filled in, so the NEXT upgrade duplicates it again");
+  await prisma.govCenter.deleteMany({ where: { name: "ZU Legacy Authority" } });
+
   // ── and it actually runs ──────────────────────────────────────────────────────────────────
   let threw = "";
   try { await applyUpgrade(v2); } catch (e: any) { threw = String(e?.message ?? e); }
