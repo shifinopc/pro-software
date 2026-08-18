@@ -132,14 +132,34 @@ async function main() {
   const nodes: any[] = [
     { id: "start", type: "start", label: "Employee Request Created", config: {} },
 
+    // WHO is being onboarded, before anything about how.
+    //
+    // `applicant` is not a label choice. issue_document reads
+    //   person = vars.applicant || vars.employee || ""
+    // and then `if (inst.companyId && person)` — so with no applicant the person is "" and the
+    // document is NOT CREATED. Silently: no error, no log line, no failed step. This step captured
+    // only classification, so all six issue_document nodes in this workflow produced nothing at all
+    // while every step went green and the run completed. A workflow whose entire output is discarded
+    // and still reports success is the worst shape a bug can take here.
+    //
+    // completeTask also resolves the Employee row by this name (companyId + name) to write the
+    // onboarding onto their history, so the same field joins the run to the employee record.
     { id: "profile", type: "task", label: "Create Employee Profile", config: {
       assigneeRole: "pro_officer", slaHours: 24,
       captures: [
+        { var: "applicant", type: "text", label: "Full name (exactly as printed in the passport)" },
+        { var: "nationality", type: "text", label: "Nationality" },
+        { var: "mobile", type: "text", label: "Mobile" },
+        { var: "email", type: "text", label: "Email" },
         { var: "hiringType", type: "select", label: "Hiring Type",
           options: "saudi_national,expat_new_hire,expat_transfer" },
         { var: "employmentType", type: "select", label: "Employment Type", options: "permanent,contract,temporary" },
-        { var: "nationality", type: "text", label: "Nationality" },
+        // Job title and department are different questions: Qiwa cares about the profession on the
+        // contract, the client cares which team the person joins, and they routinely disagree.
         { var: "profession", type: "text", label: "Profession / job title on Qiwa" },
+        { var: "department", type: "text", label: "Department" },
+        { var: "reportingManager", type: "text", label: "Reporting manager" },
+        { var: "expectedJoining", type: "date", label: "Expected joining date" },
         { var: "currentLocationStatus", type: "select", label: "Currently", options: "inside_ksa,outside_ksa" },
       ],
     } },
@@ -279,8 +299,32 @@ async function main() {
     { id: "end_cancel", type: "end", label: "Joining Cancelled", config: {} },
 
     { id: "probation", type: "delay", label: "Probation (90 days)", config: { days: 90 } },
+    // A VERDICT NEEDS SOMETHING BEHIND IT.
+    //
+    // This step used to be one dropdown: Confirmed? yes / no / extend. Chosen from that alone, a
+    // termination at the end of probation is a decision with no record of what it was based on — and
+    // this is the one step in the workflow whose output can end somebody's employment. The checklist
+    // is what the reviewer is supposed to have gathered anyway; requiring it here means the file
+    // shows it was gathered.
+    //
+    // Required items gate completion, so the step cannot be closed by opening it and picking "no".
     { id: "prob_review", type: "task", label: "Probation Review", config: { assigneeRole: "hr_officer",
-      captures: [{ var: "probationOutcome", type: "select", label: "Confirmed?", options: "yes,no,extend" }] } },
+      slaHours: 72,
+      checklist: [
+        { key: "manager_appraisal", label: "Line manager's appraisal completed and signed", required: true },
+        { key: "objectives_reviewed", label: "Probation objectives reviewed against the job description", required: true },
+        { key: "attendance_reviewed", label: "Attendance and punctuality record reviewed", required: true },
+        { key: "conduct_checked", label: "Warnings and disciplinary record checked", required: true },
+        { key: "training_complete", label: "Mandatory induction and training completed", required: false },
+        { key: "meeting_held", label: "Outcome discussed with the employee", required: true },
+      ],
+      captures: [
+        { var: "probationOutcome", type: "select", label: "Confirmed?", options: "yes,no,extend" },
+        // Free text rather than a reason code: at this end of the process the specifics are the
+        // point, and a fixed list would be answered with whichever option is least wrong.
+        { var: "probationNotes", type: "text", label: "Reason for the decision" },
+        { var: "probationEffective", type: "date", label: "Effective from" },
+      ] } },
     { id: "d_prob", type: "decision", label: "Confirmed?", config: { branches: [
       { var: "probationOutcome", op: "eq", value: "yes", key: "yes" },
       { var: "probationOutcome", op: "eq", value: "extend", key: "extend" },

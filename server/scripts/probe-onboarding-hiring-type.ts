@@ -96,6 +96,36 @@ async function main() {
     if (!row) fail(`issue_document names "${name}", which this country has no document type for — it would still create a document, with no authority and default lead days`);
   }
 
+  // ── every issued document must have somebody to belong to ──────────────────────────────────
+  //
+  // issue_document builds `person` from vars.applicant || vars.employee, then guards the write with
+  // `if (inst.companyId && person)`. An empty person therefore does not fail the step, log anything
+  // or mark the run — it just does not create the document. This workflow captured only
+  // classification, so all six issue_document nodes wrote NOTHING while every step went green.
+  //
+  // Checked as reachability, not mere presence: capturing the name somewhere later in the graph
+  // would satisfy a "does any node capture it" test and still leave the early documents ownerless.
+  const PERSON_VARS = ["applicant", "employee", "applicantName", "employeeId"];
+  const setsPerson = (n: any) => (n?.config?.captures ?? []).some((c: any) => PERSON_VARS.includes(c?.var));
+  /** Can `target` be reached from start WITHOUT passing a step that names the person? */
+  const reachableUnnamed = (target: string) => {
+    const seen = new Set<string>();
+    const walk = (id: string): boolean => {
+      if (id === target) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      if (setsPerson(byId.get(id))) return false;      // this path names them; stop following it
+      return out(id).some(e => walk(e.to));
+    };
+    return walk("start");
+  };
+  console.log("");
+  for (const n of nodes.filter(x => x.type === "issue_document")) {
+    const bad = reachableUnnamed(n.id);
+    console.log(`"${n.config?.docType}" always knows whose it is:${" ".repeat(Math.max(1, 14 - String(n.config?.docType).length))}${bad ? "NO" : "YES"}`);
+    if (bad) fail(`"${n.config?.docType}" can be reached without the person being captured — it would silently create no document at all`);
+  }
+
   // ── the rule really does produce three different lists ─────────────────────────────────────
   const rule = await prisma.checklistRule.findFirst({ where: { name: RULE } });
   if (!rule) { fail("the document rule is missing"); process.exit(1); }

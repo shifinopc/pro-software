@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { configUsage, GUARDED } from "./configusage.js";
 import { idleDaysOf } from "./lifecycle.js";
 import { homeCountry } from "./orgsettings.js";
 import { validate } from "./validate.js";
@@ -395,9 +396,43 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
     }
   });
 
+  /**
+   * What still points at this row. The console asks before it offers Delete, so a row that cannot be
+   * removed says why on the screen rather than failing on the click.
+   */
+  r.get("/:id/usage", async (req, res) => {
+    try {
+      if (!(await findInScope(req, req.params.id))) return res.status(404).json({ error: "Not found" });
+      const usedBy = GUARDED.has(modelName) ? await configUsage(modelName, req.params.id) : [];
+      res.json({ usedBy, canDelete: usedBy.length === 0 });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
   r.delete("/:id", async (req, res) => {
     try {
       if (!(await findInScope(req, req.params.id))) return res.status(404).json({ error: "Not found" });
+
+      // RETIRE RATHER THAN DELETE WHEN SOMETHING STILL POINTS AT IT.
+      //
+      // These references are names and ids in strings and JSON, so the database has no key to refuse
+      // on: the delete succeeds and leaves a workflow step issuing a document type that no longer
+      // exists, or a client document that drops out of every list joining on its type. Retiring
+      // takes the row out of the pickers and leaves everything already pointing at it working.
+      if (GUARDED.has(modelName)) {
+        const usedBy = await configUsage(modelName, req.params.id);
+        if (usedBy.length) {
+          const updated = await model.update({ where: { id: req.params.id }, data: { retired: true } });
+          return res.status(200).json({
+            retired: true,
+            usedBy,
+            message: `Still in use, so it was retired instead of deleted — it will not be offered again, and what already uses it keeps working.`,
+            row: redact(modelName, updated),
+          });
+        }
+      }
+
       await model.delete({ where: { id: req.params.id } });
       res.status(204).end();
     } catch (e: any) {
