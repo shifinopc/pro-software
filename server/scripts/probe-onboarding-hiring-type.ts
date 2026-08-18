@@ -126,6 +126,53 @@ async function main() {
     if (bad) fail(`"${n.config?.docType}" can be reached without the person being captured — it would silently create no document at all`);
   }
 
+  // ── a Saudi national must not be issued an expatriate instrument ───────────────────────────
+  //
+  // The three hiring types converged before the Work Permit node, so every Saudi national came out
+  // of this workflow holding one — a document that does not exist for them, sitting on their record
+  // with an expiry the compliance screens would then chase. It is invisible on the canvas because
+  // the node is correct and its POSITION is not.
+  //
+  // Simulated rather than read: walking every edge counts the else branch of each decision and
+  // reports a Work Permit on all three paths, which is how the original was reviewed as fine.
+  const simulate = (vars: Record<string, string>) => {
+    const docs: string[] = [];
+    const seen = new Set<string>();
+    const step = (id: string) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const n = byId.get(id);
+      if (!n) return;
+      if (n.type === "issue_document") docs.push(String(n.config?.docType));
+      if (n.type === "decision") {
+        const hit = (n.config?.branches ?? []).find((b: any) => String(vars[b.var] ?? "") === String(b.value));
+        const key = hit ? hit.key : "else";
+        let next = out(id).filter(e => String(e.condition ?? "") === key);
+        if (!next.length) next = out(id).filter(e => ["else", "default", ""].includes(String(e.condition ?? "")));
+        for (const e of next) step(e.to);
+        return;
+      }
+      for (const e of out(id)) if (String(e.condition ?? "") !== "reject") step(e.to);
+    };
+    step("start");
+    return docs;
+  };
+
+  const happy = { documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes" };
+  const EXPAT_ONLY = ["Work Permit", "Iqama", "Work Visa"];
+  console.log("");
+  console.log("documents each hiring type is actually issued:");
+  for (const h of ["saudi_national", "expat_new_hire", "expat_transfer"]) {
+    const docs = simulate({ ...happy, hiringType: h });
+    console.log(`  ${h.padEnd(16)} ${docs.join(", ")}`);
+    if (h === "saudi_national") {
+      const wrong = docs.filter(d => EXPAT_ONLY.includes(d));
+      if (wrong.length) fail(`a Saudi national is issued ${wrong.join(" and ")} — an expatriate instrument that does not exist for them`);
+    } else if (!docs.includes("Work Permit")) {
+      fail(`${h} is never issued a Work Permit, which a non-Saudi cannot work without`);
+    }
+  }
+
   // ── the rule really does produce three different lists ─────────────────────────────────────
   const rule = await prisma.checklistRule.findFirst({ where: { name: RULE } });
   if (!rule) { fail("the document rule is missing"); process.exit(1); }

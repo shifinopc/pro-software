@@ -267,6 +267,13 @@ async function main() {
     } },
     { id: "contract_doc", type: "issue_document", label: "Qiwa Employment Contract",
       config: { docType: "Qiwa Employment Contract" } },
+    // Reads hiringType rather than nationality: that is the field the profile actually captures, and
+    // the two expatriate branches are exactly the ones that need a permit.
+    { id: "d_permit", type: "decision", label: "Work Permit Required?", config: { branches: [
+      { var: "hiringType", op: "eq", value: "expat_new_hire", key: "expat" },
+      { var: "hiringType", op: "eq", value: "expat_transfer", key: "expat" },
+      { var: "hiringType", op: "eq", value: "saudi_national", key: "saudi" },
+    ] } },
     { id: "permit_doc", type: "issue_document", label: "Work Permit", config: { docType: "Work Permit" } },
 
     { id: "split", type: "parallel_split", label: "Set Up In Parallel", config: {} },
@@ -368,7 +375,13 @@ async function main() {
     e("d_transfer", "end_transfer", "else"),
 
     e("contract", "contract_doc"),
-    e("contract_doc", "permit_doc"),
+    // A WORK PERMIT IS AN EXPATRIATE INSTRUMENT. The three hiring types converged before this node,
+    // so a Saudi national was issued one — a document that does not exist for them, on their record,
+    // with an expiry the compliance screens would then chase. Saudis go straight to the shared setup.
+    e("contract_doc", "d_permit"),
+    e("d_permit", "permit_doc", "expat"),
+    e("d_permit", "split", "saudi"),
+    e("d_permit", "permit_doc", "else"),      // unknown: issue it and let a person correct the profile
     e("permit_doc", "split"),
     e("split", "payroll"), e("split", "access"), e("split", "assets"), e("split", "insurance"),
     e("payroll", "gosi_doc"), e("gosi_doc", "join"),
