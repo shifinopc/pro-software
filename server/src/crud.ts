@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
 import { configUsage, GUARDED } from "./configusage.js";
+import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { idleDaysOf } from "./lifecycle.js";
 import { homeCountry } from "./orgsettings.js";
 import { validate } from "./validate.js";
@@ -292,6 +293,10 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         const co = await prisma.company.findUnique({ where: { id: data.companyId }, select: { country: true } }).catch(() => null);
         data.workCountry = co?.country ?? await homeCountry();
       }
+      if (modelName === "document" && (data as any)?.docNumber) {
+        const clash = await numberHeldByAnother(String((data as any).docType), (data as any).docNumber, (data as any).person);
+        if (clash) return res.status(409).json({ error: clashMessage(clash), clash });
+      }
       const created = await model.create({ data });
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);
@@ -346,6 +351,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
             { at: new Date().toISOString(), by: who?.name ?? who?.email ?? a?.sub ?? "unknown", kind: "edited", changes },
           ];
         }
+      }
+
+      if (modelName === "document" && req.body?.docNumber !== undefined) {
+        const clash = await numberHeldByAnother(
+          String(req.body.docType ?? (before as any).docType),
+          req.body.docNumber,
+          req.body.person ?? (before as any).person,
+          { ignoreDocumentId: req.params.id },
+        );
+        if (clash) return res.status(409).json({ error: clashMessage(clash), clash });
       }
 
       const updated = await model.update({

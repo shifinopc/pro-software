@@ -519,6 +519,14 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
                 await log("document.ambiguous_subject", nodeId, `${docType}: ${matches.length} employees at this client are called "${person}" — the document is not linked to a record`);
               }
             }
+            // The same number cannot belong to two people. A renewal or a sponsorship transfer keeps
+            // its number for the SAME person and is allowed; two employees holding one Iqama is a
+            // record nobody can reconcile against the portal it came from.
+            if (inst.companyId && person && number) {
+              const { numberHeldByAnother, clashMessage } = await import("./docnumber.js");
+              const clash = await numberHeldByAnother(docType, number, person);
+              if (clash) throw new Error(clashMessage(clash));
+            }
             if (inst.companyId && person) {
               const st = expiry ? statusOf(expiry) : { daysLeft: 0, status: "valid" };
               await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
@@ -1164,6 +1172,11 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       else foreign.push(k);
     }
     if (foreign.length) {
+      // REFUSED OUT LOUD, not dropped quietly.
+      //
+      // Silently discarding them was safe and unhelpful: an integrator who mis-spells a variable
+      // gets a 200 and a value that never appears, and the only way to find out is to notice the
+      // absence later. The scoping is the security fix; saying so is what makes it usable.
       console.warn(`[workflow] "${task.title}" tried to write variables it does not declare: ${foreign.join(", ")}`);
       await prisma.workflowLog.create({ data: {
         instanceId: task.instanceId, action: "task.foreign_variables", nodeId: task.nodeId,
@@ -1172,6 +1185,12 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       } }).catch(() => {});
     }
     opts = { ...opts, variables: supplied } as any;
+    if (foreign.length) {
+      const known = [...declared].sort();
+      throw new Error(
+        `This step does not collect ${foreign.map(f => `"${f}"`).join(", ")}. ` +
+        (known.length ? `It collects: ${known.join(", ")}.` : "It collects nothing."));
+    }
     // WHAT THE STEP ASKS FOR, IT MUST GET.
     //
     // Required CHECKLIST items were enforced; required capture FIELDS were not enforced at all.
@@ -1675,7 +1694,65 @@ R.get("/instances/:id", requireAuth, requireStaff, async (req, res) => {
     include: { template: true, tasks: true, logs: { orderBy: { at: "asc" } } },
   });
   if (!inst) return res.status(404).json({ error: "Not found" });
-  res.json(inst);
+
+  // A PARKED RUN MUST NOT LOOK LIKE A LOST ONE.
+  //
+  // An instance waiting on a delay has no active task, so every screen showed it as a run with
+  // nothing happening and no explanation. Three separate audits concluded from that same silence
+  // that the engine had no scheduler at all — it has one, it runs at boot and hourly, and a
+  // back-dated delay resumes on the next tick. What was missing was any way to SEE that, so the
+  // wait now travels with the run: which step, until when, and whether it is already due.
+  const dv: any = (inst.variables && typeof inst.variables === "object") ? inst.variables : {};
+  const delays: Record<string, string> = dv._delays ?? {};
+  const waits = Object.entries(delays).map(([nodeId, until]) => {
+    const node = (asGraph(inst.template?.graph).nodes ?? []).find((n: any) => n.id === nodeId);
+    const t = new Date(String(until)).getTime();
+    return {
+      nodeId, label: node?.label ?? nodeId, until: String(until),
+      due: !isNaN(t) && t <= Date.now(),
+      daysLeft: isNaN(t) ? null : Math.ceil((t - Date.now()) / 86400000),
+    };
+  });
+  res.json({ ...inst, waiting: waits, isWaiting: waits.length > 0 });
+});
+
+/**
+ * Resume a run that is parked on a delay, now, without waiting for the hourly tick.
+ *
+ * The scheduler already does this on its own schedule. What did not exist was a way for a person to
+ * say "this wait is over" — a probation shortened by agreement, a delay entered in error, or simply
+ * a demonstration that the rest of the workflow works. Its absence is why the last eight nodes of
+ * the onboarding workflow had never been executed by anybody.
+ *
+ * Writes an audit line naming who forced it, because skipping a waiting period is a decision.
+ */
+R.post("/instances/:id/resume", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const inst = await prisma.workflowInstance.findUnique({ where: { id: req.params.id } });
+    if (!inst) return res.status(404).json({ error: "Not found" });
+    if (inst.status !== "running") return res.status(400).json({ error: `This run is ${inst.status}, so there is nothing to resume` });
+    const vars: any = (inst.variables && typeof inst.variables === "object") ? inst.variables : {};
+    const delays: Record<string, string> = vars._delays ?? {};
+    const nodeIds = Object.keys(delays);
+    if (!nodeIds.length) return res.status(400).json({ error: "This run is not waiting on anything" });
+
+    const a = (req as any).auth;
+    const me = a?.sub ? await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }) : null;
+    const who = me?.name ?? me?.email ?? "a supervisor";
+    // Bring every wait forward to now and let the engine's own routine do the advancing, so a forced
+    // resume and a natural one take exactly the same path.
+    for (const n of nodeIds) delays[n] = new Date(Date.now() - 1000).toISOString();
+    vars._delays = delays;
+    await prisma.workflowInstance.update({ where: { id: inst.id }, data: { variables: vars } });
+    await prisma.workflowLog.create({ data: {
+      instanceId: inst.id, action: "delay.forced", nodeId: nodeIds[0],
+      detail: `${who} resumed the run early — ${nodeIds.length === 1 ? "the wait" : `${nodeIds.length} waits`} skipped`,
+      actor: who, at: nowISO(),
+    } });
+    const r = await resumeDueDelays();
+    const now = await prisma.workflowTask.count({ where: { instanceId: inst.id, status: "active" } });
+    res.json({ resumed: r.resumed, activeTasks: now, detail: r.details.join("; ") });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.post("/instances/:id/cancel", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {

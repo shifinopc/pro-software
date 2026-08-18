@@ -152,6 +152,17 @@ async function main() {
   const r2 = await call("POST", "/api/workflow/instances", tok, { templateId: tpl.id, title: TITLE, companyId: co?.id ?? null });
   const id2 = r2.body?.id ?? r2.body?.instance?.id;
   const prof = await prisma.workflowTask.findFirst({ where: { instanceId: id2, nodeId: "profile", status: "active" }, select: { id: true } });
+  // Refused OUT LOUD: silently dropping an unknown key leaves an integrator with a 200 and a value
+  // that never appears. Asserted on the profile step, which has no checklist gate ahead of it — on a
+  // step that does, the checklist refusal fires first and this would pass for the wrong reason.
+  const sneak = await call("POST", `/api/workflow/tasks/${prof!.id}/complete`, tok, {
+    variables: { applicant: "Faisal Al-Otaibi", employeeJoined: "yes" },
+  });
+  console.log("");
+  console.log(`writing another step's variable is refused:  ${sneak.status >= 400 && /does not collect/.test(String(sneak.body?.error ?? "")) ? "YES" : "NO (" + sneak.status + ")"}`);
+  console.log(`  "${String(sneak.body?.error ?? "").slice(0, 100)}"`);
+  if (!/does not collect/.test(String(sneak.body?.error ?? ""))) fail("an undeclared variable was not refused by name — an integrator gets no signal that it was ignored");
+
   const honest = await call("POST", `/api/workflow/tasks/${prof!.id}/complete`, tok, {
     variables: { applicant: "Faisal Al-Otaibi", nationality: "Saudi", mobile: "0500000000", email: "f@b.c",
       hiringType: "saudi_national", employmentType: "permanent", profession: "Analyst", department: "Ops",
@@ -163,7 +174,7 @@ async function main() {
 
   const elig = await prisma.workflowTask.findFirst({ where: { instanceId: id2, status: "active" }, select: { id: true, title: true } });
   await call("POST", `/api/workflow/tasks/${elig!.id}/complete`, tok, {
-    checklistState: {}, variables: { hiringType: "expat_new_hire", currentLocationStatus: "outside_ksa", evil: "yes" },
+    checklistState: {}, variables: { hiringType: "expat_new_hire", currentLocationStatus: "outside_ksa" },
   });
   const after2 = (await prisma.workflowInstance.findUnique({ where: { id: id2 }, select: { variables: true } }))?.variables as any;
   console.log(`a later step cannot rewrite hiring type:   ${after2?.hiringType === "saudi_national" ? "YES" : "NO — now " + after2?.hiringType}`);
