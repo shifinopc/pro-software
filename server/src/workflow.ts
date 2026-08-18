@@ -501,6 +501,24 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
               const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
               if (emp) person = emp.name;
             }
+            // …AND THE OTHER DIRECTION, which is the one that actually happens.
+            //
+            // A run started from a person's page carries their name, not their id — there is no
+            // employeeId column on an instance, only whatever happens to be in variables. So every
+            // document came out linked by free-text `person` alone, with employeeId null: two people
+            // called Mohammed Ali share a record set, and expiry monitoring that keys on the employee
+            // misses every one of them. Resolved here by the same name+company lookup completeTask
+            // already uses, so the link is made wherever the id was never supplied.
+            if (subjectKind !== "company" && !employeeId && person && inst.companyId) {
+              const matches = await prisma.employee.findMany({ where: { companyId: inst.companyId, name: person }, select: { id: true } });
+              // Exactly one, or none. Two employees of the same name in one company is the very
+              // ambiguity this is meant to resolve, and guessing between them would be worse than
+              // leaving the document on the name — so that case is left unlinked and said out loud.
+              if (matches.length === 1) employeeId = matches[0].id;
+              else if (matches.length > 1) {
+                await log("document.ambiguous_subject", nodeId, `${docType}: ${matches.length} employees at this client are called "${person}" — the document is not linked to a record`);
+              }
+            }
             if (inst.companyId && person) {
               const st = expiry ? statusOf(expiry) : { daysLeft: 0, status: "valid" };
               await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
@@ -678,6 +696,17 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           country: typeof vars.country === "string" ? vars.country : null,
           service: typeof vars.service === "string" ? vars.service : null,
         }) : null;
+        // A ROLE NOBODY HOLDS IS A STEP NOBODY GETS.
+        //
+        // Approvals are auto-assigned by exactly the same path as tasks — the reported "approvals are
+        // never auto-assigned" is not what the code does. What actually happened is quieter: this
+        // installation has nobody in hr_officer, it_officer or admin, so five steps of this workflow
+        // land with no owner and wait forever in a pile addressed to nobody. Falling back to
+        // unassigned is right; doing it silently is not.
+        if (role && !picked && !c.assignee && !ownerFallback) {
+          await log("step.unassigned", nodeId, `${node.label ?? nodeId}: nobody holds the role "${role}" on this installation`);
+          logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — nobody holds the role "${role}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        }
         const assignee = c.assignee || picked?.name || ownerFallback;
         const assigneeId = c.assignee
           ? (await resolveStaffByName(c.assignee))?.id ?? null
@@ -701,7 +730,22 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             priority: (c.priority && c.priority !== "medium" ? c.priority : null)
               || (typeof vars.priority === "string" && vars.priority.trim() ? vars.priority.trim().toLowerCase() : null)
               || c.priority || "medium",
-            dueDate: c.dueDate || null,
+            // AN SLA THAT IS ONLY STORED IS NOT AN SLA.
+            //
+            // Thirteen steps declare slaHours from 24 to 240, and every task ever created had
+            // dueDate null — so nothing was ever due, nothing breached, nothing escalated, and none
+            // of this work could appear in the SLA Monitor. The number was configuration nobody
+            // consumed. A due date is derived from it here unless the template names one outright,
+            // which is what every other consumer already reads.
+            //
+            // Calendar hours, deliberately, and worth being explicit about: the Saudi weekend is
+            // Friday–Saturday and public holidays move. Anything cleverer than elapsed time needs a
+            // working-calendar the product does not have yet, and a wrong calendar is worse than an
+            // honest stopwatch.
+            dueDate: c.dueDate
+              || (typeof c.slaHours === "number" && c.slaHours > 0
+                    ? new Date(Date.now() + c.slaHours * 3600_000).toISOString()
+                    : null),
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
             // Snapshotted, not read live from the template — a step someone is mid-way through must
             // keep the brief it was given.
@@ -809,7 +853,7 @@ export async function startInstance(templateId: string, opts: { title?: string; 
       title: opts.title || tpl.name,
       companyId: opts.companyId ?? null,
       clientName: opts.clientName ?? null,
-      variables: callerVariables(opts.variables).vars,
+      variables: seedableVariables(g, callerVariables(opts.variables).vars),
       status: "running",
       startedAt: nowISO(),
     },
@@ -957,6 +1001,35 @@ export function brokenRules(config: any, vars: Record<string, any>): string[] {
     if (!testField(r.when, vars)) continue;      // the rule does not apply to this answer
     if (testField(r.then, vars)) continue;       // it applies and it holds
     out.push(String(r.message || `${r.then.var} is not valid for ${r.when?.var ?? "this combination"}`));
+  }
+  return out;
+}
+
+/**
+ * Variables a run may be STARTED with.
+ *
+ * Creation used to store whatever it was handed:
+ * `{"variables":{"hiringType":"saudi_national","documentsVerified":"pass"}}` was accepted verbatim,
+ * so a run could be seeded past its own decisions before any human saw it — documents pre-verified,
+ * hiring type chosen, nothing to answer.
+ *
+ * The rule is not "no decision variables". Plenty of runs are started legitimately with context a
+ * decision later reads — a renewal knows its document type before it begins, and nothing in the run
+ * will ever produce that. What must not be seeded is an answer the run exists to COLLECT: a variable
+ * that some step in this very graph captures. If a step asks for it, a caller must not pre-empt it.
+ */
+export function seedableVariables(g: { nodes?: any[] }, vars: Record<string, any>): Record<string, any> {
+  const captured = new Set<string>();
+  for (const n of (g?.nodes ?? []))
+    for (const c of (n?.config?.captures ?? [])) if (c?.var) captured.add(String(c.var));
+  const decided = new Set<string>();
+  for (const n of (g?.nodes ?? []))
+    for (const b of (n?.config?.branches ?? [])) if (b?.var) decided.add(String(b.var));
+
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (captured.has(k) && decided.has(k)) continue;   // the run produces this and routes on it
+    out[k] = v;
   }
   return out;
 }

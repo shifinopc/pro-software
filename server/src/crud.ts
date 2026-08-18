@@ -316,7 +316,42 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
     try {
       const before = await findInScope(req, req.params.id);
       if (!before) return res.status(404).json({ error: "Not found" });
-      const updated = await model.update({ where: { id: req.params.id }, data: sanitize(modelName, req.body) });
+
+      // A GOVERNMENT RECORD MUST NOT CHANGE SILENTLY.
+      //
+      // An issued Work Permit's expiry was rewritten from 2027-10-01 to 2040-01-01 through this very
+      // route: HTTP 200, and the row's `history` array still had length zero. Nothing recorded that
+      // it had ever said anything else, so the compliance screen showed a permit valid for another
+      // fourteen years and no one could tell it had been edited, by whom, or from what.
+      //
+      // Editing stays possible — a mistyped number has to be correctable, and a workflow that cannot
+      // fix its own data is worse. What changes is that it can no longer be quiet: every change to a
+      // field the compliance engine reads is appended to the document's own history, with who and
+      // when and both values. The history is only ever added to.
+      let historyPatch: any = undefined;
+      if (modelName === "document") {
+        const WATCHED: [string, string][] = [
+          ["expiryDate", "expiry"], ["docNumber", "number"], ["issueDate", "issued"],
+          ["status", "status"], ["issuingAuthority", "authority"], ["docType", "type"],
+        ];
+        const changes = WATCHED
+          .filter(([f]) => req.body?.[f] !== undefined && String(req.body[f] ?? "") !== String((before as any)[f] ?? ""))
+          .map(([f, label]) => ({ field: label, from: (before as any)[f] ?? null, to: req.body[f] ?? null }));
+        if (changes.length) {
+          const a = (req as any).auth;
+          const who = a?.sub ? (await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } })) : null;
+          const prior = Array.isArray((before as any).history) ? ((before as any).history as any[]) : [];
+          historyPatch = [
+            ...prior,
+            { at: new Date().toISOString(), by: who?.name ?? who?.email ?? a?.sub ?? "unknown", kind: "edited", changes },
+          ];
+        }
+      }
+
+      const updated = await model.update({
+        where: { id: req.params.id },
+        data: { ...sanitize(modelName, req.body), ...(historyPatch ? { history: historyPatch } : {}) },
+      });
       if (modelName === "invoice" && req.body?.status === "paid") {
         logActivity({ type: "finance", message: `Invoice ${updated.number} marked paid` });
         logNotification({ type: "payment", title: `Payment received: ${updated.number}`, message: updated.clientName ?? undefined });

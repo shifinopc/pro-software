@@ -350,7 +350,10 @@ async function main() {
     // "Added to GOSI" was one tick on the payroll list. As a document it is a record with a number,
     // an authority and a date, which is what anyone asking "is this employee registered?" needs.
     { id: "gosi_doc", type: "issue_document", label: "GOSI Employee Registration",
-      config: { docType: "GOSI Employee Registration", numberVar: "gosiNumber", expiryVar: "gosiExpiry" } },
+      // No expiryVar: a GOSI registration does not expire. Naming a variable nobody captures made the
+      // log read "GOSI Employee Registration … → ?" and stored a null expiry that looked like an
+      // omission rather than a fact about the record.
+      config: { docType: "GOSI Employee Registration", numberVar: "gosiNumber" } },
     // Accounts and devices are not PRO work. A PRO officer deals with government.
     { id: "access", type: "task", label: "System Access", config: { assigneeRole: "it_officer", slaHours: 48,
       checklist: [doc("email", "Corporate email"), doc("erp", "ERP account"), doc("attendance", "Attendance / biometric enrolment"),
@@ -479,7 +482,10 @@ async function main() {
     e("joined", "d_joined"),
     e("d_joined", "probation", "yes"),
     e("d_joined", "end_cancel", "no"),
-    e("d_joined", "end_cancel", "else"),
+    // NOT end_cancel. `else` here meant an unanswered question cancelled somebody's hire — a
+    // terminal, destructive outcome reached by missing data rather than by a decision. "No" is a
+    // decision and still ends the run; silence goes back to the person who has to make one.
+    e("d_joined", "joined", "else"),
 
     e("probation", "prob_review"),
     e("prob_review", "d_prob"),

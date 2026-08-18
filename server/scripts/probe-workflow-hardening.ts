@@ -106,6 +106,44 @@ async function main() {
   console.log(`...and so does a Saudi on the Saudi path:          ${saudiProper.length === 0 ? "YES" : "NO — " + saudiProper[0]}`);
   if (saudiProper.length) fail("a correct Saudi profile was rejected — the prefix match is too strict");
 
+  // H8 — an answer the run collects cannot be supplied before it starts
+  const seeded = await call("POST", "/api/workflow/instances", tok, {
+    templateId: tpl.id, title: TITLE, companyId: co?.id ?? null,
+    variables: { hiringType: "saudi_national", documentsVerified: "pass", employeeId: "emp-123" },
+  });
+  const seededId = seeded.body?.id ?? seeded.body?.instance?.id;
+  const sv = (await prisma.workflowInstance.findUnique({ where: { id: seededId }, select: { variables: true } }))?.variables as any;
+  console.log("");
+  console.log(`decisions cannot be pre-answered at creation: ${!sv?.hiringType && !sv?.documentsVerified ? "YES" : "NO"}`);
+  if (sv?.hiringType || sv?.documentsVerified) fail("a run can be started past its own decisions, with nothing for a human to answer");
+  console.log(`  ...while real context still travels:       ${sv?.employeeId === "emp-123" ? "YES" : "NO"}`);
+  if (sv?.employeeId !== "emp-123") fail("legitimate context was dropped, which breaks renewals started with their document");
+
+  // H1 — an SLA that is only stored is not an SLA
+  const withSla = await prisma.workflowTask.findFirst({ where: { instanceId: seededId, slaHours: { not: null } }, select: { title: true, slaHours: true, dueDate: true } });
+  console.log("");
+  console.log(`a step with an SLA has a due date:          ${withSla?.dueDate ? "YES" : "NO"}`);
+  if (withSla) {
+    const hours = withSla.dueDate ? Math.round((new Date(withSla.dueDate).getTime() - Date.now()) / 3600000) : 0;
+    console.log(`  "${withSla.title}" ${withSla.slaHours}h -> due in ~${hours}h`);
+    if (!withSla.dueDate) fail("slaHours is declared and nothing is ever due, so nothing can breach or escalate");
+    else if (Math.abs(hours - (withSla.slaHours ?? 0)) > 1) fail(`due date does not match the declared SLA (${hours}h vs ${withSla.slaHours}h)`);
+  }
+
+  // H5 — a government record cannot change quietly
+  const doc = await prisma.document.create({ data: {
+    companyId: co!.id, person: "WH Probe Person", docType: "Work Permit",
+    expiryDate: "2027-10-01", status: "valid", daysLeft: 400, docNumber: "WP-PROBE",
+  } });
+  const edit = await call("PUT", `/api/documents/${doc.id}`, tok, { expiryDate: "2040-01-01" });
+  const after = await prisma.document.findUnique({ where: { id: doc.id }, select: { history: true } });
+  const hist: any[] = Array.isArray(after?.history) ? (after!.history as any[]) : [];
+  console.log("");
+  console.log(`rewriting an issued expiry leaves a trail:  ${hist.length ? "YES" : "NO"} (${edit.status})`);
+  if (hist.length) console.log(`  ${hist[0].by} - ${hist[0].changes?.[0]?.field} ${hist[0].changes?.[0]?.from} -> ${hist[0].changes?.[0]?.to}`);
+  if (!hist.length) fail("an issued document's expiry was rewritten with history still empty — the edit is invisible");
+  await prisma.document.delete({ where: { id: doc.id } });
+
   await sweep();
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);
   process.exit(bad === 0 ? 0 : 1);
