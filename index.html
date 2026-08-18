@@ -6385,6 +6385,7 @@
                     <div style="display:flex; align-items:center; gap:9px;">
                       <span style="font-size:13.5px; font-weight:650; color:#1A1523;">{{ w.name }}</span>
                       <span style="display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700; color:{{ w.activeColor }}; background:{{ w.activeBg }}; padding:2px 8px; border-radius:99px; flex-shrink:0;"><span style="width:5px; height:5px; border-radius:99px; background:{{ w.activeColor }};"></span>{{ w.activeLabel }}</span>
+                      <sc-if value="{{ w.hasCountry }}" hint-placeholder-val="{{ true }}"><span title="{{ w.countryTitle }}" style="display:inline-flex; align-items:center; gap:5px; font-size:9.5px; font-weight:700; color:#5B00BA; background:#F3E8FF; border:1px solid #E3CCFF; padding:2px 9px; border-radius:99px; flex-shrink:0;"><span style="font-size:11px; line-height:1;">{{ w.countryFlag }}</span>{{ w.countryCode }}</span></sc-if>
                     </div>
                     <div style="font-size:11.5px; color:#A9A6B4; margin-top:3px;">{{ w.meta }}</div>
                     <!-- What this template is actually for. Said only when a service points at it:
@@ -21868,7 +21869,7 @@ class Component extends DCLogic {
           const bound8 = String(cfg8.docType || '').trim();
           const isExp8 = t.trigger === 'document_expiry';
           const used8 = _usedByNames(t.id);
-          return { name: t.name, active: !!t.active, graph: t.graph, tplId: t.id,
+          return { name: t.name, active: !!t.active, graph: t.graph, tplId: t.id, country: t.country,
             usedBy: used8,
             steps: nodes + ' step' + (nodes === 1 ? '' : 's'),
             entity: t.entityType || 'generic',
@@ -21931,6 +21932,14 @@ class Component extends DCLogic {
       meta: r.steps + ' · ' + r.entity + ' · ' + r.trigger,
       steps: r.steps, entity: r.entity, trigger: r.trigger,
       activeLabel: r.active ? 'Active' : 'Draft',
+      // WHICH COUNTRY'S RULES THIS BELONGS TO, said as its own chip rather than buried in the name.
+      // It used to be spelled into the title — "… (KSA)" — which reads fine on one workflow and
+      // becomes noise on twenty, and cannot be filtered or counted because it is just characters in
+      // a string. The flag is derived from the code, so it can never disagree with it.
+      hasCountry: !!r.country,
+      countryCode: r.country || '',
+      countryFlag: r.country ? _cnFlag(r.country) : '',
+      countryTitle: r.country ? ('Part of the ' + r.country + ' country rules') : '',
       activeColor: r.active ? '#0E9355' : '#8C8899',
       activeBg: r.active ? '#E7F8EF' : '#F3F1F7',
       // Only worth saying while the template is Active: a Draft is not expected to fire anyway, and

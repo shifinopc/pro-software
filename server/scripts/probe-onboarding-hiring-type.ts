@@ -20,7 +20,7 @@
 import { prisma } from "../src/db.js";
 import { evaluateRule } from "../src/dealchecklist.js";
 
-const TEMPLATE = "Employee Onboarding — by Hiring Type (KSA)";
+const TEMPLATE = "Employee Onboarding";
 const RULE = "Onboarding documents by hiring type";
 
 async function main() {

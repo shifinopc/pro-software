@@ -33,7 +33,12 @@
 import { prisma } from "../src/db.js";
 
 const COUNTRY = "SA";
-const TEMPLATE = "Employee Onboarding — by Hiring Type (KSA)";
+// The country is NOT in the title. It is a property of the row and the builder shows it as its own
+// chip — spelling "(KSA)" into the name reads fine on one workflow and becomes noise on twenty, and
+// it cannot be filtered or counted because it is only characters in a string.
+const TEMPLATE = "Employee Onboarding";
+/** What it used to be called, so an installation that already has it is renamed rather than doubled. */
+const OLD_NAMES = ["Employee Onboarding — by Hiring Type (KSA)"];
 const RULE = "Onboarding documents by hiring type";
 
 const doc = (key: string, label: string, required = true) => ({ key, label, required, source: "manual" });
@@ -323,9 +328,14 @@ async function main() {
   ];
 
   const graph = { nodes, edges };
+  // Rename first. Matching on the new name alone would miss the row created under the old one and
+  // create a second copy beside it — the same duplicate-on-rename trap the pack keys avoid.
+  const renamed = await prisma.workflowTemplate.updateMany({ where: { name: { in: OLD_NAMES } }, data: { name: TEMPLATE } });
+  if (renamed.count) console.log(`renamed ${renamed.count} existing template to "${TEMPLATE}"`);
+
   const existing = await prisma.workflowTemplate.findFirst({ where: { name: TEMPLATE } });
   const tpl = existing
-    ? await prisma.workflowTemplate.update({ where: { id: existing.id }, data: { graph: graph as any, country: COUNTRY, active: false } })
+    ? await prisma.workflowTemplate.update({ where: { id: existing.id }, data: { graph: graph as any, country: COUNTRY } })
     : await prisma.workflowTemplate.create({ data: {
         name: TEMPLATE, country: COUNTRY, trigger: "manual", entityType: "employee",
         // Left INACTIVE. It sits beside the one in use until somebody has read it and chosen to
