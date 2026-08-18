@@ -2,8 +2,8 @@
   "pack": "sa",
   "country": "SA",
   "countryName": "Saudi Arabia",
-  "version": "2026.5",
-  "generatedAt": "2026-08-18T08:38:43.445Z",
+  "version": "2026.6",
+  "generatedAt": "2026-08-18T09:44:24.415Z",
   "contains": "configuration only — no companies, employees, documents, invoices or credentials",
   "documentTypes": [
     {
@@ -12,6 +12,9 @@
       "subjectKind": "employee",
       "defaultFee": 75,
       "leadDays": 30,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "CCHI",
       "fields": [],
       "prereqs": [],
@@ -22,8 +25,11 @@
       "key": "sa.doctype.iqama",
       "name": "Iqama",
       "subjectKind": "employee",
-      "defaultFee": 650,
+      "defaultFee": 65000,
       "leadDays": 60,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "Muqeem",
       "fields": [
         {
@@ -67,6 +73,9 @@
       "subjectKind": "employee",
       "defaultFee": null,
       "leadDays": 30,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "MHRSD",
       "fields": [],
       "prereqs": [
@@ -84,6 +93,9 @@
       "subjectKind": "employee",
       "defaultFee": 0,
       "leadDays": 30,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": null,
       "fields": [
         {
@@ -111,6 +123,9 @@
       "subjectKind": "employee",
       "defaultFee": null,
       "leadDays": 30,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "Qiwa",
       "fields": [],
       "prereqs": [],
@@ -123,6 +138,9 @@
       "subjectKind": "employee",
       "defaultFee": null,
       "leadDays": 30,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "Qiwa",
       "fields": [
         {
@@ -146,6 +164,9 @@
       "subjectKind": "employee",
       "defaultFee": null,
       "leadDays": 14,
+      "statutoryDays": null,
+      "statutoryFrom": null,
+      "statutoryBasis": null,
       "authority": "GOSI",
       "fields": [
         {
@@ -281,6 +302,31 @@
           },
           {
             "to": "end_transfer",
+            "from": "d_transfer",
+            "condition": "cancelled"
+          },
+          {
+            "to": "qiwa_req",
+            "from": "d_transfer",
+            "condition": "waiting_employee"
+          },
+          {
+            "to": "qiwa_req",
+            "from": "d_transfer",
+            "condition": "waiting_employer"
+          },
+          {
+            "to": "qiwa_req",
+            "from": "d_transfer",
+            "condition": "waiting_notice"
+          },
+          {
+            "to": "qiwa_req",
+            "from": "d_transfer",
+            "condition": "waiting_ministry"
+          },
+          {
+            "to": "qiwa_req",
             "from": "d_transfer",
             "condition": "else"
           },
@@ -752,8 +798,8 @@
                 {
                   "var": "transferOutcome",
                   "type": "select",
-                  "label": "Transfer Outcome",
-                  "options": "approved,rejected,expired"
+                  "label": "Where is the transfer now?",
+                  "options": "awaiting_employee,awaiting_current_employer,notice_period,ministry_processing,approved,rejected,expired,cancelled"
                 }
               ],
               "slaHours": 240,
@@ -809,6 +855,36 @@
                   "key": "expired",
                   "var": "transferOutcome",
                   "value": "expired"
+                },
+                {
+                  "op": "eq",
+                  "key": "cancelled",
+                  "var": "transferOutcome",
+                  "value": "cancelled"
+                },
+                {
+                  "op": "eq",
+                  "key": "waiting_employee",
+                  "var": "transferOutcome",
+                  "value": "awaiting_employee"
+                },
+                {
+                  "op": "eq",
+                  "key": "waiting_employer",
+                  "var": "transferOutcome",
+                  "value": "awaiting_current_employer"
+                },
+                {
+                  "op": "eq",
+                  "key": "waiting_notice",
+                  "var": "transferOutcome",
+                  "value": "notice_period"
+                },
+                {
+                  "op": "eq",
+                  "key": "waiting_ministry",
+                  "var": "transferOutcome",
+                  "value": "ministry_processing"
                 }
               ]
             }

@@ -390,6 +390,16 @@ model DocumentType {
   fields              Json?   @default("[]") // array of { id, label, type, options?, required? }
   prereqs             Json?   @default("[]") // renewal rules: array of { requiresDocType, minMonths }
   leadDays            Int? // reminder lead time — days before expiry the doc flags "expiring" (default 30)
+  // A STATUTORY DEADLINE IS NOT A REMINDER WINDOW, and there was nowhere to record one.
+  //
+  // leadDays above says when Compliance should start nagging; it says nothing about what the law
+  // allows. With only that field on the screen, "Iqama · 60 days" reads as a legal deadline — an
+  // external reviewer read it exactly that way — and the platform would be asserting a compliance
+  // date nobody had established. These three are deliberately separate and default to null: a
+  // deadline appears only once somebody enters one, together with the source it comes from.
+  statutoryDays       Int?    // days allowed after the trigger event
+  statutoryFrom       String? // the event the clock starts from — entry to the country, employment start…
+  statutoryBasis      String? // the regulation or service page it comes from, so nobody takes the number on trust
   defaultFee          Int? // default renewal fee (SAR)
   requiresApproval    Boolean @default(false)
   defaultAssigneeRole String? // role a renewal task defaults to

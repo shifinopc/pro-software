@@ -253,13 +253,28 @@ async function main() {
         doc("employee_accepted", "Employee accepted on Qiwa"),
         doc("employer_response", "Current employer responded"),
       ],
-      captures: [{ var: "transferOutcome", type: "select", label: "Transfer Outcome",
-        options: "approved,rejected,expired" }],
+      // THE WAITING STATES ARE THE POINT.
+      //
+      // approved / rejected / expired describes how a transfer ENDED and says nothing about a
+      // transfer in progress — which is most of them, for most of their life. An officer asked "where
+      // is this?" could only answer "not approved yet", and the three outcomes gave them nowhere to
+      // record whether that means the employee has not opened it, the current employer has not
+      // replied, a notice period is running, or the ministry has it.
+      //
+      // Waiting states route back to this step rather than onward or to an end: the transfer is still
+      // live, and the run has to stay on the one task that owns it.
+      captures: [{ var: "transferOutcome", type: "select", label: "Where is the transfer now?",
+        options: "awaiting_employee,awaiting_current_employer,notice_period,ministry_processing,approved,rejected,expired,cancelled" }],
     } },
     { id: "d_transfer", type: "decision", label: "Transfer Approved?", config: { branches: [
       { var: "transferOutcome", op: "eq", value: "approved", key: "approved" },
       { var: "transferOutcome", op: "eq", value: "rejected", key: "rejected" },
       { var: "transferOutcome", op: "eq", value: "expired", key: "expired" },
+      { var: "transferOutcome", op: "eq", value: "cancelled", key: "cancelled" },
+      { var: "transferOutcome", op: "eq", value: "awaiting_employee", key: "waiting_employee" },
+      { var: "transferOutcome", op: "eq", value: "awaiting_current_employer", key: "waiting_employer" },
+      { var: "transferOutcome", op: "eq", value: "notice_period", key: "waiting_notice" },
+      { var: "transferOutcome", op: "eq", value: "ministry_processing", key: "waiting_ministry" },
     ] } },
     { id: "end_transfer", type: "end", label: "Transfer Not Completed", config: {} },
 
@@ -411,7 +426,14 @@ async function main() {
     e("d_transfer", "contract", "approved"),
     e("d_transfer", "end_transfer", "rejected"),
     e("d_transfer", "end_transfer", "expired"),
-    e("d_transfer", "end_transfer", "else"),
+    e("d_transfer", "end_transfer", "cancelled"),
+    // Still running: back to the step that owns it, so the run stays alive and the reason is on record.
+    e("d_transfer", "qiwa_req", "waiting_employee"),
+    e("d_transfer", "qiwa_req", "waiting_employer"),
+    e("d_transfer", "qiwa_req", "waiting_notice"),
+    e("d_transfer", "qiwa_req", "waiting_ministry"),
+    // An unrecognised value is not a failed transfer — it goes back to a person, like the hiring type.
+    e("d_transfer", "qiwa_req", "else"),
 
     e("contract", "contract_doc"),
     // A WORK PERMIT IS AN EXPATRIATE INSTRUMENT. The three hiring types converged before this node,
