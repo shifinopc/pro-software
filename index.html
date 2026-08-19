@@ -23783,6 +23783,16 @@ class Component extends DCLogic {
       title: 'Step title', direction: 'Direction', description: 'Description',
       expiryVar: 'Expiry taken from', numberVar: 'Number taken from', issueVar: 'Issue date taken from',
       feeVar: 'Fee taken from', receiptVar: 'Receipt taken from', builtin: 'Shipped as',
+      // Added as the engine grew, and every one of them was reaching this panel unlabelled — the
+      // fallback Title-Cases the key, so a field set arrived as "Capture Rule Id" next to a raw
+      // cuid. The map has to be extended whenever a config key is, which is the standing cost of
+      // rendering stored config directly; a key with no entry here is a database column on screen.
+      captureSource: 'Fields come from', captureRuleId: 'Field set',
+      docTypeSource: 'Document type chosen by', createsEmployee: 'Creates an employee record',
+      rules: 'Cross-field rules', statutory: 'Statutory deadline',
+      accumulateInto: 'Counts towards', priority: 'Priority',
+      voidIssued: 'Withdraws what it issued', voidReason: 'Why they are withdrawn',
+      to: 'Sent to', channel: 'Sent by', subject: 'Subject', template: 'Message',
     }[k] || k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()));
 
     const _cfgValue = (k, v) => {
@@ -23793,8 +23803,20 @@ class Component extends DCLogic {
         // rule silently falls back to its own list, which is usually empty.
         return hit9 ? hit9.name : 'Rule not found — this step would fall back to its own list';
       }
+      // The FIELD SET, by name. Same contract as the checklist rule above and for the same reason:
+      // an id tells the reader nothing, and a set that has been deleted is the one case they most
+      // need to see — the step silently falls back to its own fields, which may be none at all.
+      if (k === 'captureRuleId') {
+        const sets9 = Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : [];
+        const hitF = sets9.find(f9 => f9.id === v);
+        return hitF ? hitF.name : 'Field set not found — this step would fall back to its own fields';
+      }
       if (k === 'assigneeRole' || k === 'approverRole') return ROLE_LABEL_MAP[v] || v || 'Nobody';
-      if (k === 'checklistSource') return ({ dynamic: 'A rule, decided per case', service: "The service's own required documents", list: 'The list set on this step' })[v] || v;
+      // 'list' was never a stored value — the resolver writes '', 'static', 'dynamic' or 'service' —
+      // so the one entry meant to cover the ordinary case never matched and printed "static".
+      if (k === 'checklistSource') return ({ dynamic: 'A rule, decided per case', service: "The service's own required documents", static: 'The list set on this step', '': 'Nothing' })[v] || v;
+      if (k === 'captureSource') return ({ rule: 'A field set', document_type: "A document type's fields", static: 'The fields set on this step', '': 'Nothing' })[v] || v;
+      if (k === 'docTypeSource') return v === 'specific' ? 'Named on this step' : 'Whichever document the run is about';
       if (k === 'slaHours') { const n9 = Number(v); return !n9 ? String(v) : (n9 % 24 === 0 ? (n9 / 24) + (n9 === 24 ? ' day' : ' days') : n9 + ' hours'); }
       if (k === 'days') return Number(v) === 1 ? '1 day' : v + ' days';
       if (k === 'hours') return Number(v) === 1 ? '1 hour' : v + ' hours';
@@ -23802,6 +23824,10 @@ class Component extends DCLogic {
         if (k === 'branches') return v.map(b9 => `${b9.var} ${b9.op} ${b9.value} → ${b9.key}`).join('  ·  ');
         if (k === 'captures') return v.map(c9 => c9.label || c9.var).join(' · ');
         if (k === 'checklist') return v.map(c9 => c9.label || c9.key).join(' · ');
+        // A deadline nobody can read is a deadline nobody checks. Say what it is and what it counts
+        // from, rather than "1 items".
+        if (k === 'statutory') return v.map(c9 => `${c9.label || c9.key} (from ${c9.from})`).join('  ·  ');
+        if (k === 'rules') return v.map(r9 => (r9 && r9.message) ? String(r9.message).split(/[—.]/)[0].trim() : 'rule').join('  ·  ');
         return v.length + (v.length === 1 ? ' item' : ' items');   // "1 items" read as a bug of its own
       }
       if (typeof v === 'boolean') return v ? 'Yes' : 'No';
