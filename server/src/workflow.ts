@@ -400,9 +400,49 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
 
       case "notify": {
-        const ch = node.config?.channel ?? "Email";
-        await log("notify", nodeId, `${node.label ?? "Notify"} · ${ch}`);
-        logNotification({ type: "system", title: node.label || "Workflow notification", message: node.config?.template ?? inst.title });
+        // WHAT THE STEP SAYS IT DOES, AND WHAT IT DID.
+        //
+        // The node is configured with a channel, a recipient — `to: "{{ email }}"` — and a subject.
+        // None of the three was read: this raised an in-app notification addressed to nobody and
+        // logged that it had notified. The run said Notify Employee ✓ and the employee was never
+        // told anything. Nobody could see it because the step had never executed at all: it sits
+        // behind a 90-day probation delay, and nothing matures inside a test window, so it went
+        // through several audits as "configured" on the strength of reading its config.
+        //
+        // There was also no interpolation anywhere in this engine, so `{{ email }}` was never a
+        // placeholder — it was the literal recipient string, and always had been.
+        const c = node.config ?? {};
+        const ch = String(c.channel ?? "Email");
+        const fill = (t: any) => String(t ?? "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, k) => {
+          const v = (vars as any)[k];
+          return v === undefined || v === null ? "" : String(v);
+        });
+        const to = fill(c.to).trim();
+        const subject = fill(c.subject).trim() || String(node.label ?? "Notification");
+        const message = fill(c.template).trim() || inst.title;
+
+        // The in-app notification stays: it is what the office sees, and it worked.
+        logNotification({ type: "system", title: node.label || "Workflow notification", message });
+
+        if (!/mail/i.test(ch)) {
+          // A channel this engine cannot send on is said out loud rather than quietly treated as sent.
+          await log("notify", nodeId, `${node.label ?? "Notify"} · ${ch} — recorded in the app; this engine only sends email`);
+        } else if (!to) {
+          // The case that was invisible: configured to email somebody, and the run holds no address.
+          await log("notify.no_recipient", nodeId, `${node.label ?? "Notify"} · nothing was sent — "${String(c.to ?? "")}" resolved to no address on this run`);
+          logActivity({ type: "alert", message: `⚠ "${node.label ?? "Notify"}" could not be sent — no email address on ${inst.title}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        } else {
+          try {
+            const { sendMail } = await import("./mailer.js");
+            const r = await sendMail({ to, subject, html: `<p>${message.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`, text: message, kind: "workflow" });
+            await log("notify", nodeId, `${node.label ?? "Notify"} · ${r.sent ? "emailed" : "not sent (sending is switched off)"} ${to} — "${subject}"`);
+          } catch (e: any) {
+            // Non-fatal, and never silent: the employee not being told must not strand a run that has
+            // already done its government work, but it must not read as success either.
+            await log("notify.failed", nodeId, `${node.label ?? "Notify"} · could not email ${to}: ${String(e?.message ?? e)}`);
+            logActivity({ type: "alert", message: `⚠ "${node.label ?? "Notify"}" could not be emailed to ${to}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+          }
+        }
         queue.push(...nextTargets(g, nodeId));
         break;
       }

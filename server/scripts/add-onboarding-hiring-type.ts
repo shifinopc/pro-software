@@ -252,6 +252,16 @@ async function main() {
     // it is irreversible, so it should never begin on the strength of a document check alone.
     { id: "hiring_appr", type: "approval", label: "Hiring Approval", config: {
       approverRole: "hr_officer",
+      // AN APPROVAL IS THE ONE STEP TYPE THAT CAN STALL IN SILENCE.
+      //
+      // Neither approval carried an SLA, so neither got a due date, and a task with no due date never
+      // appears in the SLA Monitor. Every other step type is chased by somebody waiting on the work
+      // downstream; an approval is waited on by the run itself, and nothing else can clear it. Now
+      // that they auto-assign, an approver on leave silently parks the hire.
+      //
+      // Two working days here, three at confirmation. Both are decisions someone can make from what
+      // is already in front of them, not work that has to be done at a ministry.
+      slaHours: 48,
       title: "Approve this hire before government processing begins",
     } },
     { id: "end_nohire", type: "end", label: "Hire Not Approved", config: {} },
@@ -287,7 +297,7 @@ async function main() {
         doc("nitaqat_band", "Nitaqat band still holds after adding this hire"),
       ],
       captures: [
-        { var: "visaAuthNumber", type: "text", label: "Visa authorisation number" },
+        { var: "visaAuthNumber", type: "text", label: "Visa authorisation number", required: false },
         { var: "quotaOutcome", type: "select", label: "Authorisation outcome",
           options: "authorised,quota_unavailable,refused", required: true },
       ],
@@ -323,7 +333,7 @@ async function main() {
       captures: [
         { var: "verificationOutcome", type: "select", label: "Verification outcome",
           options: "verified,not_required,rejected", required: true },
-        { var: "verificationRef", type: "text", label: "Verification reference" },
+        { var: "verificationRef", type: "text", label: "Verification reference", required: false },
       ],
       rules: [
         { when: { var: "verificationOutcome", op: "eq", value: "verified" },
@@ -369,8 +379,15 @@ async function main() {
         // and the run carried on issuing a Work Visa document for a visa that does not exist.
         { var: "visaOutcome", type: "select", label: "Application outcome",
           options: "issued,more_info,rejected", required: true },
-        { var: "visaNumber", type: "text", label: "Visa number" },
-        { var: "visaExpiry", type: "date", label: "Visa expiry" },
+        // OPTIONAL AS A FIELD, MANDATORY AS A RULE — the same shape as extensionAgreed above.
+        //
+        // A capture counts as required unless it says otherwise, which is right for the fields a step
+        // exists to collect and exactly wrong here: these only exist when the answer is yes. Left as
+        // plain required fields, a rejection could not be recorded at all — the step demanded a visa
+        // number before it would accept "rejected" — so every refusal branch routed correctly and
+        // none of them could be reached. The rule below keeps them mandatory on success.
+        { var: "visaNumber", type: "text", label: "Visa number", required: false },
+        { var: "visaExpiry", type: "date", label: "Visa expiry", required: false },
       ],
       rules: [
         { when: { var: "visaOutcome", op: "eq", value: "issued" },
@@ -408,10 +425,17 @@ async function main() {
         { var: "arrivalOutcome", type: "select", label: "Arrival outcome",
           options: "cleared,not_arrived,biometrics_failed,medical_failed", required: true },
         // THE DATE THE RESIDENCE CLOCK STARTS. The workflow recorded that somebody had arrived but
-        // never when, and the 90 days to issue an Iqama are counted from exactly this date. Without
-        // it the deadline cannot be computed at all — which is why it is required rather than
-        // computed from whenever the step happened to be ticked.
-        { var: "entryDate", type: "date", label: "Date of entry to the Kingdom", required: true },
+        // never when, and the 90 days to issue an Iqama are counted from exactly this date.
+        //
+        // Required of everybody who actually arrived and of nobody who did not — "has not arrived" is
+        // precisely the case with no entry date, and demanding one would make that outcome impossible
+        // to record. The rule below asks for it in every case where the employee is in the country.
+        { var: "entryDate", type: "date", label: "Date of entry to the Kingdom", required: false },
+      ],
+      rules: [
+        { when: { var: "arrivalOutcome", op: "in", value: "cleared,biometrics_failed,medical_failed" },
+          then: { var: "entryDate", op: "present" },
+          message: "The employee is in the Kingdom, so there is a date of entry — the 90 days to issue the Iqama are counted from it" },
       ],
     } },
     // The two failures here are not the same failure. Biometrics can be retaken and the employee is
@@ -442,8 +466,16 @@ async function main() {
       captures: [
         { var: "iqamaTransferOutcome", type: "select", label: "Transfer outcome",
           options: "updated,refused", required: true },
-        { var: "iqamaNumber", type: "text", label: "Existing Iqama number" },
-        { var: "iqamaExpiry", type: "date", label: "Existing Iqama expiry (unchanged by the transfer)" },
+        { var: "iqamaNumber", type: "text", label: "Existing Iqama number", required: false },
+        { var: "iqamaExpiry", type: "date", label: "Existing Iqama expiry (unchanged by the transfer)", required: false },
+      ],
+      rules: [
+        { when: { var: "iqamaTransferOutcome", op: "eq", value: "updated" },
+          then: { var: "iqamaNumber", op: "present" },
+          message: "A completed transfer records the Iqama it moved — the number does not change, but the record has to exist" },
+        { when: { var: "iqamaTransferOutcome", op: "eq", value: "updated" },
+          then: { var: "iqamaExpiry", op: "present" },
+          message: "The existing expiry travels with the transfer — it is the renewal liability the new employer inherits" },
       ],
     } },
     { id: "d_iqama_tr", type: "decision", label: "Sponsorship Updated?", config: { branches: [
@@ -466,8 +498,8 @@ async function main() {
       captures: [
         { var: "iqamaOutcome", type: "select", label: "Issuance outcome",
           options: "issued,more_info,refused", required: true },
-        { var: "iqamaNumber", type: "text", label: "Iqama number" },
-        { var: "iqamaExpiry", type: "date", label: "Iqama expiry" },
+        { var: "iqamaNumber", type: "text", label: "Iqama number", required: false },
+        { var: "iqamaExpiry", type: "date", label: "Iqama expiry", required: false },
       ],
     } },
     { id: "d_iqama_out", type: "decision", label: "Iqama Issued?", config: { branches: [
@@ -532,7 +564,7 @@ async function main() {
         doc("stop_quota", "Visa authorisation or quota released if it was consumed"),
       ],
       captures: [
-        { var: "stopStage", type: "text", label: "Which step was refused" },
+        { var: "stopStage", type: "text", label: "Which step was refused", required: false },
         // `text` rather than `textarea`: the console renders every type it does not recognise as a
         // single-line input, so asking for one would promise a box that never appears.
         { var: "stopReason", type: "text", label: "What the authority said", required: true },
@@ -576,13 +608,23 @@ async function main() {
       captures: [
         { var: "permitOutcome", type: "select", label: "Issuance outcome",
           options: "issued,more_info,refused", required: true },
-        { var: "permitNumber", type: "text", label: "Work permit number" },
-        { var: "permitExpiry", type: "date", label: "Work permit expiry" },
+        // OPTIONAL AS A FIELD, MANDATORY AS A RULE — the same shape as extensionAgreed above.
+        //
+        // A capture counts as required unless it says otherwise, which is right for the fields a step
+        // exists to collect and exactly wrong here: these only exist when the answer is yes. Left as
+        // plain required fields, a rejection could not be recorded at all — the step demanded a visa
+        // number before it would accept "rejected" — so every refusal branch routed correctly and
+        // none of them could be reached. The rule below keeps them mandatory on success.
+        { var: "permitNumber", type: "text", label: "Work permit number", required: false },
+        { var: "permitExpiry", type: "date", label: "Work permit expiry", required: false },
       ],
       rules: [
         { when: { var: "permitOutcome", op: "eq", value: "issued" },
           then: { var: "permitNumber", op: "present" },
           message: "An issued work permit has a number" },
+        { when: { var: "permitOutcome", op: "eq", value: "issued" },
+          then: { var: "permitExpiry", op: "present" },
+          message: "An issued work permit has an expiry — it is what the renewal is driven from" },
       ],
     } },
     { id: "d_permit_out", type: "decision", label: "Work Permit Issued?", config: { branches: [
@@ -603,8 +645,15 @@ async function main() {
       captures: [
         { var: "gosiOutcome", type: "select", label: "GOSI registration outcome",
           options: "registered,pending,failed", required: true },
-        { var: "gosiNumber", type: "text", label: "GOSI number" },
-        { var: "firstWageDue", type: "date", label: "First wage due date" },
+        { var: "gosiNumber", type: "text", label: "GOSI number", required: false },
+        // Genuinely optional: the statutory clock falls back to the expected joining date when
+        // payroll has not set one yet.
+        { var: "firstWageDue", type: "date", label: "First wage due date", required: false },
+      ],
+      rules: [
+        { when: { var: "gosiOutcome", op: "eq", value: "registered" },
+          then: { var: "gosiNumber", op: "present" },
+          message: "A completed GOSI registration has a number — it is what the registration record is created from" },
       ],
       // TWO DEADLINES ON ONE STEP, which is why a step carries a list of them.
       //
@@ -733,7 +782,10 @@ async function main() {
     ] } },
         { id: "extend", type: "delay", label: "Extend Probation (30 days)", config: { days: 30, accumulateInto: "probationDaysUsed" } },
     { id: "end_term", type: "end", label: "Not Confirmed — Termination", config: {} },
-    { id: "confirm_appr", type: "approval", label: "Employee Confirmation Approval", config: { approverRole: "admin" } },
+    { id: "confirm_appr", type: "approval", label: "Employee Confirmation Approval", config: {
+      approverRole: "admin", slaHours: 72,
+      title: "Confirm this employee at the end of probation",
+    } },
         // The last step before the employee is confirmed, and it was configured with nothing at all: no
     // channel, no recipient, no wording. Unreachable until delays resumed, so it had never run — and
     // the first person to clear probation would have been confirmed in silence.
