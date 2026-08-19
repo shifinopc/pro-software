@@ -133,7 +133,20 @@ export function validateGraph(graph: any, tpl?: { trigger?: string | null; trigg
     }
 
     if (n.type === "task" || n.type === "approval") {
-      if (!String(c.assigneeRole ?? "").trim() && !String(c.assignee ?? "").trim()) {
+      // READ THE SAME FIELD THE ENGINE READS.
+      //
+      // An approval names its owner in `approverRole` — that is what the builder writes and what the
+      // engine resolves, as `c.assigneeRole || c.approverRole`. This checked only the first of the
+      // two, so both approvals in Employee Onboarding were reported as naming nobody while the engine
+      // was assigning them perfectly well from hr_officer and admin.
+      //
+      // A linter that disagrees with the engine is worse than no linter. This one was believed: an
+      // external review read the warning, wrote up "both approvals name no approver" as the single
+      // highest-value item left before go-live, and it was carried as an open finding through four
+      // audit passes. The real gap was somewhere else entirely — the roles are named, but nobody
+      // holds them on that installation, which is what the staffing check in validateReferences now
+      // reports and which no amount of editing the template would have fixed.
+      if (!String(c.assigneeRole ?? "").trim() && !String(c.approverRole ?? "").trim() && !String(c.assignee ?? "").trim()) {
         out.push({ level: "warning", nodeId: n.id, node: nameOf(n), message: `"${nameOf(n)}" names nobody, so it will sit unassigned until someone claims it.` });
       }
     }

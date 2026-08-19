@@ -58,6 +58,28 @@ async function main() {
   console.log(`a role that does not exist is still an error: ${bogus.some(i => i.level === "error") ? "YES" : "NO"}`);
   if (!bogus.some(i => i.level === "error")) fail("a step owned by a nonexistent role no longer fails validation");
 
+  // ── the linter has to agree with the engine about who owns a step ─────────────────────────────
+  //
+  // These are two different questions and both were wrong in opposite directions. "Names nobody" is
+  // about the TEMPLATE and read only assigneeRole, so an approval naming approverRole — which is what
+  // the builder writes and the engine resolves — was reported as ownerless while being assigned
+  // perfectly well. That false warning was believed and carried as the top pre-go-live item through
+  // four audit passes. "Nobody holds the role" is about the INSTALLATION, and is the real gap.
+  const { validateGraph } = await import("../src/workflow-validate.js");
+  const namesNobody = (cfg: any) =>
+    validateGraph({ nodes: [{ id: "n", type: "approval", label: "Sign-off", config: cfg }], edges: [] }, {} as any)
+      .some((i: any) => /names nobody/.test(i.message));
+
+  console.log("");
+  console.log(`an approval naming approverRole is NOT flagged:  ${namesNobody({ approverRole: "admin" }) ? "NO" : "YES"}`);
+  if (namesNobody({ approverRole: "admin" })) fail("the linter reports an approval as ownerless when it names approverRole — the field the builder writes and the engine reads");
+  console.log(`one naming assigneeRole is still not flagged:    ${namesNobody({ assigneeRole: "admin" }) ? "NO" : "YES"}`);
+  if (namesNobody({ assigneeRole: "admin" })) fail("a step naming assigneeRole is reported as ownerless");
+  console.log(`one naming a person outright is not flagged:     ${namesNobody({ assignee: "Sara" }) ? "NO" : "YES"}`);
+  if (namesNobody({ assignee: "Sara" })) fail("a step naming a person outright is reported as ownerless");
+  console.log(`...and one naming NOBODY still is:               ${namesNobody({}) ? "YES" : "NO"}`);
+  if (!namesNobody({})) fail("a step that genuinely names nobody is no longer reported — the check was widened into uselessness");
+
   // ── and what the real template says here ──────────────────────────────────────────────────────
   const tpl = await prisma.workflowTemplate.findFirst({ where: { name: "Employee Onboarding" } });
   if (tpl) {
