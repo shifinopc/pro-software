@@ -348,19 +348,18 @@
   .fm-rise{animation:fmRise .26s cubic-bezier(.22,1,.36,1) both;}
   .fm-step{animation:fmStepIn .24s cubic-bezier(.22,1,.36,1) both;}
   .fm-step-back{animation:fmStepBack .24s cubic-bezier(.22,1,.36,1) both;}
-  /* The fields arrive a beat after the card, top-down, so the eye lands on the first one. Six is
-     enough for this form; anything past it simply appears with the rest rather than trailing. */
-  .fm-stagger > *{animation:fmRise .3s cubic-bezier(.22,1,.36,1) both;}
-  .fm-stagger > *:nth-child(1){animation-delay:.02s;}
-  .fm-stagger > *:nth-child(2){animation-delay:.05s;}
-  .fm-stagger > *:nth-child(3){animation-delay:.08s;}
-  .fm-stagger > *:nth-child(4){animation-delay:.11s;}
-  .fm-stagger > *:nth-child(5){animation-delay:.14s;}
-  .fm-stagger > *:nth-child(6){animation-delay:.17s;}
+  /* NO PER-FIELD ENTRANCE, and this is not a style preference.
+     A field that animates has a transform and an opacity below one, and either makes it a stacking
+     context. A dropdown is absolutely positioned INSIDE its field, so its z-index then only competes
+     with its own siblings — the fields below it paint straight over the open list. Worse, the
+     runtime re-creates these nodes on every render, so opening a dropdown restarts the animation and
+     reproduces it every time rather than once on open.
+     The step container animates instead: every field shares that one context, so their paint order
+     is untouched and z-index means what it says. */
   /* Motion is decoration here: every one of these is an entrance, so removing them costs nothing
      but the flourish. */
   @media (prefers-reduced-motion:reduce){
-    .fm-rise,.fm-step,.fm-step-back,.fm-stagger > *{animation:none;}
+    .fm-rise,.fm-step,.fm-step-back{animation:none;}
   }
   .fm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 26px 15px;border-bottom:1px solid #F0EDF6;flex-shrink:0;}
   /* The one scrolling region. Header and footer stay put, so the primary action is
@@ -12251,7 +12250,7 @@
               <span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">Subject: {{ ntSubjectKind }}</span>
             </div>
 
-            <div class="fm-grid fm-stagger">
+            <div class="fm-grid">
               <div class="fm-wide">
                 <label class="fm-lab">Task title <span class="fm-req">*</span></label>
                 <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" class="fm-inp">
