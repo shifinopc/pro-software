@@ -956,6 +956,57 @@ async function main() {
     e("gov_stop", "end_gov_stop"),
   ];
 
+  // ── the document lists that belong to the country, not to the workflow ───────────────────────
+  //
+  // A step's checklist was written into the step. That is right for the firm's own process — what
+  // IT hands a joiner, what HR asks at a probation review — and wrong for everything a Saudi
+  // authority requires. Qiwa deciding it now wants one more paper for a work permit is a fact about
+  // Saudi Arabia, and it should not need a workflow edit in every tenant that has one.
+  //
+  // So the government-facing lists move into checklist rules, which are already part of a country
+  // pack: they carry `country` and `packKey`, and the pack rewrites a step's `checklistRuleId` to a
+  // stable `checklistRuleKey` on export and back again on install. That is what makes a rule
+  // survive being installed somewhere else — an id would not.
+  //
+  // One row, no conditions: these lists do not vary by hiring type, they simply belong somewhere
+  // shared. The rule that DOES vary — onboarding documents by hiring type — already exists and is
+  // left as it is.
+  //
+  // THE STEP KEEPS ITS OWN LIST AS A FALLBACK. resolveChecklist only uses the rule when it yields
+  // something, so a pack installed where the rule did not resolve still produces a step that asks
+  // for the right papers rather than a step that asks for nothing.
+  const GOV_LISTS: [string, string][] = [
+    ["elig", "Eligibility & Nitaqat check"],
+    ["visa_auth", "Visa authorisation & quota"],
+    ["prof_verify", "Professional qualification verification"],
+    ["medical_wafid", "Wafid medical examination"],
+    ["arrival", "Arrival, medical & biometrics"],
+    ["qiwa_req", "Qiwa employee transfer request"],
+    ["iqama_transfer", "Iqama sponsorship transfer"],
+    ["iqama_task", "Iqama issuance"],
+    ["permit_task", "Work permit issuance"],
+    ["contract", "Qiwa contract authentication"],
+    ["insurance_task", "Health insurance enrolment"],
+    ["payroll", "Payroll & WPS setup"],
+  ];
+  const slugOf = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  for (const [nodeId, ruleName] of GOV_LISTS) {
+    const node = nodes.find(n => n.id === nodeId);
+    const items = (node?.config?.checklist ?? []) as any[];
+    if (!node || !items.length) { console.log(`checklist rule skipped — "${nodeId}" has no list`); continue; }
+    const packKey = `sa.checklist.${slugOf(ruleName)}`;
+    const rows = [{
+      conditions: [],
+      documents: items.map(i => ({ key: i.key, label: i.label, source: "manual", required: i.required !== false })),
+    }];
+    const found = await prisma.checklistRule.findFirst({ where: { OR: [{ packKey }, { name: ruleName, country: COUNTRY }] } });
+    const rule = found
+      ? await prisma.checklistRule.update({ where: { id: found.id }, data: { name: ruleName, country: COUNTRY, packKey, rows: rows as any, retired: false } })
+      : await prisma.checklistRule.create({ data: { name: ruleName, country: COUNTRY, packKey, rows: rows as any } });
+    node.config = { ...(node.config ?? {}), checklistSource: "dynamic", checklistRuleId: rule.id };
+    console.log(`${found ? "updated" : "created"} checklist rule "${ruleName}" (${items.length} items) → ${nodeId}`);
+  }
+
   const graph = { nodes, edges };
   // Rename first. Matching on the new name alone would miss the row created under the old one and
   // create a second copy beside it — the same duplicate-on-rename trap the pack keys avoid.

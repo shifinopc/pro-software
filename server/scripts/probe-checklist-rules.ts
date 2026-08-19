@@ -1,0 +1,189 @@
+/**
+ * Check that the government document lists a step actually hands somebody come from the country
+ * rules, and that a run still asks for the right papers when they do not.
+ *
+ * The twelve government-facing lists were moved out of the workflow and into checklist rules, so a
+ * change Qiwa makes travels in the Saudi pack instead of needing a workflow edit in every tenant.
+ * That move is invisible from the outside: a step whose rule resolves to NOTHING looks exactly like
+ * a step with no checklist, and every existing probe would still pass, because ticking an empty list
+ * satisfies "all required items are ticked" trivially. So the assertion here is not "the run
+ * completes" — it is that the list on the task holds the items the rule holds, by key.
+ *
+ * The second half is the fallback. Each step kept its own inline list, because a pack installed
+ * where the rule did not come across must still produce a step that asks for papers rather than one
+ * that asks for nothing. That is tested against a throwaway template pointing at a rule id that does
+ * not exist, which is what a half-installed pack looks like.
+ *
+ * Own run, own user, own template. Deletes everything it makes.
+ */
+import { prisma } from "../src/db.js";
+import bcrypt from "bcryptjs";
+
+const API = "http://localhost:4100";
+const EMAIL = "cl-probe@example.invalid";
+const PW = "ClProbe!2026";
+const PREFIX = "ZS checklist";
+const TITLE = "ZS checklist probe";
+const FALLBACK = "ZS checklist fallback probe";
+const WHO = "ZS Checklist Probe Person";
+
+const call = (method: string, p: string, tok: string, body?: any) =>
+  fetch(API + p, { method, headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, ...(body ? { body: JSON.stringify(body) } : {}) })
+    .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) as any }));
+
+async function sweep() {
+  const insts = await prisma.workflowInstance.findMany({ where: { title: { startsWith: PREFIX } }, select: { id: true } });
+  const ids = insts.map(i => i.id);
+  if (ids.length) {
+    await prisma.workflowTask.deleteMany({ where: { instanceId: { in: ids } } });
+    await prisma.workflowLog.deleteMany({ where: { instanceId: { in: ids } } });
+    await prisma.workflowInstance.deleteMany({ where: { id: { in: ids } } });
+  }
+  await prisma.workflowTemplate.deleteMany({ where: { name: FALLBACK } });
+  await prisma.document.deleteMany({ where: { person: WHO } });
+  await prisma.employee.deleteMany({ where: { name: WHO } });
+  await prisma.user.deleteMany({ where: { email: EMAIL } });
+}
+
+/** The answer that keeps a run moving forward, wherever a step asks for a decision. */
+const HAPPY: Record<string, string> = {
+  nationality: "Indian", employmentType: "permanent",
+  documentsVerified: "pass", transferOutcome: "approved",
+  quotaOutcome: "authorised", verificationOutcome: "verified", wafidOutcome: "fit",
+  visaOutcome: "issued", arrivalOutcome: "cleared", permitOutcome: "issued", iqamaOutcome: "issued",
+  iqamaTransferOutcome: "updated", gosiOutcome: "registered", employeeJoined: "yes",
+  probationOutcome: "yes", probationFinal: "confirm",
+};
+
+/** Fill a step's captures without knowing which step it is — the shape is on the task itself. */
+function answer(captures: any[], hiringType: string): Record<string, any> {
+  const vars: Record<string, any> = {};
+  for (const c of captures ?? []) {
+    const v = String(c.var ?? "");
+    if (!v) continue;
+    if (v === "hiringType") { vars[v] = hiringType; continue; }
+    // A transfer is somebody already working in the Kingdom, and the graph enforces that. Answering
+    // "outside" here is not a shortcut the probe may take — it is a profile that cannot exist.
+    if (v === "currentLocationStatus") { vars[v] = hiringType === "expat_transfer" ? "inside_ksa" : "outside_ksa"; continue; }
+    if (HAPPY[v] !== undefined) { vars[v] = HAPPY[v]; continue; }
+    const opts: any[] = c.options ?? [];
+    if (opts.length) { vars[v] = String(opts[0]?.value ?? opts[0]); continue; }
+    if (c.type === "date" || /date|expiry|end|joining|due/i.test(v)) { vars[v] = "2027-01-15"; continue; }
+    if (c.type === "number") { vars[v] = 1; continue; }
+    if (v === "applicant") { vars[v] = WHO; continue; }
+    if (v === "email") { vars[v] = "cl@example.invalid"; continue; }
+    if (v === "mobile") { vars[v] = "+966500000003"; continue; }
+    vars[v] = "ZS-" + v;
+  }
+  return vars;
+}
+
+async function main() {
+  let bad = 0;
+  const fail = (m: string) => { console.log("  x " + m); bad++; };
+  await sweep();
+
+  await prisma.user.create({ data: { name: "CL Probe", email: EMAIL, roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
+  const tok = (await (await fetch(API + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: EMAIL, password: PW }) })).json() as any).token;
+  if (!tok) { console.log("could not sign in — is the API running?"); await sweep(); process.exit(1); }
+
+  const tpl = await prisma.workflowTemplate.findFirst({ where: { name: "Employee Onboarding" } });
+  const g: any = tpl?.graph ?? {};
+  const nodes: any[] = g.nodes ?? [];
+
+  // What each step is SUPPOSED to ask for, taken from the rule rather than from the step.
+  const rules = await prisma.checklistRule.findMany({ where: { country: "SA", retired: false } });
+  const byRule = new Map(rules.map(r => [r.id, r]));
+  const expected = new Map<string, { rule: string; keys: string[]; inline: string[] }>();
+  for (const n of nodes) {
+    const rid = n?.config?.checklistRuleId;
+    if (!rid) continue;
+    const rule = byRule.get(rid);
+    if (!rule) { fail(`step "${n.id}" points at checklist rule ${rid}, which does not exist`); continue; }
+    const rows: any[] = (rule.rows as any[]) ?? [];
+    // Only the unconditional rows — a run's hiring type decides the rest, and what is under test
+    // here is whether the rule is consulted at all, not the conditions, which have their own probe.
+    const keys = rows.filter(r => !(r.conditions ?? []).length).flatMap(r => (r.documents ?? []).map((d: any) => String(d.key)));
+    expected.set(n.id, { rule: rule.name, keys, inline: ((n.config?.checklist ?? []) as any[]).map(i => String(i.key)) });
+  }
+  console.log(`steps whose list comes from a country rule:  ${expected.size}`);
+
+  // ── walk one of each kind of hire and look at what every step actually asked for ───────────────
+  //
+  // Two runs, because no single one reaches all thirteen: a transfer never applies for a visa, and a
+  // new hire never asks Qiwa to move a sponsorship. Walking only the new-hire path would leave two
+  // rules untested while reporting a clean pass.
+  const co = await prisma.company.findFirst({ select: { id: true, name: true } });
+  const seen = new Map<string, string[]>();
+
+  for (const hiringType of ["expat_new_hire", "expat_transfer"]) {
+    const started = await call("POST", "/api/workflow/instances", tok, {
+      templateId: tpl!.id, title: `${TITLE} ${hiringType}`, companyId: co?.id ?? null, clientName: co?.name ?? null,
+    });
+    const id = started.body?.id ?? started.body?.instance?.id;
+    if (!id) { fail(`could not start a ${hiringType} run`); continue; }
+    const live = () => prisma.workflowTask.findMany({ where: { instanceId: id, status: "active" } });
+
+    for (let i = 0; i < 50; i++) {
+      const tasks = await live();
+      if (!tasks.length) break;
+      for (const t of tasks) {
+        const items: any[] = Array.isArray(t.checklist) ? (t.checklist as any[]) : [];
+        if (expected.has(t.nodeId) && !seen.has(t.nodeId)) seen.set(t.nodeId, items.map(x => String(x.key)));
+        const checklistState: any = {};
+        for (const x of items) checklistState[x.key ?? x.label] = { received: true, verified: true };
+        const r = await call("POST", `/api/workflow/tasks/${t.id}/complete`, tok, {
+          variables: answer(t.captures as any[], hiringType), ...(t.nodeType === "approval" ? { outcome: "approve" } : {}),
+          ...(items.length ? { checklistState } : {}),
+        });
+        if (r.status >= 400) { fail(`"${t.title}" refused on the ${hiringType} path — ${String(r.body?.error).slice(0, 110)}`); await sweep(); console.log(`\n${bad} problem(s)`); process.exit(1); }
+      }
+    }
+  }
+
+  console.log(`...of which the two runs reached:           ${seen.size}\n`);
+  for (const [nodeId, got] of seen) {
+    const want = expected.get(nodeId)!;
+    const ok = want.keys.length > 0 && want.keys.every(k => got.includes(k));
+    console.log(`  ${nodeId.padEnd(15)} ${String(got.length).padStart(2)} item(s)  ${ok ? "from" : "NOT from"} "${want.rule}"`);
+    if (!got.length) fail(`"${nodeId}" handed somebody an EMPTY checklist — the rule resolved to nothing and the step asks for no papers at all`);
+    else if (!ok) fail(`"${nodeId}" asked for ${got.join(", ")} where the rule holds ${want.keys.join(", ")}`);
+  }
+  const missed = [...expected.keys()].filter(k => !seen.has(k));
+  if (missed.length) { console.log(`
+  never reached: ${missed.join(", ")}`); fail(`${missed.length} rule-backed step(s) were never exercised, so their lists are untested`); }
+  if (!seen.size) fail("the runs reached none of the rule-backed steps, so nothing here was actually tested");
+
+  // ── and when the rule did not come across ─────────────────────────────────────────────────────
+  const donor = nodes.find(n => expected.has(n.id));
+  if (!donor) { console.log("no rule-backed step to borrow for the fallback test"); await sweep(); process.exit(1); }
+  const t2 = await prisma.workflowTemplate.create({ data: {
+    name: FALLBACK, trigger: "manual", entityType: "employee", active: false, country: "SA",
+    createdAt: new Date().toISOString(),
+    graph: { nodes: [
+      { id: "start", type: "start", label: "Start", config: {} },
+      { id: "step", type: "task", label: "Step", config: {
+        ...donor.config, checklistSource: "dynamic", checklistRuleId: "no-such-rule-id",
+        captures: [], rules: [], statutory: undefined, docType: undefined,
+      } },
+      { id: "end", type: "end", label: "End", config: {} },
+    ], edges: [{ from: "start", to: "step" }, { from: "step", to: "end" }] } as any,
+  } });
+  const run2 = await call("POST", "/api/workflow/instances", tok, { templateId: t2.id, title: FALLBACK });
+  const id2 = run2.body?.id ?? run2.body?.instance?.id;
+  const t2task = id2 ? (await prisma.workflowTask.findFirst({ where: { instanceId: id2, status: "active" } })) : null;
+  const fb: any[] = Array.isArray(t2task?.checklist) ? (t2task!.checklist as any[]) : [];
+  console.log("");
+  console.log(`a step whose rule is missing falls back to:  ${fb.length ? `its own ${fb.length} item(s)` : "NOTHING"}`);
+  if (!fb.length) fail("a step whose checklist rule did not resolve asks for no documents at all — a half-installed pack silently drops the paperwork");
+  else {
+    const want = expected.get(donor.id)!.inline;
+    if (!want.every(k => fb.map(x => String(x.key)).includes(k))) fail(`the fallback list is not the step's own: got ${fb.map(x => x.key).join(", ")}`);
+  }
+
+  await sweep();
+  console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);
+  await prisma.$disconnect();
+  process.exit(bad === 0 ? 0 : 1);
+}
+main().catch(async e => { console.error(e); await sweep().catch(() => {}); await prisma.$disconnect(); process.exit(1); });

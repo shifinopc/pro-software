@@ -12350,7 +12350,9 @@
                         </div>
                       </sc-if>
                     </div>
-                    <div class="fm-hint">Maintained in Checklist Rules. The step falls back to its own list if the rule matches nothing.</div>
+                    <div class="fm-hint">Maintained in Checklist Rules, so a change there reaches every step that uses it.</div>
+                    <sc-if value="{{ wsChkHasFallback }}" hint-placeholder-val="{{ false }}"><div class="fm-hint">{{ wsChkFallbackText }}</div></sc-if>
+                    <sc-if value="{{ wsChkNoFallback }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#B8860B;">This step has no list of its own, so it asks for no documents at all if the rule matches nothing.</div></sc-if>
                     <sc-if value="{{ wsChkNoRules }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#B8860B;">No checklist rules exist yet — this step would fall back to its own list.</div></sc-if>
                   </div>
                 </sc-if>
@@ -23799,6 +23801,19 @@ class Component extends DCLogic {
           wsChkIsRule: chkSrc === 'dynamic',
           wsChkIsService: chkSrc === 'service',
           wsChkNoRules: chkSrc === 'dynamic' && !rules.length,
+          // WHAT THIS STEP FALLS BACK TO, not what a step in general falls back to.
+          //
+          // Choosing a rule hides the step's own list, so the fallback becomes invisible: a step
+          // with twelve documents behind it and a step with none look identical here. Both are
+          // real — the government steps deliberately keep their list for an installation where the
+          // rule did not come across, and the others have nothing at all, which is worth a warning
+          // rather than a reassurance.
+          wsChkHasFallback: chkSrc === 'dynamic' && chkHasOwn,
+          wsChkNoFallback: chkSrc === 'dynamic' && !chkHasOwn,
+          wsChkFallbackText: chkHasOwn
+            ? 'Kept on the step as a fallback if the rule matches nothing: '
+              + _wsCfg.checklist.map(i => (i && i.label) || i).join(', ')
+            : '',
           ...mkDdCombo('ddWsRule', [{ title: '', options: rules }], String(_wsCfg.checklistRuleId || ''),
             (v) => _wsCfgSet({ checklistRuleId: v }), 'Which rule decides the list'),
 
