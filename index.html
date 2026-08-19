@@ -12315,15 +12315,91 @@
             <sc-if value="{{ wsIsWork }}" hint-placeholder-val="{{ false }}">
               <div class="fm-grid">
                 <div class="fm-wide">
-                  <label class="fm-lab">Documents to collect</label>
-                  <textarea value="{{ wsChecklist }}" onInput="{{ setWsChecklist }}" rows="5" placeholder="One per line&#10;Passport copy&#10;Signed offer letter" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.6; resize:vertical; font-family:inherit;"></textarea>
-                  <div class="fm-hint">Each line becomes a required item the step cannot be completed without.</div>
+                  <label class="fm-lab">Documents this step collects</label>
+                  <div style="display:flex; flex-direction:column; gap:7px;">
+                    <sc-for list="{{ wsChkRows }}" as="cs" hint-placeholder-count="3">
+                      <div onClick="{{ cs.pick }}" style="border:1.5px solid {{ cs.border }}; background:{{ cs.bg }}; border-radius:11px; padding:10px 13px; cursor:pointer; transition:border-color .12s, background .12s;">
+                        <span style="display:block; font-size:12.5px; font-weight:600; color:{{ cs.color }};">{{ cs.label }}</span>
+                        <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px; line-height:1.4;">{{ cs.desc }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
                 </div>
-                <sc-if value="{{ wsHasCaptures }}" hint-placeholder-val="{{ false }}">
+
+                <sc-if value="{{ wsChkIsStatic }}" hint-placeholder-val="{{ true }}">
                   <div class="fm-wide">
-                    <label class="fm-lab">Recorded on completion</label>
-                    <div style="font-size:12px; color:#6F6C7A; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; line-height:1.5;">{{ wsCaptures }}</div>
-                    <div class="fm-hint">Set by the country pack. Editing these is not done here — they are matched by name to the rules and documents downstream.</div>
+                    <label class="fm-lab">The list</label>
+                    <textarea value="{{ wsChecklist }}" onInput="{{ setWsChecklist }}" rows="5" placeholder="One per line&#10;Passport copy&#10;Signed offer letter" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.6; resize:vertical; font-family:inherit;"></textarea>
+                    <div class="fm-hint">Each line becomes a required item the step cannot be completed without.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ wsChkIsRule }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">Which rule</label>
+                    <div class="fm-selwrap">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddWsRuleOpen }}" onClick="{{ ddWsRuleOpenList }}" onInput="{{ ddWsRuleSetQuery }}" onKeyDown="{{ ddWsRuleKey }}" value="{{ ddWsRuleValue }}" placeholder="{{ ddWsRulePlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddWsRuleOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-for list="{{ ddWsRuleRows }}" as="o" hint-placeholder-count="2">
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <div class="fm-hint">Maintained in Checklist Rules. The step falls back to its own list if the rule matches nothing.</div>
+                    <sc-if value="{{ wsChkNoRules }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#B8860B;">No checklist rules exist yet — this step would fall back to its own list.</div></sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ wsChkIsService }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <div class="fm-hint">The step inherits the documents the service asked the client to upload, so it cannot drift from the request form. Falls back to its own list when the run did not come from a service request.</div>
+                  </div>
+                </sc-if>
+
+                <div class="fm-wide" style="border-top:1px solid #F5F2FA; padding-top:14px;">
+                  <label class="fm-lab">What the step records</label>
+                  <div style="display:flex; flex-direction:column; gap:7px;">
+                    <sc-for list="{{ wsCapRows }}" as="cr" hint-placeholder-count="2">
+                      <div onClick="{{ cr.pick }}" style="border:1.5px solid {{ cr.border }}; background:{{ cr.bg }}; border-radius:11px; padding:10px 13px; cursor:pointer; transition:border-color .12s, background .12s;">
+                        <span style="display:block; font-size:12.5px; font-weight:600; color:{{ cr.color }};">{{ cr.label }}</span>
+                        <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px; line-height:1.4;">{{ cr.desc }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <sc-if value="{{ wsCapIsStatic }}" hint-placeholder-val="{{ true }}">
+                  <sc-if value="{{ wsHasCaptures }}" hint-placeholder-val="{{ false }}">
+                    <div class="fm-wide">
+                      <label class="fm-lab">The fields</label>
+                      <div style="font-size:12px; color:#6F6C7A; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; line-height:1.5;">{{ wsCaptures }}</div>
+                      <div class="fm-hint">Renaming one of these is not done here — decisions, rules and issued documents match them by name.</div>
+                    </div>
+                  </sc-if>
+                </sc-if>
+
+                <sc-if value="{{ wsCapIsDoc }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">Whose fields</label>
+                    <div class="fm-selwrap">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddWsCapDocOpen }}" onClick="{{ ddWsCapDocOpenList }}" onInput="{{ ddWsCapDocSetQuery }}" onKeyDown="{{ ddWsCapDocKey }}" value="{{ ddWsCapDocValue }}" placeholder="{{ ddWsCapDocPlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddWsCapDocOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-for list="{{ ddWsCapDocRows }}" as="o" hint-placeholder-count="3">
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <div class="fm-hint">Leave it blank and the step follows whichever document the run is about — one step serving every type. File-upload fields are skipped: they have nowhere to go in the run's data.</div>
                   </div>
                 </sc-if>
               </div>
@@ -23677,6 +23753,61 @@ class Component extends DCLogic {
         (v) => _wsCfgSet({ assigneeRole: v }), 'Nobody — the step waits to be claimed'),
       ...mkDdCombo('ddWsPortal', [{ title: '', options: _wsPortals }], String(_wsCfg.govCenter || ''),
         (v) => _wsCfgSet({ govCenter: v }), 'Office work — no portal'),
+
+      // ── WHERE THE STEP'S LISTS COME FROM ────────────────────────────────────────────────────
+      //
+      // A step can carry its own list, or it can follow one kept somewhere else — a checklist rule,
+      // the service the client asked for, a document type's fields. The engine has resolved all
+      // three since long before this dialog existed; nothing in the builder could choose between
+      // them, so every step in the pack carries a hand-written list and changing what a step asks
+      // for meant editing the workflow.
+      //
+      // Following a source is the better default for anything a country changes: the rule or the
+      // document type is maintained in one place and every step pointed at it follows. Whatever
+      // resolves is snapshotted onto the step as it is created, so editing the source later never
+      // rewrites work already in progress.
+      ...(() => {
+        const chkSrc = String(_wsCfg.checklistSource || 'static');
+        const capSrc = String(_wsCfg.captureSource || 'static');
+        const rules = (Array.isArray(this.state.checklistRulesData) ? this.state.checklistRulesData : [])
+          .map(r => ({ value: r.id, label: r.name }));
+        const row = (on) => ({
+          border: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#FBF7FF' : '#fff', color: on ? '#7C00FF' : '#1A1523',
+        });
+        return {
+          // Documents
+          wsChkRows: [
+            ['static', 'This step\u2019s own list', 'The list typed below, the same for every run'],
+            ['dynamic', 'A checklist rule', 'Worked out per run \u2014 e.g. a different list by hiring type'],
+            ['service', 'The service\u2019s documents', 'Whatever the client was asked to upload on the request form'],
+          ].map(([val, label, desc]) => ({
+            label, desc, ...row(chkSrc === val),
+            pick: () => _wsCfgSet({ checklistSource: val === 'static' ? '' : val }),
+          })),
+          wsChkIsStatic: chkSrc === 'static',
+          wsChkIsRule: chkSrc === 'dynamic',
+          wsChkIsService: chkSrc === 'service',
+          wsChkNoRules: chkSrc === 'dynamic' && !rules.length,
+          ...mkDdCombo('ddWsRule', [{ title: '', options: rules }], String(_wsCfg.checklistRuleId || ''),
+            (v) => _wsCfgSet({ checklistRuleId: v }), 'Which rule decides the list'),
+
+          // Recorded fields
+          wsCapRows: [
+            ['static', 'This step\u2019s own fields', 'The fields listed below, fixed on the step'],
+            ['document_type', 'The fields of a document type', 'Follows Country Rules \u2014 add a field there and this step asks for it'],
+          ].map(([val, label, desc]) => ({
+            label, desc, ...row(capSrc === val),
+            pick: () => _wsCfgSet({ captureSource: val === 'static' ? '' : val }),
+          })),
+          wsCapIsStatic: capSrc === 'static',
+          wsCapIsDoc: capSrc === 'document_type',
+          // Which type's fields. Blank means "whatever document this run is about", which is how a
+          // renewal workflow serves every document type with one step.
+          ...mkDdCombo('ddWsCapDoc', [{ title: '', options: _wsDocTypes }], String(_wsCfg.docTypeSource === 'specific' ? (_wsCfg.docType || '') : ''),
+            (v) => _wsCfgSet(v ? { docTypeSource: 'specific', docType: v } : { docTypeSource: '' }),
+            'Whichever document the run is about'),
+        };
+      })(),
 
       // The work
       wsChecklist: (Array.isArray(_wsCfg.checklist) ? _wsCfg.checklist : []).map(i => (i && i.label) || i || '').join('\n'),
