@@ -446,6 +446,16 @@
   .fm-combo > .fm-inp[data-open="1"],.fm-combo > .fm-inp[data-open="true"]{border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.12);}
   .fm-combo-caret{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;}
 
+  /* WIZARD RAIL. The active background is a CLASS, not an inline style, and that is the whole
+     point of it: style-hover writes the row's background inline on mouseenter and restores what it
+     cached on mouseleave. Hover a row while it is the active one and that cached purple is written
+     back for good — so the rail ended up with two rows looking selected, the real one coloured by
+     its label and a stale one coloured by its background. Hover belongs to CSS, which has no memory
+     to get out of date. */
+  .wz-rail{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border-radius:11px;cursor:pointer;transition:background .12s;}
+  .wz-rail:hover{background:#F7F3FD;}
+  .wz-rail.on{background:#F5EEFF;}
+  .wz-rail.on:hover{background:#F5EEFF;}
   .fm-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto auto;gap:9px;align-items:start;}
   @media (max-width:640px){.fm-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}}
   .fm-x{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .12s;}
@@ -12205,8 +12215,9 @@
           <!-- the rail -->
           <div style="width:196px; flex-shrink:0; border-right:1px solid #F0EDF6; padding:14px 10px; display:flex; flex-direction:column; gap:3px;">
             <sc-for list="{{ wsPanes }}" as="pn" hint-placeholder-count="3">
-              <div onClick="{{ pn.go }}" style="display:flex; align-items:flex-start; gap:9px; padding:9px 10px; border-radius:11px; cursor:pointer; background:{{ pn.bg }}; transition:background .12s;" style-hover="background:#F7F3FD;">
-                <span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span>
+              <div onClick="{{ pn.go }}" class="{{ pn.cls }}">
+                <sc-if value="{{ pn.showNum }}" hint-placeholder-val="{{ true }}"><span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span></sc-if>
+                <sc-if value="{{ pn.showTick }}" hint-placeholder-val="{{ false }}"><span style="width:19px; height:19px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span></sc-if>
                 <span style="min-width:0;">
                   <span style="display:block; font-size:12.5px; font-weight:600; color:{{ pn.color }};">{{ pn.label }}</span>
                   <span style="display:block; font-size:10.5px; color:#A9A6B4; margin-top:1px; line-height:1.4;">{{ pn.hint }}</span>
@@ -12404,8 +12415,9 @@
         <div style="display:flex; min-height:0; flex:1;">
           <div style="width:196px; flex-shrink:0; border-right:1px solid #F0EDF6; padding:14px 10px; display:flex; flex-direction:column; gap:3px;">
             <sc-for list="{{ ntPanes }}" as="pn" hint-placeholder-count="3">
-              <div onClick="{{ pn.go }}" style="display:flex; align-items:flex-start; gap:9px; padding:9px 10px; border-radius:11px; cursor:pointer; background:{{ pn.bg }}; transition:background .12s;" style-hover="background:#F7F3FD;">
-                <span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span>
+              <div onClick="{{ pn.go }}" class="{{ pn.cls }}">
+                <sc-if value="{{ pn.showNum }}" hint-placeholder-val="{{ true }}"><span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span></sc-if>
+                <sc-if value="{{ pn.showTick }}" hint-placeholder-val="{{ false }}"><span style="width:19px; height:19px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span></sc-if>
                 <span style="min-width:0;">
                   <span style="display:block; font-size:12.5px; font-weight:600; color:{{ pn.color }};">{{ pn.label }}</span>
                   <span style="display:block; font-size:10.5px; color:#A9A6B4; margin-top:1px; line-height:1.4;">{{ pn.hint }}</span>
@@ -12546,7 +12558,7 @@
           <div style="display:flex; align-items:center; gap:9px;">
             <sc-if value="{{ ntNotFirst }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ntBack }}" style="font-size:12.5px; font-weight:600; color:#8C8899; padding:9px 12px; cursor:pointer;" style-hover="color:#7C00FF;">← Back</span></sc-if>
             <sc-if value="{{ ntNotLast }}" hint-placeholder-val="{{ true }}"><span onClick="{{ ntNext }}" style="font-size:12.5px; font-weight:600; color:#7C00FF; padding:9px 14px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF;">Next →</span></sc-if>
-            <button onClick="{{ submitTask }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create task</button>
+            <sc-if value="{{ ntAtLast }}" hint-placeholder-val="{{ false }}"><button onClick="{{ submitTask }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create task</button></sc-if>
           </div>
         </div>
       </div>
@@ -19840,25 +19852,38 @@ class Component extends DCLogic {
       // of them, because somebody who came to raise a plain task should not be walked through three
       // screens to do it.
       ...(() => {
+        // DONE MEANS "HAS EVERYTHING IT NEEDS", not "has been visited". Walking past a section
+        // without filling it in is not progress, and a tick that only records where you have been
+        // would mark the whole form complete the moment you reached the end of it.
+        //
+        // Two of the three are complete from the start, and that is the truth rather than a
+        // shortcut: a plain task is preselected, and an owner, a due date and a priority are all
+        // optional with a sensible default. So the one section that can be incomplete is the one
+        // carrying the required fields, and the rail points straight at it.
         const panes = [
-          { key: 'kind', label: 'Kind of work', hint: 'Plain task, or a workflow' },
-          { key: 'task', label: 'The task', hint: 'What it is and who for' },
-          { key: 'assign', label: 'Assignment', hint: 'Who does it, and by when' },
+          { key: 'kind', label: 'Kind of work', hint: 'Plain task, or a workflow', done: !!(this.state.ntKind || 'plain') },
+          { key: 'task', label: 'The task', hint: 'What it is and who for',
+            done: !!String(this.state.ntTitle || '').trim() && (!ntPersonScoped || !!this.state.ntApplicant) },
+          { key: 'assign', label: 'Assignment', hint: 'Who does it, and by when', done: true },
         ];
         const at = Math.min(Math.max(0, this.state.ntPane || 0), panes.length - 1);
         return {
           ntPanes: panes.map((pn, i) => ({
             label: pn.label, hint: pn.hint, num: String(i + 1),
-            bg: i === at ? '#F5EEFF' : 'transparent',
+            cls: i === at ? 'wz-rail on' : 'wz-rail',
             color: i === at ? '#7C00FF' : '#6F6C7A',
-            numBg: i === at ? '#7C00FF' : '#EDEBF2',
+            // The current section keeps its number even when it is complete — you are standing in
+            // it, and a tick where the marker should be reads as "you have left".
+            showTick: pn.done && i !== at,
+            showNum: !(pn.done && i !== at),
+            numBg: i === at ? '#7C00FF' : (pn.done ? '#E7F8EF' : '#EDEBF2'),
             numColor: i === at ? '#fff' : '#8C8899',
             go: () => this.setState({ ntPane: i }),
           })),
           ntPaneTitle: panes[at].label,
           ntPaneHint: panes[at].hint,
           ntIsKind: at === 0, ntIsSubject: at === 1, ntIsAssign: at === 2,
-          ntNotFirst: at > 0, ntNotLast: at < panes.length - 1,
+          ntNotFirst: at > 0, ntNotLast: at < panes.length - 1, ntAtLast: at === panes.length - 1,
           ntProgress: Math.round(((at + 1) / panes.length) * 100) + '%',
           ntBack: () => this.setState({ ntPane: Math.max(0, at - 1) }),
           ntNext: () => this.setState({ ntPane: Math.min(panes.length - 1, at + 1) }),
@@ -23532,11 +23557,32 @@ class Component extends DCLogic {
       create_invoice: 'Amount', decision: 'Condition', branch: 'Condition', notify: 'Message',
       notification: 'Message', courier: 'Shipment', delay: 'Timing', webhook: 'Endpoint', end: 'Outcome',
     })[_wsType] || null;
+    // What each kind of step needs before it will actually run. Ownership and the work are optional
+    // — a step with no role waits to be claimed, which is a choice — so they are complete as they
+    // stand. The type-specific section is the one that can be genuinely unfinished: an
+    // issue_document with no document type creates nothing, and a decision with no variable branches
+    // on nothing.
+    const _wsDetailDone = ({
+      issue_document: () => !!String(_wsCfg.docType || '').trim(),
+      decision: () => !!String(_wsCfg.var || '').trim(),
+      branch: () => !!String(_wsCfg.var || '').trim(),
+      notify: () => !!String(_wsCfg.message || '').trim(),
+      notification: () => !!String(_wsCfg.message || '').trim(),
+      webhook: () => !!String(_wsCfg.url || '').trim(),
+      delay: () => Number(_wsCfg.days) > 0 || Number(_wsCfg.hours) > 0,
+      courier: () => !!String(_wsCfg.description || '').trim(),
+      charge_fee: () => Number(_wsCfg.amount) > 0,
+      invoice: () => Number(_wsCfg.amount) > 0,
+      draft_invoice: () => Number(_wsCfg.amount) > 0,
+      create_invoice: () => Number(_wsCfg.amount) > 0,
+      end: () => true,
+    })[_wsType];
     const _wsPanes = [
-      { key: 'basics', label: 'Basics', hint: 'What this step is called' },
-      ...(_wsIsTask ? [{ key: 'owner', label: 'Ownership', hint: 'Who does it, and where' }] : []),
-      ...(_wsIsTask ? [{ key: 'work', label: 'The work', hint: 'What they collect and record' }] : []),
-      ...(_wsDetailName ? [{ key: 'detail', label: _wsDetailName, hint: 'Settings for this kind of step' }] : []),
+      { key: 'basics', label: 'Basics', hint: 'What this step is called', done: !!(_wsNode && String(_wsNode.label || '').trim()) },
+      ...(_wsIsTask ? [{ key: 'owner', label: 'Ownership', hint: 'Who does it, and where', done: true }] : []),
+      ...(_wsIsTask ? [{ key: 'work', label: 'The work', hint: 'What they collect and record', done: true }] : []),
+      ...(_wsDetailName ? [{ key: 'detail', label: _wsDetailName, hint: 'Settings for this kind of step',
+        done: _wsDetailDone ? _wsDetailDone() : true }] : []),
     ];
     const _wsPane = Math.min(this.state.wsPane || 0, Math.max(0, _wsPanes.length - 1));
     const _wsPaneKey = (_wsPanes[_wsPane] || {}).key || 'basics';
@@ -23560,9 +23606,11 @@ class Component extends DCLogic {
       wsPanes: _wsPanes.map((pn, i) => ({
         label: pn.label, hint: pn.hint, num: String(i + 1),
         on: i === _wsPane,
-        bg: i === _wsPane ? '#F5EEFF' : 'transparent',
+        cls: i === _wsPane ? 'wz-rail on' : 'wz-rail',
         color: i === _wsPane ? '#7C00FF' : '#6F6C7A',
-        numBg: i === _wsPane ? '#7C00FF' : '#EDEBF2',
+        showTick: pn.done && i !== _wsPane,
+        showNum: !(pn.done && i !== _wsPane),
+        numBg: i === _wsPane ? '#7C00FF' : (pn.done ? '#E7F8EF' : '#EDEBF2'),
         numColor: i === _wsPane ? '#fff' : '#8C8899',
         go: () => this.setState({ wsPane: i }),
       })),
