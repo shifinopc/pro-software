@@ -12634,6 +12634,16 @@
                   </div>
                 </sc-if>
 
+                <sc-if value="{{ wsShowCreatesEmp }}" hint-placeholder-val="{{ true }}">
+                  <div class="fm-wide" style="border-top:1px solid #F5F2FA; padding-top:14px;">
+                    <label class="fm-lab">Creates an employee record</label>
+                    <div onClick="{{ wsToggleCreatesEmp }}" style="display:flex; align-items:center; gap:11px; border:1.5px solid #E4E0EC; border-radius:11px; padding:10px 13px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                      <span style="font-size:11.5px; font-weight:700; color:{{ wsCreatesEmpColor }}; background:{{ wsCreatesEmpBg }}; padding:5px 12px; border-radius:99px; flex-shrink:0;">{{ wsCreatesEmpLabel }}</span>
+                      <span style="font-size:11px; color:#8C8899; line-height:1.45;">On completion the name this step collected becomes a person on the client's books, and every document the run issues links to them rather than to matching text.</span>
+                    </div>
+                  </div>
+                </sc-if>
+
                 <sc-if value="{{ wsCapIsRule }}" hint-placeholder-val="{{ false }}">
                   <div class="fm-wide">
                     <label class="fm-lab">Which set</label>
@@ -23931,27 +23941,24 @@ class Component extends DCLogic {
       // REAL node config when a template graph is loaded; design hints otherwise.
       wfCfgFields: (_gSelReal
         ? (Object.keys(_gSelReal.config || {}).length
-          // A FALLBACK MUST NOT READ AS THE LIVE LIST. A step taking its fields from a set keeps its
-          // own as a fallback, and the panel printed them under "Asks the person for" — directly
-          // above the set that actually governs, both looking equally authoritative. Whichever one
-          // is not in force says so, rather than being hidden: it is still what the step would ask
-          // if the set stopped resolving, which is worth being able to read.
-          ? Object.entries(_gSelReal.config).map(([k3, v3]) => {
-              const cfg3 = _gSelReal.config || {};
-              // A set that carries rules REPLACES the step's, so the step's copy is a fallback too —
-              // and it has to be looked up, because a set with no rules of its own leaves the step's
-              // in charge. Marking them fallback-only in that case would be the opposite of true.
-              const set3 = cfg3.captureRuleId
-                ? (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : []).find(f3 => f3.id === cfg3.captureRuleId)
+          // A FALLBACK IS NOT WHAT THE STEP DOES, so it is left out of the summary of what the step
+          // does. Labelling it "(fallback only)" was the first fix and only half of one: the two
+          // longest values on the panel — eleven field labels and four rule sentences — went on
+          // dominating it while describing something that is not in force, sitting above the one
+          // line that says what actually governs. It is still readable in Edit step, on the source
+          // that overrides it, which is where somebody deciding whether to rely on it is standing.
+          ? Object.entries(_gSelReal.config).filter(([k4]) => {
+              const cfg4 = _gSelReal.config || {};
+              const set4 = cfg4.captureRuleId
+                ? (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : []).find(f4 => f4.id === cfg4.captureRuleId)
                 : null;
-              const overridden = (k3 === 'captures' && cfg3.captureSource && cfg3.captureSource !== 'static')
-                || (k3 === 'checklist' && cfg3.checklistSource && cfg3.checklistSource !== 'static')
-                || (k3 === 'rules' && set3 && Array.isArray(set3.rules) && set3.rules.length > 0);
-              return {
-                label: overridden ? _cfgLabel(k3) + ' (fallback only)' : _cfgLabel(k3),
-                value: _cfgValue(k3, v3),
-              };
-            })
+              if (k4 === 'captures' && cfg4.captureSource && cfg4.captureSource !== 'static') return false;
+              if (k4 === 'checklist' && cfg4.checklistSource && cfg4.checklistSource !== 'static') return false;
+              // A set with no rules of its own leaves the step's in charge, so this one is checked
+              // against the set rather than assumed from the step pointing at one.
+              if (k4 === 'rules' && set4 && Array.isArray(set4.rules) && set4.rules.length > 0) return false;
+              return true;
+            }).map(([k3, v3]) => ({ label: _cfgLabel(k3), value: _cfgValue(k3, v3) }))
           : [{ label: 'No configuration yet', value: 'Use Edit step to set this node up' }])
         : (wfCfgMap[gSelType] || []).map(([label, value]) => ({ label, value }))),
       // Mirrors the guard in _wfRemoveNode: Start never, End only while another End remains — so the
@@ -24192,6 +24199,16 @@ class Component extends DCLogic {
             pick: () => { this.setState({ wsCapOpen: false }); _wsCfgSet({ captureSource: val }); },
           })),
           wsCapIsStatic: capSrc === 'static',
+          // WHETHER THIS STEP PUTS A PERSON ON THE CLIENT'S BOOKS. Set only by the builder script
+          // until now, which made it invisible and unchangeable — and it is not a small flag. It is
+          // the difference between a run that creates an employee record every issued document
+          // links to, and one that captures a name into a variable and leaves the documents attached
+          // to a string that merely spells it. Offered on task steps, which are what collect a name.
+          wsShowCreatesEmp: _wsType === 'task',
+          wsCreatesEmpLabel: _wsCfg.createsEmployee ? 'Yes — adds them to the client’s people' : 'No',
+          wsCreatesEmpColor: _wsCfg.createsEmployee ? '#0E6B40' : '#8C8899',
+          wsCreatesEmpBg: _wsCfg.createsEmployee ? '#E7F8EF' : '#F4F3F7',
+          wsToggleCreatesEmp: () => _wsCfgSet({ createsEmployee: !_wsCfg.createsEmployee }),
           wsCapIsRule: capSrc === 'rule',
           wsCapIsDoc: capSrc === 'document_type',
           wsCapNoSets: capSrc === 'rule' && !_wsFieldSets.length,
