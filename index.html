@@ -151,6 +151,18 @@
   @media (prefers-reduced-motion: reduce){*{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;}}
   @keyframes barGrow{from{transform:scaleY(0);}to{transform:scaleY(1);}}
   @keyframes popIn{from{opacity:0;transform:scale(.6);}to{opacity:1;transform:scale(1);}}
+  /* The tick is DRAWN, not popped. An upgrade rewrites a whole market in one press, and the moment it
+     lands is the only feedback anybody gets that it worked — a shape appearing instantly reads as the
+     dialog redrawing, while a stroke travelling along its own path reads as something completing.
+     dasharray/dashoffset on the path length; the ring lands first so the tick has something to land in. */
+  @keyframes tickRing{0%{transform:scale(.4);opacity:0;}60%{transform:scale(1.06);opacity:1;}100%{transform:scale(1);opacity:1;}}
+  @keyframes tickDraw{from{stroke-dashoffset:30;}to{stroke-dashoffset:0;}}
+  @keyframes doneRise{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .upg-ring{animation:tickRing .34s cubic-bezier(.34,1.4,.64,1) both;}
+  .upg-tick{stroke-dasharray:30;stroke-dashoffset:30;animation:tickDraw .3s cubic-bezier(.65,0,.35,1) .24s both;}
+  .upg-done-t{animation:doneRise .3s ease .34s both;}
+  .upg-done-s{animation:doneRise .3s ease .42s both;}
+  @media (prefers-reduced-motion:reduce){.upg-ring,.upg-tick,.upg-done-t,.upg-done-s{animation:none;stroke-dashoffset:0;opacity:1;transform:none;}}
   @keyframes slideInRight{from{transform:translateX(28px);opacity:0;}to{transform:translateX(0);opacity:1;}}
   @keyframes typingDot{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-3px);}}
   @keyframes slideRight{from{transform:translateX(-100%);}to{transform:translateX(0);}}
@@ -10465,6 +10477,7 @@
           <sc-if value="{{ dlErr }}" hint-placeholder-val="{{ false }}">
             <div class="fm-err" style="margin-top:12px;">{{ dlErr }}</div>
           </sc-if>
+          </sc-if>
         </div>
         <div class="fm-foot" style="justify-content:flex-end;">
           <span onClick="{{ dlClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
@@ -11242,6 +11255,17 @@
           <div style="font-size:12px; color:#8C8899; margin-top:3px;">Anything you edited is left exactly as it is. Clients, staff, documents and invoices are never touched.</div>
         </div>
         <div class="fm-body" data-hidescroll="true">
+          <sc-if value="{{ upgDone }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:18px 8px 10px;">
+              <div class="upg-ring" style="width:56px; height:56px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path class="upg-tick" d="M20 6L9 17l-5-5"></path></svg>
+              </div>
+              <div class="upg-done-t" style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; margin-top:13px;">Now on {{ upgDoneTo }}</div>
+              <div class="upg-done-s" style="font-size:12px; color:#8C8899; margin-top:5px; line-height:1.6; max-width:340px;">{{ upgDoneLine }}</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ upgNotDone }}" hint-placeholder-val="{{ true }}">
 <sc-if value="{{ upgReady }}" hint-placeholder-val="{{ true }}">
           <sc-if value="{{ upgNothingToDo }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex; align-items:center; gap:13px; background:#F1FAF5; border:1px solid #C6E9D6; border-radius:14px; padding:16px 18px;">
@@ -11367,12 +11391,18 @@
           </sc-if>
         </sc-if>
 
+          </sc-if>
         </div>
 
         <div class="fm-foot" style="justify-content:flex-end;">
           <sc-if value="{{ upgHasErr }}" hint-placeholder-val="{{ false }}"><div style="flex:1; font-size:12px; color:#C0353A; text-align:left;">{{ upgErr }}</div></sc-if>
+          <sc-if value="{{ upgDone }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ closeUpgrade }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Done</button>
+          </sc-if>
+          <sc-if value="{{ upgNotDone }}" hint-placeholder-val="{{ true }}">
           <button onClick="{{ closeUpgrade }}" style="background:#fff; color:#4B4757; border:1px solid #E4E0EC; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F8F6FC;">Cancel</button>
           <button onClick="{{ confirmUpgrade }}" disabled="{{ upgBusy }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Upgrade</button>
+          </sc-if>
         </div>
       </div>
     </div>
@@ -21319,6 +21349,19 @@ class Component extends DCLogic {
       upgName: this.state.upgName || '',
       upgBusy: !!this.state.upgBusy,
       upgErr: this.state.upgErr || '', upgHasErr: !!this.state.upgErr,
+      // The moment after it lands. Kept as its own state rather than a flag on the plan, because the
+      // plan is cleared as part of closing and the panel has to outlive it.
+      upgDone: !!this.state.upgDone,
+      upgNotDone: !this.state.upgDone,
+      upgDoneTo: this.state.upgDone ? this.state.upgDone.to : '',
+      upgDoneLine: (() => {
+        const d = this.state.upgDone;
+        if (!d) return '';
+        const bits = [d.added && d.added + ' added', d.updated && d.updated + ' updated',
+                      d.adopted && d.adopted + ' recognised as yours', d.revived && d.revived + ' brought back',
+                      d.removed && d.removed + ' removed', d.retired && d.retired + ' retired'].filter(Boolean);
+        return bits.length ? bits.join(' · ') : 'Nothing needed changing — the version is recorded.';
+      })(),
       upgReady: !!_ugPlan,
       upgTitle: _ugPlan ? ('Upgrade ' + _ugPlan.countryName + ' · ' + _ugPlan.from + ' → ' + _ugPlan.to) : 'Reading the pack…',
       // Only the counts that are not zero get a tile. Four tiles reading 0 · 0 · 5 · 26 gave the two
@@ -21387,7 +21430,7 @@ class Component extends DCLogic {
       })) : [],
       upgNothingToDo: !!(_ugPlan && !_ugPlan.totals.add && !_ugPlan.totals.update && !_ugPlan.totals.revive
         && !_ugPlan.totals.adopt && !_ugPlan.totals.remove && !_ugPlan.totals.retire && !_ugPlan.totals.keep),
-      closeUpgrade: () => this.setState({ upgOpen: false, upgPlan: null, upgErr: '', upgQuietOpen: false }),
+      closeUpgrade: () => { clearTimeout(this._upgDoneTimer); this.setState({ upgOpen: false, upgPlan: null, upgErr: '', upgQuietOpen: false, upgDone: null }); },
       confirmUpgrade: () => {
         if (!_ugPlan || this.state.upgBusy) return;
         const t9 = localStorage.getItem('stimespro:token');
@@ -21399,7 +21442,28 @@ class Component extends DCLogic {
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
             if (!ok) return this.setState({ upgBusy: false, upgErr: (j9 && j9.error) || 'The server refused — nothing was changed' });
-            this.setState({ upgOpen: false, upgPlan: null, upgBusy: false });
+            // THE ROW SAID "UPDATE AVAILABLE" UNTIL THE PAGE WAS REFRESHED.
+            //
+            // Everything else was reloaded here — the installed versions, the document types, the
+            // services, the workflows — but not the map that decides whether an update EXISTS. That
+            // map is `packUpdates`, fetched once on boot, and the badge and the button both read it.
+            // So the upgrade applied, the counts were right, and the row went on offering the same
+            // upgrade until somebody reloaded and it quietly disappeared. `_loadPackUpdates` was
+            // already there; it simply was not called.
+            this._loadPackUpdates && this._loadPackUpdates();
+            // Held open on a done state rather than vanishing. An upgrade is the one action on this
+            // screen that changes a whole market at once, and closing the instant it lands leaves
+            // nothing to read but a toast that is already fading.
+            this.setState({
+              upgBusy: false,
+              upgDone: {
+                added: j9.added || 0, updated: j9.updated || 0, adopted: j9.adopted || 0,
+                revived: j9.revived || 0, removed: j9.removed || 0, retired: j9.retired || 0,
+                kept: j9.kept || 0, to: (_ugPlan && _ugPlan.to) || '',
+              },
+            });
+            clearTimeout(this._upgDoneTimer);
+            this._upgDoneTimer = setTimeout(() => this.setState({ upgOpen: false, upgPlan: null, upgDone: null, upgQuietOpen: false }), 2600);
             this.toast(j9.added + ' added · ' + j9.updated + ' updated' + (j9.revived ? (' · ' + j9.revived + ' restored') : '') + (j9.removed ? (' · ' + j9.removed + ' removed') : '') + (j9.yours ? (' · ' + j9.yours + ' left as yours') : ''));
             for (const [path9, key9] of [['document-types', 'docTypesData'], ['service-items', 'serviceItemsData'], ['gov-centers', 'govCentersData'], ['packages', 'packagesData']]) this._opReload && this._opReload(path9, key9);
             this._load && this._load('/api/workflow/templates', 'wfTemplates', (v9) => this.setState({ wfTemplates: v9 }));
