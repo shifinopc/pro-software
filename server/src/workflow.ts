@@ -1166,6 +1166,34 @@ export function brokenRules(config: any, vars: Record<string, any>): string[] {
 }
 
 /**
+ * Which rules actually govern these steps, and what they say about these answers.
+ *
+ * A step taking its fields from a set takes the rules over those fields from the same set — the set
+ * REPLACES the step's own rules rather than adding to them, which is the same contract resolveChecklist
+ * and resolveCaptures follow. Additive was the obvious first move and it is wrong: a rule deleted on
+ * the Field Sets screen would go on being enforced from the step's copy, so the screen would appear to
+ * work and the rule would not actually be gone. The step's rules remain as the fallback for an
+ * installation where the set did not come across, which is why they are not deleted from the graph.
+ *
+ * A set that has been deleted contributes nothing and the step's own rules apply: losing a set must
+ * not make a step uncompletable, and it must not silently drop the validation either.
+ */
+async function effectiveRules(nodes: any[], vars: Record<string, any>): Promise<string[]> {
+  const ids = [...new Set(nodes.map(n => String(n?.config?.captureRuleId ?? "")).filter(Boolean))];
+  let bySet = new Map<string, any[]>();
+  if (ids.length) {
+    try {
+      const sets = await prisma.fieldSet.findMany({ where: { id: { in: ids } } });
+      bySet = new Map(sets.map(st => [st.id, Array.isArray((st as any).rules) ? (st as any).rules : []]));
+    } catch { /* fall back to what the steps carry */ }
+  }
+  return nodes.flatMap((n: any) => {
+    const fromSet = bySet.get(String(n?.config?.captureRuleId ?? ""));
+    return brokenRules(fromSet && fromSet.length ? { rules: fromSet } : n?.config, vars);
+  });
+}
+
+/**
  * Variables a run may be STARTED with.
  *
  * Creation used to store whatever it was handed:
@@ -1411,7 +1439,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     const owners = (g.nodes ?? []).filter((n: any) =>
       n?.id === node0?.id ||
       (n?.config?.captures ?? []).some((c: any) => written.has(String(c?.var ?? ""))));
-    const broken = [...new Set(owners.flatMap((n: any) => brokenRules(n?.config, merged)))];
+    const broken = [...new Set(await effectiveRules(owners, merged))];
     if (broken.length) throw new Error(broken.join(" · "));
   }
 
@@ -2333,20 +2361,21 @@ R.get("/field-sets", requireAuth, requireStaff, async (_req, res) => {
 });
 R.post("/field-sets", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { name, rows, country } = req.body ?? {};
+    const { name, rows, country, rules } = req.body ?? {};
     if (!name) return res.status(400).json({ error: "Name required" });
     // Defaulted rather than left null, for the same reason a checklist rule is: a set with no
     // country shows up in every market's pickers and cannot travel in a pack.
     const c = String(country ?? "").trim().toUpperCase() || (await homeCountry());
-    res.status(201).json(await prisma.fieldSet.create({ data: { name: String(name), country: c, rows: normalizeRows(rows) as any } }));
+    res.status(201).json(await prisma.fieldSet.create({ data: { name: String(name), country: c, rows: normalizeRows(rows) as any, rules: normalizeSetRules(rules) as any } }));
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 R.put("/field-sets/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { name, rows, country } = req.body ?? {};
+    const { name, rows, country, rules } = req.body ?? {};
     const data: any = {};
     if (name !== undefined) data.name = name;
     if (rows !== undefined) data.rows = normalizeRows(rows);
+    if (rules !== undefined) data.rules = normalizeSetRules(rules);
     if (country !== undefined) data.country = String(country ?? "").trim().toUpperCase() || null;
     data.packModified = true;
     res.json(await prisma.fieldSet.update({ where: { id: req.params.id }, data }));
@@ -2363,6 +2392,21 @@ R.delete("/field-sets/:id", requireAuth, requireStaff, requireWriteRole, async (
     res.status(204).end();
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+
+/**
+ * A rule is kept only if it can ever DO anything: it must say which field it constrains, or it is a
+ * sentence that reads like validation and enforces nothing. The `when` half is optional — a rule with
+ * no condition applies always, which is how "this field must be present" is written.
+ */
+function normalizeSetRules(raw: unknown): any[] {
+  if (!Array.isArray(raw)) return [];
+  const half = (h: any) => (h && String(h.var ?? "").trim()
+    ? { var: String(h.var).trim(), op: String(h.op ?? "eq").trim() || "eq", value: h.value ?? "" }
+    : undefined);
+  return (raw as any[])
+    .map(r => ({ when: half(r?.when), then: half(r?.then), message: String(r?.message ?? "").trim() }))
+    .filter(r => !!r.then);
+}
 
 /** Rows in, rows out, with every field put through one definition of what a field is. */
 function normalizeRows(raw: unknown): any[] {

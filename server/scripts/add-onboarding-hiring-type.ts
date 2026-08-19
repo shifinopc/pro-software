@@ -1036,12 +1036,17 @@ async function main() {
     if (!node || !caps.length) { console.log(`field set skipped — "${nodeId}" records nothing`); continue; }
     const packKey = `sa.fieldset.${slugOf(setName)}`;
     const rows = [{ conditions: [], fields: caps.map(c => ({ ...c })) }];
+    // THE RULES TRAVEL WITH THE FIELDS THEY CONSTRAIN. "A Saudi national cannot be onboarded on an
+    // expatriate path" is a fact about nationality and hiring type, not about the step that happens
+    // to ask for them — leaving it behind on the step while the questions moved would be a rule
+    // still visible in configuration and quietly never run.
+    const setRules = ((node?.config?.rules ?? []) as any[]).map(r => ({ ...r }));
     const found = await prisma.fieldSet.findFirst({ where: { OR: [{ packKey }, { name: setName, country: COUNTRY }] } });
     const set = found
-      ? await prisma.fieldSet.update({ where: { id: found.id }, data: { name: setName, country: COUNTRY, packKey, rows: rows as any, retired: false } })
-      : await prisma.fieldSet.create({ data: { name: setName, country: COUNTRY, packKey, rows: rows as any } });
+      ? await prisma.fieldSet.update({ where: { id: found.id }, data: { name: setName, country: COUNTRY, packKey, rows: rows as any, rules: setRules as any, retired: false } })
+      : await prisma.fieldSet.create({ data: { name: setName, country: COUNTRY, packKey, rows: rows as any, rules: setRules as any } });
     node.config = { ...(node.config ?? {}), captureSource: "rule", captureRuleId: set.id };
-    console.log(`${found ? "updated" : "created"} field set "${setName}" (${caps.length} fields) → ${nodeId}`);
+    console.log(`${found ? "updated" : "created"} field set "${setName}" (${caps.length} fields, ${setRules.length} rules) → ${nodeId}`);
   }
 
   const graph = { nodes, edges };

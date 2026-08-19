@@ -222,6 +222,48 @@ async function main() {
     }
   }
 
+  // ── the rules that travel with the fields ─────────────────────────────────────────────────────
+  //
+  // A rule moved into a set and then EDITED there must change what the engine enforces. If the set's
+  // rules were merely added to the step's own copy, deleting one on the screen would leave it being
+  // enforced from the graph — the screen would look like it worked and the rule would still fire.
+  // The check is therefore not "a rule is enforced" but "the set is the one in charge".
+  const ruled = await prisma.fieldSet.findFirst({ where: { country: "SA", retired: false, NOT: { rules: { equals: [] } } } });
+  console.log("");
+  if (!ruled) {
+    console.log("no field set carries a rule, so nothing here was tested");
+  } else {
+    const original = (ruled.rules as any[]) ?? [];
+    console.log(`"${ruled.name}" carries ${original.length} rule(s) over its own fields`);
+    const owner = nodes.find(n => n?.config?.captureRuleId === ruled.id);
+    const r4 = await call("POST", "/api/workflow/instances", tok, { templateId: tpl!.id, title: `${TITLE} rules` });
+    const id4 = r4.body?.id ?? r4.body?.instance?.id;
+    const t4 = id4 ? await prisma.workflowTask.findFirst({ where: { instanceId: id4, status: "active" } }) : null;
+    if (!t4 || !owner) fail("could not open the step whose fields come from a set carrying rules");
+    else {
+      // Answers that break the set's own rule: a Saudi national sent down an expatriate path.
+      const bad = { ...answer(t4.captures as any[], "expat_new_hire"), nationality: "Saudi" };
+      const a4 = await call("POST", `/api/workflow/tasks/${t4.id}/complete`, tok, { variables: bad });
+      console.log(`  a rule from the set is enforced:          ${a4.status >= 400 ? "YES" : "NO — the step completed anyway"}`);
+      if (a4.status < 400) fail("a cross-field rule held on the set was not enforced at all");
+      else console.log(`    "${String(a4.body?.error ?? "").slice(0, 88)}"`);
+
+      // NOW TAKE THE RULES AWAY. The step still holds its own copy, so if the set merely added to
+      // them the same answers stay refused and the screen is a lie.
+      try {
+        await prisma.fieldSet.update({ where: { id: ruled.id }, data: { rules: [{ when: { var: "nationality", op: "eq", value: "__never__" }, then: { var: "nationality", op: "present" }, message: "ZS probe placeholder" }] as any } });
+        const b4 = await call("POST", `/api/workflow/tasks/${t4.id}/complete`, tok, { variables: bad });
+        console.log(`  editing the set changes what is enforced: ${b4.status < 400 ? "YES" : "NO — the step's own copy still fired"}`);
+        if (b4.status >= 400) fail(`the set's rules were replaced and the same answers are still refused (${String(b4.body?.error).slice(0, 80)}) — the screen cannot actually govern`);
+      } finally {
+        await prisma.fieldSet.update({ where: { id: ruled.id }, data: { rules: original as any } });
+      }
+      const back = (await prisma.fieldSet.findUnique({ where: { id: ruled.id } }))?.rules as any[];
+      console.log(`  the set is put back as it was:            ${(back ?? []).length === original.length ? "YES" : "NO"}`);
+      if ((back ?? []).length !== original.length) fail("the probe did not restore the set's rules");
+    }
+  }
+
   // ── and when the rule did not come across ─────────────────────────────────────────────────────
   const donor = nodes.find(n => expected.has(n.id));
   if (!donor) { console.log("no rule-backed step to borrow for the fallback test"); await sweep(); process.exit(1); }

@@ -1667,6 +1667,12 @@ model FieldSet {
   country      String?
   name         String
   rows         Json?   @default("[]")
+  /// Cross-field rules over this set's own fields — "a Saudi national cannot be onboarded on an
+  /// expatriate path". They live WITH the fields they constrain rather than on the step, because a
+  /// rule about nationality and hiring type is a fact about the two questions, not about the step
+  /// that happens to ask them; moving the questions and leaving the rule behind would silently drop
+  /// the validation. Same shape the step already stores: [{ when, then, message }].
+  rules        Json?   @default("[]")
 
   @@index([packKey])
 }

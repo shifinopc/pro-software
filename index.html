@@ -5729,6 +5729,40 @@
                 <sc-if value="{{ fs.canWrite }}" hint-placeholder-val="{{ true }}">
                   <span onClick="{{ fs.addRow }}" style="display:inline-block; font-size:11.5px; font-weight:700; color:#7C00FF; margin-top:14px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a group</span>
                 </sc-if>
+
+                <div style="margin-top:20px; padding-top:16px; border-top:1px solid #F0EDF6;">
+                  <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Rules between these fields</div>
+                  <div style="font-size:10.5px; color:#A9A6B4; margin-top:4px; line-height:1.5;">Two answers that are each fine on their own but cannot both be true. Checked when the step is completed, and the message below is what the person is shown.</div>
+                  <sc-if value="{{ fs.noRules }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:10.5px; color:#C9C4D4; margin-top:8px;">None — every answer here stands on its own.</div>
+                  </sc-if>
+                  <sc-for list="{{ fs.rules }}" as="ru" hint-placeholder-count="2">
+                    <div style="margin-top:10px; border:1px solid #EDEBF2; border-radius:13px; padding:12px 14px; background:#FCFBFE;">
+                      <div style="display:grid; grid-template-columns:34px minmax(0,1fr) 104px minmax(0,1fr) 34px; gap:7px; align-items:center;">
+                        <span style="font-size:10px; font-weight:700; color:#A9A6B4;">WHEN</span>
+                        <input value="{{ ru.when.var }}" onInput="{{ ru.when.setVar }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                        <div onClick="{{ ru.when.cycleOp }}" title="Click to change the test" style="font-size:11px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF;">{{ ru.when.opLabel }}</div>
+                        <sc-if value="{{ ru.when.takesValue }}" hint-placeholder-val="{{ true }}">
+                          <input value="{{ ru.when.value }}" onInput="{{ ru.when.setValue }}" placeholder="value" class="fm-inp">
+                        </sc-if>
+                        <div onClick="{{ ru.remove }}" class="fm-x" title="Remove this rule"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                      </div>
+                      <div style="display:grid; grid-template-columns:34px minmax(0,1fr) 104px minmax(0,1fr) 34px; gap:7px; align-items:center; margin-top:7px;">
+                        <span style="font-size:10px; font-weight:700; color:#7C00FF;">THEN</span>
+                        <input value="{{ ru.then.var }}" onInput="{{ ru.then.setVar }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                        <div onClick="{{ ru.then.cycleOp }}" title="Click to change the test" style="font-size:11px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF;">{{ ru.then.opLabel }}</div>
+                        <sc-if value="{{ ru.then.takesValue }}" hint-placeholder-val="{{ true }}">
+                          <input value="{{ ru.then.value }}" onInput="{{ ru.then.setValue }}" placeholder="value" class="fm-inp">
+                        </sc-if>
+                        <span></span>
+                      </div>
+                      <input value="{{ ru.message }}" onInput="{{ ru.setMessage }}" placeholder="What the person is told when this is broken" class="fm-inp" style="margin-top:7px;">
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ fs.canWrite }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ fs.addRule }}" style="display:inline-block; font-size:11.5px; font-weight:700; color:#7C00FF; margin-top:12px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a rule</span>
+                  </sc-if>
+                </div>
               </section>
             </sc-if>
             </sc-for>
@@ -23844,7 +23878,27 @@ class Component extends DCLogic {
       // REAL node config when a template graph is loaded; design hints otherwise.
       wfCfgFields: (_gSelReal
         ? (Object.keys(_gSelReal.config || {}).length
-          ? Object.entries(_gSelReal.config).map(([k3, v3]) => ({ label: _cfgLabel(k3), value: _cfgValue(k3, v3) }))
+          // A FALLBACK MUST NOT READ AS THE LIVE LIST. A step taking its fields from a set keeps its
+          // own as a fallback, and the panel printed them under "Asks the person for" — directly
+          // above the set that actually governs, both looking equally authoritative. Whichever one
+          // is not in force says so, rather than being hidden: it is still what the step would ask
+          // if the set stopped resolving, which is worth being able to read.
+          ? Object.entries(_gSelReal.config).map(([k3, v3]) => {
+              const cfg3 = _gSelReal.config || {};
+              // A set that carries rules REPLACES the step's, so the step's copy is a fallback too —
+              // and it has to be looked up, because a set with no rules of its own leaves the step's
+              // in charge. Marking them fallback-only in that case would be the opposite of true.
+              const set3 = cfg3.captureRuleId
+                ? (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : []).find(f3 => f3.id === cfg3.captureRuleId)
+                : null;
+              const overridden = (k3 === 'captures' && cfg3.captureSource && cfg3.captureSource !== 'static')
+                || (k3 === 'checklist' && cfg3.checklistSource && cfg3.checklistSource !== 'static')
+                || (k3 === 'rules' && set3 && Array.isArray(set3.rules) && set3.rules.length > 0);
+              return {
+                label: overridden ? _cfgLabel(k3) + ' (fallback only)' : _cfgLabel(k3),
+                value: _cfgValue(k3, v3),
+              };
+            })
           : [{ label: 'No configuration yet', value: 'Use Edit step to set this node up' }])
         : (wfCfgMap[gSelType] || []).map(([label, value]) => ({ label, value }))),
       // Mirrors the guard in _wfRemoveNode: Start never, End only while another End remains — so the
@@ -30430,6 +30484,22 @@ class Component extends DCLogic {
         const _opLabelF = (v) => (_OPSF.find(o => o.value === String(v ?? '')) || _OPSF[0]).label;
         const _TYPESF = ['text', 'select', 'date', 'number', 'textarea'];
 
+        // The operators a RULE understands, which are not the operators a condition understands —
+        // a rule can also test that something is merely present, or match a pattern. Kept separate
+        // rather than folded together, because offering a rule an operator the evaluator ignores is
+        // a rule that silently always passes.
+        const _RULEOPS = [
+          { value: 'eq', label: 'is' },
+          { value: 'ne', label: 'is not' },
+          { value: 'in', label: 'one of' },
+          { value: 'notIn', label: 'none of' },
+          { value: 'present', label: 'is filled in' },
+          { value: 'matches', label: 'matches' },
+        ];
+        const _ruleOpLabel = (v) => (_RULEOPS.find(o => o.value === String(v ?? 'eq')) || _RULEOPS[0]).label;
+        const _fsRuleDraft = this.state.fsRules || {};
+        const _rulesOfF = (set) => (_fsRuleDraft[set.id] ? _fsRuleDraft[set.id] : (Array.isArray(set.rules) ? set.rules : []));
+        const _setRulesF = (set, rules) => this.setState({ fsRules: { ...(this.state.fsRules || {}), [set.id]: rules } });
         const _rowsOfF = (set) => (_fsDraft[set.id] ? _fsDraft[set.id] : (Array.isArray(set.rows) ? set.rows : []));
         const _setRowsF = (set, rows) => this.setState({ fsDraft: { ...(this.state.fsDraft || {}), [set.id]: rows } });
         const _nameOfF = (set) => (_fsNames[set.id] !== undefined ? _fsNames[set.id] : set.name);
@@ -30473,7 +30543,7 @@ class Component extends DCLogic {
           }),
           fsSets: _fsAll.map(set => {
             const rows = _rowsOfF(set);
-            const dirty = (!!_fsDraft[set.id] || _fsNames[set.id] !== undefined) && canWrite;
+            const dirty = (!!_fsDraft[set.id] || _fsNames[set.id] !== undefined || !!_fsRuleDraft[set.id]) && canWrite;
             const count = rows.reduce((n, r) => n + ((Array.isArray(r.fields) ? r.fields : []).length), 0);
             return {
               open: set.id === _selIdF,
@@ -30491,17 +30561,55 @@ class Component extends DCLogic {
               setName: (e) => this.setState({ fsNames: { ...(this.state.fsNames || {}), [set.id]: e.target.value } }),
               save: () => _fsSend('/' + set.id, {
                 method: 'PUT',
-                body: JSON.stringify({ name: _nameOfF(set), rows }),
+                body: JSON.stringify({ name: _nameOfF(set), rows, rules: _rulesOfF(set) }),
               }, 'Field set saved').then(() => {
                 const d = { ...(this.state.fsDraft || {}) }; delete d[set.id];
                 const n = { ...(this.state.fsNames || {}) }; delete n[set.id];
-                this.setState({ fsDraft: d, fsNames: n });
+                const rr = { ...(this.state.fsRules || {}) }; delete rr[set.id];
+                this.setState({ fsDraft: d, fsNames: n, fsRules: rr });
               }),
               remove: () => this._confirm('Delete ' + set.name + '?', {
                 body: 'If a workflow step still records its fields from this set, this is refused and names the steps.',
                 danger: true, okLabel: 'Delete',
               }).then((ok) => { if (ok) _fsSend('/' + set.id, { method: 'DELETE' }, 'Field set deleted'); }),
               addRow: () => _setRowsF(set, [...rows, { conditions: [], fields: [] }]),
+              // ── CROSS-FIELD RULES ──────────────────────────────────────────────────────────
+              //
+              // One question can be answered wrongly only in relation to another: a Saudi national
+              // on an expatriate hiring path is two individually valid answers that cannot both be
+              // true. These lived on the step, out of reach; they belong with the fields they
+              // constrain, and they travel with them.
+              hasRules: _rulesOfF(set).length > 0,
+              noRules: _rulesOfF(set).length === 0,
+              addRule: () => _setRulesF(set, [..._rulesOfF(set), { when: { var: '', op: 'eq', value: '' }, then: { var: '', op: 'eq', value: '' }, message: '' }]),
+              rules: _rulesOfF(set).map((rule, ri) => {
+                const all = _rulesOfF(set);
+                const putR = (patch) => _setRulesF(set, all.map((x, i) => (i === ri ? { ...x, ...patch } : x)));
+                const half = (which) => {
+                  const h = rule[which] || {};
+                  return {
+                    var: h.var || '',
+                    setVar: (e) => putR({ [which]: { ...h, var: String(e.target.value).replace(/[^A-Za-z0-9_]/g, '') } }),
+                    opLabel: _ruleOpLabel(h.op),
+                    cycleOp: () => putR({ [which]: { ...h, op: _RULEOPS[(_RULEOPS.findIndex(o => o.value === String(h.op ?? 'eq')) + 1) % _RULEOPS.length].value } }),
+                    value: h.value || '',
+                    setValue: (e) => putR({ [which]: { ...h, value: e.target.value } }),
+                    // 'is filled in' takes no value, so the box would be a control that changes
+                    // nothing — the one thing this screen keeps being fixed for.
+                    takesValue: String(h.op ?? 'eq') !== 'present',
+                  };
+                };
+                return {
+                  when: half('when'),
+                  then: half('then'),
+                  message: rule.message || '',
+                  // The message IS the error the officer sees, so it is written here rather than
+                  // generated: "hiringType is not valid for nationality" helps nobody at 4pm.
+                  setMessage: (e) => putR({ message: e.target.value }),
+                  canWrite,
+                  remove: () => _setRulesF(set, all.filter((_, i) => i !== ri)),
+                };
+              }),
               rows: rows.map((row, ri) => {
                 const conds = Array.isArray(row.conditions) ? row.conditions : [];
                 const fields = Array.isArray(row.fields) ? row.fields : [];

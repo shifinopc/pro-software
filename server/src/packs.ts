@@ -83,7 +83,7 @@ export const KINDS = [
   // What a step RECORDS, alongside what it collects. Same shape, same reason for travelling: a
   // market's intake questions belong to the market, not to whoever last edited the graph.
   { key: "fieldSets", model: "fieldSet", label: "field sets", one: "field set",
-    fields: (r: any) => ({ name: r.name, rows: r.rows }) },
+    fields: (r: any) => ({ name: r.name, rows: r.rows, rules: r.rules }) },
   { key: "workflowTemplates", model: "workflowTemplate", label: "workflow templates", one: "workflow",
     fields: (r: any) => ({ name: r.name, trigger: r.trigger, triggerConfig: r.triggerConfig, entityType: r.entityType, active: r.active, graph: r.graph }) },
   { key: "serviceItems", model: "serviceItem", label: "services", one: "service",
@@ -1052,7 +1052,7 @@ export async function buildPack(
 
     fieldSets: kFieldSets.map(f => ({
       key: keyOf(f, "fieldset"),
-      name: f.name, rows: f.rows ?? [],
+      name: f.name, rows: f.rows ?? [], rules: (f as any).rules ?? [],
     })),
 
     // Nationalisation bands. The install side already knew how to receive these; the exporter did
