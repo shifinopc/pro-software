@@ -12443,6 +12443,16 @@
               <div class="fm-grid">
                 <div class="fm-wide">
                   <label class="fm-lab">Documents this step collects</label>
+                  <sc-if value="{{ wsChkPickerShut }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ wsChkChange }}" style="border:1.5px solid #E4E0EC; background:#fff; border-radius:11px; padding:10px 13px; cursor:pointer; display:flex; align-items:center; gap:10px;" style-hover="border-color:#7C00FF;">
+                      <div style="flex:1; min-width:0;">
+                        <span style="display:block; font-size:12.5px; font-weight:600; color:#1A1523;">{{ wsChkChosen }}</span>
+                        <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px; line-height:1.4;">{{ wsChkChosenDesc }}</span>
+                      </div>
+                      <span style="flex-shrink:0; font-size:10.5px; font-weight:700; color:#7C00FF;">Change</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ wsChkPickerOpen }}" hint-placeholder-val="{{ true }}">
                   <div style="display:flex; flex-direction:column; gap:7px;">
                     <sc-for list="{{ wsChkRows }}" as="cs" hint-placeholder-count="3">
                       <div onClick="{{ cs.pick }}" style="border:1.5px solid {{ cs.border }}; background:{{ cs.bg }}; border-radius:11px; padding:10px 13px; cursor:pointer; transition:border-color .12s, background .12s;">
@@ -12451,6 +12461,7 @@
                       </div>
                     </sc-for>
                   </div>
+                  </sc-if>
                 </div>
 
                 <sc-if value="{{ wsChkIsStatic }}" hint-placeholder-val="{{ true }}">
@@ -12492,6 +12503,16 @@
 
                 <div class="fm-wide" style="border-top:1px solid #F5F2FA; padding-top:14px;">
                   <label class="fm-lab">What the step records</label>
+                  <sc-if value="{{ wsCapPickerShut }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ wsCapChange }}" style="border:1.5px solid #E4E0EC; background:#fff; border-radius:11px; padding:10px 13px; cursor:pointer; display:flex; align-items:center; gap:10px;" style-hover="border-color:#7C00FF;">
+                      <div style="flex:1; min-width:0;">
+                        <span style="display:block; font-size:12.5px; font-weight:600; color:#1A1523;">{{ wsCapChosen }}</span>
+                        <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px; line-height:1.4;">{{ wsCapChosenDesc }}</span>
+                      </div>
+                      <span style="flex-shrink:0; font-size:10.5px; font-weight:700; color:#7C00FF;">Change</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ wsCapPickerOpen }}" hint-placeholder-val="{{ true }}">
                   <div style="display:flex; flex-direction:column; gap:7px;">
                     <sc-for list="{{ wsCapRows }}" as="cr" hint-placeholder-count="2">
                       <div onClick="{{ cr.pick }}" style="border:1.5px solid {{ cr.border }}; background:{{ cr.bg }}; border-radius:11px; padding:10px 13px; cursor:pointer; transition:border-color .12s, background .12s;">
@@ -12500,6 +12521,7 @@
                       </div>
                     </sc-for>
                   </div>
+                  </sc-if>
                 </div>
 
                 <sc-if value="{{ wsCapIsStatic }}" hint-placeholder-val="{{ true }}">
@@ -23809,7 +23831,7 @@ class Component extends DCLogic {
         const g5 = wfCanvasGraph ? JSON.parse(JSON.stringify(wfCanvasGraph)) : null;
         const n5 = (g5 && row5) ? g5.nodes.find(x5 => x5.id === row5[0]) : null;
         if (!n5) return this.toast('Select one of your workflows first', 'error');
-        this.setState({ wsNode: { ...n5, config: n5.config || {} }, wsIdx: gSel, wsPane: 0 });
+        this.setState({ wsNode: { ...n5, config: n5.config || {} }, wsIdx: gSel, wsPane: 0, wsChkOpen: false, wsCapOpen: false });
       },
       wfRemoveStep: () => this._wfRemoveNode ? this._wfRemoveNode(gSel) : this.setState({ wfSelNode: 1 }),
     };
@@ -23957,20 +23979,52 @@ class Component extends DCLogic {
           .map(r => ({ value: r.id, label: r.name }));
         const _wsFieldSets = (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : [])
           .map(r => ({ value: r.id, label: r.name }));
+        // One place the wording lives, so the collapsed line and the expanded card cannot drift.
+        const _wsChkLabels = {
+          '': ['Nothing \u2014 this step collects no documents', 'Which is right for an approval, a wait, or a step that only records answers'],
+          static: ['This step\u2019s own list', 'The list typed below, the same for every run'],
+          dynamic: ['A checklist rule', 'Worked out per run \u2014 e.g. a different list by hiring type'],
+          service: ['The service\u2019s documents', 'Whatever the client was asked to upload on the request form'],
+        };
+        const _wsCapLabels = {
+          '': ['Nothing \u2014 this step records no answers', 'Which is right for a step that only collects papers'],
+          static: ['This step\u2019s own fields', 'The fields listed below, edited right here'],
+          rule: ['A field set', 'Maintained in Field Sets \u2014 one change reaches every step using it'],
+          document_type: ['The fields of a document type', 'Follows Country Rules \u2014 add a field there and this step asks for it'],
+        };
+        const _chkPickerOpen = !!this.state.wsChkOpen;
+        const _capPickerOpen = !!this.state.wsCapOpen;
         const row = (on) => ({
           border: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#FBF7FF' : '#fff', color: on ? '#7C00FF' : '#1A1523',
         });
         return {
           // Documents
+          // SIX SOURCES, ONE OF WHICH APPLIES. Every one of these does real work in some workflow —
+          // a renewal takes its fields from the document type, a client-request flow takes its
+          // documents from the service — so none of them is dead. But a step has ONE answer, and
+          // showing all six expanded, every time, turns a settled decision back into a question and
+          // buries the thing actually being edited below the fold.
+          //
+          // So a picker that has been answered collapses to its answer, with a way back. Nothing is
+          // hidden that is in use, and a step with no source yet opens expanded, because then it
+          // genuinely is a question.
+          wsChkPickerOpen: _chkPickerOpen,
+          wsChkPickerShut: !_chkPickerOpen,
+          wsChkChosen: (_wsChkLabels[chkSrc] || _wsChkLabels.static)[0],
+          wsChkChosenDesc: (_wsChkLabels[chkSrc] || _wsChkLabels.static)[1],
+          wsChkChange: () => this.setState({ wsChkOpen: true }),
           wsChkRows: [
             ['static', 'This step\u2019s own list', 'The list typed below, the same for every run'],
             ['dynamic', 'A checklist rule', 'Worked out per run \u2014 e.g. a different list by hiring type'],
             ['service', 'The service\u2019s documents', 'Whatever the client was asked to upload on the request form'],
           ].map(([val, label, desc]) => ({
             label, desc, ...row(chkSrc === val),
-            pick: () => _wsCfgSet({ checklistSource: val === 'static' ? '' : val }),
+            pick: () => { this.setState({ wsChkOpen: false }); _wsCfgSet({ checklistSource: val }); },
           })),
-          wsChkIsStatic: chkSrc === 'static' || chkSrc === '',
+          // Only when somebody has actually chosen to keep the list here. It used to show for
+          // the empty case too, so a step that collects nothing announced as much and then offered
+          // an empty list editor underneath, contradicting itself.
+          wsChkIsStatic: chkSrc === 'static',
           wsChkIsRule: chkSrc === 'dynamic',
           wsChkIsService: chkSrc === 'service',
           wsChkNoRules: chkSrc === 'dynamic' && !rules.length,
@@ -23991,15 +24045,20 @@ class Component extends DCLogic {
             (v) => _wsCfgSet({ checklistRuleId: v }), 'Which rule decides the list'),
 
           // Recorded fields
+          wsCapPickerOpen: _capPickerOpen,
+          wsCapPickerShut: !_capPickerOpen,
+          wsCapChosen: (_wsCapLabels[capSrc] || _wsCapLabels.static)[0],
+          wsCapChosenDesc: (_wsCapLabels[capSrc] || _wsCapLabels.static)[1],
+          wsCapChange: () => this.setState({ wsCapOpen: true }),
           wsCapRows: [
             ['static', 'This step\u2019s own fields', 'The fields listed below, edited right here'],
             ['rule', 'A field set', 'Maintained in Field Sets — one change reaches every step using it'],
             ['document_type', 'The fields of a document type', 'Follows Country Rules \u2014 add a field there and this step asks for it'],
           ].map(([val, label, desc]) => ({
             label, desc, ...row(capSrc === val),
-            pick: () => _wsCfgSet({ captureSource: val === 'static' ? '' : val }),
+            pick: () => { this.setState({ wsCapOpen: false }); _wsCfgSet({ captureSource: val }); },
           })),
-          wsCapIsStatic: capSrc === 'static' || capSrc === '',
+          wsCapIsStatic: capSrc === 'static',
           wsCapIsRule: capSrc === 'rule',
           wsCapIsDoc: capSrc === 'document_type',
           wsCapNoSets: capSrc === 'rule' && !_wsFieldSets.length,
