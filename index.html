@@ -12194,9 +12194,23 @@
           <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">TASK TITLE *</div>
           <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
           <div style="display:flex; gap:12px; margin-top:14px;">
-            <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div><div style="margin-top:6px; position:relative;">
-              <div data-dd onClick="{{ ddNtClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ ntClientColor }};">{{ ntClientLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-              <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><div style="padding:4px 4px 6px;"><input value="{{ ddNtClientQuery }}" onInput="{{ ddNtClientSetQuery }}" placeholder="{{ ddNtClientPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:12.5px; background:#FBFAFE; outline:none;"></div><sc-if value="{{ ddNtClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddNtClientOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+            <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div><div style="margin-top:6px;" class="fm-selwrap">
+              <!-- The field IS the search box - the same control as the lead form's Managed by. It
+                   shows the answer when closed and takes the typing when open, rather than a box
+                   showing a name above a second box for finding one. -->
+              <div class="fm-combo">
+                <input data-dd data-open="{{ ddNtClientOpen }}" onClick="{{ ddNtClientOpenList }}" onInput="{{ ddNtClientSetQuery }}" onKeyDown="{{ ddNtClientKey }}" value="{{ ddNtClientValue }}" placeholder="{{ ddNtClientPlaceholder }}" autocomplete="off" class="fm-inp">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="fm-dd">
+                  <sc-if value="{{ ddNtClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if>
+                  <sc-for list="{{ ddNtClientRows }}" as="o" hint-placeholder-count="3">
+                    <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                    <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                  </sc-for>
+                </div>
+              </sc-if>
             </div></div>
             <sc-if value="{{ ntPersonScoped }}" hint-placeholder-val="{{ false }}">
               <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLICANT *</div><div style="margin-top:6px; position:relative;">
@@ -12206,9 +12220,20 @@
             </sc-if>
           </div>
           <div style="display:flex; gap:12px; margin-top:14px;">
-            <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CASE OWNER</div><div style="margin-top:6px; position:relative;">
-              <div data-dd onClick="{{ ddNtAssigneeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1;">{{ ntAssignee }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-              <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtAssigneeOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+            <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CASE OWNER</div><div style="margin-top:6px;" class="fm-selwrap">
+              <div class="fm-combo">
+                <input data-dd data-open="{{ ddNtAssigneeOpen }}" onClick="{{ ddNtAssigneeOpenList }}" onInput="{{ ddNtAssigneeSetQuery }}" onKeyDown="{{ ddNtAssigneeKey }}" value="{{ ddNtAssigneeValue }}" placeholder="{{ ddNtAssigneePlaceholder }}" autocomplete="off" class="fm-inp">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="fm-dd">
+                  <sc-if value="{{ ddNtAssigneeNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody on the team matches that</div></sc-if>
+                  <sc-for list="{{ ddNtAssigneeRows }}" as="o" hint-placeholder-count="3">
+                    <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                    <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                  </sc-for>
+                </div>
+              </sc-if>
               <div style="font-size:10.5px; color:#A9A6B4; margin-top:5px; line-height:1.45;">Owns the file. Steps that name a role still route to that role.</div>
             </div></div>
             <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PRIORITY</div><div style="margin-top:6px; position:relative;">
@@ -19489,7 +19514,10 @@ class Component extends DCLogic {
       ntStep: this.state.ntStep || 1, ntStep1: (this.state.ntStep || 1) === 1, ntStep2: (this.state.ntStep || 1) === 2,
       ntStep2Bar: (this.state.ntStep || 1) === 2 ? '#7C00FF' : '#EEE0FF',
       ntTitle: this.state.ntTitle || '', ntDue: this.state.ntDue || '', ntErr: this.state.ntErr || false,
-      ntClient: this.state.ntClient || '', ntClientLabel: this.state.ntClient || 'Select a client', ntClientColor: this.state.ntClient ? '#1A1523' : '#A9A6B4', ntAssignee: this.state.ntAssignee || 'Unassigned', ntPrio: this.state.ntPrio || 'Medium',
+      // ntClientLabel/ntClientColor went with the old div-as-a-select: the combo shows its own
+      // value and greys its own placeholder, so a second copy of the same answer is one more thing
+      // to keep in step with the first.
+      ntClient: this.state.ntClient || '', ntAssignee: this.state.ntAssignee || 'Unassigned', ntPrio: this.state.ntPrio || 'Medium',
       // Step 1 — choose kind of work (searchable + scrollable so it scales to many workflows)
       ntKindQuery: this.state.ntKindQuery || '',
       setNtKindQuery: (e) => this.setState({ ntKindQuery: e.target.value }),
@@ -19519,11 +19547,28 @@ class Component extends DCLogic {
       ntCustomRequired: !ntSel.doc ? false : true,
       setNtTitle: (e) => this.setState({ ntTitle: e.target.value, ntErr: '' }),
       setNtDue: (e) => this.setState({ ntDue: e.target.value }),
-      ...mkDdSearch('ddNtClient', realClientNames || [], this.state.ntClient || '', (v) => this.setState({ ntClient: v, ntApplicant: '' }), 'Search clients…'),
+      // THE FIELD IS THE SEARCH BOX — the same control as the lead form's "Managed by".
+      //
+      // These were the last two pickers in the app still doing it the other way: the client list put
+      // a second input INSIDE the open panel, so the thing you typed into was not the thing showing
+      // the answer, and the case-owner list had no search at all — fine with four names, useless
+      // once a real office has forty. Two different pickers on one dialog is also just two things to
+      // learn where there should be one.
+      //
+      // Sections are built here rather than from _coSections9/_ownerSections9: those are declared
+      // further down this same function, and reaching them from here is a temporal-dead-zone error,
+      // which in this runtime does not throw politely — it blanks the screen.
+      ...mkDdCombo('ddNtClient', [{ title: '', options: realClientNames || [] }],
+        this.state.ntClient || '',
+        (v) => this.setState({ ntClient: v, ntApplicant: '' }),
+        'Select a client'),
       ...mkDd('ddNtApplicant', ntEmployeesForClient, this.state.ntApplicant || 'Select employee', (v) => this.setState({ ntApplicant: v })),
       // Unassigned first, and only staff who can actually pick the work up — an invited user who
       // has never signed in cannot be given a task.
-      ...mkDd('ddNtAssignee', ['Unassigned', ...(realActiveStaff || [])], this.state.ntAssignee || 'Unassigned', (v) => this.setState({ ntAssignee: v })),
+      ...mkDdCombo('ddNtAssignee', [{ title: '', options: ['Unassigned', ...(realActiveStaff || [])] }],
+        this.state.ntAssignee || 'Unassigned',
+        (v) => this.setState({ ntAssignee: v }),
+        'Search people…'),
       ...mkDd('ddNtPrio', ['Critical', 'High', 'Medium', 'Low'], this.state.ntPrio || 'Medium', (v) => this.setState({ ntPrio: v })),
       // The list was GDRFA / MOHRE Tasheel / ICP / DED / FTA — every one of them a UAE authority, in
       // a product sold for Saudi Arabia. Worse, the value is written to Task.govCenter, which the
