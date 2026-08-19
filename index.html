@@ -452,6 +452,15 @@
      back for good — so the rail ended up with two rows looking selected, the real one coloured by
      its label and a stale one coloured by its background. Hover belongs to CSS, which has no memory
      to get out of date. */
+  /* A FLOOR UNDER THE DIALOG.
+     .fm-body scrolls, which means it also CLIPS: a dropdown inside it cannot paint past its edge,
+     and _placeDropdowns caps the list to whatever room is actually there. Assignment holds three
+     fields, so the body collapsed to roughly the height of those fields and the case-owner list came
+     out two rows tall with the rest cut off.
+     It also stops the card resizing between sections — a section with three fields and one with a
+     scrolling list of workflows were two different dialogs, and the buttons moved under the cursor
+     on the way between them. */
+  .wz-modal{min-height:470px;}
   .wz-rail{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border-radius:11px;cursor:pointer;transition:background .12s;}
   .wz-rail:hover{background:#F7F3FD;}
   .wz-rail.on{background:#F5EEFF;}
@@ -12201,7 +12210,7 @@
        about documents first. Nothing reaches the graph until Save. -->
   <sc-if value="{{ wsShow }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ wsClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .18s ease both;">
-      <div onClick="{{ wsStop }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+      <div onClick="{{ wsStop }}" class="fm-modal fm-rise wz-modal" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
         <div style="height:3px; background:#F0EDF6; flex-shrink:0;"><div style="height:3px; width:{{ wsProgress }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
         <div class="fm-head">
           <div style="min-width:0;">
@@ -12402,7 +12411,7 @@
     <div onClick="{{ closeTaskModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .18s ease both;">
       <!-- Same shell as the step wizard: pinned head and foot, one scrolling body, a rail of named
            sections rather than numbered steps you walk through once. -->
-      <div onClick="{{ stopClick }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+      <div onClick="{{ stopClick }}" class="fm-modal fm-rise wz-modal" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
         <div style="height:3px; background:#F0EDF6; flex-shrink:0;"><div style="height:3px; width:{{ ntProgress }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
         <div class="fm-head">
           <div style="min-width:0;">
@@ -12536,7 +12545,7 @@
                   <label class="fm-lab">Priority</label>
                   <div class="fm-selwrap">
                     <div data-dd data-open="{{ ddNtPrioOpen }}" onClick="{{ ddNtPrioToggle }}" class="fm-inp fm-sel">
-                      <span style="color:{{ ntPrioTone }}; font-weight:600;">{{ ntPrio }}</span>
+                      <span style="color:{{ ntPrioTone }}; font-weight:{{ ntPrioWeight }};">{{ ntPrio }}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
                     </div>
                     <sc-if value="{{ ddNtPrioOpen }}" hint-placeholder-val="{{ false }}">
@@ -19844,7 +19853,7 @@ class Component extends DCLogic {
       // "Rashid" — neither of which exists in this system. Left alone, that is what got submitted.
       // It now opens on the first REAL client and unassigned, and falls back to nothing rather than
       // to a name someone invented.
-      openTaskModal: () => this.setState({ taskModal: true, ntPane: 0, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntDue: '', ntPortalRef: '', ntErr: '' }),
+      openTaskModal: () => this.setState({ taskModal: true, ntPane: 0, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntPrioSet: false, ntDue: '', ntPortalRef: '', ntErr: '' }),
       closeTaskModal: () => this.setState({ taskModal: false }),
       // THE SAME SHAPE AS THE STEP WIZARD, and for the same reason. Two numbered steps meant the
       // kind of work was a door you walked through once: to change it you pressed Back and lost your
@@ -19958,10 +19967,18 @@ class Component extends DCLogic {
         this.state.ntAssignee || 'Unassigned',
         (v) => this.setState({ ntAssignee: v }),
         'Search people…'),
-      ...mkDd('ddNtPrio', ['Critical', 'High', 'Medium', 'Low'], this.state.ntPrio || 'Medium', (v) => this.setState({ ntPrio: v })),
-      // The chosen priority in the colour the task list uses, so the closed control reads at a
-      // glance rather than as one more grey word.
-      ntPrioTone: ({ Critical: '#C0353A', High: '#B8860B', Medium: '#6D5BD0', Low: '#6F6C7A' })[this.state.ntPrio || 'Medium'] || '#1A1523',
+      ...mkDd('ddNtPrio', ['Critical', 'High', 'Medium', 'Low'], this.state.ntPrio || 'Medium', (v) => this.setState({ ntPrio: v, ntPrioSet: true })),
+      // A DEFAULT THAT DOES NOT DRESS AS A DECISION.
+      //
+      // Medium is what the task is saved as if nobody touches this, so showing the word is honest —
+      // it is the value that will be written, not a guess. Colouring it was the overreach: the tone
+      // is how the task list marks a priority somebody chose, so an untouched field wore the badge
+      // of a decision nobody had made. It stays grey until it is picked, and then it is the real
+      // colour, because by then it is a real answer.
+      ntPrioTone: this.state.ntPrioSet
+        ? (({ Critical: '#C0353A', High: '#B8860B', Medium: '#6D5BD0', Low: '#6F6C7A' })[this.state.ntPrio || 'Medium'] || '#1A1523')
+        : '#8C8899',
+      ntPrioWeight: this.state.ntPrioSet ? '600' : '500',
       // The list was GDRFA / MOHRE Tasheel / ICP / DED / FTA — every one of them a UAE authority, in
       // a product sold for Saudi Arabia. Worse, the value is written to Task.govCenter, which the
       // Government Centers screen buckets its queues by: a task filed under "GDRFA" lands in a
