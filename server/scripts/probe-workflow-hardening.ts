@@ -130,18 +130,40 @@ async function main() {
     else if (Math.abs(hours - (withSla.slaHours ?? 0)) > 1) fail(`due date does not match the declared SLA (${hours}h vs ${withSla.slaHours}h)`);
   }
 
-  // H5 — a government record cannot change quietly
+  // A STATE FROM THE MOMENT IT EXISTS, and a real one once the deadline passes.
+  //
+  // slaState was written only by the hourly escalator, so a task carried null until the next tick —
+  // and one that opened and closed inside that hour never had a state at all. Twenty of a hundred and
+  // nine SLA-bound tasks here had one, and the other eighty-nine were simply never seen while open.
+  const slaTask = await prisma.workflowTask.findFirst({ where: { instanceId: seededId, slaHours: { not: null } }, select: { id: true, slaState: true } });
+  console.log(`  a new step is on track immediately:      ${slaTask?.slaState === "on_track" ? "YES" : "NO (" + slaTask?.slaState + ")"}`);
+  if (slaTask?.slaState !== "on_track") fail("a live step has no SLA state until the next hourly tick");
+
+  if (slaTask) {
+    const { escalateSla } = await import("../src/jobs.js");
+    await prisma.workflowTask.update({ where: { id: slaTask.id }, data: { dueDate: new Date(Date.now() - 3600_000).toISOString() } });
+    await escalateSla();
+    const done2 = await prisma.workflowTask.findUnique({ where: { id: slaTask.id }, select: { slaState: true, priority: true, escalatedAt: true } });
+    console.log(`  once past its deadline it breaches:      ${done2?.slaState === "breached" ? "YES" : "NO (" + done2?.slaState + ")"} · priority ${done2?.priority} · escalated ${done2?.escalatedAt ? "yes" : "no"}`);
+    if (done2?.slaState !== "breached") fail("a step past its due date is not marked breached, so nothing escalates");
+    if (!done2?.escalatedAt) fail("a breached step was not escalated to anybody");
+  }
+
+  // H5 — a government record cannot change quietly, and now cannot change here at all.
+  //
+  // This used to assert that the edit was RECORDED. It is now refused outright, with correction and
+  // supersede as the named ways through — probe-document-integrity covers both of those and the
+  // history they leave. What belongs here is only that the ordinary update no longer takes it.
   const doc = await prisma.document.create({ data: {
     companyId: co!.id, person: "WH Probe Person", docType: "Work Permit",
     expiryDate: "2027-10-01", status: "valid", daysLeft: 400, docNumber: "WP-PROBE",
   } });
   const edit = await call("PUT", `/api/documents/${doc.id}`, tok, { expiryDate: "2040-01-01" });
-  const after = await prisma.document.findUnique({ where: { id: doc.id }, select: { history: true } });
-  const hist: any[] = Array.isArray(after?.history) ? (after!.history as any[]) : [];
+  const after = await prisma.document.findUnique({ where: { id: doc.id }, select: { expiryDate: true } });
   console.log("");
-  console.log(`rewriting an issued expiry leaves a trail:  ${hist.length ? "YES" : "NO"} (${edit.status})`);
-  if (hist.length) console.log(`  ${hist[0].by} - ${hist[0].changes?.[0]?.field} ${hist[0].changes?.[0]?.from} -> ${hist[0].changes?.[0]?.to}`);
-  if (!hist.length) fail("an issued document's expiry was rewritten with history still empty — the edit is invisible");
+  console.log(`rewriting an issued expiry is refused:      ${edit.status === 409 ? "YES" : "NO (" + edit.status + ")"}`);
+  if (edit.status !== 409) fail("an issued government record was rewritten through the ordinary update");
+  if (after?.expiryDate !== "2027-10-01") fail("the expiry changed despite the refusal");
   await prisma.document.delete({ where: { id: doc.id } });
 
   // N1/N7 — a step may only answer its own questions

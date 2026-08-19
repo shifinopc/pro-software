@@ -351,7 +351,14 @@ export async function escalateSla(): Promise<SlaResult> {
     if (started === null || !t.slaHours) continue;
     out.evaluated++;
 
-    const remH = t.slaHours - (Date.now() - started) / HOUR;
+    // Measured against the DUE DATE when there is one, because that is the date the task carries and
+    // the date every screen shows. Falling back to createdAt + slaHours keeps older rows working, but
+    // a due date somebody set deliberately must not be quietly ignored in favour of the arithmetic it
+    // was set to override.
+    const due = parseDate(t.dueDate);
+    const remH = due !== null
+      ? (due - Date.now()) / HOUR
+      : t.slaHours - (Date.now() - started) / HOUR;
     const state = remH < 0 ? "breached" : remH <= t.slaHours * 0.25 ? "at_risk" : "on_track";
     if (state === t.slaState) continue; // already acted on this state — say nothing
     if (state === "on_track") { await prisma.workflowTask.update({ where: { id: t.id }, data: { slaState: state } }); continue; }

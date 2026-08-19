@@ -769,6 +769,14 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
                     ? new Date(Date.now() + c.slaHours * 3600_000).toISOString()
                     : null),
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
+            // ON TRACK FROM THE MOMENT IT EXISTS.
+            //
+            // slaState was only ever written by the hourly escalator, so a task carried null until the
+            // next tick — up to an hour of a live step with no state at all, and a step that opened
+            // and closed inside that hour never had one. Twenty of a hundred and nine SLA-bound tasks
+            // here have a state, and the other eighty-nine are not a bug in the escalator: they are
+            // steps it never saw while they were open.
+            slaState: typeof c.slaHours === "number" && c.slaHours > 0 ? "on_track" : null,
             // Snapshotted, not read live from the template — a step someone is mid-way through must
             // keep the brief it was given.
             instructions: (typeof c.instructions === "string" && c.instructions.trim()) ? c.instructions.trim() : null,

@@ -5081,6 +5081,66 @@ app.delete("/api/service-items/:id", requireAuth, requireStaff, requireWriteRole
  * Which packages / clients / open requests a service is attached to. The console asks before
  * offering Delete, so a service that cannot be removed says why instead of failing on the click.
  */
+/**
+ * The two ways an issued government record is allowed to change.
+ *
+ * Editing one through the generic PUT is refused: a compliance record that can be freely rewritten
+ * cannot be reconciled against the portal it came from, and an audit found an issued Work Permit's
+ * expiry pushed to 2039 with a 200 and an empty history. But a record that cannot be fixed at all is
+ * worse — a mistyped number would be permanent, and people would keep their real notes elsewhere.
+ *
+ * So the change is named, and the name says which of two different things happened:
+ *
+ *   CORRECT    the row was always wrong. Same document, same identity, a value put right, with the
+ *              reason recorded. The old value stays readable in the history forever.
+ *   SUPERSEDE  a NEW document replaces this one — a renewal, a re-issue, a replacement card. The old
+ *              row is kept and marked superseded rather than overwritten, so the history of what the
+ *              employee held and when is still there.
+ *
+ * Both require a reason, both name the actor, and neither ever deletes anything.
+ */
+const GOV_FIELDS = ["docType", "docNumber", "expiryDate", "issueDate", "issuingAuthority", "person", "employeeId"] as const;
+
+const actorName = async (req: any) => {
+  const a = req.auth;
+  const u = a?.sub ? await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }) : null;
+  return u?.name ?? u?.email ?? a?.sub ?? "unknown";
+};
+
+app.post("/api/documents/:id/correct", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (doc.supersededAt) return res.status(409).json({ error: "This record has been superseded — correct the document that replaced it" });
+
+    const reason = String(req.body?.reason ?? "").trim();
+    if (reason.length < 5) return res.status(400).json({ error: "A correction needs a reason — what was wrong with the record as it stood?" });
+
+    const changes = GOV_FIELDS
+      .filter(f => req.body?.[f] !== undefined && String(req.body[f] ?? "") !== String((doc as any)[f] ?? ""))
+      .map(f => ({ field: f, from: (doc as any)[f] ?? null, to: req.body[f] ?? null }));
+    if (!changes.length) return res.status(400).json({ error: "Nothing would change" });
+
+    // The countdown follows a corrected expiry, exactly as it does on an ordinary edit.
+    const patch: any = Object.fromEntries(changes.map(c => [c.field, c.to]));
+    if (patch.expiryDate !== undefined) {
+      const t = patch.expiryDate ? new Date(String(patch.expiryDate)).getTime() : NaN;
+      Object.assign(patch, isNaN(t)
+        ? { daysLeft: 0, status: "unknown" }
+        : (() => { const dl = Math.round((t - Date.now()) / 86400000);
+                   return { daysLeft: dl, status: dl < 0 ? "overdue" : dl <= 30 ? "expiring" : "valid" }; })());
+    }
+    const prior = Array.isArray(doc.history) ? (doc.history as any[]) : [];
+    const updated = await prisma.document.update({ where: { id: doc.id }, data: { ...patch,
+      history: [...prior, { at: new Date().toISOString(), by: await actorName(req), kind: "corrected", reason, changes }] } });
+
+    await logAudit({ action: "document.corrected", actorId: (req as any).auth?.sub, target: doc.id,
+      detail: `${doc.docType} · ${changes.map(c => `${c.field} ${c.from} → ${c.to}`).join("; ")} · ${reason}`.slice(0, 900) });
+    logActivity({ type: "compliance", message: `${doc.docType} corrected for ${doc.person} — ${reason}` });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 app.get("/api/service-items/:id/usage", requireAuth, requireStaff, async (req, res) => {
   const id = req.params.id;
   const [packages, subs, openReqs] = await Promise.all([

@@ -333,6 +333,33 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       // fix its own data is worse. What changes is that it can no longer be quiet: every change to a
       // field the compliance engine reads is appended to the document's own history, with who and
       // when and both values. The history is only ever added to.
+      // AN ISSUED GOVERNMENT RECORD IS NOT A FORM.
+      //
+      // The generic PUT let a pro_officer push an issued Work Permit's expiry to 2039 and get a 200.
+      // Adding a history entry made that visible, which is not the same as preventing it: the record
+      // still said whatever the last person to touch it typed, and a compliance system whose records
+      // can be freely rewritten cannot be reconciled against the portal they came from.
+      //
+      // The fields below are what the record IS. They change through one of two named acts, each with
+      // its own endpoint and its own reason: a CORRECTION (this row was always wrong) or a SUPERSEDE
+      // (a new document replaces it). Everything else on the document — notes, custom data, the fields
+      // an officer fills in while working — stays freely editable, because most of a document is
+      // working data and locking all of it would only push people into keeping their own notes.
+      const GOVERNMENT_FIELDS = ["docType", "docNumber", "expiryDate", "issueDate", "issuingAuthority", "person", "employeeId"];
+      if (modelName === "document" && !(req as any).__documentAct) {
+        const touched = GOVERNMENT_FIELDS.filter(f =>
+          req.body?.[f] !== undefined && String(req.body[f] ?? "") !== String((before as any)[f] ?? ""));
+        if (touched.length) {
+          return res.status(409).json({
+            error: `${touched.join(", ")} ${touched.length === 1 ? "is" : "are"} part of the government record and cannot be edited directly. `
+              + `Use "correct" if it was recorded wrongly, or "supersede" if a new document replaces this one — both keep the original readable.`,
+            fields: touched,
+            correct: `/api/documents/${req.params.id}/correct`,
+            supersede: `/api/documents/${req.params.id}/supersede`,
+          });
+        }
+      }
+
       let historyPatch: any = undefined;
       if (modelName === "document") {
         const WATCHED: [string, string][] = [
