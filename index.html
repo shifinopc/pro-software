@@ -14934,7 +14934,7 @@ class Component extends DCLogic {
     this._chkPersist = (stepId, itemKey, action, note) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/workflow/tasks/' + stepId + '/checklist', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ itemKey, action, ...(note ? { note } : {}) }) })
-        .then(r => { if (!r.ok) r.json().then(j => this.toast(j.error || 'Could not save checklist')).catch(() => {}); })
+        .then(r => { if (!r.ok) r.json().then(j => this.toast(j.error || 'Could not save checklist', 'error')).catch(() => {}); })
         .catch(() => this.toast('Server unreachable'));
     };
     // Shared reload for task mutations.
@@ -15349,7 +15349,7 @@ class Component extends DCLogic {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/users/' + id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ status }) })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
-        .then(({ ok, j }) => { if (!ok) return this.toast(j.error || 'Could not update'); this.toast((status === 'active' ? 'Activated ' : 'Suspended ') + name); this._reloadUsers(); })
+        .then(({ ok, j }) => { if (!ok) return this.toast(j.error || 'Could not update', 'error'); this.toast((status === 'active' ? 'Activated ' : 'Suspended ') + name); this._reloadUsers(); })
         .catch(() => this.toast('Server unreachable'));
     };
     // REAL impersonation (super_admin only): staff target → swap this session's token (original
@@ -15359,7 +15359,7 @@ class Component extends DCLogic {
       fetch(API + '/api/users/' + id + '/login-as', { method: 'POST', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
-          if (!ok) return this.toast(j.error || 'Could not impersonate');
+          if (!ok) return this.toast(j.error || 'Could not impersonate', 'error');
           if (j.user && j.user.type === 'portal') {
             localStorage.setItem('stimespro:portalToken', j.token);
             window.open('/portal/dashboard', '_blank');
@@ -15414,7 +15414,7 @@ class Component extends DCLogic {
         if (!ok9) return;
         const t2 = localStorage.getItem('stimespro:token');
         fetch(API + '/api/users/' + id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-          .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else r.json().then(j => this.toast(j.error || 'Could not delete')).catch(() => this.toast('Could not delete')); })
+          .then(r => { if (r.ok || r.status === 204) { this.toast('User deleted'); this._reloadUsers(); } else if (r.status === 401) this.toast('Sign in to the console first', 'error'); else r.json().then(j => this.toast(j.error || 'Could not delete', 'error')).catch(() => this.toast('Could not delete')); })
           .catch(() => this.toast('Server unreachable'));
       });
     };
@@ -18950,7 +18950,7 @@ class Component extends DCLogic {
         fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/reset-portal-password', { method: 'POST', headers: t6 ? { Authorization: 'Bearer ' + t6 } : {} })
           .then(r6 => r6.json().then(j6 => ({ ok: r6.ok, j6 })))
           .then(({ ok, j6 }) => {
-            if (!ok) return this.toast(j6.error || 'Could not reset the portal password');
+            if (!ok) return this.toast(j6.error || 'Could not reset the portal password', 'error');
             this.setState({ clPwReveal: j6.tempPassword });
             this.toast('Portal password reset for ' + (j6.email || clRow.name));
           })
@@ -21869,7 +21869,7 @@ class Component extends DCLogic {
         if (!ok9) return;
         const t2 = localStorage.getItem('stimespro:token');
         fetch((this._apiBase || 'http://localhost:4100') + '/api/packages/' + p9.id, { method: 'DELETE', headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
-          .then(r9 => r9.ok ? (this.toast('Package deleted'), this._opReload('packages', 'packagesData')) : r9.json().then(j9 => this.toast(j9.error || 'Could not delete')).catch(() => this.toast('Could not delete')))
+          .then(r9 => r9.ok ? (this.toast('Package deleted'), this._opReload('packages', 'packagesData')) : r9.json().then(j9 => this.toast(j9.error || 'Could not delete', 'error')).catch(() => this.toast('Could not delete')))
           .catch(() => this.toast('Server unreachable'));
       });
     };
@@ -23201,7 +23201,7 @@ class Component extends DCLogic {
       const API = this._apiBase || 'http://localhost:4100';
       const tok = localStorage.getItem('stimespro:token');
       fetch(API + '/api/workflow/templates/' + tplId, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ graph: g4 }) })
-        .then(r => { if (r.ok) { r.json().then(j => this.setState({ wfIssues: Array.isArray(j.validation) ? j.validation : [] })).catch(() => {}); this.toast('Workflow saved'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not save')).catch(() => this.toast('Could not save')); })
+        .then(r => { if (r.ok) { r.json().then(j => this.setState({ wfIssues: Array.isArray(j.validation) ? j.validation : [] })).catch(() => {}); this.toast('Workflow saved'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not save', 'error')).catch(() => this.toast('Could not save')); })
         .catch(() => this.toast('Server unreachable'));
     };
     // The graph shown on the canvas: the explicitly-selected template, else the first real template.
@@ -23227,7 +23227,7 @@ class Component extends DCLogic {
       const API = this._apiBase || 'http://localhost:4100';
       const tok = localStorage.getItem('stimespro:token');
       fetch(API + '/api/workflow/templates/' + tpl.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ active: next }) })
-        .then(r => { if (r.ok) { this.toast(next ? 'Workflow activated' : 'Workflow set to Draft'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not update')).catch(() => this.toast('Could not update')); })
+        .then(r => { if (r.ok) { this.toast(next ? 'Workflow activated' : 'Workflow set to Draft'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not update', 'error')).catch(() => this.toast('Could not update')); })
         .catch(() => this.toast('Server unreachable'));
     };
     // The two things that can start a workflow. "Client request intake" used to sit here as a third,
@@ -24727,7 +24727,7 @@ class Component extends DCLogic {
         const API4 = this._apiBase || 'http://localhost:4100';
         fetch(API4 + '/api/upload', { method: 'POST', headers: H4, body: JSON.stringify({ kind: kind2, name: f2.name, data: rd2.result }) })
           .then(r2 => r2.json()).then(j2 => {
-            if (!j2.path) return this.toast(j2.error || 'Upload failed');
+            if (!j2.path) return this.toast(j2.error || 'Upload failed', 'error');
             const next2 = { ...(this.state.orgSet || {}), [key2]: j2.path };
             fetch(API4 + '/api/settings/org', { method: 'PUT', headers: H4, body: JSON.stringify(next2) })
               .then(rr2 => { if (rr2.ok) { this.setState({ orgSet: next2 }); this.toast('Logo uploaded'); } else this.toast('Uploaded, but could not save the setting'); })
@@ -25732,7 +25732,7 @@ class Component extends DCLogic {
         const t2 = localStorage.getItem('stimespro:token');
         fetch((this._apiBase || 'http://localhost:4100') + '/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ kind: 'print-' + key2, name: f2.name, data: rd2.result }) })
           .then(r2 => r2.json()).then(j2 => {
-            if (!j2.path) return this.toast(j2.error || 'Upload failed');
+            if (!j2.path) return this.toast(j2.error || 'Upload failed', 'error');
             const next2 = { ...(this.state.printBranding || {}), [key2]: j2.path };
             this.setState({ printBranding: next2, pbDirty: true });
             this.toast('Uploaded — press "Save branding" to apply it to prints');
@@ -26497,7 +26497,7 @@ class Component extends DCLogic {
             const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (v2 && String(v2).trim()) vars2[k2] = v2; });
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2 }) })
-              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not complete')))
+              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not complete', 'error')))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'done' }, workRow: null });
         },
@@ -26505,7 +26505,7 @@ class Component extends DCLogic {
           if (selStep._real) {
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ outcome: 'approve' }) })
-              .then(r2 => r2.ok ? (this.toast('Approved — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not approve')))
+              .then(r2 => r2.ok ? (this.toast('Approved — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not approve', 'error')))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'approved' }, workRow: null });
         },
@@ -26513,7 +26513,7 @@ class Component extends DCLogic {
           if (selStep._real) {
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ outcome: 'reject' }) })
-              .then(r2 => r2.ok ? (this.toast('Rejected'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not reject')))
+              .then(r2 => r2.ok ? (this.toast('Rejected'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not reject', 'error')))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'rejected' }, workRow: null });
         },
@@ -30089,7 +30089,7 @@ class Component extends DCLogic {
                 body: JSON.stringify({ rateBp: bp }),
               }).then(res => res.json().then(j => ({ ok: res.ok, j })))
                 .then(({ ok, j }) => {
-                  if (!ok) return this.toast((j && j.error) || 'Could not set that rate');
+                  if (!ok) return this.toast((j && j.error) || 'Could not set that rate', 'error');
                   this.toast(bp == null ? 'Rate cleared' : 'Rate set to ' + (bp / 100) + '%');
                   if (this._loadTF) this._loadTF();
                 })
