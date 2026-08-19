@@ -535,7 +535,17 @@
 
   <sc-if value="{{ dlgShow }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ dlgCancel }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:500; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .15s ease both;">
-      <div onClick="{{ stopClick }}" style="width:430px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); padding:22px 24px; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-rise" style="width:430px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); overflow:hidden;">
+        <!-- Wizard chrome, only when this dialog is one of a chain. A single confirm keeps the plain
+             card it always had. -->
+        <sc-if value="{{ dlgWizShow }}" hint-placeholder-val="{{ false }}">
+          <div style="height:3px; background:#F0EDF6;"><div style="height:3px; width:{{ dlgWizPct }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 24px 0;">
+            <div style="font-size:9.5px; font-weight:800; letter-spacing:.07em; color:#7C00FF; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ dlgWizName }}</div>
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; white-space:nowrap; flex-shrink:0;">{{ dlgWizStep }}</div>
+          </div>
+        </sc-if>
+        <div class="fm-step" style="padding:18px 24px 22px;">
         <div style="display:flex; align-items:flex-start; gap:12px;">
           <span style="width:30px; height:30px; border-radius:10px; background:{{ dlgIconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ dlgIconColor }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ dlgIcon }}"></path></svg>
@@ -569,6 +579,7 @@
           <sc-if value="{{ dlgHasOk }}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ dlgAccept }}" style="background:{{ dlgOkBg }}; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer;">{{ dlgOkLabel }}</button>
           </sc-if>
+        </div>
         </div>
       </div>
     </div>
@@ -12672,8 +12683,30 @@ class Component extends DCLogic {
     // Replaces window.confirm and window.prompt. Both resolve on a real choice and NEVER return a
     // truthy fallback on cancel: confirm → false, prompt → null. The reject-document bug came from
     // prompt(...) || 'Rejected', where cancelling filed the rejection anyway.
+    // A CHAIN OF QUESTIONS IS A WIZARD, so it should say so.
+    //
+    // Editing a workflow step asks up to ten things in a row, each one its own dialog that looked
+    // exactly like the last: same box, same buttons, no sense of how far in you were or what you
+    // were editing. `_wizCtx` is set for the length of such a chain and every ask counts itself,
+    // so the caller does not have to number its own questions.
+    //
+    // The total is only shown when it is actually known. Most step types ask a fixed number of
+    // things, but a task branches on its own answers and can ask seven or ten — so those show the
+    // position without a denominator and a bar that eases toward the end without ever claiming to
+    // have reached it. A progress bar that lies is worse than no progress bar.
+    this._wizCtx = null;
     this._askDialog = (opts) => new Promise((resolve) => {
-      this.setState({ dlg: { ...opts, value: opts.value == null ? '' : String(opts.value), error: '' }, dlgResolve: resolve });
+      let wiz = null;
+      if (this._wizCtx) {
+        this._wizCtx.i = (this._wizCtx.i || 0) + 1;
+        const i = this._wizCtx.i, n = this._wizCtx.n;
+        wiz = {
+          name: this._wizCtx.name || '',
+          step: n ? ('Step ' + i + ' of ' + n) : ('Step ' + i),
+          pct: n ? Math.min(100, Math.round((i / n) * 100)) : Math.round(100 * (1 - Math.pow(0.72, i))),
+        };
+      }
+      this.setState({ dlg: { ...opts, wiz, value: opts.value == null ? '' : String(opts.value), error: '' }, dlgResolve: resolve });
       // Focus the field so a prompt behaves like the native one it replaces. Selecting everything is
       // right for a single value — you are replacing it — and wrong for a list, where the next
       // keystroke would wipe every line the author already typed. So multiline puts the caret at the
@@ -14722,6 +14755,10 @@ class Component extends DCLogic {
     };
     const dialogApi = {
       dlgShow: !!_dlg,
+      dlgWizShow: !!(_dlg && _dlg.wiz),
+      dlgWizName: (_dlg && _dlg.wiz && _dlg.wiz.name) || '',
+      dlgWizStep: (_dlg && _dlg.wiz && _dlg.wiz.step) || '',
+      dlgWizPct: ((_dlg && _dlg.wiz && _dlg.wiz.pct) || 0) + '%',
       dlgTitle: (_dlg && _dlg.title) || '',
       dlgBody: (_dlg && _dlg.body) || '',
       dlgHasBody: !!(_dlg && _dlg.body),
@@ -22816,6 +22853,10 @@ class Component extends DCLogic {
         const node3 = g3.nodes.find(n3 => n3.id === row3[0]); if (!node3) return;
         // Sequential questions. The in-app dialog resolves rather than blocks, so the chain is
         // awaited — cancelling any step stops the edit there, as the native prompts did.
+        // How many questions this type asks. Fixed for most; a task branches on its own answers and
+        // can ask seven or ten, so it declares no total rather than a wrong one.
+        const WIZ_N3 = { decision: 2, branch: 2, notify: 2, notification: 2, delay: 2, webhook: 2, end: 2, issue_document: 2, courier: 4 };
+        this._wizCtx = { name: 'Editing · ' + (node3.label || node3.type), i: 0, n: WIZ_N3[node3.type] || null };
         (async () => {
           const label3 = await this._prompt('Step label:', node3.label || '', { okLabel: 'Next' });
           if (label3 == null) return;
@@ -23052,7 +23093,9 @@ class Component extends DCLogic {
             ], { body: 'Written to the run as its result, and shown wherever the outcome is reported.' });
           }
           _gSync(g3); this.toast('Step updated — Save to persist');
-        })();
+        // Cleared however the chain ends — finished, cancelled at any question, or thrown. Left set,
+        // the next ordinary confirm anywhere in the app would wear wizard chrome and go on counting.
+        })().finally(() => { this._wizCtx = null; });
       };
     } else {
       // No template on the canvas — clear every handler, or a stale closure keeps editing the graph
