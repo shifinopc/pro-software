@@ -12120,10 +12120,19 @@
           </sc-if>
           <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">RECORD</div>
+            <sc-if value="{{ wdRuleErrShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:12px; padding:12px 14px;">
+                <div style="font-size:11px; font-weight:800; letter-spacing:.06em; color:#C0353A;">THESE ANSWERS CONTRADICT EACH OTHER</div>
+                <sc-for list="{{ wdRuleMsgs }}" as="rm" hint-placeholder-count="1">
+                  <div style="font-size:12px; color:#8E2A2E; margin-top:6px; line-height:1.5;">{{ rm.text }}</div>
+                </sc-for>
+                <div style="font-size:10.5px; color:#B4757A; margin-top:8px;">Change either one below and this clears.</div>
+              </div>
+            </sc-if>
             <div style="display:flex; flex-direction:column; gap:12px; margin-top:11px;">
               <sc-for list="{{ wdCaptures }}" as="c" hint-placeholder-count="2">
                 <div>
-                  <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if></label>
+                  <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if><sc-if value="{{ c.ruleErr }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#C0353A; background:#FEECEC; padding:2px 7px; border-radius:99px;">CHECK THIS</span></sc-if></label>
                   <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
                     <div style="display:flex; gap:7px; flex-wrap:wrap;"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="font-size:11.5px; font-weight:600; color:{{ o.color }}; background:{{ o.bg }}; border:1px solid {{ o.border }}; padding:7px 14px; border-radius:99px; cursor:pointer; transition:background .12s, color .12s, border-color .12s;">{{ o.o }}</span></sc-for></div>
                   </sc-if>
@@ -26367,10 +26376,21 @@ class Component extends DCLogic {
       // The label is the value made readable: these come from the template as machine values
       // (`expat_new_hire`), and they were being shown to a PRO officer exactly as stored.
       const _capWords = (v) => String(v).replace(/[_-]+/g, ' ').replace(/^\s*\w/, m => m.toUpperCase());
+      // WHICH ANSWERS THE LAST REFUSAL WAS ABOUT. A cross-field rule is by definition about two
+      // answers that are each fine on their own, so a sentence on its own leaves somebody reading it
+      // against a screenful of boxes — and it is a toast, so it is gone in four seconds. The server
+      // now returns the variables, and they are marked here until one of them is changed.
+      const _ruleErr = (this.state.wfRuleErr && this.state.wfRuleErr.id === selStep.id) ? this.state.wfRuleErr : null;
+      const _ruleFields = _ruleErr ? (_ruleErr.fields || []) : [];
+      const _clearRule = () => { if (_ruleErr) this.setState({ wfRuleErr: null }); };
       const caps = (selStep.captures || []).map(c => {
         const val = cap[c.var] || '';
         return {
           var: c.var, label: c.label, type: c.type,
+          // sc-if on presence, rather than a bound colour: a mostly-static style attribute gets
+          // hoisted into a generated class and stops re-evaluating, so a bound border would freeze
+          // at whatever it was on first render. An element that appears and disappears cannot.
+          ruleErr: _ruleFields.indexOf(c.var) >= 0,
           isSelect: c.type === 'select', isDate: c.type === 'date', isText: c.type !== 'select' && c.type !== 'date',
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
           // refused on completion, so the form should say so before the button is pressed.
@@ -26383,10 +26403,10 @@ class Component extends DCLogic {
               bg: on ? '#7C00FF' : '#fff',
               color: on ? '#fff' : '#4B4757',
               border: on ? '#7C00FF' : '#DDD9E6',
-              pick: () => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: o } } }),
+              pick: () => { _clearRule(); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: o } } }); },
             };
           }),
-          set: (e) => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }),
+          set: (e) => { _clearRule(); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }); },
         };
       });
       const remH = selStep.slaHours - selStep.elapsedH;
@@ -26478,6 +26498,8 @@ class Component extends DCLogic {
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
+        wdRuleErrShow: !!_ruleErr,
+        wdRuleMsgs: _ruleErr ? (_ruleErr.rules || []).map(r => ({ text: r.message })) : [],
         // A workflow step has its own next step — the graph decides it — so there is nothing to
         // suggest here, and the section stays closed rather than opening onto nothing.
         wdOnApprove: selStep.onApprove, wdOnReject: selStep.onReject,
@@ -26497,7 +26519,13 @@ class Component extends DCLogic {
             const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (v2 && String(v2).trim()) vars2[k2] = v2; });
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2 }) })
-              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not complete', 'error')))
+              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => {
+                // A cross-field refusal is held on the form, against the fields it names. Everything
+                // else stays a toast, because there is nothing on screen to point at.
+                if (j2 && Array.isArray(j2.fields) && j2.fields.length) {
+                  this.setState({ wfRuleErr: { id: selStep.id, fields: j2.fields, rules: (j2.rules && j2.rules.length) ? j2.rules : [{ message: j2.error }] } });
+                } else this.toast(j2.error || 'Could not complete', 'error');
+              }))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'done' }, workRow: null });
         },

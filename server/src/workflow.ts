@@ -1152,15 +1152,27 @@ function testField(t: FieldTest | undefined, vars: Record<string, any>): boolean
   }
 }
 
-/** Every rule on this node that the answers break, in the words the rule author wrote. */
-export function brokenRules(config: any, vars: Record<string, any>): string[] {
+/**
+ * Every rule on this node that the answers break, in the words the rule author wrote — AND the
+ * fields each one is about.
+ *
+ * A cross-field rule is, by definition, about two answers that are each fine alone. Returning only
+ * the sentence leaves the person to work out which two boxes it means, from a message that may name
+ * neither in the words on their screen. The variables come straight off the rule, so the form can
+ * mark exactly the fields in question.
+ */
+export type BrokenRule = { message: string; vars: string[] };
+export function brokenRules(config: any, vars: Record<string, any>): BrokenRule[] {
   const rules: any[] = Array.isArray(config?.rules) ? config.rules : [];
-  const out: string[] = [];
+  const out: BrokenRule[] = [];
   for (const r of rules) {
     if (!r || !r.then?.var) continue;
     if (!testField(r.when, vars)) continue;      // the rule does not apply to this answer
     if (testField(r.then, vars)) continue;       // it applies and it holds
-    out.push(String(r.message || `${r.then.var} is not valid for ${r.when?.var ?? "this combination"}`));
+    out.push({
+      message: String(r.message || `${r.then.var} is not valid for ${r.when?.var ?? "this combination"}`),
+      vars: [String(r.then.var), ...(r.when?.var ? [String(r.when.var)] : [])],
+    });
   }
   return out;
 }
@@ -1178,7 +1190,7 @@ export function brokenRules(config: any, vars: Record<string, any>): string[] {
  * A set that has been deleted contributes nothing and the step's own rules apply: losing a set must
  * not make a step uncompletable, and it must not silently drop the validation either.
  */
-async function effectiveRules(nodes: any[], vars: Record<string, any>): Promise<string[]> {
+async function effectiveRules(nodes: any[], vars: Record<string, any>): Promise<BrokenRule[]> {
   const ids = [...new Set(nodes.map(n => String(n?.config?.captureRuleId ?? "")).filter(Boolean))];
   let bySet = new Map<string, any[]>();
   if (ids.length) {
@@ -1439,8 +1451,19 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     const owners = (g.nodes ?? []).filter((n: any) =>
       n?.id === node0?.id ||
       (n?.config?.captures ?? []).some((c: any) => written.has(String(c?.var ?? ""))));
-    const broken = [...new Set(await effectiveRules(owners, merged))];
-    if (broken.length) throw new Error(broken.join(" · "));
+    const broken = await effectiveRules(owners, merged);
+    if (broken.length) {
+      // Deduplicated by MESSAGE — the same rule can be reached from two nodes that both own one of
+      // the answers, and saying it twice is still one thing wrong.
+      const seen = new Set<string>();
+      const uniq = broken.filter(b => (seen.has(b.message) ? false : (seen.add(b.message), true)));
+      const err: any = new Error(uniq.map(b => b.message).join(" · "));
+      // The fields travel with it so the form can mark them, rather than the person re-reading a
+      // sentence against a screenful of boxes.
+      err.fields = [...new Set(uniq.flatMap(b => b.vars))];
+      err.rules = uniq;
+      throw err;
+    }
   }
 
   // THE STEP CALLED "CREATE EMPLOYEE PROFILE" DID NOT CREATE ONE.
@@ -2321,7 +2344,11 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
     const inst = await completeTask(req.params.id, { actor: me?.name ?? a.sub, outcome, checklist, variables });
     await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${task.title} (${task.id})`, detail: outcome ?? undefined });
     res.json(inst);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
+  } catch (e: any) {
+    // `fields` rides along only on a cross-field refusal, and the console uses it to mark the boxes
+    // in question. Every other failure keeps the plain shape it has always had.
+    res.status(400).json({ error: e.message, ...(e.fields ? { fields: e.fields, rules: e.rules } : {}) });
+  }
 });
 /**
  * WHERE EACH RULE IS ACTUALLY USED — one answer, two readers.
