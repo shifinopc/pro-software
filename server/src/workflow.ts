@@ -1524,7 +1524,7 @@ const R = workflowRouter;
  * Reported on every save alongside the graph issues; ENFORCED only on the draft → active
  * transition, the same line the roleless-step rule already draws.
  */
-async function validateReferences(graph: any, tpl: { country?: string | null }): Promise<GraphIssue[]> {
+export async function validateReferences(graph: any, tpl: { country?: string | null }): Promise<GraphIssue[]> {
   const out: GraphIssue[] = [];
   const nodes: any[] = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const country = String(tpl?.country ?? "").trim().toUpperCase();
@@ -1579,6 +1579,40 @@ async function validateReferences(graph: any, tpl: { country?: string | null }):
         if (!r || builtIn.has(r) || custom.has(r)) continue;
         out.push({ level: "error", nodeId: n.id, node: n.label || n.id, message: `"${n.label || n.id}" is owned by the role "${r}", which does not exist.` });
       }
+    }
+
+    // ...AND A ROLE THAT EXISTS BUT NOBODY HOLDS, WHICH IS THE ONE THAT ACTUALLY HAPPENED.
+    //
+    // The check above only asks whether the role is defined. `hr_officer`, `it_officer` and `admin`
+    // are all defined here and none of them has a single active member, so this template validated
+    // clean while five of its steps — including both approvals — were certain to land on an empty
+    // desk. The engine says so when a run reaches one, which is too late and once per run: the
+    // information arrives mid-flight, buried in one instance's log, to whoever happens to look.
+    //
+    // Said here it arrives while somebody is publishing the workflow and can still staff the role.
+    //
+    // A WARNING, NOT AN ERROR. Who holds a role is an operational fact that changes after a template
+    // is published — the last member of a team leaving must not retroactively invalidate a workflow,
+    // and blocking the publish would push people into assigning steps to whoever exists today, which
+    // is how every step ends up on the administrator.
+    const eligible = await prisma.user.groupBy({
+      by: ["roleId"],
+      where: { status: "active", type: "staff", roleId: { in: roles } },
+      _count: { _all: true },
+    });
+    const held = new Map(eligible.map(e => [String(e.roleId), e._count._all]));
+    for (const r of roles) {
+      if (held.get(r)) continue;
+      const steps = nodes.filter(n => [n?.config?.assigneeRole, n?.config?.approverRole].map((x: any) => String(x ?? "").trim()).includes(r));
+      const approvals = steps.filter(n => n?.type === "approval").length;
+      const names = steps.map(n => `"${n.label || n.id}"`).join(", ");
+      out.push({
+        level: "warning",
+        nodeId: steps[0]?.id,
+        node: steps[0]?.label || steps[0]?.id,
+        message: `Nobody holds the role "${r}", so ${steps.length === 1 ? "this step waits" : `${steps.length} steps wait`} on an empty desk: ${names}.` +
+          (approvals ? ` ${approvals === 1 ? "One of them is an approval, which nothing else can" : `${approvals} of them are approvals, which nothing else can`} clear — the run stops there.` : ""),
+      });
     }
   }
   return out;
