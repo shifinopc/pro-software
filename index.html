@@ -23767,8 +23767,19 @@ class Component extends DCLogic {
       // resolves is snapshotted onto the step as it is created, so editing the source later never
       // rewrites work already in progress.
       ...(() => {
-        const chkSrc = String(_wsCfg.checklistSource || 'static');
-        const capSrc = String(_wsCfg.captureSource || 'static');
+        // NOTHING IS SELECTED UNTIL SOMETHING IS TRUE.
+        //
+        // A step with no source and no list collects nothing — six of this template's steps are in
+        // that position, the profile step among them. Highlighting "this step's own list" there
+        // claims a choice nobody made, and says there IS a list which happens to be empty. There
+        // is not. So a row lights up only when it describes the step: a source that is set, or an
+        // own-list that actually has lines in it.
+        const chkSet = String(_wsCfg.checklistSource || '');
+        const chkHasOwn = Array.isArray(_wsCfg.checklist) && _wsCfg.checklist.length > 0;
+        const chkSrc = chkSet || (chkHasOwn ? 'static' : '');
+        const capSet = String(_wsCfg.captureSource || '');
+        const capHasOwn = Array.isArray(_wsCfg.captures) && _wsCfg.captures.length > 0;
+        const capSrc = capSet || (capHasOwn ? 'static' : '');
         const rules = (Array.isArray(this.state.checklistRulesData) ? this.state.checklistRulesData : [])
           .map(r => ({ value: r.id, label: r.name }));
         const row = (on) => ({
@@ -23784,7 +23795,7 @@ class Component extends DCLogic {
             label, desc, ...row(chkSrc === val),
             pick: () => _wsCfgSet({ checklistSource: val === 'static' ? '' : val }),
           })),
-          wsChkIsStatic: chkSrc === 'static',
+          wsChkIsStatic: chkSrc === 'static' || chkSrc === '',
           wsChkIsRule: chkSrc === 'dynamic',
           wsChkIsService: chkSrc === 'service',
           wsChkNoRules: chkSrc === 'dynamic' && !rules.length,
@@ -23799,7 +23810,7 @@ class Component extends DCLogic {
             label, desc, ...row(capSrc === val),
             pick: () => _wsCfgSet({ captureSource: val === 'static' ? '' : val }),
           })),
-          wsCapIsStatic: capSrc === 'static',
+          wsCapIsStatic: capSrc === 'static' || capSrc === '',
           wsCapIsDoc: capSrc === 'document_type',
           // Which type's fields. Blank means "whatever document this run is about", which is how a
           // renewal workflow serves every document type with one step.
