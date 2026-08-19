@@ -158,7 +158,16 @@ async function main() {
     return docs;
   };
 
-  const happy = { documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes" };
+  // EVERY GOVERNMENT STEP NOW HAS TO BE TOLD IT SUCCEEDED, which is the whole point of the failure
+  // branches: there is no longer a path through this workflow that assumes the ministry said yes.
+  // A walk that leaves these blank falls to the retry edges and goes round in circles, exactly as a
+  // real file does when nobody records what the authority decided.
+  const happy = {
+    documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes",
+    quotaOutcome: "authorised", verificationOutcome: "verified", wafidOutcome: "fit",
+    visaOutcome: "issued", arrivalOutcome: "cleared", permitOutcome: "issued",
+    iqamaOutcome: "issued", iqamaTransferOutcome: "updated", gosiOutcome: "registered",
+  };
   const EXPAT_ONLY = ["Work Permit", "Iqama", "Work Visa"];
   console.log("");
   console.log("documents each hiring type is actually issued:");
@@ -194,7 +203,10 @@ async function main() {
   }
   const issued: { doc: string; from: string; field: string }[] = [];
   {
-    const vars: Record<string, string> = { hiringType: "expat_new_hire", documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes" };
+    const vars: Record<string, string> = { hiringType: "expat_new_hire", documentsVerified: "pass", transferOutcome: "approved", employeeJoined: "yes", probationOutcome: "yes",
+      quotaOutcome: "authorised", verificationOutcome: "verified", wafidOutcome: "fit",
+      visaOutcome: "issued", arrivalOutcome: "cleared", permitOutcome: "issued",
+      iqamaOutcome: "issued", iqamaTransferOutcome: "updated", gosiOutcome: "registered" };
     const seen = new Set<string>();
     const step = (id: string) => {
       if (seen.has(id)) return; seen.add(id);
@@ -232,7 +244,18 @@ async function main() {
   const feeders = new Map<string, Set<string>>();
   for (const n of nodes.filter(x => x.type === "issue_document")) {
     const set = feeders.get(String(n.config?.docType)) ?? new Set<string>();
-    for (const e of edges.filter(e2 => e2.to === n.id)) set.add(e.from);
+    // A DECISION IS TRANSPARENT TO THIS QUESTION. Government steps now record what the authority
+    // decided, so "Iqama Issued?" sits between the step that captured the number and the document it
+    // feeds. A decision captures nothing, so looking only one edge back would report every document
+    // as fed by a node that holds no data at all.
+    const back = (id: string, depth = 0) => {
+      for (const e of edges.filter(e2 => e2.to === id)) {
+        const from = byId.get(e.from);
+        if (from?.type === "decision" && depth < 6) back(e.from, depth + 1);
+        else set.add(e.from);
+      }
+    };
+    back(n.id);
     feeders.set(String(n.config?.docType), set);
   }
   for (const i of issued) {

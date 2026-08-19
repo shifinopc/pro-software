@@ -243,13 +243,122 @@ async function main() {
     } },
 
     // ── expatriate, hired from outside KSA ───────────────────────────────────────────────────
+    //
+    // THREE THINGS HAVE TO HAPPEN BEFORE ANYBODY APPLIES FOR A VISA, and the workflow began at the
+    // application. A real expatriate hire stalls on every one of them, and the second cannot be
+    // repaired afterwards at any price.
+    //
+    // An establishment cannot apply for a work visa it has not been authorised to use. The
+    // authorisation is granted against the Nitaqat band and the approved manpower quota, per
+    // profession and per nationality — so "do we have a visa for this role" is a question with a
+    // real answer before the file is opened, not a tick box on an eligibility screen. Quota is
+    // where expatriate hiring actually fails, and it fails at the beginning.
+    { id: "visa_auth", type: "task", label: "Visa Authorisation & Quota", config: {
+      assigneeRole: "pro_officer", govCenter: "Qiwa", slaHours: 120,
+      checklist: [
+        doc("quota_checked", "Approved manpower quota covers this profession and nationality"),
+        doc("nitaqat_band", "Nitaqat band still holds after adding this hire"),
+      ],
+      captures: [
+        { var: "visaAuthNumber", type: "text", label: "Visa authorisation number" },
+        { var: "quotaOutcome", type: "select", label: "Authorisation outcome",
+          options: "authorised,quota_unavailable,refused", required: true },
+      ],
+      rules: [
+        { when: { var: "quotaOutcome", op: "eq", value: "authorised" },
+          then: { var: "visaAuthNumber", op: "present" },
+          message: "An authorised visa has an authorisation number — it is what the visa application is filed against" },
+      ],
+    } },
+    { id: "d_quota", type: "decision", label: "Visa Authorisation Granted?", config: { branches: [
+      { var: "quotaOutcome", op: "eq", value: "authorised", key: "authorised" },
+      { var: "quotaOutcome", op: "eq", value: "quota_unavailable", key: "no_quota" },
+      { var: "quotaOutcome", op: "eq", value: "refused", key: "refused" },
+    ] } },
+
+    // THE ONE THAT CANNOT BE FIXED LATER.
+    //
+    // For many profession and nationality combinations the qualification must be verified through the
+    // Saudi Professional Verification Programme BEFORE the visa is stamped. It cannot be done after
+    // entry: the employee is already in the country, on a permit that should not have been issued,
+    // and the only remedies are exit and re-entry or a change of profession. Modelling it after
+    // arrival — or not at all, which is what the workflow did — is the expensive kind of wrong.
+    //
+    // Not every hire needs it, which is exactly why it is a step rather than an assumption. The
+    // officer records whether it applies, and a "not required" is a decision somebody made and
+    // signed rather than a silence.
+    { id: "prof_verify", type: "task", label: "Professional Qualification Verification", config: {
+      assigneeRole: "pro_officer", govCenter: "SVP", slaHours: 336,
+      checklist: [
+        doc("svp_checked", "Checked whether this profession and nationality require verification"),
+        doc("svp_docs", "Degree or trade certificate submitted for verification"),
+      ],
+      captures: [
+        { var: "verificationOutcome", type: "select", label: "Verification outcome",
+          options: "verified,not_required,rejected", required: true },
+        { var: "verificationRef", type: "text", label: "Verification reference" },
+      ],
+      rules: [
+        { when: { var: "verificationOutcome", op: "eq", value: "verified" },
+          then: { var: "verificationRef", op: "present" },
+          message: "A completed verification has a reference — the visa application is checked against it" },
+      ],
+    } },
+    { id: "d_verify", type: "decision", label: "Qualification Verified?", config: { branches: [
+      { var: "verificationOutcome", op: "eq", value: "verified", key: "verified" },
+      { var: "verificationOutcome", op: "eq", value: "not_required", key: "not_required" },
+      { var: "verificationOutcome", op: "eq", value: "rejected", key: "rejected" },
+    ] } },
+
+    // The pre-departure medical, taken at an approved Wafid centre in the employee's own country.
+    // A separate fact from the medical taken after arrival, which the workflow did have: this one
+    // gates the visa, and an unfit result ends the hire before anybody buys a ticket.
+    { id: "medical_wafid", type: "task", label: "Wafid Medical Examination", config: {
+      assigneeRole: "pro_officer", govCenter: "Wafid", slaHours: 240,
+      checklist: [
+        doc("wafid_booked", "Examination booked at an approved Wafid centre in the home country"),
+        doc("wafid_report", "Medical report received and readable"),
+      ],
+      captures: [
+        { var: "wafidOutcome", type: "select", label: "Medical outcome",
+          options: "fit,repeat,unfit", required: true },
+        { var: "wafidCentre", type: "text", label: "Wafid centre" },
+        { var: "wafidDate", type: "date", label: "Examination date" },
+      ],
+    } },
+    { id: "d_wafid", type: "decision", label: "Medically Fit to Travel?", config: { branches: [
+      { var: "wafidOutcome", op: "eq", value: "fit", key: "fit" },
+      { var: "wafidOutcome", op: "eq", value: "repeat", key: "repeat" },
+      { var: "wafidOutcome", op: "eq", value: "unfit", key: "unfit" },
+    ] } },
+
     { id: "visa_apply", type: "task", label: "Work Visa Application", config: {
       assigneeRole: "pro_officer", govCenter: "MOFA", slaHours: 240,
       captures: [
+        // WHAT HAPPENS WHEN THE GOVERNMENT SAYS NO.
+        //
+        // Every government step had exactly two ways out: complete it, or leave it open forever. A
+        // rejected visa had to be recorded as a SUCCESSFUL application — the only button there was —
+        // and the run carried on issuing a Work Visa document for a visa that does not exist.
+        { var: "visaOutcome", type: "select", label: "Application outcome",
+          options: "issued,more_info,rejected", required: true },
         { var: "visaNumber", type: "text", label: "Visa number" },
         { var: "visaExpiry", type: "date", label: "Visa expiry" },
       ],
+      rules: [
+        { when: { var: "visaOutcome", op: "eq", value: "issued" },
+          then: { var: "visaNumber", op: "present" },
+          message: "An issued visa has a number — it is what the Work Visa record is created from" },
+        { when: { var: "visaOutcome", op: "eq", value: "issued" },
+          then: { var: "visaExpiry", op: "present" },
+          message: "An issued visa has an expiry — entry after it lapses is refused at the border" },
+      ],
     } },
+    { id: "d_visa", type: "decision", label: "Visa Issued?", config: { branches: [
+      { var: "visaOutcome", op: "eq", value: "issued", key: "issued" },
+      { var: "visaOutcome", op: "eq", value: "more_info", key: "more_info" },
+      { var: "visaOutcome", op: "eq", value: "rejected", key: "rejected" },
+    ] } },
     // EVERY ISSUED DOCUMENT NAMES ITS OWN VARIABLES.
     //
     // issue_document reads `vars.docNumber` and `vars.newExpiry` unless the node says otherwise, and
@@ -268,7 +377,20 @@ async function main() {
         doc("medical_ksa", "Medical test completed in KSA"),
         doc("biometrics", "Biometrics captured"),
       ],
+      captures: [
+        { var: "arrivalOutcome", type: "select", label: "Arrival outcome",
+          options: "cleared,not_arrived,biometrics_failed,medical_failed", required: true },
+      ],
     } },
+    // The two failures here are not the same failure. Biometrics can be retaken and the employee is
+    // in the country either way; failing the medical AFTER arrival ends the residence application
+    // altogether, and the run has to stop rather than loop.
+    { id: "d_arrival", type: "decision", label: "Arrival Cleared?", config: { branches: [
+      { var: "arrivalOutcome", op: "eq", value: "cleared", key: "cleared" },
+      { var: "arrivalOutcome", op: "eq", value: "not_arrived", key: "not_arrived" },
+      { var: "arrivalOutcome", op: "eq", value: "biometrics_failed", key: "retry_biometrics" },
+      { var: "arrivalOutcome", op: "eq", value: "medical_failed", key: "medical_failed" },
+    ] } },
     // The Iqama's own step, and it could not have had one before: under the old order the residence
     // permit was issued at arrival, so its number was captured there — weeks before the work permit
     // that has to precede it. Now it is applied for after the permit exists, which is when anybody
@@ -286,10 +408,16 @@ async function main() {
         doc("fines_checked", "Outstanding fines and renewal liability checked before accepting the transfer"),
       ],
       captures: [
+        { var: "iqamaTransferOutcome", type: "select", label: "Transfer outcome",
+          options: "updated,refused", required: true },
         { var: "iqamaNumber", type: "text", label: "Existing Iqama number" },
         { var: "iqamaExpiry", type: "date", label: "Existing Iqama expiry (unchanged by the transfer)" },
       ],
     } },
+    { id: "d_iqama_tr", type: "decision", label: "Sponsorship Updated?", config: { branches: [
+      { var: "iqamaTransferOutcome", op: "eq", value: "updated", key: "updated" },
+      { var: "iqamaTransferOutcome", op: "eq", value: "refused", key: "refused" },
+    ] } },
     { id: "iqama_task", type: "task", label: "Iqama Issuance", config: {
       assigneeRole: "pro_officer", govCenter: "Muqeem", slaHours: 168,
       checklist: [
@@ -297,10 +425,17 @@ async function main() {
         doc("iqama_insurance", "Health insurance active and covering the residence period"),
       ],
       captures: [
+        { var: "iqamaOutcome", type: "select", label: "Issuance outcome",
+          options: "issued,more_info,refused", required: true },
         { var: "iqamaNumber", type: "text", label: "Iqama number" },
         { var: "iqamaExpiry", type: "date", label: "Iqama expiry" },
       ],
     } },
+    { id: "d_iqama_out", type: "decision", label: "Iqama Issued?", config: { branches: [
+      { var: "iqamaOutcome", op: "eq", value: "issued", key: "issued" },
+      { var: "iqamaOutcome", op: "eq", value: "more_info", key: "more_info" },
+      { var: "iqamaOutcome", op: "eq", value: "refused", key: "refused" },
+    ] } },
     { id: "iqama_doc", type: "issue_document", label: "Iqama",
       config: { docType: "Iqama", numberVar: "iqamaNumber", expiryVar: "iqamaExpiry" } },
 
@@ -338,6 +473,34 @@ async function main() {
     ] } },
     { id: "end_transfer", type: "end", label: "Transfer Not Completed", config: {} },
 
+    // ── where a government refusal goes ──────────────────────────────────────────────────────
+    //
+    // A REFUSAL CANNOT GO STRAIGHT TO AN END NODE, which is why this is a step and not an arrow.
+    //
+    // By the time a work permit is refused the run has usually already issued a visa, a health
+    // insurance policy and an authenticated contract. Ending quietly leaves all of them live on the
+    // record of somebody who will never join — and live records are not inert here: they sit in the
+    // compliance screens, they count toward the establishment's obligations, and the renewal engine
+    // chases them, year after year, for an employee who does not exist. The mess outlives the hire.
+    //
+    // So the run stops at a desk. Somebody withdraws what was issued, tells the candidate, and says
+    // in writing what was refused and why, before the run is allowed to end.
+    { id: "gov_stop", type: "task", label: "Government Refusal — Withdraw and Close", config: {
+      assigneeRole: "pro_officer", slaHours: 72, priority: "high",
+      checklist: [
+        doc("stop_withdraw", "Documents already issued for this hire withdrawn or cancelled"),
+        doc("stop_notify", "Candidate and hiring manager told the hire cannot proceed"),
+        doc("stop_quota", "Visa authorisation or quota released if it was consumed"),
+      ],
+      captures: [
+        { var: "stopStage", type: "text", label: "Which step was refused" },
+        // `text` rather than `textarea`: the console renders every type it does not recognise as a
+        // single-line input, so asking for one would promise a box that never appears.
+        { var: "stopReason", type: "text", label: "What the authority said", required: true },
+      ],
+    } },
+    { id: "end_gov_stop", type: "end", label: "Stopped — Government Refusal", config: {} },
+
     // ── everyone converges here. A plain task, NOT a parallel join: a join waits for every
     //    in-edge to arrive, and only one of the three branches ever will. ────────────────────
     // The checks stay a task, because somebody has to do them; what the task PRODUCES is then
@@ -372,10 +535,22 @@ async function main() {
       assigneeRole: "pro_officer", govCenter: "Qiwa", slaHours: 72,
       checklist: [doc("permit_fees", "Work permit fees paid"), doc("permit_profession", "Profession on the permit matches the contract")],
       captures: [
+        { var: "permitOutcome", type: "select", label: "Issuance outcome",
+          options: "issued,more_info,refused", required: true },
         { var: "permitNumber", type: "text", label: "Work permit number" },
         { var: "permitExpiry", type: "date", label: "Work permit expiry" },
       ],
+      rules: [
+        { when: { var: "permitOutcome", op: "eq", value: "issued" },
+          then: { var: "permitNumber", op: "present" },
+          message: "An issued work permit has a number" },
+      ],
     } },
+    { id: "d_permit_out", type: "decision", label: "Work Permit Issued?", config: { branches: [
+      { var: "permitOutcome", op: "eq", value: "issued", key: "issued" },
+      { var: "permitOutcome", op: "eq", value: "more_info", key: "more_info" },
+      { var: "permitOutcome", op: "eq", value: "refused", key: "refused" },
+    ] } },
     { id: "d_iqama", type: "decision", label: "Residence Permit Required?", config: { branches: [
       { var: "hiringType", op: "eq", value: "expat_new_hire", key: "new_hire" },
       { var: "hiringType", op: "eq", value: "expat_transfer", key: "transfer" },
@@ -386,7 +561,24 @@ async function main() {
     { id: "split", type: "parallel_split", label: "Set Up In Parallel", config: {} },
     { id: "payroll", type: "task", label: "Payroll & WPS Setup", config: { assigneeRole: "accountant", slaHours: 72,
       checklist: [doc("wps_registered", "Registered on WPS"), doc("bank_ok", "Salary account confirmed")],
-      captures: [{ var: "gosiNumber", type: "text", label: "GOSI number" }] } },
+      captures: [
+        { var: "gosiOutcome", type: "select", label: "GOSI registration outcome",
+          options: "registered,pending,failed", required: true },
+        { var: "gosiNumber", type: "text", label: "GOSI number" },
+      ] } },
+    // THIS ONE DOES NOT LEAVE THE PARALLEL BLOCK, and that is deliberate.
+    //
+    // Payroll runs inside the parallel setup, and the join downstream waits for all three branches.
+    // A branch that exits to the stop path never arrives at the join, so the other two sit waiting
+    // for a run that has already ended — a stranded join is a worse failure than the one being
+    // modelled. A GOSI problem therefore goes back to the step that owns it: the run stays alive, the
+    // reason is recorded, the SLA clock keeps running, and the statutory deadline below is what makes
+    // the delay impossible to ignore.
+    { id: "d_gosi", type: "decision", label: "GOSI Registration Complete?", config: { branches: [
+      { var: "gosiOutcome", op: "eq", value: "registered", key: "registered" },
+      { var: "gosiOutcome", op: "eq", value: "pending", key: "pending" },
+      { var: "gosiOutcome", op: "eq", value: "failed", key: "failed" },
+    ] } },
     // "Added to GOSI" was one tick on the payroll list. As a document it is a record with a number,
     // an authority and a date, which is what anyone asking "is this employee registered?" needs.
     { id: "gosi_doc", type: "issue_document", label: "GOSI Employee Registration",
@@ -520,14 +712,47 @@ async function main() {
     // trunk, ahead of the contract, rather than in the parallel block ten nodes later where the Iqama
     // had already been issued against a policy that did not exist.
     e("d_hiring", "insurance_task", "saudi"),
-    e("d_hiring", "visa_apply", "new_hire"),
+    e("d_hiring", "visa_auth", "new_hire"),
     e("d_hiring", "qiwa_req", "transfer"),
     e("d_hiring", "hold", "else"),
     e("hold", "d_hiring"),                    // fixed by a person, then asked again
 
-    e("visa_apply", "visa_doc"),
+    // The pre-visa sequence, in the order the government requires it. Authorisation before
+    // verification before medical before application: each one is a precondition of the next, and
+    // the verification in the middle is the one that cannot be done later at all.
+    e("visa_auth", "d_quota"),
+    e("d_quota", "prof_verify", "authorised"),
+    // No quota is not a refusal — it is a wait for a band or a quota request, and the file stays
+    // open at the desk that can chase it.
+    e("d_quota", "visa_auth", "no_quota"),
+    e("d_quota", "gov_stop", "refused"),
+    e("d_quota", "visa_auth", "else"),
+
+    e("prof_verify", "d_verify"),
+    e("d_verify", "medical_wafid", "verified"),
+    e("d_verify", "medical_wafid", "not_required"),
+    e("d_verify", "gov_stop", "rejected"),
+    e("d_verify", "prof_verify", "else"),
+
+    e("medical_wafid", "d_wafid"),
+    e("d_wafid", "visa_apply", "fit"),
+    e("d_wafid", "medical_wafid", "repeat"),
+    e("d_wafid", "gov_stop", "unfit"),
+    e("d_wafid", "medical_wafid", "else"),
+
+    e("visa_apply", "d_visa"),
+    e("d_visa", "visa_doc", "issued"),
+    e("d_visa", "visa_apply", "more_info"),   // the file goes back to the officer, not forward
+    e("d_visa", "gov_stop", "rejected"),
+    e("d_visa", "visa_apply", "else"),
     e("visa_doc", "arrival"),
-    e("arrival", "insurance_task"),
+
+    e("arrival", "d_arrival"),
+    e("d_arrival", "insurance_task", "cleared"),
+    e("d_arrival", "arrival", "not_arrived"),
+    e("d_arrival", "arrival", "retry_biometrics"),
+    e("d_arrival", "gov_stop", "medical_failed"),
+    e("d_arrival", "arrival", "else"),
 
     e("qiwa_req", "d_transfer"),
     e("d_transfer", "insurance_task", "approved"),
@@ -554,21 +779,37 @@ async function main() {
     e("d_permit", "permit_task", "expat_move"),
     e("d_permit", "split", "saudi"),
     e("d_permit", "permit_task", "else"),     // unknown: issue it and let a person correct the profile
-    e("permit_task", "permit_doc"),
+    e("permit_task", "d_permit_out"),
+    e("d_permit_out", "permit_doc", "issued"),
+    e("d_permit_out", "permit_task", "more_info"),
+    e("d_permit_out", "gov_stop", "refused"),
+    e("d_permit_out", "permit_task", "else"),
     // MHRSD issues the work licence and then directs the establishment to the Passport Office for the
     // residence permit — the permit is a precondition of the Iqama, and the graph had them the other
     // way round, so every expatriate run recorded an Iqama whose real counterpart could not exist yet.
     e("permit_doc", "d_iqama"),
     e("d_iqama", "iqama_task", "new_hire"),
-    e("iqama_task", "iqama_doc"),
+    e("iqama_task", "d_iqama_out"),
+    e("d_iqama_out", "iqama_doc", "issued"),
+    e("d_iqama_out", "iqama_task", "more_info"),
+    e("d_iqama_out", "gov_stop", "refused"),
+    e("d_iqama_out", "iqama_task", "else"),
     // A transfer keeps the Iqama it already has: the number and expiry stay, and the employer on it
     // is updated rather than a new one issued. Recording a fresh Iqama here would invent a document.
     e("d_iqama", "iqama_transfer", "transfer"),
-    e("iqama_transfer", "iqama_doc"),
+    e("iqama_transfer", "d_iqama_tr"),
+    e("d_iqama_tr", "iqama_doc", "updated"),
+    e("d_iqama_tr", "gov_stop", "refused"),
+    e("d_iqama_tr", "iqama_transfer", "else"),
     e("d_iqama", "split", "else"),
     e("iqama_doc", "split"),
     e("split", "payroll"), e("split", "access"), e("split", "assets"),
-    e("payroll", "gosi_doc"), e("gosi_doc", "join"),
+    e("payroll", "d_gosi"),
+    e("d_gosi", "gosi_doc", "registered"),
+    e("d_gosi", "payroll", "pending"),
+    e("d_gosi", "payroll", "failed"),        // stays inside the block — see d_gosi
+    e("d_gosi", "payroll", "else"),
+    e("gosi_doc", "join"),
     e("access", "join"), e("assets", "join"),
     e("join", "joined"),
 
@@ -597,6 +838,8 @@ async function main() {
     e("confirm_appr", "notify", "approve"),
     e("confirm_appr", "end_term", "reject"),
     e("notify", "end_ok"),
+
+    e("gov_stop", "end_gov_stop"),
   ];
 
   const graph = { nodes, edges };
