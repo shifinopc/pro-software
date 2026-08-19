@@ -336,6 +336,32 @@
   .gc-act{opacity:0;transition:opacity .12s;}
   [style*="border-left:3px solid"]:hover .gc-act,.gc-act:focus{opacity:1;}
   .fm-modal{display:flex;flex-direction:column;max-height:90vh;overflow:hidden;}
+  /* DIALOG MOTION.
+     The card arrives with a small rise and settle rather than a bounce — a spring on something you
+     are about to type into reads as unsteady. The step change is what the motion is really for: the
+     two steps are the same card, so without it the content simply teleports and it is not obvious
+     anything moved. Each step slides in from the side it came from, which is the direction the Back
+     and Next buttons imply. */
+  @keyframes fmRise{from{opacity:0;transform:translateY(10px) scale(.985);}to{opacity:1;transform:none;}}
+  @keyframes fmStepIn{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
+  @keyframes fmStepBack{from{opacity:0;transform:translateX(-14px);}to{opacity:1;transform:none;}}
+  .fm-rise{animation:fmRise .26s cubic-bezier(.22,1,.36,1) both;}
+  .fm-step{animation:fmStepIn .24s cubic-bezier(.22,1,.36,1) both;}
+  .fm-step-back{animation:fmStepBack .24s cubic-bezier(.22,1,.36,1) both;}
+  /* The fields arrive a beat after the card, top-down, so the eye lands on the first one. Six is
+     enough for this form; anything past it simply appears with the rest rather than trailing. */
+  .fm-stagger > *{animation:fmRise .3s cubic-bezier(.22,1,.36,1) both;}
+  .fm-stagger > *:nth-child(1){animation-delay:.02s;}
+  .fm-stagger > *:nth-child(2){animation-delay:.05s;}
+  .fm-stagger > *:nth-child(3){animation-delay:.08s;}
+  .fm-stagger > *:nth-child(4){animation-delay:.11s;}
+  .fm-stagger > *:nth-child(5){animation-delay:.14s;}
+  .fm-stagger > *:nth-child(6){animation-delay:.17s;}
+  /* Motion is decoration here: every one of these is an entrance, so removing them costs nothing
+     but the flourish. */
+  @media (prefers-reduced-motion:reduce){
+    .fm-rise,.fm-step,.fm-step-back,.fm-stagger > *{animation:none;}
+  }
   .fm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:20px 26px 15px;border-bottom:1px solid #F0EDF6;flex-shrink:0;}
   /* The one scrolling region. Header and footer stay put, so the primary action is
      never scrolled off the bottom of a long form. */
@@ -10326,19 +10352,19 @@
     </div>
   </sc-if>
 
-  <sc-if value="{{ ntOpen }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ ntClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ ntStop }}" data-nt-panel="1" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 30px 70px rgba(38,7,77,.3); animation:popIn .22s cubic-bezier(.16,1,.3,1) both;">
+  <sc-if value="{{ tmOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ tmClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ tmStop }}" data-nt-panel="1" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 30px 70px rgba(38,7,77,.3); animation:popIn .22s cubic-bezier(.16,1,.3,1) both;">
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:20px 24px 0;">
           <div>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">{{ ntTitle }}</div>
-            <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ ntSub }}</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">{{ tmTitle }}</div>
+            <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ tmSub }}</div>
           </div>
-          <div onClick="{{ ntClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+          <div onClick="{{ tmClose }}" title="Close" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
         <div class="fm-body">
           <div><label class="fm-lab">Team name *</label>
-            <input value="{{ ntName }}" onInput="{{ setNtName }}" placeholder="{{ ntPlaceholder }}" class="fm-inp"></div>
+            <input value="{{ tmName }}" onInput="{{ setTmName }}" placeholder="{{ tmPlaceholder }}" class="fm-inp"></div>
           <div style="margin-top:13px;"><label class="fm-lab">Team leader</label>
             <div class="fm-selwrap" style="z-index:40;">
               <!-- Boxed like the name field above it. .fm-sel is a bare flex row — it is reused as a
@@ -10365,13 +10391,13 @@
             </div>
             <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">A team with no leader keeps working and stops being overseen, so this screen will flag it until one is set.</div>
           </div>
-          <sc-if value="{{ ntHasErr }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:12px; font-size:11.5px; font-weight:600; color:#C0353A; background:#FEECEC; border-radius:10px; padding:9px 12px; line-height:1.5;">{{ ntErr }}</div>
+          <sc-if value="{{ tmHasErr }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; font-size:11.5px; font-weight:600; color:#C0353A; background:#FEECEC; border-radius:10px; padding:9px 12px; line-height:1.5;">{{ tmErr }}</div>
           </sc-if>
         </div>
         <div style="display:flex; justify-content:flex-end; gap:9px; align-items:center; padding:0 24px 20px;">
-          <span onClick="{{ ntClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
-          <button onClick="{{ ntSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create team</button>
+          <span onClick="{{ tmClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <button onClick="{{ tmSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create team</button>
         </div>
       </div>
     </div>
@@ -12157,7 +12183,7 @@
            and foot are pinned now and only .fm-body scrolls — which is also the box _placeDropdowns
            measures against, so a list opening near the footer flips above its field instead of being
            clipped by it. -->
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3);">
         <!-- Progress, flush to the top edge: two segments for two steps. It was two floating bars
              below the title, which read as decoration rather than as where you are. -->
         <div style="display:flex; gap:2px; height:3px; flex-shrink:0; overflow:hidden; border-radius:20px 20px 0 0;">
@@ -12177,6 +12203,7 @@
 
           <!-- Step 1: kind of work -->
           <sc-if value="{{ ntStep1 }}" hint-placeholder-val="{{ true }}">
+            <div class="fm-step-back">
             <div class="fm-combo">
               <input value="{{ ntKindQuery }}" onChange="{{ setNtKindQuery }}" placeholder="Search {{ ntKindCount }} workflows…" class="fm-inp" style="padding-left:36px;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
@@ -12199,10 +12226,12 @@
               </sc-for>
               <sc-if value="{{ ntKindEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:26px; text-align:center; font-size:12px; color:#A9A6B4;">No workflow matches “{{ ntKindQuery }}”.</div></sc-if>
             </div>
+            </div>
           </sc-if>
 
           <!-- Step 2: subject & details -->
           <sc-if value="{{ ntStep2 }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-step">
             <!-- What this will do, before the fields ask anything: which workflow, what it issues,
                  and whose record it lands on. -->
             <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; background:#FBF7FF; border:1px solid #EEE0FF; border-radius:12px; padding:10px 13px;">
@@ -12211,7 +12240,7 @@
               <span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">Subject: {{ ntSubjectKind }}</span>
             </div>
 
-            <div class="fm-grid">
+            <div class="fm-grid fm-stagger">
               <div class="fm-wide">
                 <label class="fm-lab">Task title <span class="fm-req">*</span></label>
                 <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" class="fm-inp">
@@ -12281,25 +12310,6 @@
                 <input value="{{ ntDue }}" onChange="{{ setNtDue }}" type="date" class="fm-inp">
               </div>
 
-              <sc-if value="{{ ntDerivedDocShow }}" hint-placeholder-val="{{ false }}">
-                <div class="fm-wide">
-                  <label class="fm-lab">Government portal <span class="fm-req">*</span></label>
-                  <div class="fm-selwrap">
-                    <div data-dd data-open="{{ ddNtPortalOpen }}" onClick="{{ ddNtPortalToggle }}" class="fm-inp fm-sel">
-                      <span>{{ ntPortalRef }}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
-                    </div>
-                    <sc-if value="{{ ddNtPortalOpen }}" hint-placeholder-val="{{ false }}">
-                      <div data-dd data-hidescroll="true" class="fm-dd">
-                        <sc-for list="{{ ddNtPortalOptions }}" as="o" hint-placeholder-count="3">
-                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                        </sc-for>
-                      </div>
-                    </sc-if>
-                  </div>
-                </div>
-              </sc-if>
-
               <div>
                 <label class="fm-lab">Priority</label>
                 <div class="fm-selwrap">
@@ -12316,6 +12326,7 @@
                   </sc-if>
                 </div>
               </div>
+            </div>
             </div>
           </sc-if>
         </div>
@@ -28033,7 +28044,7 @@ class Component extends DCLogic {
           // A form, not a one-field prompt. The leader is asked for HERE because a team created
           // without one is immediately in the state this screen warns about — the amber "nobody
           // leads this" banner appeared the moment the old prompt returned.
-          tmAdd: () => this.setState({ ntOpen: true, ntName: '', ntLead: '', ntErr: '' }),
+          tmAdd: () => this.setState({ tmOpen: true, tmName: '', tmLead: '', tmErr: '' }),
         };
       })(),
       // ── Set target dialog ─────────────────────────────────────────────────────────────────
@@ -28872,7 +28883,7 @@ class Component extends DCLogic {
 
       // ── New team ──────────────────────────────────────────────────────────────────────────
       ...(() => {
-        const open9 = !!this.state.ntOpen;
+        const open9 = !!this.state.tmOpen;
         // The SAME rule the list uses, phrased the same way round. It used to ask the opposite
         // question and answer with a word the server has never accepted, so the PRO tab could
         // open this dialog, name the team, and never create one — sales worked, which is why it
@@ -28881,37 +28892,37 @@ class Component extends DCLogic {
         const word9 = kind9 === 'sales' ? 'sales' : 'PRO';
         const staff9 = (Array.isArray(this.state.usersData) ? this.state.usersData : [])
           .filter(u => u.type !== 'portal' && u.status === 'active');
-        const close9 = () => this.setState({ ntOpen: false, ntErr: '' });
+        const close9 = () => this.setState({ tmOpen: false, tmErr: '' });
         return {
-          ntOpen: open9,
-          ntClose: close9,
-          ntStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
-          ntTitle: 'New ' + word9 + ' team',
-          ntSub: 'Pick a leader now \u2014 add members after.',
-          ntName: this.state.ntName || '',
-          ntPlaceholder: kind9 === 'sales' ? 'e.g. Riyadh Sales' : 'e.g. Visas & Immigration',
-          setNtName: (e) => this.setState({ ntName: e.target.value, ntErr: '' }),
-          ntErr: this.state.ntErr || '',
-          ntHasErr: !!this.state.ntErr,
+          tmOpen: open9,
+          tmClose: close9,
+          tmStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+          tmTitle: 'New ' + word9 + ' team',
+          tmSub: 'Pick a leader now \u2014 add members after.',
+          tmName: this.state.tmName || '',
+          tmPlaceholder: kind9 === 'sales' ? 'e.g. Riyadh Sales' : 'e.g. Visas & Immigration',
+          setTmName: (e) => this.setState({ tmName: e.target.value, tmErr: '' }),
+          tmErr: this.state.tmErr || '',
+          tmHasErr: !!this.state.tmErr,
           // A PLAIN picker, not a search-as-you-type field. This firm has a handful of staff, and
           // a filter box over seven names is furniture — the same reason the leads grouping picker
           // has none. The searchable combo stays on the team card, where it is choosing out of the
           // whole staff directory rather than from a list you can read at a glance.
           ...mkDd('ddNtLead', staff9.map(u => ({ value: u.id, label: u.name })),
-            this.state.ntLead || '', (v) => this.setState({ ntLead: v, ntErr: '' }), 'Nobody yet'),
+            this.state.tmLead || '', (v) => this.setState({ tmLead: v, tmErr: '' }), 'Nobody yet'),
           // Grey until somebody is picked, so "Nobody yet" cannot be misread as a name.
-          ddNtLeadColor: this.state.ntLead ? '#1A1523' : '#A9A6B4',
-          ntSave: () => {
-            const nm = String(this.state.ntName || '').trim();
-            if (!nm) return this.setState({ ntErr: 'Give the team a name \u2014 it goes on reports.' });
-            const lead = this.state.ntLead || '';
+          ddNtLeadColor: this.state.tmLead ? '#1A1523' : '#A9A6B4',
+          tmSave: () => {
+            const nm = String(this.state.tmName || '').trim();
+            if (!nm) return this.setState({ tmErr: 'Give the team a name \u2014 it goes on reports.' });
+            const lead = this.state.tmLead || '';
             const API = this._apiBase || 'http://localhost:4100';
             const tok = localStorage.getItem('stimespro:token');
             const hdr = { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) };
             fetch(API + '/api/teams', { method: 'POST', headers: hdr, body: JSON.stringify({ name: nm, kind: kind9 }) })
               .then(r => r.json().then(j => ({ ok: r.ok, j })))
               .then(({ ok, j }) => {
-                if (!ok) return this.setState({ ntErr: (j && j.error) || 'Could not create that team' });
+                if (!ok) return this.setState({ tmErr: (j && j.error) || 'Could not create that team' });
                 // The lead is a SECOND call, because /api/teams takes only a name and a kind. If it
                 // fails the team still exists and says it has no lead, which is the truth and is
                 // exactly what the card's amber banner is for — better than rolling back a team
@@ -28921,7 +28932,7 @@ class Component extends DCLogic {
                 fetch(API + '/api/teams/' + j.id + '/lead', { method: 'POST', headers: hdr, body: JSON.stringify({ userId: lead }) })
                   .then(() => done()).catch(() => done());
               })
-              .catch(() => this.setState({ ntErr: 'Server unreachable \u2014 nothing was created' }));
+              .catch(() => this.setState({ tmErr: 'Server unreachable \u2014 nothing was created' }));
           },
         };
       })(),
