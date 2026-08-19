@@ -14,6 +14,13 @@
  * that asks for nothing. That is tested against a throwaway template pointing at a rule id that does
  * not exist, which is what a half-installed pack looks like.
  *
+ * The THIRD part is the same question about fields. A step's captures moved into field sets for
+ * the same reason, and they fail the same silent way: a set that resolves to nothing leaves a step
+ * asking no questions, which a probe walking the workflow would sail straight through, because a
+ * form with no required fields is a form you can submit. So the intake step's captures are checked
+ * against the SET, by variable name, and a run is then made to prove the fields are really enforced
+ * rather than merely displayed.
+ *
  * Own run, own user, own template. Deletes everything it makes.
  */
 import { prisma } from "../src/db.js";
@@ -108,6 +115,21 @@ async function main() {
   }
   console.log(`steps whose list comes from a country rule:  ${expected.size}`);
 
+  // The same, for what a step RECORDS.
+  const sets = await prisma.fieldSet.findMany({ where: { country: "SA", retired: false } });
+  const bySet = new Map(sets.map(r => [r.id, r]));
+  const expectedFields = new Map<string, { set: string; vars: string[]; inline: string[] }>();
+  for (const n of nodes) {
+    const sid = n?.config?.captureRuleId;
+    if (!sid) continue;
+    const set = bySet.get(sid);
+    if (!set) { fail(`step "${n.id}" points at field set ${sid}, which does not exist`); continue; }
+    const rws: any[] = (set.rows as any[]) ?? [];
+    const vars = rws.filter(r => !(r.conditions ?? []).length).flatMap(r => (r.fields ?? []).map((f: any) => String(f.var)));
+    expectedFields.set(n.id, { set: set.name, vars, inline: ((n.config?.captures ?? []) as any[]).map(c => String(c.var)) });
+  }
+  console.log(`steps whose fields come from a field set:   ${expectedFields.size}`);
+
   // ── walk one of each kind of hire and look at what every step actually asked for ───────────────
   //
   // Two runs, because no single one reaches all thirteen: a transfer never applies for a visa, and a
@@ -115,6 +137,7 @@ async function main() {
   // rules untested while reporting a clean pass.
   const co = await prisma.company.findFirst({ select: { id: true, name: true } });
   const seen = new Map<string, string[]>();
+  const seenFields = new Map<string, string[]>();
 
   for (const hiringType of ["expat_new_hire", "expat_transfer"]) {
     const started = await call("POST", "/api/workflow/instances", tok, {
@@ -130,6 +153,9 @@ async function main() {
       for (const t of tasks) {
         const items: any[] = Array.isArray(t.checklist) ? (t.checklist as any[]) : [];
         if (expected.has(t.nodeId) && !seen.has(t.nodeId)) seen.set(t.nodeId, items.map(x => String(x.key)));
+        if (expectedFields.has(t.nodeId) && !seenFields.has(t.nodeId)) {
+          seenFields.set(t.nodeId, ((t.captures as any[]) ?? []).map(c => String(c.var)));
+        }
         const checklistState: any = {};
         for (const x of items) checklistState[x.key ?? x.label] = { received: true, verified: true };
         const r = await call("POST", `/api/workflow/tasks/${t.id}/complete`, tok, {
@@ -153,6 +179,48 @@ async function main() {
   if (missed.length) { console.log(`
   never reached: ${missed.join(", ")}`); fail(`${missed.length} rule-backed step(s) were never exercised, so their lists are untested`); }
   if (!seen.size) fail("the runs reached none of the rule-backed steps, so nothing here was actually tested");
+
+  // ── the fields, from the set ──────────────────────────────────────────────────────────────────
+  console.log("");
+  for (const [nodeId, got] of seenFields) {
+    const want = expectedFields.get(nodeId)!;
+    const ok = want.vars.length > 0 && want.vars.every(v => got.includes(v));
+    console.log(`  ${nodeId.padEnd(15)} ${String(got.length).padStart(2)} field(s)  ${ok ? "from" : "NOT from"} "${want.set}"`);
+    if (!got.length) fail(`"${nodeId}" handed somebody a form with NO fields — the set resolved to nothing and the step records nothing at all`);
+    else if (!ok) fail(`"${nodeId}" asked for ${got.join(", ")} where the set holds ${want.vars.join(", ")}`);
+  }
+  if (!seenFields.size) fail("no step recording from a field set was reached, so nothing about them was tested");
+
+  // AND THE FIELDS ARE ENFORCED, not merely displayed. A form resolved from a set that the engine
+  // then ignores is indistinguishable from one it honours, right up until a run reaches the end
+  // with nothing recorded on it — so a step is deliberately completed with a required field missing
+  // and with a select answered outside its own list.
+  const probeSet = [...expectedFields.keys()][0];
+  if (probeSet) {
+    const r3 = await call("POST", "/api/workflow/instances", tok, { templateId: tpl!.id, title: `${TITLE} enforcement` });
+    const id3 = r3.body?.id ?? r3.body?.instance?.id;
+    const t3 = id3 ? await prisma.workflowTask.findFirst({ where: { instanceId: id3, status: "active" } }) : null;
+    if (!t3) fail("could not open a run to test that the fields are enforced");
+    else {
+      const caps: any[] = (t3.captures as any[]) ?? [];
+      const req = caps.find(c => c.required !== false);
+      const sel = caps.find(c => String(c.type) === "select" && String(c.options ?? "").trim());
+      const full = answer(caps, "expat_new_hire");
+
+      const missing = { ...full }; if (req) delete missing[String(req.var)];
+      const a = await call("POST", `/api/workflow/tasks/${t3.id}/complete`, tok, { variables: missing });
+      console.log("");
+      console.log(`a required field from the set is enforced:  ${a.status >= 400 ? "YES" : "NO — the step completed without it"}`);
+      if (req && a.status < 400) fail(`"${req.var}" is marked required in the set and the step completed without it`);
+
+      if (sel) {
+        const bad = { ...full, [String(sel.var)]: "definitely-not-an-option" };
+        const b = await call("POST", `/api/workflow/tasks/${t3.id}/complete`, tok, { variables: bad });
+        console.log(`its choices are a closed list:             ${b.status >= 400 ? "YES" : "NO — any value was accepted"}`);
+        if (b.status < 400) fail(`"${sel.var}" accepted a value outside ${sel.options} — a decision reading it would fall through to else`);
+      }
+    }
+  }
 
   // ── and when the rule did not come across ─────────────────────────────────────────────────────
   const donor = nodes.find(n => expected.has(n.id));

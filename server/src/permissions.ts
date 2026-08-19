@@ -206,6 +206,7 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/workflow/instances", "Tasks"],
   ["/api/workflow/templates", "Workflow"],
   ["/api/workflow/checklist-rules", "Workflow"],
+  ["/api/workflow/field-sets", "Workflow"],
   ["/api/assignment-rules", "Workflow"],
   ["/api/prereq-check", "Workflow"],
   ["/api/team-performance", "Tasks"],

@@ -1007,6 +1007,43 @@ async function main() {
     console.log(`${found ? "updated" : "created"} checklist rule "${ruleName}" (${items.length} items) → ${nodeId}`);
   }
 
+  // ── the questions that belong to the market, not to the workflow ─────────────────────────────
+  //
+  // Same move as the checklist rules above, one layer in: those decide what a step COLLECTS, these
+  // decide what it RECORDS. The intake step asks eleven questions and every one of them was written
+  // into the graph, so adding a twelfth — a Qiwa profession code, an emergency contact, whatever the
+  // Ministry asks for next — meant editing this script and redeploying. That is not a job an
+  // operations lead can do, and it is not a workflow change: the questions Saudi Arabia expects of a
+  // new hire belong to Saudi Arabia.
+  //
+  // So they become a FIELD SET, edited on its own screen and carried in the country pack, resolved
+  // by `captureRuleId` → `captureRuleKey` on export exactly as the checklist rules are.
+  //
+  // ONLY THE INTAKE STEP. The rest of the workflow records government outcomes — a visa number, an
+  // Iqama expiry, whether Wafid passed somebody fit — and those are bound tightly to the decision
+  // immediately after them. Moving those into shared sets would put a branch's input one indirection
+  // away from the branch, to no benefit, since nothing else asks the same questions.
+  //
+  // The step keeps its own captures as the documented fallback, same contract: resolveCaptures uses
+  // the set only when it yields fields, so an installation where the set did not arrive still asks
+  // its eleven questions rather than presenting a blank form that can be submitted.
+  const FIELD_SETS: [string, string][] = [
+    ["profile", "Employee intake"],
+  ];
+  for (const [nodeId, setName] of FIELD_SETS) {
+    const node = nodes.find(n => n.id === nodeId);
+    const caps = (node?.config?.captures ?? []) as any[];
+    if (!node || !caps.length) { console.log(`field set skipped — "${nodeId}" records nothing`); continue; }
+    const packKey = `sa.fieldset.${slugOf(setName)}`;
+    const rows = [{ conditions: [], fields: caps.map(c => ({ ...c })) }];
+    const found = await prisma.fieldSet.findFirst({ where: { OR: [{ packKey }, { name: setName, country: COUNTRY }] } });
+    const set = found
+      ? await prisma.fieldSet.update({ where: { id: found.id }, data: { name: setName, country: COUNTRY, packKey, rows: rows as any, retired: false } })
+      : await prisma.fieldSet.create({ data: { name: setName, country: COUNTRY, packKey, rows: rows as any } });
+    node.config = { ...(node.config ?? {}), captureSource: "rule", captureRuleId: set.id };
+    console.log(`${found ? "updated" : "created"} field set "${setName}" (${caps.length} fields) → ${nodeId}`);
+  }
+
   const graph = { nodes, edges };
   // Rename first. Matching on the new name alone would miss the row created under the old one and
   // create a second copy beside it — the same duplicate-on-rename trap the pack keys avoid.

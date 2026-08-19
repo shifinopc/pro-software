@@ -56,7 +56,7 @@ export type PackRow = { key: string; name: string; [k: string]: any };
 export type Pack = {
   pack: string; country: string; countryName: string; version: string;
   generatedAt?: string; contains?: string;
-  documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[];
+  documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[]; fieldSets?: PackRow[];
   workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
   pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[]; courierJobTypes?: PackRow[];
   appointmentTypes?: PackRow[]; courierStatuses?: PackRow[]; appointmentStatuses?: PackRow[];
@@ -79,6 +79,10 @@ export const KINDS = [
   { key: "govCenters", model: "govCenter", label: "authorities", one: "authority",
     fields: (r: any) => ({ name: r.name, sub: r.sub, color: r.color, bg: r.bg }) },
   { key: "checklistRules", model: "checklistRule", label: "checklist rules", one: "checklist rule",
+    fields: (r: any) => ({ name: r.name, rows: r.rows }) },
+  // What a step RECORDS, alongside what it collects. Same shape, same reason for travelling: a
+  // market's intake questions belong to the market, not to whoever last edited the graph.
+  { key: "fieldSets", model: "fieldSet", label: "field sets", one: "field set",
     fields: (r: any) => ({ name: r.name, rows: r.rows }) },
   { key: "workflowTemplates", model: "workflowTemplate", label: "workflow templates", one: "workflow",
     fields: (r: any) => ({ name: r.name, trigger: r.trigger, triggerConfig: r.triggerConfig, entityType: r.entityType, active: r.active, graph: r.graph }) },
@@ -379,12 +383,23 @@ async function wireReferences(pack: Pack, skipKeys: Set<string> = new Set()): Pr
     const next: any[] = [];
     for (const n of nodes) {
       const c = n?.config;
-      if (!c?.checklistRuleKey) { next.push(n); continue; }
-      const { checklistRuleKey, ...rest } = c;
-      const id = await idFor("checklistRule", checklistRuleKey);
+      if (!c?.checklistRuleKey && !c?.captureRuleKey) { next.push(n); continue; }
       touched = true;
-      if (!id) { unresolved.push(`workflow "${t.name}" step "${n.label ?? n.id}" → ${checklistRuleKey}`); next.push({ ...n, config: rest }); continue; }
-      next.push({ ...n, config: { ...rest, checklistRuleId: id } });
+      // Both references are resolved in one pass. Written as a loop rather than a second copy of
+      // the block because the copy is where the two would drift — a third reference added later
+      // gets carried by the same code or not at all.
+      const { checklistRuleKey, captureRuleKey, ...rest } = c;
+      const cfg: any = { ...rest };
+      for (const [key, model, prop] of [
+        [checklistRuleKey, "checklistRule", "checklistRuleId"],
+        [captureRuleKey, "fieldSet", "captureRuleId"],
+      ] as const) {
+        if (!key) continue;
+        const id = await idFor(model, key);
+        if (!id) { unresolved.push(`workflow "${t.name}" step "${n.label ?? n.id}" → ${key}`); continue; }
+        cfg[prop] = id;
+      }
+      next.push({ ...n, config: cfg });
     }
     if (touched) await prisma.workflowTemplate.update({ where: { id: tpl.id }, data: { graph: { ...g, nodes: next } } });
   }
@@ -482,14 +497,15 @@ async function planRemoval(country: string, candidates: Record<string, any[]>): 
         note(await prisma.task.count({ where: { govCenter: row.name } }), "tasks");
         note(await prisma.workflowTask.count({ where: { govCenter: row.name } }), "workflow steps");
         note(await prisma.siteCredential.count({ where: { govCenter: row.name } }), "stored credentials");
-      } else if (kind.model === "checklistRule") {
+      } else if (kind.model === "checklistRule" || kind.model === "fieldSet") {
         // Referenced from inside workflow graphs, so it has to be looked for there — and only in the
         // templates that will still be here afterwards.
+        const prop = kind.model === "checklistRule" ? "checklistRuleId" : "captureRuleId";
         const tpls = await prisma.workflowTemplate.findMany({ select: { id: true, graph: true } });
         const used = tpls.filter(t => {
           if (!survives("workflowTemplate", t.id)) return false;
           const nodes: any[] = Array.isArray((t.graph as any)?.nodes) ? (t.graph as any).nodes : [];
-          return nodes.some(n => n?.config?.checklistRuleId === row.id);
+          return nodes.some(n => n?.config?.[prop] === row.id);
         }).length;
         note(used, "workflow steps");
       }
@@ -667,10 +683,18 @@ async function resolveGraph(graph: any): Promise<any> {
   const next: any[] = [];
   for (const n of nodes) {
     const c = n?.config;
-    if (!c?.checklistRuleKey) { next.push(n); continue; }
-    const { checklistRuleKey, ...rest } = c;
-    const id = await idFor("checklistRule", checklistRuleKey);
-    next.push(id ? { ...n, config: { ...rest, checklistRuleId: id } } : { ...n, config: rest });
+    if (!c?.checklistRuleKey && !c?.captureRuleKey) { next.push(n); continue; }
+    const { checklistRuleKey, captureRuleKey, ...rest } = c;
+    const cfg: any = { ...rest };
+    if (checklistRuleKey) {
+      const id = await idFor("checklistRule", checklistRuleKey);
+      if (id) cfg.checklistRuleId = id;
+    }
+    if (captureRuleKey) {
+      const id = await idFor("fieldSet", captureRuleKey);
+      if (id) cfg.captureRuleId = id;
+    }
+    next.push({ ...n, config: cfg });
   }
   return { ...(graph ?? {}), nodes: next };
 }
@@ -830,7 +854,7 @@ export async function buildPack(
   const p = country.toLowerCase();
 
   const where = { country, retired: false };
-  const [docTypes, templates, services, centers, packages, checklists, bands, stages, sources, reasons,
+  const [docTypes, templates, services, centers, packages, checklists, fieldSets, bands, stages, sources, reasons,
          courierTypes, apptTypes, courierStatuses, apptStatuses, competitors, industries, campaigns, cancelReasons] = await Promise.all([
     prisma.documentType.findMany({ where }),
     prisma.workflowTemplate.findMany({ where }),
@@ -838,6 +862,7 @@ export async function buildPack(
     prisma.govCenter.findMany({ where }),
     prisma.package.findMany({ where }),
     prisma.checklistRule.findMany({ where }),
+    prisma.fieldSet.findMany({ where }),
     prisma.workforceBand.findMany({ where }),
     prisma.pipelineStage.findMany({ where }),
     prisma.leadSource.findMany({ where }),
@@ -876,6 +901,7 @@ export async function buildPack(
   const kCenters   = keep(centers,   "authority");
   const kPackages  = keep(packages,  "package");
   const kChecklists= keep(checklists,"checklist rule");
+  const kFieldSets = keep(fieldSets, "field set");
   const kBands     = keep(bands,     "workforce band");
   const kStages    = keep(stages,    "pipeline stage");
   const kSources   = keep(sources,   "lead source");
@@ -916,6 +942,7 @@ export async function buildPack(
   const tplKey = new Map(kTemplates.map(t => [t.id, keyOf(t, "workflow")]));
   const svcKey = new Map(kServices.map(s => [s.id, keyOf(s, "service")]));
   const chkKey = new Map(kChecklists.map(c => [c.id, keyOf(c, "checklist")]));
+  const fsKey  = new Map(kFieldSets.map(f => [f.id, keyOf(f, "fieldset")]));
 
   /**
    * Swap database ids inside a workflow graph for pack keys.
@@ -930,14 +957,22 @@ export async function buildPack(
       ...g,
       nodes: nodes.map((n: any) => {
         const c = n?.config;
-        if (!c || typeof c !== "object" || !c.checklistRuleId) return n;
-        const { checklistRuleId, ...rest } = c;
-        const key = chkKey.get(String(checklistRuleId));
-        if (!key) {
-          unresolved.push(`workflow "${tplName}" step "${n.label ?? n.id}" → checklist rule ${checklistRuleId} (not in this country)`);
-          return { ...n, config: rest };   // dropped deliberately, and reported — never left as a dead id
+        if (!c || typeof c !== "object" || (!c.checklistRuleId && !c.captureRuleId)) return n;
+        const { checklistRuleId, captureRuleId, ...rest } = c;
+        const cfg: any = { ...rest };
+        // An id is meaningless on another installation, so it is either translated to a stable key
+        // or dropped AND reported. Never left behind: a dead id looks like a working reference and
+        // resolves to nothing at run time, which is a step that silently asks for nothing.
+        for (const [id, map, keyProp, what] of [
+          [checklistRuleId, chkKey, "checklistRuleKey", "checklist rule"],
+          [captureRuleId, fsKey, "captureRuleKey", "field set"],
+        ] as const) {
+          if (!id) continue;
+          const key = map.get(String(id));
+          if (!key) { unresolved.push(`workflow "${tplName}" step "${n.label ?? n.id}" → ${what} ${id} (not in this country)`); continue; }
+          cfg[keyProp] = key;
         }
-        return { ...n, config: { ...rest, checklistRuleKey: key } };
+        return { ...n, config: cfg };
       }),
     };
   };
@@ -1013,6 +1048,11 @@ export async function buildPack(
     checklistRules: kChecklists.map(c => ({
       key: keyOf(c, "checklist"),
       name: c.name, rows: c.rows ?? [],
+    })),
+
+    fieldSets: kFieldSets.map(f => ({
+      key: keyOf(f, "fieldset"),
+      name: f.name, rows: f.rows ?? [],
     })),
 
     // Nationalisation bands. The install side already knew how to receive these; the exporter did
@@ -1133,6 +1173,11 @@ export async function buildPack(
   // A kind the installer expects but this pack has nothing for. Refused rather than written, because
   // the cost lands on whoever installs it — a country with no pipeline stages has nowhere to put a
   // deal, and they have no way to know the pack was the reason.
+  // FIELD SETS ARE NOT ON THIS LIST, deliberately. Everything here is something the installer
+  // expects of every market, and a country with none of it is a pack somebody built by mistake. A
+  // market can perfectly well record its intake questions on the steps themselves, so demanding a
+  // field set would refuse a legitimate export — and would refuse every pack built before they
+  // existed.
   const empty = ([
     ["document types", pack.documentTypes], ["workflow templates", pack.workflowTemplates],
     ["services", pack.serviceItems], ["authorities", pack.govCenters],

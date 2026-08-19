@@ -1644,6 +1644,33 @@ model ChecklistRule {
   @@index([packKey])
 }
 
+// A named set of FIELDS a step records, managed in the app rather than written into the workflow.
+//
+// The same argument as ChecklistRule, one layer in: what a step ASKS FOR was baked into the step, so
+// adding a field meant editing the graph — and editing the graph is not something an operations lead
+// can do. A set lives here, is edited on its own screen, and travels in a country pack, so one change
+// reaches every step pointed at it.
+//
+// `rows` has the same shape as ChecklistRule.rows — [{ conditions, fields }] — deliberately, so both
+// halves share one rule syntax and one evaluator. A row with no conditions is the base set; matching
+// rows merge, keyed by variable name, later rows winning. That means a set can ask a transfer for the
+// current employer and a new hire for the passport without two sets or two steps.
+//
+// Retired rather than deleted by a pack uninstall, and packModified once a human edits it, matching
+// every other packable row.
+model FieldSet {
+  id           String  @id @default(cuid())
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+  country      String?
+  name         String
+  rows         Json?   @default("[]")
+
+  @@index([packKey])
+}
+
 model WorkflowLog {
   id         String           @id @default(cuid())
   instance   WorkflowInstance @relation(fields: [instanceId], references: [id])

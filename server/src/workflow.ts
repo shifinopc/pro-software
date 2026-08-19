@@ -5,6 +5,7 @@
 // completed via completeTask(), which resumes the frontier from that node.
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { evaluateFieldSet, normalizeFields } from "./fieldsets.js";
 import { homeCurrency, homeCountry } from "./orgsettings.js";
 import { nextNumber } from "./sequence.js";
 import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } from "./notify.js";
@@ -161,6 +162,27 @@ async function preTickFromRequest(requestId: string | undefined, items: Checklis
 }
 
 /**
+ * The values a select will accept, whatever shape they were written in.
+ *
+ * This used to be `String(cap.options).split(",")`, which is exactly right for a step's own captures
+ * — they store "saudi_national,expat_new_hire" — and silently catastrophic for anything storing a
+ * LIST. `String([{value:"a"},{value:"b"}])` is "[object Object],[object Object]", so the allowed set
+ * becomes two impossible strings and every correct answer is refused as invalid. Nothing hit it only
+ * because no document type has yet been given a dropdown; with field sets there are now three
+ * producers, and the shape they agree on should not be the thing standing between an officer and
+ * completing a step.
+ */
+function allowedOptions(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((o: any) => (o && typeof o === "object" ? String(o.value ?? o.label ?? "") : String(o ?? "")))
+      .map(x => x.trim())
+      .filter(Boolean);
+  }
+  return String(raw ?? "").split(",").map(x => x.trim()).filter(Boolean);
+}
+
+/**
  * Which run variable a Document Type field feeds. `issue_document` reads these names when it writes
  * the renewed document back to Compliance, so a field marked "Expiry date" on the type lands in the
  * variable the issue step actually looks at — and the renewal updates the expiry instead of silently
@@ -177,7 +199,10 @@ const FIELD_PURPOSE_VAR: Record<string, string> = {
 /**
  * Capture fields for a step.
  *
- * Static by default. With `captureSource: "document_type"` the step instead inherits the fields
+ * Static by default. With `captureSource: "rule"` the step takes them from a FIELD SET, which is
+ * managed on its own screen and travels in the country pack — so adding a question to the intake
+ * form is an afternoon's configuration rather than a workflow edit. With `captureSource:
+ * "document_type"` the step instead inherits the fields
  * configured on the DOCUMENT TYPE the run is about (vars.docType) — so one generic step asks for
  * Iqama Number / New Expiry Date on an Iqama run and for the work-visa fields on a work-visa run,
  * without a template per document type.
@@ -201,6 +226,17 @@ function stepDocType(config: any, vars: Record<string, any>): string {
 
 async function resolveCaptures(config: any, vars: Record<string, any>): Promise<any[] | undefined> {
   const c = config ?? {};
+  // A FIELD SET, managed on its own screen and carried by the country pack. Same contract as a
+  // checklist rule: consulted first, and only used when it actually yields fields, so a step whose
+  // set did not come across in a half-installed pack still asks its own questions rather than
+  // presenting a person with an empty form and accepting it.
+  if (c.captureSource === "rule" && c.captureRuleId) {
+    try {
+      const set = await prisma.fieldSet.findUnique({ where: { id: String(c.captureRuleId) } });
+      const out = evaluateFieldSet((set as any)?.rows, vars).fields;
+      if (out.length) return out;
+    } catch { /* fall through to the step's own fields */ }
+  }
   if (c.captureSource === "document_type") {
     const docType = stepDocType(c, vars);
     if (docType) {
@@ -1356,8 +1392,8 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       // A select is a closed list, and it was not being treated as one: any string was accepted, so
       // a decision reading it fell through to `else`. A value outside the list is a typo or a
       // tampered request, and both should be refused where they enter rather than routed on.
-      if (String(cap.type) === "select" && String(cap.options ?? "").trim()) {
-        const allowed = String(cap.options).split(",").map((o: string) => o.trim()).filter(Boolean);
+      if (String(cap.type) === "select") {
+        const allowed = allowedOptions(cap.options);
         if (allowed.length && !allowed.includes(String(raw).trim())) {
           throw new Error(`${cap.label || cap.var}: "${raw}" is not one of ${allowed.join(", ")}`);
         }
@@ -2271,6 +2307,72 @@ R.delete("/checklist-rules/:id", requireAuth, requireStaff, requireWriteRole, as
     res.status(204).end();
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+/**
+ * Who is still pointing at a field set. Same job as checklistRuleUsage, and it exists for the same
+ * reason: the screen should be able to say what a change will affect BEFORE somebody makes it,
+ * rather than only at the moment a delete is refused.
+ */
+async function fieldSetUsage(): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (const t of await prisma.workflowTemplate.findMany({ select: { name: true, graph: true } })) {
+    for (const n of (((t.graph as any)?.nodes ?? []) as any[])) {
+      const id = String(n?.config?.captureRuleId ?? "").trim();
+      if (id) out.set(id, [...(out.get(id) ?? []), `Workflow "${t.name}" → step "${n.label ?? n.id}"`]);
+    }
+  }
+  return out;
+}
+
+// Field sets (what a step records) CRUD — admin/super_admin for writes, mirroring checklist rules.
+R.get("/field-sets", requireAuth, requireStaff, async (_req, res) => {
+  const [sets, usage] = await Promise.all([
+    prisma.fieldSet.findMany({ where: { retired: false }, orderBy: { name: "asc" } }),
+    fieldSetUsage(),
+  ]);
+  res.json(sets.map(r => ({ ...r, usedBy: usage.get(r.id) ?? [] })));
+});
+R.post("/field-sets", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const { name, rows, country } = req.body ?? {};
+    if (!name) return res.status(400).json({ error: "Name required" });
+    // Defaulted rather than left null, for the same reason a checklist rule is: a set with no
+    // country shows up in every market's pickers and cannot travel in a pack.
+    const c = String(country ?? "").trim().toUpperCase() || (await homeCountry());
+    res.status(201).json(await prisma.fieldSet.create({ data: { name: String(name), country: c, rows: normalizeRows(rows) as any } }));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+R.put("/field-sets/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const { name, rows, country } = req.body ?? {};
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (rows !== undefined) data.rows = normalizeRows(rows);
+    if (country !== undefined) data.country = String(country ?? "").trim().toUpperCase() || null;
+    data.packModified = true;
+    res.json(await prisma.fieldSet.update({ where: { id: req.params.id }, data }));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+R.delete("/field-sets/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const used = (await fieldSetUsage()).get(id) ?? [];
+    // A step whose fields silently became empty is completable by pressing the button, which is how
+    // a run reaches the end with nothing recorded on it. Refuse, and name what to fix first.
+    if (used.length) return res.status(409).json({ error: `Still in use by ${used.join(", ")}. Point those somewhere else first.`, usedBy: used });
+    await prisma.fieldSet.delete({ where: { id } });
+    res.status(204).end();
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/** Rows in, rows out, with every field put through one definition of what a field is. */
+function normalizeRows(raw: unknown): any[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as any[]).map(r => ({
+    conditions: Array.isArray(r?.conditions) ? r.conditions : [],
+    fields: normalizeFields(r?.fields),
+  }));
+}
+
 // Delegate a workflow step to a specific person (admin only). Clears the role gate so the named person owns it.
 R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;

@@ -5609,6 +5609,133 @@
         </section>
       </div></sc-if>
 
+      <!-- ══ Field Sets ══════════════════════════════════════════════════════════════════════════
+           What a step RECORDS, as against what it collects. Same rows-and-conditions shape as a
+           checklist rule, and on purpose: a group with no conditions is what everybody is asked,
+           and the exceptions sit in groups of their own, so one set can ask a transfer for their
+           current employer without a second step existing.
+
+           The variable name has its own column because it is not decoration — decisions, cross-field
+           rules, statutory clocks and notification templates all match on that exact word. -->
+      <sc-if value="{{ showFieldSets }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Field Sets">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CONFIGURE</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Field Sets</h1>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">What a step asks somebody to record — kept here, so adding a question is not a workflow edit</div>
+          </div>
+          <sc-if value="{{ fsCanWrite }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ fsNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">New field set</button>
+          </sc-if>
+        </section>
+
+        <sc-if value="{{ fsEmpty }}" hint-placeholder-val="{{ false }}">
+          <div class="pg-card" style="padding:34px; text-align:center;">
+            <div style="font-size:15px; font-weight:700;">No field sets yet</div>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:6px; line-height:1.6;">A step can hold its own fields perfectly well. A set is worth making when the same questions are asked in more than one place, or when they belong to the market rather than to this workflow — those travel in the country pack.</div>
+          </div>
+        </sc-if>
+
+        <div style="display:grid; grid-template-columns:minmax(0,260px) minmax(0,1fr); gap:18px; align-items:start;">
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <sc-for list="{{ fsList }}" as="L" hint-placeholder-count="3">
+              <div onClick="{{ L.pick }}" style="background:{{ L.cardBg }}; border:1.5px solid {{ L.cardBd }}; border-radius:14px; padding:13px 15px; cursor:pointer;" style-hover="border-color:#C9A2FF;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:9px;">
+                  <span style="font-size:13px; font-weight:700; line-height:1.35; min-width:0;">{{ L.name }}</span>
+                  <span style="flex-shrink:0; font-size:9px; font-weight:700; color:#6F6C7A; background:#F4F3F7; padding:3px 8px; border-radius:99px; white-space:nowrap;">{{ L.country }}</span>
+                </div>
+                <div style="font-size:10.5px; color:#A9A6B4; margin-top:5px;">{{ L.rows }}</div>
+                <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                  <span style="width:6px; height:6px; border-radius:99px; background:{{ L.attachedFg }}; flex-shrink:0;"></span>
+                  <span style="font-size:10px; font-weight:700; color:{{ L.attachedFg }};">{{ L.attached }}</span>
+                  <span style="font-size:10px; color:#C9C4D4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ L.where }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+            <sc-for list="{{ fsSets }}" as="fs" hint-placeholder-count="1">
+            <sc-if value="{{ fs.open }}" hint-placeholder-val="{{ true }}">
+              <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; padding:18px 22px 20px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+                  <div style="min-width:0; flex:1;">
+                    <input value="{{ fs.name }}" onInput="{{ fs.setName }}" placeholder="e.g. Employee intake" style="width:100%; max-width:360px; box-sizing:border-box; border:1px solid transparent; border-radius:9px; padding:6px 9px; margin-left:-9px; font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700; background:transparent;" style-hover="border-color:#DDD9E6; background:#fff;">
+                    <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ fs.summary }}</div>
+                    <sc-if value="{{ fs.isUsed }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                        <sc-for list="{{ fs.usedBy }}" as="u" hint-placeholder-count="2">
+                          <span style="font-size:10.5px; font-weight:600; color:#3C1470; background:#F5EEFF; padding:4px 10px; border-radius:99px;">{{ u.what }}</span>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ fs.notUsed }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:10.5px; color:#A9A6B4; margin-top:8px; line-height:1.5;">{{ fs.unusedNote }}</div>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                    <sc-if value="{{ fs.dirty }}" hint-placeholder-val="{{ false }}">
+                      <button onClick="{{ fs.save }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:600; padding:7px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Save changes</button>
+                    </sc-if>
+                    <sc-if value="{{ fs.canWrite }}" hint-placeholder-val="{{ true }}">
+                      <span onClick="{{ fs.remove }}" style="font-size:10.5px; font-weight:700; color:#C0353A; background:#FEECEC; padding:7px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#FBDADA;">Delete</span>
+                    </sc-if>
+                  </div>
+                </div>
+
+                <sc-for list="{{ fs.rows }}" as="row" hint-placeholder-count="2">
+                  <div style="margin-top:14px; border:1px solid #EDEBF2; border-radius:13px; padding:13px 15px; background:#FCFBFE;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                      <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">{{ row.title }}</div>
+                      <sc-if value="{{ row.canWrite }}" hint-placeholder-val="{{ true }}">
+                        <span onClick="{{ row.remove }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer;" style-hover="text-decoration:underline;">Remove this group</span>
+                      </sc-if>
+                    </div>
+                    <div style="font-size:10.5px; color:#A9A6B4; margin-top:4px; line-height:1.5;">{{ row.when }}</div>
+
+                    <sc-for list="{{ row.conds }}" as="c" hint-placeholder-count="1">
+                      <div style="display:grid; grid-template-columns:minmax(0,1.1fr) 110px minmax(0,1fr) 34px; gap:7px; align-items:center; margin-top:8px;">
+                        <input value="{{ c.var }}" onInput="{{ c.setVar }}" placeholder="{{ c.varPlaceholder }}" class="fm-inp">
+                        <div onClick="{{ c.cycleOp }}" title="Click to change the test" style="font-size:11px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF;">{{ c.opLabel }}</div>
+                        <input value="{{ c.value }}" onInput="{{ c.setValue }}" placeholder="value" class="fm-inp">
+                        <div onClick="{{ c.remove }}" class="fm-x" title="Remove this condition"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ row.canWrite }}" hint-placeholder-val="{{ true }}">
+                      <span onClick="{{ row.addCond }}" style="display:inline-block; font-size:10.5px; font-weight:700; color:#7C00FF; margin-top:8px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a condition</span>
+                    </sc-if>
+
+                    <div style="margin-top:12px; padding-top:11px; border-top:1px solid #F0EDF6;">
+                      <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Then these are recorded</div>
+                      <sc-for list="{{ row.fields }}" as="fd" hint-placeholder-count="2">
+                        <div style="display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 92px 88px 34px; gap:7px; align-items:center; margin-top:8px;">
+                          <input value="{{ fd.label }}" onInput="{{ fd.setLabel }}" placeholder="What is asked" class="fm-inp">
+                          <input value="{{ fd.varName }}" onInput="{{ fd.setVar }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                          <div onClick="{{ fd.cycleType }}" title="Click to change what kind of answer this takes" style="font-size:11px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF;">{{ fd.typeLabel }}</div>
+                          <div onClick="{{ fd.toggleReq }}" title="Whether the step can be completed without it" style="font-size:10.5px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:{{ fd.reqColor }}; background:{{ fd.reqBg }};">{{ fd.reqLabel }}</div>
+                          <div onClick="{{ fd.remove }}" class="fm-x" title="Remove this field"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                          <sc-if value="{{ fd.isSelect }}" hint-placeholder-val="{{ false }}">
+                            <input value="{{ fd.optionText }}" onInput="{{ fd.setOptions }}" placeholder="The choices, comma separated — these are the exact words decisions branch on" class="fm-inp" style="grid-column:1 / -1;">
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ row.canWrite }}" hint-placeholder-val="{{ true }}">
+                        <span onClick="{{ row.addField }}" style="display:inline-block; font-size:10.5px; font-weight:700; color:#7C00FF; margin-top:8px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a field</span>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ fs.canWrite }}" hint-placeholder-val="{{ true }}">
+                  <span onClick="{{ fs.addRow }}" style="display:inline-block; font-size:11.5px; font-weight:700; color:#7C00FF; margin-top:14px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a group</span>
+                </sc-if>
+              </section>
+            </sc-if>
+            </sc-for>
+          </div>
+        </div>
+      </div></sc-if>
+
       <!-- ══ Checklist Rules ═════════════════════════════════════════════════════════════════════
            A rule is a set of ROWS. Each row says "when these conditions hold, these items apply",
            and the matching rows are merged — so the common items live in a row with no conditions
@@ -12376,13 +12503,49 @@
                 </div>
 
                 <sc-if value="{{ wsCapIsStatic }}" hint-placeholder-val="{{ true }}">
-                  <sc-if value="{{ wsHasCaptures }}" hint-placeholder-val="{{ false }}">
-                    <div class="fm-wide">
-                      <label class="fm-lab">The fields</label>
-                      <div style="font-size:12px; color:#6F6C7A; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; line-height:1.5;">{{ wsCaptures }}</div>
-                      <div class="fm-hint">Renaming one of these is not done here — decisions, rules and issued documents match them by name.</div>
+                  <div class="fm-wide">
+                    <label class="fm-lab">The fields</label>
+                    <sc-for list="{{ wsFieldRows }}" as="fd" hint-placeholder-count="3">
+                      <div style="display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 92px 88px 34px; gap:7px; align-items:center; margin-top:8px;">
+                        <input value="{{ fd.label }}" onInput="{{ fd.setLabel }}" placeholder="What is asked" class="fm-inp">
+                        <input value="{{ fd.varName }}" onInput="{{ fd.setVar }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                        <div onClick="{{ fd.cycleType }}" title="Click to change what kind of answer this takes" style="font-size:11px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF;">{{ fd.typeLabel }}</div>
+                        <div onClick="{{ fd.toggleReq }}" title="Whether the step can be completed without it" style="font-size:10.5px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:{{ fd.reqColor }}; background:{{ fd.reqBg }};">{{ fd.reqLabel }}</div>
+                        <div onClick="{{ fd.remove }}" class="fm-x" title="Remove this field"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                        <sc-if value="{{ fd.isSelect }}" hint-placeholder-val="{{ false }}">
+                          <input value="{{ fd.optionText }}" onInput="{{ fd.setOptions }}" placeholder="The choices, comma separated" class="fm-inp" style="grid-column:1 / -1;">
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ wsNoFields }}" hint-placeholder-val="{{ false }}">
+                      <div class="fm-hint" style="margin-top:8px;">This step records nothing, which is right for an approval or a wait.</div>
+                    </sc-if>
+                    <span onClick="{{ wsAddField }}" style="display:inline-block; font-size:11px; font-weight:700; color:#7C00FF; margin-top:10px; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a field</span>
+                    <div class="fm-hint">The name in the second column is what decisions, rules, deadlines and messages match on. Changing it repoints nothing automatically — the workflow will refuse to go live if something still reads the old name.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ wsCapIsRule }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">Which set</label>
+                    <div class="fm-selwrap">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddWsCapRuleOpen }}" onClick="{{ ddWsCapRuleOpenList }}" onInput="{{ ddWsCapRuleSetQuery }}" onKeyDown="{{ ddWsCapRuleKey }}" value="{{ ddWsCapRuleValue }}" placeholder="{{ ddWsCapRulePlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddWsCapRuleOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-for list="{{ ddWsCapRuleRows }}" as="o" hint-placeholder-count="2">
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
                     </div>
-                  </sc-if>
+                    <div class="fm-hint">Maintained in Field Sets, so adding a question there reaches every step that uses it.</div>
+                    <sc-if value="{{ wsCapHasFallback }}" hint-placeholder-val="{{ false }}"><div class="fm-hint">{{ wsCapFallbackText }}</div></sc-if>
+                    <sc-if value="{{ wsCapNoFallback }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#B8860B;">This step has no fields of its own, so it records nothing at all if the set matches nothing.</div></sc-if>
+                    <sc-if value="{{ wsCapNoSets }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#B8860B;">No field sets exist yet — this step would fall back to its own fields.</div></sc-if>
+                  </div>
                 </sc-if>
 
                 <sc-if value="{{ wsCapIsDoc }}" hint-placeholder-val="{{ false }}">
@@ -13402,7 +13565,7 @@ class Component extends DCLogic {
       'Employees': 'Clients & Compliance', 'Renewals': 'Clients & Compliance',
       'Invoices': 'Finance', 'Quotations': 'Finance', 'Receipts': 'Finance', 'Reports': 'Finance',
       'Service Catalog': 'Configure', 'Plan & Billing': 'Configure', 'Service Packages': 'Masters', 'Country Rules': 'Configure',
-      'Document Types': 'Configure', 'Checklist Rules': 'Configure', 'Departments': 'Configure', 'Record Sequence': 'Configure', 'Form Builder': 'Configure', 'Print Layout': 'Configure',
+      'Document Types': 'Configure', 'Checklist Rules': 'Configure', 'Field Sets': 'Configure', 'Departments': 'Configure', 'Record Sequence': 'Configure', 'Form Builder': 'Configure', 'Print Layout': 'Configure',
       'Workflow Builder': 'Admin', 'Profile Settings': 'Admin', 'Settings': 'Admin', 'Problem Reports': 'Admin',
       // Notifications was missing here, so /notifications soft-404'd to the Dashboard and the screen
       // was only reachable through the bell popover.
@@ -13661,6 +13824,14 @@ class Component extends DCLogic {
         .then(v => { if (Array.isArray(v)) this.setState({ checklistRulesData: v }); })
         .catch(() => {});
       this._loadChecklistRules();
+      // The field sets — what a step RECORDS, as against what it collects. Same screen-and-pack
+      // treatment as the checklist rules above, and loaded the same way so the workflow builder and
+      // the Field Sets screen read one list rather than two that can disagree.
+      this._loadFieldSets = () => fetch(API + '/api/workflow/field-sets', { headers: hdr })
+        .then(r => (r.ok ? r.json() : null))
+        .then(v => { if (Array.isArray(v)) this.setState({ fieldSetsData: v }); })
+        .catch(() => {});
+      this._loadFieldSets();
       this._loadStages = () => fetch(API + '/api/pipeline-stages', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ stagesData: v }); })
@@ -15221,7 +15392,7 @@ class Component extends DCLogic {
       'Service Catalog': 'Finance', 'Quotations': 'Sales',
       'Pipeline': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Follow-ups': 'Sales', 'Inbox': 'Sales',
       'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Sales', 'Sales Settings': 'Sales',
-      'Reports': 'Reports', 'Workflow Builder': 'Workflow', 'Checklist Rules': 'Workflow',
+      'Reports': 'Reports', 'Workflow Builder': 'Workflow', 'Checklist Rules': 'Workflow', 'Field Sets': 'Workflow',
       'Settings': 'Settings', 'Profile Settings': 'Settings', 'Notifications': 'Settings',
       'Problem Reports': 'Settings', 'Country Rules': 'Settings', 'Record Sequence': 'Settings',
       'Form Builder': 'Settings', 'Print Layout': 'Settings', 'Setup Check': 'Settings',
@@ -15327,7 +15498,7 @@ class Component extends DCLogic {
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Receipts', I.card], ['Reports', I.layers]]],
-      ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
+      ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Field Sets', I.fileText], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
       // Problem Reports carries a badge of what is still unread — a report nobody looks at is the
       // same as no report at all, and the count is the only thing that makes anyone look.
       ['Admin', I.settings, [['Workflow Builder', I.layers], ['Notifications', I.bell, _unreadNotifCount], ['Problem Reports', I.buoy, _newReportCount], ['Profile Settings', I.users], ['Settings', I.settings]]],
@@ -23784,6 +23955,8 @@ class Component extends DCLogic {
         const capSrc = capSet || (capHasOwn ? 'static' : '');
         const rules = (Array.isArray(this.state.checklistRulesData) ? this.state.checklistRulesData : [])
           .map(r => ({ value: r.id, label: r.name }));
+        const _wsFieldSets = (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : [])
+          .map(r => ({ value: r.id, label: r.name }));
         const row = (on) => ({
           border: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#FBF7FF' : '#fff', color: on ? '#7C00FF' : '#1A1523',
         });
@@ -23819,14 +23992,27 @@ class Component extends DCLogic {
 
           // Recorded fields
           wsCapRows: [
-            ['static', 'This step\u2019s own fields', 'The fields listed below, fixed on the step'],
+            ['static', 'This step\u2019s own fields', 'The fields listed below, edited right here'],
+            ['rule', 'A field set', 'Maintained in Field Sets — one change reaches every step using it'],
             ['document_type', 'The fields of a document type', 'Follows Country Rules \u2014 add a field there and this step asks for it'],
           ].map(([val, label, desc]) => ({
             label, desc, ...row(capSrc === val),
             pick: () => _wsCfgSet({ captureSource: val === 'static' ? '' : val }),
           })),
           wsCapIsStatic: capSrc === 'static' || capSrc === '',
+          wsCapIsRule: capSrc === 'rule',
           wsCapIsDoc: capSrc === 'document_type',
+          wsCapNoSets: capSrc === 'rule' && !_wsFieldSets.length,
+          // The same honesty the checklist side got: choosing a set hides the step's own fields, so
+          // say whether this step still has any to fall back on rather than implying it does.
+          wsCapHasFallback: capSrc === 'rule' && capHasOwn,
+          wsCapNoFallback: capSrc === 'rule' && !capHasOwn,
+          wsCapFallbackText: capHasOwn
+            ? 'Kept on the step as a fallback if the set matches nothing: '
+              + _wsCfg.captures.map(c => (c && (c.label || c.var)) || '').filter(Boolean).join(', ')
+            : '',
+          ...mkDdCombo('ddWsCapRule', [{ title: '', options: _wsFieldSets }], String(_wsCfg.captureRuleId || ''),
+            (v) => _wsCfgSet({ captureRuleId: v }), 'Which set decides the fields'),
           // Which type's fields. Blank means "whatever document this run is about", which is how a
           // renewal workflow serves every document type with one step.
           ...mkDdCombo('ddWsCapDoc', [{ title: '', options: _wsDocTypes }], String(_wsCfg.docTypeSource === 'specific' ? (_wsCfg.docType || '') : ''),
@@ -23863,6 +24049,65 @@ class Component extends DCLogic {
         _wsCfgSet({ checklist: items.length ? items : '' });
       },
       wsCaptures: (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).map(c => (c && c.var) || '').filter(Boolean).join(', '),
+
+      // ── THE FIELDS, EDITABLE ─────────────────────────────────────────────────────────────────
+      //
+      // This was a read-only line of comma-separated variable names. It said what the step records
+      // and gave nobody any way to change it: adding one question to the intake form meant editing
+      // the builder script and redeploying, which is not something the people who run this office
+      // can do. Every other part of the step is configurable; this was the one screen that showed
+      // you a fact and dared you to alter it.
+      //
+      // A row per field, not a textarea. The checklist got a textarea because an item is a line of
+      // text; a field is four things (what it is called, what it writes to, what kind of answer,
+      // whether it is required) and packing those into one line means inventing a syntax people
+      // then have to learn and get wrong.
+      //
+      // THE VARIABLE NAME IS EDITED SEPARATELY FROM THE LABEL, and is what decisions, rules,
+      // statutory clocks and notify templates match on. Renaming is allowed — nothing is live yet —
+      // but the two are deliberately not linked, so retitling "Mobile" to "Mobile number" for
+      // readability cannot silently repoint a decision at a variable that no longer exists. The
+      // validator refuses to activate a workflow whose decisions read a variable nothing captures,
+      // which is the backstop.
+      wsFieldRows: (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).map((c, i) => {
+        const list = () => (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).slice();
+        const put = (patch) => { const n = list(); n[i] = { ...(n[i] || {}), ...patch }; _wsCfgSet({ captures: n }); };
+        const TYPES = ['text', 'select', 'date', 'number', 'textarea'];
+        const t = String((c && c.type) || 'text');
+        const opts = (c && c.options) || '';
+        return {
+          label: (c && c.label) || '',
+          setLabel: (e) => put({ label: e.target.value }),
+          varName: (c && c.var) || '',
+          setVar: (e) => put({ var: String(e.target.value).replace(/[^A-Za-z0-9_]/g, '') }),
+          typeLabel: t,
+          // Click to cycle, the same control the condition operators use — five types is far too
+          // few to be worth a searchable dropdown, and this box is already crowded.
+          cycleType: () => put({ type: TYPES[(TYPES.indexOf(t) + 1) % TYPES.length] || 'text' }),
+          isSelect: t === 'select',
+          // OPTIONS ARE A COMMA-SEPARATED STRING, because that is what the engine compares an
+          // answer against. An earlier draft of this editor helpfully rewrote them into
+          // [{value,label}] objects, which stringify to "[object Object]" — the allowed set becomes
+          // two impossible words and every correct answer is refused, on a dropdown that still
+          // looks perfectly normal. The values ARE the words the decisions branch on, so they are
+          // shown and edited exactly as stored rather than prettified.
+          optionText: (Array.isArray(opts) ? opts.map(o => (o && (o.value || o.label)) || o).join(', ') : String(opts || '').split(',').map(x => x.trim()).filter(Boolean).join(', ')),
+          setOptions: (e) => put({ options: String(e.target.value).split(',').map(x => x.trim()).filter(Boolean).join(',') }),
+          reqLabel: (c && c.required === false) ? 'Optional' : 'Required',
+          reqColor: (c && c.required === false) ? '#8C8899' : '#3C1470',
+          reqBg: (c && c.required === false) ? '#F4F3F7' : '#F5EEFF',
+          toggleReq: () => put({ required: !(c && c.required === false) ? false : true }),
+          remove: () => { const n = list(); n.splice(i, 1); _wsCfgSet({ captures: n.length ? n : '' }); },
+        };
+      }),
+      wsAddField: () => {
+        const n = (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).slice();
+        n.push({ var: '', label: '', type: 'text', required: true });
+        _wsCfgSet({ captures: n });
+      },
+      // A step that records nothing is a perfectly ordinary step — an approval, a notify, a wait —
+      // so this is a statement, not a warning.
+      wsNoFields: !(Array.isArray(_wsCfg.captures) && _wsCfg.captures.length),
       wsHasCaptures: !!(Array.isArray(_wsCfg.captures) && _wsCfg.captures.length),
 
       // Type-specific
@@ -26473,6 +26718,7 @@ class Component extends DCLogic {
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
       showTeamPerf: act === 'Team Performance',
       showChecklistRules: act === 'Checklist Rules',
+      showFieldSets: act === 'Field Sets',
       showInbox: act === 'Inbox',
       showFollowUps: act === 'Follow-ups', showPerformance: act === 'Targets & Forecast', showSetupCheck: act === 'Setup Check',
     };
@@ -27170,7 +27416,7 @@ class Component extends DCLogic {
     // componentDidMount and cannot be reached here; this covers only the screens findings link to,
     // and an unknown one falls back to Configure rather than landing nowhere.
     const _scGroupOf = {
-      'Sales Settings': 'Configure', 'Country Rules': 'Configure', 'Service Catalog': 'Configure', 'Checklist Rules': 'Configure',
+      'Sales Settings': 'Configure', 'Country Rules': 'Configure', 'Service Catalog': 'Configure', 'Checklist Rules': 'Configure', 'Field Sets': 'Configure',
       'Sales Teams': 'Sales', 'PRO Teams': 'Operations',
       'Document Types': 'Configure', 'Setup Check': 'Configure',
       'Workflow Builder': 'Admin', 'Settings': 'Admin',
@@ -30064,6 +30310,161 @@ class Component extends DCLogic {
                       remove: () => patch9({ documents: items9.filter((_x, j) => j !== ii) }),
                       ddToggle: dd9[kDd9 + 'Toggle'], ddOpen: dd9[kDd9 + 'Open'], ddOptions: dd9[kDd9 + 'Options'],
                       ddQuery: dd9[kDd9 + 'Query'], ddSetQuery: dd9[kDd9 + 'SetQuery'], ddLabel: dd9[kDd9 + 'Label'],
+                    };
+                  }),
+                };
+              }),
+            };
+          }),
+        };
+      })(),
+
+      // ── Field Sets ────────────────────────────────────────────────────────────────────────────
+      //
+      // The same screen as Checklist Rules, one layer in: that one decides what a step COLLECTS,
+      // this one decides what it RECORDS. Deliberately built on the same rows-and-conditions shape
+      // and the same operators, because two rule editors that look alike and behave differently is
+      // worse than one that is slightly too general.
+      //
+      // Edits are held as a draft until Save. A field written straight to the server is a field
+      // briefly wrong for every step reading the set — and unlike a checklist item, a half-typed
+      // variable name is one a decision cannot match.
+      ...(() => {
+        const _fsAll = Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : [];
+        const _fsDraft = this.state.fsDraft || {};
+        const _fsNames = this.state.fsNames || {};
+        const _OPSF = [
+          { value: '', label: 'always' },
+          { value: 'eq', label: 'is' },
+          { value: 'ne', label: 'is not' },
+          { value: 'contains', label: 'contains' },
+          { value: 'in', label: 'one of' },
+          { value: 'gte', label: 'at least' },
+          { value: 'lte', label: 'at most' },
+        ];
+        const _opLabelF = (v) => (_OPSF.find(o => o.value === String(v ?? '')) || _OPSF[0]).label;
+        const _TYPESF = ['text', 'select', 'date', 'number', 'textarea'];
+
+        const _rowsOfF = (set) => (_fsDraft[set.id] ? _fsDraft[set.id] : (Array.isArray(set.rows) ? set.rows : []));
+        const _setRowsF = (set, rows) => this.setState({ fsDraft: { ...(this.state.fsDraft || {}), [set.id]: rows } });
+        const _nameOfF = (set) => (_fsNames[set.id] !== undefined ? _fsNames[set.id] : set.name);
+
+        const _fsSend = (path, opts, okMsg) => {
+          const API = this._apiBase || 'http://localhost:4100';
+          const tok = localStorage.getItem('stimespro:token');
+          return fetch(API + '/api/workflow/field-sets' + path, {
+            headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) },
+            ...opts,
+          })
+            .then(r => (r.status === 204 ? {} : (r.ok ? r.json() : r.json().then(j => { throw new Error((j && j.error) || 'HTTP ' + r.status); }))))
+            .then(() => { if (okMsg) this.toast(okMsg); if (this._loadFieldSets) this._loadFieldSets(); })
+            .catch(e => this.toast(String(e.message || 'That did not work'), 'error'));
+        };
+
+        const _selIdF = this.state.fsSelId || (_fsAll[0] || {}).id;
+
+        return {
+          fsEmpty: _fsAll.length === 0,
+          fsCanWrite: canWrite,
+          fsNew: () => _fsSend('', {
+            method: 'POST',
+            body: JSON.stringify({ name: 'New field set', rows: [{ conditions: [], fields: [] }] }),
+          }, 'Field set created'),
+          fsList: _fsAll.map(set => {
+            const rows = _rowsOfF(set);
+            const count = rows.reduce((n, r) => n + ((Array.isArray(r.fields) ? r.fields : []).length), 0);
+            const on = set.id === _selIdF;
+            return {
+              name: _nameOfF(set),
+              cardBg: on ? '#FBF7FF' : '#fff',
+              cardBd: on ? '#7C00FF' : '#EDEBF2',
+              rows: rows.length + (rows.length === 1 ? ' group · ' : ' groups · ') + count + (count === 1 ? ' field' : ' fields'),
+              country: set.country || 'no country',
+              attached: (set.usedBy && set.usedBy.length) ? 'In use' : 'Not used',
+              attachedFg: (set.usedBy && set.usedBy.length) ? '#1F7A4D' : '#A9A6B4',
+              where: (set.usedBy && set.usedBy.length) ? set.usedBy.join(' · ') : 'no step points at it yet',
+              pick: () => this.setState({ fsSelId: set.id }),
+            };
+          }),
+          fsSets: _fsAll.map(set => {
+            const rows = _rowsOfF(set);
+            const dirty = (!!_fsDraft[set.id] || _fsNames[set.id] !== undefined) && canWrite;
+            const count = rows.reduce((n, r) => n + ((Array.isArray(r.fields) ? r.fields : []).length), 0);
+            return {
+              open: set.id === _selIdF,
+              name: _nameOfF(set),
+              canWrite,
+              dirty,
+              summary: [set.country || 'no country', rows.length + (rows.length === 1 ? ' group' : ' groups'),
+                        count + (count === 1 ? ' field' : ' fields'), dirty ? 'unsaved' : null].filter(Boolean).join(' · '),
+              // The blast radius, before anybody edits — the same list the delete guard reads, so
+              // this screen can never say "not used" about something a delete then refuses.
+              usedBy: (Array.isArray(set.usedBy) ? set.usedBy : []).map(u => ({ what: u })),
+              isUsed: !!(set.usedBy && set.usedBy.length),
+              notUsed: !(set.usedBy && set.usedBy.length),
+              unusedNote: 'Not used yet — point a step at it in the Workflow Builder, under "What the step records".',
+              setName: (e) => this.setState({ fsNames: { ...(this.state.fsNames || {}), [set.id]: e.target.value } }),
+              save: () => _fsSend('/' + set.id, {
+                method: 'PUT',
+                body: JSON.stringify({ name: _nameOfF(set), rows }),
+              }, 'Field set saved').then(() => {
+                const d = { ...(this.state.fsDraft || {}) }; delete d[set.id];
+                const n = { ...(this.state.fsNames || {}) }; delete n[set.id];
+                this.setState({ fsDraft: d, fsNames: n });
+              }),
+              remove: () => this._confirm('Delete ' + set.name + '?', {
+                body: 'If a workflow step still records its fields from this set, this is refused and names the steps.',
+                danger: true, okLabel: 'Delete',
+              }).then((ok) => { if (ok) _fsSend('/' + set.id, { method: 'DELETE' }, 'Field set deleted'); }),
+              addRow: () => _setRowsF(set, [...rows, { conditions: [], fields: [] }]),
+              rows: rows.map((row, ri) => {
+                const conds = Array.isArray(row.conditions) ? row.conditions : [];
+                const fields = Array.isArray(row.fields) ? row.fields : [];
+                const put = (patch) => _setRowsF(set, rows.map((r, i) => (i === ri ? { ...r, ...patch } : r)));
+                return {
+                  title: conds.length ? 'When all of these hold' : 'Everyone gets these',
+                  when: conds.length
+                    ? 'Only added when every condition below is true of the run.'
+                    : 'No conditions, so this group applies to every run — the base set.',
+                  canWrite,
+                  remove: () => _setRowsF(set, rows.filter((_, i) => i !== ri)),
+                  addCond: () => put({ conditions: [...conds, { var: '', op: 'eq', value: '' }] }),
+                  addField: () => put({ fields: [...fields, { var: '', label: '', type: 'text', required: true }] }),
+                  conds: conds.map((c, ci) => {
+                    const setC = (patch) => put({ conditions: conds.map((x, i) => (i === ci ? { ...x, ...patch } : x)) });
+                    return {
+                      var: c.var || '',
+                      setVar: (e) => setC({ var: e.target.value }),
+                      varPlaceholder: 'a run variable, e.g. hiringType',
+                      opLabel: _opLabelF(c.op),
+                      cycleOp: () => setC({ op: _OPSF[(_OPSF.findIndex(o => o.value === String(c.op ?? '')) + 1) % _OPSF.length].value }),
+                      value: c.value || '',
+                      setValue: (e) => setC({ value: e.target.value }),
+                      remove: () => put({ conditions: conds.filter((_, i) => i !== ci) }),
+                    };
+                  }),
+                  fields: fields.map((f, fi) => {
+                    const setF = (patch) => put({ fields: fields.map((x, i) => (i === fi ? { ...x, ...patch } : x)) });
+                    const t = String(f.type || 'text');
+                    return {
+                      label: f.label || '',
+                      setLabel: (e) => setF({ label: e.target.value }),
+                      varName: f.var || '',
+                      // Stripped as it is typed, because this is the word a decision matches on and a
+                      // space in it is a branch that can never fire.
+                      setVar: (e) => setF({ var: String(e.target.value).replace(/[^A-Za-z0-9_]/g, '') }),
+                      typeLabel: t,
+                      cycleType: () => setF({ type: _TYPESF[(_TYPESF.indexOf(t) + 1) % _TYPESF.length] || 'text' }),
+                      isSelect: t === 'select',
+                      // Stored as the engine stores them: a comma-separated list of the exact values
+                      // decisions branch on, never prettified into objects.
+                      optionText: (Array.isArray(f.options) ? f.options.map(o => (o && (o.value || o.label)) || o) : String(f.options || '').split(',')).map(x => String(x).trim()).filter(Boolean).join(', '),
+                      setOptions: (e) => setF({ options: String(e.target.value).split(',').map(x => x.trim()).filter(Boolean).join(',') }),
+                      reqLabel: f.required === false ? 'Optional' : 'Required',
+                      reqColor: f.required === false ? '#8C8899' : '#3C1470',
+                      reqBg: f.required === false ? '#F4F3F7' : '#F5EEFF',
+                      toggleReq: () => setF({ required: f.required === false }),
+                      remove: () => put({ fields: fields.filter((_, i) => i !== fi) }),
                     };
                   }),
                 };
