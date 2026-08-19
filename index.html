@@ -12329,8 +12329,8 @@
                 <sc-if value="{{ wsChkIsStatic }}" hint-placeholder-val="{{ true }}">
                   <div class="fm-wide">
                     <label class="fm-lab">The list</label>
-                    <textarea value="{{ wsChecklist }}" onInput="{{ setWsChecklist }}" rows="5" placeholder="One per line&#10;Passport copy&#10;Signed offer letter" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.6; resize:vertical; font-family:inherit;"></textarea>
-                    <div class="fm-hint">Each line becomes a required item the step cannot be completed without.</div>
+                    <textarea value="{{ wsChecklist }}" onInput="{{ setWsChecklist }}" rows="5" placeholder="One per line&#10;Passport copy&#10;Signed offer letter&#10;Bank letter (optional)" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.6; resize:vertical; font-family:inherit;"></textarea>
+                    <div class="fm-hint">One per line. Each is required and the step cannot be completed without it — add <b>(optional)</b> to the end of a line for one that is asked for but not insisted on.</div>
                   </div>
                 </sc-if>
 
@@ -23821,10 +23821,31 @@ class Component extends DCLogic {
       })(),
 
       // The work
-      wsChecklist: (Array.isArray(_wsCfg.checklist) ? _wsCfg.checklist : []).map(i => (i && i.label) || i || '').join('\n'),
+      // AN ITEM'S REQUIRED FLAG SURVIVES BEING EDITED.
+      //
+      // The first version of this box turned every line into a required item, because a line of text
+      // has nowhere to put a flag. Three items in this template are deliberately optional — the
+      // quota check on eligibility, accommodation on assets, induction training on the probation
+      // review — and editing any of those lists would have silently made them mandatory. On the
+      // probation review that means the step could no longer be completed until somebody ticked a
+      // training course, which nobody would connect to having renamed a line above it.
+      //
+      // So the flag is written INTO the line, as a suffix, where it can be both seen and changed.
+      // Keys are matched by label and kept, so an existing item stays the same item after an edit
+      // rather than being replaced by an identical-looking new one.
+      wsChecklist: (Array.isArray(_wsCfg.checklist) ? _wsCfg.checklist : [])
+        .map(i => (i && i.label ? (i.required === false ? i.label + ' (optional)' : i.label) : (i || '')))
+        .join('\n'),
       setWsChecklist: (e) => {
+        const before = Array.isArray(_wsCfg.checklist) ? _wsCfg.checklist : [];
         const rows = String(e.target.value).split('\n').map(x => x.trim()).filter(Boolean);
-        _wsCfgSet({ checklist: rows.length ? rows.map((label, i) => ({ key: 'i' + (i + 1), label, required: true })) : '' });
+        const items = rows.map((raw, i) => {
+          const optional = /\(optional\)\s*$/i.test(raw);
+          const label = raw.replace(/\(optional\)\s*$/i, '').trim();
+          const was = before.find(b => b && String(b.label).trim().toLowerCase() === label.toLowerCase());
+          return { key: (was && was.key) || 'i' + (i + 1), label, required: !optional };
+        }).filter(it => it.label);
+        _wsCfgSet({ checklist: items.length ? items : '' });
       },
       wsCaptures: (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).map(c => (c && c.var) || '').filter(Boolean).join(', '),
       wsHasCaptures: !!(Array.isArray(_wsCfg.captures) && _wsCfg.captures.length),
