@@ -11232,20 +11232,50 @@
        happens to them, and anything identical is left as a single number. -->
   <sc-if value="{{ showUpgrade }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeUpgrade }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:560px; max-height:86vh; overflow-y:auto; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
-        <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ upgTitle }}</div>
-        <div style="font-size:12px; color:#8C8899; margin-top:3px;">Anything you edited is left exactly as it is. Clients, staff, documents and invoices are never touched.</div>
-
-        <sc-if value="{{ upgReady }}" hint-placeholder-val="{{ true }}">
-          <div style="display:flex; gap:9px; margin-top:16px;">
-            <div style="flex:1; background:#F1FAF5; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#0E9355;">{{ upgAdd }}</div><div style="font-size:11px; color:#0E6B41; margin-top:2px;">new</div></div>
-            <div style="flex:1; background:#F3E8FF; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#7C00FF;">{{ upgUpdate }}</div><div style="font-size:11px; color:#5B00BA; margin-top:2px;">changed</div></div>
-            <div style="flex:1; background:#F8F6FC; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#8C8899;">{{ upgUnchanged }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:2px;">identical</div></div>
-            <div style="flex:1; background:#FEF9EF; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#B8860B;">{{ upgYours }}</div><div style="font-size:11px; color:#7A5B12; margin-top:2px;">yours</div></div>
-          </div>
-
+      <!-- .fm-modal / .fm-head / .fm-body / .fm-foot: the house pattern for a dialog that can grow.
+           The whole card used to scroll, footer included, so on a long plan the Cancel and Upgrade
+           buttons were simply below the fold — the screenshot that prompted this redesign has no
+           buttons in it at all. -->
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div class="fm-head" style="display:block;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ upgTitle }}</div>
+          <div style="font-size:12px; color:#8C8899; margin-top:3px;">Anything you edited is left exactly as it is. Clients, staff, documents and invoices are never touched.</div>
+        </div>
+        <div class="fm-body" data-hidescroll="true">
+<sc-if value="{{ upgReady }}" hint-placeholder-val="{{ true }}">
           <sc-if value="{{ upgNothingToDo }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:16px; background:#F8F6FC; border-radius:12px; padding:14px 16px; font-size:12.5px; color:#8C8899;">This version changes nothing here — every row already matches it.</div>
+            <div style="display:flex; align-items:center; gap:13px; background:#F1FAF5; border:1px solid #C6E9D6; border-radius:14px; padding:16px 18px;">
+              <div style="width:34px; height:34px; border-radius:99px; background:#DCF3E7; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0E6B41" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+              </div>
+              <div style="min-width:0;">
+                <div style="font-size:13.5px; font-weight:700; color:#0E6B41;">Nothing to apply</div>
+                <div style="font-size:11.5px; color:#3F7A5D; margin-top:2px; line-height:1.5;">Every row here already matches this version. Upgrading records the new version number and changes no configuration.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ upgAnyAction }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; gap:9px; flex-wrap:wrap;">
+              <sc-if value="{{ upgShowAdd }}" hint-placeholder-val="{{ true }}">
+                <div style="flex:1; min-width:104px; background:#F1FAF5; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#0E9355;">{{ upgAdd }}</div><div style="font-size:11px; color:#3F7A5D;">new</div></div>
+              </sc-if>
+              <sc-if value="{{ upgShowUpdate }}" hint-placeholder-val="{{ true }}">
+                <div style="flex:1; min-width:104px; background:#F3E8FF; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#7C00FF;">{{ upgUpdate }}</div><div style="font-size:11px; color:#6B4E93;">changed</div></div>
+              </sc-if>
+              <sc-if value="{{ upgShowAdopt }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:1; min-width:104px; background:#F7F3FD; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#5B00BC;">{{ upgAdopt }}</div><div style="font-size:11px; color:#6B4E93;">recognised as yours</div></div>
+              </sc-if>
+              <sc-if value="{{ upgShowRevive }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:1; min-width:104px; background:#F1FAF5; border-radius:12px; padding:12px 14px;"><div style="font-size:22px; font-weight:700; color:#0E9355;">{{ upgRevive }}</div><div style="font-size:11px; color:#3F7A5D;">brought back</div></div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- The two counts that are never an action. A line, not a pair of tiles competing with the
+               numbers that do mean something. -->
+          <sc-if value="{{ upgHasQuietLine }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:11.5px; color:#A9A6B4; margin-top:12px;">{{ upgQuietLine }}</div>
           </sc-if>
 
           <sc-if value="{{ upgHasUpdate }}" hint-placeholder-val="{{ false }}">
@@ -11291,20 +11321,39 @@
             </div>
           </sc-if>
 
-          <sc-if value="{{ upgHasYours }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:10px; font-weight:800; color:#A9A6B4; letter-spacing:.07em; margin-top:18px;">YOURS — LEFT UNTOUCHED</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:4px; line-height:1.5;">You edited these after installing, so the upgrade skips them. What the pack would have done is listed in case you want to apply any of it by hand.</div>
+          <!-- Rows you edited that the pack DID have something for. These are the only ones worth
+               reading here, because they are the ones somebody might choose to apply by hand. -->
+          <sc-if value="{{ upgHasYoursOffered }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:10px; font-weight:800; color:#A9A6B4; letter-spacing:.07em; margin-top:18px;">YOURS — SKIPPED, WITH WHAT THE PACK WOULD HAVE DONE</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:4px; line-height:1.5;">You edited these after installing, so the upgrade leaves them alone. Its version is listed in case you want any of it.</div>
             <div style="margin-top:8px; background:#FEF9EF; border-radius:12px; padding:6px 14px;">
-              <sc-for list="{{ upgYoursRows }}" as="r" hint-placeholder-count="1">
+              <sc-for list="{{ upgYoursOffered }}" as="r" hint-placeholder-count="1">
                 <div style="padding:9px 0; border-bottom:1px solid #F6E3BC;">
                   <div style="font-size:12.5px; font-weight:600; color:#7A5B12;">{{ r.label }}</div>
-                  <sc-if value="{{ r.nothing }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#9A7A2E; margin-top:2px;">the pack changes nothing here</div></sc-if>
                   <sc-for list="{{ r.changes }}" as="c" hint-placeholder-count="1">
                     <div style="font-size:11px; color:#9A7A2E; margin-top:2px;">{{ c.text }}</div>
                   </sc-for>
                 </div>
               </sc-for>
             </div>
+          </sc-if>
+
+          <!-- And the rest: edited here, and this version has nothing to say about any of them. That
+               was twenty-six rows each repeating "the pack changes nothing here" — the bulk of the
+               dialog, carrying one fact between them. It is a count, openable if anybody wants it. -->
+          <sc-if value="{{ upgHasQuiet }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ toggleUpgQuiet }}" style="display:flex; align-items:center; gap:8px; margin-top:14px; padding:11px 14px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:12px; cursor:pointer;" style-hover="border-color:#DDD9E6;">
+              <span style="font-size:12px; color:#6F6C7A; flex:1;">{{ upgQuietCount }} more you edited — this version changes nothing in any of them</span>
+              <sc-if value="{{ upgQuietShut }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px; font-weight:700; color:#7C00FF;">Show</span></sc-if>
+              <sc-if value="{{ upgQuietOpen }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#7C00FF;">Hide</span></sc-if>
+            </div>
+            <sc-if value="{{ upgQuietOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:8px; background:#FBFAFE; border-radius:12px; padding:6px 14px;">
+                <sc-for list="{{ upgYoursQuiet }}" as="r" hint-placeholder-count="2">
+                  <div style="padding:7px 0; border-bottom:1px solid #EDEBF2; font-size:12px; color:#6F6C7A;">{{ r.label }}</div>
+                </sc-for>
+              </div>
+            </sc-if>
           </sc-if>
 
           <sc-if value="{{ upgHasGone }}" hint-placeholder-val="{{ false }}">
@@ -11318,9 +11367,10 @@
           </sc-if>
         </sc-if>
 
-        <sc-if value="{{ upgHasErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px; font-size:12px; color:#C0353A;">{{ upgErr }}</div></sc-if>
+        </div>
 
-        <div style="display:flex; gap:9px; margin-top:20px; justify-content:flex-end;">
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <sc-if value="{{ upgHasErr }}" hint-placeholder-val="{{ false }}"><div style="flex:1; font-size:12px; color:#C0353A; text-align:left;">{{ upgErr }}</div></sc-if>
           <button onClick="{{ closeUpgrade }}" style="background:#fff; color:#4B4757; border:1px solid #E4E0EC; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F8F6FC;">Cancel</button>
           <button onClick="{{ confirmUpgrade }}" disabled="{{ upgBusy }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Upgrade</button>
         </div>
@@ -21271,8 +21321,26 @@ class Component extends DCLogic {
       upgErr: this.state.upgErr || '', upgHasErr: !!this.state.upgErr,
       upgReady: !!_ugPlan,
       upgTitle: _ugPlan ? ('Upgrade ' + _ugPlan.countryName + ' · ' + _ugPlan.from + ' → ' + _ugPlan.to) : 'Reading the pack…',
+      // Only the counts that are not zero get a tile. Four tiles reading 0 · 0 · 5 · 26 gave the two
+      // zeros the same weight as the answer, and the answer was in a grey band underneath them.
+      upgShowAdd: !!(_ugPlan && _ugPlan.totals.add),
+      upgShowUpdate: !!(_ugPlan && _ugPlan.totals.update),
+      upgShowRevive: !!(_ugPlan && _ugPlan.totals.revive),
+      upgShowAdopt: !!(_ugPlan && _ugPlan.totals.adopt),
+      upgAnyAction: !!(_ugPlan && (_ugPlan.totals.add || _ugPlan.totals.update || _ugPlan.totals.revive || _ugPlan.totals.adopt)),
+      upgQuietLine: _ugPlan
+        ? [_ugPlan.totals.unchanged ? _ugPlan.totals.unchanged + ' already identical' : '',
+           _ugPlan.totals.yours ? _ugPlan.totals.yours + ' you edited, left as they are' : ''].filter(Boolean).join(' · ')
+        : '',
+      upgHasQuietLine: !!(_ugPlan && (_ugPlan.totals.unchanged || _ugPlan.totals.yours)),
       upgAdd: _ugPlan ? _ugPlan.totals.add : 0,
       upgUpdate: _ugPlan ? _ugPlan.totals.update : 0,
+      // The two tiles that only appear on an upgrade that adopts or revives something. Their VALUES
+      // never existed — the old dialog showed four fixed tiles and these two counts were not among
+      // them — so the markup would have drawn an unresolved interpolation on the one upgrade that
+      // had something to say. Not the sort of thing a no-op plan would ever have revealed.
+      upgAdopt: _ugPlan ? _ugPlan.totals.adopt : 0,
+      upgRevive: _ugPlan ? _ugPlan.totals.revive : 0,
       upgUnchanged: _ugPlan ? _ugPlan.totals.unchanged : 0,
       upgYours: _ugPlan ? _ugPlan.totals.yours : 0,
       upgHasAdd: !!(_ugPlan && _ugPlan.totals.add),
@@ -21292,12 +21360,25 @@ class Component extends DCLogic {
       upgReviveRows: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'revive').map(r9 => ({ label: r9.one + ' · ' + r9.name })) : [],
       // The promise the whole flow rests on: your edits are not touched. The pack's version of each
       // change is still listed, so it can be applied by hand if it turns out to be wanted.
+      // YOURS, SPLIT BY WHETHER THE PACK HAD ANYTHING TO SAY ABOUT IT.
+      //
+      // This was one list of every edited row, and on a typical upgrade almost all of them read "the
+      // pack changes nothing here" — twenty-six identical lines of it, which is most of what the
+      // dialog showed and none of what it was for. The rows worth reading are the ones where the pack
+      // WOULD have changed something and was skipped, because those are the ones somebody might want
+      // to apply by hand. The rest is a count.
       upgHasYours: !!(_ugPlan && _ugPlan.totals.yours),
-      upgYoursRows: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'yours').map(r9 => ({
+      upgYoursOffered: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'yours' && r9.changes.length).map(r9 => ({
         label: r9.one + ' · ' + r9.name,
         changes: r9.changes.map(c9 => ({ text: c9.field + ': yours ' + _ugVal(c9.from) + ' · pack ' + _ugVal(c9.to) })),
-        nothing: r9.changes.length === 0,
       })) : [],
+      upgHasYoursOffered: !!(_ugPlan && _ugPlan.rows.some(r9 => r9.outcome === 'yours' && r9.changes.length)),
+      upgYoursQuiet: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'yours' && !r9.changes.length).map(r9 => ({ label: r9.one + ' · ' + r9.name })) : [],
+      upgQuietCount: _ugPlan ? _ugPlan.rows.filter(r9 => r9.outcome === 'yours' && !r9.changes.length).length : 0,
+      upgHasQuiet: !!(_ugPlan && _ugPlan.rows.some(r9 => r9.outcome === 'yours' && !r9.changes.length)),
+      upgQuietOpen: !!this.state.upgQuietOpen,
+      upgQuietShut: !this.state.upgQuietOpen,
+      toggleUpgQuiet: () => this.setState({ upgQuietOpen: !this.state.upgQuietOpen }),
       upgHasGone: !!(_ugPlan && (_ugPlan.totals.remove || _ugPlan.totals.retire || _ugPlan.totals.keep)),
       upgGoneRows: _ugPlan ? _ugPlan.gone.map(r9 => ({
         label: r9.one + ' · ' + r9.name,
@@ -21306,7 +21387,7 @@ class Component extends DCLogic {
       })) : [],
       upgNothingToDo: !!(_ugPlan && !_ugPlan.totals.add && !_ugPlan.totals.update && !_ugPlan.totals.revive
         && !_ugPlan.totals.adopt && !_ugPlan.totals.remove && !_ugPlan.totals.retire && !_ugPlan.totals.keep),
-      closeUpgrade: () => this.setState({ upgOpen: false, upgPlan: null, upgErr: '' }),
+      closeUpgrade: () => this.setState({ upgOpen: false, upgPlan: null, upgErr: '', upgQuietOpen: false }),
       confirmUpgrade: () => {
         if (!_ugPlan || this.state.upgBusy) return;
         const t9 = localStorage.getItem('stimespro:token');
