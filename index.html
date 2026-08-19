@@ -12388,169 +12388,165 @@
   </sc-if>
 
   <sc-if value="{{ showTaskModal }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeTaskModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <!-- THE HOUSE DIALOG SHELL, which this one was not using.
-           The whole card scrolled, footer included, so on the second step "Create task" drifted up
-           into the middle of the fields and an open dropdown near the bottom had nowhere to go. Head
-           and foot are pinned now and only .fm-body scrolls — which is also the box _placeDropdowns
-           measures against, so a list opening near the footer flips above its field instead of being
-           clipped by it. -->
-      <div onClick="{{ stopClick }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3);">
-        <!-- Progress, flush to the top edge: two segments for two steps. It was two floating bars
-             below the title, which read as decoration rather than as where you are. -->
-        <div style="display:flex; gap:2px; height:3px; flex-shrink:0; overflow:hidden; border-radius:20px 20px 0 0;">
-          <div style="flex:1; background:#7C00FF;"></div>
-          <div style="flex:1; background:{{ ntStep2Bar }}; transition:background .2s;"></div>
-        </div>
+    <div onClick="{{ closeTaskModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .18s ease both;">
+      <!-- Same shell as the step wizard: pinned head and foot, one scrolling body, a rail of named
+           sections rather than numbered steps you walk through once. -->
+      <div onClick="{{ stopClick }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+        <div style="height:3px; background:#F0EDF6; flex-shrink:0;"><div style="height:3px; width:{{ ntProgress }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
         <div class="fm-head">
           <div style="min-width:0;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em;">New task</div>
-            <div style="font-size:11.5px; color:#A9A6B4; margin-top:3px;">Step {{ ntStep }} of 2 · <sc-if value="{{ ntStep1 }}" hint-placeholder-val="{{ true }}">choose the kind of work</sc-if><sc-if value="{{ ntStep2 }}" hint-placeholder-val="{{ false }}">subject &amp; details</sc-if></div>
+            <div style="font-size:9.5px; font-weight:800; letter-spacing:.07em; color:#7C00FF; text-transform:uppercase;">New task</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ntKindName }}</div>
           </div>
           <div onClick="{{ closeTaskModal }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
 
-        <div class="fm-body" data-hidescroll="true">
-          <sc-if value="{{ ntErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:13px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ntErr }}</div></sc-if>
-
-          <!-- Step 1: kind of work -->
-          <sc-if value="{{ ntStep1 }}" hint-placeholder-val="{{ true }}">
-            <div class="fm-step-back">
-            <div class="fm-combo">
-              <input value="{{ ntKindQuery }}" onChange="{{ setNtKindQuery }}" placeholder="Search {{ ntKindCount }} workflows…" class="fm-inp" style="padding-left:36px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px; margin-top:11px;">
-              <sc-for list="{{ ntKindCards }}" as="k" hint-placeholder-count="5">
-                <div onClick="{{ k.select }}" style="border:1.5px solid {{ k.border }}; background:{{ k.bg }}; border-radius:13px; padding:12px 14px; cursor:pointer; transition:border-color .12s, background .12s;">
-                  <div style="display:flex; align-items:center; gap:10px;">
-                    <div style="flex:1; min-width:0;">
-                      <div style="font-size:13.5px; font-weight:700;">{{ k.name }}</div>
-                      <div style="font-size:11px; color:#8C8899; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ k.desc }}</div>
-                    </div>
-                    <sc-if value="{{ k.active }}" hint-placeholder-val="{{ false }}"><div style="width:20px; height:20px; border-radius:99px; background:#7C00FF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div></sc-if>
-                  </div>
-                  <div style="display:flex; gap:6px; margin-top:9px;">
-                    <sc-if value="{{ k.hasDoc }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 9px; border-radius:99px;">{{ k.docChip }}</span></sc-if>
-                    <sc-if value="{{ k.hasSubject }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">{{ k.subjectChip }}</span></sc-if>
-                  </div>
-                </div>
-              </sc-for>
-              <sc-if value="{{ ntKindEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:26px; text-align:center; font-size:12px; color:#A9A6B4;">No workflow matches “{{ ntKindQuery }}”.</div></sc-if>
-            </div>
-            </div>
-          </sc-if>
-
-          <!-- Step 2: subject & details -->
-          <sc-if value="{{ ntStep2 }}" hint-placeholder-val="{{ false }}">
-            <div class="fm-step">
-            <!-- What this will do, before the fields ask anything: which workflow, what it issues,
-                 and whose record it lands on. -->
-            <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; background:#FBF7FF; border:1px solid #EEE0FF; border-radius:12px; padding:10px 13px;">
-              <span style="font-size:11.5px; font-weight:700; color:#7C00FF;">{{ ntKindName }}</span>
-              <sc-if value="{{ ntDerivedDocShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 9px; border-radius:99px;">issues {{ ntDerivedDoc }}</span></sc-if>
-              <span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">Subject: {{ ntSubjectKind }}</span>
-            </div>
-
-            <div class="fm-grid">
-              <div class="fm-wide">
-                <label class="fm-lab">Task title <span class="fm-req">*</span></label>
-                <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" class="fm-inp">
+        <div style="display:flex; min-height:0; flex:1;">
+          <div style="width:196px; flex-shrink:0; border-right:1px solid #F0EDF6; padding:14px 10px; display:flex; flex-direction:column; gap:3px;">
+            <sc-for list="{{ ntPanes }}" as="pn" hint-placeholder-count="3">
+              <div onClick="{{ pn.go }}" style="display:flex; align-items:flex-start; gap:9px; padding:9px 10px; border-radius:11px; cursor:pointer; background:{{ pn.bg }}; transition:background .12s;" style-hover="background:#F7F3FD;">
+                <span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span>
+                <span style="min-width:0;">
+                  <span style="display:block; font-size:12.5px; font-weight:600; color:{{ pn.color }};">{{ pn.label }}</span>
+                  <span style="display:block; font-size:10.5px; color:#A9A6B4; margin-top:1px; line-height:1.4;">{{ pn.hint }}</span>
+                </span>
               </div>
+            </sc-for>
+          </div>
 
-              <div>
-                <label class="fm-lab">Client</label>
-                <div class="fm-selwrap">
-                  <div class="fm-combo">
-                    <input data-dd data-open="{{ ddNtClientOpen }}" onClick="{{ ddNtClientOpenList }}" onInput="{{ ddNtClientSetQuery }}" onKeyDown="{{ ddNtClientKey }}" value="{{ ddNtClientValue }}" placeholder="{{ ddNtClientPlaceholder }}" autocomplete="off" class="fm-inp">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
-                  </div>
-                  <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}">
-                    <div data-dd data-hidescroll="true" class="fm-dd">
-                      <sc-if value="{{ ddNtClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if>
-                      <sc-for list="{{ ddNtClientRows }}" as="o" hint-placeholder-count="3">
-                        <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
-                        <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
-                      </sc-for>
-                    </div>
-                  </sc-if>
-                </div>
+          <div class="fm-body" data-hidescroll="true" style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:#26074D;">{{ ntPaneTitle }}</div>
+            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">{{ ntPaneHint }}</div>
+            <sc-if value="{{ ntErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ntErr }}</div></sc-if>
+
+            <!-- 1 · kind of work -->
+            <sc-if value="{{ ntIsKind }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:12px;" class="fm-combo">
+                <input value="{{ ntKindQuery }}" onChange="{{ setNtKindQuery }}" placeholder="Search {{ ntKindCount }} workflows…" class="fm-inp" style="padding-left:36px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
               </div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:11px;">
+                <sc-for list="{{ ntKindCards }}" as="k" hint-placeholder-count="4">
+                  <div onClick="{{ k.select }}" style="border:1.5px solid {{ k.border }}; background:{{ k.bg }}; border-radius:13px; padding:12px 14px; cursor:pointer; transition:border-color .12s, background .12s;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:13.5px; font-weight:700;">{{ k.name }}</div>
+                        <div style="font-size:11px; color:#8C8899; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ k.desc }}</div>
+                      </div>
+                      <sc-if value="{{ k.active }}" hint-placeholder-val="{{ false }}"><div style="width:20px; height:20px; border-radius:99px; background:#7C00FF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div></sc-if>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:9px;">
+                      <sc-if value="{{ k.hasDoc }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 9px; border-radius:99px;">{{ k.docChip }}</span></sc-if>
+                      <sc-if value="{{ k.hasSubject }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">{{ k.subjectChip }}</span></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ ntKindEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:26px; text-align:center; font-size:12px; color:#A9A6B4;">No workflow matches “{{ ntKindQuery }}”.</div></sc-if>
+              </div>
+            </sc-if>
 
-              <sc-if value="{{ ntPersonScoped }}" hint-placeholder-val="{{ false }}">
+            <!-- 2 · the task -->
+            <sc-if value="{{ ntIsSubject }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap; background:#FBF7FF; border:1px solid #EEE0FF; border-radius:12px; padding:10px 13px; margin-top:12px;">
+                <span style="font-size:11.5px; font-weight:700; color:#7C00FF;">{{ ntKindName }}</span>
+                <sc-if value="{{ ntDerivedDocShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:2px 9px; border-radius:99px;">issues {{ ntDerivedDoc }}</span></sc-if>
+                <span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:2px 9px; border-radius:99px;">Subject: {{ ntSubjectKind }}</span>
+              </div>
+              <div class="fm-grid">
+                <div class="fm-wide">
+                  <label class="fm-lab">Task title <span class="fm-req">*</span></label>
+                  <input value="{{ ntTitle }}" onChange="{{ setNtTitle }}" placeholder="e.g. Iqama Renewal — Ahmed Al-Rashid" class="fm-inp">
+                </div>
                 <div>
-                  <label class="fm-lab">Applicant <span class="fm-req">*</span></label>
+                  <label class="fm-lab">Client</label>
                   <div class="fm-selwrap">
                     <div class="fm-combo">
-                      <input data-dd data-open="{{ ddNtApplicantOpen }}" onClick="{{ ddNtApplicantOpenList }}" onInput="{{ ddNtApplicantSetQuery }}" onKeyDown="{{ ddNtApplicantKey }}" value="{{ ddNtApplicantValue }}" placeholder="{{ ddNtApplicantPlaceholder }}" autocomplete="off" class="fm-inp">
+                      <input data-dd data-open="{{ ddNtClientOpen }}" onClick="{{ ddNtClientOpenList }}" onInput="{{ ddNtClientSetQuery }}" onKeyDown="{{ ddNtClientKey }}" value="{{ ddNtClientValue }}" placeholder="{{ ddNtClientPlaceholder }}" autocomplete="off" class="fm-inp">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
                     </div>
-                    <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}">
+                    <sc-if value="{{ ddNtClientOpen }}" hint-placeholder-val="{{ false }}">
                       <div data-dd data-hidescroll="true" class="fm-dd">
-                        <sc-if value="{{ ddNtApplicantNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody at this client matches that</div></sc-if>
-                        <sc-for list="{{ ddNtApplicantRows }}" as="o" hint-placeholder-count="3">
-                          <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                        <sc-if value="{{ ddNtClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if>
+                        <sc-for list="{{ ddNtClientRows }}" as="o" hint-placeholder-count="3">
                           <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
                         </sc-for>
                       </div>
                     </sc-if>
                   </div>
                 </div>
-              </sc-if>
-
-              <div>
-                <label class="fm-lab">Case owner</label>
-                <div class="fm-selwrap">
-                  <div class="fm-combo">
-                    <input data-dd data-open="{{ ddNtAssigneeOpen }}" onClick="{{ ddNtAssigneeOpenList }}" onInput="{{ ddNtAssigneeSetQuery }}" onKeyDown="{{ ddNtAssigneeKey }}" value="{{ ddNtAssigneeValue }}" placeholder="{{ ddNtAssigneePlaceholder }}" autocomplete="off" class="fm-inp">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
-                  </div>
-                  <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}">
-                    <div data-dd data-hidescroll="true" class="fm-dd">
-                      <sc-if value="{{ ddNtAssigneeNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody on the team matches that</div></sc-if>
-                      <sc-for list="{{ ddNtAssigneeRows }}" as="o" hint-placeholder-count="3">
-                        <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
-                        <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
-                      </sc-for>
+                <sc-if value="{{ ntPersonScoped }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <label class="fm-lab">Applicant <span class="fm-req">*</span></label>
+                    <div class="fm-selwrap">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddNtApplicantOpen }}" onClick="{{ ddNtApplicantOpenList }}" onInput="{{ ddNtApplicantSetQuery }}" onKeyDown="{{ ddNtApplicantKey }}" value="{{ ddNtApplicantValue }}" placeholder="{{ ddNtApplicantPlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-if value="{{ ddNtApplicantNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody at this client matches that</div></sc-if>
+                          <sc-for list="{{ ddNtApplicantRows }}" as="o" hint-placeholder-count="3">
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
                     </div>
-                  </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- 3 · assignment -->
+            <sc-if value="{{ ntIsAssign }}" hint-placeholder-val="{{ false }}">
+              <div class="fm-grid">
+                <div>
+                  <label class="fm-lab">Case owner</label>
+                  <div class="fm-selwrap">
+                    <div class="fm-combo">
+                      <input data-dd data-open="{{ ddNtAssigneeOpen }}" onClick="{{ ddNtAssigneeOpenList }}" onInput="{{ ddNtAssigneeSetQuery }}" onKeyDown="{{ ddNtAssigneeKey }}" value="{{ ddNtAssigneeValue }}" placeholder="{{ ddNtAssigneePlaceholder }}" autocomplete="off" class="fm-inp">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ ddNtAssigneeOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="fm-dd">
+                        <sc-if value="{{ ddNtAssigneeNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody on the team matches that</div></sc-if>
+                        <sc-for list="{{ ddNtAssigneeRows }}" as="o" hint-placeholder-count="3">
+                          <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+                <div>
+                  <label class="fm-lab">Due date</label>
+                  <input value="{{ ntDue }}" onChange="{{ setNtDue }}" type="date" class="fm-inp">
+                </div>
+                <div>
+                  <label class="fm-lab">Priority</label>
+                  <div class="fm-selwrap">
+                    <div data-dd data-open="{{ ddNtPrioOpen }}" onClick="{{ ddNtPrioToggle }}" class="fm-inp fm-sel">
+                      <span style="color:{{ ntPrioTone }}; font-weight:600;">{{ ntPrio }}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ ddNtPrioOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="fm-dd">
+                        <sc-for list="{{ ddNtPrioOptions }}" as="o" hint-placeholder-count="4">
+                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <label class="fm-lab">Due date</label>
-                <input value="{{ ntDue }}" onChange="{{ setNtDue }}" type="date" class="fm-inp">
-              </div>
-
-              <div>
-                <label class="fm-lab">Priority</label>
-                <div class="fm-selwrap">
-                  <div data-dd data-open="{{ ddNtPrioOpen }}" onClick="{{ ddNtPrioToggle }}" class="fm-inp fm-sel">
-                    <span style="color:{{ ntPrioTone }}; font-weight:600;">{{ ntPrio }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
-                  </div>
-                  <sc-if value="{{ ddNtPrioOpen }}" hint-placeholder-val="{{ false }}">
-                    <div data-dd data-hidescroll="true" class="fm-dd">
-                      <sc-for list="{{ ddNtPrioOptions }}" as="o" hint-placeholder-count="4">
-                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                      </sc-for>
-                    </div>
-                  </sc-if>
-                </div>
-              </div>
-            </div>
-            </div>
-          </sc-if>
+            </sc-if>
+          </div>
         </div>
 
         <div class="fm-foot" style="justify-content:space-between;">
-          <div>
-            <sc-if value="{{ ntStep1 }}" hint-placeholder-val="{{ true }}"><button onClick="{{ closeTaskModal }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button></sc-if>
-            <sc-if value="{{ ntStep2 }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ntBackStep1 }}" style="background:none; color:#8C8899; border:none; font-size:12.5px; font-weight:600; padding:9px 4px; cursor:pointer;" style-hover="color:#7C00FF;">← Back</button></sc-if>
-          </div>
-          <div>
-            <sc-if value="{{ ntStep1 }}" hint-placeholder-val="{{ true }}"><button onClick="{{ ntGoStep2 }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Next →</button></sc-if>
-            <sc-if value="{{ ntStep2 }}" hint-placeholder-val="{{ false }}"><button onClick="{{ submitTask }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create task</button></sc-if>
+          <span onClick="{{ closeTaskModal }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          <div style="display:flex; align-items:center; gap:9px;">
+            <sc-if value="{{ ntNotFirst }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ntBack }}" style="font-size:12.5px; font-weight:600; color:#8C8899; padding:9px 12px; cursor:pointer;" style-hover="color:#7C00FF;">← Back</span></sc-if>
+            <sc-if value="{{ ntNotLast }}" hint-placeholder-val="{{ true }}"><span onClick="{{ ntNext }}" style="font-size:12.5px; font-weight:600; color:#7C00FF; padding:9px 14px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF;">Next →</span></sc-if>
+            <button onClick="{{ submitTask }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create task</button>
           </div>
         </div>
       </div>
@@ -19836,10 +19832,38 @@ class Component extends DCLogic {
       // "Rashid" — neither of which exists in this system. Left alone, that is what got submitted.
       // It now opens on the first REAL client and unassigned, and falls back to nothing rather than
       // to a name someone invented.
-      openTaskModal: () => this.setState({ taskModal: true, ntStep: 1, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntDue: '', ntPortalRef: '', ntErr: '' }),
+      openTaskModal: () => this.setState({ taskModal: true, ntPane: 0, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntDue: '', ntPortalRef: '', ntErr: '' }),
       closeTaskModal: () => this.setState({ taskModal: false }),
-      ntStep: this.state.ntStep || 1, ntStep1: (this.state.ntStep || 1) === 1, ntStep2: (this.state.ntStep || 1) === 2,
-      ntStep2Bar: (this.state.ntStep || 1) === 2 ? '#7C00FF' : '#EEE0FF',
+      // THE SAME SHAPE AS THE STEP WIZARD, and for the same reason. Two numbered steps meant the
+      // kind of work was a door you walked through once: to change it you pressed Back and lost your
+      // place. These are sections of one form — the rail is a map, and Create is available from all
+      // of them, because somebody who came to raise a plain task should not be walked through three
+      // screens to do it.
+      ...(() => {
+        const panes = [
+          { key: 'kind', label: 'Kind of work', hint: 'Plain task, or a workflow' },
+          { key: 'task', label: 'The task', hint: 'What it is and who for' },
+          { key: 'assign', label: 'Assignment', hint: 'Who does it, and by when' },
+        ];
+        const at = Math.min(Math.max(0, this.state.ntPane || 0), panes.length - 1);
+        return {
+          ntPanes: panes.map((pn, i) => ({
+            label: pn.label, hint: pn.hint, num: String(i + 1),
+            bg: i === at ? '#F5EEFF' : 'transparent',
+            color: i === at ? '#7C00FF' : '#6F6C7A',
+            numBg: i === at ? '#7C00FF' : '#EDEBF2',
+            numColor: i === at ? '#fff' : '#8C8899',
+            go: () => this.setState({ ntPane: i }),
+          })),
+          ntPaneTitle: panes[at].label,
+          ntPaneHint: panes[at].hint,
+          ntIsKind: at === 0, ntIsSubject: at === 1, ntIsAssign: at === 2,
+          ntNotFirst: at > 0, ntNotLast: at < panes.length - 1,
+          ntProgress: Math.round(((at + 1) / panes.length) * 100) + '%',
+          ntBack: () => this.setState({ ntPane: Math.max(0, at - 1) }),
+          ntNext: () => this.setState({ ntPane: Math.min(panes.length - 1, at + 1) }),
+        };
+      })(),
       ntTitle: this.state.ntTitle || '', ntDue: this.state.ntDue || '', ntErr: this.state.ntErr || false,
       // ntClientLabel/ntClientColor went with the old div-as-a-select: the combo shows its own
       // value and greys its own placeholder, so a second copy of the same answer is one more thing
@@ -19863,8 +19887,6 @@ class Component extends DCLogic {
       })),
       ntKindCount: wfCatalog.length - 1, // excludes "Plain task"
       ntKindEmpty: !wfCatalog.some(w => { const q = (this.state.ntKindQuery || '').trim().toLowerCase(); return !q || w.name.toLowerCase().includes(q) || (w.desc || '').toLowerCase().includes(q); }),
-      ntGoStep2: () => this.setState({ ntStep: 2 }),
-      ntBackStep1: () => this.setState({ ntStep: 1 }),
       // Step 2 — derived facts
       ntDerivedDoc: ntSel.doc || 'General', ntDerivedDocShow: !!ntSel.doc,
       ntSubjectKind: ntSubjectKind, ntPersonScoped: ntPersonScoped,
@@ -19929,8 +19951,11 @@ class Component extends DCLogic {
       // report success on a confirmed 2xx and reload the relevant views from the server.
       submitTask: () => {
         const s2 = this.state;
-        if (!(s2.ntTitle || '').trim()) return this.setState({ ntErr: 'Task title is required' });
-        if (ntPersonScoped && !s2.ntApplicant) return this.setState({ ntErr: 'Applicant is required for this workflow' });
+        // TAKE THEM TO THE FIELD, not just to the message. The form is sections now, so an error
+        // raised while Assignment is open names a field that is not on screen — the reader is told
+        // what is wrong and shown somewhere it cannot be fixed.
+        if (!(s2.ntTitle || '').trim()) return this.setState({ ntErr: 'Task title is required', ntPane: 1 });
+        if (ntPersonScoped && !s2.ntApplicant) return this.setState({ ntErr: 'Applicant is required for this workflow', ntPane: 1 });
         const prMap = { Critical: 'high', High: 'high', Medium: 'medium', Low: 'low' };
         const isWorkflow = (this.state.ntKind || 'plain') !== 'plain';
         const tok8 = localStorage.getItem('stimespro:token');
@@ -32085,7 +32110,7 @@ class Component extends DCLogic {
       toggleQuickCreate: () => togglePop('quickCreate'),
       quickCreateItems: [
         ['Client', 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M20 8v6M23 11h-6', '#7C00FF', '#F3E8FF', () => this.setState({ addClient: true, acStep: 'form', quickCreate: false, acCName: '', acEmail: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPkg: 'Prospect / unassigned', acErr2: '' })],
-        ['Task', 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', '#6D5BD0', '#EFEBFF', () => this.setState({ active: 'Task List', activeGroup: 'Operations', taskModal: true, ntStep: 1, ntKind: 'plain', ntTitle: '', quickCreate: false })],
+        ['Task', 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', '#6D5BD0', '#EFEBFF', () => this.setState({ active: 'Task List', activeGroup: 'Operations', taskModal: true, ntPane: 0, ntKind: 'plain', ntTitle: '', quickCreate: false })],
         ['Invoice', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', '#B8860B', '#FEF4E2', () => this.setState({ active: 'Invoices', activeGroup: 'Finance', createInv: true, ciEditId: null, ciClient: '', ciLines: [['', '1', '']], ciIssued: new Date().toISOString().slice(0, 10), ciDue: '', ciSubject: '', ciNotes: '', ciErr: '', quickCreate: false })],
         ['Employee', 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0', '#0284C7', '#E4F4FD', () => this.setState({ empModal: true, quickCreate: false })],
         ['Appointment', 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', '#0E9355', '#E7F8EF', () => this.setState({ bookModal: true, quickCreate: false })],
