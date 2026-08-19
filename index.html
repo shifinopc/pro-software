@@ -12185,6 +12185,208 @@
   </sc-if>
 
   <!-- New Task modal -->
+  <!-- ── Workflow step wizard ──────────────────────────────────────────────────────────────────
+       One modal for a whole step. The rail on the left is a map, not a queue: every section is
+       reachable at any time, because changing the SLA should not mean answering four questions
+       about documents first. Nothing reaches the graph until Save. -->
+  <sc-if value="{{ wsShow }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ wsClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .18s ease both;">
+      <div onClick="{{ wsStop }}" class="fm-modal fm-rise" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+        <div style="height:3px; background:#F0EDF6; flex-shrink:0;"><div style="height:3px; width:{{ wsProgress }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-size:9.5px; font-weight:800; letter-spacing:.07em; color:#7C00FF; text-transform:uppercase;">Editing step · {{ wsTypeLabel }}</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.01em; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ wsStepName }}</div>
+          </div>
+          <div onClick="{{ wsClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <div style="display:flex; min-height:0; flex:1;">
+          <!-- the rail -->
+          <div style="width:196px; flex-shrink:0; border-right:1px solid #F0EDF6; padding:14px 10px; display:flex; flex-direction:column; gap:3px;">
+            <sc-for list="{{ wsPanes }}" as="pn" hint-placeholder-count="3">
+              <div onClick="{{ pn.go }}" style="display:flex; align-items:flex-start; gap:9px; padding:9px 10px; border-radius:11px; cursor:pointer; background:{{ pn.bg }}; transition:background .12s;" style-hover="background:#F7F3FD;">
+                <span style="width:19px; height:19px; border-radius:99px; background:{{ pn.numBg }}; color:{{ pn.numColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">{{ pn.num }}</span>
+                <span style="min-width:0;">
+                  <span style="display:block; font-size:12.5px; font-weight:600; color:{{ pn.color }};">{{ pn.label }}</span>
+                  <span style="display:block; font-size:10.5px; color:#A9A6B4; margin-top:1px; line-height:1.4;">{{ pn.hint }}</span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div class="fm-body" data-hidescroll="true" style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:#26074D;">{{ wsPaneTitle }}</div>
+            <div style="font-size:11.5px; color:#A9A6B4; margin-top:2px;">{{ wsPaneHint }}</div>
+
+            <sc-if value="{{ wsIsBasics }}" hint-placeholder-val="{{ true }}">
+              <div class="fm-grid">
+                <div class="fm-wide">
+                  <label class="fm-lab">Step label <span class="fm-req">*</span></label>
+                  <input value="{{ wsLabel }}" onInput="{{ setWsLabel }}" placeholder="e.g. Collect documents" class="fm-inp">
+                </div>
+                <sc-if value="{{ wsShowInstructions }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">What should the person do?</label>
+                    <textarea value="{{ wsInstructions }}" onInput="{{ setWsInstructions }}" rows="4" placeholder="Shown on the step when they open it — which papers, which counter, what counts as done" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.55; resize:vertical; font-family:inherit;"></textarea>
+                    <div class="fm-hint">Written onto the step as it is created, so editing this later leaves work already in progress alone.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ wsIsOwner }}" hint-placeholder-val="{{ false }}">
+              <div class="fm-grid">
+                <div class="fm-wide">
+                  <label class="fm-lab">Who owns this step?</label>
+                  <div class="fm-selwrap">
+                    <div class="fm-combo">
+                      <input data-dd data-open="{{ ddWsRoleOpen }}" onClick="{{ ddWsRoleOpenList }}" onInput="{{ ddWsRoleSetQuery }}" onKeyDown="{{ ddWsRoleKey }}" value="{{ ddWsRoleValue }}" placeholder="{{ ddWsRolePlaceholder }}" autocomplete="off" class="fm-inp">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ ddWsRoleOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="fm-dd">
+                        <sc-for list="{{ ddWsRoleRows }}" as="o" hint-placeholder-count="3">
+                          <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <div class="fm-hint">The engine hands the step to whoever holds this role.</div>
+                </div>
+                <div>
+                  <label class="fm-lab">Government portal</label>
+                  <div class="fm-selwrap">
+                    <div class="fm-combo">
+                      <input data-dd data-open="{{ ddWsPortalOpen }}" onClick="{{ ddWsPortalOpenList }}" onInput="{{ ddWsPortalSetQuery }}" onKeyDown="{{ ddWsPortalKey }}" value="{{ ddWsPortalValue }}" placeholder="{{ ddWsPortalPlaceholder }}" autocomplete="off" class="fm-inp">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ ddWsPortalOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="fm-dd">
+                        <sc-for list="{{ ddWsPortalRows }}" as="o" hint-placeholder-count="3">
+                          <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <div class="fm-hint">Steps are queued by portal.</div>
+                </div>
+                <div>
+                  <label class="fm-lab">SLA hours</label>
+                  <input value="{{ wsSla }}" onInput="{{ setWsSla }}" type="number" placeholder="e.g. 72" class="fm-inp">
+                  <div class="fm-hint">Blank means this step is not chased.</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ wsIsWork }}" hint-placeholder-val="{{ false }}">
+              <div class="fm-grid">
+                <div class="fm-wide">
+                  <label class="fm-lab">Documents to collect</label>
+                  <textarea value="{{ wsChecklist }}" onInput="{{ setWsChecklist }}" rows="5" placeholder="One per line&#10;Passport copy&#10;Signed offer letter" class="fm-inp" style="height:auto; padding:10px 13px; line-height:1.6; resize:vertical; font-family:inherit;"></textarea>
+                  <div class="fm-hint">Each line becomes a required item the step cannot be completed without.</div>
+                </div>
+                <sc-if value="{{ wsHasCaptures }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">Recorded on completion</label>
+                    <div style="font-size:12px; color:#6F6C7A; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; line-height:1.5;">{{ wsCaptures }}</div>
+                    <div class="fm-hint">Set by the country pack. Editing these is not done here — they are matched by name to the rules and documents downstream.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ wsIsDetail }}" hint-placeholder-val="{{ false }}">
+              <div class="fm-grid">
+                <sc-if value="{{ wsDetailIsDoc }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">Which document does this issue or renew?</label>
+                    <div class="fm-selwrap">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddWsDocOpen }}" onClick="{{ ddWsDocOpenList }}" onInput="{{ ddWsDocSetQuery }}" onKeyDown="{{ ddWsDocKey }}" value="{{ ddWsDocValue }}" placeholder="{{ ddWsDocPlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddWsDocOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-for list="{{ ddWsDocRows }}" as="o" hint-placeholder-count="3">
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                    <div class="fm-hint">The record created on the employee when the run reaches this step.</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ wsDetailIsText }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">{{ wsTextLabel }}</label>
+                    <input value="{{ wsTextValue }}" onInput="{{ setWsText }}" class="fm-inp">
+                    <div class="fm-hint">{{ wsTextHint }}</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ wsDetailIsNum }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <label class="fm-lab">Wait in days</label>
+                    <input value="{{ wsDays }}" onInput="{{ setWsDays }}" type="number" placeholder="e.g. 90" class="fm-inp">
+                  </div>
+                  <div>
+                    <label class="fm-lab">…or in hours</label>
+                    <input value="{{ wsHours }}" onInput="{{ setWsHours }}" type="number" placeholder="e.g. 48" class="fm-inp">
+                  </div>
+                </sc-if>
+                <sc-if value="{{ wsDetailIsMoney }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <label class="fm-lab">Amount</label>
+                    <input value="{{ wsAmount }}" onInput="{{ setWsAmount }}" type="number" placeholder="0.00" class="fm-inp">
+                  </div>
+                  <div>
+                    <label class="fm-lab">Service description</label>
+                    <input value="{{ wsService }}" onInput="{{ setWsService }}" placeholder="What the line says" class="fm-inp">
+                  </div>
+                  <div class="fm-wide">
+                    <label class="fm-lab">Is that amount before or after VAT?</label>
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                      <sc-for list="{{ wsVatRows }}" as="vr" hint-placeholder-count="2">
+                        <div onClick="{{ vr.pick }}" class="fm-opt" style="border:1.5px solid {{ vr.border }}; background:{{ vr.bg }}; border-radius:11px; padding:10px 13px; display:block;">
+                          <span style="display:block; font-size:12.5px; font-weight:600; color:{{ vr.color }};">{{ vr.label }}</span>
+                          <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px;">{{ vr.desc }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ wsDetailIsEnd }}" hint-placeholder-val="{{ false }}">
+                  <div class="fm-wide">
+                    <label class="fm-lab">How does the run finish here?</label>
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                      <sc-for list="{{ wsEndRows }}" as="er" hint-placeholder-count="3">
+                        <div onClick="{{ er.pick }}" class="fm-opt" style="border:1.5px solid {{ er.border }}; background:{{ er.bg }}; border-radius:11px; padding:10px 13px; display:block;">
+                          <span style="display:block; font-size:12.5px; font-weight:600; color:{{ er.color }};">{{ er.label }}</span>
+                          <span style="display:block; font-size:11px; color:#8C8899; margin-top:2px;">{{ er.desc }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        <div class="fm-foot" style="justify-content:space-between;">
+          <div>
+            <span onClick="{{ wsClose }}" style="font-size:12.5px; font-weight:600; color:#6F6C7A; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:9px;">
+            <sc-if value="{{ wsNotFirst }}" hint-placeholder-val="{{ false }}"><span onClick="{{ wsBack }}" style="font-size:12.5px; font-weight:600; color:#8C8899; padding:9px 12px; cursor:pointer;" style-hover="color:#7C00FF;">← Back</span></sc-if>
+            <sc-if value="{{ wsNotLast }}" hint-placeholder-val="{{ true }}"><span onClick="{{ wsNext }}" style="font-size:12.5px; font-weight:600; color:#7C00FF; padding:9px 14px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF;">Next →</span></sc-if>
+            <button onClick="{{ wsSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save step</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ showTaskModal }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeTaskModal }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <!-- THE HOUSE DIALOG SHELL, which this one was not using.
@@ -22846,16 +23048,21 @@ class Component extends DCLogic {
         this.setState({ wfSelNode: 0 });
         _gSync(g3); this.toast('Step removed — Save to persist');
       };
+        // Write an edited node back into the graph. The wizard hands over a whole node rather than
+        // patching field by field, so what lands is exactly what the dialog was showing.
+        this._wfApplyNode = (i4, node4) => {
+          const g4 = _gClone();
+          const row4 = gNodesRaw[i4]; if (!row4) return;
+          const at4 = g4.nodes.findIndex(n4 => n4.id === row4[0]); if (at4 < 0) return;
+          g4.nodes[at4] = { ...g4.nodes[at4], label: node4.label, config: node4.config || {} };
+          _gSync(g4); this.toast('Step updated — Save to persist');
+        };
       this._wfEditNode = (i3) => {
         const g3 = _gClone();
         const row3 = gNodesRaw[i3]; if (!row3) return;
         const node3 = g3.nodes.find(n3 => n3.id === row3[0]); if (!node3) return;
         // Sequential questions. The in-app dialog resolves rather than blocks, so the chain is
         // awaited — cancelling any step stops the edit there, as the native prompts did.
-        // How many questions this type asks. Fixed for most; a task branches on its own answers and
-        // can ask seven or ten, so it declares no total rather than a wrong one.
-        const WIZ_N3 = { decision: 2, branch: 2, notify: 2, notification: 2, delay: 2, webhook: 2, end: 2, issue_document: 2, courier: 4 };
-        this._wizCtx = { name: 'Editing · ' + (node3.label || node3.type), i: 0, n: WIZ_N3[node3.type] || null };
         (async () => {
           const label3 = await this._prompt('Step label:', node3.label || '', { okLabel: 'Next' });
           if (label3 == null) return;
@@ -23260,8 +23467,168 @@ class Component extends DCLogic {
       // button is absent exactly when pressing it would be refused, rather than offering and failing.
       wfCfgRemovable: gSelType !== 'trigger'
         && (gSelType !== 'end' || gNodesRaw.filter(r3 => r3[3] === 'end').length > 1),
-      wfEditStep: () => this._wfEditNode ? this._wfEditNode(gSel) : this.toast('Select one of your workflows first', 'error'),
+      // Opens the step wizard on a DEEP CLONE, so nothing reaches the graph until Save.
+      wfEditStep: () => {
+        const row5 = gNodesRaw[gSel];
+        const g5 = wfCanvasGraph ? JSON.parse(JSON.stringify(wfCanvasGraph)) : null;
+        const n5 = (g5 && row5) ? g5.nodes.find(x5 => x5.id === row5[0]) : null;
+        if (!n5) return this.toast('Select one of your workflows first', 'error');
+        this.setState({ wsNode: { ...n5, config: n5.config || {} }, wsIdx: gSel, wsPane: 0 });
+      },
       wfRemoveStep: () => this._wfRemoveNode ? this._wfRemoveNode(gSel) : this.setState({ wfSelNode: 1 }),
+    };
+
+    // ── The step editor ───────────────────────────────────────────────────────────────────────
+    //
+    // This was a chain of up to ten separate dialogs, each asking one thing and looking exactly like
+    // the last. Answering question two meant you could no longer see question one, changing your
+    // mind meant cancelling the whole chain, and nothing on screen ever showed the step as a whole.
+    //
+    // It is one modal now, with the step's settings grouped under named sections you can move
+    // between in any order — the sections are a map of the step, not a queue. Nothing is written to
+    // the graph until Save, so leaving changes nothing, and the working copy is a deep clone for the
+    // same reason.
+    const _wsNode = this.state.wsNode || null;
+    const _wsCfg = (_wsNode && _wsNode.config) || {};
+    const _wsSet = (patch) => this.setState({ wsNode: { ..._wsNode, ...patch } });
+    const _wsCfgSet = (patch) => {
+      const next = { ..._wsCfg, ...patch };
+      // A blank field means "not set" rather than "set to empty" — the engine checks for presence.
+      Object.keys(patch).forEach(k => { if (patch[k] === '' || patch[k] == null) delete next[k]; });
+      this.setState({ wsNode: { ..._wsNode, config: next } });
+    };
+    const _wsType = _wsNode ? String(_wsNode.type || '') : '';
+    const _wsIsTask = _wsType === 'task' || _wsType === 'approval';
+
+    // Which sections this type has. A delay has no ownership and no documents; showing empty
+    // sections would make the wizard look like it lost something.
+    const _wsDetailName = ({
+      issue_document: 'Document', charge_fee: 'Amount', invoice: 'Amount', draft_invoice: 'Amount',
+      create_invoice: 'Amount', decision: 'Condition', branch: 'Condition', notify: 'Message',
+      notification: 'Message', courier: 'Shipment', delay: 'Timing', webhook: 'Endpoint', end: 'Outcome',
+    })[_wsType] || null;
+    const _wsPanes = [
+      { key: 'basics', label: 'Basics', hint: 'What this step is called' },
+      ...(_wsIsTask ? [{ key: 'owner', label: 'Ownership', hint: 'Who does it, and where' }] : []),
+      ...(_wsIsTask ? [{ key: 'work', label: 'The work', hint: 'What they collect and record' }] : []),
+      ...(_wsDetailName ? [{ key: 'detail', label: _wsDetailName, hint: 'Settings for this kind of step' }] : []),
+    ];
+    const _wsPane = Math.min(this.state.wsPane || 0, Math.max(0, _wsPanes.length - 1));
+    const _wsPaneKey = (_wsPanes[_wsPane] || {}).key || 'basics';
+
+    const _wsRoles = [
+      { value: 'pro_officer', label: 'PRO Officer' }, { value: 'accountant', label: 'Accountant' },
+      { value: 'admin', label: 'Admin' }, { value: 'super_admin', label: 'Super Admin' },
+      { value: 'sales', label: 'Sales' },
+      ...((this.state.customRoles || []).map(c => ({ value: c.id, label: c.label }))),
+    ];
+    const _wsPortals = (Array.isArray(this.state.govCentersData) ? this.state.govCentersData : []).map(g => ({ value: g.name, label: g.name }));
+    const _wsDocTypes = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []).map(d => ({ value: d.name, label: d.name }));
+
+    const stepWizardApi = {
+      wsShow: !!_wsNode,
+      wsStepName: _wsNode ? (_wsNode.label || _wsType || 'Step') : '',
+      wsTypeLabel: _wsType.replace(/_/g, ' '),
+      wsClose: () => this.setState({ wsNode: null, wsIdx: null, wsPane: 0 }),
+      wsStop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+      // The rail. Every section reachable at any time — this is a step's settings, not a queue.
+      wsPanes: _wsPanes.map((pn, i) => ({
+        label: pn.label, hint: pn.hint, num: String(i + 1),
+        on: i === _wsPane,
+        bg: i === _wsPane ? '#F5EEFF' : 'transparent',
+        color: i === _wsPane ? '#7C00FF' : '#6F6C7A',
+        numBg: i === _wsPane ? '#7C00FF' : '#EDEBF2',
+        numColor: i === _wsPane ? '#fff' : '#8C8899',
+        go: () => this.setState({ wsPane: i }),
+      })),
+      wsPaneTitle: (_wsPanes[_wsPane] || {}).label || '',
+      wsPaneHint: (_wsPanes[_wsPane] || {}).hint || '',
+      wsIsBasics: _wsPaneKey === 'basics',
+      wsIsOwner: _wsPaneKey === 'owner',
+      wsIsWork: _wsPaneKey === 'work',
+      wsIsDetail: _wsPaneKey === 'detail',
+      wsProgress: _wsPanes.length ? Math.round(((_wsPane + 1) / _wsPanes.length) * 100) + '%' : '0%',
+
+      // Basics
+      wsLabel: _wsNode ? (_wsNode.label || '') : '',
+      setWsLabel: (e) => _wsSet({ label: e.target.value }),
+      wsInstructions: String(_wsCfg.instructions || ''),
+      setWsInstructions: (e) => _wsCfgSet({ instructions: e.target.value }),
+      wsShowInstructions: _wsIsTask,
+
+      // Ownership
+      wsSla: _wsCfg.slaHours == null ? '' : String(_wsCfg.slaHours),
+      setWsSla: (e) => { const v = e.target.value; _wsCfgSet({ slaHours: v === '' ? '' : (parseInt(v) || 0) }); },
+      ...mkDdCombo('ddWsRole', [{ title: '', options: _wsRoles }], String(_wsCfg.assigneeRole || ''),
+        (v) => _wsCfgSet({ assigneeRole: v }), 'Nobody — the step waits to be claimed'),
+      ...mkDdCombo('ddWsPortal', [{ title: '', options: _wsPortals }], String(_wsCfg.govCenter || ''),
+        (v) => _wsCfgSet({ govCenter: v }), 'Office work — no portal'),
+
+      // The work
+      wsChecklist: (Array.isArray(_wsCfg.checklist) ? _wsCfg.checklist : []).map(i => (i && i.label) || i || '').join('\n'),
+      setWsChecklist: (e) => {
+        const rows = String(e.target.value).split('\n').map(x => x.trim()).filter(Boolean);
+        _wsCfgSet({ checklist: rows.length ? rows.map((label, i) => ({ key: 'i' + (i + 1), label, required: true })) : '' });
+      },
+      wsCaptures: (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).map(c => (c && c.var) || '').filter(Boolean).join(', '),
+      wsHasCaptures: !!(Array.isArray(_wsCfg.captures) && _wsCfg.captures.length),
+
+      // Type-specific
+      wsDetailIsDoc: _wsType === 'issue_document',
+      wsDetailIsText: ['decision', 'branch', 'notify', 'notification', 'webhook', 'courier'].includes(_wsType),
+      wsDetailIsNum: _wsType === 'delay',
+      wsDetailIsMoney: ['charge_fee', 'invoice', 'draft_invoice', 'create_invoice'].includes(_wsType),
+      wsDetailIsEnd: _wsType === 'end',
+      ...mkDdCombo('ddWsDoc', [{ title: '', options: _wsDocTypes }], String(_wsCfg.docType || ''),
+        (v) => _wsCfgSet({ docType: v }), 'Which document this issues'),
+      wsTextLabel: ({ decision: 'Condition variable', branch: 'Condition variable', notify: 'Message',
+        notification: 'Message', webhook: 'Webhook URL', courier: 'What is being sent' })[_wsType] || 'Value',
+      wsTextHint: ({ decision: 'The run variable this branches on, e.g. passportValid',
+        branch: 'The run variable this branches on', notify: 'Sent to the employee when the run reaches here',
+        webhook: 'Called when the run reaches this step', courier: 'Described on the courier job' })[_wsType] || '',
+      wsTextKey: ({ decision: 'var', branch: 'var', notify: 'message', notification: 'message', webhook: 'url', courier: 'description' })[_wsType] || 'value',
+      wsTextValue: String(_wsCfg[({ decision: 'var', branch: 'var', notify: 'message', notification: 'message', webhook: 'url', courier: 'description' })[_wsType] || 'value'] || ''),
+      setWsText: (e) => _wsCfgSet({ [({ decision: 'var', branch: 'var', notify: 'message', notification: 'message', webhook: 'url', courier: 'description' })[_wsType] || 'value']: e.target.value }),
+      wsHours: _wsCfg.hours == null ? '' : String(_wsCfg.hours),
+      setWsHours: (e) => { const v = e.target.value; _wsCfgSet({ hours: v === '' ? '' : (parseInt(v) || 0) }); },
+      wsDays: _wsCfg.days == null ? '' : String(_wsCfg.days),
+      setWsDays: (e) => { const v = e.target.value; _wsCfgSet({ days: v === '' ? '' : (parseInt(v) || 0) }); },
+      wsAmount: _wsCfg.amount == null ? '' : String(_wsCfg.amount),
+      setWsAmount: (e) => { const v = e.target.value; _wsCfgSet({ amount: v === '' ? '' : (parseFloat(v) || 0) }); },
+      wsService: String(_wsCfg.service || ''),
+      setWsService: (e) => _wsCfgSet({ service: e.target.value }),
+      wsVatRows: [
+        ['Includes VAT', true, 'The amount above is what the client pays'],
+        ['Before VAT', false, 'VAT is added on top of the amount above'],
+      ].map(([label, val, desc]) => {
+        const on = (_wsCfg.feeIncludesVat !== false) === val;
+        return { label, desc, border: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#FBF7FF' : '#fff',
+          color: on ? '#7C00FF' : '#1A1523', pick: () => _wsCfgSet({ feeIncludesVat: val }) };
+      }),
+      wsEndRows: [
+        ['Completed', 'completed', 'The normal finish'],
+        ['Approved', 'approved', 'Finished with an approval outcome'],
+        ['Rejected', 'rejected', 'Finished having been refused'],
+      ].map(([label, val, desc]) => {
+        const on = String(_wsCfg.result || 'completed') === val;
+        return { label, desc, border: on ? '#7C00FF' : '#E4E0EC', bg: on ? '#FBF7FF' : '#fff',
+          color: on ? '#7C00FF' : '#1A1523', pick: () => _wsCfgSet({ result: val }) };
+      }),
+
+      // Moving about
+      wsAtFirst: _wsPane === 0,
+      wsNotFirst: _wsPane > 0,
+      wsAtLast: _wsPane >= _wsPanes.length - 1,
+      wsNotLast: _wsPane < _wsPanes.length - 1,
+      wsBack: () => this.setState({ wsPane: Math.max(0, _wsPane - 1) }),
+      wsNext: () => this.setState({ wsPane: Math.min(_wsPanes.length - 1, _wsPane + 1) }),
+      wsSave: () => {
+        const idx = this.state.wsIdx;
+        if (idx == null || !_wsNode) return this.setState({ wsNode: null, wsIdx: null, wsPane: 0 });
+        if (!this._wfApplyNode) return this.setState({ wsNode: null, wsIdx: null, wsPane: 0 });
+        this._wfApplyNode(idx, _wsNode);
+        this.setState({ wsNode: null, wsIdx: null, wsPane: 0 });
+      },
     };
 
     const workflowApi = {
@@ -32502,7 +32869,7 @@ class Component extends DCLogic {
       ...svcNewApi, ...svcEditApi, ...svcDelApi, renewalGroups,
       ...requestsApi, ...quotesApi, ...planApi, ...mobileApi, ...calApi, ...notifPopApi, ...searchApi, ...apptApi, ...blApi, ...needsTodayApi, ...courierApi,
       ...tasksApi, ...tasksApi2, ...myTasksApi, ...myWorkApi, ...activityApi, ...approvalsApi, ...slaApi, ...slaApi2, ...queueApi, ...complianceApi,
-      ...reportsApi, ...financeApi, ...govCentersApi, ...packagesApi, ...countryApi, ...docTypesApi, ...departmentsApi, ...workflowApi, ...settingsAdminApi,
+      ...reportsApi, ...financeApi, ...govCentersApi, ...packagesApi, ...countryApi, ...docTypesApi, ...departmentsApi, ...workflowApi, ...stepWizardApi, ...settingsAdminApi,
       ...pageFlags, ...crmApi, showDashboard, canWrite, canWriteTasks,
       setTabGeneral: setTab === 'General', setTabUsers: setTab === 'Users', setTabPermissions: setTab === 'Permissions',
       setTabConfigure: setTab === 'Configure', setTabNotifications: setTab === 'Notifications',
