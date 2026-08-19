@@ -11947,7 +11947,15 @@
                   <span onClick="{{ openWorkflowRun }}" style="font-size:10.5px; font-weight:650; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">View workflow</span>
                 </sc-if>
               </div>
-              <div style="display:flex; flex-direction:column; margin-top:11px; max-height:250px; overflow-y:auto; padding-right:6px; border-bottom:1px solid #F5F3F9;">
+              <!-- NO INNER SCROLLER. This kept the old design's `max-height:250px; overflow-y:auto`,
+                   which does two things the handoff does not ask for. It puts a second scrollbar
+                   inside a sheet that already scrolls — and, less obviously, `overflow` makes this a
+                   CLIPPING BOX: the live step's pulse ring is a box-shadow that expands 6px around a
+                   token sitting hard against the left content edge, so the ring was sliced off flat
+                   on that side. A round marker with one straight edge, on the only element in the
+                   drawer that is meant to draw the eye.
+                   The steps sit in a plain column now; the sheet does the scrolling, as specified. -->
+              <div style="display:flex; flex-direction:column; margin-top:11px;">
                 <sc-for data-wf-stages="true" list="{{ wdStages }}" as="s" hint-placeholder-count="5">
                   <!-- A STEP IS A CARD WITH A TOKEN BESIDE IT, per the handoff: done is filled and
                        quiet, the live one is raised and outlined in the accent, everything ahead is
