@@ -11855,44 +11855,67 @@
   <sc-if value="{{ showWorkDrawer }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" data-hidescroll="true" style="width:100%; max-width:460px; height:100%; background:#fff; box-shadow:-18px 0 50px rgba(38,7,77,.2); display:flex; flex-direction:column; overflow:hidden; animation:slideInRight .28s cubic-bezier(.16,1,.3,1) both;">
-        <div style="position:sticky; top:0; background:#fff; border-bottom:1px solid #F0EDF6; padding:20px 24px; display:flex; align-items:flex-start; gap:12px; z-index:2;">
+        <div style="position:sticky; top:0; background:#fff; border-bottom:1px solid #F0EDF6; padding:20px 24px 18px; display:flex; align-items:flex-start; gap:12px; z-index:2; position:sticky;">
           <div style="flex:1; min-width:0;">
-            <span style="font-size:9.5px; font-weight:700; color:#6D5BD0; background:#EFEBFF; padding:3px 10px; border-radius:99px;">{{ wdKind }}</span>
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; margin-top:9px; line-height:1.3;">{{ wdTitle }}</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ wdClient }} · ⚙ {{ wdRelated }}</div>
+            <span style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#7C00FF; text-transform:uppercase;">{{ wdKind }}</span>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.03em; margin-top:8px; line-height:1.22; color:#15111D;">{{ wdTitle }}</div>
+            <div style="display:flex; align-items:center; gap:9px; font-size:11.5px; color:#8C8899; margin-top:8px; flex-wrap:wrap;">
+              <span style="font-weight:650; color:#3E3949;">{{ wdClient }}</span>
+              <span style="width:3px; height:3px; border-radius:99px; background:#D6D1E0;"></span>
+              <span>{{ wdRelated }}</span>
+            </div>
           </div>
           <div onClick="{{ closeWorkDrawer }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+          <!-- HOW FAR THIS RUN HAS GOT. Only drawn when there is a run to measure — a bar that is
+               always the same width is decoration wearing the clothes of information. -->
+          <sc-if value="{{ wdProgShow }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; left:24px; right:24px; bottom:0; height:2px; background:#F1EEF7; border-radius:99px; overflow:hidden;">
+              <div style="height:100%; width:{{ wdProgWidth }}; background:linear-gradient(90deg,#7C00FF,#B36BFF); border-radius:99px;"></div>
+            </div>
+          </sc-if>
         </div>
         <div style="padding:20px 24px; display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto;">
           <!-- Plain task detail -->
           <sc-if value="{{ wdIsPlain }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <span style="font-size:10.5px; font-weight:700; color:{{ wdPrColor }}; background:{{ wdPrBg }}; padding:4px 12px; border-radius:99px;">{{ wdPriority }} priority</span>
-              <span style="font-size:10.5px; font-weight:700; color:{{ wdDueColor }}; background:#F3F1F7; padding:4px 12px; border-radius:99px;">Due {{ wdDue }}</span>
-              <span style="font-size:10.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:4px 12px; border-radius:99px;">{{ wdRole }}</span>
+            <!-- flex-shrink:0, or the drawer body — a flex column with more content than height —
+                 squashes this to a 4px sliver with its three 72px cells overflowing out of it. The
+                 pills it replaced were text and carried their own min-content height; a grid does
+                 not, so it has to say it. -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #F1EEF7; border-radius:16px; overflow:hidden; flex-shrink:0;">
+              <div style="padding:13px 14px; border-right:1px solid #F1EEF7;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">PRIORITY</div><div style="font-size:12.5px; font-weight:700; color:{{ wdPrColor }}; margin-top:5px;">{{ wdPriority }}</div></div>
+              <div style="padding:13px 14px; border-right:1px solid #F1EEF7;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">DUE</div><div style="font-size:12.5px; font-weight:700; color:{{ wdDueColor }}; margin-top:5px;">{{ wdDue }}</div></div>
+              <div style="padding:13px 14px;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">OWNER ROLE</div><div style="font-size:12.5px; font-weight:700; color:#3E3949; margin-top:5px;">{{ wdRole }}</div></div>
             </div>
-            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">STATUS</div>
-            <div style="display:flex; align-items:center; gap:0; margin-top:10px;">
+            <div style="display:flex; align-items:center; gap:0; margin-top:16px; flex-shrink:0;">
               <sc-for list="{{ wdStepper }}" as="s" hint-placeholder-count="3">
                 <div style="display:flex; align-items:center; flex:1;">
-                  <span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; animation:{{ s.anim }};"></span>
-                  <span style="font-size:11px; font-weight:600; color:#4B4757; margin-left:7px; white-space:nowrap;">{{ s.label }}</span>
-                  <div style="flex:1; height:2px; background:#F0EDF6; margin:0 8px;"></div>
+                  <span style="width:9px; height:9px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; animation:{{ s.anim }};"></span>
+                  <span style="font-size:10.5px; font-weight:700; color:#57525F; margin-left:7px; white-space:nowrap;">{{ s.label }}</span>
+                  <div style="flex:1; height:1px; background:#EDE9F5; margin:0 9px;"></div>
                 </div>
               </sc-for>
             </div>
             <sc-if value="{{ wdBlockedShow }}" hint-placeholder-val="{{ false }}">
               <div style="margin-top:18px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:12px; padding:12px 14px;"><div style="font-size:12px; font-weight:700; color:#C0353A;">⛔ Parked — waiting on prerequisite</div><div style="font-size:11.5px; color:#8A6D1F; margin-top:3px; color:#C0353A;">{{ wdBlocked }}</div><button onClick="{{ wdResume }}" style="margin-top:10px; background:#C0353A; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.92);">Check prerequisite</button></div>
             </sc-if>
-            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">LINKED RECORDS</div>
-            <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
-              <sc-if value="{{ wdCompShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">🛡</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdComp }}</div><div style="font-size:10.5px; color:#A9A6B4;">Compliance document — renews when this task closes</div></div></div></sc-if>
-              <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openWorkflowRun }}" title="Show this run's steps" style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="font-size:15px;">⚙</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdWf }}</div><div style="font-size:10.5px; color:#A9A6B4;">Workflow instance that launched this task</div></div></div></sc-if>
-              <sc-if value="{{ wdEmpShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">👤</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdEmp }}</div><div style="font-size:10.5px; color:#A9A6B4;">Applicant / subject employee</div></div></div></sc-if>
-              <sc-if value="{{ wdDocShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px;"><span style="font-size:15px;">📄</span><div style="flex:1;"><div style="font-size:12.5px; font-weight:600;">{{ wdDocType }}</div><div style="font-size:10.5px; color:#A9A6B4;">Document type</div></div></div></sc-if>
+            <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.11em; margin-top:24px;">LINKED RECORDS</div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:11px;">
+              <sc-if value="{{ wdCompShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:11px; border:1px solid #F1EEF7; border-radius:14px; padding:12px 14px;"><span style="width:32px; height:32px; border-radius:10px; background:#F7F4FC; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">🛡</span><div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:650; color:#15111D;">{{ wdComp }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">Compliance document — renews when this task closes</div></div></div></sc-if>
+              <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openWorkflowRun }}" title="Show this run's steps" style="display:flex; align-items:center; gap:11px; border:1px solid #F1EEF7; border-radius:14px; padding:12px 14px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="width:32px; height:32px; border-radius:10px; background:#F7F4FC; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">⚙</span><div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:650; color:#15111D;">{{ wdWf }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">Workflow instance that launched this task</div></div><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9C4D4" stroke-width="2.4" stroke-linecap="round" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"></path></svg></div></sc-if>
+              <sc-if value="{{ wdEmpShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:11px; border:1px solid #F1EEF7; border-radius:14px; padding:12px 14px;"><span style="width:32px; height:32px; border-radius:10px; background:#F7F4FC; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">👤</span><div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:650; color:#15111D;">{{ wdEmp }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">Applicant / subject employee</div></div></div></sc-if>
+              <sc-if value="{{ wdDocShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:11px; border:1px solid #F1EEF7; border-radius:14px; padding:12px 14px;"><span style="width:32px; height:32px; border-radius:10px; background:#F7F4FC; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;">📄</span><div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:650; color:#15111D;">{{ wdDocType }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:2px;">Document type</div></div></div></sc-if>
             </div>
             <sc-if value="{{ wdHasStages }}" hint-placeholder-val="{{ false }}">
-              <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">PROCESS · WHO DID WHAT</div>
+              <div style="display:flex; align-items:center; gap:9px; margin-top:24px;">
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:14.5px; font-weight:700; color:#15111D; letter-spacing:-.02em;">Process</span>
+                <sc-if value="{{ wdProgShow }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size:9.5px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:3px 9px; border-radius:99px;">{{ wdProgLabel }}</span>
+                </sc-if>
+                <div style="flex:1;"></div>
+                <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ true }}">
+                  <span onClick="{{ openWorkflowRun }}" style="font-size:10.5px; font-weight:650; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">View workflow</span>
+                </sc-if>
+              </div>
               <div style="display:flex; flex-direction:column; margin-top:11px; max-height:250px; overflow-y:auto; padding-right:6px; border-bottom:1px solid #F5F3F9;">
                 <sc-for data-wf-stages="true" list="{{ wdStages }}" as="s" hint-placeholder-count="5">
                   <div style="display:flex; gap:11px; position:relative; padding-bottom:16px;">
@@ -11901,10 +11924,35 @@
                          reach the bottom of the content box, leaving every segment hanging short of
                          the dot below it. left:6px centres a 2px line under a 14px dot. -->
                     <sc-if value="{{ s.notLast }}" hint-placeholder-val="{{ true }}">
-                      <div style="position:absolute; left:6px; top:{{ s.lineTop }}; bottom:0; width:2px; background:#F0EDF6;"></div>
+                      <div style="position:absolute; left:12px; top:{{ s.lineTop }}; bottom:0; width:2px; background:#F0EDF6;"></div>
                     </sc-if>
-                    <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;"><sc-if value="{{ s.current }}" hint-placeholder-val="{{ false }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1; animation:pulseBadge 1.4s ease-in-out infinite; box-shadow:0 0 0 4px rgba(124,0,255,.15);"></span></sc-if><sc-if value="{{ s.notCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1;"></span></sc-if></div>
-                    <div style="margin-top:-1px; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if><sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10.5px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if></div>
+                    <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:26px;">
+                      <!-- A DONE STEP IS TICKED, not merely coloured. Three states, three markers,
+                           each its own flag because sc-if has no else. The dot colour still carries
+                           refusal and engine-skip, which are neither done nor pending. -->
+                      <sc-if value="{{ s.tlDone }}" hint-placeholder-val="{{ true }}">
+                        <span style="width:26px; height:26px; border-radius:99px; background:#12B76A; display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:1; box-shadow:0 3px 8px rgba(18,183,106,.28);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                      </sc-if>
+                      <sc-if value="{{ s.tlCurrent }}" hint-placeholder-val="{{ false }}">
+                        <span style="width:26px; height:26px; border-radius:99px; background:linear-gradient(140deg,#9333EA,#7C00FF); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:1; box-shadow:0 4px 12px rgba(124,0,255,.35); animation:pulseBadge 1.8s ease-in-out infinite;"><span style="width:7px; height:7px; border-radius:99px; background:#fff;"></span></span>
+                      </sc-if>
+                      <sc-if value="{{ s.tlFuture }}" hint-placeholder-val="{{ false }}">
+                        <span style="width:26px; height:26px; border-radius:99px; border:1.5px solid #EAE6F2; background:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:1;"><span style="width:6px; height:6px; border-radius:99px; background:{{ s.dot }};"></span></span>
+                      </sc-if>
+                    </div>
+                    <div style="margin-top:3px; min-width:0; flex:1;">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:12.5px; font-weight:650; color:#15111D; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.ic }} {{ s.label }}</span>
+                        <sc-if value="{{ s.tlCurrent }}" hint-placeholder-val="{{ false }}">
+                          <span style="flex-shrink:0; font-size:8.5px; font-weight:800; letter-spacing:.08em; color:#7C00FF; background:#F5EEFF; padding:3px 7px; border-radius:99px;">• LIVE</span>
+                        </sc-if>
+                      </div>
+                      <div style="display:flex; align-items:center; gap:7px; margin-top:4px;">
+                        <sc-if value="{{ s.hasWho }}" hint-placeholder-val="{{ true }}">
+                          <span style="width:17px; height:17px; border-radius:99px; background:#EFEBFF; color:#5B21B6; font-size:7.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ s.initials }}</span>
+                        </sc-if>
+                        <span style="font-size:10.5px; color:#A9A6B4;">{{ s.who }} · {{ s.when }}</span>
+                      </div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if><sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10.5px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if></div>
                   </div>
                 </sc-for>
               </div>
@@ -11915,9 +11963,14 @@
                  label now appears only when there is something to label, and takes its spacing from
                  the content above rather than from whatever room is left over. -->
             <sc-if value="{{ wdHasSuggestions }}" hint-placeholder-val="{{ false }}">
-              <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; padding:20px 24px 0;">SUGGESTED NEXT STEPS</div>
-              <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px; padding:0 24px;">
-                <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3"><div style="background:#FBF7FF; border:1px solid #EEE0FF; border-radius:11px; padding:10px 13px; font-size:12px; color:#4B4757;">{{ g }}</div></sc-for>
+              <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.11em; padding:24px 24px 0;">SUGGESTED NEXT STEPS</div>
+              <div style="display:flex; flex-direction:column; gap:2px; margin-top:9px; padding:0 24px;">
+                <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:flex-start; gap:10px; padding:9px 2px; font-size:12px; color:#4B4757; line-height:1.45;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+                    <span>{{ g }}</span>
+                  </div>
+                </sc-for>
               </div>
             </sc-if>
             <sc-if value="{{ wdDelegatedTo }}" hint-placeholder-val="{{ false }}"><div style="margin:16px 24px 0; background:#E7F8EF; border:1px solid #A6E5C3; border-radius:11px; padding:10px 13px; font-size:12px; font-weight:600; color:#0E6B40;">✓ Reassigned to {{ wdDelegatedTo }} · logged to activity</div></sc-if>
@@ -26306,11 +26359,28 @@ class Component extends DCLogic {
           anim: s === selPlain.status ? 'pulseBadge 1.4s ease-in-out infinite' : 'none' })),
         wdEmpShow: selPlain.empShow, wdEmp: selPlain.employee,
         wdHasStages: selPlain.wfShow,
+        // HOW FAR ALONG, COUNTED — not the mock's fixed 56%. A progress bar that always shows the
+        // same width is decoration pretending to be information, and this one sits directly under
+        // the task title where it reads as a fact about this task.
+        ...(() => {
+          const run3 = (this.state.wfRunFor === selId) ? this.state.wfRunDetail : null;
+          const tasks3 = (run3 && Array.isArray(run3.tasks)) ? run3.tasks : [];
+          const total3 = tasks3.length;
+          const done3 = tasks3.filter(t3 => t3.status === 'done' || t3.status === 'approved').length;
+          return {
+            wdProgShow: selPlain.wfShow && total3 > 0,
+            wdProgWidth: total3 ? Math.round((done3 / total3) * 100) + '%' : '0%',
+            wdProgLabel: total3 ? done3 + ' of ' + total3 + ' complete' : '',
+          };
+        })(),
         // WIRED: real run steps (template graph order + WorkflowTask states) when the run detail has
         // loaded; a small placeholder while loading; nothing invented.
         wdStages: (selPlain.wfShow ? (() => {
           const run2 = (this.state.wfRunFor === selId) ? this.state.wfRunDetail : null;
-          if (!run2) return [{ label: 'Loading run steps…', who: '—', when: '—', dot: '#D8D3E3', current: false, ic: '⏳' }];
+          // The placeholder needs the timeline's own flags too. Without tlFuture it matched none of
+          // the three markers and drew a row with an empty marker column — a loading state that
+          // looked like a rendering fault.
+          if (!run2) return [{ label: 'Loading run steps…', who: '—', when: '—', dot: '#D8D3E3', current: false, ic: '⏳', tlDone: false, tlCurrent: false, tlFuture: true, hasWho: false, initials: '' }];
           const g2 = (run2.template && run2.template.graph) || {};
           const nodes2 = Array.isArray(g2.nodes) ? g2.nodes : [];
           const edges2 = Array.isArray(g2.edges) ? g2.edges : [];
@@ -26369,6 +26439,20 @@ class Component extends DCLogic {
               when: engSkip2 ? 'skipped by the engine' : cur2 ? 'in progress' : (isStart2 && !wt2) ? fmtAt2(run2.startedAt) : done2 ? fmtAt2(wt2 ? wt2.completedAt : ranAt2[n2.id]) : rej2 ? 'rejected' : skipped2 ? 'skipped' : (notRun2 && run2.status === 'completed') ? 'not run' : '—',
               dot: engSkip2 ? '#B8860B' : rej2 ? '#C0353A' : done2 ? '#12B76A' : cur2 ? '#7C00FF' : '#D8D3E3',
               current: cur2, ic: engSkip2 ? '⚠' : (IC2[n2.type] || '📝'),
+              // The timeline draws three different markers, and sc-if has no else — so each state
+              // is its own flag rather than being inferred in the template.
+              tlDone: done2 && !rej2 && !engSkip2 && !cur2,
+              tlCurrent: cur2,
+              tlFuture: !cur2 && !(done2 && !rej2 && !engSkip2) ,
+              // Initials for the little avatar. Built from whoever actually did it, so a step nobody
+              // has touched shows no avatar at all rather than a circle with a dash in it.
+              initials: (() => {
+                const w3 = engSkip2 ? '' : cur2 ? String((wt2 && (wt2.assignee || wt2.assigneeRole)) || '')
+                  : done2 ? String((wt2 && wt2.completedBy) || '') : '';
+                const parts3 = w3.replace(/[^A-Za-z ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+                return parts3.length ? (parts3[0][0] + (parts3[1] ? parts3[1][0] : '')).toUpperCase() : '';
+              })(),
+              hasWho: !!(engSkip2 ? false : cur2 ? (wt2 && (wt2.assignee || wt2.assigneeRole)) : done2 ? (wt2 && wt2.completedBy) : false),
               warn: engSkip2, warnWhy: engSkip2 ? skipWhy2[n2.id] : '',
               // THE DEADLINE THE LAW SETS, which is not the one this office set itself. It reads
               // differently from the SLA on purpose — an SLA slipping is a conversation, and these
