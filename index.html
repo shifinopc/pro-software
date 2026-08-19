@@ -11743,7 +11743,7 @@
                       <div style="position:absolute; left:6px; top:{{ s.lineTop }}; bottom:0; width:2px; background:#F0EDF6;"></div>
                     </sc-if>
                     <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;"><sc-if value="{{ s.current }}" hint-placeholder-val="{{ false }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1; animation:pulseBadge 1.4s ease-in-out infinite; box-shadow:0 0 0 4px rgba(124,0,255,.15);"></span></sc-if><sc-if value="{{ s.notCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1;"></span></sc-if></div>
-                    <div style="margin-top:-1px; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if><sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10.5px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if></div></div>
+                    <div style="margin-top:-1px; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if><sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10.5px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if></div>
                   </div>
                 </sc-for>
               </div>
@@ -11897,9 +11897,15 @@
               <button onClick="{{ approveStep }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:11px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Approve</button>
             </div>
           </sc-if>
+          <!-- A FOOTER, not a button floating over the fields. The body scrolls properly now that
+               its container closes where it should, so the action can sit in a bar pinned to the
+               bottom of it — the same shape the dialogs use — with the deadline beside it rather
+               than scrolling away above it. -->
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
-            <div style="font-size:11px; font-weight:600; color:{{ wdSlaColor }}; margin-top:20px;">⏱ {{ wdFootNote }}</div>
-            <button onClick="{{ completeStep }}" style="position:sticky; bottom:8px; z-index:2; width:100%; margin-top:11px; background:{{ wdCompleteBg }}; color:#fff; border:none; font-size:13px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer;">Complete step</button>
+            <div style="position:sticky; bottom:0; z-index:2; margin-top:22px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 4px;">
+              <div style="font-size:11px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
+              <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:{{ wdCompleteBg }}; color:#fff; border:none; font-size:13px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">Complete step</button>
+            </div>
           </sc-if>
         </div>
       </div>
@@ -25669,7 +25675,11 @@ class Component extends DCLogic {
         // Approvals are excluded because they finish through Approve / Reject instead.
         wdCanCompleteStep: selStep.kind !== 'approval',
         wdCounters: notReceived + ' not received · ' + notVerified + ' awaiting verify',
-        wdAllDone: gateOk, wdCompleteBg: gateOk ? '#12B76A' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : (() => {
+        wdAllDone: gateOk,
+        // Purple when it can be pressed, grey when the document gate holds it — the same signal as
+        // before, in the colour every other primary action in this app uses. Green made the drawer
+        // look like it came from a different product, which is the thing being fixed here.
+        wdCompleteBg: gateOk ? '#7C00FF' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : (() => {
           // Name the actual blocker. A rejected document is not a missing one, and sending someone
           // to look for a file they already turned down wastes the trip.
           // The document gate first: it is the reason the officer cannot proceed, and pointing them
