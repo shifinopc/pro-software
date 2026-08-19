@@ -351,12 +351,22 @@ model Document {
   // filters them out, so exactly one document of a type is authoritative for a subject at a time.
   supersededAt     String? // ISO; null = this is the live one
   supersededById   String? // the document that replaced it, when there is one
+  // WHICH RUN PUT THIS RECORD HERE.
+  //
+  // `renewalRunId` is the run currently RENEWING a document and is cleared when that run finishes;
+  // this is the run that CREATED it, and it never changes. Without it there was no way back from a
+  // document to the work that produced it — which mattered when a hire was refused by the government
+  // halfway through: the visa, the policy and the contract issued earlier in that run had to be
+  // withdrawn, and nothing could say which ones they were. Matching on the person's name and the
+  // document types the run happened to mention would catch a record from somebody's previous job.
+  issuedByRunId    String? // WorkflowInstance that created this document
 
   @@index([supersededAt])
   @@index([status])
   @@index([expiryDate])
   @@index([companyId, status])
   @@index([employeeId])
+  @@index([issuedByRunId])
 }
 
 // Admin-defined document types with their own dynamic fields + renewal config (no-code).

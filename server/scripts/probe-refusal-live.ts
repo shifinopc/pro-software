@@ -89,6 +89,11 @@ async function main() {
       visa_auth: { quotaOutcome: "authorised", visaAuthNumber: "VA-9001" },
       prof_verify: { verificationOutcome: "verified", verificationRef: "SVP-771" },
       medical_wafid: { wafidOutcome: "fit", wafidCentre: "Wafid Kochi", wafidDate: "2026-09-10" },
+      visa_apply: { visaOutcome: "issued", visaNumber: "V-7001", visaExpiry: "2027-06-30" },
+      arrival: { arrivalOutcome: "cleared", entryDate: "2026-10-05" },
+      insurance_task: { policyNumber: "POL-7001", policyExpiry: "2027-10-05" },
+      contract: { contractNumber: "QC-7001", contractEnd: "2027-10-05" },
+      permit_task: { permitOutcome: "issued", permitNumber: "WP-7001", permitExpiry: "2027-10-05" },
     };
     for (let i = 0; i < 14; i++) {
       const t = await current(instId);
@@ -167,6 +172,55 @@ async function main() {
     console.log(`...and with the date it goes through:      ${withDate.status === 200 ? "YES" : "NO (" + withDate.status + ")"}`);
     if (withDate.status !== 200) fail(`a properly recorded arrival was refused — ${String(withDate.body?.error).slice(0, 100)}`);
   }
+
+  // ── the deepest refusal, and what it leaves behind ────────────────────────────────────────────
+  //
+  // An Iqama refusal is the worst case: by then the run has issued a visa, a policy, a contract and a
+  // work permit. All of them belong to somebody who will never be onboarded, and none of them is
+  // inert — they sit in compliance monitoring, count toward the client's totals, and are chased for
+  // renewal year after year.
+  const runD = await startRun(TITLE + " D");
+  const atIqama = await walkTo(runD, "iqama_task");
+  console.log(`
+reached the Iqama, four documents in:      ${atIqama ? "YES" : "NO"}`);
+  if (atIqama) {
+    const before = await prisma.document.findMany({ where: { issuedByRunId: runD, supersededAt: null }, select: { docType: true } });
+    console.log(`  live documents this run has issued:      ${before.map(d => d.docType).join(", ") || "none"}`);
+    if (before.length < 3) fail(`only ${before.length} documents were issued before the Iqama, so this is not testing the case that matters`);
+
+    // an unrelated record for the same person, to prove the sweep stays inside its own run
+    const inst = await prisma.workflowInstance.findUnique({ where: { id: runD }, select: { companyId: true } });
+    const bystander = await prisma.document.create({ data: {
+      companyId: inst!.companyId!, person: WHO, docType: "Passport", docNumber: "P-BYSTANDER",
+      status: "valid", daysLeft: 900, expiryDate: "2029-01-01",
+    } });
+
+    const refused = await done(runD, { iqamaOutcome: "refused" });
+    console.log(`  recording the refusal is accepted:       ${refused.status === 200 ? "YES" : "NO (" + refused.status + ")"}`);
+    if (refused.status !== 200) fail(`a refused Iqama cannot be recorded — ${String(refused.body?.error).slice(0, 100)}`);
+
+    const stop = await current(runD);
+    if (stop?.nodeId === "gov_stop") {
+      const closed = await done(runD, { stopReason: "Iqama refused — profession not permitted for this nationality" });
+      if (closed.status !== 200) fail(`the refusal desk could not be closed — ${String(closed.body?.error).slice(0, 100)}`);
+    } else fail(`a refused Iqama did not reach the refusal desk — the run is at "${stop?.nodeId ?? "nowhere"}"`);
+
+    const after = await prisma.document.findMany({ where: { issuedByRunId: runD }, select: { docType: true, supersededAt: true, history: true } });
+    const stillLive = after.filter(d => !d.supersededAt);
+    console.log(`
+  once the run stops, still live:          ${stillLive.length ? stillLive.map(d => d.docType).join(", ") : "none — all withdrawn"}`);
+    if (stillLive.length) fail(`${stillLive.length} document(s) from an abandoned hire are still live: ${stillLive.map(d => d.docType).join(", ")} — compliance and the renewal engine would chase them for an employee who was never onboarded`);
+    const withReason = after.filter(d => (Array.isArray(d.history) ? d.history as any[] : []).some((h: any) => h.kind === "voided"));
+    console.log(`  ...each saying why on its own record:    ${withReason.length === after.length ? "YES" : `NO (${withReason.length}/${after.length})`}`);
+    if (withReason.length !== after.length) fail("a document was withdrawn with nothing on it to say why");
+
+    const by = await prisma.document.findUnique({ where: { id: bystander.id }, select: { supersededAt: true } });
+    console.log(`  a record this run did not issue is left:  ${by?.supersededAt === null ? "YES" : "NO"}`);
+    if (by?.supersededAt) fail("withdrawing reached past the run's own documents and voided an unrelated record");
+
+    const fin = await prisma.workflowInstance.findUnique({ where: { id: runD }, select: { status: true } });
+    console.log(`  and the run is finished:                 ${fin?.status === "completed" ? "YES" : "NO (" + fin?.status + ")"}`);
+  } else fail("could not drive a run as far as the Iqama");
 
   await sweep();
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);

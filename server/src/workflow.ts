@@ -569,7 +569,10 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             }
             if (inst.companyId && person) {
               const st = expiry ? statusOf(expiry) : { daysLeft: 0, status: "valid" };
-              const created = await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
+              // Stamped with the run that created it, so the work can be traced back from the record
+              // — and so a hire the government refuses halfway through can withdraw exactly the
+              // documents that hire produced, rather than every document with the same name on it.
+              const created = await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft, issuedByRunId: inst.id } });
               await log("document.issued", nodeId, `${docType} (${subjectKind}) for ${person} → ${expiry || "?"}`);
               // What this replaces leaves the live reports. Without it, a second run of the same
               // onboarding left two identical live rows and every reminder fired twice.
@@ -859,10 +862,46 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
       }
 
-      case "end":
+      case "end": {
+        // AN ABANDONED HIRE LEAVES LIVE GOVERNMENT RECORDS BEHIND IT.
+        //
+        // When a run stops because the government refused, the documents issued EARLIER in that run
+        // are still on file: an Iqama refusal leaves a work visa, a health insurance policy, an
+        // authenticated contract and a work permit, all valid, all belonging to somebody who was
+        // never onboarded. Nothing here is inert — every one of them sits in compliance and expiry
+        // monitoring, counts toward the client's document totals, and is chased by the renewal engine
+        // year after year. The deeper the failure, the more orphans it leaves.
+        //
+        // The refusal step already asks the officer to tick that the documents were withdrawn, and
+        // that tick is the right place for the GOVERNMENT-side cancellation — which is work only a
+        // person can do at a ministry. It is the wrong place for this system's own records: a tick
+        // is a statement about the world, not a change to the database, and the two had quietly been
+        // treated as the same thing.
+        //
+        // Voided rather than deleted, which is the same reasoning as superseding: what was issued
+        // did exist, and the client may be asked to account for it. It leaves the live reports and
+        // stays readable, with the reason on the record.
+        if (node.config?.voidIssued) {
+          const orphans = await prisma.document.findMany({
+            where: { issuedByRunId: inst.id, supersededAt: null },
+            select: { id: true, docType: true, docNumber: true, history: true },
+          });
+          if (orphans.length) {
+            const at = nowISO();
+            const why = String(node.config?.voidReason || `Withdrawn — ${node.label ?? "the onboarding"} did not complete`);
+            for (const d of orphans) {
+              const hist = Array.isArray(d.history) ? (d.history as any[]) : [];
+              hist.unshift({ at, by: "workflow", kind: "voided", note: why });
+              await prisma.document.update({ where: { id: d.id }, data: { supersededAt: at, history: hist } });
+            }
+            await log("documents.voided", nodeId, `${orphans.length} document(s) issued by this run withdrawn: ${orphans.map(d => `${d.docType}${d.docNumber ? ` ${d.docNumber}` : ""}`).join(", ")}`);
+            logActivity({ type: "compliance", message: `${orphans.length} document(s) withdrawn — ${node.label ?? "the onboarding"} did not complete${inst.clientName ? ` (${inst.clientName})` : ""}` });
+          }
+        }
         // End nodes can declare an outcome: config.result = "approved" | "rejected" | "completed".
         await finalizeInstance(inst, String(node.config?.result || "completed").toLowerCase(), nodeId, node.label);
         break;
+      }
 
       default:
         // Carried into the run's visible timeline, not just this table. A step the engine does not

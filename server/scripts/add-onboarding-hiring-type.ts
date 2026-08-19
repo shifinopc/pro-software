@@ -570,7 +570,14 @@ async function main() {
         { var: "stopReason", type: "text", label: "What the authority said", required: true },
       ],
     } },
-    { id: "end_gov_stop", type: "end", label: "Stopped — Government Refusal", config: {} },
+    // The records this run created are withdrawn here, not left behind. The officer's checklist tick
+    // above covers the cancellation at the ministry, which only a person can do; this covers our own
+    // file, which a tick never touched. An Iqama refusal was leaving four live documents on somebody
+    // who was never onboarded, and the renewal engine would have chased every one of them.
+    { id: "end_gov_stop", type: "end", label: "Stopped — Government Refusal", config: {
+      voidIssued: true,
+      voidReason: "Withdrawn — the hire was stopped by a government refusal and the employee never joined",
+    } },
 
     // ── everyone converges here. A plain task, NOT a parallel join: a join waits for every
     //    in-edge to arrive, and only one of the three branches ever will. ────────────────────
