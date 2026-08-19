@@ -1277,6 +1277,52 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     if (broken.length) throw new Error(broken.join(" · "));
   }
 
+  // THE STEP CALLED "CREATE EMPLOYEE PROFILE" DID NOT CREATE ONE.
+  //
+  // It captured a name, a nationality and a profession onto the run and stopped there, so onboarding
+  // produced no employee record at all. Every document the run issued was therefore linked by
+  // free-text `person` and nothing else — 57 of 65 documents on this installation have employeeId
+  // null, and not one of them has an employee of that name to link to. That was reported three times
+  // as "documents are not linked to the employee record", and the linking was never the problem.
+  //
+  // Explicit on the node rather than inferred from having a name: creating a personnel record is not
+  // something a workflow should do as a side effect of somebody filling in a form.
+  const profileNode = getNode(g, task.nodeId);
+  const answered: Record<string, any> = (opts.variables && typeof opts.variables === "object") ? opts.variables as any : {};
+  if ((profileNode?.config as any)?.createsEmployee && inst.companyId) {
+    const name = String(answered.applicant ?? (inst.variables as any)?.applicant ?? "").trim();
+    if (name) {
+      try {
+        const merged2: any = { ...((inst.variables as any) ?? {}), ...answered };
+        // Match before creating: a run started for somebody the client already employs must attach to
+        // them, not mint a second record and split their documents across the two.
+        const existing = await prisma.employee.findFirst({ where: { companyId: inst.companyId, name } });
+        const emp = existing ?? await prisma.employee.create({ data: {
+          companyId: inst.companyId, name,
+          nationality: merged2.nationality ? String(merged2.nationality) : null,
+          role: merged2.profession ? String(merged2.profession) : null,
+          employmentType: merged2.employmentType ? String(merged2.employmentType) : null,
+          status: "onboarding",
+        } });
+        // The id joins the run, so every document issued from here links to the person rather than
+        // to a string that happens to spell their name.
+        (opts as any).variables = { ...answered, employeeId: emp.id };
+        await prisma.workflowLog.create({ data: {
+          instanceId: inst.id, action: existing ? "employee.matched" : "employee.created", nodeId: task.nodeId,
+          detail: `${emp.name}${existing ? " — already on file, linked to this run" : " — added to the client's people"}`,
+          actor: "engine", at: nowISO(),
+        } }).catch(() => {});
+      } catch (e: any) {
+        // Non-fatal: onboarding must not stop because a personnel record could not be written, but it
+        // must not pretend it wrote one either.
+        await prisma.workflowLog.create({ data: {
+          instanceId: inst.id, action: "employee.failed", nodeId: task.nodeId,
+          detail: `could not create the employee record: ${String(e?.message ?? e)}`, actor: "engine", at: nowISO(),
+        } }).catch(() => {});
+      }
+    }
+  }
+
   // Merge captured variables into the instance before routing.
   // IMPORTANT: never let a blank capture wipe an existing value (e.g. passportValid set at start
   // must survive completing a step whose empty capture field would otherwise overwrite it).
@@ -1802,9 +1848,18 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   );
   // attach instance context
   const instIds = [...new Set(mine.map(t => t.instanceId))];
-  const insts = await prisma.workflowInstance.findMany({ where: { id: { in: instIds } }, select: { id: true, title: true, clientName: true } });
+  // `variables` comes too, for the ONE thing every list of workflow work was missing: who it is about.
+  // Three rows reading "Create Employee Profile · 24h left · — · workflow" are indistinguishable, and
+  // a compliance row beside them names its person because a document carries one. A run carries the
+  // applicant in its variables and nothing was reading it.
+  const insts = await prisma.workflowInstance.findMany({ where: { id: { in: instIds } }, select: { id: true, title: true, clientName: true, variables: true } });
   const imap = Object.fromEntries(insts.map(i => [i.id, i]));
-  res.json(mine.map(t => ({ ...t, instance: imap[t.instanceId] })));
+  res.json(mine.map(t => {
+    const inst = imap[t.instanceId] as any;
+    const v = (inst?.variables && typeof inst.variables === "object") ? inst.variables : {};
+    const subject = String(v.applicant ?? v.employee ?? v.person ?? "").trim() || null;
+    return { ...t, instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject } : undefined };
+  }));
 });
 /**
  * The document this step has to check, and the verdict — the same call completeTask makes, so the

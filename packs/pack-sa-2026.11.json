@@ -2,8 +2,8 @@
   "pack": "sa",
   "country": "SA",
   "countryName": "Saudi Arabia",
-  "version": "2026.10",
-  "generatedAt": "2026-08-18T13:07:37.420Z",
+  "version": "2026.11",
+  "generatedAt": "2026-08-19T02:52:26.783Z",
   "contains": "configuration only — no companies, employees, documents, invoices or credentials",
   "documentTypes": [
     {
@@ -393,9 +393,14 @@
             "condition": ""
           },
           {
-            "to": "split",
+            "to": "iqama_transfer",
             "from": "d_iqama",
             "condition": "transfer"
+          },
+          {
+            "to": "iqama_doc",
+            "from": "iqama_transfer",
+            "condition": ""
           },
           {
             "to": "split",
@@ -675,7 +680,8 @@
                 }
               ],
               "slaHours": 24,
-              "assigneeRole": "pro_officer"
+              "assigneeRole": "pro_officer",
+              "createsEmployee": true
             }
           },
           {
@@ -870,6 +876,42 @@
                   "required": true
                 }
               ],
+              "assigneeRole": "pro_officer"
+            }
+          },
+          {
+            "id": "iqama_transfer",
+            "type": "task",
+            "label": "Iqama Sponsorship Transfer",
+            "config": {
+              "captures": [
+                {
+                  "var": "iqamaNumber",
+                  "type": "text",
+                  "label": "Existing Iqama number"
+                },
+                {
+                  "var": "iqamaExpiry",
+                  "type": "date",
+                  "label": "Existing Iqama expiry (unchanged by the transfer)"
+                }
+              ],
+              "slaHours": 168,
+              "checklist": [
+                {
+                  "key": "sponsor_updated",
+                  "label": "Employer updated on the Iqama record",
+                  "source": "manual",
+                  "required": true
+                },
+                {
+                  "key": "fines_checked",
+                  "label": "Outstanding fines and renewal liability checked before accepting the transfer",
+                  "source": "manual",
+                  "required": true
+                }
+              ],
+              "govCenter": "Muqeem",
               "assigneeRole": "pro_officer"
             }
           },
@@ -1612,7 +1654,12 @@
             "id": "notify",
             "type": "notify",
             "label": "Notify Employee",
-            "config": {}
+            "config": {
+              "to": "{{ email }}",
+              "channel": "Email",
+              "subject": "Your employment is confirmed",
+              "template": "Your probation period is complete and your employment is confirmed. Your HR team will be in touch with the paperwork."
+            }
           },
           {
             "id": "end_ok",

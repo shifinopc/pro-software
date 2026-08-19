@@ -21841,6 +21841,12 @@ class Component extends DCLogic {
       decision: ['Decision', 'decision', '#0284C7', 'Automatic branch based on a condition.'],
       split: ['Parallel split', 'webhook', '#0284C7', 'Fans out into branches that run at once.'],
       join: ['Parallel join', 'webhook', '#0284C7', 'Waits for parallel branches, then continues.'],
+      // The ENGINE's own names for these two. The palette writes `split`/`join`, the engine reads
+      // `parallel_split`/`parallel_join`, and every graph built from a pack or a script carries the
+      // engine's spelling — which matched nothing here, fell through to the default, and drew the
+      // four-way fan-out and the gate that waits for it both labelled "Task".
+      parallel_split: ['Parallel split', 'webhook', '#0284C7', 'Fans out into branches that run at once.'],
+      parallel_join: ['Parallel join', 'webhook', '#0284C7', 'Waits for parallel branches, then continues.'],
       notify: ['Notify', 'notify', '#6D5BD0', 'Sends a notification, then continues.'],
       invoice: ['Draft invoice', 'invoice', '#0E9355', 'Drops a draft invoice into Finance.'],
       doc: ['Issue / renew document', 'doc', '#0284C7', 'Writes the result back to Compliance — renews the document.'],
@@ -21983,6 +21989,17 @@ class Component extends DCLogic {
     const _wfUrlSub = (_wfUrlPath && _wfUrlPath[1] === 'workflow-builder') ? (_wfUrlPath[2] || '') : '';
     const _wfRouted = (_wfUrlSub && Array.isArray(wfTpls))
       ? (wfTpls.find(t => _wfSlug(t.name) === _wfUrlSub) || null) : null;
+    // ARRIVING BY LINK IS NOT ARRIVING BY CLICK.
+    //
+    // The issues are fetched in _wfOpen, which only runs when somebody picks a row. Open the builder
+    // from a shared link or reload the page and the workflow is restored from the address while its
+    // warnings are never requested — so the canvas showed nothing at all while the API was returning
+    // two, and the unnamed approvers stayed invisible to the person editing the workflow. Guarded by
+    // the template id so it asks once per workflow rather than on every render.
+    if (_wfRouted && _wfRouted.id && this._wfIssuesFor !== _wfRouted.id) {
+      this._wfIssuesFor = _wfRouted.id;
+      this._loadWfIssues && this._loadWfIssues(_wfRouted.id);
+    }
     // What the engine will and won't do with this graph. Fetched on open as well as returned on save,
     // so opening a workflow already tells you what is broken in it without touching anything.
     this._loadWfIssues = (tplId9) => {
@@ -22001,6 +22018,7 @@ class Component extends DCLogic {
         wfFlow: graphToFlow(r.graph) || wfDefaultFlow, wfFlowGraph: r.graph || null,
         wfSelNode: 0, wfView: 'edit', wfIssues: null,
       });
+      this._wfIssuesFor = r.tplId || null;
       this._loadWfIssues(r.tplId);
     };
     const wfRowsAll = wfListRaw.map((r) => ({
@@ -24398,7 +24416,10 @@ class Component extends DCLogic {
     // 2) SLA-bound workflow steps — WIRED: real active steps with slaHours from /api/workflow/my-work.
     const slaWorkflowSteps = (Array.isArray(this.state.myWorkData)
       ? this.state.myWorkData.filter(t2 => t2.slaHours && t2.createdAt && t2.status === 'active').map(t2 => [
-          t2.title || 'Workflow step', ((t2.instance && t2.instance.clientName) || '—') + ' · workflow',
+          // The employee, when the run knows one. Three rows called "Create Employee Profile" with no
+          // name are one row repeated as far as anybody reading this screen is concerned.
+          (t2.title || 'Workflow step') + ((t2.instance && t2.instance.subject) ? ' — ' + t2.instance.subject : ''),
+          ((t2.instance && t2.instance.clientName) || '—') + ' · workflow',
           Number(t2.slaHours), Math.max(0, (Date.now() - new Date(t2.createdAt).getTime()) / 3600000), t2.id, t2.escalatedAt])
       : (_authed ? [] : [
         ['Emirates ID biometrics', 'Falcon Technologies · ICP', 48, 40, null, null],

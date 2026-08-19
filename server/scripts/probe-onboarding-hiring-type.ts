@@ -223,13 +223,22 @@ async function main() {
   console.log("");
   console.log("where each issued document's details come from:");
   // The step that feeds a document is the one immediately before it on the path.
-  const feeder = new Map<string, string>();
-  for (const n of nodes.filter(x => x.type === "issue_document"))
-    for (const e of edges.filter(e2 => e2.to === n.id)) feeder.set(String(n.config?.docType), e.from);
+  // ANY of the document's own feeders, not one.
+  //
+  // A document can legitimately be fed by a different step on each branch — the Iqama is captured at
+  // `iqama_task` when it is being issued to a new arrival and at `iqama_transfer` when an existing one
+  // moves with a transferred employee. What must never happen is its details coming from a step that
+  // belongs to a DIFFERENT document.
+  const feeders = new Map<string, Set<string>>();
+  for (const n of nodes.filter(x => x.type === "issue_document")) {
+    const set = feeders.get(String(n.config?.docType)) ?? new Set<string>();
+    for (const e of edges.filter(e2 => e2.to === n.id)) set.add(e.from);
+    feeders.set(String(n.config?.docType), set);
+  }
   for (const i of issued) {
-    const want = feeder.get(i.doc);
-    const ok = i.from === want;
-    console.log(`  ${i.doc.padEnd(28)} ${i.field.padEnd(7)} from "${i.from}"${ok ? "" : `  — expected "${want}"`}`);
+    const want = feeders.get(i.doc) ?? new Set<string>();
+    const ok = want.has(i.from);
+    console.log(`  ${i.doc.padEnd(28)} ${i.field.padEnd(7)} from "${i.from}"${ok ? "" : `  — expected one of ${[...want].join(", ")}`}`);
     if (!ok) fail(`"${i.doc}" is issued with the ${i.field} captured at "${i.from}", which belongs to a different document`);
   }
 

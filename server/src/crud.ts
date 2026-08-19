@@ -363,9 +363,27 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         if (clash) return res.status(409).json({ error: clashMessage(clash), clash });
       }
 
+      // AN EXPIRY THAT CHANGES MUST TAKE ITS COUNTDOWN WITH IT.
+      //
+      // `daysLeft` and `status` are stored, not derived, and only the nightly recompute rewrote them —
+      // so a document edited to expire in 2039 went on reading "408 days" and kept whatever status it
+      // had until the next tick. Everything that decides urgency reads those two fields, so for up to
+      // an hour the compliance screens showed the old answer with the new date beside it.
+      let derived: any = {};
+      if (modelName === "document" && req.body?.expiryDate !== undefined
+          && String(req.body.expiryDate ?? "") !== String((before as any).expiryDate ?? "")) {
+        const t = req.body.expiryDate ? new Date(String(req.body.expiryDate)).getTime() : NaN;
+        derived = isNaN(t)
+          ? { daysLeft: 0, status: "unknown" }
+          : (() => {
+              const dl = Math.round((t - Date.now()) / 86400000);
+              return { daysLeft: dl, status: dl < 0 ? "overdue" : dl <= 30 ? "expiring" : "valid" };
+            })();
+      }
+
       const updated = await model.update({
         where: { id: req.params.id },
-        data: { ...sanitize(modelName, req.body), ...(historyPatch ? { history: historyPatch } : {}) },
+        data: { ...sanitize(modelName, req.body), ...derived, ...(historyPatch ? { history: historyPatch } : {}) },
       });
       if (modelName === "invoice" && req.body?.status === "paid") {
         logActivity({ type: "finance", message: `Invoice ${updated.number} marked paid` });

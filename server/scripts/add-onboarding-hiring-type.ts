@@ -151,6 +151,9 @@ async function main() {
     // onboarding onto their history, so the same field joins the run to the employee record.
     { id: "profile", type: "task", label: "Create Employee Profile", config: {
       assigneeRole: "pro_officer", slaHours: 24,
+      // It now does what its name says. Without this the run captured a name and produced no
+      // personnel record, so every document it issued had nobody to belong to.
+      createsEmployee: true,
       // WHAT THE THREE PATHS MEAN, ENFORCED WHERE THEY ARE CHOSEN.
       //
       // Nothing checked nationality against hiring type, so a profile reading nationality "Saudi" and
@@ -270,6 +273,23 @@ async function main() {
     // permit was issued at arrival, so its number was captured there — weeks before the work permit
     // that has to precede it. Now it is applied for after the permit exists, which is when anybody
     // actually has a number to record.
+    // A TRANSFERRED EMPLOYEE HAD NO RESIDENCE DOCUMENT ON FILE AT ALL.
+    //
+    // Not issuing a new Iqama was right — the transfer keeps the existing one, with its number and
+    // its original expiry, and the employer on it is updated. But recording nothing meant the new
+    // employer inherited a renewal liability, and any fines already on it, with no visibility of
+    // either. This captures what is already there rather than pretending to issue it.
+    { id: "iqama_transfer", type: "task", label: "Iqama Sponsorship Transfer", config: {
+      assigneeRole: "pro_officer", govCenter: "Muqeem", slaHours: 168,
+      checklist: [
+        doc("sponsor_updated", "Employer updated on the Iqama record"),
+        doc("fines_checked", "Outstanding fines and renewal liability checked before accepting the transfer"),
+      ],
+      captures: [
+        { var: "iqamaNumber", type: "text", label: "Existing Iqama number" },
+        { var: "iqamaExpiry", type: "date", label: "Existing Iqama expiry (unchanged by the transfer)" },
+      ],
+    } },
     { id: "iqama_task", type: "task", label: "Iqama Issuance", config: {
       assigneeRole: "pro_officer", govCenter: "Muqeem", slaHours: 168,
       checklist: [
@@ -467,7 +487,15 @@ async function main() {
         { id: "extend", type: "delay", label: "Extend Probation (30 days)", config: { days: 30, accumulateInto: "probationDaysUsed" } },
     { id: "end_term", type: "end", label: "Not Confirmed — Termination", config: {} },
     { id: "confirm_appr", type: "approval", label: "Employee Confirmation Approval", config: { approverRole: "admin" } },
-    { id: "notify", type: "notify", label: "Notify Employee", config: {} },
+        // The last step before the employee is confirmed, and it was configured with nothing at all: no
+    // channel, no recipient, no wording. Unreachable until delays resumed, so it had never run — and
+    // the first person to clear probation would have been confirmed in silence.
+    { id: "notify", type: "notify", label: "Notify Employee", config: {
+      channel: "Email",
+      to: "{{ email }}",
+      subject: "Your employment is confirmed",
+      template: "Your probation period is complete and your employment is confirmed. Your HR team will be in touch with the paperwork.",
+    } },
     { id: "end_ok", type: "end", label: "Employee Confirmed", config: {} },
   ];
 
@@ -535,7 +563,8 @@ async function main() {
     e("iqama_task", "iqama_doc"),
     // A transfer keeps the Iqama it already has: the number and expiry stay, and the employer on it
     // is updated rather than a new one issued. Recording a fresh Iqama here would invent a document.
-    e("d_iqama", "split", "transfer"),
+    e("d_iqama", "iqama_transfer", "transfer"),
+    e("iqama_transfer", "iqama_doc"),
     e("d_iqama", "split", "else"),
     e("iqama_doc", "split"),
     e("split", "payroll"), e("split", "access"), e("split", "assets"),
