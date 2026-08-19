@@ -529,8 +529,13 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             }
             if (inst.companyId && person) {
               const st = expiry ? statusOf(expiry) : { daysLeft: 0, status: "valid" };
-              await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
+              const created = await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft } });
               await log("document.issued", nodeId, `${docType} (${subjectKind}) for ${person} → ${expiry || "?"}`);
+              // What this replaces leaves the live reports. Without it, a second run of the same
+              // onboarding left two identical live rows and every reminder fired twice.
+              const { supersedePriorLive } = await import("./docnumber.js");
+              const replaced = await supersedePriorLive(created, "workflow");
+              if (replaced) await log("document.superseded", nodeId, `${replaced} earlier ${docType} record(s) for ${person} marked replaced by the one just issued`);
               logActivity({ type: "compliance", message: `${docType} issued for ${person} — expiry ${expiry || "?"}${inst.clientName ? ` (${inst.clientName})` : ""}` });
               // Close the loop with the client. They were told the renewal had started; nothing
               // ever told them it finished.
