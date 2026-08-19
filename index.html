@@ -12676,34 +12676,6 @@
                   </div>
                 </sc-if>
 
-                <sc-if value="{{ wsShowCreatesEmp }}" hint-placeholder-val="{{ true }}">
-                  <div class="fm-wide" style="border-top:1px solid #F5F2FA; padding-top:14px;">
-                    <label class="fm-lab">Creates an employee record</label>
-                    <div onClick="{{ wsToggleCreatesEmp }}" style="display:flex; align-items:center; gap:11px; border:1.5px solid #E4E0EC; border-radius:11px; padding:10px 13px; cursor:pointer;" style-hover="border-color:#7C00FF;">
-                      <span style="font-size:11.5px; font-weight:700; color:{{ wsCreatesEmpColor }}; background:{{ wsCreatesEmpBg }}; padding:5px 12px; border-radius:99px; flex-shrink:0;">{{ wsCreatesEmpLabel }}</span>
-                      <span style="font-size:11px; color:#8C8899; line-height:1.45;">On completion the name this step collected becomes a person on the client's books, and every document the run issues links to them rather than to matching text.</span>
-                    </div>
-                    <sc-if value="{{ wsEmpMapShow }}" hint-placeholder-val="{{ true }}">
-                      <div style="margin-top:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px; background:#FCFBFE;">
-                        <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Built from these answers</div>
-                        <sc-for list="{{ wsEmpMap }}" as="em" hint-placeholder-count="4">
-                          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:8px; align-items:center; margin-top:8px;">
-                            <span style="font-size:11.5px; color:#4B4757;">{{ em.label }}</span>
-                            <div>
-                              <!-- No bound border colour here. The runtime hoists a style attribute that is mostly static into
-                                   a generated class and stops re-evaluating it, so the red outline stayed the colour it
-                                   had on first render — a warning that cannot change is worse than none. The line below
-                                   is a text binding, which does update. -->
-                              <input value="{{ em.value }}" onInput="{{ em.set }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
-                              <sc-if value="{{ em.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:600; color:#C0353A; margin-top:4px;">⚠ {{ em.warnText }}</div></sc-if>
-                            </div>
-                          </div>
-                        </sc-for>
-                        <div class="fm-hint">Rename a field and repoint it here. The workflow will not go live while the name is missing — a step that creates nobody is the failure nothing else reports.</div>
-                      </div>
-                    </sc-if>
-                  </div>
-                </sc-if>
 
                 <sc-if value="{{ wsCapIsRule }}" hint-placeholder-val="{{ false }}">
                   <div class="fm-wide">
@@ -12745,6 +12717,92 @@
                       </sc-if>
                     </div>
                     <div class="fm-hint">Leave it blank and the step follows whichever document the run is about — one step serving every type. File-upload fields are skipped: they have nowhere to go in the run's data.</div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ wsShowCreatesEmp }}" hint-placeholder-val="{{ true }}">
+                  <div class="fm-wide" style="border-top:1px solid #F5F2FA; padding-top:14px;">
+                    <label class="fm-lab">Creates an employee record</label>
+                    <div onClick="{{ wsToggleCreatesEmp }}" style="display:flex; align-items:center; gap:11px; border:1.5px solid #E4E0EC; border-radius:11px; padding:10px 13px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                      <span style="font-size:11.5px; font-weight:700; color:{{ wsCreatesEmpColor }}; background:{{ wsCreatesEmpBg }}; padding:5px 12px; border-radius:99px; flex-shrink:0;">{{ wsCreatesEmpLabel }}</span>
+                      <span style="font-size:11px; color:#8C8899; line-height:1.45;">On completion the name this step collected becomes a person on the client's books, and every document the run issues links to them rather than to matching text.</span>
+                    </div>
+                    <sc-if value="{{ wsEmpMapShow }}" hint-placeholder-val="{{ true }}">
+                      <div class="fm-wide" style="margin-top:12px; border:1px solid #F0EDF6; border-radius:12px; padding:13px 15px; background:#FCFBFE;">
+                        <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;">Built from these answers</div>
+                        <div class="fm-grid">
+                        <div class="fm-wide">
+                          <label class="fm-lab">Their name</label>
+                          <div class="fm-selwrap">
+                            <div class="fm-combo">
+                              <input data-dd data-open="{{ ddEmpNameOpen }}" onClick="{{ ddEmpNameOpenList }}" onInput="{{ ddEmpNameSetQuery }}" onKeyDown="{{ ddEmpNameKey }}" value="{{ ddEmpNameValue }}" placeholder="{{ ddEmpNamePlaceholder }}" autocomplete="off" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                            </div>
+                            <sc-if value="{{ ddEmpNameOpen }}" hint-placeholder-val="{{ false }}">
+                              <div data-dd data-hidescroll="true" class="fm-dd">
+                                <sc-for list="{{ ddEmpNameRows }}" as="o" hint-placeholder-count="3">
+                                  <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                          </div>
+                          <sc-if value="{{ wsEmpNameWarn }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#C0353A; font-weight:600;">⚠ {{ wsEmpNameWarnText }}</div></sc-if>
+                        </div>
+                        <div class="fm-wide">
+                          <label class="fm-lab">Nationality</label>
+                          <div class="fm-selwrap">
+                            <div class="fm-combo">
+                              <input data-dd data-open="{{ ddEmpNatOpen }}" onClick="{{ ddEmpNatOpenList }}" onInput="{{ ddEmpNatSetQuery }}" onKeyDown="{{ ddEmpNatKey }}" value="{{ ddEmpNatValue }}" placeholder="{{ ddEmpNatPlaceholder }}" autocomplete="off" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                            </div>
+                            <sc-if value="{{ ddEmpNatOpen }}" hint-placeholder-val="{{ false }}">
+                              <div data-dd data-hidescroll="true" class="fm-dd">
+                                <sc-for list="{{ ddEmpNatRows }}" as="o" hint-placeholder-count="3">
+                                  <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                          </div>
+                          <sc-if value="{{ wsEmpNatWarn }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#C0353A; font-weight:600;">⚠ {{ wsEmpNatWarnText }}</div></sc-if>
+                        </div>
+                        <div class="fm-wide">
+                          <label class="fm-lab">Job title</label>
+                          <div class="fm-selwrap">
+                            <div class="fm-combo">
+                              <input data-dd data-open="{{ ddEmpRoleOpen }}" onClick="{{ ddEmpRoleOpenList }}" onInput="{{ ddEmpRoleSetQuery }}" onKeyDown="{{ ddEmpRoleKey }}" value="{{ ddEmpRoleValue }}" placeholder="{{ ddEmpRolePlaceholder }}" autocomplete="off" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                            </div>
+                            <sc-if value="{{ ddEmpRoleOpen }}" hint-placeholder-val="{{ false }}">
+                              <div data-dd data-hidescroll="true" class="fm-dd">
+                                <sc-for list="{{ ddEmpRoleRows }}" as="o" hint-placeholder-count="3">
+                                  <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                          </div>
+                          <sc-if value="{{ wsEmpRoleWarn }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#C0353A; font-weight:600;">⚠ {{ wsEmpRoleWarnText }}</div></sc-if>
+                        </div>
+                        <div class="fm-wide">
+                          <label class="fm-lab">Employment type</label>
+                          <div class="fm-selwrap">
+                            <div class="fm-combo">
+                              <input data-dd data-open="{{ ddEmpTypeOpen }}" onClick="{{ ddEmpTypeOpenList }}" onInput="{{ ddEmpTypeSetQuery }}" onKeyDown="{{ ddEmpTypeKey }}" value="{{ ddEmpTypeValue }}" placeholder="{{ ddEmpTypePlaceholder }}" autocomplete="off" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                            </div>
+                            <sc-if value="{{ ddEmpTypeOpen }}" hint-placeholder-val="{{ false }}">
+                              <div data-dd data-hidescroll="true" class="fm-dd">
+                                <sc-for list="{{ ddEmpTypeRows }}" as="o" hint-placeholder-count="3">
+                                  <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                          </div>
+                          <sc-if value="{{ wsEmpTypeWarn }}" hint-placeholder-val="{{ false }}"><div class="fm-hint" style="color:#C0353A; font-weight:600;">⚠ {{ wsEmpTypeWarnText }}</div></sc-if>
+                        </div>
+                        </div>
+                        <div class="fm-hint">Rename a field and repoint it here, choosing from what this workflow collects. The workflow will not go live while the name is missing — a step that creates nobody is the failure nothing else reports.</div>
+                      </div>
+                    </sc-if>
                   </div>
                 </sc-if>
               </div>
@@ -24285,28 +24343,36 @@ class Component extends DCLogic {
           wsToggleCreatesEmp: () => _wsCfgSet({ createsEmployee: !_wsCfg.createsEmployee }),
           // WHICH ANSWER BECOMES WHICH PART OF THE PERSON. The engine used to have these four
           // variable names written into it, which was safe only while fields could not be renamed.
-          // They can now, on the step and in a field set, and a rename of the name field means no
-          // employee is created at all — silently. So the mapping is shown, and a name that no
-          // longer exists is called out here rather than discovered months later in the documents.
+          // They can now, and a rename of the name field means no employee is created at all.
+          //
+          // A PICKER OVER WHAT THE GRAPH ACTUALLY CAPTURES, not a text box. Typing a variable name
+          // from memory is how a mapping ends up pointing at `profesion`, and the failure is silent
+          // — the person is simply created without a job title. The list is every variable the graph
+          // captures, INCLUDING those arriving from a field set.
+          //
+          // Choosing is the only way to set it: typing filters the list, it does not commit. That is
+          // the right constraint rather than a limitation — a name outside this list is one no step
+          // supplies, which the validator refuses at activation anyway. A value already stored that
+          // is no longer captured (the rename case) still shows, and still warns.
           wsEmpMapShow: _wsType === 'task' && !!_wsCfg.createsEmployee,
-          wsEmpMap: [
-            ['name', 'applicant', 'Their name'],
-            ['nationality', 'nationality', 'Nationality'],
-            ['role', 'profession', 'Job title'],
-            ['employmentType', 'employmentType', 'Employment type'],
-          ].map(([key, fallback, label]) => {
-            const cur = String((_wsCfg.employeeFields || {})[key] ?? fallback);
-            const known = _wsKnownVars.includes(cur);
+          ...(() => {
+            const opts = [...new Set(_wsKnownVars)].sort().map(v => ({ value: v, label: v }));
+            const get = (k, fb) => String((_wsCfg.employeeFields || {})[k] ?? fb);
+            const set = (k) => (v) => _wsCfgSet({ employeeFields: { ...(_wsCfg.employeeFields || {}), [k]: String(v || '').replace(/[^A-Za-z0-9_]/g, '') } });
+            const warn = (v) => !_wsKnownVars.includes(v);
+            const nameV = get('name', 'applicant'), natV = get('nationality', 'nationality');
+            const roleV = get('role', 'profession'), typeV = get('employmentType', 'employmentType');
             return {
-              label,
-              value: cur,
-              // Free text rather than a picker: the variable may be captured on ANOTHER step, and a
-              // dropdown listing only this step's fields would refuse a mapping that is correct.
-              set: (e) => _wsCfgSet({ employeeFields: { ...(_wsCfg.employeeFields || {}), [key]: String(e.target.value).replace(/[^A-Za-z0-9_]/g, '') } }),
-              warn: !known,
-              warnText: known ? '' : 'No step captures "' + cur + '"',
+              ...mkDdCombo('ddEmpName', [{ title: '', options: opts }], nameV, set('name'), 'variableName'),
+              ...mkDdCombo('ddEmpNat', [{ title: '', options: opts }], natV, set('nationality'), 'variableName'),
+              ...mkDdCombo('ddEmpRole', [{ title: '', options: opts }], roleV, set('role'), 'variableName'),
+              ...mkDdCombo('ddEmpType', [{ title: '', options: opts }], typeV, set('employmentType'), 'variableName'),
+              wsEmpNameWarn: warn(nameV), wsEmpNameWarnText: 'No step captures "' + nameV + '" — this step would create nobody',
+              wsEmpNatWarn: warn(natV), wsEmpNatWarnText: 'No step captures "' + natV + '"',
+              wsEmpRoleWarn: warn(roleV), wsEmpRoleWarnText: 'No step captures "' + roleV + '"',
+              wsEmpTypeWarn: warn(typeV), wsEmpTypeWarnText: 'No step captures "' + typeV + '"',
             };
-          }),
+          })(),
           wsCapIsRule: capSrc === 'rule',
           wsCapIsDoc: capSrc === 'document_type',
           wsCapNoSets: capSrc === 'rule' && !_wsFieldSets.length,
