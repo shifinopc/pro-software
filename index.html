@@ -12679,6 +12679,25 @@
                       <span style="font-size:11.5px; font-weight:700; color:{{ wsCreatesEmpColor }}; background:{{ wsCreatesEmpBg }}; padding:5px 12px; border-radius:99px; flex-shrink:0;">{{ wsCreatesEmpLabel }}</span>
                       <span style="font-size:11px; color:#8C8899; line-height:1.45;">On completion the name this step collected becomes a person on the client's books, and every document the run issues links to them rather than to matching text.</span>
                     </div>
+                    <sc-if value="{{ wsEmpMapShow }}" hint-placeholder-val="{{ true }}">
+                      <div style="margin-top:10px; border:1px solid #F0EDF6; border-radius:11px; padding:11px 13px; background:#FCFBFE;">
+                        <div style="font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">Built from these answers</div>
+                        <sc-for list="{{ wsEmpMap }}" as="em" hint-placeholder-count="4">
+                          <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:8px; align-items:center; margin-top:8px;">
+                            <span style="font-size:11.5px; color:#4B4757;">{{ em.label }}</span>
+                            <div>
+                              <!-- No bound border colour here. The runtime hoists a style attribute that is mostly static into
+                                   a generated class and stops re-evaluating it, so the red outline stayed the colour it
+                                   had on first render — a warning that cannot change is worse than none. The line below
+                                   is a text binding, which does update. -->
+                              <input value="{{ em.value }}" onInput="{{ em.set }}" placeholder="variableName" class="fm-inp" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px;">
+                              <sc-if value="{{ em.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:600; color:#C0353A; margin-top:4px;">⚠ {{ em.warnText }}</div></sc-if>
+                            </div>
+                          </div>
+                        </sc-for>
+                        <div class="fm-hint">Rename a field and repoint it here. The workflow will not go live while the name is missing — a step that creates nobody is the failure nothing else reports.</div>
+                      </div>
+                    </sc-if>
                   </div>
                 </sc-if>
 
@@ -24157,6 +24176,19 @@ class Component extends DCLogic {
           .map(r => ({ value: r.id, label: r.name }));
         const _wsFieldSets = (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : [])
           .map(r => ({ value: r.id, label: r.name }));
+        // Every variable the WHOLE graph captures, including those arriving from a field set — a
+        // mapping may legitimately point at an answer collected two steps earlier.
+        const _wsKnownVars = (() => {
+          const g6 = wfCanvasGraph || {};
+          const out6 = [];
+          for (const n6 of (Array.isArray(g6.nodes) ? g6.nodes : [])) {
+            for (const c6 of ((n6 && n6.config && n6.config.captures) || [])) if (c6 && c6.var) out6.push(String(c6.var));
+            const sid6 = n6 && n6.config && n6.config.captureRuleId;
+            const set6 = sid6 ? (Array.isArray(this.state.fieldSetsData) ? this.state.fieldSetsData : []).find(f6 => f6.id === sid6) : null;
+            for (const row6 of ((set6 && set6.rows) || [])) for (const f6 of ((row6 && row6.fields) || [])) if (f6 && f6.var) out6.push(String(f6.var));
+          }
+          return out6;
+        })();
         // One place the wording lives, so the collapsed line and the expanded card cannot drift.
         const _wsChkLabels = {
           '': ['Nothing \u2014 this step collects no documents', 'Which is right for an approval, a wait, or a step that only records answers'],
@@ -24247,6 +24279,30 @@ class Component extends DCLogic {
           wsCreatesEmpColor: _wsCfg.createsEmployee ? '#0E6B40' : '#8C8899',
           wsCreatesEmpBg: _wsCfg.createsEmployee ? '#E7F8EF' : '#F4F3F7',
           wsToggleCreatesEmp: () => _wsCfgSet({ createsEmployee: !_wsCfg.createsEmployee }),
+          // WHICH ANSWER BECOMES WHICH PART OF THE PERSON. The engine used to have these four
+          // variable names written into it, which was safe only while fields could not be renamed.
+          // They can now, on the step and in a field set, and a rename of the name field means no
+          // employee is created at all — silently. So the mapping is shown, and a name that no
+          // longer exists is called out here rather than discovered months later in the documents.
+          wsEmpMapShow: _wsType === 'task' && !!_wsCfg.createsEmployee,
+          wsEmpMap: [
+            ['name', 'applicant', 'Their name'],
+            ['nationality', 'nationality', 'Nationality'],
+            ['role', 'profession', 'Job title'],
+            ['employmentType', 'employmentType', 'Employment type'],
+          ].map(([key, fallback, label]) => {
+            const cur = String((_wsCfg.employeeFields || {})[key] ?? fallback);
+            const known = _wsKnownVars.includes(cur);
+            return {
+              label,
+              value: cur,
+              // Free text rather than a picker: the variable may be captured on ANOTHER step, and a
+              // dropdown listing only this step's fields would refuse a mapping that is correct.
+              set: (e) => _wsCfgSet({ employeeFields: { ...(_wsCfg.employeeFields || {}), [key]: String(e.target.value).replace(/[^A-Za-z0-9_]/g, '') } }),
+              warn: !known,
+              warnText: known ? '' : 'No step captures "' + cur + '"',
+            };
+          }),
           wsCapIsRule: capSrc === 'rule',
           wsCapIsDoc: capSrc === 'document_type',
           wsCapNoSets: capSrc === 'rule' && !_wsFieldSets.length,

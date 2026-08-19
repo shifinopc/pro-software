@@ -1456,18 +1456,36 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   const profileNode = getNode(g, task.nodeId);
   const answered: Record<string, any> = (opts.variables && typeof opts.variables === "object") ? opts.variables as any : {};
   if ((profileNode?.config as any)?.createsEmployee && inst.companyId) {
-    const name = String(answered.applicant ?? (inst.variables as any)?.applicant ?? "").trim();
+    // WHICH ANSWERS BECOME THE PERSON. These four variable names used to be written into this
+    // function — applicant, nationality, profession, employmentType — which was fine while the only
+    // way to change a field was to edit the builder script. Fields are editable now, on the step and
+    // in a field set, so a rename here is a silent amputation: rename `profession` and the person
+    // arrives with no job title; rename `applicant` and NO EMPLOYEE IS CREATED AT ALL, because the
+    // name reads empty. The run would go on issuing documents against a string, which is precisely
+    // how 57 of 65 documents on this installation ended up with nobody behind them.
+    //
+    // So the mapping is configuration, defaulting to the names it always used — every existing graph
+    // keeps working untouched, and a renamed field is repointed here rather than quietly dropped.
+    const empMap: any = (profileNode?.config as any)?.employeeFields ?? {};
+    const pick = (key: string, fallback: string) => {
+      const v = String(empMap[key] ?? fallback).trim();
+      return v ? (answered[v] ?? (inst.variables as any)?.[v]) : undefined;
+    };
+    const name = String(pick("name", "applicant") ?? "").trim();
     if (name) {
       try {
-        const merged2: any = { ...((inst.variables as any) ?? {}), ...answered };
+        const val = (key: string, fallback: string) => {
+          const raw = pick(key, fallback);
+          return raw === undefined || raw === null || String(raw).trim() === "" ? null : String(raw);
+        };
         // Match before creating: a run started for somebody the client already employs must attach to
         // them, not mint a second record and split their documents across the two.
         const existing = await prisma.employee.findFirst({ where: { companyId: inst.companyId, name } });
         const emp = existing ?? await prisma.employee.create({ data: {
           companyId: inst.companyId, name,
-          nationality: merged2.nationality ? String(merged2.nationality) : null,
-          role: merged2.profession ? String(merged2.profession) : null,
-          employmentType: merged2.employmentType ? String(merged2.employmentType) : null,
+          nationality: val("nationality", "nationality"),
+          role: val("role", "profession"),
+          employmentType: val("employmentType", "employmentType"),
           status: "onboarding",
         } });
         // The id joins the run, so every document issued from here links to the person rather than
@@ -1712,6 +1730,46 @@ export async function validateReferences(graph: any, tpl: { country?: string | n
   const out: GraphIssue[] = [];
   const nodes: any[] = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const country = String(tpl?.country ?? "").trim().toUpperCase();
+
+  // ── the step that creates the person, and whether it still can ───────────────────────────────
+  //
+  // A step with createsEmployee on writes a personnel record from a captured answer, and everything
+  // the run issues afterwards links to that record. If the variable holding the name is not captured
+  // anywhere — because somebody renamed the field, on the step or in its field set — the flag goes on
+  // looking enabled and does nothing at all. That failure is invisible at run time: the step
+  // completes, the run proceeds, and the documents attach to a name instead of a person.
+  const empNodes = nodes.filter(n => n?.config?.createsEmployee);
+  if (empNodes.length) {
+    // Every variable this graph can capture, INCLUDING the ones that arrive from a field set — a
+    // step reading its fields from a set has no captures of its own to look at.
+    const known = new Set<string>();
+    for (const n of nodes) for (const c of (n?.config?.captures ?? [])) if (c?.var) known.add(String(c.var));
+    const setIds = [...new Set(nodes.map(n => String(n?.config?.captureRuleId ?? "")).filter(Boolean))];
+    if (setIds.length) {
+      try {
+        for (const st of await prisma.fieldSet.findMany({ where: { id: { in: setIds } } })) {
+          for (const row of ((st.rows as any[]) ?? [])) for (const f of (row?.fields ?? [])) if (f?.var) known.add(String(f.var));
+        }
+      } catch { /* an unreadable set must not turn into a false alarm */ }
+    }
+    for (const n of empNodes) {
+      const label = n.label || n.id;
+      const nameVar = String((n.config?.employeeFields ?? {}).name ?? "applicant").trim();
+      if (!known.has(nameVar)) {
+        out.push({ level: "error", nodeId: n.id, node: label,
+          message: `"${label}" creates an employee record from "${nameVar}", which no step captures. The step would complete and create nobody, and every document the run issues would hang off a name instead of a person.` });
+      }
+      for (const [key, fallback, what] of [["nationality", "nationality", "nationality"], ["role", "profession", "job title"], ["employmentType", "employmentType", "employment type"]] as const) {
+        const v = String((n.config?.employeeFields ?? {})[key] ?? fallback).trim();
+        // A warning, not an error: a person can be created without a job title, and a market that
+        // does not ask for one is entitled to leave it unmapped.
+        if (v && !known.has(v)) {
+          out.push({ level: "warning", nodeId: n.id, node: label,
+            message: `"${label}" takes the ${what} from "${v}", which no step captures — the employee record would be created without it.` });
+        }
+      }
+    }
+  }
 
   const docNodes = nodes.filter(n => n?.type === "issue_document");
   if (docNodes.length) {
