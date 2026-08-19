@@ -19852,19 +19852,22 @@ class Component extends DCLogic {
       // of them, because somebody who came to raise a plain task should not be walked through three
       // screens to do it.
       ...(() => {
-        // DONE MEANS "HAS EVERYTHING IT NEEDS", not "has been visited". Walking past a section
-        // without filling it in is not progress, and a tick that only records where you have been
-        // would mark the whole form complete the moment you reached the end of it.
+        // A TICK MEANS "YOU DID THIS", so only a section that ASKED FOR SOMETHING can earn one.
         //
-        // Two of the three are complete from the start, and that is the truth rather than a
-        // shortcut: a plain task is preselected, and an owner, a due date and a priority are all
-        // optional with a sensible default. So the one section that can be incomplete is the one
-        // carrying the required fields, and the rail points straight at it.
+        // It first said "has everything it needs", which is a different sentence: a plain task is
+        // preselected and every field on Assignment is optional, so both ticked on open, before
+        // anything had been typed. Whatever the intent, a tick against a section nobody has touched
+        // reads as progress that has not happened — and the one place it appeared was the empty
+        // form, where it is most misleading.
+        //
+        // So `req` is the flag that matters. A section with nothing required never ticks; it keeps
+        // its number, exactly like a section you have not finished, because there is nothing there
+        // to finish. Only the one carrying required fields can go green, and only once they are in.
         const panes = [
-          { key: 'kind', label: 'Kind of work', hint: 'Plain task, or a workflow', done: !!(this.state.ntKind || 'plain') },
-          { key: 'task', label: 'The task', hint: 'What it is and who for',
+          { key: 'kind', label: 'Kind of work', hint: 'Plain task, or a workflow', req: false, done: true },
+          { key: 'task', label: 'The task', hint: 'What it is and who for', req: true,
             done: !!String(this.state.ntTitle || '').trim() && (!ntPersonScoped || !!this.state.ntApplicant) },
-          { key: 'assign', label: 'Assignment', hint: 'Who does it, and by when', done: true },
+          { key: 'assign', label: 'Assignment', hint: 'Who does it, and by when', req: false, done: true },
         ];
         const at = Math.min(Math.max(0, this.state.ntPane || 0), panes.length - 1);
         return {
@@ -19874,9 +19877,9 @@ class Component extends DCLogic {
             color: i === at ? '#7C00FF' : '#6F6C7A',
             // The current section keeps its number even when it is complete — you are standing in
             // it, and a tick where the marker should be reads as "you have left".
-            showTick: pn.done && i !== at,
-            showNum: !(pn.done && i !== at),
-            numBg: i === at ? '#7C00FF' : (pn.done ? '#E7F8EF' : '#EDEBF2'),
+            showTick: pn.req && pn.done && i !== at,
+            showNum: !(pn.req && pn.done && i !== at),
+            numBg: i === at ? '#7C00FF' : '#EDEBF2',
             numColor: i === at ? '#fff' : '#8C8899',
             go: () => this.setState({ ntPane: i }),
           })),
@@ -23577,12 +23580,16 @@ class Component extends DCLogic {
       create_invoice: () => Number(_wsCfg.amount) > 0,
       end: () => true,
     })[_wsType];
+    // Same rule as the task dialog: only a section that asked for something can tick. A step with
+    // no role and no checklist is a legitimate step — those sections have nothing to satisfy — so
+    // they keep their numbers rather than claiming credit for fields nobody had to fill in.
     const _wsPanes = [
-      { key: 'basics', label: 'Basics', hint: 'What this step is called', done: !!(_wsNode && String(_wsNode.label || '').trim()) },
-      ...(_wsIsTask ? [{ key: 'owner', label: 'Ownership', hint: 'Who does it, and where', done: true }] : []),
-      ...(_wsIsTask ? [{ key: 'work', label: 'The work', hint: 'What they collect and record', done: true }] : []),
+      { key: 'basics', label: 'Basics', hint: 'What this step is called', req: true,
+        done: !!(_wsNode && String(_wsNode.label || '').trim()) },
+      ...(_wsIsTask ? [{ key: 'owner', label: 'Ownership', hint: 'Who does it, and where', req: false, done: true }] : []),
+      ...(_wsIsTask ? [{ key: 'work', label: 'The work', hint: 'What they collect and record', req: false, done: true }] : []),
       ...(_wsDetailName ? [{ key: 'detail', label: _wsDetailName, hint: 'Settings for this kind of step',
-        done: _wsDetailDone ? _wsDetailDone() : true }] : []),
+        req: !!_wsDetailDone, done: _wsDetailDone ? _wsDetailDone() : true }] : []),
     ];
     const _wsPane = Math.min(this.state.wsPane || 0, Math.max(0, _wsPanes.length - 1));
     const _wsPaneKey = (_wsPanes[_wsPane] || {}).key || 'basics';
@@ -23608,9 +23615,9 @@ class Component extends DCLogic {
         on: i === _wsPane,
         cls: i === _wsPane ? 'wz-rail on' : 'wz-rail',
         color: i === _wsPane ? '#7C00FF' : '#6F6C7A',
-        showTick: pn.done && i !== _wsPane,
-        showNum: !(pn.done && i !== _wsPane),
-        numBg: i === _wsPane ? '#7C00FF' : (pn.done ? '#E7F8EF' : '#EDEBF2'),
+        showTick: pn.req && pn.done && i !== _wsPane,
+        showNum: !(pn.req && pn.done && i !== _wsPane),
+        numBg: i === _wsPane ? '#7C00FF' : '#EDEBF2',
         numColor: i === _wsPane ? '#fff' : '#8C8899',
         go: () => this.setState({ wsPane: i }),
       })),
