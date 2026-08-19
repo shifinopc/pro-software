@@ -11998,8 +11998,13 @@
                  label now appears only when there is something to label, and takes its spacing from
                  the content above rather than from whatever room is left over. -->
             <sc-if value="{{ wdHasSuggestions }}" hint-placeholder-val="{{ false }}">
-              <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.14em; padding:24px 28px 0;">SUGGESTED NEXT STEPS</div>
-              <div style="display:flex; flex-direction:column; margin-top:4px; padding:0 28px;">
+              <!-- NO HORIZONTAL PADDING OF ITS OWN. This block sits inside the drawer body, which
+                   already provides the 28px gutter, so its own 28px stacked on top and pushed the
+                   whole section 28px further in than the timeline above it — the one part of the
+                   sheet that did not line up. It carried a matching 24px when the body used 24px,
+                   so it has been doubly indented all along and the rebuild only made it wider. -->
+              <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.14em; padding-top:24px;">SUGGESTED NEXT STEPS</div>
+              <div style="display:flex; flex-direction:column; margin-top:4px;">
                 <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3">
                   <div style="display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid #F4F1F9; font-size:12px; color:#3E3949; line-height:1.45; transition:padding-left .2s, color .2s;" style-hover="padding-left:6px; color:#7C00FF;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
@@ -26659,8 +26664,14 @@ class Component extends DCLogic {
                   stepNo: String(ix2 + 1).padStart(2, '0'),
                   // Green up to and including the step in hand, faint after it: the rail is the
                   // progress, so it must stop exactly where the work has.
-                  railColor: (done2 || cur2) ? '#12B76A' : '#EFEBF7',
-                  railOpacity: (done2 || cur2) ? '1' : '.35',
+                  //
+                  // This segment is the one BELOW its own step, so `done2 || cur2` painted the piece
+                  // that runs AWAY from the live step green as well — the highlight carried on past
+                  // the pulsing token and down into the steps nobody has started, which is exactly
+                  // the "up to and including" the handoff rules out. Only a step that is FINISHED
+                  // has green below it.
+                  railColor: done2 ? '#12B76A' : '#EFEBF7',
+                  railOpacity: done2 ? '1' : '.35',
                   // The settle, staggered per step — the numbers are the handoff's.
                   rowAnim: 'stagIn .5s cubic-bezier(.32,.72,0,1) ' + (0.36 + ix2 * 0.06).toFixed(2) + 's both',
                   railAnim: 'barGrow .5s cubic-bezier(.32,.72,0,1) ' + (0.5 + ix2 * 0.07).toFixed(2) + 's both',
