@@ -451,6 +451,87 @@ function addCycle(ms: number, cycle: string): number {
 
 // The catch-up ceiling is a setting now — see jobrules.ts. It was 12 periods here.
 
+export type StatutoryResult = { evaluated: number; started: number; breached: number; raised: string[] };
+
+/**
+ * The deadlines set by law, watched separately from the ones this office sets itself.
+ *
+ * Kept apart from escalateSla deliberately, even though the two look alike. An SLA breach raises a
+ * priority and asks somebody to hurry; these cannot be hurried out of. The 90 days from entry to
+ * issue an Iqama is a fine and a blocked file, and a non-Saudi cannot be registered with GOSI
+ * retroactively at all — that deadline does not pass into "late", it passes into "no longer
+ * possible". Folding them into the SLA counters would bury both facts in one number.
+ *
+ * Two things happen here. Clocks that could not be computed when the step was created — because the
+ * date they count from had not been captured yet — are started as soon as the run knows it. And a
+ * clock that has run out on a step still open is raised, once, the same way the SLA escalator only
+ * speaks on a real transition rather than every hour.
+ */
+export async function watchStatutory(): Promise<StatutoryResult> {
+  const out: StatutoryResult = { evaluated: 0, started: 0, breached: 0, raised: [] };
+  const today = nowISO().slice(0, 10);
+
+  const tasks = await prisma.workflowTask.findMany({
+    where: { status: "active" },
+    include: { instance: { select: { id: true, title: true, clientName: true, templateId: true, variables: true } } },
+  });
+
+  const graphs = new Map<string, any>();
+  const { clocksFor, earliest, breachMessage } = await import("./statutory.js");
+
+  for (const t of tasks) {
+    // A step that has no clocks yet may simply not have had its starting date. Ask the graph what
+    // this node declares and try again with what the run knows now.
+    let clocks: any[] = Array.isArray(t.statutory) ? (t.statutory as any[]) : [];
+    if (!clocks.length && t.instance) {
+      const tid = t.instance.templateId;
+      if (!graphs.has(tid)) graphs.set(tid, (await prisma.workflowTemplate.findUnique({ where: { id: tid } }))?.graph ?? {});
+      const node = ((graphs.get(tid)?.nodes ?? []) as any[]).find(n => n?.id === t.nodeId);
+      const specs = node?.config?.statutory;
+      if (specs) {
+        const list = Array.isArray(specs) ? specs : [specs];
+        const wanted = [...new Set(list.map((x: any) => String(x?.docType ?? "").trim()).filter(Boolean))];
+        const types = new Map<string, any>();
+        if (wanted.length) for (const r of await prisma.documentType.findMany({
+          where: { name: { in: wanted } }, select: { name: true, statutoryDays: true, statutoryFrom: true, statutoryBasis: true },
+        })) types.set(r.name, r);
+        const vars: any = (t.instance.variables && typeof t.instance.variables === "object") ? t.instance.variables : {};
+        clocks = clocksFor(list, vars, types);
+        if (clocks.length) {
+          await prisma.workflowTask.update({ where: { id: t.id }, data: { statutory: clocks as any, statutoryDue: earliest(clocks) } });
+          out.started++;
+        }
+      }
+    }
+    if (!clocks.length) continue;
+    out.evaluated++;
+
+    const overdue = clocks.filter(c => String(c.due ?? "") && String(c.due) < today);
+    if (!overdue.length) continue;
+    if (t.statutoryState === "breached") continue;   // already said once
+
+    out.breached++;
+    await prisma.workflowTask.update({
+      where: { id: t.id },
+      data: { statutoryState: "breached", priority: raisePriority(t.priority, "urgent") },
+    });
+    for (const c of overdue) {
+      const who = t.instance?.clientName ? ` (${t.instance.clientName})` : "";
+      await notifyOnce(`statutory:${t.id}:${c.key}`, {
+        type: "overdue",
+        title: `Statutory deadline passed: ${c.label}${who}`,
+        message: breachMessage(c, t.title),
+      });
+      await prisma.workflowLog.create({ data: {
+        instanceId: t.instanceId, action: "statutory.breached", nodeId: t.nodeId,
+        detail: breachMessage(c, t.title), actor: "engine", at: nowISO(),
+      } }).catch(() => {});
+      out.raised.push(`${c.label} · ${t.title}${who}`);
+    }
+  }
+  return out;
+}
+
 export async function renewSubscriptions(): Promise<BillingResult> {
   const rules = await jobRules();
   const out: BillingResult = { scanned: 0, renewed: 0, invoiced: 0, lapsed: 0, details: [] };

@@ -134,6 +134,33 @@ async function main() {
   console.log(`${existingRule ? "updated" : "created"} rule "${RULE}" — ${rows.length} rows`);
 
   // ── the graph ──────────────────────────────────────────────────────────────────────────────
+  // ── the statutory deadlines, on the document types they belong to ────────────────────────────
+  //
+  // The DAYS AND THE SOURCE live in Country Rules, not in the workflow. A workflow step knows when a
+  // clock started — entry to the Kingdom is a fact about one run — but how long the law allows is a
+  // fact about Saudi Arabia, and it belongs where somebody maintaining Saudi regulations will find
+  // it, and where it travels in the country pack rather than being restated in every workflow that
+  // touches the same document.
+  //
+  // Only filled where it was empty. A number somebody has already corrected against the current
+  // regulation outranks the one written here months ago.
+  for (const st of [
+    { name: "Iqama", statutoryDays: 90, statutoryFrom: "entry to the Kingdom",
+      statutoryBasis: "Residence (Iqama) Regulations — issue within 90 days of entry" },
+    { name: "GOSI Employee Registration", statutoryFrom: "the start of work",
+      statutoryBasis: "GOSI — register by the 15th of the following month; non-Saudis cannot be registered retroactively" },
+  ]) {
+    const row = await prisma.documentType.findFirst({ where: { name: st.name, country: COUNTRY } });
+    if (!row) { console.log(`document type "${st.name}" not installed — statutory deadline not set`); continue; }
+    const data: any = {};
+    if (row.statutoryDays == null && (st as any).statutoryDays != null) data.statutoryDays = (st as any).statutoryDays;
+    if (!row.statutoryFrom) data.statutoryFrom = st.statutoryFrom;
+    if (!row.statutoryBasis) data.statutoryBasis = st.statutoryBasis;
+    if (!Object.keys(data).length) { console.log(`statutory deadline for "${st.name}" already set`); continue; }
+    await prisma.documentType.update({ where: { id: row.id }, data });
+    console.log(`statutory deadline set on "${st.name}": ${Object.keys(data).join(", ")}`);
+  }
+
   const nodes: any[] = [
     { id: "start", type: "start", label: "Employee Request Created", config: {} },
 
@@ -380,6 +407,11 @@ async function main() {
       captures: [
         { var: "arrivalOutcome", type: "select", label: "Arrival outcome",
           options: "cleared,not_arrived,biometrics_failed,medical_failed", required: true },
+        // THE DATE THE RESIDENCE CLOCK STARTS. The workflow recorded that somebody had arrived but
+        // never when, and the 90 days to issue an Iqama are counted from exactly this date. Without
+        // it the deadline cannot be computed at all — which is why it is required rather than
+        // computed from whenever the step happened to be ticked.
+        { var: "entryDate", type: "date", label: "Date of entry to the Kingdom", required: true },
       ],
     } },
     // The two failures here are not the same failure. Biometrics can be retaken and the employee is
@@ -423,6 +455,13 @@ async function main() {
       checklist: [
         doc("iqama_fees", "Iqama fees and levy paid"),
         doc("iqama_insurance", "Health insurance active and covering the residence period"),
+      ],
+      // Counted from the date of entry captured at arrival — the days and the source come from the
+      // Iqama entry in Country Rules, so the regulation is maintained in one place rather than
+      // restated in every workflow that touches it.
+      statutory: [
+        { key: "iqama_90", docType: "Iqama", from: "entryDate",
+          label: "Iqama must be issued within 90 days of entry" },
       ],
       captures: [
         { var: "iqamaOutcome", type: "select", label: "Issuance outcome",
@@ -565,6 +604,22 @@ async function main() {
         { var: "gosiOutcome", type: "select", label: "GOSI registration outcome",
           options: "registered,pending,failed", required: true },
         { var: "gosiNumber", type: "text", label: "GOSI number" },
+        { var: "firstWageDue", type: "date", label: "First wage due date" },
+      ],
+      // TWO DEADLINES ON ONE STEP, which is why a step carries a list of them.
+      //
+      // GOSI is the one that cannot be recovered: a non-Saudi cannot be registered retroactively, so
+      // the 15th of the following month is not a date after which this is late — it is a date after
+      // which it can no longer be done properly at all.
+      statutory: [
+        { key: "gosi_15th", docType: "GOSI Employee Registration", rule: "by_15th_next_month",
+          from: "expectedJoining",
+          label: "GOSI registration due by the 15th of the month after work starts" },
+        // The wage date if payroll has set one, otherwise the expected joining date — the clock
+        // starts from the best date the run actually holds rather than not starting at all.
+        { key: "wps_30", days: 30, from: "firstWageDue,expectedJoining",
+          label: "First salary paid and uploaded to WPS within 30 days",
+          basis: "Wage Protection System — MHRSD" },
       ] } },
     // THIS ONE DOES NOT LEAVE THE PARALLEL BLOCK, and that is deliberate.
     //

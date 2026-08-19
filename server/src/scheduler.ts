@@ -11,7 +11,7 @@ import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
 import { sendDueDigests, pruneDigests } from "./digest.js";
 import { mailHealth, pruneMailLog } from "./mailer.js";
-import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
+import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, watchStatutory, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
 import { captureWorkforceSnapshots } from "./workforce.js";
 
@@ -148,6 +148,18 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
       action: "cron.sla_escalated",
       target: `${sla.breached} breached, ${sla.atRisk} at risk`,
       detail: [`source=${source}`, sla.escalated.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // Separate from the SLA pass above on purpose: an SLA breach is a promise this office made, a
+  // statutory breach is a deadline in law. One asks somebody to hurry; the other has already cost
+  // money, and in the GOSI case has closed the door rather than delayed it.
+  const statutory = await safely("statutory", watchStatutory);
+  if ("raised" in statutory && statutory.raised.length) {
+    await logAudit({
+      action: "cron.statutory_breached",
+      target: `${statutory.breached} deadline(s) passed`,
+      detail: [`source=${source}`, statutory.raised.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
 
@@ -339,7 +351,7 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
 
   // Every job that ran belongs in the result. A job missing from here ran invisibly — the tick
   // response is the only place anyone can see what the hourly pass actually did.
-  return { source, ms: Date.now() - started, compliance, renewals, sla, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
+  return { source, ms: Date.now() - started, compliance, renewals, sla, statutory, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
 }
 
 let timer: NodeJS.Timeout | null = null;
@@ -359,6 +371,7 @@ export function startScheduler() {
         "started" in r.renewals && r.renewals.started && `renewals ${r.renewals.started}`,
         "held" in r.renewals && r.renewals.held && `held ${r.renewals.held}`,
         "escalated" in r.sla && r.sla.escalated.length && `sla ${r.sla.escalated.length}`,
+        "raised" in r.statutory && r.statutory.raised.length && `statutory ${r.statutory.raised.length}`,
         "renewed" in r.billing && r.billing.renewed && `billed ${r.billing.invoiced}`,
         "chased" in r.dunning && r.dunning.chased && `chased ${r.dunning.chased}`,
       ].filter(Boolean);

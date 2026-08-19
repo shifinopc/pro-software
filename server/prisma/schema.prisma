@@ -902,10 +902,26 @@ model WorkflowTask {
   // runs through Qiwa, Muqeem and GOSI could name just one of them, and the Government Centers queue
   // could only ever list whole cases rather than the jobs waiting at each authority.
   govCenter           String?
+  // A DEADLINE IN LAW, WHICH IS NOT AN SLA.
+  //
+  // `dueDate` is what this office promised itself; these are what the Kingdom requires, and they are
+  // different in kind. Missing an SLA is a service failure somebody explains internally. Missing the
+  // 90 days from entry to issue an Iqama, or the GOSI registration due by the 15th of the following
+  // month, is a fine and a blocked file — and a non-Saudi cannot be registered with GOSI
+  // retroactively at all, so that one does not become late, it becomes impossible.
+  //
+  // Both are stored. `statutory` holds every clock running on this step, because one step can carry
+  // more than one — payroll owes both the GOSI registration and the first WPS upload. `statutoryDue`
+  // mirrors the EARLIEST of them so the hourly job can scan for what is overdue without opening the
+  // JSON on every row.
+  statutory           Json? // [{ key, label, due, basis, from }]
+  statutoryDue        String? // earliest of the above — the binding one
+  statutoryState      String? // null (never evaluated) | due | breached — last state acted on
 
   @@index([status])
   @@index([assigneeRole])
   @@index([govCenter])
+  @@index([statutoryDue])
 }
 
 // Admin-defined rule that maps instance variables → a document set (dynamic per-client checklists).

@@ -802,9 +802,19 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             requireVerification: !!c.requireVerification,
             captures: await resolveCaptures(c, vars),
             createdAt: nowISO(),
+            // The clocks the law is running on this step, alongside the one this office set itself.
+            // Computed from what the run knows NOW; a step whose starting date has not been captured
+            // yet simply carries none, and picks them up when the date arrives — see refreshStatutory.
+            ...(await statutoryFields(c, vars)),
           },
         });
         await log(node.type === "approval" ? "approval.requested" : "task.created", nodeId, node.label);
+        {
+          const clocks = await resolveClocks(c, vars);
+          for (const k of clocks) {
+            await log("statutory.due", nodeId, `${k.label} — due ${k.due}, counted from ${k.fromDate}${k.basis ? ` (${k.basis})` : ""}`);
+          }
+        }
         // wait — do not advance
         break;
       }
@@ -1501,6 +1511,37 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     }
   }
   return prisma.workflowInstance.findUnique({ where: { id: inst.id }, include: { tasks: true, logs: true } });
+}
+
+/**
+ * The statutory clocks a step declares, resolved against what the run currently knows.
+ *
+ * The step names the run variable holding the starting date; the days and the legal source come from
+ * Country Rules when the clock names a document type, so the regulation is maintained in one place
+ * rather than copied into every workflow that touches it.
+ */
+async function resolveClocks(c: any, vars: Record<string, any>) {
+  const specs = c?.statutory;
+  const list = Array.isArray(specs) ? specs : specs ? [specs] : [];
+  if (!list.length) return [];
+  const wanted = [...new Set(list.map((x: any) => String(x?.docType ?? "").trim()).filter(Boolean))];
+  const types = new Map<string, any>();
+  if (wanted.length) {
+    for (const r of await prisma.documentType.findMany({
+      where: { name: { in: wanted } },
+      select: { name: true, statutoryDays: true, statutoryFrom: true, statutoryBasis: true },
+    })) types.set(r.name, r);
+  }
+  const { clocksFor } = await import("./statutory.js");
+  return clocksFor(list, vars, types);
+}
+
+/** Those clocks as columns, or nothing at all when none has started. */
+async function statutoryFields(c: any, vars: Record<string, any>) {
+  const clocks = await resolveClocks(c, vars);
+  if (!clocks.length) return {};
+  const { earliest } = await import("./statutory.js");
+  return { statutory: clocks as any, statutoryDue: earliest(clocks) };
 }
 
 // ── REST API ──────────────────────────────────────────────────────────

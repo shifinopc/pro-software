@@ -11686,7 +11686,7 @@
                       <div style="position:absolute; left:6px; top:{{ s.lineTop }}; bottom:0; width:2px; background:#F0EDF6;"></div>
                     </sc-if>
                     <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0;"><sc-if value="{{ s.current }}" hint-placeholder-val="{{ false }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1; animation:pulseBadge 1.4s ease-in-out infinite; box-shadow:0 0 0 4px rgba(124,0,255,.15);"></span></sc-if><sc-if value="{{ s.notCurrent }}" hint-placeholder-val="{{ true }}"><span style="width:14px; height:14px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; z-index:1;"></span></sc-if></div>
-                    <div style="margin-top:-1px; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if></div></div>
+                    <div style="margin-top:-1px; min-width:0;"><div style="font-size:12.5px; font-weight:600;">{{ s.ic }} {{ s.label }}</div><div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ s.who }} · {{ s.when }}</div><sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if><sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10.5px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:5px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if></div></div>
                   </div>
                 </sc-for>
               </div>
@@ -25104,6 +25104,29 @@ class Component extends DCLogic {
               dot: engSkip2 ? '#B8860B' : rej2 ? '#C0353A' : done2 ? '#12B76A' : cur2 ? '#7C00FF' : '#D8D3E3',
               current: cur2, ic: engSkip2 ? '⚠' : (IC2[n2.type] || '📝'),
               warn: engSkip2, warnWhy: engSkip2 ? skipWhy2[n2.id] : '',
+              // THE DEADLINE THE LAW SETS, which is not the one this office set itself. It reads
+              // differently from the SLA on purpose — an SLA slipping is a conversation, and these
+              // are a fine, a blocked file, or in the GOSI case something that can no longer be done
+              // at all. Shown on the step that owes it, with what it was counted from, because a
+              // date with no derivation is a number nobody can check or argue with.
+              ...(() => {
+                const cl2 = (wt2 && Array.isArray(wt2.statutory)) ? wt2.statutory : [];
+                if (!cl2.length) return { statShow: false, statLines: [] };
+                const today2 = new Date().toISOString().slice(0, 10);
+                return {
+                  statShow: true,
+                  statLines: cl2.map(c2 => {
+                    const over2 = String(c2.due || '') && String(c2.due) < today2 && (st2 === 'active');
+                    return {
+                      text: (over2 ? 'OVERDUE · ' : 'Due ' + String(c2.due || '?') + ' · ') + String(c2.label || 'Statutory deadline')
+                        + (c2.fromDate ? ' (from ' + c2.fromDate + ')' : ''),
+                      statBg: over2 ? '#FEECEC' : '#F5F1FF',
+                      statBorder: over2 ? '#F8CFCF' : '#E4DBFF',
+                      statColor: over2 ? '#C0353A' : '#5B4BA8',
+                    };
+                  }),
+                };
+              })(),
             };
           });
         })() : []).map(s => ({
