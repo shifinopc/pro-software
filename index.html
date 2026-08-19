@@ -6317,7 +6317,7 @@
           <div>
             <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">MASTERS</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Document Types</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Templates with custom fields, lead times and default fees</div>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Templates with custom fields, renewal reminders and default fees</div>
           </div><button onClick="{{ openDtNew }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add type</button>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
@@ -21841,12 +21841,6 @@ class Component extends DCLogic {
       decision: ['Decision', 'decision', '#0284C7', 'Automatic branch based on a condition.'],
       split: ['Parallel split', 'webhook', '#0284C7', 'Fans out into branches that run at once.'],
       join: ['Parallel join', 'webhook', '#0284C7', 'Waits for parallel branches, then continues.'],
-      // The ENGINE's own names for these two. The palette writes `split`/`join`, the engine reads
-      // `parallel_split`/`parallel_join`, and every graph built from a pack or a script carries the
-      // engine's spelling — which matched nothing here, fell through to the default, and drew the
-      // four-way fan-out and the gate that waits for it both labelled "Task".
-      parallel_split: ['Parallel split', 'webhook', '#0284C7', 'Fans out into branches that run at once.'],
-      parallel_join: ['Parallel join', 'webhook', '#0284C7', 'Waits for parallel branches, then continues.'],
       notify: ['Notify', 'notify', '#6D5BD0', 'Sends a notification, then continues.'],
       invoice: ['Draft invoice', 'invoice', '#0E9355', 'Drops a draft invoice into Finance.'],
       doc: ['Issue / renew document', 'doc', '#0284C7', 'Writes the result back to Compliance — renews the document.'],
@@ -21967,7 +21961,11 @@ class Component extends DCLogic {
       ]));
     // Convert a saved template graph → the linear [type,label] flow the canvas renders. Backend node
     // types are mapped to the builder's palette; nodes are ordered left-to-right by x when present.
-    const WF_TYPE_MAP = { start: 'trigger', trigger: 'trigger', task: 'task', approval: 'approval', decision: 'decision', branch: 'decision', notify: 'notify', notification: 'notify', issue_document: 'doc', document: 'doc', charge_fee: 'invoice', invoice: 'invoice', courier: 'courier', dispatch: 'courier', delay: 'delay', webhook: 'webhook', end: 'end' };
+    // Engine type → palette key. Anything missing falls through to 'task', which is why the four-way
+    // fan-out and the gate that waits for it were both drawn as "Task": the engine writes
+    // `parallel_split` / `parallel_join` and this map only knew the palette's own `split` / `join`.
+    // Adding them to the meta table alone did nothing, because the lookup never got that far.
+    const WF_TYPE_MAP = { start: 'trigger', trigger: 'trigger', task: 'task', approval: 'approval', decision: 'decision', branch: 'decision', notify: 'notify', notification: 'notify', issue_document: 'doc', document: 'doc', charge_fee: 'invoice', invoice: 'invoice', courier: 'courier', dispatch: 'courier', delay: 'delay', webhook: 'webhook', end: 'end', parallel_split: 'split', split: 'split', parallel_join: 'join', join: 'join' };
     const graphToFlow = (graph) => {
       if (!graph || !Array.isArray(graph.nodes) || !graph.nodes.length) return null;
       const ns = [...graph.nodes];
@@ -22440,7 +22438,9 @@ class Component extends DCLogic {
     const _gClone = () => JSON.parse(JSON.stringify(wfCanvasGraph || { nodes: [], edges: [] }));
     const _gSync = (g3) => this.setState({ wfFlowGraph: g3, wfFlow: graphToFlow(g3) || wfDefaultFlow });
     if (wfCanvasGraph) {
-      const WF_BACK_MAP = { trigger: 'start', doc: 'issue_document', invoice: 'charge_fee' };
+      // Palette key → engine type. Without split/join here a node dragged from the palette was saved
+      // as type "split", which the engine does not execute — it would sit in the graph doing nothing.
+      const WF_BACK_MAP = { trigger: 'start', doc: 'issue_document', invoice: 'charge_fee', split: 'parallel_split', join: 'parallel_join' };
       this._wfAddNode = (type) => {
         const g3 = _gClone(); if (!g3.nodes.length) return;
         const selId3 = (gNodesRaw[gSel] || gNodesRaw[0])[0];
