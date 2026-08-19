@@ -11748,10 +11748,17 @@
                 </sc-for>
               </div>
             </sc-if>
-            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:auto; padding:20px 24px 0;">SUGGESTED NEXT STEPS</div>
-            <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px; padding:0 24px;">
-              <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3"><div style="background:#FBF7FF; border:1px solid #EEE0FF; border-radius:11px; padding:10px 13px; font-size:12px; color:#4B4757;">{{ g }}</div></sc-for>
-            </div>
+            <!-- A HEADING OVER NOTHING. `margin-top:auto` pushed this to the bottom of the flex
+                 column, so on a step with no suggestions the drawer opened with a band of empty
+                 white between the title and a section label that then had nothing under it. The
+                 label now appears only when there is something to label, and takes its spacing from
+                 the content above rather than from whatever room is left over. -->
+            <sc-if value="{{ wdHasSuggestions }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; padding:20px 24px 0;">SUGGESTED NEXT STEPS</div>
+              <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px; padding:0 24px;">
+                <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3"><div style="background:#FBF7FF; border:1px solid #EEE0FF; border-radius:11px; padding:10px 13px; font-size:12px; color:#4B4757;">{{ g }}</div></sc-for>
+              </div>
+            </sc-if>
             <sc-if value="{{ wdDelegatedTo }}" hint-placeholder-val="{{ false }}"><div style="margin:16px 24px 0; background:#E7F8EF; border:1px solid #A6E5C3; border-radius:11px; padding:10px 13px; font-size:12px; font-weight:600; color:#0E6B40;">✓ Reassigned to {{ wdDelegatedTo }} · logged to activity</div></sc-if>
             <sc-if value="{{ wdDelegateOpen }}" hint-placeholder-val="{{ false }}">
               <div style="margin:16px 24px 0; border:1px solid #EDEBF2; border-radius:12px; padding:12px 14px;">
@@ -11865,18 +11872,18 @@
           </sc-if>
           <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">RECORD</div>
-            <div style="display:flex; flex-direction:column; gap:11px; margin-top:11px;">
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:11px;">
               <sc-for list="{{ wdCaptures }}" as="c" hint-placeholder-count="2">
                 <div>
-                  <div style="font-size:11px; font-weight:600; color:#6F6C7A;">{{ c.label }}</div>
+                  <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if></label>
                   <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
-                    <div style="display:flex; gap:7px; margin-top:6px; flex-wrap:wrap;"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="font-size:11.5px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ o.o }}</span></sc-for></div>
+                    <div style="display:flex; gap:7px; flex-wrap:wrap;"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="font-size:11.5px; font-weight:600; color:{{ o.color }}; background:{{ o.bg }}; border:1px solid {{ o.border }}; padding:7px 14px; border-radius:99px; cursor:pointer; transition:background .12s, color .12s, border-color .12s;">{{ o.o }}</span></sc-for></div>
                   </sc-if>
                   <sc-if value="{{ c.isDate }}" hint-placeholder-val="{{ false }}">
-                    <input value="{{ c.value }}" onChange="{{ c.set }}" type="date" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FBFAFE; margin-top:6px;">
+                    <input value="{{ c.value }}" onChange="{{ c.set }}" type="date" class="fm-inp">
                   </sc-if>
                   <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ true }}">
-                    <input value="{{ c.value }}" onChange="{{ c.set }}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:9px 12px; font-size:12.5px; background:#FBFAFE; margin-top:6px;">
+                    <input value="{{ c.value }}" onChange="{{ c.set }}" class="fm-inp">
                   </sc-if>
                 </div>
               </sc-for>
@@ -25558,11 +25565,36 @@ class Component extends DCLogic {
       const _vRule9 = (this.state.wdVerifyFor === selId) ? this.state.wdVerify : null;
       const _vBlocks9 = !!(_vRule9 && _vRule9.docType && !_vRule9.ok);
       const gateOk = notReceived === 0 && notVerified === 0 && !_vBlocks9;
-      const caps = (selStep.captures || []).map(c => ({
-        var: c.var, label: c.label, type: c.type, isSelect: c.type === 'select', isDate: c.type === 'date', isText: c.type !== 'select' && c.type !== 'date',
-        value: cap[c.var] || '', options: (c.options || '').split(',').map(o => ({ o: o, pick: () => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: o } } }) })),
-        set: (e) => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }),
-      }));
+      // A CHOICE YOU CANNOT SEE IS NOT A CHOICE. The option chips were styled identically whether
+      // picked or not, so tapping one changed nothing on screen — the value went into state and the
+      // form looked exactly as it had a moment before. On a step that will refuse to complete
+      // without it, that is the worst place to be silent.
+      //
+      // The label is the value made readable: these come from the template as machine values
+      // (`expat_new_hire`), and they were being shown to a PRO officer exactly as stored.
+      const _capWords = (v) => String(v).replace(/[_-]+/g, ' ').replace(/^\s*\w/, m => m.toUpperCase());
+      const caps = (selStep.captures || []).map(c => {
+        const val = cap[c.var] || '';
+        return {
+          var: c.var, label: c.label, type: c.type,
+          isSelect: c.type === 'select', isDate: c.type === 'date', isText: c.type !== 'select' && c.type !== 'date',
+          // The engine's own rule, said out loud: required unless the step opted out. A blank one is
+          // refused on completion, so the form should say so before the button is pressed.
+          req: !(c.required === false || c.optional === true),
+          value: val,
+          options: (c.options || '').split(',').filter(Boolean).map(o => {
+            const on = String(val) === String(o);
+            return {
+              o: _capWords(o),
+              bg: on ? '#7C00FF' : '#fff',
+              color: on ? '#fff' : '#4B4757',
+              border: on ? '#7C00FF' : '#DDD9E6',
+              pick: () => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: o } } }),
+            };
+          }),
+          set: (e) => this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }),
+        };
+      });
       const remH = selStep.slaHours - selStep.elapsedH;
       drawerApi = {
         showWorkDrawer: true, wdKind: selStep.kind, wdIsApproval: selStep.kind === 'approval',
@@ -25648,6 +25680,9 @@ class Component extends DCLogic {
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
+        // A workflow step has its own next step — the graph decides it — so there is nothing to
+        // suggest here, and the section stays closed rather than opening onto nothing.
+        wdHasSuggestions: false, wdSuggestions: [],
         wdOnApprove: selStep.onApprove, wdOnReject: selStep.onReject,
         wdSlaText: remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA',
         // The gate note describes the CHECKLIST gate, so it is only meaningful when there is one —
@@ -25879,6 +25914,10 @@ class Component extends DCLogic {
             this.setState({ workRow: null, active: 'Documents', activeGroup: 'Clients & Compliance', docScope: 'employees' });
           });
         },
+        // The workflow-step drawer defines none of these, so the heading used to render over an
+        // empty list there. Stated in both places rather than inferred from a list that is undefined
+        // in one of them.
+        wdHasSuggestions: true,
         wdSuggestions: selPlain.blockedShow ? [
           '⛔ ' + (selPlain.blocked || 'Waiting on a prerequisite') + ' — resolve it, then hit Resume',
           '🔄 The system resumes this automatically once the prerequisite document is valid again',
