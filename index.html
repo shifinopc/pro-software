@@ -12213,9 +12213,20 @@
               </sc-if>
             </div></div>
             <sc-if value="{{ ntPersonScoped }}" hint-placeholder-val="{{ false }}">
-              <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLICANT *</div><div style="margin-top:6px; position:relative;">
-                <div data-dd onClick="{{ ddNtApplicantToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#6F6C7A;">{{ ntApplicant }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
-                <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; max-height:190px; overflow-y:auto; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; animation:popIn .15s ease both;"><sc-for list="{{ ddNtApplicantOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="flex:1;">{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div></sc-for></div></sc-if>
+              <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">APPLICANT *</div><div style="margin-top:6px;" class="fm-selwrap">
+                <div class="fm-combo">
+                  <input data-dd data-open="{{ ddNtApplicantOpen }}" onClick="{{ ddNtApplicantOpenList }}" onInput="{{ ddNtApplicantSetQuery }}" onKeyDown="{{ ddNtApplicantKey }}" value="{{ ddNtApplicantValue }}" placeholder="{{ ddNtApplicantPlaceholder }}" autocomplete="off" class="fm-inp">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddNtApplicantOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" class="fm-dd">
+                    <sc-if value="{{ ddNtApplicantNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody at this client matches that</div></sc-if>
+                    <sc-for list="{{ ddNtApplicantRows }}" as="o" hint-placeholder-count="3">
+                      <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                      <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                    </sc-for>
+                  </div>
+                </sc-if>
               </div></div>
             </sc-if>
           </div>
@@ -19429,7 +19440,11 @@ class Component extends DCLogic {
       const emps = (Array.isArray(this.state.employeesData) ? this.state.employeesData : [])
         .filter(e => co2 && e.companyId === co2.id && !e.archived)
         .map(e => [e.name, e.code, e.role].filter(Boolean).join(' · '));
-      return emps.length ? emps : ['Select a client first'];
+      // REAL PEOPLE ONLY. This used to fall back to ['Select a client first'], which put a sentence
+      // into the list as though it were an employee — and it was pickable, so the applicant on a run
+      // could literally become "Select a client first". Why the list is empty is a message, not an
+      // option; it is said in the placeholder instead.
+      return emps;
     })();
 
     // Renewal prerequisites are evaluated by the SERVER (POST /api/prereq-check). This dialog carried
@@ -19562,7 +19577,19 @@ class Component extends DCLogic {
         this.state.ntClient || '',
         (v) => this.setState({ ntClient: v, ntApplicant: '' }),
         'Select a client'),
-      ...mkDd('ddNtApplicant', ntEmployeesForClient, this.state.ntApplicant || 'Select employee', (v) => this.setState({ ntApplicant: v })),
+      // The field is the search box here too. An employee list is the longest of the three — a client
+      // with sixty staff was sixty rows to scroll — and it is also the one that decides
+      // `variables.employeeId`, so picking the wrong row sends a whole run to the wrong person.
+      //
+      // The placeholder carries the reason the list is empty, which is two different reasons: no
+      // client has been chosen yet, or the client has nobody on file. Those need different answers
+      // from the person filling this in, and the old list said "Select a client first" for both.
+      ...mkDdCombo('ddNtApplicant', [{ title: '', options: ntEmployeesForClient }],
+        this.state.ntApplicant || '',
+        (v) => this.setState({ ntApplicant: v }),
+        !this.state.ntClient ? 'Select a client first'
+          : ntEmployeesForClient.length ? 'Search employees…'
+          : 'No employees on file for this client'),
       // Unassigned first, and only staff who can actually pick the work up — an invited user who
       // has never signed in cannot be given a task.
       ...mkDdCombo('ddNtAssignee', [{ title: '', options: ['Unassigned', ...(realActiveStaff || [])] }],
