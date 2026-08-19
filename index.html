@@ -20104,8 +20104,12 @@ class Component extends DCLogic {
           // The check itself: asked of the server, so this dialog and the nightly job can never judge
           // the same requirement differently. Attribute rules would otherwise need writing twice.
           if (!ntSel.doc) { _startRun(null); return; }
-          fetch((this._apiBase || 'http://localhost:4100') + '/api/prereq-check', {
-            method: 'POST', headers: H8,
+          // H8 IS ANOTHER FUNCTION'S VARIABLE. It is declared inside the document-upload handler a
+          // thousand lines away, so reaching it from here threw ReferenceError and took the whole
+          // console down — and only on this path, which runs when the chosen workflow issues a
+          // document, so a plain task never touched it. Built from the token this scope already has.
+          fetch(API8 + '/api/prereq-check', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok8 ? { Authorization: 'Bearer ' + tok8 } : {}) },
             body: JSON.stringify({ docType: ntSel.doc, employeeId: (ntPersonScoped && emp8) ? emp8.id : null, companyId: co8 ? co8.id : null }),
           })
             .then(r8 => (r8.ok ? r8.json() : Promise.reject(new Error('check failed'))))
