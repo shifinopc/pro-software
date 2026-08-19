@@ -12000,27 +12000,6 @@
                 </sc-for>
               </div>
             </sc-if>
-            <!-- A HEADING OVER NOTHING. `margin-top:auto` pushed this to the bottom of the flex
-                 column, so on a step with no suggestions the drawer opened with a band of empty
-                 white between the title and a section label that then had nothing under it. The
-                 label now appears only when there is something to label, and takes its spacing from
-                 the content above rather than from whatever room is left over. -->
-            <sc-if value="{{ wdHasSuggestions }}" hint-placeholder-val="{{ false }}">
-              <!-- NO HORIZONTAL PADDING OF ITS OWN. This block sits inside the drawer body, which
-                   already provides the 28px gutter, so its own 28px stacked on top and pushed the
-                   whole section 28px further in than the timeline above it — the one part of the
-                   sheet that did not line up. It carried a matching 24px when the body used 24px,
-                   so it has been doubly indented all along and the rebuild only made it wider. -->
-              <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.14em; padding-top:24px;">SUGGESTED NEXT STEPS</div>
-              <div style="display:flex; flex-direction:column; margin-top:4px;">
-                <sc-for list="{{ wdSuggestions }}" as="g" hint-placeholder-count="3">
-                  <div style="display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid #F4F1F9; font-size:12px; color:#3E3949; line-height:1.45; transition:padding-left .2s, color .2s;" style-hover="padding-left:6px; color:#7C00FF;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-                    <span>{{ g }}</span>
-                  </div>
-                </sc-for>
-              </div>
-            </sc-if>
             <sc-if value="{{ wdDelegatedTo }}" hint-placeholder-val="{{ false }}"><div style="margin:16px 24px 0; background:#E7F8EF; border:1px solid #A6E5C3; border-radius:11px; padding:10px 13px; font-size:12px; font-weight:600; color:#0E6B40;">✓ Reassigned to {{ wdDelegatedTo }} · logged to activity</div></sc-if>
             <sc-if value="{{ wdDelegateOpen }}" hint-placeholder-val="{{ false }}">
               <div style="margin:16px 24px 0; border:1px solid #EDEBF2; border-radius:12px; padding:12px 14px;">
@@ -26501,7 +26480,6 @@ class Component extends DCLogic {
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
         // A workflow step has its own next step — the graph decides it — so there is nothing to
         // suggest here, and the section stays closed rather than opening onto nothing.
-        wdHasSuggestions: false, wdSuggestions: [],
         wdOnApprove: selStep.onApprove, wdOnReject: selStep.onReject,
         wdSlaText: remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA',
         // The gate note describes the CHECKLIST gate, so it is only meaningful when there is one —
@@ -26814,23 +26792,6 @@ class Component extends DCLogic {
         // The workflow-step drawer defines none of these, so the heading used to render over an
         // empty list there. Stated in both places rather than inferred from a list that is undefined
         // in one of them.
-        wdHasSuggestions: true,
-        wdSuggestions: selPlain.blockedShow ? [
-          '⛔ ' + (selPlain.blocked || 'Waiting on a prerequisite') + ' — resolve it, then hit Resume',
-          '🔄 The system resumes this automatically once the prerequisite document is valid again',
-        ] : selPlain.compShow ? [
-          '⏱ Expires soon — start the renewal now to stay within SLA',
-          '📄 Confirm the new fee against the Document Type default',
-          '👤 Assign to whoever handled the last renewal for continuity',
-        ] : selPlain._wfId ? [
-          // A workflow task has no Start button, so telling someone to move it themselves is advice
-          // for a control that is not on screen.
-          '▶️ This moves with its workflow — open the current step in My Tasks to act on it',
-          '👥 Delegate moves the open step too, not just this task',
-        ] : [
-          '➡️ Move to In progress once you begin',
-          '👥 Delegate if another officer is closer to this authority',
-        ],
         wdDelegateOpen: !!this.state.wdDelegate,
         wdDelegatedTo: this.state.wdDelegatedTo || false,
         toggleDelegate: () => this.setState({ wdDelegate: !this.state.wdDelegate }),
