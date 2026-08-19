@@ -1633,9 +1633,20 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
           await supersede(alsoLive, existing.id, docType1, person, inst.id, task.nodeId);
           await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.updated", detail: `${docType1} for ${person} → ${expiry ?? "expiry unchanged"}`, actor: opts.actor ?? "engine", at: nowISO() } });
           logActivity({ type: "compliance", message: `${docType1} updated for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
-        } else {
+        } else if (expiry || number || issue) {
           // Create if absent: onboarding records a document that has never existed before, and
           // refusing to would mean the captured details had nowhere to go.
+          //
+          // ONLY WHEN THE STEP ACTUALLY RECORDED SOMETHING ABOUT THE DOCUMENT — a number, an expiry
+          // or an issue date. Without that guard this fired on ANY step with answers whenever the run
+          // carried a docType, and the first such step in onboarding is the intake form. Completing
+          // it filed a WORK VISA for somebody who had not applied for one: no number, no expiry, no
+          // issue date, `issuedByRunId` null because no issue step had run — and `status: "valid"`,
+          // because the status is derived from an expiry and an absent expiry falls back to valid.
+          //
+          // A visa nobody applied for, marked valid, sitting on the employee's card and in every
+          // compliance count. The captured answers are not lost: they are on the run and on the step,
+          // which is where a name and a department belong. They were never facts about a visa.
           const made = await prisma.document.create({
             data: { companyId: inst.companyId, person, employeeId, docType: docType1, expiryDate: effExpiry,
               issueDate: issue, docNumber: number, issuingAuthority: dt1?.authority ?? null,
@@ -1644,6 +1655,12 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
           await supersede(alsoLive, made.id, docType1, person, inst.id, task.nodeId);
           await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.created", detail: `${docType1} for ${person} → ${expiry ?? "no expiry"}`, actor: opts.actor ?? "engine", at: nowISO() } });
           logActivity({ type: "compliance", message: `${docType1} filed for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        } else {
+          // Not silence: the run says what it declined to invent, so anybody wondering where the
+          // document is can see that the step recorded nothing to put on one.
+          await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.not_created",
+            detail: `"${task.title}" recorded no ${docType1} number, expiry or issue date, so no ${docType1} was filed for ${person}`,
+            actor: "engine", at: nowISO() } }).catch(() => {});
         }
       }
     }
