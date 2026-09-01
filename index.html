@@ -5243,6 +5243,12 @@
                   </sc-for>
                 </div>
               </sc-if>
+              <sc-if value="{{ tfNoBoard }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px; border:1px dashed #EDE9F5; border-radius:13px; padding:20px 16px; text-align:center;">
+                  <div style="font-size:12.5px; font-weight:650; color:#57525F;">Nobody to rank yet</div>
+                  <div style="font-size:11px; color:#A9A6B4; margin-top:5px; line-height:1.55; max-width:290px; margin-left:auto; margin-right:auto;">{{ tfNoBoardWhy }}</div>
+                </div>
+              </sc-if>
             </div>
             <!-- The COMPACT reading of the same channels, which is what the design puts beside
                  the leaderboard: name, bar, share won. The detailed one further down adds the chip
@@ -5268,6 +5274,12 @@
                       <div style="height:6px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:6px;"><div style="height:100%; width:{{ x.barW }}; background:{{ x.barColor }}; border-radius:99px;"></div></div>
                     </div>
                   </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tfNoSources }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px; border:1px dashed #EDE9F5; border-radius:13px; padding:20px 16px; text-align:center;">
+                  <div style="font-size:12.5px; font-weight:650; color:#57525F;">No channels to compare yet</div>
+                  <div style="font-size:11px; color:#A9A6B4; margin-top:5px; line-height:1.55; max-width:290px; margin-left:auto; margin-right:auto;">{{ tfNoSourcesWhy }}</div>
                 </div>
               </sc-if>
             </div>
@@ -5311,6 +5323,12 @@
                   </div>
                 </sc-for>
               </div></div>
+            </sc-if>
+            <sc-if value="{{ tfNoOfficers }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:0 22px 16px; border:1px dashed #EDE9F5; border-radius:13px; padding:22px 16px; text-align:center;">
+                <div style="font-size:12.5px; font-weight:650; color:#57525F;">No officer figures for this month</div>
+                <div style="font-size:11px; color:#A9A6B4; margin-top:5px; line-height:1.55; max-width:380px; margin-left:auto; margin-right:auto;">{{ tfNoOfficersWhy }}</div>
+              </div>
             </sc-if>
           </section>
           <!-- The DETAILED reading, full width and below the officers, where the design puts
@@ -29957,6 +29975,14 @@ class Component extends DCLogic {
               })()
             : '',
           tfHasBoard: (D.leaderboard || []).length > 0,
+          // EMPTY IS A STATE, NOT AN ABSENCE. sc-if has no else, so a section whose list is empty
+          // rendered its heading and then stopped — a title, a caption, and silence, which reads as
+          // something that failed to load rather than something with nothing in it yet. Each of
+          // these says what would put a row there, in the terms that actually govern it.
+          tfNoBoard: (D.leaderboard || []).length === 0,
+          tfNoBoardWhy: 'Ranked by deals WON in ' + (selLabel9 || 'this month') + '. Nobody appears until a deal is marked won with an owner on it.',
+          tfNoOfficers: (D.leaderboard || []).length === 0,
+          tfNoOfficersWhy: 'Officers appear here once they have won a deal in ' + (selLabel9 || 'this month') + '. Targets and commission rates are then set against them from this table.',
           tfBoard: (D.leaderboard || []).map((r, i) => {
             // Same rule as the officer table: the firm’s figure is the team’s, so attainment
             // is measured against it when somebody has no target of their own.
@@ -30131,6 +30157,8 @@ class Component extends DCLogic {
           }),
           tfHasOfficers: (D.leaderboard || []).length > 0,
           tfHasSources: (D.sources || []).length > 0,
+          tfNoSources: (D.sources || []).length === 0,
+          tfNoSourcesWhy: 'Built from the source recorded on each lead. Nothing is shown until leads arrive carrying one \u2014 lead sources are configured in Sales Settings.',
           tfSources: (() => {
             const max = Math.max(1, ...(D.sources || []).map(x => x.wonMinor || 0));
             return (D.sources || []).map((x) => ({
