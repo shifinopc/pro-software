@@ -9508,6 +9508,32 @@
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL</div><input value="{{ ecEmail }}" onChange="{{ setEcEmail }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PHONE</div><input value="{{ ecPhone }}" onChange="{{ setEcPhone }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
         </div>
+        <!-- COUNTRY, CITY, INDUSTRY.
+             All three show as "Not recorded" on the panel behind this dialog and none of them could
+             be entered anywhere. Country is the one that stops work: no country means no published
+             thresholds, so the band editor refuses to open — and the refusal used to point people
+             here, at a form that could not fix it. Industry is what suggests which ladder applies. -->
+        <div style="display:flex; gap:12px; margin-top:14px;">
+          <div style="flex:1;">
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COUNTRY</div>
+            <div style="position:relative; margin-top:6px;">
+              <div data-dd onClick="{{ ddEcCountryToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ecCountryColor }};">{{ ddEcCountryVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+              <sc-if value="{{ ddEcCountryOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;">
+                  <sc-for list="{{ ddEcCountryOptions }}" as="o" hint-placeholder-count="6">
+                    <div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <div style="font-size:10.5px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Decides which country's rules and thresholds apply.</div>
+          </div>
+          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CITY</div><input value="{{ ecCity }}" onChange="{{ setEcCity }}" placeholder="Riyadh" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">INDUSTRY</div><input value="{{ ecIndustry }}" onChange="{{ setEcIndustry }}" placeholder="Construction" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+        </div>
+        <sc-if value="{{ ecErrShow }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ecErr }}</div>
+        </sc-if>
         <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;"><button onClick="{{ closeEditClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ saveEditClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save changes</button></div>
       </div>
     </div>
@@ -19796,16 +19822,77 @@ class Component extends DCLogic {
     const ecRow = ecOpen && clSel != null ? allClients[clSel] : null;
     const editClientApi = {
       showEditClient: ecOpen,
-      openEditClient: () => { const r = allClients[clSel]; this.setState({ editClient: true, ecName: r.name, ecContact: r.contact, ecEmail: r.email, ecPhone: r.phone, ecStatus: r.status, ecErr: '' }); },
+      openEditClient: () => {
+        const r = allClients[clSel];
+        this.setState({
+          editClient: true, ecId: r.realId || null,
+          ecName: r.name, ecContact: r.contact, ecEmail: r.email, ecPhone: r.phone, ecStatus: r.status,
+          // Read from the RECORD, not from the row. The list row is a tuple of rendered strings —
+          // a blank city shows as "Not recorded" — and it carries no country at all, so a dialog
+          // populated from it would either save that placeholder as a value or silently drop the one
+          // field somebody opened this to set.
+          ...(() => {
+            const raw9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+              .find(c9 => c9.id === (r.realId || '')) || {};
+            return { ecCountry: raw9.country || '', ecCity: raw9.city || '', ecIndustry: raw9.industry || '' };
+          })(),
+          ecErr: '',
+        });
+      },
       closeEditClient: () => this.setState({ editClient: false }),
       ecName: this.state.ecName || '', ecContact: this.state.ecContact || '', ecEmail: this.state.ecEmail || '', ecPhone: this.state.ecPhone || '', ecErr: this.state.ecErr || false,
       setEcName: (e) => this.setState({ ecName: e.target.value, ecErr: '' }),
       setEcContact: (e) => this.setState({ ecContact: e.target.value }),
       setEcEmail: (e) => this.setState({ ecEmail: e.target.value }),
       setEcPhone: (e) => this.setState({ ecPhone: e.target.value }),
+      setEcCity: (e) => this.setState({ ecCity: e.target.value, ecErr: '' }),
+      setEcIndustry: (e) => this.setState({ ecIndustry: e.target.value, ecErr: '' }),
+      ecCity: this.state.ecCity || '', ecIndustry: this.state.ecIndustry || '',
+      // A country is a CODE chosen from the server's list, never typed: "Saudi", "KSA" and "SA" are
+      // one country to a person and three to every count in this system.
+      ...mkDd('ddEcCountry', _countryLabels, _labelFromCode(this.state.ecCountry), (v9) => this.setState({ ecCountry: _codeFromLabel(v9), ecErr: '' })),
+      ddEcCountryVal: this.state.ecCountry ? _labelFromCode(this.state.ecCountry) : 'Not set',
+      ecCountryColor: this.state.ecCountry ? '#26074D' : '#A9A6B4',
+      ecErrShow: !!this.state.ecErr,
       ...mkDd('ddEcStatus', ['Prospect', 'Onboarding', 'Active', 'Suspended', 'Inactive'], this.state.ecStatus || 'Active', (v) => this.setState({ ecStatus: v })),
       ecStatusVal: this.state.ecStatus || 'Active',
-      saveEditClient: () => { if (!(this.state.ecName || '').trim()) return this.setState({ ecErr: 'Name is required' }); this.setState({ editClient: false, ecSaved: true }); },
+      /**
+       * SAVE. This dialog used to close and set a flag, and that was all of it — every field typed
+       * into it was discarded, silently, including the one the band editor sends people here to fix.
+       */
+      saveEditClient: () => {
+        const st9 = this.state;
+        if (!(st9.ecName || '').trim()) return this.setState({ ecErr: 'Name is required' });
+        const id9 = st9.ecId;
+        if (!id9) return this.setState({ ecErr: 'This row is not linked to a saved client, so there is nothing to update.' });
+        const tok9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + id9, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+          // Blanks are sent as null rather than omitted: clearing a city has to be possible, and an
+          // omitted key means "leave alone" to the server.
+          body: JSON.stringify({
+            name: st9.ecName.trim(),
+            contact: (st9.ecContact || '').trim() || null,
+            email: (st9.ecEmail || '').trim() || null,
+            phone: (st9.ecPhone || '').trim() || null,
+            status: String(st9.ecStatus || 'active').toLowerCase(),
+            country: (st9.ecCountry || '').trim() || null,
+            city: (st9.ecCity || '').trim() || null,
+            industry: (st9.ecIndustry || '').trim() || null,
+          }),
+        })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            if (!ok) return this.setState({ ecErr: (j9 && j9.error) || 'Could not save those changes' });
+            this.setState({ editClient: false, ecSaved: true, ecErr: '' });
+            this.toast('Saved');
+            this._opReload && this._opReload('companies', 'companiesData');
+            // The country decides which thresholds apply, so the workforce reading has to be redone.
+            this._loadWorkforce && this._loadWorkforce();
+          })
+          .catch(() => this.setState({ ecErr: 'Server unreachable — nothing was saved' }));
+      },
     };
 
     // ---- Add Client modal (full provisioning flow) ----
