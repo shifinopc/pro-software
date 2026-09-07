@@ -22733,21 +22733,26 @@ class Component extends DCLogic {
           const bs9 = wfAll9[k9] && wfAll9[k9].bandSet;
           if (bs9 && bs9.assigned) users9[bs9.id] = (users9[bs9.id] || 0) + 1;
         }
-        const isNew9 = this.state.wbSet === '__new';
+        // WHAT THE EDITOR OPENS ON, AND WHAT IT MUST NOT.
+        //
+        // Only ever this client's own ladder: the one they are on, or one set up for them. It used
+        // to fall through to the country default and then to whatever happened to be first, so a
+        // client with nothing configured opened showing ANOTHER client's thresholds, already filled
+        // in — and "Save and apply" would quietly put them on numbers nobody chose for them. A
+        // default nobody picked is exactly what this whole area was moved off Country Rules to avoid.
+        //
+        // With nothing of their own, it opens BLANK and named for them. Other ladders stay one chip
+        // away, so reuse is still a click and never an accident.
+        const onNow9 = (wfAll9[co9] && wfAll9[co9].bandSet && wfAll9[co9].bandSet.assigned)
+          ? wfAll9[co9].bandSet.id : null;
+        const picked9 = this.state.wbSet && this.state.wbSet !== '__new'
+          ? (sets9.find(g9 => g9.id === this.state.wbSet) || null) : null;
+        const theirs9 = sets9.find(g9 => g9.id === onNow9) || sets9.find(g9 => g9.ownerCompanyId === co9) || null;
         // '__new' is a ladder that does not exist yet: created on SAVE, not on the click that opens
         // it, so a mis-click leaves nothing behind. An empty row nobody meant to make is still a row
         // somebody has to delete.
-        //
-        // Opening falls to the ladder this client is ON, then their own, then the pack's — never to
-        // an arbitrary first row, which would invite somebody to edit another client's numbers while
-        // believing they were setting up this one.
-        const onNow9 = (wfAll9[co9] && wfAll9[co9].bandSet && wfAll9[co9].bandSet.assigned)
-          ? wfAll9[co9].bandSet.id : null;
-        const cur9 = isNew9 ? null
-          : (sets9.find(g9 => g9.id === this.state.wbSet)
-             || sets9.find(g9 => g9.id === onNow9)
-             || sets9.find(g9 => g9.ownerCompanyId === co9)
-             || sets9.find(g9 => g9.isDefault) || sets9[0] || null);
+        const cur9 = picked9 || (this.state.wbSet === '__new' ? null : theirs9);
+        const isNew9 = !cur9;
         const setId9 = isNew9 ? '__new' : (cur9 ? cur9.id : null);
         // The scheme's own fields, held as a draft so typing a name does not write to the server on
         // every keystroke.
@@ -22803,9 +22808,13 @@ class Component extends DCLogic {
             ? 'A new ladder for this client. Type the bands the regulator publishes for their activity and size — the ratio is counted from their staff, and these decide what it is called.'
             : 'The published thresholds this client is measured against. The ratio comes from their staff records; these decide which band it lands in.',
           wbNewLabel: sets9.length ? '+ Set up different bands' : '+ Set up bands',
-          wbPickNote: sets9.length
-            ? 'Pick the ladder that applies to this client, or set up a different one. Saving puts them on whichever is selected.'
-            : 'Nothing is set up for this country yet. Add the bands the regulator publishes for this client.',
+          wbPickNote: !sets9.length
+            ? 'Nothing is set up yet. Add the bands the regulator publishes for this client.'
+            : isNew9
+              // Named ladders are listed above, so "reuse one" is a real offer rather than a hint at
+              // something the reader cannot see.
+              ? 'New bands for this client. Or press one above to put them on a ladder already set up.'
+              : 'Saving puts this client on the ladder selected above.',
           // The count comes from clients whose reading the app has loaded, so it is a floor, not a
           // census — worded as "at least" rather than stating a number it cannot guarantee.
           wbShared: others9 > 0,
