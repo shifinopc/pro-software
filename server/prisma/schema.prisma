@@ -312,6 +312,16 @@ model Employee {
   // Facts a workforce-quota calculation needs and the row did not carry. All nullable: a percentage
   // computed from incomplete data must report how much it could see rather than quietly assume.
   salary         Int? // monthly, in minor units — see money.ts for why money is never a float
+  /// Which counting rules this person is claimed under, as a list of rule keys — ["disability"].
+  ///
+  /// The rules themselves live on the client's band ladder, so this is deliberately just keys: the
+  /// multiplier, the wording and the condition are all the regulator's and change with it, while
+  /// what is recorded here is a fact about the person that does not.
+  ///
+  /// ABSENT MEANS NOT CLAIMED, WHICH IS NOT THE SAME AS NO — and is the safe direction. A missed
+  /// disability makes a client's ratio read WORSE than it is; the opposite error would quietly tell
+  /// somebody they were compliant when they were not.
+  countingTraits Json?
   employmentType String? // full_time | part_time — part-time counts fractionally in some regimes
   jobCategory    String? // skilled | unskilled | … — some regimes count only part of the workforce
   role           String?
@@ -1042,6 +1052,29 @@ model WorkforceBandSet {
   /// The size bracket it covers, in headcount. `sizeMax` null means "and above".
   sizeMin      Int?
   sizeMax      Int?
+  /// How each person is COUNTED toward this client's ratio, when the regulator does not count
+  /// everybody as one.
+  ///
+  /// Saudi Nitaqat counts an employee with a disability as four Saudi employees; part-timers count
+  /// as a half in several regimes. Those multipliers are published by the same authority that
+  /// publishes the thresholds, change on the same schedule, and are meaningless apart from them —
+  /// which is why they live on the ladder rather than in a table of their own. It also means they
+  /// travel in a country pack and are set up on the client screen, with no new place to manage.
+  ///
+  /// Rows of:
+  ///   { key, label, when?, from?, countsAs, appliesTo? }
+  ///
+  ///   countsAs   HUNDREDTHS. 400 = counts as four, 50 = counts as a half. An integer for the same
+  ///              reason the band floors are: a weight held as a float puts a client on the wrong
+  ///              side of a threshold it was supposed to help them clear.
+  ///   when       what must be true of the employee for the rule to apply, e.g. { nationality:
+  ///              "national" }. Also decides whether the checkbox is OFFERED on the employee form,
+  ///              so "only ask this for Saudis" is one fact written once.
+  ///   from       reads an existing column instead of a tick box, e.g. "employmentType=part_time".
+  ///   appliesTo  "both" (default) counts the weight in the ratio AND in the workforce total;
+  ///              "nationals" counts it only on top. The two give materially different percentages
+  ///              and no default is safe to assume, so it is stated per rule and shown in the working.
+  counting     Json?
   /// The scheme a client falls to when it has not been given one. At most one per country.
   ///
   /// No longer settable from the console: thresholds are set up per client, so there is no screen

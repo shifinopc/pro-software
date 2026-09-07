@@ -1935,6 +1935,14 @@
                     <div style="font-family:'Space Grotesk',sans-serif; font-size:30px; font-weight:700; color:#26074D;">{{ wfPct }}</div>
                     <div style="font-size:12px; color:#8C8899;">{{ wfCount }}</div>
                   </div>
+                  <!-- SHOW THE WORKING.
+                       A weighted percentage on its own cannot be reconciled against the government
+                       portal by the person looking at it, and being checkable is this panel's entire
+                       claim on anybody's trust. Only appears when a rule actually moved something —
+                       explaining a plain headcount would make it look derived. -->
+                  <sc-if value="{{ wfWeighted }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top:8px; font-size:11.5px; color:#6F6C7A; line-height:1.6;">{{ wfCountedLine }}<br><span style="color:#A9A6B4;">{{ wfCountingWhy }}</span></div>
+                  </sc-if>
                   <div style="margin-top:10px; height:9px; border-radius:99px; background:#F1EDF9; overflow:hidden; display:flex;">
                     <span style="width:{{ wfBarKnown }}; background:#0E9355;"></span>
                     <span style="width:{{ wfBarUnknown }}; background:#D8D3E3;"></span>
@@ -8538,6 +8546,31 @@
                 <div class="fm-hint">Counts toward the client's nationalisation ratio.</div>
               </div>
             </div>
+            <!-- COUNTED FOR MORE THAN ONE.
+                 Not a hard-coded "has a disability" box: these are generated from the counting rules
+                 on the client's band ladder, and only the ones whose condition this person already
+                 meets are shown. So picking Saudi Arabia reveals the Nitaqat disability rule, picking
+                 India does not, and adding "released prisoner counts as two" next year is a row in
+                 configuration rather than a change to this form. -->
+            <sc-if value="{{ eeHasTraits }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px; border:1px solid #EDEBF2; border-radius:13px; padding:13px 15px; background:#FBFAFD;">
+                <div style="font-size:11.5px; font-weight:700; color:#4B4757;">Counts as more than one</div>
+                <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-top:3px;">{{ eeTraitsNote }}</div>
+                <sc-for list="{{ eeTraits }}" as="t" hint-placeholder-count="1">
+                  <div onClick="{{ t.toggle }}" style="display:flex; gap:10px; align-items:flex-start; margin-top:11px; cursor:pointer;">
+                    <div style="width:17px; height:17px; border-radius:5px; border:1.5px solid {{ t.bd }}; background:{{ t.bg }}; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center;">
+                      <sc-if value="{{ t.on }}" hint-placeholder-val="{{ false }}">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                      </sc-if>
+                    </div>
+                    <div style="min-width:0;">
+                      <div style="font-size:12px; font-weight:600; color:#26074D;">{{ t.label }}</div>
+                      <div style="font-size:11px; color:#8C8899; line-height:1.5; margin-top:2px;">{{ t.effect }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
           </div>
 
           <!-- ── Employment terms ── -->
@@ -8921,6 +8954,31 @@
                 <div class="fm-hint">Counts toward the client's nationalisation ratio.</div>
               </div>
             </div>
+            <!-- COUNTED FOR MORE THAN ONE.
+                 Not a hard-coded "has a disability" box: these are generated from the counting rules
+                 on the client's band ladder, and only the ones whose condition this person already
+                 meets are shown. So picking Saudi Arabia reveals the Nitaqat disability rule, picking
+                 India does not, and adding "released prisoner counts as two" next year is a row in
+                 configuration rather than a change to this form. -->
+            <sc-if value="{{ eHasTraits }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px; border:1px solid #EDEBF2; border-radius:13px; padding:13px 15px; background:#FBFAFD;">
+                <div style="font-size:11.5px; font-weight:700; color:#4B4757;">Counts as more than one</div>
+                <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-top:3px;">{{ eTraitsNote }}</div>
+                <sc-for list="{{ eTraits }}" as="t" hint-placeholder-count="1">
+                  <div onClick="{{ t.toggle }}" style="display:flex; gap:10px; align-items:flex-start; margin-top:11px; cursor:pointer;">
+                    <div style="width:17px; height:17px; border-radius:5px; border:1.5px solid {{ t.bd }}; background:{{ t.bg }}; flex-shrink:0; margin-top:1px; display:flex; align-items:center; justify-content:center;">
+                      <sc-if value="{{ t.on }}" hint-placeholder-val="{{ false }}">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                      </sc-if>
+                    </div>
+                    <div style="min-width:0;">
+                      <div style="font-size:12px; font-weight:600; color:#26074D;">{{ t.label }}</div>
+                      <div style="font-size:11px; color:#8C8899; line-height:1.5; margin-top:2px;">{{ t.effect }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
           </div>
 
           <!-- ── Employment terms ──
@@ -11551,6 +11609,47 @@
             <sc-if value="{{ wbCanSeed }}" hint-placeholder-val="{{ false }}">
               <span onClick="{{ wbSeed }}" style="font-size:11.5px; font-weight:700; color:#8C8899; cursor:pointer;" style-hover="color:#7C00FF;">Start from the usual four</span>
             </sc-if>
+          </div>
+
+          <!-- WHO COUNTS FOR MORE THAN ONE.
+               A nationalisation ratio is not always a headcount: Nitaqat counts an employee with a
+               disability as four Saudis, and several regimes count a part-timer as a half. Those
+               multipliers come from the same published regulation as the thresholds above, change on
+               the same schedule, and mean nothing apart from them — so they are edited here rather
+               than in a table of their own, and travel with the ladder. -->
+          <div style="margin-top:20px; border-top:1px solid #F1EDF9; padding-top:16px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div style="font-size:12.5px; font-weight:700; color:#26074D;">How people are counted</div>
+              <span onClick="{{ wbAddCount }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a rule</span>
+            </div>
+            <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-top:4px;">Leave empty and everybody counts as one. A rule adds a tick box to the employee form for the people it applies to.</div>
+
+            <sc-for list="{{ wbCountRows }}" as="c" hint-placeholder-count="2">
+              <div style="margin-top:11px; border:1px solid #EDEBF2; border-radius:13px; padding:12px 14px;">
+                <div style="display:grid; grid-template-columns:1.7fr 90px auto; gap:10px; align-items:end;">
+                  <div>
+                    <label class="fm-lab">What to call it on the employee form</label>
+                    <input value="{{ c.label }}" onInput="{{ c.setLabel }}" placeholder="e.g. Has a disability" class="fm-inp">
+                  </div>
+                  <div>
+                    <label class="fm-lab">Counts as</label>
+                    <input value="{{ c.countsAs }}" onInput="{{ c.setCounts }}" placeholder="4" class="fm-inp">
+                  </div>
+                  <div onClick="{{ c.remove }}" class="fm-x" title="Remove this rule"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center;">
+                  <span style="font-size:11px; color:#8C8899;">Ask it for</span>
+                  <sc-for list="{{ c.whoOpts }}" as="o" hint-placeholder-count="3">
+                    <span onClick="{{ o.pick }}" style="font-size:11px; font-weight:650; padding:5px 11px; border-radius:99px; cursor:pointer; border:1px solid {{ o.bd }}; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</span>
+                  </sc-for>
+                  <span style="font-size:11px; color:#8C8899; margin-left:8px;">and weight</span>
+                  <sc-for list="{{ c.scopeOpts }}" as="o" hint-placeholder-count="2">
+                    <span onClick="{{ o.pick }}" title="{{ o.title }}" style="font-size:11px; font-weight:650; padding:5px 11px; border-radius:99px; cursor:pointer; border:1px solid {{ o.bd }}; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</span>
+                  </sc-for>
+                </div>
+                <div style="font-size:11px; color:#6F6C7A; line-height:1.55; margin-top:9px;">{{ c.plain }}</div>
+              </div>
+            </sc-for>
           </div>
 
           <sc-if value="{{ wbPreview }}" hint-placeholder-val="{{ false }}">
@@ -14963,7 +15062,7 @@ class Component extends DCLogic {
     // is no screen on which "the default for everybody" is a sensible thing to choose. The route
     // survives on the server because country packs still ship a default, and a fresh installation
     // has to place its clients somewhere until each one has been set up.
-    this._saveBands = (country, setId, rows, meta, companyId) => {
+    this._saveBands = (country, setId, rows, meta, companyId, counting) => {
       const clean = rows.map(r => ({
         id: r.id, name: String(r.name || '').trim(),
         minBp: Math.round((parseFloat(r.from) || 0) * 100),
@@ -14985,6 +15084,28 @@ class Component extends DCLogic {
 
       const name = String((meta && meta.name) || '').trim();
       if (!name) return this.setState({ wbErr: 'Give these bands a name — it is what somebody picks from when setting up the next client.' });
+      // ── the counting rules, validated the same way the bands are ──
+      // A key is derived from the label rather than typed: it is what gets stored on every employee
+      // claimed under the rule, and letting somebody edit it later would orphan all of them.
+      const cRules = (counting || []).map(c => {
+        const label = String(c.label || '').trim();
+        const n = parseFloat(c.countsAs);
+        const key = String(c.key || '').trim()
+          || label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        return { key, label, n, who: c.who || 'anyone', scope: c.scope === 'nationals' ? 'nationals' : 'both', from: String(c.from || '').trim() };
+      }).filter(c => c.label || Number.isFinite(c.n));
+      for (const c of cRules) {
+        if (!c.label) return this.setState({ wbErr: 'One counting rule has a multiplier but no name — the name is what the employee form asks.' });
+        if (!Number.isFinite(c.n)) return this.setState({ wbErr: '"' + c.label + '" has no multiplier. How many people does someone ticked for it count as?' });
+        if (c.n < 0) return this.setState({ wbErr: '"' + c.label + '" counts as a negative number of people.' });
+        // A rule worth exactly one changes nothing and puts a tick box on the form that does nothing,
+        // which reads as broken rather than as deliberate.
+        if (c.n === 1) return this.setState({ wbErr: '"' + c.label + '" counts as one, which is what everybody already counts as. Give it a different multiplier or remove it.' });
+        if (!c.key) return this.setState({ wbErr: '"' + c.label + '" needs at least one letter or number in its name.' });
+      }
+      const dupe = cRules.map(c => c.key).find((k, i, a) => a.indexOf(k) !== i);
+      if (dupe) return this.setState({ wbErr: 'Two counting rules would be stored under the same name. Rename one so the people claimed under each stay distinct.' });
+
       const sizeMin = String((meta && meta.sizeMin) || '').trim();
       const sizeMax = String((meta && meta.sizeMax) || '').trim();
       if (sizeMin && sizeMax && Number(sizeMax) < Number(sizeMin)) {
@@ -15001,6 +15122,13 @@ class Component extends DCLogic {
         activity: String((meta && meta.activity) || '').trim() || null,
         sizeMin: sizeMin === '' ? null : Number(sizeMin),
         sizeMax: sizeMax === '' ? null : Number(sizeMax),
+        // Hundredths on the way out, the way the band floors are basis points: a multiplier held as
+        // a float would put a client on the wrong side of the very threshold it was meant to clear.
+        counting: cRules.map(c => ({
+          key: c.key, label: c.label, countsAs: Math.round(c.n * 100), appliesTo: c.scope,
+          ...(c.who === 'anyone' ? {} : { when: { nationality: c.who } }),
+          ...(c.from ? { from: c.from } : {}),
+        })),
         // Whose screen this ladder was made on. Provenance, not ownership — it decides which chip a
         // client sees first, and nothing else. Only stamped on CREATE: re-saving somebody else's
         // ladder from this client would otherwise quietly retitle it as this client's.
@@ -15051,7 +15179,7 @@ class Component extends DCLogic {
         const failed = rs.filter(x => !x).length;
         this.setState({ wbBusy: false, wbOpen: failed ? this.state.wbOpen : null,
           wbSet: failed ? this.state.wbSet : null,
-          wbDraft: failed ? this.state.wbDraft : null, wbMeta: failed ? this.state.wbMeta : null,
+          wbDraft: failed ? this.state.wbDraft : null, wbMeta: failed ? this.state.wbMeta : null, wbCount: failed ? this.state.wbCount : null,
           wbErr: failed ? (failed + ' change' + (failed === 1 ? '' : 's') + ' were refused by the server.') : '' });
         if (!failed) this.toast(clean.length + ' band' + (clean.length === 1 ? '' : 's') + ' saved');
         this._opReload('workforce-bands', 'bandsData');
@@ -17518,6 +17646,7 @@ class Component extends DCLogic {
             // Typed in whole currency, stored in minor units — the same rule as everywhere else.
             salary: String(st9.eeSalary || '').trim() ? Math.round(parseFloat(st9.eeSalary) * 100) : null,
             employmentType: st9.eeType || null, jobCategory: st9.eeCat || null,
+            countingTraits: Array.isArray(st9.eeTraits) ? st9.eeTraits : [],
             department: st9.eeDept || null, joinDate: st9.eeJoin || null, visaQuota: Number(st9.eeQuota) || 1,
           }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
@@ -18017,11 +18146,70 @@ class Component extends DCLogic {
           eErrorGeneral: (msg9 && !fld9) ? msg9 : false,
         };
       })(),
+      // ── who counts for more than one ──
+      // Read from the counting rules of the ladder that judges THIS client, filtered to the ones
+      // whose condition the details entered so far already satisfy. Nothing here is hard-coded: the
+      // wording, the multiplier and the "only ask Saudis" condition all come from configuration.
+      ...(() => {
+        const rulesFor9 = (who9, natCode9) => {
+          const all19 = Array.isArray(this.state.companiesData) ? this.state.companiesData : [];
+          const companyId9 = (all19.find(c9 => c9.id === who9) || all19.find(c9 => c9.name === who9) || {}).id || '';
+          const wf9 = (this.state.workforceData || {})[companyId9] || null;
+          const setId9 = wf9 && wf9.bandSet && wf9.bandSet.id;
+          const set9 = setId9 && (Array.isArray(this.state.bandSetsData) ? this.state.bandSetsData : []).find(g9 => g9.id === setId9);
+          const all9 = (set9 && Array.isArray(set9.counting)) ? set9.counting : [];
+          const co9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.id === companyId9);
+          const ctry9 = (co9 && co9.country) || (wf9 && wf9.country) || '';
+          // `from` rules read an existing column — employment type already asks that question, and a
+          // second tick box for the same fact is two places for one truth.
+          return all9.filter(r9 => !r9.from).filter(r9 => {
+            const want9 = r9.when && r9.when.nationality;
+            if (!want9) return true;
+            // Unknown nationality shows nothing rather than everything: offering a Saudis-only box
+            // before anybody has said the nationality invites it to be ticked for the wrong person.
+            if (!natCode9) return false;
+            const isNat9 = String(natCode9).toUpperCase() === String(ctry9).toUpperCase();
+            return want9 === 'national' ? isNat9 : want9 === 'expat' ? !isNat9 : String(want9).toUpperCase() === String(natCode9).toUpperCase();
+          });
+        };
+        const effect9 = (r9) => {
+          const n9 = (Number(r9.countsAs) || 100) / 100;
+          const as9 = n9 === 0.5 ? 'half a person' : (n9 + ' people');
+          return 'Counts as ' + as9 + (r9.appliesTo === 'nationals' ? ' in the ratio, one body in the total.' : ' in the ratio and in the total.');
+        };
+        const box9 = (on9) => ({ bd: on9 ? '#7C00FF' : '#D8D3E3', bg: on9 ? '#7C00FF' : '#fff' });
+        const mk9 = (rules9, picked9, put9) => ({
+          has: rules9.length > 0,
+          note: rules9.length === 1
+            ? 'One rule on this client\u2019s bands applies to somebody with these details.'
+            : rules9.length + ' rules on this client\u2019s bands apply to somebody with these details.',
+          rows: rules9.map(r9 => {
+            const on9 = picked9.indexOf(r9.key) >= 0;
+            return {
+              label: r9.label || r9.key, effect: effect9(r9), on: on9, ...box9(on9),
+              toggle: () => put9(on9 ? picked9.filter(k9 => k9 !== r9.key) : [...picked9, r9.key]),
+            };
+          }),
+        });
+
+        // Add employee.
+        const aRules9 = rulesFor9(this.state.eClient, this.state.eNat);
+        const aPicked9 = Array.isArray(this.state.eTraits) ? this.state.eTraits : [];
+        const a9 = mk9(aRules9, aPicked9, (v9) => this.setState({ eTraits: v9 }));
+        // Edit employee.
+        const eRules9 = rulesFor9(this.state.eeCompanyId, this.state.eeNat);
+        const ePicked9 = Array.isArray(this.state.eeTraits) ? this.state.eeTraits : [];
+        const e9 = mk9(eRules9, ePicked9, (v9) => this.setState({ eeTraits: v9 }));
+        return {
+          eHasTraits: a9.has, eTraitsNote: a9.note, eTraits: a9.rows,
+          eeHasTraits: e9.has, eeTraitsNote: e9.note, eeTraits: e9.rows,
+        };
+      })(),
       eDob: this.state.eDob || '', eNat: this.state.eNat || '',
       setEDob: (e) => this.setState({ eDob: e.target.value }),
       setENat: (e) => this.setState({ eNat: e.target.value }),
       // From the all-Employees screen: no client is implied, so the picker is shown and starts empty.
-      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eDob: '', eNat: '', eSalary: '', eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
+      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eDob: '', eNat: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
       // Nationality is a code now, chosen from the server's list rather than typed. A text box with
       // the placeholder "e.g. Saudi" invites four spellings of one country, and a headcount that
       // misses a spelling under-reports — which is the direction that gets a client in trouble.
@@ -18122,6 +18310,9 @@ class Component extends DCLogic {
             salary: (st.eSalary || '').trim() ? Math.round(parseFloat(st.eSalary) * 100) : null,
             employmentType: _EMP_TYPE_VAL[st.eEmpType] || null,
             jobCategory: _JOB_CAT_VAL[st.eJobCat] || null,
+            // A column, not customData, for the same reason the nationality is: the ratio reads it,
+            // and a fact with two homes is a count that is right on the empty one.
+            countingTraits: Array.isArray(st.eTraits) ? st.eTraits : [],
             customData: { department: st.eDept || null, visaQuota: Number(st.eVisaQuota) || 1, joinDate: st.eJoinDate || null } }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
@@ -18667,6 +18858,21 @@ class Component extends DCLogic {
       // turns out to be an expat, and under-reporting is the direction that gets a client fined.
       clDetailApi.wfPct = _wf ? (_wf.certain ? _pct9(_wf.ratioMinBp) : (_pct9(_wf.ratioMinBp) + '–' + _pct9(_wf.ratioMaxBp))) : '—';
       clDetailApi.wfCount = _wf ? (_wf.nationals + ' of ' + _wf.total + ' on the books') : '';
+      // ── the working behind a weighted ratio ──
+      // Said in PEOPLE, not hundredths: the store is integer for the same reason money is, and
+      // nobody reads "1300 counted".
+      const _ppl9 = (h9) => {
+        const n9 = (Number(h9) || 0) / 100;
+        return Number.isInteger(n9) ? String(n9) : String(Number(n9.toFixed(2)));
+      };
+      clDetailApi.wfWeighted = !!(_wf && _wf.weighted);
+      clDetailApi.wfCountedLine = _wf
+        ? (_wf.total + ' on the books, ' + _ppl9(_wf.countedTotal) + ' counted \u00b7 '
+           + _wf.nationals + ' national' + (_wf.nationals === 1 ? '' : 's') + ', ' + _ppl9(_wf.countedNationals) + ' counted')
+        : '';
+      clDetailApi.wfCountingWhy = (_wf && Array.isArray(_wf.counting))
+        ? _wf.counting.map(c9 => c9.people + ' \u00d7 ' + c9.label.toLowerCase() + ' ' + c9.word).join(' \u00b7 ')
+        : '';
       clDetailApi.wfBarKnown = _wf && _wf.total ? ((_wf.nationals * 100) / _wf.total) + '%' : '0%';
       clDetailApi.wfBarUnknown = _wf && _wf.total ? ((_wf.unknown * 100) / _wf.total) + '%' : '0%';
       clDetailApi.wfNationalsLabel = _wf ? (_wf.nationals + ' national' + (_wf.nationals === 1 ? '' : 's')) : '';
@@ -19307,6 +19513,10 @@ class Component extends DCLogic {
             this.setState({
               eeOpen: e9.id, eeErr: '', eeErrField: '', eeNewDocs: [],
               eeClient: (clRow && clRow.name) || '',
+              // The company, so the counting rules of THIS client's ladder can be found, and what
+              // this person is already claimed under, so the boxes open ticked rather than blank.
+              eeCompanyId: (clRow && clRow.realId) || e9.companyId || '',
+              eeTraits: Array.isArray(e9.countingTraits) ? e9.countingTraits : [],
               eeName: e9.name || '', eeRole: e9.role || '',
               eeExpiry: d9(e9.iqamaExpiry), eeDob: d9(e9.dob), eeJoin: d9(cd9.joinDate),
               eeNat: e9.nationality || '',
@@ -22548,6 +22758,21 @@ class Component extends DCLogic {
         const num9 = (v9) => String(v9).replace(/[^0-9.]/g, '');
         // A preview in words, so the thresholds can be read back before they are trusted.
         const ordered9 = [...rows9].filter(r9 => r9.name).sort((a9, b9) => (parseFloat(a9.from) || 0) - (parseFloat(b9.from) || 0));
+        // ── how people are counted on this ladder ──
+        // Held as a draft beside the band rows and saved with them: they are one published
+        // regulation, and letting somebody save half of it would leave a ladder whose thresholds and
+        // whose multipliers came from different versions of the rules.
+        const cRows9 = this.state.wbCount || (Array.isArray(cur9 && cur9.counting) ? cur9.counting.map(c9 => ({
+          key: c9.key || '', label: c9.label || '',
+          // Stored in hundredths, typed as a person would say it.
+          countsAs: String((Number(c9.countsAs) || 100) / 100),
+          who: (c9.when && c9.when.nationality) || 'anyone',
+          scope: c9.appliesTo === 'nationals' ? 'nationals' : 'both',
+          from: c9.from || '',
+        })) : []);
+        const setC9 = (i9, patch9) => this.setState({ wbCount: cRows9.map((r9, j9) => (j9 === i9 ? { ...r9, ...patch9 } : r9)), wbErr: '' });
+        const chip9 = (on9) => ({ bd: on9 ? '#7C00FF' : '#E4E0EC', bg: on9 ? '#F5EEFF' : '#fff', fg: on9 ? '#7C00FF' : '#6F6C7A' });
+
         const shareCount9 = cur9 ? (users9[cur9.id] || 0) : 0;
         const others9 = shareCount9 - (onNow9 && cur9 && onNow9 === cur9.id ? 1 : 0);
         return {
@@ -22588,12 +22813,15 @@ class Component extends DCLogic {
                 fg: on9 ? '#7C00FF' : '#4B4757',
                 // Switching schemes drops the draft. Carrying half-typed rows from one ladder onto
                 // another is how a construction threshold ends up saved against retail.
-                pick: () => this.setState({ wbSet: g9.id, wbDraft: null, wbMeta: null, wbErr: '' }),
+                pick: () => this.setState({ wbSet: g9.id, wbDraft: null, wbMeta: null, wbCount: null, wbErr: '' }),
               };
             }),
             ...(isNew9 ? [{ label: 'New bands', title: 'Not saved yet', bd: '#7C00FF', bg: '#F5EEFF', fg: '#7C00FF', pick: () => {} }] : []),
           ],
-          wbNewSet: () => this.setState({ wbSet: '__new', wbDraft: [], wbMeta: null, wbErr: '' }),
+          // A new ladder INHERITS the counting rules of the one being looked at. Multipliers are a
+          // fact about the regulator, identical for every client in the market, and retyping them per
+          // client is how one ladder ends up counting a disabled Saudi as four and the next as one.
+          wbNewSet: () => this.setState({ wbSet: '__new', wbDraft: [], wbMeta: null, wbCount: cRows9, wbErr: '' }),
           wbSetName: meta9.name,
           wbSetActivity: meta9.activity,
           wbSetSizeMin: meta9.sizeMin,
@@ -22623,6 +22851,34 @@ class Component extends DCLogic {
             remove: () => this.setState({ wbDraft: rows9.filter((_x, j9) => j9 !== i9), wbErr: '' }),
           })),
           wbAdd: () => this.setState({ wbDraft: [...rows9, { name: '', from: '', to: '' }], wbErr: '' }),
+          wbAddCount: () => this.setState({ wbCount: [...cRows9, { key: '', label: '', countsAs: '', who: 'national', scope: 'both', from: '' }], wbErr: '' }),
+          wbCountRows: cRows9.map((c9, i9) => ({
+            label: c9.label, countsAs: c9.countsAs,
+            setLabel: (e9) => setC9(i9, { label: e9.target.value }),
+            // Decimals allowed: a half is a real weight, and typing 0.5 is how somebody says it.
+            setCounts: (e9) => setC9(i9, { countsAs: String(e9.target.value).replace(/[^0-9.]/g, '') }),
+            remove: () => this.setState({ wbCount: cRows9.filter((_x, j9) => j9 !== i9), wbErr: '' }),
+            whoOpts: [
+              ['national', 'Nationals'], ['expat', 'Expatriates'], ['anyone', 'Everyone'],
+            ].map(([v9, l9]) => ({ label: l9, ...chip9(c9.who === v9), pick: () => setC9(i9, { who: v9 }) })),
+            // The decision the regulator makes and this app must not: whether the extra credit swells
+            // the workforce total as well as the nationals figure. The two give materially different
+            // percentages, so it is a visible choice rather than a hidden default.
+            scopeOpts: [
+              ['both', 'the ratio and the total', 'A person counted as four is four in both halves of the sum.'],
+              ['nationals', 'the ratio only', 'The extra credit lands on top; the person is still one body in the total.'],
+            ].map(([v9, l9, t9]) => ({ label: l9, title: t9, ...chip9(c9.scope === v9), pick: () => setC9(i9, { scope: v9 }) })),
+            // The rule read back as a sentence, so it can be checked against the portal without
+            // anybody having to hold "appliesTo" in their head.
+            plain: (() => {
+              const n9 = parseFloat(c9.countsAs);
+              if (!c9.label.trim() || !Number.isFinite(n9)) return 'Give it a name and a multiplier, and this will say what it does.';
+              const who9 = c9.who === 'national' ? 'A national' : c9.who === 'expat' ? 'An expatriate' : 'Anyone';
+              const as9 = n9 === 0.5 ? 'half a person' : (n9 === 1 ? 'one person' : n9 + ' people');
+              return who9 + ' ticked "' + c9.label.trim() + '" counts as ' + as9
+                + (c9.scope === 'both' ? ' in the ratio and in the workforce total.' : ' in the ratio, and as one body in the workforce total.');
+            })(),
+          })),
           // A starting point, not a claim about any particular country's real thresholds — the
           // names and cut-offs still have to be checked against what the regulator publishes.
           wbSeed: () => this.setState({ wbErr: '', wbDraft: [
@@ -22631,8 +22887,8 @@ class Component extends DCLogic {
             { name: 'Green', from: '50', to: '75', color: '#0E9355', bg: '#E7F8EF' },
             { name: 'Platinum', from: '75', to: '', color: '#4B4757', bg: '#F2F1F5' },
           ] }),
-          wbClose: () => this.setState({ wbOpen: null, wbCompany: null, wbSet: null, wbDraft: null, wbMeta: null, wbErr: '' }),
-          wbSave: () => this._saveBands(open9, setId9, rows9, meta9, co9),
+          wbClose: () => this.setState({ wbOpen: null, wbCompany: null, wbSet: null, wbDraft: null, wbMeta: null, wbCount: null, wbErr: '' }),
+          wbSave: () => this._saveBands(open9, setId9, rows9, meta9, co9, cRows9),
         };
       })(),
       // ── Upgrade ────────────────────────────────────────────────────────────

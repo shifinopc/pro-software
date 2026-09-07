@@ -25,13 +25,14 @@
 import { prisma } from "./db.js";
 import { sameCountry, countryName } from "./countries.js";
 import { ACTIVE_CLIENT } from "./validate.js";
+import { normalizeRules, weighFor, weightWord, type CountingRule } from "./counting.js";
 
 export type Workforce = {
   companyId: string;
   companyName: string;
   country: string | null;
   countryLabel: string;
-  /** Everyone counted: on the books, not archived, not already exited. */
+  /** Everyone counted: on the books, not archived, not already exited. HEADS, not weighted. */
   total: number;
   /** Holds the nationality of the country the company operates in. */
   nationals: number;
@@ -39,6 +40,20 @@ export type Workforce = {
   expats: number;
   /** Nationality not recorded. Counted in the total, excluded from both certainties. */
   unknown: number;
+  /**
+   * What the ratio was worked out from once the counting rules were applied, in HUNDREDTHS of a
+   * person — 1300 is "thirteen counted". Equal to the headcount x100 when nobody is weighted.
+   *
+   * Both figures are on screen together, always. A weighted percentage shown on its own cannot be
+   * reconciled against the government portal by the person looking at it, and this module's entire
+   * claim on anybody's trust is that its arithmetic can be checked.
+   */
+  countedTotal: number;
+  countedNationals: number;
+  /** The rules that fired and how many people each touched, for the line under the number. */
+  counting: { key: string; label: string; countsAs: number; word: string; people: number }[];
+  /** True when no rule fired, so the screen can stay quiet rather than explaining an absence. */
+  weighted: boolean;
   /** Basis points, so no float ever decides a percentage. 3333 = 33.33%. */
   ratioBp: number;
   ratioMinBp: number;
@@ -205,34 +220,65 @@ export async function workforceFor(companyId: string): Promise<Workforce | null>
     // Archived and exited people are off the books. Counting someone who left last year inflates a
     // headcount the client would be measured on today.
     where: { companyId, archived: false, exitStatus: { not: "exited" } },
-    select: { nationality: true, workCountry: true, employmentType: true },
+    select: { nationality: true, workCountry: true, employmentType: true, jobCategory: true, countingTraits: true },
   });
 
   const country = company.country ?? null;
   const here = staff.filter(e => sameCountry(e.workCountry ?? country, country));
   const elsewhere = staff.length - here.length;
 
+  // The counting rules of the ladder that judges this client — how much each person is worth to the
+  // ratio, when the regulator does not count everybody as one. Resolved before the loop because they
+  // belong to the ladder, and the ladder is a fact about the client, not about any employee.
+  const scheme = await bandSetForCompany(company);
+  const rules: CountingRule[] = normalizeRules(scheme?.set.counting);
+
   let nationals = 0, expats = 0, unknown = 0, partTime = 0, unknownEmploymentType = 0;
+  // Hundredths throughout: `wNum`/`wDen` are what the rules make of the people who ARE known, and
+  // the `Unk` pair is the same sum again with every unrecorded nationality treated as a national —
+  // which is what the top of the honest range is made of.
+  let wNum = 0, wDen = 0, wNumUnk = 0, wDenUnk = 0;
+  const fired = new Map<string, { key: string; label: string; countsAs: number; people: number }>();
+  const note = (a: { key: string; label: string; countsAs: number }[]) => {
+    for (const x of a) {
+      const seen = fired.get(x.key);
+      if (seen) seen.people++;
+      else fired.set(x.key, { ...x, people: 1 });
+    }
+  };
+
   for (const e of here) {
-    if (!e.nationality) unknown++;
-    else if (sameCountry(e.nationality, country)) nationals++;
+    const isUnknown = !e.nationality;
+    const isNational = !isUnknown && sameCountry(e.nationality, country);
+    if (isUnknown) unknown++;
+    else if (isNational) nationals++;
     else expats++;
     if (e.employmentType === "part_time") partTime++;
     else if (!e.employmentType) unknownEmploymentType++;
+
+    // The low end: an unrecorded nationality is treated as an expat, so national-only rules do not
+    // fire for them. Nothing is assumed in the direction that flatters the client.
+    const low = weighFor(rules, e, isNational);
+    wNum += low.num; wDen += low.den;
+    note(low.applied);
+
+    // The high end: the same person, counted as a national. Only reached when the nationality is
+    // genuinely missing — a known expat is never re-imagined as a national.
+    const high = isUnknown ? weighFor(rules, e, true) : low;
+    wNumUnk += high.num; wDenUnk += high.den;
   }
 
   const total = here.length;
-  const ratioMinBp = bp(nationals, total);                 // every unknown turns out to be an expat
-  const ratioMaxBp = bp(nationals + unknown, total);       // every unknown turns out to be a national
+  const ratioMinBp = bp(wNum, wDen);        // every unknown turns out to be an expat
+  const ratioMaxBp = bp(wNumUnk, wDenUnk);  // every unknown turns out to be a national
   const bandRatioBp = company.workforceBandRatioBp ?? null;
   // Drift is measured against the LOW end, the same end that gets a client into trouble.
   const driftBp = bandRatioBp === null ? null : ratioMinBp - bandRatioBp;
 
   // The band the thresholds put this ratio in. Measured against the LOW end, the same end drift is
   // measured against — the figure that holds if every unrecorded nationality turns out to be an expat.
-  // The client's own scheme, not the country's - thresholds are published per activity and per size
-  // bracket, so one country-wide ladder placed most clients against numbers they are not judged by.
-  const scheme = await bandSetForCompany(company);
+  // The bands of that same ladder. Thresholds and counting rules come from one published regulation,
+  // so they are resolved together and can never disagree about which client is being described.
   const bands = scheme ? await bandsInSet(scheme.set.id) : [];
   // A client with nobody on the books has no ratio to place. 0 of 0 arithmetically reads as 0%, which
   // would drop them in the bottom band and show a compliance failure for a workforce that does not
@@ -257,6 +303,11 @@ export async function workforceFor(companyId: string): Promise<Workforce | null>
     country,
     countryLabel: country ? countryName(country) : "no country set",
     total, nationals, expats, unknown,
+    countedTotal: wDen, countedNationals: wNum,
+    counting: [...fired.values()].map(f => ({ ...f, word: weightWord(f.countsAs) })),
+    // Only true when a rule actually moved something. A client with rules configured but nobody
+    // claimed under them is not "weighted", and saying so would make a plain headcount look derived.
+    weighted: wDen !== total * 100 || wNum !== nationals * 100,
     ratioBp: ratioMinBp, ratioMinBp, ratioMaxBp,
     certain: unknown === 0,
     partTime, unknownEmploymentType,

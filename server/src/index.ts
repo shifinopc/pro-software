@@ -3710,6 +3710,13 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
     : (b.salary === null || b.salary === "" ? null : Math.round(Number(b.salary)));
   if (nextSalary != null && !Number.isFinite(nextSalary)) return res.status(400).json({ error: "That salary isn't a number" });
 
+  // Which counting rules this person is claimed under. Normalised to a list of unique non-empty
+  // keys: the ratio matches on these, and a stray blank or a duplicate would either match nothing
+  // or double-apply a multiplier, neither of which anybody would see until a band came out wrong.
+  const nextTraits = b.countingTraits === undefined
+    ? (Array.isArray(emp.countingTraits) ? emp.countingTraits : [])
+    : [...new Set((Array.isArray(b.countingTraits) ? b.countingTraits : []).map((x: any) => String(x ?? "").trim()).filter(Boolean))] as string[];
+
   const cur: any = (emp.customData && typeof emp.customData === "object") ? emp.customData : {};
   const nextCustom = { ...cur };
   if (b.department !== undefined) nextCustom.department = str(b.department);
@@ -3727,6 +3734,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   note("department", cur.department, nextCustom.department);
   note("joining date", cur.joinDate, nextCustom.joinDate);
   note("visa quota", cur.visaQuota, nextCustom.visaQuota);
+  note("counted as", (Array.isArray(emp.countingTraits) ? emp.countingTraits : []).join(", ") || "everyone else", (nextTraits as string[]).join(", ") || "everyone else");
   if (!changes.length) return res.json({ employee: emp, unchanged: true });
 
   const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
@@ -3735,7 +3743,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
     data: {
       name: nextName, role: nextRole, iqamaExpiry: nextExpiry,
       dob: nextDob, nationality: nextNat, salary: nextSalary,
-      employmentType: nextType, jobCategory: nextCat, customData: nextCustom,
+      employmentType: nextType, jobCategory: nextCat, customData: nextCustom, countingTraits: nextTraits,
       history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
         { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],
     },
