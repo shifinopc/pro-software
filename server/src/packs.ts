@@ -94,6 +94,9 @@ export const KINDS = [
   // The SCHEMES come first, and must: a band is a row on a ladder, and a ladder that arrives after
   // its rungs leaves every one of them pointing at nothing. `setKey` is wired up afterwards by
   // wireReferences, the same way a service finds its workflow.
+  // ownerCompanyId is deliberately NOT carried: it names a client on THIS installation, and on any
+  // other it would point at either nothing or, worse, somebody else. A pack ships published
+  // thresholds; who they were set up for is local history.
   { key: "workforceBandSets", model: "workforceBandSet", label: "band schemes", one: "band scheme",
     fields: (r: any) => ({ name: r.name, activity: r.activity, sizeMin: r.sizeMin, sizeMax: r.sizeMax, isDefault: r.isDefault, sort: r.sort }) },
   { key: "workforceBands", model: "workforceBand", label: "workforce bands", one: "workforce band",

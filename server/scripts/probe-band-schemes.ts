@@ -151,6 +151,25 @@ async function main() {
   console.log(`a retailer at 100 staff:  ${wrong ? `suggested "${wrong.name}"` : "no suggestion"}`);
   if (wrong) fail("a retailer was matched to a construction scheme on headcount alone");
 
+  // ── 6. a client on THEIR OWN ladder is never argued with ───────────────────────────────────
+  // Bands are set up per client, so another client's ladder can match this one's activity and size
+  // exactly. Suggesting a move to it would be the app second-guessing a decision somebody made about
+  // this client specifically, on this client's own screen.
+  const own = await prisma.workforceBandSet.create({
+    data: { country: COUNTRY, name: `${CLIENT} — bands`, ownerCompanyId: co.id, activity: "Construction", sizeMin: 50, sizeMax: 499 },
+  });
+  await prisma.workforceBand.createMany({ data: [
+    { country: COUNTRY, setId: own.id, name: "Red", minBp: 0, maxBp: 1000, sort: 0 },
+    { country: COUNTRY, setId: own.id, name: "Green", minBp: 1000, maxBp: null, sort: 1 },
+  ] });
+  await prisma.company.update({ where: { id: co.id }, data: { workforceBandSetId: own.id } });
+  const w4 = await workforceFor(co.id);
+  console.log("");
+  console.log(`on its OWN ladder:       band ${w4?.computedBand?.name} via "${w4?.bandSet?.name}"`);
+  console.log(`  a rival ladder matches activity and size, suggestion: ${w4?.bandSetSuggestion ? w4.bandSetSuggestion.name : "none"}`);
+  if (w4?.bandSetSuggestion) fail("a client set up on its own ladder was told to move to somebody else's");
+  await prisma.company.update({ where: { id: co.id }, data: { workforceBandSetId: null } });
+
   // ── and the bands helper agrees with the reading ───────────────────────────────────────────
   const rows = await bandsForCompany({ country: COUNTRY, workforceBandSetId: constr.id });
   if (rows.length !== 3) fail(`bandsForCompany returned ${rows.length} rows for a three-rung ladder`);

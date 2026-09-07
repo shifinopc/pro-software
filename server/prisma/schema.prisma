@@ -1029,14 +1029,25 @@ model WorkforceSnapshot {
 model WorkforceBandSet {
   id           String  @id @default(cuid())
   country      String?
+  /// The client this ladder was set up for, when it was set up on their screen.
+  ///
+  /// Thresholds are managed per client here — there is no country-level editor, by the firm's own
+  /// choice. This records WHOSE screen a ladder was made on, so a client is offered their own first
+  /// and everybody else's second. It is provenance, not ownership: a ladder can be used by any
+  /// number of clients, and the editor says so before it lets anybody change one that is shared.
+  ownerCompanyId String?
   name         String
   /// The economic activity this scheme is published for, in the regulator's own words.
   activity     String?
   /// The size bracket it covers, in headcount. `sizeMax` null means "and above".
   sizeMin      Int?
   sizeMax      Int?
-  /// The scheme a client falls to when it has not been given one. Exactly one per country; the
-  /// editor refuses to save a second, because "the default" that is ambiguous is not a default.
+  /// The scheme a client falls to when it has not been given one. At most one per country.
+  ///
+  /// No longer settable from the console: thresholds are set up per client, so there is no screen
+  /// on which "the default for everybody" would be a sensible thing to choose. It survives because
+  /// COUNTRY PACKS still ship one, and an installation that has just taken a pack should place its
+  /// clients somewhere until each has been set up individually.
   isDefault    Boolean @default(false)
   sort         Int     @default(0)
   retired      Boolean @default(false)
@@ -1046,6 +1057,7 @@ model WorkforceBandSet {
 
   @@index([packKey])
   @@index([country])
+  @@index([ownerCompanyId])
 }
 
 model WorkforceBand {

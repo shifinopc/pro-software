@@ -1,5 +1,11 @@
 /**
- * A starting set of Saudi band schemes, so the console has something real to show.
+ * A starting set of Saudi band ladders, offered on the client screen as things to pick from.
+ *
+ * NONE of these is marked the country default. Bands are set up per client - that is the firm's own
+ * decision about how this works - so a ladder that silently judged every client nobody had set up
+ * yet would be exactly the country-level management they asked to be rid of, only invisible. A
+ * client with nothing set up shows "no bands set up for this client", which is true and actionable.
+ * The default MECHANISM survives for country packs, which do ship one.
  *
  * These are the SHAPE of what MHRSD publishes — a general ladder plus per-activity, per-size ones —
  * and NOT a claim about the current published figures. Nitaqat thresholds change, and they change
@@ -55,11 +61,11 @@ async function scheme(
 }
 
 async function main() {
-  // Exactly one default, enforced here as well as by the route: two would mean an unassigned
-  // client's ladder depends on row order.
+  // No default among these: see the note at the top. Cleared rather than merely not set, so that
+  // re-running after the earlier version of this script leaves nothing quietly placing clients.
   await prisma.workforceBandSet.updateMany({ where: { country: COUNTRY }, data: { isDefault: false } });
 
-  await scheme("general", "General — all activities", { isDefault: true, sort: 0 },
+  await scheme("general", "General — all activities", { sort: 0 },
     [["Red", 0, 10], ["Yellow", 10, 25], ["Green", 25, 40], ["Platinum", 40, null]]);
 
   await scheme("construction-small", "Construction · under 50", { activity: "Construction", sizeMax: 49, sort: 10 },
@@ -74,8 +80,9 @@ async function main() {
 
   const sets = await prisma.workforceBandSet.count({ where: { country: COUNTRY, retired: false } });
   const bands = await prisma.workforceBand.count({ where: { country: COUNTRY, retired: false } });
-  console.log(`\n${sets} scheme(s), ${bands} band(s) for ${COUNTRY}`);
+  console.log(`\n${sets} ladder(s), ${bands} band(s) available to pick from on any ${COUNTRY} client`);
   console.log("These are the SHAPE of the Nitaqat ladders, not the current published figures — check each one against Qiwa.");
+  console.log("None is a default: every client is set up individually, on the client's own screen.");
   await prisma.$disconnect();
 }
 main().catch(async e => { console.error(e); await prisma.$disconnect(); process.exit(1); });

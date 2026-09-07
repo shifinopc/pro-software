@@ -1961,7 +1961,7 @@
                     <div style="margin-top:12px; background:#F5EEFF; border:1px solid #E4D4FA; border-radius:12px; padding:11px 14px; font-size:11.5px; color:#5B21B6; line-height:1.55; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                       <span style="flex:1; min-width:200px;">{{ wfSuggestNote }}</span>
                       <span onClick="{{ wfSuggestApply }}" style="font-weight:700; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Move to it</span>
-                      <span onClick="{{ wfOpenScheme }}" style="font-weight:600; color:#8C8899; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">See all</span>
+                      <span onClick="{{ wfOpenScheme }}" style="font-weight:600; color:#8C8899; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Set up bands</span>
                     </div>
                   </sc-if>
                   <!-- ONE band leads: the one your own thresholds produce, because it is derived from
@@ -1981,6 +1981,7 @@
                     </sc-if>
                     <sc-if value="{{ wfNoBands }}" hint-placeholder-val="{{ false }}">
                       <div style="font-size:11.5px; color:#A9A6B4; line-height:1.5; flex:1; min-width:220px;">{{ wfNoBandsNote }}</div>
+                      <span onClick="{{ wfOpenScheme }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Set up bands</span>
                     </sc-if>
                     <!-- WHICH LADDER PRODUCED THAT BAND.
                          A band name on its own stopped being an answer the moment two clients in one
@@ -6582,7 +6583,6 @@
                   <div style="font-size:10.5px; color:#A9A6B4; margin-top:3px;">{{ c.packLine }}</div>
                   <sc-if value="{{ c.updateNote }}" hint-placeholder-val="{{ false }}"><div style="display:inline-flex; align-items:center; gap:5px; margin-top:5px; background:#F3E8FF; border:1px solid #E3CCFF; border-radius:99px; padding:2px 10px 2px 7px;"><span style="width:6px; height:6px; border-radius:99px; background:#7C00FF;"></span><span style="font-size:10.5px; font-weight:700; color:#5B00BA;">{{ c.updateNote }}</span></div></sc-if>
                 </div>
-                                <button onClick="{{ c.openBands }}" title="Nationalisation bands for this country" style="background:#fff; color:#4B4757; border:1px solid #EDEBF2; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ c.bandsLabel }}</button>
                 <sc-if value="{{ c.canUpgrade }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.upgrade }}" style="background:#F3E8FF; color:#7C00FF; border:1px solid #E3CCFF; font-size:11px; font-weight:700; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#E9D8FF;">{{ c.upgradeLabel }}</button></sc-if>
                 <button onClick="{{ c.exportPack }}" title="Download this country's whole configuration as a pack file, to install on another system" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ c.exportLabel }}</button>
                 <sc-if value="{{ c.fromPack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.uninstall }}" style="background:#fff; color:#8C8899; border:1px solid #EDEBF2; font-size:11px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#C0353A; color:#C0353A;">Uninstall</button></sc-if>
@@ -10211,51 +10211,6 @@
     </div>
   </sc-if>
 
-  <!-- WHICH PUBLISHED LADDER THIS CLIENT IS MEASURED BY.
-       Separate from recording a band, and deliberately so: one is "what the portal said about this
-       client", the other is "which thresholds apply to a company of this activity and size". Mixing
-       them into one dialog would invite somebody to fix a wrong band by re-reading the portal, when
-       the actual fault is that the client is on the wrong ladder. -->
-  <sc-if value="{{ showWfScheme }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ wsClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
-        <div class="fm-head">
-          <div style="min-width:0;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Band scheme · {{ wsName }}</div>
-            <div style="font-size:12px; color:#8C8899; margin-top:3px;">Nationalisation thresholds are published per activity and per size bracket. Pick the ladder this client is actually judged by — it decides the band, not the ratio.</div>
-          </div>
-          <div onClick="{{ wsClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
-        </div>
-
-        <div class="fm-body" data-hidescroll="true">
-          <sc-for list="{{ wsRows }}" as="g" hint-placeholder-count="3">
-            <div onClick="{{ g.pick }}" style="border:1.5px solid {{ g.bd }}; background:{{ g.bg }}; border-radius:14px; padding:13px 15px; margin-bottom:9px; cursor:pointer; display:flex; gap:12px; align-items:center;" style-hover="border-color:#7C00FF;">
-              <div style="flex:1; min-width:0;">
-                <div style="font-size:13px; font-weight:700; color:#26074D;">{{ g.name }}</div>
-                <div style="font-size:11.5px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ g.covers }}</div>
-                <div style="font-size:11px; color:#A9A6B4; margin-top:4px; line-height:1.5;">{{ g.ladder }}</div>
-              </div>
-              <sc-if value="{{ g.on }}" hint-placeholder-val="{{ false }}">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-              </sc-if>
-            </div>
-          </sc-for>
-          <sc-if value="{{ wsNone }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:12.5px; color:#A9A6B4; line-height:1.6; padding:8px 0;">{{ wsNoneNote }}</div>
-          </sc-if>
-          <sc-if value="{{ wsHasErr }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:12px; background:#FEECEC; border:1px solid #F3C9C9; border-radius:12px; padding:11px 14px; font-size:12px; font-weight:600; color:#C0353A;">{{ wsErr }}</div>
-          </sc-if>
-        </div>
-
-        <div class="fm-foot">
-          <span style="flex:1; font-size:11px; color:#A9A6B4; line-height:1.5;">Changing this changes the band, not the ratio.</span>
-          <button onClick="{{ wsClose }}" style="background:#fff; color:#4B4757; border:1px solid #E4E0EC; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F8F6FC;">Done</button>
-        </div>
-      </div>
-    </div>
-  </sc-if>
-
   <!-- Nationalisation bands for one country.
        These are the thresholds the ratio is measured against — Nitaqat here, whatever a second
        market calls its own there. They were four names hard-coded in this file, which meant the band
@@ -11504,32 +11459,41 @@
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:640px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
         <div class="fm-head">
           <div style="min-width:0;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Band schemes · {{ wbCountry }}</div>
-            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Thresholds are published per activity and per size bracket, so one ladder per country fits almost nobody. Each scheme is one published ladder; clients are put on the one that applies to them.</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Nationalisation bands · {{ wbCountry }}</div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ wbHeadNote }}</div>
           </div>
           <div onClick="{{ wbClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
 
         <div class="fm-body" data-hidescroll="true">
 
-          <!-- WHICH LADDER IS BEING EDITED.
-               Chips rather than a dropdown: the number of schemes in a country is small and knowing
-               how many there are is half the information — a country with one scheme and a country
-               with nine look identical behind a closed select. -->
-          <div style="display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-bottom:15px;">
+          <!-- WHICH LADDER JUDGES THIS CLIENT.
+               This client's own comes first and is what a fresh setup writes to. The rest are ladders
+               already set up for other clients here — offered because two contractors of the same size
+               are held to the same published numbers, and retyping them is how the second one ends up
+               subtly different from the first. -->
+          <div style="display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
             <sc-for list="{{ wbSets }}" as="g" hint-placeholder-count="3">
               <span onClick="{{ g.pick }}" title="{{ g.title }}" style="font-size:11.5px; font-weight:650; padding:6px 13px; border-radius:99px; cursor:pointer; border:1px solid {{ g.bd }}; background:{{ g.bg }}; color:{{ g.fg }}; white-space:nowrap;">{{ g.label }}</span>
             </sc-for>
-            <span onClick="{{ wbNewSet }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; padding:6px 4px;" style-hover="text-decoration:underline;">+ New scheme</span>
+            <span onClick="{{ wbNewSet }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; padding:6px 4px;" style-hover="text-decoration:underline;">{{ wbNewLabel }}</span>
           </div>
+          <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-bottom:15px;">{{ wbPickNote }}</div>
 
-          <!-- What this scheme CLAIMS to cover. Not used to file anybody automatically — it is what
-               lets the app suggest a scheme for a client, and what tells the next person why two
-               ladders exist for one country. -->
+          <!-- CHANGING A LADDER SOMEBODY ELSE IS ON CHANGES THEIR BAND TOO.
+               Said before the rows, not after saving: this is the one way a per-client screen can
+               quietly affect a client who is not on it. -->
+          <sc-if value="{{ wbShared }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-bottom:14px; background:#FEF9EF; border:1px solid #F5DFB0; border-radius:12px; padding:11px 14px; font-size:11.5px; color:#7A5B12; line-height:1.55;">{{ wbSharedNote }}</div>
+          </sc-if>
+
+          <!-- What this ladder CLAIMS to cover. Not used to file anybody automatically — it is what
+               lets the app spot a client sitting on the wrong one, and what tells the next person why
+               two ladders exist side by side. -->
           <div style="display:grid; grid-template-columns:1.6fr 1fr 70px 70px; gap:10px; align-items:end; margin-bottom:14px; padding-bottom:15px; border-bottom:1px solid #F1EDF9;">
             <div>
-              <label class="fm-lab">Scheme name</label>
-              <input value="{{ wbSetName }}" onInput="{{ wbSetSetName }}" placeholder="e.g. Construction · 50–499" class="fm-inp">
+              <label class="fm-lab">Name these bands</label>
+              <input value="{{ wbSetName }}" onInput="{{ wbSetSetName }}" placeholder="e.g. Construction · under 50" class="fm-inp">
             </div>
             <div>
               <label class="fm-lab">Activity</label>
@@ -11545,16 +11509,12 @@
             </div>
           </div>
 
-          <div style="display:flex; align-items:center; gap:9px; margin-bottom:15px;">
-            <sc-if value="{{ wbSetIsDefault }}" hint-placeholder-val="{{ false }}">
-              <span style="font-size:11px; font-weight:700; color:#0E6B41; background:#E7F8EF; padding:5px 12px; border-radius:99px;">Country default</span>
-              <span style="font-size:11px; color:#A9A6B4; line-height:1.5;">Clients with no scheme of their own are measured by this one.</span>
-            </sc-if>
-            <sc-if value="{{ wbSetCanDefault }}" hint-placeholder-val="{{ false }}">
-              <span onClick="{{ wbMakeDefault }}" style="font-size:11.5px; font-weight:650; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Make this the country default</span>
-              <span style="font-size:11px; color:#A9A6B4; line-height:1.5;">Whichever scheme unassigned clients fall to.</span>
-            </sc-if>
-          </div>
+          <sc-if value="{{ wbSetIsDefault }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:9px; margin-bottom:15px;">
+              <span style="font-size:11px; font-weight:700; color:#0E6B41; background:#E7F8EF; padding:5px 12px; border-radius:99px;">Shipped with the country pack</span>
+              <span style="font-size:11px; color:#A9A6B4; line-height:1.5;">Clients not yet set up individually fall to this one.</span>
+            </div>
+          </sc-if>
 
           <sc-for list="{{ wbRows }}" as="b" hint-placeholder-count="4">
             <div style="display:grid; grid-template-columns:1.4fr 90px 90px auto; gap:10px; align-items:end; margin-bottom:10px;">
@@ -11575,7 +11535,7 @@
           </sc-for>
 
           <sc-if value="{{ wbEmpty }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:12.5px; color:#A9A6B4; padding:10px 0;">No bands in this scheme yet. Add the ones your regulator publishes for it, lowest first — the top one can be left open-ended.</div>
+            <div style="font-size:12.5px; color:#A9A6B4; padding:10px 0;">No bands yet. Add the ones the regulator publishes for this client, lowest first — the top one can be left open-ended.</div>
           </sc-if>
 
           <div style="display:flex; gap:10px; align-items:center; margin-top:6px;">
@@ -11594,7 +11554,7 @@
         </div>
 
         <div class="fm-foot">
-          <span style="flex:1; font-size:11px; color:#A9A6B4;">{{ wbFootNote }}</span>
+          <span style="flex:1; font-size:11px; color:#A9A6B4; line-height:1.5;">{{ wbFootNote }}</span>
           <button onClick="{{ wbClose }}" style="background:#fff; color:#4B4757; border:1px solid #E4E0EC; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F8F6FC;">Cancel</button>
           <button onClick="{{ wbSave }}" disabled="{{ wbBusy }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);">{{ wbSaveLabel }}</button>
         </div>
@@ -14991,29 +14951,11 @@ class Component extends DCLogic {
         return true;
       })
       .catch(() => { this.setState({ lcErr: 'Server unreachable — nothing changed' }); return false; });
-    /**
-     * Make one scheme the country's default. Its own server route because "exactly one" is a fact
-     * about the SET of schemes, not a checkbox on any one of them — saved as a field, two of them
-     * could claim it and an unassigned client's ladder would depend on row order.
-     */
-    this._makeDefaultScheme = (setId) => {
-      if (!setId) return;
-      const tok = localStorage.getItem('stimespro:token');
-      this.setState({ wbBusy: true, wbErr: '' });
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/workforce-band-sets/' + setId + '/default',
-        { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) } })
-        .then(r => r.json().then(j => ({ ok: r.ok, j })))
-        .then(({ ok, j }) => {
-          this.setState({ wbBusy: false, wbErr: ok ? '' : (j && j.error) || 'The server refused that.' });
-          if (ok) {
-            this.toast('Unassigned clients in this country are now measured by this scheme');
-            this._opReload('workforce-band-sets', 'bandSetsData');
-            this._loadWorkforce && this._loadWorkforce();
-          }
-        })
-        .catch(() => this.setState({ wbBusy: false, wbErr: 'Server unreachable — nothing changed' }));
-    };
-    this._saveBands = (country, setId, rows, meta) => {
+    // The country default is no longer set from the console — bands are set up per client, so there
+    // is no screen on which "the default for everybody" is a sensible thing to choose. The route
+    // survives on the server because country packs still ship a default, and a fresh installation
+    // has to place its clients somewhere until each one has been set up.
+    this._saveBands = (country, setId, rows, meta, companyId) => {
       const clean = rows.map(r => ({
         id: r.id, name: String(r.name || '').trim(),
         minBp: Math.round((parseFloat(r.from) || 0) * 100),
@@ -15034,7 +14976,7 @@ class Component extends DCLogic {
       if (clean[0].minBp !== 0) return this.setState({ wbErr: 'The lowest band must start at 0% — otherwise a client below ' + (clean[0].minBp / 100) + '% has no band.' });
 
       const name = String((meta && meta.name) || '').trim();
-      if (!name) return this.setState({ wbErr: 'Give the scheme a name — it is what somebody picks from when putting a client on it.' });
+      if (!name) return this.setState({ wbErr: 'Give these bands a name — it is what somebody picks from when setting up the next client.' });
       const sizeMin = String((meta && meta.sizeMin) || '').trim();
       const sizeMax = String((meta && meta.sizeMax) || '').trim();
       if (sizeMin && sizeMax && Number(sizeMax) < Number(sizeMin)) {
@@ -15051,6 +14993,10 @@ class Component extends DCLogic {
         activity: String((meta && meta.activity) || '').trim() || null,
         sizeMin: sizeMin === '' ? null : Number(sizeMin),
         sizeMax: sizeMax === '' ? null : Number(sizeMax),
+        // Whose screen this ladder was made on. Provenance, not ownership — it decides which chip a
+        // client sees first, and nothing else. Only stamped on CREATE: re-saving somebody else's
+        // ladder from this client would otherwise quietly retitle it as this client's.
+        ...(setId === '__new' && companyId ? { ownerCompanyId: companyId } : {}),
       });
       this.setState({ wbBusy: true, wbErr: '' });
 
@@ -15064,8 +15010,12 @@ class Component extends DCLogic {
             .then(r => (r.ok ? setId : null)).catch(() => null);
 
       ensureSet9.then((realSetId) => {
-        if (!realSetId) { this.setState({ wbBusy: false, wbErr: 'The scheme itself could not be saved, so the bands were left alone.' }); return; }
-        return this._saveBandRows(country, realSetId, clean, base, H);
+        if (!realSetId) { this.setState({ wbBusy: false, wbErr: 'Those bands could not be saved, so nothing was changed.' }); return; }
+        // Saving from a client's screen also PUTS THEM ON these bands. Editing a ladder and then
+        // having to assign it separately is two steps for one intention, and the second is the one
+        // people forget — leaving a client measured by numbers somebody just decided were wrong.
+        return this._saveBandRows(country, realSetId, clean, base, H)
+          .then(() => { if (companyId) return this._assignScheme(companyId, realSetId, true); });
       }).catch(() => this.setState({ wbBusy: false, wbErr: 'Server unreachable — nothing changed' }));
     };
     /** The rows of one ladder, diffed against what the server currently holds for that ladder. */
@@ -15095,7 +15045,7 @@ class Component extends DCLogic {
           wbSet: failed ? this.state.wbSet : null,
           wbDraft: failed ? this.state.wbDraft : null, wbMeta: failed ? this.state.wbMeta : null,
           wbErr: failed ? (failed + ' change' + (failed === 1 ? '' : 's') + ' were refused by the server.') : '' });
-        if (!failed) this.toast(clean.length + ' band' + (clean.length === 1 ? '' : 's') + ' saved to this scheme');
+        if (!failed) this.toast(clean.length + ' band' + (clean.length === 1 ? '' : 's') + ' saved');
         this._opReload('workforce-bands', 'bandsData');
         this._opReload('workforce-band-sets', 'bandSetsData');
         // The bands decide every client's band, so the ratios have to be recomputed.
@@ -15113,24 +15063,33 @@ class Component extends DCLogic {
      * mismatch note and the suggestion are all derived from the ladder, so half of the card would
      * otherwise still be describing the old one.
      */
-    this._assignScheme = (companyId, setId) => {
+    this._assignScheme = (companyId, setId, quiet) => {
       if (!companyId) return;
       const t2 = localStorage.getItem('stimespro:token');
-      this.setState({ wsErr: '' });
       fetch(API + '/api/workforce/' + companyId + '/scheme', { method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
         body: JSON.stringify({ setId: setId || '' }) })
         .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
-          if (!ok) return this.setState({ wsErr: (j && j.error) || 'The server refused that.' });
-          this.setState({ wsErr: '' });
-          this.toast(setId
-            ? ('Now measured by ' + ((j && j.bandSet && j.bandSet.name) || 'that scheme')
-               + ((j && j.computedBand) ? (' \u2014 band reads ' + j.computedBand.name) : ''))
-            : 'Back on the country default');
+          // Two audiences for one failure: inside the editor it belongs beside the rows that were
+          // just saved, and outside it there is no dialog open to put it in.
+          if (!ok) {
+            const msg = (j && j.error) || 'The server refused that.';
+            if (quiet) this.setState({ wbErr: 'The bands saved, but this client could not be put on them — ' + msg });
+            else this.toast(msg, 'error');
+            return;
+          }
+          // One toast per act. Saving bands already says what happened; a second toast announcing the
+          // assignment reads as two things having happened when the user did one.
+          if (!quiet) {
+            this.toast(setId
+              ? ('Now measured by ' + ((j && j.bandSet && j.bandSet.name) || 'those bands')
+                 + ((j && j.computedBand) ? (' \u2014 band reads ' + j.computedBand.name) : ''))
+              : 'Back on the country default');
+          }
           this._loadWorkforce && this._loadWorkforce();
         })
-        .catch(() => this.setState({ wsErr: 'Server unreachable — nothing changed' }));
+        .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
     this._saveBand = (companyId, band) => {
       if (!companyId) return;
@@ -18724,8 +18683,8 @@ class Component extends DCLogic {
       // something" and "go and pick one": a country with no ladders at all, or a client whose ratio
       // falls through the ladder it is on.
       clDetailApi.wfNoBandsNote = (_wf && !_wf.bandSet)
-        ? 'No band schemes set up for this country yet — add one in Country Rules and the ratio will place itself.'
-        : 'This ratio falls outside every band in "' + ((_wf && _wf.bandSet && _wf.bandSet.name) || '') + '". Check the scheme covers 0% upward.';
+        ? 'No bands set up for this client yet — add the ones the regulator publishes for their activity and size, and the ratio will place itself.'
+        : 'This ratio falls outside every band in "' + ((_wf && _wf.bandSet && _wf.bandSet.name) || '') + '". Check the bands cover 0% upward.';
       // ── which scheme did the placing ──
       clDetailApi.wfHasScheme = !!(_wf && _wf.bandSet);
       clDetailApi.wfSchemeLabel = (_wf && _wf.bandSet)
@@ -18734,11 +18693,20 @@ class Component extends DCLogic {
       clDetailApi.wfSchemeTitle = (_wf && _wf.bandSet)
         ? (_wf.bandSet.assigned
             ? 'This client is measured by "' + _wf.bandSet.name + '". Click to change it.'
-            : 'No scheme chosen for this client, so it falls to the country default. Click to choose one.')
+            : 'These bands came with the country pack, not from this client. Click to set up their own.')
         : '';
+      // Bands are set up HERE, on the client, because that is where the person who knows which
+      // published ladder applies is standing. Re-read on open: a tab left sitting since before these
+      // existed would show an empty editor for a client that has bands, and the obvious next move —
+      // pressing Save — would wipe them.
       clDetailApi.wfOpenScheme = () => {
+        this._opReload && this._opReload('workforce-bands', 'bandsData');
         this._opReload && this._opReload('workforce-band-sets', 'bandSetsData');
-        this.setState({ wsOpen: clRow.realId, wsErr: '' });
+        this.setState({
+          wbOpen: (_wf && _wf.country) || (clRow && clRow.country) || '',
+          wbCompany: clRow.realId, wbName: clRow.name || '',
+          wbSet: null, wbDraft: null, wbMeta: null, wbErr: '',
+        });
       };
       clDetailApi.wfSuggest = !!(_wf && _wf.bandSetSuggestion);
       clDetailApi.wfSuggestNote = (_wf && _wf.bandSetSuggestion)
@@ -19489,72 +19457,6 @@ class Component extends DCLogic {
       clSearch: this.state.clSearch || '', setClSearch: (e) => this.setState({ clSearch: e.target.value }),
       clientsEmpty: clVisible.length === 0,
       ...clDetailApi, ...editClientApi,
-      // ── Which published ladder this client is measured by ────────────────
-      // The country default is a row in this list rather than a checkbox somewhere else: "no scheme
-      // chosen" is a real, common and perfectly correct state, and hiding it would make clearing an
-      // assignment feel like an undo nobody could find.
-      ...(() => {
-        const open9 = this.state.wsOpen || null;
-        const co9 = open9 && Array.isArray(this.state.companiesData)
-          ? (this.state.companiesData.find(c9 => c9.id === open9) || null) : null;
-        const w9 = (this.state.workforceData || {})[open9] || null;
-        const country9 = (co9 && co9.country) || (w9 && w9.country) || null;
-        const curId9 = (w9 && w9.bandSet && w9.bandSet.assigned) ? w9.bandSet.id : null;
-        const bands9 = Array.isArray(this.state.bandsData) ? this.state.bandsData : [];
-        const sets9 = (Array.isArray(this.state.bandSetsData) ? this.state.bandSetsData : [])
-          .filter(g9 => g9.country === country9 && !g9.retired)
-          .sort((a9, b9) => (a9.sort - b9.sort) || String(a9.name).localeCompare(String(b9.name)));
-        // The ladder written out, so a scheme can be chosen on what it SAYS rather than on its name.
-        // Two schemes called "Construction · large" tell nobody which one is which.
-        const ladder9 = (id9) => {
-          const rows9 = bands9.filter(b9 => b9.setId === id9 && !b9.retired)
-            .sort((a9, b9) => (a9.minBp || 0) - (b9.minBp || 0));
-          if (!rows9.length) return 'No bands in this scheme yet — a client on it would have no band at all.';
-          return rows9.map(b9 => b9.name + ' ' + ((b9.minBp || 0) / 100) + (b9.maxBp == null ? '%+' : '\u2013' + (b9.maxBp / 100) + '%')).join('  ·  ');
-        };
-        const dflt9 = sets9.find(g9 => g9.isDefault) || null;
-        return {
-          showWfScheme: !!open9,
-          wsName: (co9 && co9.name) || (w9 && w9.companyName) || '',
-          wsErr: this.state.wsErr || '', wsHasErr: !!this.state.wsErr,
-          wsNone: sets9.length === 0,
-          wsNoneNote: country9
-            ? ('No band schemes are set up for ' + country9 + ' yet. Add one under Configure \u2192 Country Rules, and every client here can be put on the one that applies to them.')
-            : 'This client has no country set, so there are no published thresholds to choose between.',
-          wsRows: [
-            {
-              name: 'Country default' + (dflt9 ? ' \u2014 ' + dflt9.name : ''),
-              covers: dflt9
-                ? 'Whatever this country\u2019s default scheme is, now and in future.'
-                : 'No default scheme is set for this country, so nothing would place this client.',
-              ladder: dflt9 ? ladder9(dflt9.id) : '',
-              on: !curId9,
-              bd: !curId9 ? '#7C00FF' : '#EDEBF2',
-              bg: !curId9 ? '#F9F5FF' : '#fff',
-              pick: () => this._assignScheme(open9, ''),
-            },
-            ...sets9.map(g9 => {
-              const on9 = g9.id === curId9;
-              const size9 = g9.sizeMin == null && g9.sizeMax == null ? 'any size'
-                : g9.sizeMax == null ? (g9.sizeMin + '+ staff')
-                // No floor means "everybody under the ceiling" — written as a range starting at 0 it
-                // reads like a stored value rather than the bracket a regulator publishes.
-                : g9.sizeMin == null ? ('under ' + (g9.sizeMax + 1) + ' staff')
-                : (g9.sizeMin + '\u2013' + g9.sizeMax + ' staff');
-              return {
-                name: g9.name,
-                covers: (g9.activity || 'Any activity') + ' \u00b7 ' + size9 + (g9.isDefault ? ' \u00b7 the country default' : ''),
-                ladder: ladder9(g9.id),
-                on: on9,
-                bd: on9 ? '#7C00FF' : '#EDEBF2',
-                bg: on9 ? '#F9F5FF' : '#fff',
-                pick: () => this._assignScheme(open9, g9.id),
-              };
-            }),
-          ],
-          wsClose: () => this.setState({ wsOpen: null, wsErr: '' }),
-        };
-      })(),
       // ── Record the band an official portal shows ─────────────────────────
       // The band is typed by a person reading a portal; the RATIO beside it is captured by the server
       // at the moment of saving, so "how far has it moved since" has something to measure against.
@@ -22403,27 +22305,11 @@ class Component extends DCLogic {
             ? ('Pack ' + inst9.version + (inst9.mixed ? ' (mixed)' : '') + ' · ' + inst9.rows + ' rows' + (inst9.edited ? (' · ' + inst9.edited + ' edited by you') : ''))
             : 'Configured here',
           fromPack: !!inst9,
-          // Nationalisation bands for this country. Counted from the real rows so the button says
-          // whether anything is set up, rather than looking identical either way.
-          bandsLabel: (() => {
-            const g9 = (Array.isArray(this.state.bandSetsData) ? this.state.bandSetsData : []).filter(x9 => x9.country === code9 && !x9.retired).length;
-            const n9 = (Array.isArray(this.state.bandsData) ? this.state.bandsData : []).filter(b9 => b9.country === code9 && !b9.retired).length;
-            if (!n9 && !g9) return 'Set up bands';
-            // Both numbers, because either one alone hides something: nine schemes holding no rows
-            // place nobody, and forty rows across nine ladders is not "forty bands".
-            return g9 > 1 ? (g9 + ' schemes · ' + n9 + ' bands') : (n9 + ' bands');
-          })(),
-          openBands: () => {
-            // Without a resolvable country code the editor would open on '' — showing "No bands yet"
-            // however many are configured, and SAVING bands under an empty country. Silent either way.
-            if (!code9) return this.toast('This row is not linked to a country code yet — reopen it from Configure and pick the country.', 'error');
-            // Re-read from the server on open. A tab left sitting since before these existed would
-            // otherwise show an empty editor for a country that has four bands, and the obvious next
-            // move — pressing Save — would wipe them.
-            this._opReload && this._opReload('workforce-bands', 'bandsData');
-            this._opReload && this._opReload('workforce-band-sets', 'bandSetsData');
-            this.setState({ wbOpen: code9, wbName: name, wbErr: '', wbSet: null, wbDraft: null, wbMeta: null });
-          },
+          // NATIONALISATION BANDS ARE NOT SET UP HERE.
+          // They were, briefly, and the firm asked for them to move: thresholds are published per
+          // activity and per size bracket, so the person who knows which ladder applies is the one
+          // looking at the client, not the one configuring a country. The editor lives on the client
+          // itself — Clients → a client → Workforce → Set up bands.
           canUpgrade: isNewer9,
           upgradeLabel: upd9 ? ('Update to ' + upd9.to) : (newest9 ? ('Upgrade to ' + newest9.version) : ''),
           // Said in the row itself, not only on a button — an update nobody notices is an update
@@ -22573,23 +22459,52 @@ class Component extends DCLogic {
       ...(() => {
         const open9 = this.state.wbOpen || null;
         const all9 = Array.isArray(this.state.bandsData) ? this.state.bandsData : [];
-        // ── which ladder is being edited ──
-        // A country's schemes, and the one in front of the user. '__new' is a scheme that does not
-        // exist yet: it is created on SAVE, not on the click that opens it, so a mis-click leaves
-        // nothing behind. An empty row nobody meant to make is still a row somebody has to delete.
+        // ── whose bands these are ──
+        // The editor belongs to a CLIENT now. The country still scopes which ladders are offered —
+        // published thresholds are a fact about a market — but there is no country-level screen, and
+        // the firm asked for it that way: the person who knows which ladder applies is looking at the
+        // client, not at a configuration page.
+        const co9 = this.state.wbCompany || null;
+        const wfAll9 = this.state.workforceData || {};
+        const coName9 = this.state.wbName || '';
         const sets9 = (Array.isArray(this.state.bandSetsData) ? this.state.bandSetsData : [])
           .filter(g9 => g9.country === open9 && !g9.retired)
-          .sort((a9, b9) => (a9.sort - b9.sort) || String(a9.name).localeCompare(String(b9.name)));
+          // This client's own first, then the pack's, then everybody else's. Whoever opened this
+          // came to set up THIS client, so their own ladder should not be third in a row of chips.
+          .sort((a9, b9) => ((b9.ownerCompanyId === co9) - (a9.ownerCompanyId === co9))
+            || (b9.isDefault - a9.isDefault)
+            || (a9.sort - b9.sort) || String(a9.name).localeCompare(String(b9.name)));
+        // How many clients each ladder judges, counted from the workforce readings the app already
+        // holds. Editing a shared one changes bands for clients nobody has open, and that has to be
+        // said out loud before the rows, not discovered afterwards.
+        const users9 = {};
+        for (const k9 of Object.keys(wfAll9)) {
+          const bs9 = wfAll9[k9] && wfAll9[k9].bandSet;
+          if (bs9 && bs9.assigned) users9[bs9.id] = (users9[bs9.id] || 0) + 1;
+        }
         const isNew9 = this.state.wbSet === '__new';
-        // Falls to the default scheme, then the first: opening the editor on nothing would show an
-        // empty ladder for a country that has several.
+        // '__new' is a ladder that does not exist yet: created on SAVE, not on the click that opens
+        // it, so a mis-click leaves nothing behind. An empty row nobody meant to make is still a row
+        // somebody has to delete.
+        //
+        // Opening falls to the ladder this client is ON, then their own, then the pack's — never to
+        // an arbitrary first row, which would invite somebody to edit another client's numbers while
+        // believing they were setting up this one.
+        const onNow9 = (wfAll9[co9] && wfAll9[co9].bandSet && wfAll9[co9].bandSet.assigned)
+          ? wfAll9[co9].bandSet.id : null;
         const cur9 = isNew9 ? null
-          : (sets9.find(g9 => g9.id === this.state.wbSet) || sets9.find(g9 => g9.isDefault) || sets9[0] || null);
+          : (sets9.find(g9 => g9.id === this.state.wbSet)
+             || sets9.find(g9 => g9.id === onNow9)
+             || sets9.find(g9 => g9.ownerCompanyId === co9)
+             || sets9.find(g9 => g9.isDefault) || sets9[0] || null);
         const setId9 = isNew9 ? '__new' : (cur9 ? cur9.id : null);
         // The scheme's own fields, held as a draft so typing a name does not write to the server on
         // every keystroke.
         const meta9 = this.state.wbMeta || {
-          name: cur9 ? (cur9.name || '') : '',
+          // A brand-new ladder is named for the client it is being set up for. That is what it is,
+          // and an editor that opens on a blank required field reads as a form to fill in rather
+          // than a thing to adjust.
+          name: cur9 ? (cur9.name || '') : (coName9 ? (coName9 + ' — bands') : ''),
           activity: cur9 ? (cur9.activity || '') : '',
           sizeMin: cur9 && cur9.sizeMin != null ? String(cur9.sizeMin) : '',
           sizeMax: cur9 && cur9.sizeMax != null ? String(cur9.sizeMax) : '',
@@ -22613,9 +22528,23 @@ class Component extends DCLogic {
         const num9 = (v9) => String(v9).replace(/[^0-9.]/g, '');
         // A preview in words, so the thresholds can be read back before they are trusted.
         const ordered9 = [...rows9].filter(r9 => r9.name).sort((a9, b9) => (parseFloat(a9.from) || 0) - (parseFloat(b9.from) || 0));
+        const shareCount9 = cur9 ? (users9[cur9.id] || 0) : 0;
+        const others9 = shareCount9 - (onNow9 && cur9 && onNow9 === cur9.id ? 1 : 0);
         return {
           showBands: !!open9,
-          wbCountry: this.state.wbName || open9 || '',
+          wbCountry: coName9 || open9 || '',
+          wbHeadNote: isNew9
+            ? 'A new ladder for this client. Type the bands the regulator publishes for their activity and size — the ratio is counted from their staff, and these decide what it is called.'
+            : 'The published thresholds this client is measured against. The ratio comes from their staff records; these decide which band it lands in.',
+          wbNewLabel: sets9.length ? '+ Set up different bands' : '+ Set up bands',
+          wbPickNote: sets9.length
+            ? 'Pick the ladder that applies to this client, or set up a different one. Saving puts them on whichever is selected.'
+            : 'Nothing is set up for this country yet. Add the bands the regulator publishes for this client.',
+          // The count comes from clients whose reading the app has loaded, so it is a floor, not a
+          // census — worded as "at least" rather than stating a number it cannot guarantee.
+          wbShared: others9 > 0,
+          wbSharedNote: 'These bands are also used by at least ' + others9 + ' other client'
+            + (others9 === 1 ? '' : 's') + '. Changing them changes what band those clients are in too — set up a separate ladder instead if this is only about ' + (coName9 || 'this client') + '.',
           wbEmpty: rows9.length === 0,
           // ── the scheme chips ──
           wbSets: [
@@ -22627,8 +22556,12 @@ class Component extends DCLogic {
                 // reads like a stored value rather than the bracket a regulator publishes.
                 : g9.sizeMin == null ? ('under ' + (g9.sizeMax + 1) + ' staff')
                 : (g9.sizeMin + '\u2013' + g9.sizeMax + ' staff');
+              const used9 = users9[g9.id] || 0;
               return {
-                label: g9.name + (g9.isDefault ? '  \u00b7  default' : ''),
+                // Says what a ladder IS to this client, which is the thing being chosen between:
+                // their own, one the pack shipped, or one already in use elsewhere.
+                label: g9.name
+                  + (g9.ownerCompanyId === co9 ? '  \u00b7  this client' : (g9.isDefault ? '  \u00b7  from the pack' : (used9 ? ('  \u00b7  ' + used9 + ' client' + (used9 === 1 ? '' : 's')) : ''))),
                 title: (g9.activity || 'any activity') + ' \u00b7 ' + size9,
                 bd: on9 ? '#7C00FF' : '#E4E0EC',
                 bg: on9 ? '#F5EEFF' : '#fff',
@@ -22638,7 +22571,7 @@ class Component extends DCLogic {
                 pick: () => this.setState({ wbSet: g9.id, wbDraft: null, wbMeta: null, wbErr: '' }),
               };
             }),
-            ...(isNew9 ? [{ label: 'New scheme', title: 'Not saved yet', bd: '#7C00FF', bg: '#F5EEFF', fg: '#7C00FF', pick: () => {} }] : []),
+            ...(isNew9 ? [{ label: 'New bands', title: 'Not saved yet', bd: '#7C00FF', bg: '#F5EEFF', fg: '#7C00FF', pick: () => {} }] : []),
           ],
           wbNewSet: () => this.setState({ wbSet: '__new', wbDraft: [], wbMeta: null, wbErr: '' }),
           wbSetName: meta9.name,
@@ -22652,12 +22585,10 @@ class Component extends DCLogic {
           wbSetIsDefault: !!(cur9 && cur9.isDefault),
           // Offered only for a scheme that EXISTS. On an unsaved one the button would have nothing
           // to point at, and the first thing a new country needs is its rows, not its precedence.
-          wbSetCanDefault: !!(cur9 && !cur9.isDefault),
-          wbMakeDefault: () => this._makeDefaultScheme(cur9 && cur9.id),
-          wbSaveLabel: isNew9 ? 'Create scheme' : 'Save bands',
-          wbFootNote: isNew9
-            ? 'A new ladder for this country. Percentages, not basis points \u2014 33.33 is fine.'
-            : 'Percentages, not basis points \u2014 33.33 is fine.',
+          wbSaveLabel: isNew9 ? 'Create and apply' : (onNow9 && cur9 && onNow9 === cur9.id ? 'Save bands' : 'Save and apply'),
+          wbFootNote: (onNow9 && cur9 && onNow9 === cur9.id)
+            ? 'Percentages, not basis points \u2014 33.33 is fine.'
+            : 'Saving also puts ' + (coName9 || 'this client') + ' on these bands. Percentages, not basis points.',
           wbBusy: !!this.state.wbBusy,
           wbErr: this.state.wbErr || '', wbHasErr: !!this.state.wbErr,
           wbCanSeed: rows9.length === 0,
@@ -22680,8 +22611,8 @@ class Component extends DCLogic {
             { name: 'Green', from: '50', to: '75', color: '#0E9355', bg: '#E7F8EF' },
             { name: 'Platinum', from: '75', to: '', color: '#4B4757', bg: '#F2F1F5' },
           ] }),
-          wbClose: () => this.setState({ wbOpen: null, wbSet: null, wbDraft: null, wbMeta: null, wbErr: '' }),
-          wbSave: () => this._saveBands(open9, setId9, rows9, meta9),
+          wbClose: () => this.setState({ wbOpen: null, wbCompany: null, wbSet: null, wbDraft: null, wbMeta: null, wbErr: '' }),
+          wbSave: () => this._saveBands(open9, setId9, rows9, meta9, co9),
         };
       })(),
       // ── Upgrade ────────────────────────────────────────────────────────────

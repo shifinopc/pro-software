@@ -147,7 +147,7 @@ export async function bandsForCompany(co: { country: string | null; workforceBan
  * which is the failure that would file a retailer under construction targets.
  */
 export async function suggestBandSet(
-  co: { country: string | null; industry?: string | null },
+  co: { id?: string; country: string | null; industry?: string | null },
   headcount: number,
   currentSetId: string | null,
 ): Promise<{ id: string; name: string; why: string } | null> {
@@ -158,6 +158,10 @@ export async function suggestBandSet(
   if (!activity || activity === "\u2014") return null;
 
   const sets = await prisma.workforceBandSet.findMany({ where: { country: co.country, retired: false } });
+  // A client already on a ladder SET UP FOR THEM is where they are meant to be. Another client's
+  // ladder can match the same activity and bracket, and suggesting a move to it would be the app
+  // second-guessing a decision somebody made about this client specifically.
+  if (co.id && currentSetId && sets.some(s => s.id === currentSetId && s.ownerCompanyId === co.id)) return null;
   const fits = sets.filter(s => {
     const act = String(s.activity ?? "").trim().toLowerCase();
     if (!act || act !== activity) return false;
@@ -169,7 +173,7 @@ export async function suggestBandSet(
   // make on the client's behalf - say nothing rather than pick one.
   if (fits.length !== 1) return null;
   const s = fits[0];
-  // Already on it. Suggesting the scheme a client is on reads as "something is wrong here" when
+  // Already on it. Suggesting the ladder a client is on reads as "something is wrong here" when
   // nothing is.
   if (s.id === currentSetId) return null;
   // "0-49 staff" is how a range is stored, not how a bracket is published. A scheme with no floor
