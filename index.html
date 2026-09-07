@@ -8571,6 +8571,9 @@
                 </sc-for>
               </div>
             </sc-if>
+            <sc-if value="{{ eeTraitsHint }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px; font-size:11px; color:#A9A6B4; line-height:1.6;">{{ eeTraitsHint }}</div>
+            </sc-if>
           </div>
 
           <!-- ── Employment terms ── -->
@@ -8978,6 +8981,9 @@
                   </div>
                 </sc-for>
               </div>
+            </sc-if>
+            <sc-if value="{{ eTraitsHint }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px; font-size:11px; color:#A9A6B4; line-height:1.6;">{{ eTraitsHint }}</div>
             </sc-if>
           </div>
 
@@ -18162,7 +18168,8 @@ class Component extends DCLogic {
           const ctry9 = (co9 && co9.country) || (wf9 && wf9.country) || '';
           // `from` rules read an existing column — employment type already asks that question, and a
           // second tick box for the same fact is two places for one truth.
-          return all9.filter(r9 => !r9.from).filter(r9 => {
+          const asked9 = all9.filter(r9 => !r9.from);
+          const matched9 = asked9.filter(r9 => {
             const want9 = r9.when && r9.when.nationality;
             if (!want9) return true;
             // Unknown nationality shows nothing rather than everything: offering a Saudis-only box
@@ -18171,6 +18178,16 @@ class Component extends DCLogic {
             const isNat9 = String(natCode9).toUpperCase() === String(ctry9).toUpperCase();
             return want9 === 'national' ? isNat9 : want9 === 'expat' ? !isNat9 : String(want9).toUpperCase() === String(natCode9).toUpperCase();
           });
+          return {
+            rules: matched9,
+            // What to say when there is nothing to show. Only ever a note about CONFIGURATION —
+            // a rule that exists and correctly does not apply to this person is the system working,
+            // and explaining it would be noise on every form for every expatriate.
+            hint: !companyId9 || !ctry9 || asked9.length ? ''
+              : (wf9 && wf9.bandSet)
+                ? ('No counting rules on "' + wf9.bandSet.name + '". If this client\u2019s regulator counts some people as more than one — a national with a disability, a part-timer — add the rule to their bands and a tick box appears here.')
+                : 'Bands are not set up for this client yet, so everybody counts as one. Set them up on the client\u2019s Overview to record who counts for more.',
+          };
         };
         const effect9 = (r9) => {
           const n9 = (Number(r9.countsAs) || 100) / 100;
@@ -18193,16 +18210,20 @@ class Component extends DCLogic {
         });
 
         // Add employee.
-        const aRules9 = rulesFor9(this.state.eClient, this.state.eNat);
+        const aFound9 = rulesFor9(this.state.eClient, this.state.eNat);
         const aPicked9 = Array.isArray(this.state.eTraits) ? this.state.eTraits : [];
-        const a9 = mk9(aRules9, aPicked9, (v9) => this.setState({ eTraits: v9 }));
+        const a9 = mk9(aFound9.rules, aPicked9, (v9) => this.setState({ eTraits: v9 }));
         // Edit employee.
-        const eRules9 = rulesFor9(this.state.eeCompanyId, this.state.eeNat);
+        const eFound9 = rulesFor9(this.state.eeCompanyId, this.state.eeNat);
         const ePicked9 = Array.isArray(this.state.eeTraits) ? this.state.eeTraits : [];
-        const e9 = mk9(eRules9, ePicked9, (v9) => this.setState({ eeTraits: v9 }));
+        const e9 = mk9(eFound9.rules, ePicked9, (v9) => this.setState({ eeTraits: v9 }));
         return {
           eHasTraits: a9.has, eTraitsNote: a9.note, eTraits: a9.rows,
           eeHasTraits: e9.has, eeTraitsNote: e9.note, eeTraits: e9.rows,
+          // Shown INSTEAD of the boxes, and only where a nationality has been picked — before that
+          // there is no question on screen for it to be answering.
+          eTraitsHint: (!a9.has && this.state.eNat) ? aFound9.hint : false,
+          eeTraitsHint: (!e9.has && this.state.eeNat) ? eFound9.hint : false,
         };
       })(),
       eDob: this.state.eDob || '', eNat: this.state.eNat || '',
