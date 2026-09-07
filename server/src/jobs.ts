@@ -959,17 +959,20 @@ export async function assignOrphanTasks(): Promise<AssignResult> {
   const out: AssignResult = { scanned: 0, assigned: 0, details: [] };
   const orphans = await prisma.workflowTask.findMany({
     where: { status: "active", assignee: null, NOT: { assigneeRole: null } },
-    select: { id: true, title: true, assigneeRole: true },
+    // The run, so the client is known here too. Without it this job answers "who is free" for work
+    // whose client has a named officer — and a backlog cleared onto the wrong desk is exactly the
+    // surprise a client team is meant to prevent.
+    select: { id: true, title: true, assigneeRole: true, instance: { select: { companyId: true } } },
   });
   for (const t of orphans) {
     out.scanned++;
-    const who = await pickAssignee(t.assigneeRole!);
+    const who = await pickAssignee(t.assigneeRole!, { companyId: (t as any).instance?.companyId ?? null });
     if (!who) continue; // still nobody in that role — leave it rather than assign the wrong desk
     await prisma.workflowTask.update({ where: { id: t.id }, data: { assignee: who.name, assigneeId: who.id } });
     out.assigned++;
     out.details.push(`${t.title} → ${who.name}`);
     // Work that appears on somebody's desk while they are not looking at the console.
-    notifyTaskAssigned({ assigneeId: who.id, title: t.title, why: `it was waiting for a ${t.assigneeRole}` });
+    notifyTaskAssigned({ assigneeId: who.id, title: t.title, why: (who as any).why ?? `it was waiting for a ${t.assigneeRole}` });
   }
   return out;
 }

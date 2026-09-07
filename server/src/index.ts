@@ -268,6 +268,118 @@ app.post("/api/packs/preview", requireAuth, requireStaff, async (req, res) => {
     res.status(400).json({ error: `Could not read that pack — ${e?.message ?? e}` });
   }
 });
+// ── The client team: who at the firm does this client's work, per role ───────
+//
+// The engine hands each step to whoever holds the role and is carrying least. That is right until a
+// client has an officer who knows their file, and there was no way to say so short of one global
+// routing rule per client, all competing for position in a single ordered list.
+
+/**
+ * Which roles are worth naming somebody for, and who is available to name.
+ *
+ * DERIVED, never a hard-coded list of three. A role earns a row by actually appearing as an
+ * assigneeRole or approverRole on a live workflow — so a market whose templates use an IT officer
+ * gets that row, and a firm that has never used one is not asked about it.
+ */
+app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const co = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true, name: true, roleOwners: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+
+    const templates = await prisma.workflowTemplate.findMany({ where: { active: true, retired: false }, select: { graph: true } });
+    const roles = new Set<string>();
+    for (const t of templates) {
+      const nodes: any[] = Array.isArray((t.graph as any)?.nodes) ? (t.graph as any).nodes : [];
+      for (const n of nodes) {
+        for (const k of ["assigneeRole", "approverRole"]) {
+          const r = String(n?.config?.[k] ?? "").trim();
+          if (r) roles.add(r);
+        }
+      }
+    }
+
+    const map: any = (co.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners : {};
+    const staff = await prisma.user.findMany({
+      where: { status: "active", type: "staff", roleId: { in: [...roles] } },
+      select: { id: true, name: true, roleId: true },
+      orderBy: { name: "asc" },
+    });
+
+    const out = [...roles].sort().map(role => {
+      const chosenId = String(map[role] ?? "").trim() || null;
+      const people = staff.filter(u => u.roleId === role);
+      const chosen = chosenId ? people.find(u => u.id === chosenId) ?? null : null;
+      return {
+        role,
+        people: people.map(u => ({ id: u.id, name: u.name })),
+        ownerId: chosen?.id ?? null,
+        ownerName: chosen?.name ?? null,
+        // Said plainly rather than left as a silent fallback: a client whose named officer left looks
+        // identical on screen to one that never had a person, and only one of those needs attention.
+        stale: !!(chosenId && !chosen),
+      };
+    });
+    res.json({ companyId: co.id, roles: out });
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+/**
+ * Name somebody — or nobody — for one role on one client.
+ *
+ * `moveOpen` also moves that client's OPEN steps for the role. Off by default: reassigning live work
+ * as a side effect of setting a preference takes a task off somebody's list while they are looking at
+ * it. The count comes back either way, so the console can offer it as a separate, informed choice.
+ */
+app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const companyId = String(req.params.id);
+    const role = String(req.params.role).trim();
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, roleOwners: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+    if (!role) return res.status(400).json({ error: "No role given" });
+
+    const userId = String(req.body?.userId ?? "").trim();
+    let name: string | null = null;
+    if (userId) {
+      const u = await prisma.user.findFirst({ where: { id: userId, status: "active", type: "staff" }, select: { id: true, name: true, roleId: true } });
+      if (!u) return res.status(400).json({ error: "That person is not an active staff account." });
+      // Naming somebody who does not hold the role would put work in front of a person the rest of
+      // the system agrees cannot do it — and the engine ignores such a pointer anyway, so the setting
+      // would look accepted and do nothing.
+      if (u.roleId !== role) return res.status(400).json({ error: `${u.name} is not a ${role.replace(/_/g, " ")}, so steps for that role would not go to them.` });
+      name = u.name;
+    }
+
+    const map: any = (co.roleOwners && typeof co.roleOwners === "object") ? { ...(co.roleOwners as any) } : {};
+    if (userId) map[role] = userId; else delete map[role];
+    await prisma.company.update({ where: { id: companyId }, data: { roleOwners: map } });
+
+    // Work already open for this client and this role. Reported always, moved only on request.
+    const open = await prisma.workflowTask.findMany({
+      where: { status: "active", assigneeRole: role, instance: { companyId } },
+      select: { id: true, title: true },
+    });
+    let moved = 0;
+    if (req.body?.moveOpen && userId && name) {
+      await prisma.workflowTask.updateMany({ where: { id: { in: open.map(t => t.id) } }, data: { assignee: name, assigneeId: userId } });
+      moved = open.length;
+    }
+
+    await logAudit({
+      action: userId ? "client.role_owner_set" : "client.role_owner_cleared",
+      actorId: a?.sub, target: co.name,
+      detail: `${role}${name ? ` → ${name}` : " cleared"}${moved ? ` · ${moved} open step(s) moved` : ""}`,
+      ip: clientIp(req),
+    });
+    res.json({ ok: true, role, ownerId: userId || null, ownerName: name, openTasks: open.length, moved });
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // ── Workforce nationalisation (Saudization / Emiratisation / …) ──────────────
 //
 // Reading is a plain staff permission: this is a count of records the reader can already see. The

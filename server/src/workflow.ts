@@ -76,11 +76,28 @@ export async function resolveStaffByName(name: string | null | undefined): Promi
   return hits.length === 1 ? hits[0] : null;
 }
 
+/** Who at this client does this role's work, if anybody, and if they still can. */
+export async function clientRoleOwner(companyId: string | null | undefined, role: string):
+  Promise<{ id: string; name: string; email: string } | null> {
+  if (!companyId || !role) return null;
+  const co = await prisma.company.findUnique({ where: { id: String(companyId) }, select: { roleOwners: true } }).catch(() => null);
+  const map: any = (co?.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners : {};
+  const userId = String(map[role] ?? "").trim();
+  if (!userId) return null;
+  // ACTIVE, STAFF, AND STILL HOLDING THE ROLE. A named officer who left, was deactivated or moved
+  // teams is ignored rather than assigned to — the alternative is work handed to somebody who cannot
+  // do it or is not there, which is worse than the load balancer being unaware of the relationship.
+  return prisma.user.findFirst({
+    where: { id: userId, status: "active", type: "staff", roleId: role },
+    select: { id: true, name: true, email: true },
+  }).catch(() => null);
+}
+
 export async function pickAssignee(
   role: string,
   /** What the step is about, so a routing rule can say who is right for it rather than who is free. */
-  facts?: import("./routing.js").RoutingFacts,
-): Promise<{ id: string; name: string; email: string } | null> {
+  facts?: import("./routing.js").RoutingFacts & { companyId?: string | null },
+): Promise<{ id: string; name: string; email: string; why?: string } | null> {
   // A routing rule refines this decision; it never invents one. Nothing matching leaves the
   // load balancer below untouched, which is exactly how this behaved before rules existed.
   if (facts) {
@@ -91,11 +108,24 @@ export async function pickAssignee(
       // wrote "GOSI deregistration goes to Noura" on purpose, and silently overruling that with the
       // role would make the rule look broken rather than overridden.
       const u = await prisma.user.findUnique({ where: { id: routed.userId }, select: { id: true, name: true, email: true } });
-      if (u) return u;
+      if (u) return { ...u, why: routed.why };
     }
     // A rule naming a ROLE redirects which team balances, then falls through to the same logic.
     if (routed.role) role = routed.role;
   }
+
+  // THE CLIENT'S OWN OFFICER, below a rule that named a person and above the balancer.
+  //
+  // A person-naming rule is about a KIND of work — "GOSI deregistration goes to Noura" — and is
+  // narrower than "Omar handles this client", so it wins. The client's officer in turn beats the
+  // balancer, because knowing the file is worth more than being free this minute, which is the whole
+  // reason anybody names one.
+  //
+  // OUTSIDE the routing block on purpose. It reads a fact about the client, not a rule, so a caller
+  // that passes no routing facts — the job that re-tries orphaned steps — must still honour it.
+  // Nested, that job would quietly hand a client's backlog to whoever happened to be free.
+  const owner = await clientRoleOwner(facts?.companyId, role);
+  if (owner) return { ...owner, why: `this client's ${role.replace(/_/g, " ")}` };
   const candidates = await prisma.user.findMany({
     where: { roleId: role, status: "active", type: "staff" },
     select: { id: true, name: true, email: true },
@@ -801,6 +831,10 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           govCenter: (typeof c.govCenter === "string" && c.govCenter.trim()) ? c.govCenter.trim() : null,
           country: typeof vars.country === "string" ? vars.country : null,
           service: typeof vars.service === "string" ? vars.service : null,
+          // The client, so a step can go to the officer who handles them. Present for every step of
+          // every run, including the ones created weeks in — which is what makes this work for a
+          // renewal the nightly job started, not just for work somebody raised by hand.
+          companyId: inst.companyId ?? null,
         }) : null;
         // A ROLE NOBODY HOLDS IS A STEP NOBODY GETS.
         //
@@ -813,6 +847,11 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           await log("step.unassigned", nodeId, `${node.label ?? nodeId}: nobody holds the role "${role}" on this installation`);
           logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — nobody holds the role "${role}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
         }
+        // WHY THIS LANDED ON THEM. routing.ts states the principle — an assignment engine nobody can
+        // interrogate is one people stop trusting the first time it surprises them — and then this
+        // path threw the reason away. A named officer makes that worse, because the balancer's answer
+        // at least changes visibly with load while a standing preference looks like nothing at all.
+        if (picked?.why) await log("step.assigned", nodeId, `${node.label ?? nodeId} → ${picked.name} (${picked.why})`);
         const assignee = c.assignee || picked?.name || ownerFallback;
         const assigneeId = c.assignee
           ? (await resolveStaffByName(c.assignee))?.id ?? null

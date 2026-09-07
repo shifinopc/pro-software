@@ -2110,6 +2110,49 @@
                     <div class="fm-hint" style="margin-top:6px;">Nobody owns this client, so it does not appear for any sales user.</div>
                   </sc-if>
 
+                  <!-- WHO DOES THE WORK, as opposed to who owns the relationship above.
+                       Steps go to whoever holds the role and is carrying least, which is right until
+                       a client has an officer who knows their file. Naming one here sends their work
+                       to that person — including steps a renewal creates weeks from now — and leaving
+                       it blank keeps the balancer, which is a perfectly good answer.
+
+                       The rows are DERIVED: one per role that an active workflow actually asks for.
+                       A firm whose templates never mention an IT officer is never asked about one. -->
+                  <sc-if value="{{ cdHasTeam }}" hint-placeholder-val="{{ false }}">
+                    <div class="pg-sec-lab" style="margin-top:18px;">Client team</div>
+                    <div class="fm-hint" style="margin-bottom:9px;">Who handles this client's work. Leave blank and it goes to whoever is free.</div>
+                    <sc-for list="{{ cdTeam }}" as="r" hint-placeholder-count="2">
+                      <div style="display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid #FAF8FC; flex-wrap:wrap;">
+                        <div style="min-width:120px; font-size:11.5px; font-weight:650; color:#4B4757;">{{ r.roleLabel }}</div>
+                        <div style="flex:1; min-width:180px;">
+                          <div class="fm-selwrap">
+                            <div data-dd data-open="{{ r.open }}" onClick="{{ r.toggle }}" class="fm-inp fm-sel" style="font-weight:{{ r.weight }}; color:{{ r.color }};"><span>{{ r.label }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                            <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                              <div data-dd data-hidescroll="true" class="fm-dd">
+                                <sc-for list="{{ r.options }}" as="o" hint-placeholder-count="3">
+                                  <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                                </sc-for>
+                              </div>
+                            </sc-if>
+                          </div>
+                        </div>
+                      </div>
+                      <!-- A named officer who has left or changed team is IGNORED by the engine, so
+                           the client is quietly back on the balancer. Identical on screen to never
+                           having named anybody, and only one of the two needs somebody to act. -->
+                      <sc-if value="{{ r.stale }}" hint-placeholder-val="{{ false }}">
+                        <div class="fm-hint" style="color:#B8860B; margin:-2px 0 8px;">{{ r.staleNote }}</div>
+                      </sc-if>
+                    </sc-for>
+                    <sc-if value="{{ cdTeamMoveAsk }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:10px; background:#F5EEFF; border:1px solid #E4D4FA; border-radius:12px; padding:11px 14px; font-size:11.5px; color:#5B21B6; line-height:1.55; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <span style="flex:1; min-width:200px;">{{ cdTeamMoveNote }}</span>
+                        <span onClick="{{ cdTeamMoveYes }}" style="font-weight:700; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Move them</span>
+                        <span onClick="{{ cdTeamMoveNo }}" style="font-weight:600; color:#8C8899; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Leave them</span>
+                      </div>
+                    </sc-if>
+                  </sc-if>
+
                   <!-- The people. One of them is the MAIN contact, and that is not decoration: it is
                        who every notice, invoice and portal login is addressed to. -->
                   <div class="pg-sec-lab" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -15233,6 +15276,35 @@ class Component extends DCLogic {
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
+    /**
+     * Name somebody — or nobody — for one role on one client.
+     *
+     * Re-reads the row from the server afterwards rather than patching state: whether the person is
+     * still eligible, and how much open work there is, are both the server's to know, and a screen
+     * that guesses either would be confidently wrong exactly when it matters.
+     */
+    this._setRoleOwner = (companyId, role, userId, name, clientName, moveOpen) => {
+      const t2 = localStorage.getItem('stimespro:token');
+      this.setState({ cdTeamOpen: null, ...(moveOpen ? { cdTeamMove: null } : {}) });
+      fetch(API + '/api/companies/' + companyId + '/role-owners/' + role, { method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+        body: JSON.stringify({ userId: userId || '', ...(moveOpen ? { moveOpen: true } : {}) }) })
+        .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.toast((j && j.error) || 'That could not be saved', 'error');
+          this.toast(userId
+            ? (moveOpen && j.moved ? (j.moved + ' open step' + (j.moved === 1 ? '' : 's') + ' moved to ' + name) : (name + ' now handles ' + String(role).replace(/_/g, ' ') + ' work for ' + clientName))
+            : ('Back to whoever is free for ' + String(role).replace(/_/g, ' ') + ' work'));
+          // Only worth asking when there IS open work and somebody new was named.
+          this.setState({
+            cdTeam: { ...(this.state.cdTeam || {}) },
+            cdTeamMove: (!moveOpen && userId && j.openTasks) ? { companyId, role, ownerId: userId, ownerName: name, openTasks: j.openTasks } : null,
+          });
+          delete (this.state.cdTeam || {})[companyId];
+          this.setState({ cdTeam: { ...(this.state.cdTeam || {}) } });
+        })
+        .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
     this._saveBand = (companyId, band) => {
       if (!companyId) return;
       const t2 = localStorage.getItem('stimespro:token');
@@ -19312,6 +19384,66 @@ class Component extends DCLogic {
       // The placeholder carries the empty state here: on a record panel "who manages this" wants an
       // answer on the face of it, and a blank box with a generic prompt would not give one.
       ], clRow.ownerId || '', (v9) => this._setOwner(clRow.realId, v9, clRow.name), 'Unassigned — search to assign'));
+      // ── Who does this client's work, per role ──
+      // Loaded from the server rather than derived here: which roles matter is a fact about the
+      // ACTIVE workflow templates, and who may hold one is a fact about staff — both already known
+      // there, and neither worth shipping the whole template graph to the browser to work out.
+      (() => {
+        const team9 = (this.state.cdTeam || {})[clRow.realId] || null;
+        if (!team9 && !this.state.cdTeamLoading) {
+          this.state.cdTeamLoading = true;
+          const tok9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/role-owners',
+            { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+            .then(r9 => (r9.ok ? r9.json() : null))
+            .then(j9 => { this.state.cdTeamLoading = false; if (j9 && j9.roles) this.setState({ cdTeam: { ...(this.state.cdTeam || {}), [clRow.realId]: j9.roles } }); })
+            .catch(() => { this.state.cdTeamLoading = false; });
+        }
+        const rows9 = Array.isArray(team9) ? team9 : [];
+        const pretty9 = (r9) => String(r9 || '').replace(/_/g, ' ').replace(/\b\w/g, c9 => c9.toUpperCase());
+        clDetailApi.cdHasTeam = rows9.length > 0;
+        clDetailApi.cdTeam = rows9.map(r9 => {
+          const openKey9 = clRow.realId + ':' + r9.role;
+          const on9 = this.state.cdTeamOpen === openKey9;
+          return {
+            roleLabel: pretty9(r9.role),
+            open: on9,
+            // "Whoever is free" is a real answer, not an empty field — the balancer is the default
+            // and saying so stops a blank row reading as something somebody forgot.
+            label: r9.ownerName || 'Whoever is free',
+            weight: r9.ownerName ? '650' : '500',
+            color: r9.ownerName ? '#26074D' : '#8C8899',
+            stale: !!r9.stale,
+            staleNote: 'The person named here is no longer an active ' + String(r9.role).replace(/_/g, ' ') + ', so this client is back on whoever is free. Pick somebody else or clear it.',
+            toggle: () => this.setState({ cdTeamOpen: on9 ? null : openKey9 }),
+            options: [
+              { id: '', name: 'Whoever is free' },
+              ...(r9.people || []),
+            ].map(o9 => {
+              const sel9 = (o9.id || '') === (r9.ownerId || '');
+              return {
+                label: o9.name,
+                weight: sel9 ? '700' : '500',
+                color: sel9 ? '#7C00FF' : '#4B4757',
+                bg: sel9 ? '#F9F5FF' : 'transparent',
+                pick: () => this._setRoleOwner(clRow.realId, r9.role, o9.id || '', o9.name, clRow.name),
+              };
+            }),
+          };
+        });
+        // Offered after the change, never done as part of it: reassigning live work as a side effect
+        // takes a task off somebody's list while they are looking at it.
+        const ask9 = this.state.cdTeamMove || null;
+        clDetailApi.cdTeamMoveAsk = !!(ask9 && ask9.companyId === clRow.realId);
+        clDetailApi.cdTeamMoveNote = ask9
+          ? (ask9.openTasks + ' open step' + (ask9.openTasks === 1 ? '' : 's') + ' for this client '
+             + (ask9.openTasks === 1 ? 'is' : 'are') + ' still with whoever had ' + (ask9.openTasks === 1 ? 'it' : 'them')
+             + '. New work goes to ' + ask9.ownerName + ' either way.')
+          : '';
+        clDetailApi.cdTeamMoveYes = () => this._setRoleOwner(ask9.companyId, ask9.role, ask9.ownerId, ask9.ownerName, clRow.name, true);
+        clDetailApi.cdTeamMoveNo = () => this.setState({ cdTeamMove: null });
+      })();
+
       // ── The people at this client ──
       const _cdPeople = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
         .filter(c9 => c9.companyId === clRow.realId)

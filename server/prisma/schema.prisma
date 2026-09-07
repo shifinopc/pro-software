@@ -144,6 +144,20 @@ model Company {
   /// different targets. See WorkforceBandSet for why this points at a shared scheme rather than
   /// giving every client its own private copy of the numbers.
   workforceBandSetId   String?
+  /// Who at the firm does this client's work, per role — { "pro_officer": "u_abc", … }.
+  ///
+  /// Steps are handed to whoever holds the role and is carrying least, which is the right default and
+  /// wrong for a client whose officer knows their file. Named here rather than as a routing rule
+  /// because routing rules are one global ordered list: "this client goes to Omar" written that way
+  /// is one rule per client, all competing for position in the same list.
+  ///
+  /// A MAP, not a proOfficerId column. Roles are string keys in this system, so a column would mean a
+  /// schema change the first time somebody wants a named accountant — and they will.
+  ///
+  /// Nothing here can STALL work: a named person who has left, been deactivated or changed team is
+  /// ignored and the balancer takes over, because a client team is a preference and an unassigned
+  /// task is a failure.
+  roleOwners           Json?
   // Billing suspension. `status` carries "suspended"; these record why and since when so the console
   // and the client's banner can both explain it rather than just showing a red badge.
   suspendedAt          String?
