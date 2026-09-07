@@ -66,6 +66,20 @@ export type Workforce = {
    * thresholds are wrong or the portal knows something the headcount does not.
    */
   computedBand: { name: string; color: string | null; bg: string | null } | null;
+  /**
+   * Which scheme placed the ratio, and how this client came to be judged by it.
+   *
+   * On screen beside the band because a computed band is only as good as the ladder behind it, and
+   * "Green" against the wrong thresholds looks exactly like "Green" against the right ones.
+   * `assigned` separates a scheme somebody chose from the country default a client merely fell to.
+   */
+  bandSet: { id: string; name: string; assigned: boolean; isDefault: boolean } | null;
+  /**
+   * A scheme that fits this client's activity and headcount better than the one in force, if there
+   * is one. A SUGGESTION - never applied. Assigning thresholds nobody chose is the guessing this
+   * module exists to avoid; the officer confirms it or ignores it.
+   */
+  bandSetSuggestion: { id: string; name: string; why: string } | null;
   /** True only when both are known and they differ. */
   bandMismatch: boolean;
   /** How far into the current band, and what reaching the next one would take. */
@@ -81,10 +95,91 @@ export type Workforce = {
  */
 export async function bandsFor(country: string | null) {
   if (!country) return [];
+  const set = await defaultSetFor(country);
+  return set ? bandsInSet(set.id) : [];
+}
+
+/** The rows of one scheme, lowest first. */
+export async function bandsInSet(setId: string) {
   return prisma.workforceBand.findMany({
-    where: { country, retired: false },
+    where: { setId, retired: false },
     orderBy: [{ sort: "asc" }, { minBp: "asc" }],
   });
+}
+
+/** The scheme a client falls to when nobody has chosen one for it. */
+export async function defaultSetFor(country: string | null) {
+  if (!country) return null;
+  return prisma.workforceBandSet.findFirst({
+    where: { country, retired: false, isDefault: true },
+    orderBy: [{ sort: "asc" }],
+  });
+}
+
+/**
+ * The scheme that judges one client, and how it got there.
+ *
+ * A scheme that has been RETIRED is treated as no scheme rather than followed quietly: retiring the
+ * thresholds is somebody saying they no longer describe the regulator, and continuing to place
+ * clients against them because a foreign key still points there is the opposite of what was meant.
+ */
+export async function bandSetForCompany(co: { country: string | null; workforceBandSetId?: string | null }) {
+  if (co.workforceBandSetId) {
+    const chosen = await prisma.workforceBandSet.findFirst({ where: { id: co.workforceBandSetId, retired: false } });
+    if (chosen) return { set: chosen, assigned: true };
+  }
+  const fallback = await defaultSetFor(co.country ?? null);
+  return fallback ? { set: fallback, assigned: false } : null;
+}
+
+/** The bands that place one client's ratio. */
+export async function bandsForCompany(co: { country: string | null; workforceBandSetId?: string | null }) {
+  const hit = await bandSetForCompany(co);
+  return hit ? bandsInSet(hit.set.id) : [];
+}
+
+/**
+ * A better-fitting scheme than the one in force, if the schemes on file describe one.
+ *
+ * Matched on what a scheme SAYS it covers - activity wording and headcount bracket - and returned
+ * only when it is not already the scheme in use. Both halves have to agree: a scheme claiming an
+ * activity is not a match for a client of a different activity merely because the headcount fits,
+ * which is the failure that would file a retailer under construction targets.
+ */
+export async function suggestBandSet(
+  co: { country: string | null; industry?: string | null },
+  headcount: number,
+  currentSetId: string | null,
+): Promise<{ id: string; name: string; why: string } | null> {
+  if (!co.country) return null;
+  const activity = String(co.industry ?? "").trim().toLowerCase();
+  // Nothing to match on. A client with no activity recorded, placed by size alone, would be a coin
+  // toss dressed as a recommendation.
+  if (!activity || activity === "\u2014") return null;
+
+  const sets = await prisma.workforceBandSet.findMany({ where: { country: co.country, retired: false } });
+  const fits = sets.filter(s => {
+    const act = String(s.activity ?? "").trim().toLowerCase();
+    if (!act || act !== activity) return false;
+    if (s.sizeMin != null && headcount < s.sizeMin) return false;
+    if (s.sizeMax != null && headcount > s.sizeMax) return false;
+    return true;
+  });
+  // Two schemes claiming the same activity and bracket is a configuration error, not a choice to
+  // make on the client's behalf - say nothing rather than pick one.
+  if (fits.length !== 1) return null;
+  const s = fits[0];
+  // Already on it. Suggesting the scheme a client is on reads as "something is wrong here" when
+  // nothing is.
+  if (s.id === currentSetId) return null;
+  // "0-49 staff" is how a range is stored, not how a bracket is published. A scheme with no floor
+  // covers everybody below its ceiling, and saying so is the difference between a suggestion that
+  // reads like the regulator and one that reads like a database row.
+  const size = s.sizeMin == null && s.sizeMax == null ? ""
+    : s.sizeMax == null ? " and " + String(s.sizeMin) + "+ staff"
+    : s.sizeMin == null ? " and under " + String(s.sizeMax + 1) + " staff"
+    : " and " + String(s.sizeMin) + "-" + String(s.sizeMax) + " staff";
+  return { id: s.id, name: s.name, why: `matches ${s.activity}${size}` };
 }
 
 const bp = (part: number, whole: number) => (whole > 0 ? Math.round((part * 10000) / whole) : 0);
@@ -98,7 +193,7 @@ const bp = (part: number, whole: number) => (whole > 0 ? Math.round((part * 1000
 export async function workforceFor(companyId: string): Promise<Workforce | null> {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { id: true, name: true, country: true, workforceBand: true, workforceBandAt: true, workforceBandNote: true, workforceBandRatioBp: true },
+    select: { id: true, name: true, country: true, industry: true, workforceBand: true, workforceBandAt: true, workforceBandNote: true, workforceBandRatioBp: true, workforceBandSetId: true },
   });
   if (!company) return null;
 
@@ -131,12 +226,15 @@ export async function workforceFor(companyId: string): Promise<Workforce | null>
 
   // The band the thresholds put this ratio in. Measured against the LOW end, the same end drift is
   // measured against — the figure that holds if every unrecorded nationality turns out to be an expat.
-  const bands = await bandsFor(country);
+  // The client's own scheme, not the country's - thresholds are published per activity and per size
+  // bracket, so one country-wide ladder placed most clients against numbers they are not judged by.
+  const scheme = await bandSetForCompany(company);
+  const bands = scheme ? await bandsInSet(scheme.set.id) : [];
   // A client with nobody on the books has no ratio to place. 0 of 0 arithmetically reads as 0%, which
   // would drop them in the bottom band and show a compliance failure for a workforce that does not
   // exist — the same "answer to a question nobody asked" the headline figure already avoids.
   const placeable = total > 0;
-  const hit = placeable
+  const placed = placeable
     ? (bands.find(b => ratioMinBp >= b.minBp && (b.maxBp == null || ratioMinBp < b.maxBp)) ?? null)
     : null;
   const above = placeable
@@ -144,9 +242,11 @@ export async function workforceFor(companyId: string): Promise<Workforce | null>
     : null;
 
   return {
-    computedBand: hit ? { name: hit.name, color: hit.color ?? null, bg: hit.bg ?? null } : null,
+    computedBand: placed ? { name: placed.name, color: placed.color ?? null, bg: placed.bg ?? null } : null,
+    bandSet: scheme ? { id: scheme.set.id, name: scheme.set.name, assigned: scheme.assigned, isDefault: scheme.set.isDefault } : null,
+    bandSetSuggestion: await suggestBandSet(company, total, scheme?.set.id ?? null),
     // Only a real disagreement counts: both known, and different.
-    bandMismatch: !!(hit && company.workforceBand && hit.name !== company.workforceBand),
+    bandMismatch: !!(placed && company.workforceBand && placed.name !== company.workforceBand),
     nextBand: above ? { name: above.name, atBp: above.minBp, needBp: above.minBp - ratioMinBp } : null,
     companyId: company.id,
     companyName: company.name,

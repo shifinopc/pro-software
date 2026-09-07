@@ -316,6 +316,73 @@ app.put("/api/workforce/:companyId/band", requireAuth, requireStaff, requireWrit
   }
 });
 
+/**
+ * Make one scheme the country's default, and unmake every other.
+ *
+ * Its own route rather than a field on the generic CRUD because "exactly one" cannot be expressed as
+ * a property of a single row. Saved through CRUD, two schemes can both claim it — and then which
+ * ladder an unassigned client is judged by depends on row order, which is not a decision anybody made.
+ */
+app.put("/api/workforce-band-sets/:id/default", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const set = await prisma.workforceBandSet.findUnique({ where: { id: String(req.params.id) } });
+    if (!set) return res.status(404).json({ error: "No such band scheme" });
+    if (!set.country) return res.status(400).json({ error: "This scheme is not linked to a country, so it cannot be a country's default." });
+    await prisma.workforceBandSet.updateMany({ where: { country: set.country, NOT: { id: set.id } }, data: { isDefault: false } });
+    await prisma.workforceBandSet.update({ where: { id: set.id }, data: { isDefault: true } });
+    await logAudit({ action: "workforce.scheme_default", actorId: (req as any).auth?.sub, target: set.name, detail: set.country, ip: clientIp(req) });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
+/**
+ * Put a client on a band scheme, or take it off one.
+ *
+ * A WRITE, like recording a band: this decides which published thresholds the client is measured
+ * against, and getting it wrong means reporting a compliance position that is not theirs. Empty
+ * string clears the assignment and drops the client back to the country default.
+ *
+ * The scheme must belong to the client's own country. Nothing in the data model stops a Saudi client
+ * being pointed at an Emirati ladder, and the result would be a confident band computed from the
+ * wrong regulator's numbers — the exact failure this whole area is built to avoid.
+ */
+app.put("/api/workforce/:companyId/scheme", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const companyId = String(req.params.companyId);
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, country: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+
+    const setId = String(req.body?.setId ?? "").trim();
+    let name = "the country default";
+    if (setId) {
+      const set = await prisma.workforceBandSet.findFirst({ where: { id: setId, retired: false } });
+      if (!set) return res.status(400).json({ error: "That band scheme does not exist, or has been retired." });
+      if (set.country && co.country && set.country !== co.country) {
+        return res.status(400).json({ error: `"${set.name}" is set up for ${set.country}, and this client is in ${co.country}. A band computed from another country's thresholds would be wrong in a way nobody would notice.` });
+      }
+      name = set.name;
+    }
+
+    await prisma.company.update({
+      where: { id: companyId },
+      // The seen-band pointer is cleared alongside it. Leaving it would let the nightly check compare
+      // a band read on the OLD ladder against one computed on the new one and announce a fall that
+      // never happened — see checkWorkforceBands.
+      data: { workforceBandSetId: setId || null, workforceBandSeen: null, workforceBandSeenSetId: null },
+    });
+    await logAudit({
+      action: setId ? "workforce.scheme_assigned" : "workforce.scheme_cleared",
+      actorId: a?.sub, target: co.name, detail: name, ip: clientIp(req),
+    });
+    res.json(await workforceFor(companyId));
+  } catch (e: any) {
+    res.status(400).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // Receive a new version of a country's configuration. This is the route by which an update reaches
 // an installation at all — without it, publishing a corrected fee would mean a redeploy. Admin-only
 // and audited: it changes what every future install and upgrade on this server will do.
@@ -4851,6 +4918,9 @@ const entities: [string, string][] = [
   // Nationalisation bands per country — Nitaqat and its equivalents. Configuration, so it goes
   // through the same CRUD, country-scoping and retire rules as every other config table.
   ["workforce-bands", "workforceBand"],
+  // The ladders those bands are rungs on. One per activity and size bracket, so a contractor and a
+  // retailer are not held to the same numbers.
+  ["workforce-band-sets", "workforceBandSet"],
   ["packages", "package"],
   ["subscriptions", "subscription"],
   ["employees", "employee"],

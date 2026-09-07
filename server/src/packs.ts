@@ -57,7 +57,7 @@ export type Pack = {
   pack: string; country: string; countryName: string; version: string;
   generatedAt?: string; contains?: string;
   documentTypes?: PackRow[]; govCenters?: PackRow[]; checklistRules?: PackRow[]; fieldSets?: PackRow[];
-  workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[];
+  workflowTemplates?: PackRow[]; serviceItems?: PackRow[]; packages?: PackRow[]; workforceBands?: PackRow[]; workforceBandSets?: PackRow[];
   pipelineStages?: PackRow[]; leadSources?: PackRow[]; lostReasons?: PackRow[]; courierJobTypes?: PackRow[];
   appointmentTypes?: PackRow[]; courierStatuses?: PackRow[]; appointmentStatuses?: PackRow[];
   competitors?: PackRow[]; industries?: PackRow[]; campaigns?: PackRow[]; cancelReasons?: PackRow[];
@@ -90,6 +90,12 @@ export const KINDS = [
     fields: (r: any) => ({ name: r.name, govFee: r.govFee, time: r.time, sla: r.sla, docType: r.docType, included: r.included, docs: r.docs, requiredDocs: r.requiredDocs }) },
   // Nationalisation bands. A country pack that carries the workflows for a market but not the bands
   // it is measured by would be half a market.
+  //
+  // The SCHEMES come first, and must: a band is a row on a ladder, and a ladder that arrives after
+  // its rungs leaves every one of them pointing at nothing. `setKey` is wired up afterwards by
+  // wireReferences, the same way a service finds its workflow.
+  { key: "workforceBandSets", model: "workforceBandSet", label: "band schemes", one: "band scheme",
+    fields: (r: any) => ({ name: r.name, activity: r.activity, sizeMin: r.sizeMin, sizeMax: r.sizeMax, isDefault: r.isDefault, sort: r.sort }) },
   { key: "workforceBands", model: "workforceBand", label: "workforce bands", one: "workforce band",
     fields: (r: any) => ({ name: r.name, color: r.color, bg: r.bg, minBp: r.minBp, maxBp: r.maxBp, sort: r.sort }) },
   // Sales stages. Same argument as the bands: a pack that sets up how work is DONE in a market but
@@ -359,6 +365,18 @@ async function wireReferences(pack: Pack, skipKeys: Set<string> = new Set()): Pr
     const wf = await idFor("workflowTemplate", s.workflowKey);
     if (!wf) { unresolved.push(`service "${s.name}" → ${s.workflowKey}`); continue; }
     await prisma.serviceItem.update({ where: { id: svc.id }, data: { workflowId: wf } });
+  }
+
+  // A band without its scheme is a rung with no ladder: it exists, it is findable, and it places
+  // nobody. Left unset and reported rather than guessed at, like every other reference here.
+  for (const b of pack.workforceBands ?? []) {
+    const setKey = (b as any).setKey;
+    if (!setKey || skipKeys.has(b.key)) continue;
+    const row = await prisma.workforceBand.findFirst({ where: { packKey: b.key } });
+    if (!row) continue;
+    const setId = await idFor("workforceBandSet", setKey);
+    if (!setId) { unresolved.push(`band "${b.name}" → ${setKey}`); continue; }
+    await prisma.workforceBand.update({ where: { id: row.id }, data: { setId } });
   }
 
   for (const k of pack.packages ?? []) {
@@ -854,7 +872,7 @@ export async function buildPack(
   const p = country.toLowerCase();
 
   const where = { country, retired: false };
-  const [docTypes, templates, services, centers, packages, checklists, fieldSets, bands, stages, sources, reasons,
+  const [docTypes, templates, services, centers, packages, checklists, fieldSets, bandSets, bands, stages, sources, reasons,
          courierTypes, apptTypes, courierStatuses, apptStatuses, competitors, industries, campaigns, cancelReasons] = await Promise.all([
     prisma.documentType.findMany({ where }),
     prisma.workflowTemplate.findMany({ where }),
@@ -863,6 +881,7 @@ export async function buildPack(
     prisma.package.findMany({ where }),
     prisma.checklistRule.findMany({ where }),
     prisma.fieldSet.findMany({ where }),
+    prisma.workforceBandSet.findMany({ where }),
     prisma.workforceBand.findMany({ where }),
     prisma.pipelineStage.findMany({ where }),
     prisma.leadSource.findMany({ where }),
@@ -902,6 +921,7 @@ export async function buildPack(
   const kPackages  = keep(packages,  "package");
   const kChecklists= keep(checklists,"checklist rule");
   const kFieldSets = keep(fieldSets, "field set");
+  const kBandSets  = keep(bandSets,  "band scheme");
   const kBands     = keep(bands,     "workforce band");
   const kStages    = keep(stages,    "pipeline stage");
   const kSources   = keep(sources,   "lead source");
@@ -943,6 +963,7 @@ export async function buildPack(
   const svcKey = new Map(kServices.map(s => [s.id, keyOf(s, "service")]));
   const chkKey = new Map(kChecklists.map(c => [c.id, keyOf(c, "checklist")]));
   const fsKey  = new Map(kFieldSets.map(f => [f.id, keyOf(f, "fieldset")]));
+  const setKey = new Map(kBandSets.map(g => [g.id, keyOf(g, "bandset")]));
 
   /**
    * Swap database ids inside a workflow graph for pack keys.
@@ -1055,11 +1076,21 @@ export async function buildPack(
       name: f.name, rows: f.rows ?? [], rules: (f as any).rules ?? [],
     })),
 
-    // Nationalisation bands. The install side already knew how to receive these; the exporter did
-    // not produce them, so a pack carried a market's workflows but not the thresholds it is judged
-    // by — and an installation on the far end would compute no band at all.
+    // Nationalisation bands, and the schemes they hang off. The install side already knew how to
+    // receive the bands; the exporter did not produce them, so a pack carried a market's workflows
+    // but not the thresholds it is judged by — and an installation on the far end would compute no
+    // band at all.
+    workforceBandSets: kBandSets.map(g => ({
+      key: keyOf(g, "bandset"),
+      name: g.name, activity: g.activity, sizeMin: g.sizeMin, sizeMax: g.sizeMax, isDefault: g.isDefault, sort: g.sort,
+    })),
+
+    // setKey, not setId: an id means nothing on the far end. A band whose scheme did not travel is
+    // still exported — the installer reports it unresolved and leaves it unassigned, which is visible,
+    // where silently dropping the row would not be.
     workforceBands: kBands.map(b => ({
       key: keyOf(b, "band"),
+      setKey: b.setId ? (setKey.get(b.setId) ?? null) : null,
       name: b.name, color: b.color, bg: b.bg, minBp: b.minBp, maxBp: b.maxBp, sort: b.sort,
     })),
 
@@ -1182,7 +1213,7 @@ export async function buildPack(
     ["document types", pack.documentTypes], ["workflow templates", pack.workflowTemplates],
     ["services", pack.serviceItems], ["authorities", pack.govCenters],
     ["packages", pack.packages], ["checklist rules", pack.checklistRules],
-    ["workforce bands", pack.workforceBands], ["pipeline stages", pack.pipelineStages],
+    ["band schemes", pack.workforceBandSets], ["workforce bands", pack.workforceBands], ["pipeline stages", pack.pipelineStages],
     ["lead sources", pack.leadSources], ["loss reasons", pack.lostReasons],
   ] as const).filter(([, rows]) => !rows.length).map(([label]) => label);
   return { pack, dropped, unresolved, rekeyed, dangling, empty: empty as unknown as string[] };

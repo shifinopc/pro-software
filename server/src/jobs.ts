@@ -13,7 +13,7 @@ import { prisma } from "./db.js";
 import { homeCurrency } from "./orgsettings.js";
 import { jobRules } from "./jobrules.js";
 import { logActivity, logNotification } from "./auth.js";
-import { workforceFor, bandsFor } from "./workforce.js";
+import { workforceFor, bandsInSet, bandSetForCompany, suggestBandSet } from "./workforce.js";
 import { startInstance, pickAssignee } from "./workflow.js";
 import { sameCountry, countryNationality } from "./countries.js";
 import { nextNumber } from "./sequence.js";
@@ -982,7 +982,7 @@ export async function assignOrphanTasks(): Promise<AssignResult> {
 // band is — and nothing watched it. A number nobody is looking at is not a control; the whole point of
 // computing a band is that somebody hears about it when it moves.
 
-export type WorkforceAlertResult = { checked: number; dropped: number; improved: number; nearEdge: number; details: string[] };
+export type WorkforceAlertResult = { checked: number; dropped: number; improved: number; nearEdge: number; rescheme: number; details: string[] };
 
 /**
  * How close to the floor of the current band counts as "about to fall out".
@@ -994,12 +994,12 @@ export type WorkforceAlertResult = { checked: number; dropped: number; improved:
 
 export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
   const rules = await jobRules();
-  const out: WorkforceAlertResult = { checked: 0, dropped: 0, improved: 0, nearEdge: 0, details: [] };
+  const out: WorkforceAlertResult = { checked: 0, dropped: 0, improved: 0, nearEdge: 0, rescheme: 0, details: [] };
   const companies = await prisma.company.findMany({
     // Clients only. A lead has no workforce here to have a band about, and interrupting somebody
     // about a prospect's imaginary compliance position is how an alert channel gets muted.
     where: { NOT: { country: null }, lifecycle: ACTIVE_CLIENT },
-    select: { id: true, name: true, country: true, workforceBandSeen: true },
+    select: { id: true, name: true, country: true, industry: true, workforceBandSeen: true, workforceBandSetId: true, workforceBandSeenSetId: true },
   });
 
   for (const co of companies) {
@@ -1009,13 +1009,32 @@ export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
     if (!w || !w.total || !w.computedBand) continue;
     out.checked++;
 
-    const bands = await bandsFor(co.country);
+    // The bands of THIS CLIENT'S scheme. Ranks are positions on one ladder and mean nothing across
+    // two, so every comparison below is scoped to the scheme that actually judges this client.
+    const scheme = await bandSetForCompany(co);
+    const bands = scheme ? await bandsInSet(scheme.set.id) : [];
     const rank = (name: string) => bands.findIndex(b => b.name === name);
     const now = w.computedBand.name;
     const was = co.workforceBandSeen;
     const pct = (bp: number) => (bp / 100).toFixed(2) + "%";
 
-    if (was && was !== now) {
+    // A CHANGE OF LADDER IS NOT A CHANGE OF POSITION.
+    //
+    // Move a client onto a different scheme and the computed band name changes on the next tick,
+    // with the client's workforce exactly as it was. Compared naively that reads as a fall, and the
+    // alert would say "dropped from Green to Yellow" about somebody who did not move. The seen band
+    // is re-based onto the new scheme silently instead, and the change is logged rather than raised.
+    const seenSet = co.workforceBandSeenSetId ?? null;
+    const nowSet = scheme?.set.id ?? null;
+    const reschemed = was != null && seenSet !== nowSet;
+    if (reschemed) {
+      out.rescheme++;
+      if (was !== now) {
+        logActivity({ type: "compliance", message: `${co.name}: band reads ${now} under "${scheme?.set.name ?? "no scheme"}" (was ${was} under the previous scheme) — thresholds changed, not the workforce` });
+      }
+    }
+
+    if (!reschemed && was && was !== now) {
       const fell = rank(now) >= 0 && rank(was) >= 0 && rank(now) < rank(was);
       if (fell) {
         out.dropped++;
@@ -1035,8 +1054,8 @@ export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
       }
     }
 
-    if (was !== now) {
-      await prisma.company.update({ where: { id: co.id }, data: { workforceBandSeen: now, workforceBandSeenAt: nowISO() } });
+    if (was !== now || seenSet !== nowSet) {
+      await prisma.company.update({ where: { id: co.id }, data: { workforceBandSeen: now, workforceBandSeenAt: nowISO(), workforceBandSeenSetId: nowSet } });
     }
 
     // Close to the floor of the band it is currently in. Skipped for the lowest band — there is
@@ -1056,6 +1075,23 @@ export async function checkWorkforceBands(): Promise<WorkforceAlertResult> {
           message: `${pct(w.ratioMinBp)} against a ${pct(band.minBp)} floor — ${pct(margin)} of headroom. One departure could move it.`,
         });
       }
+    }
+
+    // THE SCHEME ITSELF CAN GO STALE.
+    //
+    // Schemes are published per activity and per size bracket, and headcount moves every month. A
+    // client assigned the 50-499 ladder that has since hired its 500th person is now being measured
+    // against thresholds it has outgrown — silently, and in the direction that gets somebody fined.
+    // Raised as a suggestion to re-assign, never re-assigned here: choosing a client's thresholds is
+    // the act this module has always refused to do on a person's behalf.
+    const better = await suggestBandSet(co, w.total, nowSet);
+    if (better) {
+      out.details.push(`${co.name}: scheme "${better.name}" fits better`);
+      await notifyOnce(`wf-scheme:${co.id}:${better.id}`, {
+        type: "compliance",
+        title: `${co.name} may be on the wrong band scheme`,
+        message: `It is judged by "${scheme?.set.name ?? "the country default"}", but "${better.name}" ${better.why} — and this client has ${w.total} on the books. Check which one the portal applies.`,
+      });
     }
   }
   return out;

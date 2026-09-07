@@ -129,6 +129,21 @@ model Company {
   /// never be said.
   workforceBandSeen    String?
   workforceBandSeenAt  String?
+  /// Which band scheme was in force when `workforceBandSeen` was written.
+  ///
+  /// Without this, moving a client onto a different scheme looks exactly like the client falling out
+  /// of its band: the computed name changes, the nightly check compares it to the last one it saw,
+  /// and it announces "dropped from Green to Yellow" about a client whose workforce did not move at
+  /// all. Ranks are only comparable WITHIN one scheme, so the check needs to know when it is looking
+  /// at a different ladder rather than a different position on the same one.
+  workforceBandSeenSetId String?
+  /// The scheme this client's ratio is placed against. Null = the country's default scheme.
+  ///
+  /// Thresholds are published per economic activity and per size bracket, so one table per country
+  /// was never going to be right — a contractor and a retailer with identical headcounts are held to
+  /// different targets. See WorkforceBandSet for why this points at a shared scheme rather than
+  /// giving every client its own private copy of the numbers.
+  workforceBandSetId   String?
   // Billing suspension. `status` carries "suspended"; these record why and since when so the console
   // and the client's banner can both explain it rather than just showing a red badge.
   suspendedAt          String?
@@ -994,9 +1009,52 @@ model WorkforceSnapshot {
 ///
 /// Carries the same provenance columns as every other config model so a band set travels in a country
 /// pack and can be upgraded, retired and uninstalled like anything else.
+/// A named set of nationalisation bands — one ladder of thresholds, shared by the clients it applies to.
+///
+/// WHY THIS EXISTS RATHER THAN BANDS-PER-CLIENT
+///
+/// Thresholds are published per economic activity and per size bracket. Bands hung off the country
+/// alone therefore said something untrue for most clients, and the obvious fix — give each client its
+/// own rows — trades one wrong answer for an unmaintainable one: a regulator changes the construction
+/// figures and somebody edits two hundred client records by hand, no two of which can be compared.
+///
+/// So the ladder is named and shared, and the CLIENT points at it. A scheme used by exactly one
+/// client is a per-client band table, so nothing is lost at the small end; twenty clients in the same
+/// sector and bracket share one row of numbers, so nothing drifts at the large end.
+///
+/// `activity` and the size bracket are what the scheme CLAIMS to cover. They are used to SUGGEST a
+/// scheme for a client, never to assign one: this module's whole discipline is that it does not guess
+/// a band, and silently filing a client under thresholds nobody chose would be guessing with extra
+/// steps.
+model WorkforceBandSet {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  /// The economic activity this scheme is published for, in the regulator's own words.
+  activity     String?
+  /// The size bracket it covers, in headcount. `sizeMax` null means "and above".
+  sizeMin      Int?
+  sizeMax      Int?
+  /// The scheme a client falls to when it has not been given one. Exactly one per country; the
+  /// editor refuses to save a second, because "the default" that is ambiguous is not a default.
+  isDefault    Boolean @default(false)
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
 model WorkforceBand {
   id           String  @id @default(cuid())
   country      String?
+  /// The scheme this band belongs to. Null means it predates schemes — the migration adopts every
+  /// such row into its country's default scheme, so a null here after that has run is a row that
+  /// belongs to no ladder and is deliberately ignored rather than silently applied to everybody.
+  setId        String?
   name         String
   /// Text and background, so a band reads the same everywhere it appears.
   color        String?
@@ -1015,6 +1073,7 @@ model WorkforceBand {
 
   @@index([packKey])
   @@index([country])
+  @@index([setId])
 }
 
 /// One column of the sales pipeline, for one country.
