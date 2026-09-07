@@ -2028,7 +2028,15 @@
                 </sc-if>
 
                 <sc-if value="{{ wfNoStaff }}" hint-placeholder-val="{{ false }}">
-                  <div style="margin-top:12px; font-size:12px; color:#A9A6B4;">No staff on file for this client yet, so there is nothing to measure. A ratio of 0% would be an answer to a question nobody asked.</div>
+                  <div style="margin-top:12px; font-size:12px; color:#A9A6B4; line-height:1.6;">No staff on file for this client yet, so there is nothing to measure. A ratio of 0% would be an answer to a question nobody asked.</div>
+                  <!-- The bands can be set up NOW, before anybody is added. Nothing about them
+                       depends on headcount: they are what the regulator publishes for this client's
+                       activity and size, and having them ready means the first hire lands in a band
+                       instead of landing nowhere. -->
+                  <div style="margin-top:13px; border-top:1px solid #F1EDF9; padding-top:13px; display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:220px; font-size:11.5px; color:#6F6C7A; line-height:1.55;">{{ wfNoStaffBands }}</div>
+                    <span onClick="{{ wfOpenScheme }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ wfNoStaffCta }}</span>
+                  </div>
                 </sc-if>
               </div>
               </sc-if>
@@ -18648,6 +18656,13 @@ class Component extends DCLogic {
         : 'Counting…';
       clDetailApi.wfHasStaff = !!(_wf && _wf.total > 0);
       clDetailApi.wfNoStaff = !!(_wf && _wf.total === 0);
+      // Bands do not depend on headcount — they are the published thresholds for this client's
+      // activity and size — so a client with nobody on file can and should have them set up.
+      clDetailApi.wfNoStaffBands = (_wf && _wf.bandSet)
+        ? ('Bands are set up: ' + _wf.bandSet.name + (_wf.bandSet.assigned ? '' : ' (from the country pack)')
+           + '. The first person added will be placed against them.')
+        : 'Bands can be set up now, before anyone is added — then the first hire lands in a band instead of nowhere.';
+      clDetailApi.wfNoStaffCta = (_wf && _wf.bandSet) ? 'Change bands' : 'Set up bands';
       // The LOW end is the headline: it is the figure that holds if every unrecorded nationality
       // turns out to be an expat, and under-reporting is the direction that gets a client fined.
       clDetailApi.wfPct = _wf ? (_wf.certain ? _pct9(_wf.ratioMinBp) : (_pct9(_wf.ratioMinBp) + '–' + _pct9(_wf.ratioMaxBp))) : '—';
@@ -18700,10 +18715,15 @@ class Component extends DCLogic {
       // existed would show an empty editor for a client that has bands, and the obvious next move —
       // pressing Save — would wipe them.
       clDetailApi.wfOpenScheme = () => {
+        // No country means no published thresholds to choose between, and `showBands` keys off this
+        // value — so without the guard the button would do nothing at all, silently, which reads as
+        // a broken screen rather than a missing detail on the client.
+        const ctry9 = (_wf && _wf.country) || (clRow && clRow.country) || '';
+        if (!ctry9) return this.toast('This client has no country set, so there are no published thresholds to choose from. Add one under Edit client first.', 'error');
         this._opReload && this._opReload('workforce-bands', 'bandsData');
         this._opReload && this._opReload('workforce-band-sets', 'bandSetsData');
         this.setState({
-          wbOpen: (_wf && _wf.country) || (clRow && clRow.country) || '',
+          wbOpen: ctry9,
           wbCompany: clRow.realId, wbName: clRow.name || '',
           wbSet: null, wbDraft: null, wbMeta: null, wbErr: '',
         });
