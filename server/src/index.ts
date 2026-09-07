@@ -275,11 +275,28 @@ app.post("/api/packs/preview", requireAuth, requireStaff, async (req, res) => {
 // routing rule per client, all competing for position in a single ordered list.
 
 /**
- * Which roles are worth naming somebody for, and who is available to name.
+ * Which roles a CLIENT can name somebody for.
  *
- * DERIVED, never a hard-coded list of three. A role earns a row by actually appearing as an
- * assigneeRole or approverRole on a live workflow — so a market whose templates use an IT officer
- * gets that row, and a firm that has never used one is not asked about it.
+ * Every role a live workflow mentions was offered at first, which put five pickers on the panel —
+ * accountant, admin, HR, IT, PRO — when a firm only ever names the PRO officer. Four rows nobody
+ * fills in are four rows that teach people to skip the block.
+ *
+ * A SETTING, not a constant: adding the accountant later is a row in app settings rather than a
+ * deploy, and the default says what the firm actually asked for.
+ */
+const CLIENT_TEAM_ROLES_DEFAULT = ["pro_officer"];
+async function clientTeamRoles(): Promise<string[]> {
+  const row = await prisma.appSetting.findUnique({ where: { key: "clientTeamRoles" } }).catch(() => null);
+  const arr = Array.isArray(row?.value) ? (row!.value as any[]).map(x => String(x ?? "").trim()).filter(Boolean) : [];
+  return arr.length ? arr : CLIENT_TEAM_ROLES_DEFAULT;
+}
+
+/**
+ * The roles this client can name somebody for, and who is available to name.
+ *
+ * Still cross-checked against the live workflows: a role nothing assigns to would be a picker that
+ * changes nothing, and a setting naming a role no template uses is a typo nobody would ever see the
+ * consequences of.
  */
 app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req, res) => {
   try {
@@ -287,16 +304,22 @@ app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req,
     if (!co) return res.status(404).json({ error: "No such client" });
 
     const templates = await prisma.workflowTemplate.findMany({ where: { active: true, retired: false }, select: { graph: true } });
-    const roles = new Set<string>();
+    const used = new Set<string>();
     for (const t of templates) {
       const nodes: any[] = Array.isArray((t.graph as any)?.nodes) ? (t.graph as any).nodes : [];
       for (const n of nodes) {
         for (const k of ["assigneeRole", "approverRole"]) {
           const r = String(n?.config?.[k] ?? "").trim();
-          if (r) roles.add(r);
+          if (r) used.add(r);
         }
       }
     }
+    const wanted = await clientTeamRoles();
+    // A role already NAMED on this client stays visible even if it has since been dropped from the
+    // setting — otherwise the pointer keeps steering assignments with no way on screen to see or
+    // clear it, which is the quiet kind of wrong this panel exists to prevent.
+    const named = Object.keys((co.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners as any : {});
+    const roles = new Set<string>([...wanted.filter(r => used.has(r)), ...named]);
 
     const map: any = (co.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners : {};
     const staff = await prisma.user.findMany({
