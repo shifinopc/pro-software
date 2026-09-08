@@ -365,6 +365,9 @@ export async function captureWorkforceSnapshots(day = new Date().toISOString().s
       // The band as the thresholds read it TODAY, by name. See the model comment: recomputing this
       // later from changed thresholds would rewrite a day that has already happened.
       bandName: w.computedBand?.name ?? null,
+      // And the ladder that produced it, so a later reader can tell a client that MOVED from one
+      // that is simply being measured by different numbers.
+      bandSetId: w.bandSet?.id ?? null,
     };
     await prisma.workforceSnapshot.upsert({
       where: { companyId_day: { companyId: w.companyId, day } },
@@ -402,7 +405,19 @@ export async function workforceHistory(companyId: string, days = 90) {
     /** Whether the band changed over the window, which is the part somebody acts on. */
     bandFrom: first?.bandName ?? null,
     bandTo: last?.bandName ?? null,
-    bandMoved: !!(first && last && first.bandName !== last.bandName),
+    /**
+     * Only a real move counts, and only within ONE ladder.
+     *
+     * A client put on different thresholds shows a different band name on the next snapshot with
+     * nobody hired or fired. Reported as a move, that reads as "you fell out of your band" — the
+     * single most alarming thing this panel can say — about a workforce that did not change. Ranks
+     * and names are positions on one ladder and mean nothing across two.
+     */
+    bandComparable: !!(first && last && (first as any).bandSetId === (last as any).bandSetId),
+    bandMoved: !!(first && last && first.bandName !== last.bandName
+      && (first as any).bandSetId === (last as any).bandSetId),
+    /** True when the ladder itself changed over the window — a different fact, said differently. */
+    bandSetChanged: !!(first && last && (first as any).bandSetId !== (last as any).bandSetId),
   };
 }
 

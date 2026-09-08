@@ -512,7 +512,21 @@ app.put("/api/workforce/:companyId/scheme", requireAuth, requireStaff, requireWr
       action: setId ? "workforce.scheme_assigned" : "workforce.scheme_cleared",
       actorId: a?.sub, target: co.name, detail: name, ip: clientIp(req),
     });
-    res.json(await workforceFor(companyId));
+
+    const after = await workforceFor(companyId);
+    // TODAY'S SNAPSHOT IS NOW STALE. It was written under the old ladder, and the card draws its
+    // trend from snapshots while showing the live band beside it — so until the next hourly tick the
+    // panel contradicts itself: "Platinum" in the pill, "moved to none" underneath. Re-stamped here
+    // rather than left for the scheduler, because the person who just made the change is looking at
+    // the screen now.
+    if (after) {
+      const day = new Date().toISOString().slice(0, 10);
+      await prisma.workforceSnapshot.updateMany({
+        where: { companyId, day },
+        data: { bandName: after.computedBand?.name ?? null, bandSetId: after.bandSet?.id ?? null },
+      }).catch(() => { /* no snapshot for today yet — the tick will write it correctly */ });
+    }
+    res.json(after);
   } catch (e: any) {
     res.status(400).json({ error: String(e?.message ?? e) });
   }

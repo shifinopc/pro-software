@@ -19159,10 +19159,18 @@ class Component extends DCLogic {
           clDetailApi.wfTrendColor = h9.direction === 'up' ? '#0E9355' : h9.direction === 'down' ? '#C0353A' : '#8C8899';
           clDetailApi.wfTrendFirstLabel = String(pts9[0].day) + ' · ' + (pts9[0].ratioMinBp / 100).toFixed(0) + '%';
           clDetailApi.wfTrendLastLabel = String(pts9[pts9.length - 1].day) + ' · ' + (vals9[vals9.length - 1] / 100).toFixed(0) + '%';
-          clDetailApi.wfTrendBandMoved = !!h9.bandMoved;
-          clDetailApi.wfTrendBandNote = h9.bandMoved
-            ? ('Band moved from ' + (h9.bandFrom || 'none') + ' to ' + (h9.bandTo || 'none') + ' over this period.')
-            : '';
+          // TWO DIFFERENT FACTS, AND ONLY ONE OF THEM IS ALARMING.
+          //
+          // "Band moved from Platinum to none" appeared on a client sitting at Platinum in the pill
+          // directly above it — because the band name at each end of the window came from a DIFFERENT
+          // ladder, and comparing them said the workforce had fallen out of its band when all that
+          // changed was which published thresholds it is measured against.
+          clDetailApi.wfTrendBandMoved = !!(h9.bandMoved || h9.bandSetChanged);
+          clDetailApi.wfTrendBandNote = h9.bandSetChanged
+            ? 'These bands were changed during this period, so the earlier readings were taken against different thresholds. The ratio above is the part that is comparable.'
+            : (h9.bandMoved
+              ? ('Band moved from ' + (h9.bandFrom || 'none') + ' to ' + (h9.bandTo || 'none') + ' over this period.')
+              : '');
         }
       })();
       // The portal reading only earns space when there IS one. Two columns saying "not recorded"

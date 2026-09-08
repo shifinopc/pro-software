@@ -1017,9 +1017,16 @@ model WorkforceSnapshot {
   ratioMinBp Int
   ratioMaxBp Int
   certain    Boolean @default(true)
-  /// The band the thresholds gave THAT DAY, by name. Null where the country had no bands set up or
-  /// the client had nobody on the books — both are real states and neither is a zero.
+  /// The band the thresholds gave THAT DAY, by name. Null where the client was on no ladder or had
+  /// nobody on the books — both are real states and neither is a zero.
   bandName   String?
+  /// WHICH LADDER produced that name.
+  ///
+  /// Without it, "Platinum" in August and "(none)" in September read as a client that fell out of
+  /// its band, when what actually happened is that somebody changed which published thresholds it is
+  /// measured against. The same lesson as the nightly check: a band name is only comparable to
+  /// another band name from the SAME ladder, so the trend has to know when it is looking at two.
+  bandSetId  String?
   createdAt  String?
 
   @@unique([companyId, day])
