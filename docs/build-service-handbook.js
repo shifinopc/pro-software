@@ -14,6 +14,7 @@ const {
 } = require('docx');
 
 const M = JSON.parse(fs.readFileSync('app-model.json', 'utf8'));
+const PLANNED = require('./planned.js');
 
 const PURPLE = '5B21B6';
 const INK = '26074D';
@@ -153,7 +154,9 @@ const kids = [];
 // Cover
 kids.push(new Paragraph({ spacing: { before: 2600, after: 0 }, children: [new TextRun({ text: 'STIMES PRO', bold: true, size: 64, color: PURPLE, font: 'Calibri' })] }));
 kids.push(P('Service Handbook', { size: 40, color: INK, after: 260 }));
-kids.push(P('Every PRO service configured in the system: what happens at each step, who does it, what is collected, and what comes out at the end.', { size: 22, color: GREY, after: 500 }));
+kids.push(P('Every PRO service — running and planned. What happens at each step, who does it, what is collected, and what comes out at the end.', { size: 22, color: GREY, after: 340 }));
+kids.push(P('Part One — the services running today, read directly from the system.', { size: 19, color: GREY, after: 60 }));
+kids.push(P('Part Two — the services designed and ready to configure, in the same detail.', { size: 19, color: GREY, after: 420 }));
 kids.push(P('Kingdom of Saudi Arabia', { size: 20, color: INK, bold: true, after: 40 }));
 kids.push(P('Issued ' + new Date().toISOString().slice(0, 10), { size: 20, color: GREY, after: 40 }));
 kids.push(new Paragraph({ children: [new PageBreak()] }));
@@ -184,8 +187,102 @@ kids.push(new Table({
 kids.push(P('', { after: 240 }));
 kids.push(P('Nothing in this handbook is a description of intent. Every step, owner, target, list and document below is read directly from the configured system.', { size: 18, italics: true, color: GREY }));
 
-// Services
-M.templates.forEach((t, i) => serviceSection(t, false).forEach(k => kids.push(k)));
+// ── Part One ──────────────────────────────────────────────────────────────────────────────────
+kids.push(H('Part One — Services running today', HeadingLevel.HEADING_1, { pageBreak: true, size: 34 }));
+kids.push(P('These two services are configured and running. Everything on the following pages is read directly from the system.', { size: 21, color: GREY, after: 200 }));
+M.templates.forEach(t => serviceSection(t, false).forEach(k => kids.push(k)));
+
+// ── Part Two ──────────────────────────────────────────────────────────────────────────────────
+// A client reading one handbook must never be left guessing which half is real. The divider says it,
+// every service repeats it in its own status line, and nothing in Part Two is written in the present
+// tense as though it already worked.
+kids.push(H('Part Two — Services designed, not yet configured', HeadingLevel.HEADING_1, { pageBreak: true, size: 34 }));
+kids.push(P('The services below are designed and costed but NOT yet running. They are written here in the same terms as Part One — step, owner, target time, checklist, information recorded, document issued — because that is exactly what each one becomes: a configuration job on the engine that is already live, not a new piece of software.', { size: 21, color: GREY, after: 160 }));
+kids.push(P('Each service names what must exist before it can be switched on. Three of them need work on the engine itself and are marked; the rest are configuration only.', { size: 21, color: GREY, after: 240 }));
+
+const byGroup = {};
+for (const svc of PLANNED) (byGroup[svc.group] = byGroup[svc.group] || []).push(svc);
+
+// A summary table first: the whole plan on one page, before twenty pages of detail.
+const sw = [3500, 2000, 1800, 2600];
+const sRows = [new TableRow({
+  tableHeader: true,
+  children: ['Service', 'Authority', 'Steps', 'Status'].map((l, i) =>
+    cell([txt(l, { bold: true, size: 16, color: 'FFFFFF' })], { width: sw[i], fill: PURPLE })),
+})];
+let sn = 0;
+for (const g of Object.keys(byGroup)) {
+  sRows.push(new TableRow({
+    children: [cell([txt(g, { bold: true, size: 17, color: PURPLE })], { width: 9900, span: 4, fill: 'EFE9FB' })],
+  }));
+  for (const svc of byGroup[g]) {
+    sn++;
+    const fill = sn % 2 ? undefined : LIGHT;
+    sRows.push(new TableRow({
+      children: [
+        cell([txt(svc.name, { bold: true, size: 17 })], { width: sw[0], fill }),
+        cell([txt(svc.authority, { size: 16, color: GREY })], { width: sw[1], fill }),
+        cell([txt(String(svc.steps.length), { size: 16, color: GREY })], { width: sw[2], fill }),
+        cell([txt(svc.blocked ? svc.blocked : 'Configuration only', { size: 16, color: svc.blocked ? 'B8860B' : '0E9355' })], { width: sw[3], fill }),
+      ],
+    }));
+  }
+}
+kids.push(new Table({ columnWidths: sw, width: { size: 9900, type: WidthType.DXA }, rows: sRows }));
+
+// Then one page per service.
+const pw = [450, 2600, 1400, 1100, 2200, 2150];
+for (const g of Object.keys(byGroup)) {
+  for (const svc of byGroup[g]) {
+    kids.push(H(svc.name, HeadingLevel.HEADING_1, { pageBreak: true, size: 30 }));
+    kids.push(P(svc.blocked ? 'PLANNED — blocked: ' + svc.blocked : 'PLANNED — not yet configured',
+      { size: 18, bold: true, color: svc.blocked ? 'B8860B' : PURPLE, after: 160 }));
+
+    const fw2 = [2600, 7300];
+    const facts = [
+      ['How it will start', svc.trigger],
+      ['It is about', svc.entity],
+      ['Authority', svc.authority],
+      ['Steps', String(svc.steps.length)],
+      ['Needed first', svc.needs.join('  ·  ')],
+    ];
+    kids.push(new Table({
+      columnWidths: fw2, width: { size: 9900, type: WidthType.DXA },
+      rows: facts.map(([k, v]) => new TableRow({
+        children: [
+          cell([txt(k, { bold: true, size: 17, color: GREY })], { width: fw2[0], fill: LIGHT }),
+          cell([txt(v, { size: 17 })], { width: fw2[1] }),
+        ],
+      })),
+    }));
+    if (svc.note) {
+      kids.push(P('', { after: 120 }));
+      kids.push(P(svc.note, { size: 18, italics: true, color: GREY, after: 160 }));
+    } else kids.push(P('', { after: 200 }));
+
+    const rows = [new TableRow({
+      tableHeader: true,
+      children: ['#', 'Step', 'Who does it', 'Target', 'Documents collected', 'Information recorded'].map((l, i) =>
+        cell([txt(l, { bold: true, size: 16, color: 'FFFFFF' })], { width: pw[i], fill: PURPLE })),
+    })];
+    svc.steps.forEach((st, i) => {
+      const fill = (i + 1) % 2 ? undefined : LIGHT;
+      const stepCell = [txt(st.label, { bold: true, size: 17 })];
+      if (st.issues) stepCell.push(txt('Issues: ' + st.issues, { size: 15, color: '0E9355', after: 0 }));
+      rows.push(new TableRow({
+        children: [
+          cell([txt(String(i + 1), { size: 16, color: GREY })], { width: pw[0], fill }),
+          cell(stepCell, { width: pw[1], fill }),
+          cell([txt(st.owner, { size: 16 })], { width: pw[2], fill }),
+          cell([txt(st.target, { size: 16, color: GREY })], { width: pw[3], fill }),
+          cell(lines(st.collects, { dash: true }), { width: pw[4], fill }),
+          cell(lines(st.records, { dash: true }), { width: pw[5], fill }),
+        ],
+      }));
+    });
+    kids.push(new Table({ columnWidths: pw, width: { size: 9900, type: WidthType.DXA }, rows }));
+  }
+}
 
 // ── Appendix: documents ───────────────────────────────────────────────────────────────────────
 kids.push(H('Appendix A — Documents the system tracks', HeadingLevel.HEADING_1, { pageBreak: true, size: 32 }));
@@ -244,8 +341,8 @@ kids.push(new Table({
   })),
 }));
 
-kids.push(H('Adding further services', HeadingLevel.HEADING_2, { before: 400, size: 24 }));
-kids.push(P('The two services in this handbook are the ones configured today. Every other PRO service — Commercial Registration renewal, Iqama renewal, profession change, GOSI registration, VAT filing and the rest — is added the same way: as a configured sequence of steps on the same engine, with its own owners, targets, checklists and documents. No part of the application is rebuilt to add one, and each new service appears in this handbook in exactly the form above.', { size: 20, after: 160 }));
+kids.push(H('How this handbook stays true', HeadingLevel.HEADING_2, { before: 400, size: 24 }));
+kids.push(P('Part One is generated from the running system rather than typed, so it cannot drift from what the software actually does. As each service in Part Two is configured, it moves into Part One in the same form — same columns, same detail — and the handbook is re-issued from the system as it then stands.', { size: 20, after: 160 }));
 
 const doc = new Document({
   creator: 'STIMES PRO',
