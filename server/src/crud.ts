@@ -119,6 +119,34 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
     // Any deal at all means somebody is on it, so it cannot be idle — see idleDaysOf.
     prisma.opportunity.groupBy({ by: ["companyId"], where: { companyId: { in: ids } }, _count: { _all: true } }),
   ]);
+  // WHO HANDLES EACH CLIENT, resolved once for the whole list.
+  //
+  // `roleOwners` holds ids, and an id on a list screen is no use to anybody. One query over every id
+  // named across every row keeps this flat in the number of companies, like everything else here.
+  //
+  // A pointer at somebody who has left, been deactivated or changed team is reported as STALE rather
+  // than as a name: the engine ignores such a pointer and falls back to the load balancer, so showing
+  // the name would tell the reader work is going somewhere it is not.
+  const wantedIds = new Set<string>();
+  for (const r of rows) {
+    const m: any = (r?.roleOwners && typeof r.roleOwners === "object") ? r.roleOwners : {};
+    for (const v of Object.values(m)) { const id = String(v ?? "").trim(); if (id) wantedIds.add(id); }
+  }
+  const owners = wantedIds.size
+    ? await prisma.user.findMany({ where: { id: { in: [...wantedIds] } }, select: { id: true, name: true, roleId: true, status: true, type: true } })
+    : [];
+  const ownerById = new Map(owners.map(u => [u.id, u]));
+  const teamOf = (r: any) => {
+    const m: any = (r?.roleOwners && typeof r.roleOwners === "object") ? r.roleOwners : {};
+    const out: Record<string, { name: string; ok: boolean }> = {};
+    for (const [role, v] of Object.entries(m)) {
+      const u = ownerById.get(String(v ?? "").trim());
+      if (!u) continue;
+      out[role] = { name: u.name, ok: u.status === "active" && u.type === "staff" && u.roleId === role };
+    }
+    return out;
+  };
+
   const arrivedBy = new Map(arrivals.map(a => [a.companyId, a._min.changedAt]));
   const contactedBy = new Map(contacts.map(c => [c.companyId, c._max.at]));
   const dealsBy = new Map(deals.map(d => [d.companyId, d._count._all]));
@@ -145,6 +173,8 @@ export async function withLiveCounts(rows: any[]): Promise<any[]> {
   }
   return rows.map(r => ({
     ...r,
+    /** Who handles this client, per role, with the name already resolved. */
+    team: teamOf(r),
     employees: empBy.get(r.id) ?? 0,
     overdue: ovd.get(r.id) ?? 0,
     expiring: exp.get(r.id) ?? 0,

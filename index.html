@@ -1830,13 +1830,18 @@
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .12s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
             <div style="overflow-x:auto;"><div style="min-width:900px;">
-              <div style="display:grid; grid-template-columns:2fr 1fr 74px 132px 128px 108px 82px 84px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
-                <span>Client</span><span>Industry</span><span>Staff</span><span>Workforce</span><span>Doc health</span><span>Status</span><span>Requests</span><span></span>
+              <div style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+                <span>Client</span><span>Industry</span><span>PRO officer</span><span>Staff</span><span>Workforce</span><span>Doc health</span><span>Status</span><span>Requests</span><span></span>
               </div>
               <sc-for list="{{ clients }}" as="c" hint-placeholder-count="6">
-                <div onClick="{{ c.open }}" style="display:grid; grid-template-columns:2fr 1fr 74px 132px 128px 108px 82px 84px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer;" style-hover="background:#FAF7FE;">
+                <div onClick="{{ c.open }}" style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer;" style-hover="background:#FAF7FE;">
                   <div style="display:flex; align-items:center; gap:11px; min-width:0;"><div style="width:34px; height:34px; border-radius:10px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</div><div style="min-width:0;"><div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</div><div style="font-size:10.5px; color:#A9A6B4;">CR {{ c.cr }} · {{ c.city }}</div></div></div>
                   <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.industry }}</span>
+                  <!-- WHO HANDLES THIS CLIENT. Named on the client, and worth a column: it is the one
+                       thing on this screen an officer scans for to find their own work, and it was
+                       only visible by opening each client in turn. A blank is not a gap — it means
+                       the work goes to whoever is free, which is a perfectly good answer. -->
+                  <span title="{{ c.proTitle }}" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ c.proColor }}; font-weight:{{ c.proWeight }};">{{ c.pro }}</span>
                   <span style="font-weight:700;">{{ c.employees }}</span>
                   <!-- The nationalisation band, per client, at a glance. It was reachable only by
                        opening each client in turn, which is no use for spotting the one that slipped. -->
@@ -18769,7 +18774,10 @@ class Component extends DCLogic {
           // away. Both are resolved from data already loaded.
           capStatus(c.status), (c.group && c.group.name) || '—',
           _repOf(c), _pkgOf(c),
-          _staffOf(c), c.overdue || 0, c.expiring || 0, false, c.id, c.ownerId || null])
+          _staffOf(c), c.overdue || 0, c.expiring || 0, false, c.id, c.ownerId || null,
+          // Resolved by the server, so the list does not have to hold every staff account to read
+          // one name off a row.
+          (c.team && c.team.pro_officer) || null])
       : (coData ? [] : [
         ['Falcon Technologies LLC', 'CN-1109842', 'Technology', 'Dubai', 'Ahmed Al Mazrouei', 'accounts@falcontech.ae', '+971 50 224 8190', 'Active', 'Falcon Group', 'Aisha', 'Enterprise', 42, 2, 3, true, null, null],
         ['Falcon Trading LLC', 'CN-2048871', 'Trading', 'Abu Dhabi', 'Rania Haddad', 'ops@falcontrading.ae', '+971 55 771 3320', 'Active', 'Falcon Group', 'Rashid', 'Business Plus', 18, 1, 2, true, null, null],
@@ -18779,13 +18787,23 @@ class Component extends DCLogic {
     const clSearch = (this.state.clSearch || '').toLowerCase();
     const clArchived = this.state.clArchivedMap || {};
     const allClients = [...(this.state.createdClients || []), ...clDefs].map((c, i) => {
-      const [name, cr, industry, city, contact, email, phone, status, group, salesRep, pkg, employees, overdue, expiring, unread, realId, ownerId] = c;
+      const [name, cr, industry, city, contact, email, phone, status, group, salesRep, pkg, employees, overdue, expiring, unread, realId, ownerId, proOfficer] = c;
       const t = clStatusTone[status];
       return {
         idx: i, realId: realId || null, name, cr, industry, city, contact, email, phone, status, group, salesRep, pkg, employees, overdue, expiring,
         // The owner id, so the detail panel can show and change it. Everything else on this row is
         // a rendered string; this one has to stay an id, because it is what gets written back.
         ownerId: ownerId || null,
+        // A named officer who has LEFT or changed team is ignored by the engine — their work is back
+        // with the balancer — so printing the name would say something untrue. Called out instead.
+        pro: proOfficer ? (proOfficer.ok ? proOfficer.name : proOfficer.name) : 'Whoever is free',
+        proColor: proOfficer ? (proOfficer.ok ? '#4B4757' : '#B8860B') : '#A9A6B4',
+        proWeight: proOfficer && proOfficer.ok ? '600' : '400',
+        proTitle: proOfficer
+          ? (proOfficer.ok
+              ? proOfficer.name + ' handles this client\u2019s PRO work.'
+              : proOfficer.name + ' is named here but is no longer an active PRO officer, so this client\u2019s work goes to whoever is free. Pick somebody else on the client.')
+          : 'Nobody named. PRO work for this client goes to whoever on the team is carrying least.',
         // Nationalisation band for the list. Read from the SERVER-computed workforce figures, the
         // same object the client card uses — a second calculation here would be a second opinion
         // about a compliance position, and the two would disagree the first time either changed.
