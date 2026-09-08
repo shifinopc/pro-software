@@ -3837,6 +3837,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   const nextExpiry = keep(b.iqamaExpiry, emp.iqamaExpiry, str);
   const nextDob = keep(b.dob, emp.dob, str);
   const nextNat = keep(b.nationality, emp.nationality, str);
+  const nextGender = keep(b.gender, emp.gender, str);
   const nextType = keep(b.employmentType, emp.employmentType, str);
   const nextCat = keep(b.jobCategory, emp.jobCategory, str);
   // Minor units, like every other money value here — a salary held as a float is the rounding bug
@@ -3863,6 +3864,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   note("Iqama expiry", emp.iqamaExpiry, nextExpiry);
   note("date of birth", emp.dob, nextDob);
   note("nationality", emp.nationality, nextNat);
+  note("gender", emp.gender, nextGender);
   note("salary", emp.salary, nextSalary);
   note("employment type", emp.employmentType, nextType);
   note("job category", emp.jobCategory, nextCat);
@@ -3877,7 +3879,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
     where: { id: emp.id },
     data: {
       name: nextName, role: nextRole, iqamaExpiry: nextExpiry,
-      dob: nextDob, nationality: nextNat, salary: nextSalary,
+      dob: nextDob, nationality: nextNat, gender: nextGender, salary: nextSalary,
       employmentType: nextType, jobCategory: nextCat, customData: nextCustom, countingTraits: nextTraits,
       history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
         { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],

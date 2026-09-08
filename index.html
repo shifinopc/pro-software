@@ -8593,6 +8593,20 @@
                 </div>
                 <div class="fm-hint">Counts toward the client's nationalisation ratio.</div>
               </div>
+              <div>
+                <label class="fm-lab">Gender</label>
+                <div class="fm-selwrap">
+                  <div data-dd data-open="{{ ddeeGenderOpen }}" onClick="{{ ddeeGenderToggle }}" class="fm-inp fm-sel"><span style="color:{{ eeGenderColor }};">{{ ddeeGenderVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                  <sc-if value="{{ ddeeGenderOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="fm-dd">
+                      <sc-for list="{{ ddeeGenderOptions }}" as="o" hint-placeholder-count="3">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <div class="fm-hint">Recorded by the government portals. Only used by a counting rule that names it.</div>
+              </div>
             </div>
             <!-- COUNTED FOR MORE THAN ONE.
                  Not a hard-coded "has a disability" box: these are generated from the counting rules
@@ -9003,6 +9017,20 @@
                   </sc-if>
                 </div>
                 <div class="fm-hint">Counts toward the client's nationalisation ratio.</div>
+              </div>
+              <div>
+                <label class="fm-lab">Gender</label>
+                <div class="fm-selwrap">
+                  <div data-dd data-open="{{ ddeGenderOpen }}" onClick="{{ ddeGenderToggle }}" class="fm-inp fm-sel"><span style="color:{{ eGenderColor }};">{{ ddeGenderVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                  <sc-if value="{{ ddeGenderOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="fm-dd">
+                      <sc-for list="{{ ddeGenderOptions }}" as="o" hint-placeholder-count="3">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <div class="fm-hint">Recorded by the government portals. Only used by a counting rule that names it.</div>
               </div>
             </div>
             <!-- COUNTED FOR MORE THAN ONE.
@@ -11710,7 +11738,7 @@
               <div style="font-size:12.5px; font-weight:700; color:#26074D;">How people are counted</div>
               <span onClick="{{ wbAddCount }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">+ Add a rule</span>
             </div>
-            <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-top:4px;">Leave empty and everybody counts as one. A rule adds a tick box to the employee form for the people it applies to.</div>
+            <div style="font-size:11px; color:#A9A6B4; line-height:1.55; margin-top:4px;">Leave empty and everybody counts as one. Most rules add a tick box to the employee form for the people they apply to; some read a detail the record already holds.</div>
 
             <sc-for list="{{ wbCountRows }}" as="c" hint-placeholder-count="2">
               <div style="margin-top:11px; border:1px solid #EDEBF2; border-radius:13px; padding:12px 14px;">
@@ -17759,7 +17787,7 @@ class Component extends DCLogic {
           // so sending them all is what makes clearing a value possible at all.
           body: JSON.stringify({
             name: st9.eeName, role: st9.eeRole, iqamaExpiry: st9.eeExpiry,
-            dob: st9.eeDob || null, nationality: st9.eeNat || null,
+            dob: st9.eeDob || null, nationality: st9.eeNat || null, gender: st9.eeGender || null,
             // Typed in whole currency, stored in minor units — the same rule as everywhere else.
             salary: String(st9.eeSalary || '').trim() ? Math.round(parseFloat(st9.eeSalary) * 100) : null,
             employmentType: st9.eeType || null, jobCategory: st9.eeCat || null,
@@ -18146,6 +18174,8 @@ class Component extends DCLogic {
       return hit9 ? (hit9.nationality + ' · ' + hit9.name) : (code9 ? String(code9) : 'Select a nationality');
     };
     const _eNatLabel = _labelFromCode(this.state.eNat);
+    const _GENDER_VAL = { 'Not recorded': '', 'Male': 'male', 'Female': 'female' };
+    const _GENDER_LABEL = { male: 'Male', female: 'Female' };
     const _EMP_TYPE_OPTS = ['Full time', 'Part time'];
     const _JOB_CAT_OPTS = ['Skilled', 'Unskilled'];
     const _EMP_TYPE_VAL = { 'Full time': 'full_time', 'Part time': 'part_time' };
@@ -18159,6 +18189,9 @@ class Component extends DCLogic {
       showEmpModal: this.state.empModal, eDocRows,
       // The SAME option sources Add uses — the country list from the API, the departments master,
       // and the two literal lists — so the choices cannot differ between adding and correcting.
+      ...mkDd('ddEeGender', ['Not recorded', 'Male', 'Female'], _GENDER_LABEL[this.state.eeGender] || 'Not recorded', (v9) => this.setState({ eeGender: _GENDER_VAL[v9] || '' })),
+      ddEeGenderVal: _GENDER_LABEL[this.state.eeGender] || 'Not recorded',
+      eeGenderColor: this.state.eeGender ? '#26074D' : '#A9A6B4',
       ...mkDd('ddEeNat', _countryLabels, _labelFromCode(this.state.eeNat), (v9) => this.setState({ eeNat: _codeFromLabel(v9) })),
       ddEeNatVal: this.state.eeNat ? _labelFromCode(this.state.eeNat) : 'Select a nationality',
       ...(() => {
@@ -18341,12 +18374,17 @@ class Component extends DCLogic {
       setEDob: (e) => this.setState({ eDob: e.target.value }),
       setENat: (e) => this.setState({ eNat: e.target.value }),
       // From the all-Employees screen: no client is implied, so the picker is shown and starts empty.
-      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eDob: '', eNat: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
+      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
       // Nationality is a code now, chosen from the server's list rather than typed. A text box with
       // the placeholder "e.g. Saudi" invites four spellings of one country, and a headcount that
       // misses a spelling under-reports — which is the direction that gets a client in trouble.
       ...mkDd('ddENat', _countryLabels, _eNatLabel, (v9) => this.setState({ eNat: _codeFromLabel(v9) })),
       ddENatVal: _eNatLabel,
+      // Stored lowercase so a rule can be written { gender: "female" } and match without anybody
+      // having to know how the picker happened to capitalise it.
+      ...mkDd('ddEGender', ['Not recorded', 'Male', 'Female'], _GENDER_LABEL[this.state.eGender] || 'Not recorded', (v9) => this.setState({ eGender: _GENDER_VAL[v9] || '' })),
+      ddEGenderVal: _GENDER_LABEL[this.state.eGender] || 'Not recorded',
+      eGenderColor: this.state.eGender ? '#26074D' : '#A9A6B4',
       // Facts a workforce-quota calculation needs. Optional: a percentage computed from partial data
       // has to say how much it could see, not quietly assume the rest.
       eSalary: this.state.eSalary || '',
@@ -18434,6 +18472,7 @@ class Component extends DCLogic {
             // Columns, not customData: a prerequisite reads these, and a fact with two homes is a
             // check that passes on the empty one.
             dob: (st.eDob || '').trim() || null, nationality: (st.eNat || '').trim() || null,
+            gender: (st.eGender || '').trim() || null,
             // The employee inherits the client's country unless someone says otherwise — an employee
             // counts toward one country's workforce, not every country the group operates in.
             workCountry: co9.country || null,
@@ -19724,7 +19763,7 @@ class Component extends DCLogic {
               eeTraits: Array.isArray(e9.countingTraits) ? e9.countingTraits : [],
               eeName: e9.name || '', eeRole: e9.role || '',
               eeExpiry: d9(e9.iqamaExpiry), eeDob: d9(e9.dob), eeJoin: d9(cd9.joinDate),
-              eeNat: e9.nationality || '',
+              eeNat: e9.nationality || '', eeGender: e9.gender || '',
               eeDept: cd9.department || '',
               eeQuota: String(cd9.visaQuota || 1),
               // Stored in minor units; shown as whole currency, the way it was typed in.
@@ -23181,7 +23220,12 @@ class Component extends DCLogic {
               if (!c9.label.trim() || !Number.isFinite(n9)) return 'Give it a name and a multiplier, and this will say what it does.';
               const who9 = c9.who === 'national' ? 'A national' : c9.who === 'expat' ? 'An expatriate' : 'Anyone';
               const as9 = n9 === 0.5 ? 'half a person' : (n9 === 1 ? 'one person' : n9 + ' people');
-              return who9 + ' ticked "' + c9.label.trim() + '" counts as ' + as9
+              // A rule with `from` reads a column the record already holds — no tick box exists for
+              // it, so saying "ticked" describes a control nobody will find.
+              const how9 = c9.from
+                ? ' whose ' + String(c9.from).split('=')[0].replace(/([A-Z])/g, ' $1').toLowerCase().trim() + ' is ' + String(c9.from).split('=')[1]
+                : ' ticked "' + c9.label.trim() + '"';
+              return who9 + how9 + ' counts as ' + as9
                 + (c9.scope === 'both' ? ' in the ratio and in the workforce total.' : ' in the ratio, and as one body in the workforce total.');
             })(),
           })),
