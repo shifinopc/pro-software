@@ -14895,7 +14895,7 @@ class Component extends DCLogic {
         .then(({ ok, j }) => {
           if (!ok) return this.toast((j && j.error) || 'Could not retire that document', 'error');
           this.toast((docType || 'Document') + ' retired — the newer one is now the live record');
-          this._opReload('documents', 'documentsData');
+          this._afterDocumentChange();
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
@@ -15413,6 +15413,22 @@ class Component extends DCLogic {
       this._opReload && this._opReload('employees', 'employeesData');
       this._opReload && this._opReload('companies', 'companiesData');
       this._loadWorkforce && this._loadWorkforce();
+    };
+    /**
+     * Everything that goes stale when a document changes.
+     *
+     * The document LIST is held in the browser, but a client's DOC HEALTH — overdue, expiring,
+     * tracked, undated — is computed on the SERVER and arrives on the company row, because a stored
+     * counter drifts the moment a document expires. Five different mutations reloaded the list and
+     * left that count exactly as it was: "6 overdue" on the card, and on the Clients list behind it,
+     * next to the document that had just been renewed.
+     *
+     * Invoices need no equivalent — every figure derived from them is computed in the browser from
+     * the same array, so reloading it refreshes all of them.
+     */
+    this._afterDocumentChange = () => {
+      this._opReload && this._opReload('documents', 'documentsData');
+      this._opReload && this._opReload('companies', 'companiesData');
     };
     this._opReload = (pathE, key, after) => {
       const t2 = localStorage.getItem('stimespro:token');
@@ -18518,7 +18534,7 @@ class Component extends DCLogic {
               // A new hire moves the ratio further than an edit does, and this refreshed the list of
               // people and nothing else.
               this._afterWorkforceChange();
-              if (savedN9) this._opReload && this._opReload('documents', 'documentsData');
+              if (savedN9) this._afterDocumentChange();
               if (docs9.length && savedN9 < docs9.length) {
                 this.toast('Employee added, but ' + (docs9.length - savedN9) + ' of ' + docs9.length + ' document(s) could not be saved — add them in Compliance', 'error');
               } else {
@@ -20378,7 +20394,7 @@ class Component extends DCLogic {
           if (filePath) body.customData = { file: filePath };
           fetch(API + '/api/documents', { method: 'POST', headers: H8, body: JSON.stringify(body) })
             .then(r => { if (r.status === 401) { this.toast('Sign in first', 'error'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
-            .then(v => { if (!v) return; this.setState({ udModal: false, udFile: '', udFileObj: null }); this.toast('Document uploaded to ' + _udCo.name); this._opReload && this._opReload('documents', 'documentsData'); })
+            .then(v => { if (!v) return; this.setState({ udModal: false, udFile: '', udFileObj: null }); this.toast('Document uploaded to ' + _udCo.name); this._afterDocumentChange(); })
             .catch(e => this.setState({ udError: String(e.message || 'Could not upload') }));
         };
         const fileObj = st.udFileObj;
@@ -22154,7 +22170,7 @@ class Component extends DCLogic {
             ? 'Renewal parked on ' + prereqType10 + ' — Phase-1 prerequisite task created'
             : 'Renewal started' + (rt10.ok ? (wfTpl10 ? ' — ' + wfTpl10.name + ' running' : ' — task created') : (wfTpl10 ? ' (workflow could not be started)' : ' (task could not be created)')));
           if (wfTpl10) this._reloadMyWork && this._reloadMyWork();
-          this._opReload && this._opReload('documents', 'documentsData');
+          this._afterDocumentChange();
           this._reloadTasks && this._reloadTasks();
         }).catch(() => this.setState({ crErr: 'Cannot reach the server — the renewal was NOT started' }));
       };
@@ -22201,7 +22217,7 @@ class Component extends DCLogic {
             const np = { ...compProgress }; delete np[ccId];
             this.setState({ compProgress: np, compComplete: null, compRenewedOk: ccRow.doc });
             this.toast('Renewal completed & archived');
-            this._opReload && this._opReload('documents', 'documentsData');
+            this._afterDocumentChange();
           })
           .catch(() => this.setState({ ccErr: 'Cannot reach the server — the renewal was NOT completed' }));
       };
@@ -22283,8 +22299,25 @@ class Component extends DCLogic {
       showAddRecord: !!this.state.addRecord,
       // Default to a REAL client (the demo name meant the save always failed the client lookup);
       // the header CLIENT filter wins when one is selected.
+      /**
+       * WHICH CLIENT THIS DOCUMENT BELONGS TO.
+       *
+       * The button sits on a client's own Documents tab AND on the firm-wide Documents screen, and it
+       * defaulted the same way for both: the Compliance filter, else the FIRST client in the list. So
+       * pressing "+ Add document" on one client's page pre-selected a different one — filing a
+       * compliance record against the wrong company unless the officer noticed a field they had no
+       * reason to re-read. Found by adding a record from Al Noor's screen and watching it land on
+       * IONOB.
+       *
+       * The client whose page you are standing on wins. It is the only one of the three that is not
+       * a guess.
+       */
       openAddRecord: () => this.setState({ addRecord: true, arDoc: '',
-        arClient: (compClientScope && compClientScope !== 'All clients') ? compClientScope : ((Array.isArray(coData) && coData.length) ? coData[0].name : ''),
+        arClient: (this.state.active === 'Clients' && this.state.clientSlug
+                   ? ((Array.isArray(coData) ? coData : []).find(c9 => _clSlug(c9.name) === this.state.clientSlug) || {}).name
+                   : null)
+          || ((compClientScope && compClientScope !== 'All clients') ? compClientScope
+              : ((Array.isArray(coData) && coData.length) ? coData[0].name : '')),
         arHolder: '', arAuthority: '', arExpiry: '', arErr: '' }),
       closeAddRecord: () => this.setState({ addRecord: false }),
       arDoc: this.state.arDoc || '', arHolder: this.state.arHolder || '', arAuthority: this.state.arAuthority || '', arExpiry: this.state.arExpiry || '', arErr: this.state.arErr || false,
@@ -22320,7 +22353,7 @@ class Component extends DCLogic {
             if (!ok) return this.setState({ arErr: (j9 && j9.error && String(j9.error).slice(0, 140)) || 'Could not save the record' });
             this.setState({ addRecord: false, arDoc: '', arHolder: '', arAuthority: '', arExpiry: '', arErr: '' });
             this.toast(type9 + ' tracked for ' + (holder9 || co9.name));
-            this._opReload('documents', 'documentsData');
+            this._afterDocumentChange();
           })
           .catch(() => this.setState({ arErr: 'Server unreachable — the record was NOT saved' }));
       },
