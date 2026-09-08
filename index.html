@@ -9537,6 +9537,15 @@
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CONTACT</div><input value="{{ ecContact }}" onChange="{{ setEcContact }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">STATUS</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcStatusToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ecStatusVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcStatusOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
         </div>
+        <!-- CR NUMBER AND CLIENT GROUP.
+             Both could be typed when the client was created and never corrected afterwards — Add
+             asked for them, Edit did not. A CR is the company's legal identity: it prints in the
+             header, it goes on documents, and a digit typed wrong on day one was permanent through
+             the console. That is not a missing convenience, it is a record nobody could put right. -->
+        <div style="display:flex; gap:12px; margin-top:14px;">
+          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER</div><input value="{{ ecCr }}" onChange="{{ setEcCr }}" placeholder="1010123456" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT GROUP</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcGroupToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ecGroupColor }};">{{ ddEcGroupVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcGroupOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcGroupOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+        </div>
         <div style="display:flex; gap:12px; margin-top:14px;">
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL</div><input value="{{ ecEmail }}" onChange="{{ setEcEmail }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
           <div style="flex:1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PHONE</div><input value="{{ ecPhone }}" onChange="{{ setEcPhone }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
@@ -19947,7 +19956,10 @@ class Component extends DCLogic {
           ...(() => {
             const raw9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
               .find(c9 => c9.id === (r.realId || '')) || {};
-            return { ecCountry: raw9.country || '', ecCity: raw9.city || '', ecIndustry: raw9.industry || '' };
+            const grp9 = (Array.isArray(this.state.groupsData) ? this.state.groupsData : [])
+              .find(g9 => g9.id === raw9.groupId);
+            return { ecCountry: raw9.country || '', ecCity: raw9.city || '', ecIndustry: raw9.industry || '',
+                     ecCr: raw9.cr || '', ecGroup: (grp9 && grp9.name) || 'None' };
           })(),
           ecErr: '',
         });
@@ -19959,6 +19971,12 @@ class Component extends DCLogic {
       setEcEmail: (e) => this.setState({ ecEmail: e.target.value }),
       setEcPhone: (e) => this.setState({ ecPhone: e.target.value }),
       setEcCity: (e) => this.setState({ ecCity: e.target.value, ecErr: '' }),
+      setEcCr: (e) => this.setState({ ecCr: e.target.value, ecErr: '' }),
+      ecCr: this.state.ecCr || '',
+      // "None" is a real answer, not an empty one — a client that belongs to no group is the norm.
+      ...mkDd('ddEcGroup', ['None', ...((Array.isArray(this.state.groupsData) ? this.state.groupsData : []).map(g => g.name))], this.state.ecGroup || 'None', (v) => this.setState({ ecGroup: v, ecErr: '' })),
+      ddEcGroupVal: this.state.ecGroup || 'None',
+      ecGroupColor: (this.state.ecGroup && this.state.ecGroup !== 'None') ? '#26074D' : '#8C8899',
       setEcIndustry: (e) => this.setState({ ecIndustry: e.target.value, ecErr: '' }),
       ecCity: this.state.ecCity || '', ecIndustry: this.state.ecIndustry || '',
       // A country is a CODE chosen from the server's list, never typed: "Saudi", "KSA" and "SA" are
@@ -19993,6 +20011,15 @@ class Component extends DCLogic {
             country: (st9.ecCountry || '').trim() || null,
             city: (st9.ecCity || '').trim() || null,
             industry: (st9.ecIndustry || '').trim() || null,
+            cr: (st9.ecCr || '').trim() || null,
+            // Sent as an id, and null clears it. The picker deals in names because that is what a
+            // person reads; the column deals in ids because two groups can be renamed to match.
+            groupId: (() => {
+              const n9 = st9.ecGroup;
+              if (!n9 || n9 === 'None') return null;
+              const g9 = (Array.isArray(this.state.groupsData) ? this.state.groupsData : []).find(x9 => x9.name === n9);
+              return g9 ? g9.id : null;
+            })(),
           }),
         })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
