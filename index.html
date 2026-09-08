@@ -14742,7 +14742,9 @@ class Component extends DCLogic {
           this.toast(stage === 'exited' ? name + ' exited — record archived'
             : stage === 'cancel' ? (wasFormer ? name + ' reinstated — renewals resume' : 'Exit cancelled — ' + name + ' stays active')
             : 'Exit in progress for ' + name);
-          this._opReload('employees', 'employeesData');
+          // An exited employee is off the books entirely — out of the headcount, out of the ratio and
+          // out of the client's staff count. Reloading only the list left the other two behind.
+          this._afterWorkforceChange();
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
@@ -15369,6 +15371,10 @@ class Component extends DCLogic {
           });
           delete (this.state.cdTeam || {})[companyId];
           this.setState({ cdTeam: { ...(this.state.cdTeam || {}) } });
+          // The PRO officer column on the Clients list is resolved onto the COMPANY row, so without
+          // this the client panel showed the new officer and the list behind it showed the old one
+          // until somebody refreshed the page.
+          this._opReload && this._opReload('companies', 'companiesData');
         })
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
@@ -15391,6 +15397,23 @@ class Component extends DCLogic {
     // `after` runs once the new rows are IN STATE. Anything that wants to open a record it has just
     // created needs that ordering: the editors read from the loaded list, so opening a row the list
     // has not seen yet gives a blank form over a record that does exist.
+    /**
+     * Everything that goes stale when the workforce changes.
+     *
+     * One employee feeds THREE separate readings: the list of people, the per-client staff and
+     * document counts on the Clients screen, and the nationalisation ratio. Each call site refreshed
+     * a different subset -- editing somebody recounted the ratio, adding somebody did not, and
+     * neither touched the client list -- so a screen could sit showing a figure the record beside it
+     * had already contradicted, and only a page refresh put it right.
+     *
+     * Named for the EVENT rather than the endpoints, so somebody adding the next mutation reaches for
+     * "the workforce changed" instead of remembering three fetches.
+     */
+    this._afterWorkforceChange = () => {
+      this._opReload && this._opReload('employees', 'employeesData');
+      this._opReload && this._opReload('companies', 'companiesData');
+      this._loadWorkforce && this._loadWorkforce();
+    };
     this._opReload = (pathE, key, after) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/' + pathE, { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
@@ -17806,10 +17829,9 @@ class Component extends DCLogic {
               this.toast((j9 && j9.unchanged && !made9) ? 'Nothing changed'
                 : ('Employee updated' + (made9 ? (' · ' + made9 + ' document' + (made9 === 1 ? '' : 's') + ' added') : '')));
               this._opReload('documents', 'documentsData');
-              this._opReload('employees', 'employeesData');
-              // Nationality and employment type feed the workforce ratio — recount rather than leave
-              // a stale percentage on screen next to the record that just changed.
-              this._loadWorkforce && this._loadWorkforce();
+              // Nationality, gender and employment type feed the workforce ratio — recount rather
+              // than leave a stale percentage on screen next to the record that just changed.
+              this._afterWorkforceChange();
             };
             if (!newDocs9.length || !emp9) return finish9(0);
             const H9 = { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) };
@@ -18493,7 +18515,9 @@ class Component extends DCLogic {
             // even when every POST had failed.
             const after9 = (savedN9) => {
               this.setState({ empModal: false, eName: '', eRole: '', eJoinDate: '', eDocs: [{ type: _eDocTypeNames[0] || 'Passport', expiry: '' }] });
-              this._opReload && this._opReload('employees', 'employeesData');
+              // A new hire moves the ratio further than an edit does, and this refreshed the list of
+              // people and nothing else.
+              this._afterWorkforceChange();
               if (savedN9) this._opReload && this._opReload('documents', 'documentsData');
               if (docs9.length && savedN9 < docs9.length) {
                 this.toast('Employee added, but ' + (docs9.length - savedN9) + ' of ' + docs9.length + ' document(s) could not be saved — add them in Compliance', 'error');
