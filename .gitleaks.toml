@@ -1,0 +1,22 @@
+# Gitleaks configuration.
+#
+# Extends the default ruleset rather than replacing it — the point of a secret scanner is the rules
+# somebody else maintains, and a config that starts from scratch quietly stops finding things.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Values that look like secrets and are not"
+
+# The CI workflow supplies a JWT_SECRET and a CRED_KEY so the API's startup checks pass in a throwaway
+# container. CRED_KEY has to be 64 hex characters to decode to 32 bytes, which is exactly what a real
+# AES-256 key looks like — so the scanner is right to flag it and right to be told these two are not
+# real. They never leave the runner and grant access to nothing.
+paths = ['''^\.github/workflows/ci\.yml$''']
+
+# The seed prints a generated password once and the docs quote the shape of one. Neither is a
+# credential; both read like one.
+regexes = [
+  '''ci-only-not-a-real-secret-value''',
+  '''00112233445566778899aabbccddeeff''',
+]
