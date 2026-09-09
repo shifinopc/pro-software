@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
+import { fail } from "./errors.js";
 import { configUsage, GUARDED } from "./configusage.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { idleDaysOf } from "./lifecycle.js";
@@ -270,7 +271,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (skip + rows.length < total) res.setHeader("X-Has-More", "true");
       res.json(redact(modelName, modelName === "company" ? await withLiveCounts(rows) : rows));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      fail(res, 500, e, `crud ${modelName}`);
     }
   });
 
@@ -280,7 +281,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (!item) return res.status(404).json({ error: "Not found" });
       res.json(redact(modelName, modelName === "company" ? (await withLiveCounts([item]))[0] : item));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      fail(res, 500, e, `crud ${modelName}`);
     }
   });
 
@@ -341,7 +342,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
       res.status(201).json(redact(modelName, created));
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      fail(res, 400, e, `crud ${modelName}`);
     }
   });
 
@@ -517,7 +518,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
       res.json(redact(modelName, updated));
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      fail(res, 400, e, `crud ${modelName}`);
     }
   });
 
@@ -531,7 +532,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       const usedBy = GUARDED.has(modelName) ? await configUsage(modelName, req.params.id) : [];
       res.json({ usedBy, canDelete: usedBy.length === 0 });
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      fail(res, 400, e, `crud ${modelName}`);
     }
   });
 
@@ -561,7 +562,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       await model.delete({ where: { id: req.params.id } });
       res.status(204).end();
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      fail(res, 400, e, `crud ${modelName}`);
     }
   });
 

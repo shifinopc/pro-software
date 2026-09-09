@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import { fail, safeError } from "./errors.js";
 import QRCode from "qrcode";
 import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
@@ -87,6 +88,27 @@ app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HST
 // Throttle auth endpoints to blunt brute-force (per IP).
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts — try again later" } });
 // Generous but bounded: a broken screen can fire several reports in a row, a bot should not.
+/**
+ * A ceiling on everything, because only login, reset, invites and intake had one — every other route
+ * could be called without limit.
+ *
+ * KEYED BY USER, falling back to IP. A whole office shares one address, so an IP-only limit either
+ * has to be set so high it stops being a limit, or it throttles a busy team as though they were one
+ * attacker. The console fires roughly fifteen requests on load, so this is set well above ordinary
+ * use: it is here to stop scraping and hammering, not to police normal work.
+ *
+ * Deliberately AFTER the tighter limiters above rather than instead of them — both apply, and the
+ * strictest wins, which is what you want on /auth/login.
+ */
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req?.auth?.sub ?? req.ip),
+  message: { error: "Too many requests — slow down and try again shortly." },
+});
+
 const reportLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many reports — try again later" } });
 const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests — try again later" } });
 /**
@@ -178,6 +200,9 @@ app.post("/api/public/enquiry", intakeByIp, intakeByKey, express.json({ limit: "
 });
 
 app.use(express.json({ limit: '6mb' })); // raised for base64 logo/file uploads
+// Mounted here so it sees every /api route, including the generic CRUD registered much further down.
+// `/api/health` is left out: a monitor polling it must never be the thing that trips the limit.
+app.use("/api", (req, res, next) => (req.path === "/health" ? next() : apiLimiter(req, res, next)));
 
 // ── Public ──
 // Opening the API's own port in a browser is a thing people do when something is not working, and
@@ -253,7 +278,7 @@ app.get("/api/packs/export", requireAuth, requireStaff, requireReadRole("super_a
       },
     });
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 app.get("/api/packs/installed", requireAuth, requireStaff, async (_req, res) => {
@@ -344,7 +369,7 @@ app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req,
     });
     res.json({ companyId: co.id, roles: out });
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -399,7 +424,7 @@ app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requi
     });
     res.json({ ok: true, role, ownerId: userId || null, ownerName: name, openTasks: open.length, moved });
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -447,7 +472,7 @@ app.put("/api/workforce/:companyId/band", requireAuth, requireStaff, requireWrit
     });
     res.json(out);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -468,7 +493,7 @@ app.put("/api/workforce-band-sets/:id/default", requireAuth, requireStaff, requi
     await logAudit({ action: "workforce.scheme_default", actorId: (req as any).auth?.sub, target: set.name, detail: set.country, ip: clientIp(req) });
     res.json({ ok: true });
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -528,7 +553,7 @@ app.put("/api/workforce/:companyId/scheme", requireAuth, requireStaff, requireWr
     }
     res.json(after);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -546,7 +571,7 @@ app.post("/api/packs/upload", requireAuth, requireStaff, requireReadRole("super_
     logActivity({ type: "system", message: `Country pack available: ${out.country} ${out.version}`, user: a?.email });
     res.json(out);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -588,13 +613,13 @@ app.post("/api/packs/upgrade", requireAuth, requireStaff, requireReadRole("super
     logActivity({ type: "system", message: `Country pack upgraded: ${pack.countryName} → ${pack.version} — ${detail}`, user: a?.email });
     res.json(out);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 // Uninstall preview — read-only, and the same planner the uninstall runs.
 app.post("/api/packs/uninstall-preview", requireAuth, requireStaff, async (req, res) => {
   try { res.json(await planUninstall(String(req.body?.country ?? ""))); }
-  catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+  catch (e: any) { fail(res, 400, e, req.path); }
 });
 // The only route here that deletes anything. Admin-only on top of the write role: removing a market's
 // configuration is not an everyday change, and the plan has to be seen before it runs.
@@ -610,7 +635,7 @@ app.post("/api/packs/uninstall", requireAuth, requireStaff, requireReadRole("sup
     logActivity({ type: "system", message: `Country pack uninstalled: ${country} — ${out.removed} removed, ${out.retired} retired`, user: a?.email });
     res.json(out);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -628,7 +653,7 @@ app.post("/api/packs/install", requireAuth, requireStaff, requireWriteRole, requ
     logActivity({ type: "system", message: `Country pack installed: ${pack.countryName} ${pack.version}`, user: a?.email });
     res.json(out);
   } catch (e: any) {
-    res.status(400).json({ error: String(e?.message ?? e) });
+    fail(res, 400, e, req.path);
   }
 });
 
@@ -2066,7 +2091,7 @@ app.get("/api/activities", requireAuth, requireStaff, requireReadRole("super_adm
     ]);
     res.json({ rows, counts, since, days, includeAuto, autoCount, scope: scoped ? "own" : "firm" });
   } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+    fail(res, 500, e, req.path);
   }
 });
 
@@ -2118,7 +2143,7 @@ app.get("/api/crm-dashboard", requireAuth, requireStaff, requireReadRole("super_
       : vis.ids;
     res.json(await crmDashboard({ companyIds: scoped, ownerIds, target, month: period }));
   } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+    fail(res, 500, e, req.path);
   }
 });
 
@@ -2138,7 +2163,7 @@ app.get("/api/stage-analytics", requireAuth, requireStaff, requireReadRole("supe
     ]);
     res.json({ ...stages, lifecycle, campaigns });
   } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+    fail(res, 500, e, req.path);
   }
 });
 
@@ -3457,7 +3482,7 @@ app.get("/api/companies/:id/assignments", requireAuth, requireStaff, requireRead
   try {
     res.json(await assignmentHistory(req.params.id));
   } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+    fail(res, 500, e, req.path);
   }
 });
 
@@ -3957,7 +3982,7 @@ app.post("/api/prereq-check", requireAuth, requireStaff, async (req, res) => {
       person: employeeId ? (await prisma.employee.findUnique({ where: { id: String(employeeId) }, select: { name: true } }))?.name ?? "" : "",
     };
     res.json({ unmet: await unmetPrereqs(dt, subject) });
-  } catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+  } catch (e: any) { fail(res, 400, e, req.path); }
 });
 
 /**
@@ -3991,7 +4016,7 @@ app.get("/api/service-requests/:id/accept-preview", requireAuth, requireStaff, a
     const svcId = req.query.serviceItemId ? String(req.query.serviceItemId) : null;
     res.json(await previewAcceptServiceRequest(req.params.id, svcId));
   } catch (e: any) {
-    res.status(404).json({ error: String(e?.message ?? e) });
+    fail(res, 404, e, req.path);
   }
 });
 
@@ -4040,7 +4065,7 @@ app.post("/api/service-requests/:id/reject", requireAuth, requireStaff, requireW
       reason,
     });
     res.json(out);
-  } catch (e: any) { res.status(400).json({ error: String(e?.message ?? e) }); }
+  } catch (e: any) { fail(res, 400, e, req.path); }
 });
 
 /**
@@ -5875,7 +5900,7 @@ app.post("/api/email-config/test", requireAuth, requireStaff, requireReadRole("s
     const r = await sendMail({ to, subject: `${org} — test email`, text, html });
     await logAudit({ action: "settings.email_test", actorId: (req as any).auth?.sub, target: to, ip: clientIp(req) });
     return res.json({ ok: true, verified: true, sent: r.sent });
-  } catch (e: any) { return res.status(400).json({ error: String(e?.message ?? e) }); }
+  } catch (e: any) { return fail(res, 400, e, req.path); }
 });
 
 // Org-wide settings (console Settings → General etc.) — one JSON row per area, keyed ("org", …).
