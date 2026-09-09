@@ -131,9 +131,15 @@ jobs:
       # The official binary rather than gitleaks-action, which requires a paid licence key for
       # organisation-owned repositories and fails closed without one. Same scanner, no licence, no
       # token handed to a third-party action.
+      # PINNED, and not resolved from the API at run time. Unauthenticated GitHub API calls from
+      # Actions runners share an IP pool and get rate-limited, which is what failed here — but the
+      # pin is the right answer regardless: a security tool should be a version somebody chose, not
+      # whatever was published this morning.
       - name: Scan the full history
+        env:
+          GITLEAKS_VERSION: 8.30.1
         run: |
           set -euo pipefail
-          TAG=$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/${TAG}/gitleaks_${TAG#v}_linux_x64.tar.gz" | tar -xz gitleaks
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks version
           ./gitleaks git --no-banner --redact --config .gitleaks.toml --exit-code 1
