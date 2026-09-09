@@ -1,0 +1,132 @@
+# The gate that did not exist.
+#
+# Until now a push went straight to `main` and from there to a production box holding real passport
+# and Iqama numbers, with no review, no type check and no test run. This is the smallest thing that
+# closes that: it runs on every pull request and on `main` itself, so a change cannot reach the
+# deployable branch without compiling, building and passing the probes.
+#
+# DELIBERATELY NOT A DEPLOY. Deploying stays a separate, human act. Putting the server's SSH key into
+# Actions secrets would trade a key that lives on one laptop for one that lives in a CI system with a
+# much larger attack surface — and an auto-deploy to a single production environment with no staging
+# is not a safety improvement, it is a faster way to ship a mistake.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push supersedes the first: no value in finishing a run for a commit already replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Types, build and dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matched to Dockerfile.api / Dockerfile.web, so CI compiles against what production runs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install (server)
+        working-directory: server
+        run: npm ci
+
+      # The client is generated, not committed, and tsc cannot resolve the schema types without it.
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Type check
+        working-directory: server
+        run: npx tsc --noEmit
+
+      # The console and portal are one Vite build. A broken template is a blank screen at runtime and
+      # nothing else catches it — there are no front-end tests.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Build the console and portal
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # SCA. Fails on high or critical only: moderates that need a major upgrade should not block a
+      # bug fix, and a gate that cries wolf is a gate people learn to force past.
+      - name: Audit dependencies
+        working-directory: server
+        run: npm audit --omit=dev --audit-level=high
+
+  probes:
+    name: Probes
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_DATABASE: stimespro
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:ci@127.0.0.1:3306/stimespro
+      # Present because startup refuses to run without them. Values are throwaway and never leave
+      # this container — the point is that the code path is exercised, not that they are secret.
+      JWT_SECRET: ci-only-not-a-real-secret-value-0123456789
+      CRED_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install
+        working-directory: server
+        run: npm ci
+
+      # db push, never migrate deploy: parts of this schema exist only through db push, so a migrate
+      # would build a database that does not match the one production runs.
+      - name: Create the schema
+        working-directory: server
+        run: npx prisma db push --skip-generate && npx prisma generate
+
+      # The self-contained probes. Each creates its own country, client and staff, asserts, and
+      # deletes everything it made — so they can run in any order against an empty database.
+      # The pack-dependent ones (upgrade, uninstall, statutory clocks) need a country pack installed
+      # first and are deliberately left out until that is scripted.
+      - name: Band schemes
+        working-directory: server
+        run: npx tsx scripts/probe-band-schemes.ts
+      - name: Counting rules
+        working-directory: server
+        run: npx tsx scripts/probe-counting-rules.ts
+      - name: Client team
+        working-directory: server
+        run: npx tsx scripts/probe-client-team.ts
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: a secret removed in a later commit is still readable in the one that added it,
+      # which is exactly the case a scan of the working tree would miss.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
