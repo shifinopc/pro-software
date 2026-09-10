@@ -5,7 +5,7 @@ import path from "node:path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { fail, safeError } from "./errors.js";
 import QRCode from "qrcode";
 import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
@@ -99,13 +99,21 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeade
  *
  * Deliberately AFTER the tighter limiters above rather than instead of them — both apply, and the
  * strictest wins, which is what you want on /auth/login.
+ *
+ * THE IP FALLBACK GOES THROUGH ipKeyGenerator, WHICH IS NOT COSMETIC. A raw `req.ip` is one key per
+ * address, and an IPv6 client is routinely handed a whole /64 — so the unauthenticated caller this
+ * ceiling is actually aimed at could take a fresh address per request and never reach the limit at
+ * all. The helper collapses an address to its /56 network so an allocation counts as one client,
+ * and passes IPv4 through untouched. Authenticated traffic still keys by user id and is unaffected.
+ * express-rate-limit says this out loud at startup (ERR_ERL_KEY_GEN_IPV6); it was being printed on
+ * every boot.
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1200,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: any) => String(req?.auth?.sub ?? req.ip),
+  keyGenerator: (req: any) => String(req?.auth?.sub ?? ipKeyGenerator(req.ip ?? "")),
   message: { error: "Too many requests — slow down and try again shortly." },
 });
 
