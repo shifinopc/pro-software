@@ -214,6 +214,112 @@ export async function unmetPrereqs(dt: any, d: any): Promise<{ need: string; mon
 }
 
 
+/**
+ * THE FIFTH TRIGGER: work that comes round on the calendar rather than off a document.
+ *
+ * The engine could start a run by hand, when a document neared expiry, when a request came in, or
+ * when a quotation was accepted. None of those is a calendar, so the two services that are pure
+ * calendar — the VAT return and the monthly WPS payroll file — could not be built at all. This is
+ * that trigger.
+ *
+ * WHICH CLIENTS, WHICH IS THE WHOLE DIFFICULTY. A document-expiry trigger knows its subjects: the
+ * documents. A calendar knows nothing. Opening a VAT return every month for every client on the
+ * books would raise returns for clients who are not VAT registered, and a queue of invented work is
+ * worse than no automation. So the run is opened only for clients ENTITLED to the service this
+ * template delivers — through their plan or an add-on, the same rule the portal draws its locks
+ * from. A template no service points at is inert rather than universal, which is the safe way round.
+ *
+ * IDEMPOTENT ON THE PERIOD, not on a timestamp. The tick runs hourly; the period is monthly or
+ * quarterly. The period key goes in the title and is matched before starting, so the second tick of
+ * the month finds September's return already open and does nothing. Getting this wrong would not
+ * look like a bug — it would look like a client owing twenty-four VAT returns.
+ *
+ * NEVER BACKFILLS. A template activated in September opens September, not January through August.
+ * Nobody wants eight months of imaginary filings on their first morning, and the periods that
+ * mattered were filed by whatever the firm used before this.
+ */
+export type PeriodicResult = { considered: number; started: number; skipped: number; details: string[] };
+
+/** "2026-09" for monthly, "2026-Q3" for quarterly — the label a human would use for the period. */
+function periodKey(d: Date, every: string): string {
+  const y = d.getUTCFullYear();
+  if (every === "quarterly") return `${y}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+  return `${y}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export async function startPeriodicRuns(): Promise<PeriodicResult> {
+  const out: PeriodicResult = { considered: 0, started: 0, skipped: 0, details: [] };
+  const templates = await prisma.workflowTemplate.findMany({ where: { active: true, retired: false, trigger: "recurring" } });
+  if (!templates.length) return out;
+
+  const now = new Date();
+  for (const tpl of templates) {
+    const cfg = (tpl.triggerConfig ?? {}) as any;
+    const every = String(cfg.every ?? "").trim().toLowerCase();
+    if (every !== "monthly" && every !== "quarterly") { out.skipped++; continue; } // unbound = inert, not an error
+
+    // Opens on or after this day of the period. Defaults to the 1st; a VAT return whose books are
+    // not closed until the 5th can say so rather than opening on a day nobody can work it.
+    const opensOn = Number(cfg.opensOnDay) > 0 ? Number(cfg.opensOnDay) : 1;
+    if (now.getUTCDate() < opensOn) { out.skipped++; continue; }
+    if (every === "quarterly" && now.getUTCMonth() % 3 !== 0) { out.skipped++; continue; }
+
+    const key = periodKey(now, every);
+
+    // Entitlement: the service this template delivers, and the clients who hold it.
+    const svc = await prisma.serviceItem.findFirst({ where: { workflowId: tpl.id, retired: false } });
+    if (!svc) { out.skipped++; out.details.push(`${tpl.name}: no service points at it — inert`); continue; }
+
+    // A subscription has no status column — it is live while it has days left on it, which is the
+    // same thing the billing job renews from.
+    const subs = await prisma.subscription.findMany({
+      include: { package: { select: { serviceIds: true } } },
+    }).catch(() => [] as any[]);
+
+    const companyIds = new Set<string>();
+    for (const sub of subs as any[]) {
+      if ((sub.daysLeft ?? 0) <= 0) continue;
+      const pkgIds: string[] = Array.isArray(sub.package?.serviceIds) ? sub.package.serviceIds : [];
+      const addons: any[] = Array.isArray(sub.addons) ? sub.addons : [];
+      if (!(pkgIds.includes(svc.id) || addons.some((x: any) => x?.serviceId === svc.id))) continue;
+      // A subscription is held either by one company or by a whole group — a group plan entitles
+      // every company under it, which is the same rule the portal reads.
+      if (sub.companyId) companyIds.add(sub.companyId);
+      else if (String(sub.scope) === "group" && sub.refId) {
+        const members = await prisma.company.findMany({ where: { groupId: sub.refId }, select: { id: true } });
+        for (const m of members) companyIds.add(m.id);
+      }
+    }
+    if (!companyIds.size) { out.skipped++; out.details.push(`${tpl.name}: nobody is entitled to ${svc.name}`); continue; }
+
+    for (const companyId of companyIds) {
+      out.considered++;
+      // A suspended client has new work paused, which is exactly what this would otherwise create.
+      const co = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true, status: true } });
+      if (!co || String(co.status).toLowerCase() === "suspended") { out.skipped++; continue; }
+
+      const title = `${svc.name} — ${key}`;
+      const already = await prisma.workflowInstance.findFirst({ where: { templateId: tpl.id, companyId, title } });
+      if (already) { out.skipped++; continue; } // this period is already open or done
+
+      try {
+        await startInstance(tpl.id, {
+          title, companyId, clientName: co.name,
+          variables: { period: key, periodBasis: every, _trigger: "recurring", _period: key, _autoStarted: nowISO() },
+        });
+        out.started++;
+        out.details.push(`${svc.name} — ${co.name} (${key})`);
+        logActivity({ type: "task", message: `${svc.name} opened for ${key} — ${co.name}` });
+      } catch (e: any) {
+        out.skipped++;
+        out.details.push(`FAILED ${svc.name} — ${co.name}: ${e?.message ?? e}`);
+      }
+    }
+  }
+  return out;
+}
+
+
 export async function triggerRenewals(): Promise<RenewalResult> {
   const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, held: 0, details: [] };
 

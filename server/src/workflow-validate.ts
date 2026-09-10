@@ -217,6 +217,16 @@ export function validateGraph(graph: any, tpl?: { trigger?: string | null; trigg
   if (tpl?.trigger === "document_expiry" && !String((tpl.triggerConfig ?? {}).docType ?? "").trim()) {
     out.push({ level: "error", message: "This starts on document expiry but is not bound to a document type, so it can never fire. Set it under Trigger." });
   }
+  // The same failure one trigger along: a recurring template with no period never fires. The other
+  // half of it — that a recurring template no service points at fires for NOBODY, because
+  // entitlement is what selects the clients — needs a database read, which this function does not
+  // do; startPeriodicRuns reports that one into the tick log instead.
+  if (tpl?.trigger === "recurring") {
+    const every = String((tpl.triggerConfig ?? {}).every ?? "").trim().toLowerCase();
+    if (every !== "monthly" && every !== "quarterly") {
+      out.push({ level: "error", message: "This starts on a schedule but has no period set, so it can never fire. Choose monthly or quarterly under Trigger." });
+    }
+  }
   // A leftover from when "Client request intake" was offered as a trigger. It never selected anything:
   // a request starts the workflow bound to its SERVICE. Reported so the row explains itself instead of
   // looking configured, and re-saving the trigger settings clears it to manual.

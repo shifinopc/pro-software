@@ -11,7 +11,8 @@ import { prisma } from "./db.js";
 import { logAudit } from "./auth.js";
 import { sendDueDigests, pruneDigests } from "./digest.js";
 import { mailHealth, pruneMailLog } from "./mailer.js";
-import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, watchStatutory, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks } from "./jobs.js";
+import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, watchStatutory, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks, startPeriodicRuns
+} from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
 import { captureWorkforceSnapshots } from "./workforce.js";
 
@@ -128,6 +129,17 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
       action: "cron.compliance_recompute",
       target: `${compliance.changed}/${compliance.scanned} documents${compliance.undated ? ` · ${compliance.undated} undated` : ""}`,
       detail: [`source=${source}`, moved && `status changes: ${moved}`].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // The calendar trigger sits beside the expiry trigger: both open runs nobody asked for by hand,
+  // and both must be visible in the tick result or they are running invisibly.
+  const periodic = await safely("periodic", startPeriodicRuns);
+  if ("started" in periodic && periodic.started) {
+    await logAudit({
+      action: "cron.periodic_opened",
+      target: `${periodic.started} period(s) opened`,
+      detail: [`source=${source}`, periodic.details.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
 
@@ -351,7 +363,7 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
 
   // Every job that ran belongs in the result. A job missing from here ran invisibly — the tick
   // response is the only place anyone can see what the hourly pass actually did.
-  return { source, ms: Date.now() - started, compliance, renewals, sla, statutory, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
+  return { source, ms: Date.now() - started, compliance, periodic, renewals, sla, statutory, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
 }
 
 let timer: NodeJS.Timeout | null = null;
