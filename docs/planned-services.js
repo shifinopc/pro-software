@@ -26,7 +26,7 @@ module.exports = [
   note: 'Saudi’s new Commercial Register Law (April 2026) replaced annual renewal with an annual confirmation of the register’s data. Confirm with the client which their portal asks for — the flow below is identical either way.',
   steps: [
     S('Pre-Renewal Gate Check', P, '48 hours',
-      ['ZATCA / Zakat certificate current', 'GOSI certificate current', 'Chamber membership status', 'Nitaqat band permits government services', 'National address valid', 'No outstanding MC violations', 'CR data still correct'],
+      ['ZATCA / Zakat certificate current', 'GOSI certificate current', 'Chamber membership status', 'Nitaqat band permits government services', 'National address valid', 'No outstanding MC violations', 'CR data still correct', 'MISA licence is valid'],
       ['Is the company clear to renew? (ready / blocked)', 'What is blocking it']),
     S('Clear the Blocking Item', P, '7 days', [], ['What was done to clear it']),
     S('Confirm Fee and Client Approval', P, '48 hours', [],
