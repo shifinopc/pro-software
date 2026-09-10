@@ -5439,7 +5439,47 @@ const taskWriteGate = (req: any, res: any, next: any) => {
   if (role === "pro_officer" && (req.method === "POST" || req.method === "PUT")) return next();
   return res.status(403).json({ error: "You don't have permission to modify tasks" });
 };
-app.use("/api/tasks", requireAuth, requireStaff, taskWriteGate, crud("task", salesScope("companyId")));
+/**
+ * A TASK MAY NOT BE CLOSED WHILE THE WORKFLOW IT LAUNCHED IS STILL RUNNING.
+ *
+ * A task that started a run is the cover sheet for it, not the work. Marking it done closed the
+ * cover sheet and left the run untouched — so the officer saw the job disappear from the Task List
+ * while its live step went on sitting in My Tasks, breaching its SLA, assigned to them. Two records
+ * for one job, drifting apart, with nothing on screen to explain why.
+ *
+ * The engine already holds the opposite half of this rule: cancelling a run closes its task, with a
+ * comment in workflow.ts saying exactly why the two must not drift. This is the same rule from the
+ * other side.
+ *
+ * DELIBERATELY A REFUSAL, NOT A CASCADE. Closing the task could have been made to cancel the run,
+ * but one click would then silently kill a multi-step government process and its audit trail — and
+ * in the case that exposed this, the run's very first step had never been completed. Nothing about
+ * it was finished. So the officer is told where the real work is; cancelling stays a deliberate act
+ * on the run itself.
+ */
+const taskWorkflowGate = async (req: any, res: any, next: any) => {
+  try {
+    if (req.method !== "PUT") return next();
+    const status = String(req.body?.status ?? "").toLowerCase();
+    if (status !== "done" && status !== "completed") return next();
+    const id = String(req.path || "").replace(/^\//, "").split("/")[0];
+    if (!id) return next();
+    const t = await prisma.task.findUnique({ where: { id }, select: { workflowInstanceId: true } });
+    if (!t?.workflowInstanceId) return next();
+    const run = await prisma.workflowInstance.findUnique({
+      where: { id: t.workflowInstanceId },
+      select: { status: true, title: true, tasks: { where: { status: "active" }, select: { title: true } } },
+    });
+    if (!run || run.status !== "running") return next();
+    const step = run.tasks[0]?.title;
+    return res.status(409).json({
+      error: step
+        ? `This task is running as a workflow and is not finished — "${step}" is still open. Complete the workflow step, or cancel the run, and this closes with it.`
+        : "This task is running as a workflow that has not finished. Cancel the run to close this task.",
+    });
+  } catch { return next(); } // a guard that cannot read the row must not block ordinary work
+};
+app.use("/api/tasks", requireAuth, requireStaff, taskWriteGate, taskWorkflowGate, crud("task", salesScope("companyId")));
 
 // BPM workflow engine (templates + instances + task inbox). Own auth guards per route.
 app.use("/api/workflow", workflowRouter);

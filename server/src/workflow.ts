@@ -411,6 +411,23 @@ async function finalizeInstance(inst: any, result: string, nodeId?: string | nul
       else notifyRequestRejected({ companyId: linked.companyId ?? null, number: linked.number ?? null, serviceName, reason });
     }
   } catch { /* the run is finished either way; a link that cannot be updated must not undo that */ }
+
+  // Close the task row that carries this run, for the same reason the cancel path does.
+  //
+  // Cancelling already closed it; finishing did not — so a run that completed left its task sitting
+  // open forever, and an officer kept a finished job in their list with nothing to do to it. The
+  // two halves of one job have to end together whichever way the run ends.
+  //
+  // `done` and `cancelled` are left alone: a task somebody has already closed is a record, not a
+  // loose end, and finishing the run should not rewrite what they did.
+  try {
+    const closed = await prisma.task.updateMany({
+      where: { workflowInstanceId: inst.id, NOT: { status: { in: ["done", "cancelled"] } } },
+      data: { status: "done" },
+    });
+    if (closed.count) await log("task.closed", `${closed.count} linked task${closed.count === 1 ? "" : "s"} closed with the run`);
+  } catch { /* same rule as above — a link that cannot be updated must not undo a finished run */ }
+
   // Update the linked subject. subjectKind = "company" → the run concerns the client itself
   // (CR/GOSI/VAT); otherwise it's an employee (Iqama/visa) — update that person + history.
   try {
