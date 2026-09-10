@@ -1834,7 +1834,7 @@
                 <span>Client</span><span>Industry</span><span>PRO officer</span><span>Staff</span><span>Workforce</span><span>Doc health</span><span>Status</span><span>Requests</span><span></span>
               </div>
               <sc-for list="{{ clients }}" as="c" hint-placeholder-count="6">
-                <div onClick="{{ c.open }}" style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer;" style-hover="background:#FAF7FE;">
+                <div onClick="{{ c.open }}" title="{{ c.suspTitle }}" style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer; background:{{ c.rowBg }}; box-shadow:{{ c.rowAccent }};" style-hover="background:#FAF7FE;">
                   <div style="display:flex; align-items:center; gap:11px; min-width:0;"><div style="width:34px; height:34px; border-radius:10px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</div><div style="min-width:0;"><div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</div><div style="font-size:10.5px; color:#A9A6B4;">CR {{ c.cr }} · {{ c.city }}</div></div></div>
                   <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.industry }}</span>
                   <!-- WHO HANDLES THIS CLIENT. Named on the client, and worth a column: it is the one
@@ -18790,7 +18790,7 @@ class Component extends DCLogic {
     // ===== Clients directory (list → 7-tab detail) =====
     const clStatusTone = {
       Active: ['#E7F8EF', '#0E9355'], Onboarding: ['#EFEBFF', '#6D5BD0'],
-      Prospect: ['#E4F4FD', '#0284C7'], Suspended: ['#FEF4E2', '#B8860B'], Inactive: ['#F3F1F7', '#8C8899'],
+      Prospect: ['#E4F4FD', '#0284C7'], Suspended: ['#FEECEC', '#C0353A'], Inactive: ['#F3F1F7', '#8C8899'],
     };
     // WIRED: real clients from /api/companies (state.companiesData); design samples only when
     // unauthenticated. [name, cr, industry, city, contact, email, phone, Status, group, rep, pkg, employees, overdue, expiring, unread]
@@ -18919,6 +18919,15 @@ class Component extends DCLogic {
         })(),
         unread: !!unread, hasOverdue: overdue > 0, hasExpiring: expiring > 0,
         stBg: t[0], stColor: t[1],
+        // A suspended client is the one row on this screen that changes what staff should DO — new
+        // requests are paused and the client cannot reach the portal — so it is marked on the row,
+        // not only in the status column. Safe to bind inside sc-for: the runtime hoists mostly-static
+        // styles into classes and stops re-evaluating them, but sc-for items are rebuilt each render.
+        rowBg: status === 'Suspended' ? '#FFF8F8' : 'transparent',
+        rowAccent: status === 'Suspended' ? 'inset 3px 0 0 #C0353A' : 'none',
+        suspTitle: status === 'Suspended'
+          ? name + ' is suspended — every user under this client is locked out of the portal and new requests are paused.'
+          : '',
         initials: name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         archived: !!clArchived[i],
         // The address is updated alongside the state, so this client can be refreshed into,
