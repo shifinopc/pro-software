@@ -2396,7 +2396,7 @@
           </sc-if>
           <sc-if value="{{ cdTabEmployees }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .5s ease both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px; gap:14px; flex-wrap:wrap;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Employees · {{ cdEmployees }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Documents added here flow into Compliance</div></div><div style="display:flex; align-items:center; gap:12px;"><sc-if value="{{ cdHasFormer }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cdToggleFormer }}" style="font-size:11.5px; font-weight:700; color:{{ cdFormerColor }}; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ cdFormerLabel }}</span></sc-if><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ cdAddEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add employee</button></sc-if></div></div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px; gap:14px; flex-wrap:wrap;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Employees · {{ cdEmployees }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Documents added here flow into Compliance</div></div><div style="display:flex; align-items:center; gap:12px;"><sc-if value="{{ cdHasFormer }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cdToggleFormer }}" style="font-size:11.5px; font-weight:700; color:{{ cdFormerColor }}; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ cdFormerLabel }}</span></sc-if><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ cdImportEmp }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button><button onClick="{{ cdAddEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add employee</button></sc-if></div></div>
               <sc-for list="{{ cdEmployeesList }}" as="e" hint-placeholder-count="4">
                 <div style="display:flex; align-items:center; gap:12px; padding:12px 24px; border-bottom:1px solid #FAF8FC; opacity:{{ e.rowOpacity }};" style-hover="background:#FAF7FE;">
                   <div style="width:34px; height:34px; border-radius:99px; background:{{ e.avBg }}; color:{{ e.avColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ e.initials }}</div>
@@ -8893,6 +8893,113 @@
        the form reads as one thing.
        All styling comes from the .fm-* classes; see the style block for why the pickers expand in
        place rather than floating. -->
+  <!-- IMPORT EMPLOYEES — opened from a client's Employees tab, so the client is fixed.
+       Three steps and never two at once: choose a file, see exactly what it would do, then do it.
+       The preview is the point. A spreadsheet whose dates were typed the other way round, or whose
+       nationalities the system does not recognise, is caught here rather than across three hundred
+       records. Nothing is written until "Import" is pressed on the preview. -->
+  <sc-if value="{{ showEmpImport }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ eiClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:720px; max-height:88vh; overflow-y:auto; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Import employees</div>
+            <div style="display:inline-flex; align-items:center; gap:6px; margin-top:6px; background:#F5EEFF; border:1px solid #E9D8FF; border-radius:99px; padding:3px 11px; font-size:11.5px; font-weight:700; color:#5B21B6; max-width:100%;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ eiClient }}</span></div>
+          </div>
+          <div onClick="{{ eiClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <sc-if value="{{ eiHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:10px 13px; font-size:12.5px; font-weight:600; color:#C0353A; line-height:1.5;">{{ eiErr }}</div>
+        </sc-if>
+
+        <!-- 1. choose a file -->
+        <sc-if value="{{ eiStepPick }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:18px; font-size:12.5px; color:#4B4757; line-height:1.6;">
+            One row per person. Dates are <b>DD/MM/YYYY</b>. People already on file are matched by their government ID and updated, not duplicated. Nothing is saved until you have seen the preview.
+          </div>
+          <label style="margin-top:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed #D9C6F5; background:#FCFAFF; border-radius:14px; padding:30px 20px; cursor:pointer; text-align:center;" style-hover="border-color:#7C00FF; background:#F8F2FF;">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+            <span style="font-size:13px; font-weight:700; color:#26074D;">Choose a CSV file</span>
+            <span style="font-size:11.5px; color:#8C8899;">Up to 2,000 people</span>
+            <input type="file" accept=".csv,text/csv" onChange="{{ eiPick }}" style="display:none;">
+          </label>
+          <div style="margin-top:14px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <span style="font-size:11.5px; color:#8C8899;">Needs at least <b>full_name</b> and <b>nationality</b>. Saving from Excel? Choose CSV UTF-8.</span>
+            <span onClick="{{ eiTemplate }}" style="font-size:12px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Download template</span>
+          </div>
+        </sc-if>
+
+        <!-- 2. what it would do -->
+        <sc-if value="{{ eiStepPreview }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; font-size:11.5px; color:#8C8899;">{{ eiFileName }} · {{ eiRowsRead }} rows read</div>
+          <div style="margin-top:10px; display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+            <div style="background:#E7F8EF; border-radius:12px; padding:11px 13px;"><div style="font-size:10px; font-weight:700; color:#0E9355; letter-spacing:.05em;">NEW</div><div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#0E9355;">{{ eiNew }}</div></div>
+            <div style="background:#EFEBFF; border-radius:12px; padding:11px 13px;"><div style="font-size:10px; font-weight:700; color:#6D5BD0; letter-spacing:.05em;">UPDATED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#6D5BD0;">{{ eiUpdate }}</div></div>
+            <div style="background:#F3F1F7; border-radius:12px; padding:11px 13px;"><div style="font-size:10px; font-weight:700; color:#6F6C7A; letter-spacing:.05em;">DOCUMENTS</div><div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#4B4757;">{{ eiDocs }}</div></div>
+            <div style="background:#FEECEC; border-radius:12px; padding:11px 13px;"><div style="font-size:10px; font-weight:700; color:#C0353A; letter-spacing:.05em;">REFUSED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#C0353A;">{{ eiRefused }}</div></div>
+          </div>
+          <div style="margin-top:10px; font-size:12px; color:#4B4757;">{{ eiSummary }}</div>
+
+          <sc-if value="{{ eiHasRefused }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:16px; font-size:10.5px; font-weight:700; color:#C0353A; letter-spacing:.06em;">NOT IMPORTED — FIX THESE ROWS AND IMPORT AGAIN</div>
+            <div style="margin-top:6px; border:1px solid #FBD5D5; border-radius:11px; max-height:150px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ eiRefusedRows }}" as="x" hint-placeholder-count="2">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #FDF0F0; font-size:12px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#8A2A2E;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ eiHasWarn }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px; font-size:10.5px; font-weight:700; color:#B8860B; letter-spacing:.06em;">IMPORTED, WITH SOMETHING LEFT OUT</div>
+            <div style="margin-top:6px; border:1px solid #F7E4BF; border-radius:11px; max-height:130px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ eiWarnRows }}" as="x" hint-placeholder-count="2">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #FBF3E3; font-size:12px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#7A5A12;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ eiHasPreview }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px; font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHO WILL BE IMPORTED</div>
+            <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; max-height:220px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ eiPreviewRows }}" as="x" hint-placeholder-count="4">
+                <div style="display:grid; grid-template-columns:1fr 44px 120px 80px 70px; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:12px;">
+                  <span style="font-weight:600; color:#26074D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
+                  <span style="color:#6F6C7A;">{{ x.nationality }}</span>
+                  <span style="color:#8C8899; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.govId }}</span>
+                  <span style="font-size:10px; font-weight:700; color:{{ x.color }}; background:{{ x.bg }}; padding:2px 8px; border-radius:99px; width:fit-content;">{{ x.action }}</span>
+                  <span style="color:#8C8899; text-align:right; white-space:nowrap;">{{ x.docs }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ eiHasMore }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 12px; font-size:11.5px; color:#8C8899;">{{ eiMore }}</div></sc-if>
+            </div>
+          </sc-if>
+
+          <div style="display:flex; gap:10px; margin-top:20px; justify-content:space-between; align-items:center;">
+            <span onClick="{{ eiAnother }}" style="font-size:12px; font-weight:700; color:#6F6C7A; cursor:pointer;" style-hover="text-decoration:underline;">Choose a different file</span>
+            <div style="display:flex; gap:10px;">
+              <button onClick="{{ eiClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+              <sc-if value="{{ eiCanCommit }}" hint-placeholder-val="{{ true }}"><button onClick="{{ eiCommit }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ eiCommitLabel }}</button></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- 3. done -->
+        <sc-if value="{{ eiStepDone }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:22px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:10px 0 4px;">
+            <div style="width:46px; height:46px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700;">Import complete</div>
+            <div style="font-size:12.5px; color:#4B4757; line-height:1.6; max-width:460px;">{{ eiDoneMsg }}</div>
+          </div>
+          <div style="display:flex; justify-content:center; margin-top:18px;"><button onClick="{{ eiClose }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 26px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Done</button></div>
+        </sc-if>
+
+        <sc-if value="{{ eiBusy }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px; font-size:12px; font-weight:600; color:#7C00FF; text-align:center;">{{ eiBusyLabel }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
   <sc-if value="{{ showEmpModal }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeEmp }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -18207,7 +18314,106 @@ class Component extends DCLogic {
     // never recorded — and saving would then assert it as fact.
     const _EMP_TYPE_LABEL = { full_time: 'Full time', part_time: 'Part time' };
     const _JOB_CAT_LABEL = { skilled: 'Skilled', unskilled: 'Unskilled' };
+    // ── IMPORT EMPLOYEES ──
+    // Preview first, always: the server reads the file and says what it would do, and nothing is
+    // written until the preview's own button is pressed. The commit re-sends the FILE, not the plan —
+    // the server re-reads it, so the browser can never hand it a list of rows to write.
+    this._eiSend = this._eiSend || ((commit) => {
+      const st9 = this.state;
+      if (!st9.eiCompanyId || !st9.eiCsv) return;
+      const t9 = localStorage.getItem('stimespro:token');
+      this.setState({ eiBusy: true, eiErr: '' });
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + st9.eiCompanyId + '/employees/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        body: JSON.stringify({ csv: st9.eiCsv, commit: !!commit }),
+      })
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.setState({ eiBusy: false, eiErr: (j && j.error) || 'The file could not be read.' });
+          if (!commit) return this.setState({ eiBusy: false, eiStep: 'preview', eiPlan: j });
+          this.setState({ eiBusy: false, eiStep: 'done', eiResult: j.result || null, eiPlan: j });
+          // Everything an import touches: the employee list, the client's counts and workforce band,
+          // and — because rows carry passports, Iqamas and permits — the documents and doc health.
+          this._afterWorkforceChange && this._afterWorkforceChange();
+          this._afterDocumentChange && this._afterDocumentChange();
+        })
+        .catch(() => this.setState({ eiBusy: false, eiErr: 'Could not reach the server — nothing was imported.' }));
+    });
+    const _eiPlan = this.state.eiPlan || null;
+    const _eiRes = this.state.eiResult || null;
+    const _eiN = (n9, one, many) => n9 + ' ' + (n9 === 1 ? one : many);
+    const eiApi = {
+      showEmpImport: !!this.state.eiOpen,
+      eiClient: this.state.eiClient || '',
+      eiStepPick: (this.state.eiStep || 'pick') === 'pick',
+      eiStepPreview: this.state.eiStep === 'preview',
+      eiStepDone: this.state.eiStep === 'done',
+      eiBusy: !!this.state.eiBusy,
+      eiBusyLabel: this.state.eiStep === 'preview' ? 'Importing…' : 'Reading the file…',
+      eiErr: this.state.eiErr || '', eiHasErr: !!this.state.eiErr,
+      eiFileName: this.state.eiFileName || '',
+      eiRowsRead: _eiPlan ? _eiPlan.rowsRead : 0,
+      eiNew: _eiPlan ? _eiPlan.creates : 0,
+      eiUpdate: _eiPlan ? _eiPlan.updates : 0,
+      eiDocs: _eiPlan ? _eiPlan.documents : 0,
+      eiRefused: _eiPlan ? _eiPlan.refused.length : 0,
+      eiSummary: _eiPlan && _eiPlan.saudization.total
+        ? 'Nationalities: ' + _eiPlan.nationalities.map(n9 => n9.code + ' ' + n9.count).join(' · ')
+          + '  ·  Saudis in this file: ' + _eiPlan.saudization.saudis + ' of ' + _eiPlan.saudization.total + ' (' + _eiPlan.saudization.pct + '%)'
+        : '',
+      eiHasRefused: !!(_eiPlan && _eiPlan.refused.length),
+      eiRefusedRows: _eiPlan ? _eiPlan.refused : [],
+      eiHasWarn: !!(_eiPlan && _eiPlan.warnings.length),
+      eiWarnRows: _eiPlan ? _eiPlan.warnings : [],
+      eiHasPreview: !!(_eiPlan && _eiPlan.preview.length),
+      eiPreviewRows: (_eiPlan ? _eiPlan.preview.slice(0, 100) : []).map(x9 => ({
+        name: x9.name, nationality: x9.nationality, govId: x9.govId || '—',
+        action: x9.action === 'new' ? 'New' : 'Update',
+        color: x9.action === 'new' ? '#0E9355' : '#6D5BD0',
+        bg: x9.action === 'new' ? '#E7F8EF' : '#EFEBFF',
+        docs: x9.documents ? _eiN(x9.documents, 'doc', 'docs') : '—',
+      })),
+      eiHasMore: !!(_eiPlan && (_eiPlan.creates + _eiPlan.updates) > 100),
+      eiMore: _eiPlan ? '+ ' + ((_eiPlan.creates + _eiPlan.updates) - 100) + ' more — all of them will be imported' : '',
+      eiCanCommit: !!(_eiPlan && (_eiPlan.creates + _eiPlan.updates) > 0) && !this.state.eiBusy,
+      eiCommitLabel: _eiPlan ? 'Import ' + _eiN(_eiPlan.creates + _eiPlan.updates, 'employee', 'employees') : 'Import',
+      eiDoneMsg: _eiRes
+        ? _eiN(_eiRes.made, 'employee', 'employees') + ' added and ' + _eiRes.changed + ' updated for ' + (this.state.eiClient || 'this client') + '. '
+          + _eiN(_eiRes.docsMade, 'document is', 'documents are') + ' now tracked for renewal'
+          + (_eiRes.docsUpdated ? ', and ' + _eiN(_eiRes.docsUpdated, 'existing document was', 'existing documents were') + ' corrected' : '') + '.'
+          + (_eiPlan && _eiPlan.refused.length ? ' ' + _eiN(_eiPlan.refused.length, 'row was', 'rows were') + ' not imported.' : '')
+        : '',
+      eiClose: () => { if (!this.state.eiBusy) this.setState({ eiOpen: false }); },
+      eiAnother: () => this.setState({ eiStep: 'pick', eiErr: '', eiCsv: '', eiFileName: '', eiPlan: null }),
+      eiPick: (ev9) => {
+        const f9 = ev9.target.files && ev9.target.files[0];
+        // Cleared so choosing the same file again — after fixing it in Excel — fires again.
+        ev9.target.value = '';
+        if (!f9) return;
+        if (!/\.csv$/i.test(f9.name)) return this.setState({ eiErr: 'That is not a CSV file. In Excel, use Save As → CSV UTF-8.' });
+        if (f9.size > 4 * 1024 * 1024) return this.setState({ eiErr: 'That file is over 4 MB. Split it into smaller files.' });
+        const rd9 = new FileReader();
+        rd9.onload = () => { this.setState({ eiCsv: String(rd9.result || ''), eiFileName: f9.name }); setTimeout(() => this._eiSend(false), 0); };
+        rd9.onerror = () => this.setState({ eiErr: 'The file could not be read.' });
+        rd9.readAsText(f9);
+      },
+      eiCommit: () => { if (!this.state.eiBusy) this._eiSend(true); },
+      // The headings the importer reads, plus one example row showing the date format — which is the
+      // mistake that matters most and the one nobody sees until a birthday has moved four months.
+      eiTemplate: () => {
+        const head9 = ['full_name', 'nationality', 'gov_id', 'gender', 'date_of_birth', 'role', 'job_category', 'employment_type', 'department', 'joining_date', 'salary_monthly', 'passport_number', 'passport_expiry', 'iqama_expiry', 'work_permit_expiry', 'health_insurance_expiry'];
+        const ex9 = ['Mohammed Rahman', 'India', '2123456789', 'male', '06/10/1994', 'Electrician', 'skilled', 'full_time', 'Maintenance', '01/03/2024', '3500', 'Z1234567', '15/08/2031', '20/11/2026', '20/11/2026', '31/12/2026'];
+        const blob9 = new Blob(['﻿' + head9.join(',') + '\n' + ex9.join(',') + '\n'], { type: 'text/csv;charset=utf-8' });
+        const a9 = document.createElement('a');
+        a9.href = URL.createObjectURL(blob9);
+        a9.download = 'employee-import-template.csv';
+        document.body.appendChild(a9); a9.click(); a9.remove();
+        setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+      },
+    };
     const empApi = {
+      ...eiApi,
       showEmpModal: this.state.empModal, eDocRows,
       // The SAME option sources Add uses — the country list from the API, the departments master,
       // and the two literal lists — so the choices cannot differ between adding and correcting.
@@ -19233,6 +19439,13 @@ class Component extends DCLogic {
       // Adding staff from a client's own page. The client is carried in and LOCKED — the dialog was
       // opening with whichever company the API listed first, so pressing Add from inside one client
       // could file the employee under another one entirely, and nothing on screen said so.
+      // Import is opened the same way, and for the same reason the client is locked: this client's
+      // id travels with the dialog, so a file can only ever land on the client whose page it was
+      // opened from.
+      clDetailApi.cdImportEmp = () => this.setState({
+        eiOpen: true, eiCompanyId: clRow.realId, eiClient: clRow.name,
+        eiStep: 'pick', eiErr: '', eiBusy: false, eiCsv: '', eiFileName: '', eiPlan: null, eiResult: null,
+      });
       clDetailApi.cdAddEmp = () => this.setState({
         empModal: true, eError: '', eErrField: '',
         eClient: clRow.name, eClientLocked: true,

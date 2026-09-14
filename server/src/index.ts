@@ -31,6 +31,7 @@ import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem
 import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
 import { syncMailbox, saveConnection } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
+import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 
 /**
  * The OAuth `state`, signed.
@@ -3858,6 +3859,48 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
   });
   await logAudit({ action: "document.supersede", actorId: a.sub, target: doc.id, detail: `${doc.docType} · ${doc.person} · exp ${doc.expiryDate ?? "none"}` });
   res.json({ document });
+});
+
+/**
+ * Import a client's employees from a CSV, from the client's own Employees tab.
+ *
+ * ALWAYS TWO CALLS. Without `commit` this reads the file and returns exactly what would happen —
+ * who is new, who is already on file, which rows are refused and why — and writes nothing. The
+ * console shows that before offering the import, so a file whose dates were read the wrong way
+ * round is caught on the preview rather than discovered across three hundred records.
+ *
+ * With `commit` it re-reads the same file and imports. Re-planning rather than trusting a plan the
+ * browser sends back means the browser cannot hand the server a list of rows to write.
+ *
+ * The rules themselves live in employee-import.ts, shared with the command-line script.
+ */
+app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const co = await prisma.company.findUnique({ where: { id: req.params.id }, select: { id: true, ownerId: true } });
+    if (!co) return res.status(404).json({ error: "That client no longer exists" });
+    // A sales user reaches only the clients they own — the same rule every client-scoped list uses.
+    if (a?.role === "sales" && co.ownerId !== a.sub) return res.status(403).json({ error: "This client belongs to another sales rep" });
+
+    const csv = String(req.body?.csv ?? "");
+    if (!csv.trim()) return res.status(400).json({ error: "Choose a CSV file to import" });
+
+    const plan = await planEmployeeImport(co.id, csv);
+    const { rows, ...summary } = plan;
+
+    if (!req.body?.commit) return res.json(summary);
+
+    if (!rows.length) return res.status(400).json({ error: "Nothing in this file can be imported — every row was refused. Fix the rows listed and try again." });
+    const result = await applyEmployeeImport(plan);
+    await logAudit({
+      action: "employees.imported", actorId: a?.sub, target: plan.company.name, ip: clientIp(req),
+      detail: `${result.made} new, ${result.changed} updated, ${result.docsMade} documents added, ${plan.refused.length} rows refused`,
+    });
+    logActivity({ type: "client", message: `Imported ${result.made + result.changed} employees for ${plan.company.name}`, user: a?.email });
+    res.json({ ...summary, result });
+  } catch (e: any) {
+    return fail(res, 400, e, "employees.import");
+  }
 });
 
 /** Edit an employee's details, appending to the same history[] the exit flow writes. */
