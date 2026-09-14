@@ -735,8 +735,18 @@ async function doLogin(req: express.Request, res: express.Response, kind: "staff
     }
   }
 
-  // Success → reset counters, log, issue token with current tokenVersion
-  await prisma.user.update({ where: { id: user!.id }, data: { failedLogins: 0, lockedUntil: null, lastActive: "Just now" } });
+  // Success → reset counters, log, issue token with current tokenVersion.
+  //
+  // AN INVITED ACCOUNT THAT SIGNS IN HAS ACCEPTED. Login deliberately admits `invited` (above), but
+  // requireAuth admits only `active` — so an invited person with a password got a token, watched the
+  // console load, and then had every single request refused with "Account inactive", including the
+  // change-password their temporary password forces on them. With no mail configured, invitation
+  // links never arrive, so an admin's "Reset password" is the normal way in, and it never touched
+  // status. Promoting here, on the first successful sign-in, repairs every route in — link, reset or
+  // direct — in the one place they all pass through, and keeps requireAuth strict.
+  const accepting = user!.status === "invited";
+  await prisma.user.update({ where: { id: user!.id }, data: { failedLogins: 0, lockedUntil: null, lastActive: "Just now", ...(accepting ? { status: "active" } : {}) } });
+  if (accepting) await logAudit({ action: "user.invite_accepted", actorId: user!.id, actorEmail: user!.email, ip, detail: "first sign-in" });
   await logAudit({ action: "login.success", actorId: user!.id, actorEmail: user!.email, ip });
   const token = signToken(kind === "staff"
     ? { sub: user!.id, type: "staff", role: user!.roleId, tv: user!.tokenVersion }
@@ -4831,6 +4841,24 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
     // but ONLY when the field is empty, and only when there is somebody in the rotation to choose.
     // An explicit owner, including a deliberate null from a manager who wants to allocate it later,
     // is never overridden: `ownerId` present in the body means somebody decided.
+    // THE PORTAL LOGIN EMAIL MUST BE FREE, AND THAT IS CHECKED BEFORE ANYTHING IS WRITTEN.
+    //
+    // Further down, provisioning skips the login when the address already belongs to somebody —
+    // and still answers 201. The form promises "one save creates the client, their portal login and
+    // their subscription", so a clash produced a client with no way into the portal and a success
+    // message saying otherwise. Found when a staff member's own address was typed as a new client's
+    // login. Refusing here, before the company exists, means the save either does all of it or none.
+    const loginEmail = String(body?.email ?? "").trim().toLowerCase();
+    if (loginEmail.includes("@") && String(body?.lifecycle ?? ACTIVE_CLIENT) === ACTIVE_CLIENT) {
+      const taken = await prisma.user.findUnique({ where: { email: loginEmail }, select: { type: true, name: true, companyId: true } });
+      if (taken) {
+        const who = taken.type === "staff"
+          ? `a staff account (${taken.name})`
+          : `the portal login for another client`;
+        return res.status(409).json({ error: `${loginEmail} is already ${who}. A portal login needs its own email address — use a different one for this client.` });
+      }
+    }
+
     let autoOwner: { id: string; name: string } | null = null;
     // The router's own words for WHY it chose this person ("Riyadh + Website"). It was already
     // computed and thrown away; it is the whole answer to "why did this lead come to me?".
