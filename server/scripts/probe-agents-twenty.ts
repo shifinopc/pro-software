@@ -45,6 +45,12 @@ async function sweep() {
   await prisma.document.deleteMany({ where: { companyId: { in: ids } } });
   await prisma.employee.deleteMany({ where: { companyId: { in: ids } } });
   await prisma.agentTask.deleteMany({ where: { companyId: { in: ids } } });
+  const tpls = await prisma.workflowTemplate.findMany({ where: { name: TAG }, select: { id: true } });
+  const runs = await prisma.workflowInstance.findMany({ where: { templateId: { in: tpls.map(t => t.id) } }, select: { id: true } });
+  await prisma.workflowTask.deleteMany({ where: { instanceId: { in: runs.map(r => r.id) } } });
+  await prisma.workflowLog.deleteMany({ where: { instanceId: { in: runs.map(r => r.id) } } });
+  await prisma.workflowInstance.deleteMany({ where: { id: { in: runs.map(r => r.id) } } });
+  await prisma.workflowTemplate.deleteMany({ where: { id: { in: tpls.map(t => t.id) } } });
   await prisma.company.deleteMany({ where: { id: { in: ids } } });
 }
 
@@ -101,6 +107,19 @@ async function main() {
   await crm.runCrmDuplicates();
   const dup = await prisma.agentTask.findMany({ where: { agent: crm.DUPES, status: "review", dedupeKey: { contains: a.id } } });
   expect(dup.length >= 1, "two records with one CR are raised as duplicates");
+
+  const tpl = await prisma.workflowTemplate.create({ data: { name: TAG, trigger: "document_expiry" } });
+  const officer = await prisma.user.findFirst({ where: { type: "staff", status: "active" }, select: { id: true, name: true } });
+  const old = new Date(Date.now() - 8 * 86_400_000).toISOString();
+  for (let i = 1; i <= 4; i++) {
+    const run = await prisma.workflowInstance.create({ data: { templateId: tpl.id, title: `${TAG} renewal ${i}`, companyId: a.id, clientName: A, status: "running", startedAt: old } });
+    await prisma.workflowTask.create({ data: { instanceId: run.id, nodeId: "n1", title: "Submit on Muqeem", status: "active", createdAt: old, ...(i < 4 ? { assigneeId: officer?.id, assignee: officer?.name } : { assigneeRole: "pro_officer", assignee: `${TAG} other` }) } });
+  }
+  await pro.runStuckWorkflows();
+  const stuck = await prisma.agentTask.findMany({ where: { agent: pro.STUCK, status: "review", OR: [{ companyId: a.id }, { dedupeKey: `holder:${officer?.id}` }] } });
+  const grouped = stuck.find(s => s.dedupeKey === `holder:${officer?.id}`);
+  expect(!!grouped && ((grouped.output as any).lists[0].items as any[]).filter(x => x.text.includes(TAG)).length === 3, "three stalled runs with one officer are ONE item listing all three");
+  expect(stuck.filter(s => s.dedupeKey.startsWith("still:")).length === 1, "a lone stalled run with someone else stays its own item");
 
   console.log("\n4. Actions");
   const r1 = await actOnTask(ex[0].id, "tasks", {}, admin as any);

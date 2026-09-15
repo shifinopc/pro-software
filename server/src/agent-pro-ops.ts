@@ -15,6 +15,7 @@ const daysSince = (iso?: string | null) => { const d = daysFromToday(iso); retur
 export const STUCK = "stuck-workflow";
 const STILL_DAYS = 5;
 const APPROVAL_DAYS = 2;
+const GROUP_AT = 3; // this many stalled runs with one person become one item
 
 export async function runStuckWorkflows() {
   return runFindings(STUCK, ["no-movement", "unassigned", "approval-waiting"], async raise => {
@@ -29,6 +30,7 @@ export async function runStuckWorkflows() {
     const lastLog = new Map(logs.map(l => [l.instanceId, l._max.at]));
     const roles = new Set(users.map(u => u.roleId));
     const activeIds = new Set(users.map(u => u.id));
+    const stalled: { run: (typeof runs)[number]; still: number; active: typeof steps; facts: { label: string; value: string }[] }[] = [];
     for (const run of runs) {
       const mine = steps.filter(s => s.instanceId === run.id);
       const active = mine.filter(s => s.status === "active");
@@ -53,11 +55,31 @@ export async function runStuckWorkflows() {
           title: `Approval waiting ${daysSince(approvals[0].createdAt)} days — ${run.title}`,
           summary: `${approvals.map(s => `${s.title}${s.assignee ? ` with ${s.assignee}` : ""}`).join("; ")}. Everything after it is held.`, output: { facts } });
       }
-      if (still >= STILL_DAYS && !orphan.length && !approvals.length) {
-        await raise({ kind: "no-movement", key: `still:${run.id}`, companyId: run.companyId, refType: "workflow", refId: run.id,
-          title: `${run.title} has not moved for ${still} days`,
-          summary: `${active.map(s => s.assignee || s.assigneeRole || "unassigned").filter(Boolean).join(", ")} ${active.length === 1 ? "holds" : "hold"} it. Ask what it is waiting for.`, output: { facts } });
+      if (still >= STILL_DAYS && !orphan.length && !approvals.length) stalled.push({ run, still, active, facts });
+    }
+
+    // One person holding many stalled runs is ONE problem — their workload — not one item per run.
+    // A batch of renewals landing on one officer otherwise floods the queue with near-identical rows.
+    for (const [holder, list] of groupBy(stalled, x => x.active[0]?.assigneeId || x.active[0]?.assignee || x.active[0]?.assigneeRole || "unassigned")) {
+      if (list.length < GROUP_AT) {
+        for (const { run, still, active, facts } of list) {
+          await raise({ kind: "no-movement", key: `still:${run.id}`, companyId: run.companyId, refType: "workflow", refId: run.id,
+            title: `${run.title} has not moved for ${still} days`,
+            summary: `${active.map(s => s.assignee || s.assigneeRole || "unassigned").filter(Boolean).join(", ")} ${active.length === 1 ? "holds" : "hold"} it. Ask what it is waiting for.`, output: { facts } });
+        }
+        continue;
       }
+      list.sort((a, b) => b.still - a.still);
+      const who = list[0].active[0]?.assignee || list[0].active[0]?.assigneeRole || "Nobody";
+      const clients = new Set(list.map(x => x.run.companyId)).size;
+      await raise({ kind: "no-movement", key: `holder:${holder}`,
+        title: `${plural(list.length, "run")} stalled with ${who}`,
+        summary: `${list.length} workflow runs for ${plural(clients, "client")} have not moved for ${list[list.length - 1].still}–${list[0].still} days, all waiting on ${who}. Too much work on one person — hand some to a colleague (SLA Rescue proposes who).`,
+        output: {
+          facts: [{ label: "Held by", value: who }, { label: "Oldest", value: `${list[0].still} days without movement` }],
+          lists: [{ title: "Stalled runs, oldest first", items: list.slice(0, LIST_MAX).map(x => ({ text: `${x.run.title}${x.run.clientName ? ` · ${x.run.clientName}` : ""} · ${x.active.map(s => s.title).join(", ")} · ${x.still} days` })) }],
+          more: Math.max(0, list.length - LIST_MAX),
+        } });
     }
   });
 }
