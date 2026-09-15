@@ -195,6 +195,15 @@
   @keyframes aurora{0%,100%{transform:translate(0,0) scale(1);}33%{transform:translate(60px,-40px) scale(1.15);}66%{transform:translate(-50px,30px) scale(.92);}}
   @keyframes aurora2{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(-70px,-50px) scale(1.2);}}
   @keyframes spinP{to{transform:rotate(360deg);}}
+  /* Agents: the intake agent is a viewfinder. Working = a beam sweeping the page it is reading and
+     the corners closing in on it; idle = a slow breath, so a live agent never looks switched off.
+     The global prefers-reduced-motion rule above stills all of it. */
+  @keyframes agScan{0%{transform:translateY(0);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateY(46px);opacity:0}}
+  @keyframes agCorners{0%,100%{transform:scale(1)}50%{transform:scale(.9)}}
+  @keyframes agBreathe{0%,100%{box-shadow:0 0 0 0 rgba(124,0,255,0)}50%{box-shadow:0 0 0 9px rgba(124,0,255,.09)}}
+  @keyframes agRing{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.45);opacity:0}}
+  @keyframes agDot{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  @keyframes agLine{0%{width:18%}50%{width:78%}100%{width:18%}}
   /* The deal drawer's entrance. `slideInRight` is declared twice already and animates a 28px
      nudge, which is right for a card appearing in place and wrong for a panel arriving from
      off-screen — the drawer would pop in almost fully formed. This one travels its own width. */
@@ -2480,7 +2489,7 @@
           </sc-if>
           <sc-if value="{{ cdTabDocuments }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .5s ease both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Documents</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ cdOverdue }} overdue · {{ cdExpiring }} expiring · flows into Compliance</div></div><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add document</button></sc-if></div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Documents</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ cdOverdue }} overdue · {{ cdExpiring }} expiring · flows into Compliance</div></div><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:10px;"><button onClick="{{ cdScanDoc }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="background:#F5EEFF; border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>Scan document</button><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add document</button></div></sc-if></div>
               <div style="overflow-x:auto;"><div style="min-width:640px;">
                 <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; padding:10px 24px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Document</span><span>Subject</span><span>Authority</span><span>Expiry</span><span>Status</span><span></span></div>
                 <sc-for list="{{ cdDocs }}" as="d" hint-placeholder-count="6">
@@ -3664,8 +3673,345 @@
                   </div>
                 </div>
               </sc-for>
+              <!-- Empty receipts. Only headings above an empty table reads as "still loading" or
+                   broken, so the list says why it is empty and offers the one next step that fits. -->
+              <sc-if value="{{ payEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:52px 24px 56px; text-align:center;">
+                  <div style="width:56px; height:56px; border-radius:16px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l3-2 3 2 2-1.5L14 22l3-2 3 2V2l-3 2-3-2-2 1.5L10 2 7 4z"></path><path d="M8 9h8M8 13h8M8 17h5"></path></svg></div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700; margin-top:14px; color:#1A1523;">{{ payEmptyTitle }}</div>
+                  <div style="font-size:12.5px; color:#8C8899; margin:6px auto 0; max-width:440px; line-height:1.6;">{{ payEmptyText }}</div>
+                  <button onClick="{{ payEmptyGo }}" style="margin-top:18px; background:#fff; color:#7C00FF; border:1px solid #D9C6F5; font-size:12.5px; font-weight:700; padding:8px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF; border-color:#7C00FF;">{{ payEmptyCta }}</button>
+                </div>
+              </sc-if>
             </div></div>
           </section>
+      </div></sc-if>
+      <sc-if value="{{ showAgents }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Agents">
+
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CONFIGURE</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Agents</h1>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px; max-width:640px;">Seven assistants that prepare work for your team. They check, match and draft — they never file, pay, send or submit. A person approves every result.</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:7px; font-size:11.5px; color:#8C8899;"><span style="width:7px; height:7px; border-radius:99px; background:#0E9355; animation:agDot 1.6s ease-in-out infinite;"></span>{{ agLiveLine }}</div>
+        </section>
+
+        <!-- how agents reach a model -->
+        <sc-for list="{{ agConn }}" as="cn" hint-placeholder-count="1">
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .03s both; background:#fff; border:1px solid #EDEBF2; border-radius:20px; padding:18px 22px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Model connection</div>
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:{{ cn.color }}; background:{{ cn.bg }}; padding:3px 10px; border-radius:99px;"><span style="width:6px; height:6px; border-radius:99px; background:{{ cn.color }};"></span>{{ cn.label }}</span>
+              </div>
+              <div style="font-size:11.5px; color:#8C8899;">Claude, or your own model server</div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:14px;">
+              <div style="border:1px solid #F0EDF6; border-radius:14px; padding:13px 15px; background:#FCFBFE;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px; height:20px; border-radius:99px; background:{{ cn.stepBg1 }}; color:{{ cn.stepInk1 }}; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">1</span><span style="font-size:12.5px; font-weight:700; color:#1A1523;">Where models run</span></div>
+                <div style="font-size:12px; color:#4B4757; margin-top:7px; line-height:1.55;">{{ cn.keyText }}</div>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                  <sc-for list="{{ cn.providers }}" as="pv" hint-placeholder-count="2">
+                    <div style="display:flex; gap:8px; align-items:flex-start;"><span style="width:7px; height:7px; border-radius:99px; background:{{ pv.dot }}; margin-top:5px; flex-shrink:0;"></span><div style="min-width:0;"><div style="font-size:12px; font-weight:700; color:#1A1523;">{{ pv.name }}</div><div style="font-size:11px; color:{{ pv.detailColor }}; line-height:1.45; word-break:break-word;">{{ pv.detail }}</div></div></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="border:1px solid #F0EDF6; border-radius:14px; padding:13px 15px; background:#FCFBFE;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px; height:20px; border-radius:99px; background:#EFE6FC; color:#5B21B6; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">2</span><span style="font-size:12.5px; font-weight:700; color:#1A1523;">Choose a model per agent</span></div>
+                <div style="font-size:12px; color:#4B4757; margin-top:7px; line-height:1.55;">{{ cn.modelsText }}</div>
+              </div>
+              <div style="border:1px solid #F0EDF6; border-radius:14px; padding:13px 15px; background:#FCFBFE;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px; height:20px; border-radius:99px; background:{{ cn.stepBg3 }}; color:{{ cn.stepInk3 }}; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">3</span><span style="font-size:12.5px; font-weight:700; color:#1A1523;">Test the connection</span></div>
+                <div style="font-size:12px; color:{{ cn.testColor }}; margin-top:7px; line-height:1.55;">{{ cn.testText }}</div>
+                <sc-if value="{{ cn.canTest }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:6px; margin-top:9px; flex-wrap:wrap;">
+                    <sc-for list="{{ cn.testModels }}" as="tm" hint-placeholder-count="3"><button onClick="{{ tm.pick }}" style="font-size:11px; font-weight:600; padding:4px 10px; border-radius:99px; cursor:pointer; border:1px solid {{ tm.border }}; background:{{ tm.bg }}; color:{{ tm.color }};">{{ tm.label }}</button></sc-for>
+                    <button onClick="{{ cn.test }}" style="font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; cursor:pointer; border:none; background:#26074D; color:#fff;" style-hover="background:#3B0F70;">{{ cn.testLabel }}</button>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:12px; line-height:1.5;">Nothing leaves this server unless an agent is set to a model, and each agent says what it would send. A self-hosted model keeps documents on a machine you control. Keys and server addresses live only in the server environment — never in the database, never in a browser.</div>
+          </section>
+        </sc-for>
+
+        <!-- the seven agents -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .06s both; display:grid; grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); gap:12px;">
+          <sc-for list="{{ agTiles }}" as="tl" hint-placeholder-count="7">
+            <div onClick="{{ tl.pick }}" style="position:relative; overflow:hidden; background:{{ tl.bg }}; border:1.5px solid {{ tl.border }}; border-radius:16px; padding:14px 15px 13px; cursor:pointer; box-shadow:{{ tl.shadow }};" style-hover="border-color:#B990F5;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div style="position:relative; width:38px; height:38px; flex-shrink:0;">
+                  <sc-if value="{{ tl.isWorking }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute; inset:0; border-radius:12px; border:2px solid #7C00FF; animation:agRing 1.8s ease-out infinite;"></div>
+                  </sc-if>
+                  <div style="position:absolute; inset:0; border-radius:12px; background:{{ tl.iconBg }}; display:flex; align-items:center; justify-content:center; animation:{{ tl.iconAnim }};">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="{{ tl.ink }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{ tl.icon }}"></path></svg>
+                  </div>
+                </div>
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ tl.stateColor }}; background:{{ tl.stateBg }}; padding:2px 9px; border-radius:99px; white-space:nowrap;"><span style="width:5px; height:5px; border-radius:99px; background:{{ tl.stateColor }}; animation:{{ tl.dotAnim }};"></span>{{ tl.stateLabel }}</span>
+              </div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:#1A1523; margin-top:11px;">{{ tl.name }}</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ tl.cadence }}</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap;">
+                <span style="font-size:10px; font-weight:600; color:#6F6C7A; background:#F3F1F7; padding:2px 8px; border-radius:99px;">{{ tl.modelChip }}</span>
+                <sc-if value="{{ tl.hasReview }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:700; color:#8A5A12; background:#FEF4E2; padding:2px 8px; border-radius:99px;">{{ tl.reviewLabel }}</span></sc-if>
+              </div>
+              <sc-if value="{{ tl.isWorking }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; left:0; right:0; bottom:0; height:3px; background:#EFE6FC; overflow:hidden;"><div style="height:100%; background:#7C00FF; animation:agLine 1.8s ease-in-out infinite;"></div></div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </section>
+
+        <!-- the selected agent -->
+        <sc-for list="{{ agentCards }}" as="ag" hint-placeholder-count="1">
+          <section style="animation:fadeUp .45s cubic-bezier(.16,1,.3,1) both; background:#fff; border:1px solid #EDEBF2; border-radius:20px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
+
+            <div style="display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:22px; align-items:center; padding:24px 26px; background:linear-gradient(135deg, {{ ag.tint }} 0%, #FFFFFF 62%); border-bottom:1px solid #F0EDF6;">
+
+              <!-- the viewfinder -->
+              <div style="position:relative; width:96px; height:96px; flex-shrink:0;">
+                <sc-if value="{{ ag.isWorking }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; inset:0; border-radius:26px; border:2px solid #7C00FF; animation:agRing 1.8s ease-out infinite;"></div>
+                  <div style="position:absolute; inset:0; border-radius:26px; border:2px solid #7C00FF; animation:agRing 1.8s ease-out .9s infinite;"></div>
+                </sc-if>
+                <div style="position:absolute; inset:0; border-radius:26px; background:{{ ag.tileBg }}; display:flex; align-items:center; justify-content:center; animation:{{ ag.tileAnim }};">
+                  <div style="position:relative; width:52px; height:60px;">
+                    <div style="position:absolute; inset:-9px; animation:{{ ag.cornerAnim }};">
+                      <div style="position:absolute; top:0; left:0; width:12px; height:12px; border-top:2.5px solid {{ ag.ink }}; border-left:2.5px solid {{ ag.ink }}; border-radius:4px 0 0 0;"></div>
+                      <div style="position:absolute; top:0; right:0; width:12px; height:12px; border-top:2.5px solid {{ ag.ink }}; border-right:2.5px solid {{ ag.ink }}; border-radius:0 4px 0 0;"></div>
+                      <div style="position:absolute; bottom:0; left:0; width:12px; height:12px; border-bottom:2.5px solid {{ ag.ink }}; border-left:2.5px solid {{ ag.ink }}; border-radius:0 0 0 4px;"></div>
+                      <div style="position:absolute; bottom:0; right:0; width:12px; height:12px; border-bottom:2.5px solid {{ ag.ink }}; border-right:2.5px solid {{ ag.ink }}; border-radius:0 0 4px 0;"></div>
+                    </div>
+                    <div style="position:absolute; inset:0; background:#fff; border-radius:7px; box-shadow:0 2px 6px rgba(38,7,77,.12); padding:9px 8px; display:flex; flex-direction:column; gap:5px; overflow:hidden;">
+                      <div style="display:flex; gap:5px; align-items:center;"><div style="width:13px; height:15px; border-radius:3px; background:{{ ag.faceBg }}; display:flex; align-items:center; justify-content:center;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="{{ ag.ink }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="{{ ag.icon }}"></path></svg></div><div style="flex:1; display:flex; flex-direction:column; gap:3px;"><div style="height:3px; border-radius:2px; background:{{ ag.lineBg }}; width:90%;"></div><div style="height:3px; border-radius:2px; background:{{ ag.lineBg }}; width:60%;"></div></div></div>
+                      <div style="height:3px; border-radius:2px; background:{{ ag.lineBg }}; width:95%;"></div>
+                      <div style="height:3px; border-radius:2px; background:{{ ag.lineBg }}; width:70%;"></div>
+                      <div style="height:3px; border-radius:2px; background:{{ ag.lineBg }}; width:85%;"></div>
+                      <sc-if value="{{ ag.isWorking }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:absolute; left:0; right:0; top:4px; height:10px; background:linear-gradient(180deg, rgba(124,0,255,0) 0%, rgba(124,0,255,.35) 50%, rgba(124,0,255,0) 100%); animation:agScan 1.6s cubic-bezier(.45,.05,.55,.95) infinite;"></div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="min-width:0;">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; color:#1A1523;">{{ ag.name }}</div>
+                  <span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:{{ ag.stateColor }}; background:{{ ag.stateBg }}; padding:3px 10px; border-radius:99px;"><span style="width:6px; height:6px; border-radius:99px; background:{{ ag.stateColor }}; animation:{{ ag.dotAnim }};"></span>{{ ag.stateLabel }}</span>
+                  <span style="font-size:10.5px; font-weight:600; color:#6F6C7A; background:#F3F1F7; padding:3px 9px; border-radius:99px;">{{ ag.modelLabel }}</span>
+                </div>
+                <div style="font-size:12.5px; color:#4B4757; margin-top:6px; line-height:1.55; max-width:680px;">{{ ag.does }}</div>
+                <sc-if value="{{ ag.isWorking }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:12.5px; font-weight:700; color:#5B21B6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:420px;">{{ ag.nowLabel }}</span>
+                    <span style="display:inline-flex; gap:3px;"><span style="width:4px; height:4px; border-radius:99px; background:#7C00FF; animation:agDot 1.2s ease-in-out infinite;"></span><span style="width:4px; height:4px; border-radius:99px; background:#7C00FF; animation:agDot 1.2s ease-in-out .2s infinite;"></span><span style="width:4px; height:4px; border-radius:99px; background:#7C00FF; animation:agDot 1.2s ease-in-out .4s infinite;"></span></span>
+                    <div style="flex:1; max-width:200px; height:3px; background:#EFE6FC; border-radius:99px; overflow:hidden;"><div style="height:100%; background:#7C00FF; border-radius:99px; animation:agLine 1.8s ease-in-out infinite;"></div></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ag.hasWhy }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px; font-size:12px; color:#8A5A12; line-height:1.5;">{{ ag.why }}</div>
+                </sc-if>
+                <div style="margin-top:8px; font-size:11.5px; color:#8C8899; display:flex; align-items:flex-start; gap:6px; line-height:1.5;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg><span>{{ ag.never }}</span></div>
+                <div style="margin-top:5px; font-size:11.5px; color:#8C8899; display:flex; align-items:flex-start; gap:6px; line-height:1.5;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"></path></svg><span>{{ ag.modelWhy }}</span></div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; max-width:260px;">
+                <sc-if value="{{ ag.canEnable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ag.enable }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Turn on</button></sc-if>
+                <sc-if value="{{ ag.canDisable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ag.disable }}" style="background:#fff; color:#6F6C7A; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#A9A6B4;">Switch off</button></sc-if>
+                <sc-if value="{{ ag.canRunNow }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ag.runNow }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F8F2FF;">Run now</button></sc-if>
+                <sc-if value="{{ ag.showModels }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px;">
+                    <sc-for list="{{ ag.modelChips }}" as="mc" hint-placeholder-count="3"><button onClick="{{ mc.pick }}" title="{{ mc.title }}" style="font-size:10.5px; font-weight:600; padding:4px 9px; border-radius:99px; cursor:pointer; border:1px solid {{ mc.border }}; background:{{ mc.bg }}; color:{{ mc.color }}; white-space:nowrap;">{{ mc.label }}</button></sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ag.hasQiwa }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ag.openQiwa }}" style="background:none; border:none; color:#5B21B6; font-size:11.5px; font-weight:700; cursor:pointer; padding:0;" style-hover="text-decoration:underline;">{{ ag.qiwaLabel }}</button></sc-if>
+                <sc-if value="{{ ag.hasBankUpload }}" hint-placeholder-val="{{ false }}"><label style="background:#26074D; color:#fff; font-size:12px; font-weight:600; padding:8px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ ag.bankUploadLabel }}<input type="file" accept=".csv,text/csv" onChange="{{ ag.bankPick }}" style="display:none;"></label></sc-if>
+                <sc-if value="{{ ag.hasCenters }}" hint-placeholder-val="{{ false }}"><button onClick="{{ ag.openCenters }}" style="background:none; border:none; color:#5B21B6; font-size:11.5px; font-weight:700; cursor:pointer; padding:0;" style-hover="text-decoration:underline;">{{ ag.centersLabel }}</button></sc-if>
+                <span style="font-size:11px; color:#A9A6B4; text-align:right; line-height:1.45;">{{ ag.footnote }}</span>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0; border-bottom:1px solid #F0EDF6;">
+              <sc-for list="{{ ag.statTiles }}" as="st" hint-placeholder-count="4">
+                <div style="padding:16px 20px; border-right:1px solid #F4F2F8;">
+                  <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.07em; text-transform:uppercase;">{{ st.label }}</div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:{{ st.color }}; margin-top:4px; font-variant-numeric:tabular-nums;">{{ st.value }}</div>
+                  <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ st.sub }}</div>
+                </div>
+              </sc-for>
+              <div style="padding:14px 20px;">
+                <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.07em;">LAST 7 DAYS</div>
+                <div style="display:flex; align-items:flex-end; gap:6px; height:42px; margin-top:8px;">
+                  <sc-for list="{{ ag.days }}" as="d" hint-placeholder-count="7"><div title="{{ d.title }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;"><div style="width:100%; height:{{ d.h }}; background:{{ d.color }}; border-radius:4px 4px 2px 2px;"></div><span style="font-size:8.5px; color:#C4C0CE;">{{ d.label }}</span></div></sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+        </sc-for>
+
+        <!-- ask the console assistant -->
+        <sc-if value="{{ agIsAssistant }}" hint-placeholder-val="{{ false }}">
+          <section style="background:#fff; border:1px solid #EDEBF2; border-radius:20px; padding:18px 22px;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Ask a question</div>
+            <div style="font-size:12px; color:#8C8899; margin-top:3px;">Answers use only what your role can already see. Nothing is changed.</div>
+            <div style="display:flex; gap:10px; margin-top:12px; align-items:flex-start; flex-wrap:wrap;">
+              <textarea value="{{ agQ }}" onChange="{{ setAgQ }}" rows="2" placeholder="Which Iqamas expire this month for Malbriz, and what's blocking each?" style="flex:1; min-width:240px; border:1px solid #DDD9E6; border-radius:12px; padding:10px 12px; font-size:13px; font-family:inherit; background:#FCFBFE; resize:vertical;"></textarea>
+              <button onClick="{{ agAsk }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:10px 18px; border-radius:12px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">{{ agAskLabel }}</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-top:9px; flex-wrap:wrap;">
+              <sc-for list="{{ agExamples }}" as="ex" hint-placeholder-count="3"><button onClick="{{ ex.use }}" style="font-size:11px; color:#5B21B6; background:#F8F2FF; border:1px solid #EDE1FC; padding:4px 10px; border-radius:99px; cursor:pointer;">{{ ex.text }}</button></sc-for>
+            </div>
+            <sc-if value="{{ agAskBusy }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:10px; margin-top:14px; font-size:12.5px; color:#5B21B6; font-weight:600;"><span style="width:16px; height:16px; border-radius:99px; border:2.5px solid #EFE6FC; border-top-color:#7C00FF; animation:spinP .8s linear infinite;"></span>Looking it up…</div>
+            </sc-if>
+            <sc-if value="{{ agHasAskErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; font-size:12.5px; color:#A12A2F; background:#FEECEC; border-radius:10px; padding:9px 12px;">{{ agAskErr }}</div></sc-if>
+            <sc-if value="{{ agHasAnswer }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px; background:#FCFBFE; border:1px solid #F0EDF6; border-radius:14px; padding:14px 16px;">
+                <div style="font-size:13px; color:#1A1523; line-height:1.65; white-space:pre-wrap;">{{ agAnswer }}</div>
+                <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; align-items:center;">
+                  <span style="font-size:10.5px; color:#A9A6B4; font-weight:700; letter-spacing:.05em;">{{ agAnswerMeta }}</span>
+                  <sc-for list="{{ agAnswerLinks }}" as="lk" hint-placeholder-count="2"><button onClick="{{ lk.go }}" style="font-size:11px; font-weight:600; color:#26074D; background:#fff; border:1px solid #DDD9E6; padding:3px 10px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF;">{{ lk.label }} →</button></sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </section>
+        </sc-if>
+
+        <!-- its work -->
+        <section style="background:#fff; border:1px solid #EDEBF2; border-radius:20px; overflow:hidden;">
+          <div style="padding:18px 26px 8px; display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ agTasksTitle }}</div>
+            <div style="font-size:11.5px; color:#8C8899;">{{ agTasksCaption }}</div>
+          </div>
+          <sc-if value="{{ agHasTasks }}" hint-placeholder-val="{{ true }}">
+            <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:860px;">
+              <div style="display:grid; grid-template-columns:132px 1.3fr 1fr 1.6fr 0.9fr; gap:12px; padding:8px 26px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Result</span><span>Task</span><span>Client</span><span>What happened</span><span style="text-align:right;">When</span></div>
+              <sc-for list="{{ agTaskRows }}" as="t" hint-placeholder-count="6">
+                <div onClick="{{ t.open }}" style="display:grid; grid-template-columns:132px 1.3fr 1fr 1.6fr 0.9fr; gap:12px; align-items:center; padding:11px 26px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer;" style-hover="background:#FAF7FE;">
+                  <span style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; color:{{ t.color }}; background:{{ t.bg }}; padding:3px 10px; border-radius:99px; width:fit-content; white-space:nowrap;"><span style="width:5px; height:5px; border-radius:99px; background:{{ t.color }}; animation:{{ t.dotAnim }};"></span>{{ t.result }}</span>
+                  <div style="min-width:0;"><div style="font-weight:700; color:#1A1523; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.title }}</div><div style="font-size:10.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.sub }}</div></div>
+                  <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.client }}</span>
+                  <span style="color:{{ t.detailColor }}; font-size:12px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ t.detail }}</span>
+                  <div style="text-align:right; min-width:0;"><div style="color:#4B4757; white-space:nowrap;">{{ t.when }}</div><div style="font-size:10.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.who }}</div></div>
+                </div>
+              </sc-for>
+            </div></div>
+          </sc-if>
+          <sc-if value="{{ agNoTasks }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:34px 24px 40px; text-align:center;">
+              <div style="width:50px; height:50px; border-radius:15px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ agEmptyIcon }}"></path></svg></div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; margin-top:12px;">Nothing done yet</div>
+              <div style="font-size:12.5px; color:#8C8899; margin:5px auto 0; max-width:440px; line-height:1.6;">{{ agEmptyText }}</div>
+            </div>
+          </sc-if>
+          <div style="height:10px;"></div>
+        </section>
+
+        <!-- review one task -->
+        <sc-if value="{{ agReviewOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ agReviewClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+            <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:760px; max-height:90vh; overflow-y:auto; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+              <sc-for list="{{ agRv }}" as="rv" hint-placeholder-count="1">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+                  <div style="min-width:0;">
+                    <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.1em; text-transform:uppercase;">{{ rv.agentName }}</div>
+                    <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; margin-top:3px;">{{ rv.title }}</div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:7px; flex-wrap:wrap;">
+                      <span style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; color:{{ rv.color }}; background:{{ rv.bg }}; padding:3px 10px; border-radius:99px;">{{ rv.result }}</span>
+                      <sc-if value="{{ rv.hasClient }}" hint-placeholder-val="{{ false }}"><span onClick="{{ rv.openClient }}" style="font-size:11.5px; font-weight:700; color:#5B21B6; background:#F5EEFF; border:1px solid #E9D8FF; border-radius:99px; padding:2px 10px; cursor:pointer;">{{ rv.client }} →</span></sc-if>
+                      <span style="font-size:11px; color:#A9A6B4;">{{ rv.when }}</span>
+                    </div>
+                  </div>
+                  <button onClick="{{ agReviewClose }}" aria-label="Close" style="background:#F3F1F7; border:none; width:30px; height:30px; border-radius:99px; cursor:pointer; font-size:16px; color:#6F6C7A; flex-shrink:0;">×</button>
+                </div>
+                <div style="font-size:13px; color:#4B4757; margin-top:14px; line-height:1.6;">{{ rv.summary }}</div>
+                <sc-if value="{{ rv.hasNote }}" hint-placeholder-val="{{ false }}"><div style="margin-top:10px; font-size:12px; color:#8A5A12; background:#FEF8EC; border-radius:10px; padding:8px 11px;">{{ rv.note }}</div></sc-if>
+
+                <sc-if value="{{ rv.hasFacts }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px; margin-top:14px;">
+                    <sc-for list="{{ rv.facts }}" as="fc" hint-placeholder-count="2"><div style="background:#FCFBFE; border:1px solid #F0EDF6; border-radius:12px; padding:9px 12px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase;">{{ fc.label }}</div><div style="font-size:12.5px; color:#1A1523; margin-top:3px; line-height:1.45;">{{ fc.value }}</div></div></sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ rv.hasChecks }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:16px; font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CHECKS</div>
+                  <div style="display:flex; flex-direction:column; gap:6px; margin-top:7px;">
+                    <sc-for list="{{ rv.checks }}" as="ck" hint-placeholder-count="3">
+                      <div style="display:flex; gap:10px; align-items:flex-start; border:1px solid {{ ck.border }}; background:{{ ck.bg }}; border-radius:11px; padding:9px 12px;">
+                        <span style="width:18px; height:18px; border-radius:99px; background:{{ ck.dot }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ ck.mark }}</span>
+                        <div style="min-width:0;"><div style="font-size:12.5px; font-weight:700; color:#1A1523;">{{ ck.label }}<span style="font-weight:600; color:{{ ck.tagColor }}; font-size:11px;">{{ ck.tag }}</span></div><div style="font-size:12px; color:#4B4757; margin-top:2px; line-height:1.45;">{{ ck.note }}</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-for list="{{ rv.lists }}" as="ls" hint-placeholder-count="0">
+                  <div style="margin-top:16px; font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase;">{{ ls.title }}</div>
+                  <div style="display:flex; flex-direction:column; gap:0; margin-top:6px; border:1px solid #F0EDF6; border-radius:12px; overflow:hidden;">
+                    <sc-for list="{{ ls.items }}" as="it" hint-placeholder-count="3"><div style="padding:8px 12px; font-size:12.5px; color:#1A1523; border-bottom:1px solid #F7F5FB; line-height:1.45;">{{ it.text }}</div></sc-for>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ rv.hasProposal }}" hint-placeholder-val="{{ false }}"><div style="margin-top:16px; background:#F8F2FF; border:1px solid #E9D8FF; border-radius:12px; padding:10px 13px; font-size:12.5px; color:#3B0F70; line-height:1.5;"><b>Proposed:</b> {{ rv.proposal }}</div></sc-if>
+                <sc-if value="{{ rv.hasDecision }}" hint-placeholder-val="{{ false }}"><div style="margin-top:16px; background:#F3FBF6; border:1px solid #D5F0E0; border-radius:12px; padding:10px 13px; font-size:12.5px; color:#0B6B3E; line-height:1.5;">{{ rv.decision }}</div></sc-if>
+              </sc-for>
+
+              <sc-if value="{{ agRvHasDraft }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:10px;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ agRvDraftTitle }}</span><span style="font-size:10.5px; color:#8C8899;">{{ agRvDraftBy }}</span></div>
+                <sc-if value="{{ agRvHasSubject }}" hint-placeholder-val="{{ true }}"><input value="{{ agDraftSubject }}" onChange="{{ setAgDraftSubject }}" style="margin-top:7px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; background:#FCFBFE; font-weight:600;"></sc-if>
+                <textarea value="{{ agDraftBody }}" onChange="{{ setAgDraftBody }}" rows="10" style="margin-top:7px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 12px; font-size:13px; line-height:1.55; font-family:inherit; background:#FCFBFE; resize:vertical;"></textarea>
+                <div style="font-size:11px; color:#A9A6B4; margin-top:5px;">{{ agRvDraftTo }}</div>
+              </sc-if>
+
+              <sc-if value="{{ agRvHasErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px; font-size:12.5px; color:#A12A2F; background:#FEECEC; border-radius:10px; padding:9px 12px;">{{ agRvErr }}</div></sc-if>
+              <sc-if value="{{ agRvHasActions }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap;">
+                  <sc-for list="{{ agRvActions }}" as="ac" hint-placeholder-count="2"><button onClick="{{ ac.run }}" style="font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer; border:{{ ac.border }}; background:{{ ac.bg }}; color:{{ ac.color }}; white-space:nowrap;">{{ ac.label }}</button></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- which government centers need a visit in person -->
+        <sc-if value="{{ agCentersOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ agCentersClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px;">
+            <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Centers that need a visit</div>
+              <div style="font-size:12.5px; color:#8C8899; margin-top:5px; line-height:1.55;">The planner only makes trips to centers ticked here. Portals done online (Absher, Qiwa, Muqeem…) should stay unticked. {{ agCentersNote }}</div>
+              <div style="display:flex; flex-direction:column; gap:6px; margin-top:14px;">
+                <sc-for list="{{ agCenterRows }}" as="cr" hint-placeholder-count="5">
+                  <div onClick="{{ cr.toggle }}" style="display:flex; align-items:center; gap:10px; border:1px solid {{ cr.border }}; background:{{ cr.bg }}; border-radius:11px; padding:9px 12px; cursor:pointer;">
+                    <span style="width:18px; height:18px; border-radius:6px; border:1.5px solid {{ cr.box }}; background:{{ cr.fill }}; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ cr.mark }}</span>
+                    <span style="font-size:13px; color:#1A1523;">{{ cr.name }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; gap:10px; flex-wrap:wrap;">
+                <button onClick="{{ agCentersAuto }}" style="background:none; border:none; color:#6F6C7A; font-size:12px; font-weight:600; cursor:pointer; padding:0;">Use the automatic guess</button>
+                <div style="display:flex; gap:8px;"><button onClick="{{ agCentersClose }}" style="font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:99px; cursor:pointer; border:1px solid #DDD9E6; background:#fff; color:#4B4757;">Cancel</button><button onClick="{{ agCentersSave }}" style="font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; border:none; background:#7C00FF; color:#fff;">Save</button></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Qiwa occupation list -->
+        <sc-if value="{{ agQiwaOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ agQiwaClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px;">
+            <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:560px; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Qiwa occupation list</div>
+              <div style="font-size:12.5px; color:#8C8899; margin-top:5px; line-height:1.55;">Paste Qiwa's occupation titles, one per line, exactly as Qiwa lists them. The Data Quality agent flags employees whose job title is not on this list. It does not guess the list — until one is pasted, job titles are not checked.</div>
+              <textarea value="{{ agQiwaText }}" onChange="{{ setAgQiwaText }}" rows="12" placeholder="Accountant&#10;Driver&#10;Sales Representative" style="margin-top:12px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 12px; font-size:12.5px; line-height:1.5; font-family:inherit; background:#FCFBFE; resize:vertical;"></textarea>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:10px;">
+                <span style="font-size:11.5px; color:#8C8899;">{{ agQiwaCount }}</span>
+                <div style="display:flex; gap:8px;"><button onClick="{{ agQiwaClose }}" style="font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:99px; cursor:pointer; border:1px solid #DDD9E6; background:#fff; color:#4B4757;">Cancel</button><button onClick="{{ agQiwaSave }}" style="font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; border:none; background:#7C00FF; color:#fff;">Save list</button></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
       </div></sc-if>
       <sc-if value="{{ showAppointments }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Appointments">
 
@@ -8893,6 +9239,153 @@
        the form reads as one thing.
        All styling comes from the .fm-* classes; see the style block for why the pickers expand in
        place rather than floating. -->
+  <!-- SCAN DOCUMENT — the document intake agent. Opened from a client's Documents tab, so the client is
+       fixed. The agent READS; it never creates. What it read comes back as a suggestion the officer
+       checks against the scan, corrects if needed, and accepts — or rejects. Every problem the system
+       found (wrong person, number already on someone else, Hijri-only expiry) is listed before they do. -->
+  <sc-if value="{{ showScanDoc }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ sdClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:860px; max-height:90vh; overflow-y:auto; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Scan document</div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap;">
+              <span style="display:inline-flex; align-items:center; background:#F5EEFF; border:1px solid #E9D8FF; border-radius:99px; padding:3px 11px; font-size:11.5px; font-weight:700; color:#5B21B6; max-width:100%;"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sdClient }}</span></span>
+              <span style="font-size:11.5px; color:#8C8899;">The agent reads the scan. Nothing is saved until you accept.</span>
+            </div>
+          </div>
+          <div onClick="{{ sdClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <sc-if value="{{ sdHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:10px 13px; font-size:12.5px; font-weight:600; color:#C0353A; line-height:1.5;">{{ sdErr }}</div>
+        </sc-if>
+
+        <!-- not available: switched off, or no key on the server -->
+        <sc-if value="{{ sdUnavailable }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px; background:#FCFAFF; border:1px solid #EDE3FB; border-radius:14px; padding:18px 20px;">
+            <div style="font-size:13.5px; font-weight:700; color:#26074D;">Document intake is not available</div>
+            <div style="font-size:12.5px; color:#4B4757; margin-top:6px; line-height:1.6;">{{ sdWhy }}</div>
+            <sc-if value="{{ sdCanEnable }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:12px; color:#6F6C7A; margin-top:10px; line-height:1.6;">Turning it on sends each scan — a passport, Iqama or permit image — to Anthropic's Claude to be read. Confirm that is acceptable under your clients' agreements and data-residency requirements first.</div>
+              <button onClick="{{ sdEnable }}" style="margin-top:14px; background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Turn on document intake</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- 1. choose who and upload -->
+        <sc-if value="{{ sdStepUpload }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px; display:grid; grid-template-columns:1fr; gap:14px;">
+            <div>
+              <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHO IS IT FOR <span style="font-weight:600; letter-spacing:0; text-transform:none; color:#B9B5C4;">— optional, the agent will try to match</span></div>
+              <div style="position:relative; margin-top:6px;">
+                <div data-dd onClick="{{ ddSdEmpToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddSdEmpLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                <sc-if value="{{ ddSdEmpOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSdEmpOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+              </div>
+            </div>
+            <label style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed #D9C6F5; background:#FCFAFF; border-radius:14px; padding:34px 20px; cursor:pointer; text-align:center;" style-hover="border-color:#7C00FF; background:#F8F2FF;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>
+              <span style="font-size:13px; font-weight:700; color:#26074D;">Choose a scan or photo</span>
+              <span style="font-size:11.5px; color:#8C8899;">Passport, Iqama, CR, work permit or insurance card · JPG, PNG, WEBP or PDF · under 4 MB</span>
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange="{{ sdPick }}" style="display:none;">
+            </label>
+          </div>
+        </sc-if>
+
+        <!-- reading -->
+        <sc-if value="{{ sdStepReading }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:26px; padding:34px 20px; text-align:center;">
+            <div style="width:40px; height:40px; margin:0 auto; border-radius:99px; border:3px solid #EFE6FC; border-top-color:#7C00FF; animation:spinP .8s linear infinite;"></div>
+            <div style="font-size:13.5px; font-weight:700; color:#26074D; margin-top:14px;">{{ sdReadingLabel }}</div>
+            <div style="font-size:12px; color:#8C8899; margin-top:4px;">{{ sdFileName }}</div>
+          </div>
+        </sc-if>
+
+        <!-- 2. review what was read -->
+        <sc-if value="{{ sdStepReview }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:20px;">
+            <!-- the scan -->
+            <div style="background:#F7F5FB; border:1px solid #EDEBF2; border-radius:14px; min-height:260px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+              <sc-if value="{{ sdHasPreview }}" hint-placeholder-val="{{ false }}"><img src="{{ sdPreviewUrl }}" alt="The scanned document" style="max-width:100%; max-height:440px; object-fit:contain; display:block;"></sc-if>
+              <sc-if value="{{ sdIsPdf }}" hint-placeholder-val="{{ false }}"><div style="text-align:center; padding:20px;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"></path></svg><div style="font-size:12px; color:#6F6C7A; margin-top:6px;">{{ sdFileName }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:2px;">PDF — check the fields against your copy</div></div></sc-if>
+            </div>
+
+            <!-- what was read -->
+            <div style="min-width:0;">
+              <sc-if value="{{ sdHasIssues }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">
+                  <sc-for list="{{ sdIssueRows }}" as="x" hint-placeholder-count="2">
+                    <div style="display:flex; gap:8px; align-items:flex-start; background:{{ x.bg }}; border:1px solid {{ x.border }}; border-radius:10px; padding:8px 11px; font-size:12px; line-height:1.5; color:{{ x.color }};"><span style="font-weight:700; flex-shrink:0;">{{ x.tag }}</span><span>{{ x.message }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 12px;">
+                <div style="grid-column:1 / -1;">
+                  <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENT TYPE</div>
+                  <div style="position:relative; margin-top:6px;">
+                    <div data-dd onClick="{{ ddSdTypeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ddSdTypeLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                    <sc-if value="{{ ddSdTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSdTypeOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                  </div>
+                </div>
+                <sc-if value="{{ sdNeedsEmployee }}" hint-placeholder-val="{{ true }}">
+                  <div style="grid-column:1 / -1;">
+                    <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">BELONGS TO</div>
+                    <div style="position:relative; margin-top:6px;">
+                      <div data-dd onClick="{{ ddSdOwnerToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddSdOwnerLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                      <sc-if value="{{ ddSdOwnerOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddSdOwnerOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+                <div style="grid-column:1 / -1;">
+                  <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">NUMBER</span><sc-for list="{{ sdConfNumber }}" as="c" hint-placeholder-count="1"><span style="font-size:9.5px; font-weight:700; color:{{ c.color }}; background:{{ c.bg }}; padding:1px 8px; border-radius:99px;">{{ c.label }}</span></sc-for></div>
+                  <input value="{{ sdNumber }}" onChange="{{ setSdNumber }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:13px; background:#FCFBFE; font-variant-numeric:tabular-nums;">
+                </div>
+                <div>
+                  <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EXPIRY</span><sc-for list="{{ sdConfExpiry }}" as="c" hint-placeholder-count="1"><span style="font-size:9.5px; font-weight:700; color:{{ c.color }}; background:{{ c.bg }}; padding:1px 8px; border-radius:99px;">{{ c.label }}</span></sc-for></div>
+                  <input type="date" value="{{ sdExpiry }}" onChange="{{ setSdExpiry }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:8px 12px; font-size:13px; background:#FCFBFE;">
+                  <sc-if value="{{ sdHasHijri }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#B8860B; margin-top:4px;">Printed Hijri: {{ sdHijri }}</div></sc-if>
+                </div>
+                <div>
+                  <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">ISSUED</span><sc-for list="{{ sdConfIssue }}" as="c" hint-placeholder-count="1"><span style="font-size:9.5px; font-weight:700; color:{{ c.color }}; background:{{ c.bg }}; padding:1px 8px; border-radius:99px;">{{ c.label }}</span></sc-for></div>
+                  <input type="date" value="{{ sdIssue }}" onChange="{{ setSdIssue }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:8px 12px; font-size:13px; background:#FCFBFE;">
+                </div>
+              </div>
+
+              <div style="margin-top:14px; border-top:1px solid #F0EDF6; padding-top:12px; display:grid; grid-template-columns:auto 1fr; gap:5px 14px; font-size:12px;">
+                <span style="color:#A9A6B4;">Name on document</span><span style="color:#26074D; font-weight:600; overflow:hidden; text-overflow:ellipsis;">{{ sdReadName }}</span>
+                <span style="color:#A9A6B4;">Nationality</span><span style="color:#4B4757;">{{ sdReadNat }}</span>
+                <span style="color:#A9A6B4;">Date of birth</span><span style="color:#4B4757;">{{ sdReadDob }}</span>
+              </div>
+              <sc-if value="{{ sdHasNotes }}" hint-placeholder-val="{{ false }}"><div style="margin-top:10px; font-size:11.5px; color:#6F6C7A; line-height:1.5; font-style:italic;">“{{ sdNotes }}”</div></sc-if>
+              <div style="margin-top:8px; font-size:11px; color:#A9A6B4;">Blank nationality and date of birth on the employee record are filled from the card when you accept. Nothing they already have is overwritten.</div>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:22px; justify-content:space-between; align-items:center;">
+            <span onClick="{{ sdReject }}" style="font-size:12px; font-weight:700; color:#C0353A; cursor:pointer;" style-hover="text-decoration:underline;">Reject this reading</span>
+            <div style="display:flex; gap:10px;">
+              <button onClick="{{ sdClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Decide later</button>
+              <button onClick="{{ sdAccept }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 22px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ sdAcceptLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- 3. done -->
+        <sc-if value="{{ sdStepDone }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:22px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:10px 0 4px;">
+            <div style="width:46px; height:46px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700;">{{ sdDoneTitle }}</div>
+            <div style="font-size:12.5px; color:#4B4757; line-height:1.6; max-width:480px;">{{ sdDoneMsg }}</div>
+          </div>
+          <div style="display:flex; justify-content:center; gap:10px; margin-top:18px;">
+            <button onClick="{{ sdAnother }}" style="background:#fff; color:#7C00FF; border:1px solid #D9C6F5; font-size:12.5px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F5EEFF;">Scan another</button>
+            <button onClick="{{ sdClose }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 26px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Done</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
   <!-- IMPORT EMPLOYEES — opened from a client's Employees tab, so the client is fixed.
        Three steps and never two at once: choose a file, see exactly what it would do, then do it.
        The preview is the point. A spreadsheet whose dates were typed the other way round, or whose
@@ -14200,7 +14693,7 @@ class Component extends DCLogic {
       // active screen is decided by `act === '<label>'`. A second entry called Dashboard would put
       // two screens behind one name and light both up at once.
       'Sales Dashboard': 'Sales', 'Activities': 'Sales',
-      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure',
+      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure', 'Agents': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
@@ -16178,6 +16671,7 @@ class Component extends DCLogic {
     const status = this.props.companyStatus ?? 'Active';
     const I = {
       grid: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+      agent: 'M12 8V4M8 4h8M5 8h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zM9 13v1M15 13v1M9 17h6',
       home: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM9 22V12h6v10',
       building: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h.5M9 13h.5M9 17h.5M14.5 9h.5M14.5 13h.5M14.5 17h.5',
       file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
@@ -16215,7 +16709,7 @@ class Component extends DCLogic {
       'Approvals': 'Approvals', 'SLA Monitor': 'SLA Monitor', 'Activity Timeline': 'Activity Log',
       'Clients': 'Clients', 'Employees': 'Clients', 'Requests Queue': 'Clients', 'Client Groups': 'Clients',
       'Documents': 'Compliance', 'Government Centers': 'Compliance', 'Appointments': 'Compliance',
-      'Courier': 'Compliance', 'Document Types': 'Compliance', 'Compliance': 'Compliance',
+      'Courier': 'Compliance', 'Document Types': 'Compliance', 'Compliance': 'Compliance', 'Agents': 'Compliance',
       'Invoices': 'Finance', 'Payments': 'Finance', 'Receipts': 'Finance', 'Plan & Billing': 'Finance',
       'Service Catalog': 'Finance', 'Quotations': 'Sales',
       'Pipeline': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Follow-ups': 'Sales', 'Inbox': 'Sales',
@@ -16314,6 +16808,12 @@ class Component extends DCLogic {
      * The badges that ARE set here — Setup Check, Notifications, Problem Reports and the Sales three
      * — have no counterpart in `_liveBadges` and are computed above from real rows.
      */
+    // Work waiting for a person, across every agent. Not "work done" — a number that only grows is decoration;
+    // this one only moves when somebody has work to pick up.
+    const _agentBadge = (() => {
+      const n9 = ((this.state.agentsData || {}).agents || []).reduce((sum9, a9) => sum9 + (Number(a9.review) || 0), 0);
+      return n9 > 0 ? String(n9) : '';
+    })();
     const groupsAll = [
       ['Overview', I.grid, [['Dashboard', I.grid], ['Activity Timeline', I.clock]]],
       // Sales sits before Operations because that is the order the work happens in: somebody is a
@@ -16326,7 +16826,7 @@ class Component extends DCLogic {
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Receipts', I.card], ['Reports', I.layers]]],
-      ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Field Sets', I.fileText], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
+      ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Agents', I.agent, _agentBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Field Sets', I.fileText], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice]]],
       // Problem Reports carries a badge of what is still unread — a report nobody looks at is the
       // same as no report at all, and the count is the only thing that makes anyone look.
       ['Admin', I.settings, [['Workflow Builder', I.layers], ['Notifications', I.bell, _unreadNotifCount], ['Problem Reports', I.buoy, _newReportCount], ['Profile Settings', I.users], ['Settings', I.settings]]],
@@ -18412,8 +18912,146 @@ class Component extends DCLogic {
         setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
       },
     };
+    // ── SCAN DOCUMENT (the intake agent) ──
+    const _sdApiBase = () => this._apiBase || 'http://localhost:4100';
+    const _sdHeaders = () => { const t9 = localStorage.getItem('stimespro:token'); return { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }; };
+    const _sdJson = (r) => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j }));
+    this._sdLoadStatus = this._sdLoadStatus || (() => {
+      fetch(_sdApiBase() + '/api/intake/status', { headers: _sdHeaders() }).then(_sdJson)
+        .then(({ ok, j }) => this.setState({ sdStatus: ok ? j : { ready: false, why: (j && j.error) || 'Could not check whether document intake is available.' } }))
+        .catch(() => this.setState({ sdStatus: { ready: false, why: 'Could not reach the server.' } }));
+    });
+    // Open the reviewed fields from what was read, so the officer edits the reading rather than retyping it.
+    this._sdLoadSuggestion = this._sdLoadSuggestion || ((s9) => {
+      const f9 = (s9 && s9.fields) || {};
+      this.setState({ sdStep: 'review', sdSug: s9, sdType: s9.docType || '', sdOwner: s9.employeeId || '',
+        sdNumber: f9.number || '', sdExpiry: f9.expiry || '', sdIssue: f9.issueDate || '', sdErr: '' });
+    });
+    const _sdSt = this.state;
+    const _sdStatus = _sdSt.sdStatus || null;
+    const _sdSug = _sdSt.sdSug || null;
+    const _sdF = (_sdSug && _sdSug.fields) || {};
+    const _sdC = (_sdSug && _sdSug.confidence) || {};
+    const _sdTypes = Array.isArray(_sdSt.docTypesData) ? _sdSt.docTypesData.filter(d9 => !d9.retired) : [];
+    const _sdTypeRow = _sdTypes.find(d9 => d9.name === _sdSt.sdType) || null;
+    const _sdStaff = (Array.isArray(_sdSt.employeesData) ? _sdSt.employeesData : []).filter(e9 => e9.companyId === _sdSt.sdCompanyId && !e9.archived);
+    const _sdChip = (lvl) => {
+      const m9 = { high: ['Clear', '#0E9355', '#E7F8EF'], medium: ['Check', '#B8860B', '#FEF4E2'], low: ['Hard to read', '#C0353A', '#FEECEC'], none: ['Not read', '#8C8899', '#F3F1F7'] }[lvl || 'none'] || ['Not read', '#8C8899', '#F3F1F7'];
+      return [{ label: m9[0], color: m9[1], bg: m9[2] }];
+    };
+    const _sdRole = (_sdSt.meUser && _sdSt.meUser.role) || '';
+    const sdApi = {
+      showScanDoc: !!_sdSt.sdOpen,
+      sdClient: _sdSt.sdClient || '',
+      sdErr: _sdSt.sdErr || '', sdHasErr: !!_sdSt.sdErr,
+      sdUnavailable: !!(_sdStatus && !_sdStatus.ready) && (_sdSt.sdStep || 'upload') === 'upload',
+      sdWhy: (_sdStatus && _sdStatus.why) || '',
+      sdCanEnable: !!(_sdStatus && _sdStatus.keyPresent && !_sdStatus.enabled && (_sdRole === 'admin' || _sdRole === 'super_admin')),
+      sdStepUpload: (_sdSt.sdStep || 'upload') === 'upload' && !!(_sdStatus && _sdStatus.ready),
+      sdStepReading: _sdSt.sdStep === 'reading',
+      sdReadingLabel: _sdSt.sdPhase === 'upload' ? 'Uploading the scan…' : 'Reading the document…',
+      sdStepReview: _sdSt.sdStep === 'review',
+      sdStepDone: _sdSt.sdStep === 'done',
+      sdFileName: _sdSt.sdFileName || '',
+      sdHasPreview: !!_sdSt.sdPreviewUrl && !_sdSt.sdIsPdf, sdPreviewUrl: _sdSt.sdPreviewUrl || '',
+      sdIsPdf: !!_sdSt.sdIsPdf,
+      ...mkDd('ddSdEmp', [{ value: '', label: 'Let the agent match it' }, ..._sdStaff.map(e9 => ({ value: e9.id, label: e9.name }))], _sdSt.sdEmpPick || '', (v9) => this.setState({ sdEmpPick: v9 }), 'Let the agent match it'),
+      ...mkDd('ddSdType', _sdTypes.map(d9 => ({ value: d9.name, label: d9.name })), _sdSt.sdType || '', (v9) => this.setState({ sdType: v9 }), 'Choose the document type'),
+      ...mkDd('ddSdOwner', _sdStaff.map(e9 => ({ value: e9.id, label: e9.name })), _sdSt.sdOwner || '', (v9) => this.setState({ sdOwner: v9 }), 'Choose the employee'),
+      sdNeedsEmployee: !_sdTypeRow || _sdTypeRow.subjectKind !== 'company',
+      sdNumber: _sdSt.sdNumber || '', setSdNumber: (e9) => this.setState({ sdNumber: e9.target.value }),
+      sdExpiry: _sdSt.sdExpiry || '', setSdExpiry: (e9) => this.setState({ sdExpiry: e9.target.value }),
+      sdIssue: _sdSt.sdIssue || '', setSdIssue: (e9) => this.setState({ sdIssue: e9.target.value }),
+      sdConfNumber: _sdChip(_sdC.number), sdConfExpiry: _sdChip(_sdC.expiry), sdConfIssue: _sdChip(_sdC.issueDate),
+      sdHasHijri: !!_sdF.expiryHijri, sdHijri: _sdF.expiryHijri || '',
+      sdReadName: _sdF.name || '—', sdReadNat: _sdF.nationality || '—', sdReadDob: _sdF.dob || '—',
+      sdHasNotes: !!(_sdSug && _sdSug.notes), sdNotes: (_sdSug && _sdSug.notes) || '',
+      sdHasIssues: !!(_sdSug && Array.isArray(_sdSug.issues) && _sdSug.issues.length),
+      sdIssueRows: ((_sdSug && _sdSug.issues) || []).map(i9 => ({
+        message: i9.message,
+        tag: i9.level === 'error' ? 'Fix' : i9.level === 'warning' ? 'Check' : 'Note',
+        color: i9.level === 'error' ? '#A12A2F' : i9.level === 'warning' ? '#7A5A12' : '#4B4757',
+        bg: i9.level === 'error' ? '#FEECEC' : i9.level === 'warning' ? '#FEF6E7' : '#F6F4F9',
+        border: i9.level === 'error' ? '#FBD5D5' : i9.level === 'warning' ? '#F7E4BF' : '#EDEBF2',
+      })),
+      sdAcceptLabel: _sdSt.sdBusy ? 'Saving…' : 'Accept and add document',
+      sdDoneTitle: (_sdSt.sdResult && _sdSt.sdResult.title) || 'Document added',
+      sdDoneMsg: (_sdSt.sdResult && _sdSt.sdResult.msg) || '',
+      sdClose: () => {
+        if (_sdSt.sdStep === 'reading' || _sdSt.sdBusy) return;
+        if (_sdSt.sdPreviewUrl) { try { URL.revokeObjectURL(_sdSt.sdPreviewUrl); } catch (e9) {} }
+        this.setState({ sdOpen: false });
+      },
+      sdAnother: () => {
+        if (_sdSt.sdPreviewUrl) { try { URL.revokeObjectURL(_sdSt.sdPreviewUrl); } catch (e9) {} }
+        this.setState({ sdStep: 'upload', sdSug: null, sdErr: '', sdFileName: '', sdPreviewUrl: '', sdIsPdf: false, sdResult: null, sdEmpPick: '' });
+      },
+      sdEnable: () => {
+        fetch(_sdApiBase() + '/api/intake/settings', { method: 'PUT', headers: _sdHeaders(), body: JSON.stringify({ enabled: true }) }).then(_sdJson)
+          .then(({ ok, j }) => ok ? this.setState({ sdStatus: j, sdErr: '' }) : this.setState({ sdErr: (j && j.error) || 'Could not turn document intake on.' }))
+          .catch(() => this.setState({ sdErr: 'Could not reach the server.' }));
+      },
+      sdPick: (ev9) => {
+        const f9 = ev9.target.files && ev9.target.files[0];
+        ev9.target.value = '';
+        if (!f9) return;
+        if (!/\.(jpe?g|png|webp|pdf)$/i.test(f9.name)) return this.setState({ sdErr: 'Use a JPG, PNG, WEBP or PDF scan.' });
+        if (f9.size > 4 * 1024 * 1024) return this.setState({ sdErr: 'That file is over 4 MB. Scan it at a lower resolution.' });
+        const isPdf9 = /\.pdf$/i.test(f9.name);
+        const preview9 = isPdf9 ? '' : URL.createObjectURL(f9);
+        this.setState({ sdStep: 'reading', sdPhase: 'upload', sdErr: '', sdFileName: f9.name, sdPreviewUrl: preview9, sdIsPdf: isPdf9 });
+        const rd9 = new FileReader();
+        rd9.onerror = () => this.setState({ sdStep: 'upload', sdErr: 'The file could not be read.' });
+        rd9.onload = () => {
+          const back9 = (msg) => this.setState({ sdStep: 'upload', sdErr: msg });
+          // Uploaded as a private "document": stored outside the public folder, readable only through an
+          // authenticated route. A passport scan never becomes a URL anyone could open.
+          fetch(_sdApiBase() + '/api/upload', { method: 'POST', headers: _sdHeaders(), body: JSON.stringify({ name: f9.name, data: String(rd9.result || ''), kind: 'document' }) }).then(_sdJson)
+            .then(({ ok, j }) => {
+              if (!ok || !j.id) return back9((j && j.error) || 'The scan could not be uploaded.');
+              this.setState({ sdPhase: 'read' });
+              return fetch(_sdApiBase() + '/api/intake/extract', { method: 'POST', headers: _sdHeaders(), body: JSON.stringify({ companyId: this.state.sdCompanyId, fileAssetId: j.id, employeeId: this.state.sdEmpPick || null }) }).then(_sdJson)
+                .then(({ ok: ok2, j: j2 }) => ok2 ? this._sdLoadSuggestion(j2) : back9((j2 && j2.error) || 'The document could not be read.'));
+            })
+            .catch(() => back9('Could not reach the server.'));
+        };
+        rd9.readAsDataURL(f9);
+      },
+      sdAccept: () => {
+        const st9 = this.state;
+        if (!st9.sdSug || st9.sdBusy) return;
+        if (!st9.sdType) return this.setState({ sdErr: 'Choose the document type.' });
+        this.setState({ sdBusy: true, sdErr: '' });
+        const body9 = { docType: st9.sdType, number: st9.sdNumber || null, expiry: st9.sdExpiry || null, issueDate: st9.sdIssue || null, employeeId: st9.sdOwner || null };
+        fetch(_sdApiBase() + '/api/intake/suggestions/' + st9.sdSug.id + '/accept', { method: 'POST', headers: _sdHeaders(), body: JSON.stringify(body9) }).then(_sdJson)
+          .then(({ ok, j }) => {
+            if (!ok) return this.setState({ sdBusy: false, sdErr: (j && j.error) || 'The document could not be added.' });
+            const d9 = j.document || {};
+            const edits9 = Object.keys(j.changed || {});
+            this.setState({ sdBusy: false, sdStep: 'done', sdResult: {
+              title: (d9.docType || 'Document') + ' added',
+              msg: (d9.docType || 'The document') + ' for ' + (d9.person || 'this client') + (d9.expiryDate ? ', expiring ' + d9.expiryDate : '') + ', is now tracked for renewal.'
+                + (j.superseded ? ' The older record was kept as history.' : '')
+                + (edits9.length ? ' Your corrections to ' + edits9.join(', ') + ' were recorded.' : ''),
+            } });
+            this._afterDocumentChange && this._afterDocumentChange();
+            this._afterWorkforceChange && this._afterWorkforceChange();
+          })
+          .catch(() => this.setState({ sdBusy: false, sdErr: 'Could not reach the server — nothing was saved.' }));
+      },
+      sdReject: () => {
+        const st9 = this.state;
+        if (!st9.sdSug || st9.sdBusy) return;
+        fetch(_sdApiBase() + '/api/intake/suggestions/' + st9.sdSug.id + '/reject', { method: 'POST', headers: _sdHeaders(), body: JSON.stringify({ reason: 'rejected on review' }) }).then(_sdJson)
+          .then(({ ok, j }) => ok
+            ? this.setState({ sdStep: 'done', sdResult: { title: 'Reading rejected', msg: 'Nothing was added. The scan and what was read are kept on record with your decision.' } })
+            : this.setState({ sdErr: (j && j.error) || 'Could not reject this reading.' }))
+          .catch(() => this.setState({ sdErr: 'Could not reach the server.' }));
+      },
+    };
     const empApi = {
       ...eiApi,
+      ...sdApi,
       showEmpModal: this.state.empModal, eDocRows,
       // The SAME option sources Add uses — the country list from the API, the departments master,
       // and the two literal lists — so the choices cannot differ between adding and correcting.
@@ -19442,6 +20080,14 @@ class Component extends DCLogic {
       // Import is opened the same way, and for the same reason the client is locked: this client's
       // id travels with the dialog, so a file can only ever land on the client whose page it was
       // opened from.
+      // Scan document — the intake agent, opened for this client. Status is fetched fresh each time: it
+      // depends on a server key and an admin switch, and a stale "available" would let someone upload
+      // a passport only to be told afterwards it cannot be read.
+      clDetailApi.cdScanDoc = () => {
+        this.setState({ sdOpen: true, sdCompanyId: clRow.realId, sdClient: clRow.name, sdStep: 'upload', sdErr: '', sdSug: null,
+          sdEmpPick: '', sdFileName: '', sdPreviewUrl: '', sdIsPdf: false, sdStatus: null, sdResult: null });
+        this._sdLoadStatus && this._sdLoadStatus();
+      };
       clDetailApi.cdImportEmp = () => this.setState({
         eiOpen: true, eiCompanyId: clRow.realId, eiClient: clRow.name,
         eiStep: 'pick', eiErr: '', eiBusy: false, eiCsv: '', eiFileName: '', eiPlan: null, eiResult: null,
@@ -26361,6 +27007,7 @@ class Component extends DCLogic {
       ['New website enquiry', 'Whoever it was assigned to', 'Email · In-app', true],
       ['Work assigned to you', 'The person the step sits with', 'Email · In-app', true],
       ['Your task is running late', 'The person the step sits with', 'Email · In-app', true],
+      ['Client documents needed', 'The client (Client Document Chaser agent)', 'Email · Portal', true],
     ].map(([event, who, channels, dflt]) => {
       const on = nrState[event] != null ? !!nrState[event] : dflt;
       return { event, who, channels, on, onOff: !on,
@@ -28382,7 +29029,7 @@ class Component extends DCLogic {
     const pageFlags = {
       showCompany: act === 'My Company', showApplications: act === 'Applications', showRenewals: act === 'Renewals',
       showEmployees: act === 'Employees', showDocuments: act === 'Documents', showInvoices: act === 'Invoices',
-      showPayments: act === 'Receipts', showAppointments: act === 'Appointments', showSupport: act === 'Support Center', showServices: act === 'Service Catalog',
+      showPayments: act === 'Receipts', showAgents: act === 'Agents', showAppointments: act === 'Appointments', showSupport: act === 'Support Center', showServices: act === 'Service Catalog',
       showNotifications: act === 'Notifications', showProfileSettings: act === 'Profile & Settings' || act === 'Profile Settings', showCredentials: act === 'Credentials', showGroup: act === 'Group Overview', showClients: act === 'Clients',
       showWorkflow: act === 'Workflow Builder', showSettings: act === 'Settings' || ['Record Sequence', 'Form Builder', 'Print Layout'].includes(act),
       showRequests: act === 'Requests Queue', showQuotations: act === 'Quotations',
@@ -35295,7 +35942,432 @@ class Component extends DCLogic {
       dashRequestsEmpty: dashRequests.length === 0,
       dashActivityEmpty: activities.length === 0,
     };
+    // ── Agents ──
+    // Loaded once at start (for the sidebar badge) and then polled every few seconds, but ONLY while
+    // the Agents screen is open, the tab is visible and nobody is mid-review — a live "working"
+    // animation is worthless if it is ten minutes stale, and a re-render under a half-edited draft is
+    // how a person loses what they typed.
+    const _agBase = () => this._apiBase || 'http://localhost:4100';
+    const _agHeaders = () => { const t9 = localStorage.getItem('stimespro:token'); return { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }; };
+    const _agJson = (r) => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j }));
+    this._loadAgents = this._loadAgents || (() => {
+      if (!localStorage.getItem('stimespro:token')) return;
+      fetch(_agBase() + '/api/agents', { headers: _agHeaders() })
+        .then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.agents)) this.setState({ agentsData: v }); }).catch(() => {});
+    });
+    this._loadAgentConn = this._loadAgentConn || (() => {
+      if (!localStorage.getItem('stimespro:token')) return;
+      fetch(_agBase() + '/api/agents/connection', { headers: _agHeaders() })
+        .then(r => (r.ok ? r.json() : null)).then(v => { if (v) this.setState({ agentConn: v }); }).catch(() => {});
+    });
+    if (!this._agentsBooted && localStorage.getItem('stimespro:token')) { this._agentsBooted = true; setTimeout(() => { this._loadAgents(); this._loadAgentConn(); }, 0); }
+    this._agentsPoll = this._agentsPoll || setInterval(() => {
+      const s9 = this.state;
+      if (s9.active === 'Agents' && document.visibilityState === 'visible' && !s9.agReviewId && !s9.agQiwaOpen) this._loadAgents();
+    }, 4000);
+    const _agAgo = (iso) => {
+      if (!iso) return '';
+      const s9 = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+      if (s9 < 45) return 'just now';
+      if (s9 < 3600) return Math.round(s9 / 60) + ' min ago';
+      if (s9 < 86400) return Math.round(s9 / 3600) + ' h ago';
+      if (s9 < 172800) return 'yesterday';
+      return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    };
+    const _agRole = (this.state.meUser && this.state.meUser.role) || '';
+    const _agAdmin = _agRole === 'admin' || _agRole === 'super_admin';
+    const _agToast = (m) => { if (this.toast) this.toast(m); };
+    const _agPut = (key, body, done) => {
+      fetch(_agBase() + '/api/agents/' + key, { method: 'PUT', headers: _agHeaders(), body: JSON.stringify(body) }).then(_agJson)
+        .then(({ ok, j }) => { if (!ok) _agToast((j && j.error) || 'Could not change the agent.'); else if (done) done(); this._loadAgents(); })
+        .catch(() => _agToast('Could not reach the server.'));
+    };
+    const AG_ICONS = {
+      scan: 'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10',
+      renew: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5M9 12l2 2 4-4',
+      inbox: 'M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z',
+      coins: 'M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+      sweep: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+      gauge: 'M12 14l4-4M3.3 17a10 10 0 1 1 17.4 0M12 14a0 0 0 0 1 0 0',
+      chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5',
+      receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h3',
+      bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+      timer: 'M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 10v4l2.5 2.5M9 2h6',
+      bank: 'M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18M12 3l9 5H3z',
+      route: 'M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 15V9a3 3 0 0 1 3-3h7M18 9v6a3 3 0 0 1-3 3H8',
+    };
+    const _agList = ((this.state.agentsData || {}).agents) || [];
+    const _agSelKey = this.state.agSel && _agList.some(a9 => a9.key === this.state.agSel) ? this.state.agSel : (_agList[0] && _agList[0].key);
+    const _agSel = _agList.find(a9 => a9.key === _agSelKey) || null;
+    const _agState = (a9) => {
+      const working9 = a9.state === 'working', off9 = a9.state === 'off';
+      return {
+        working9, off9,
+        stateLabel: working9 ? 'Working' : off9 ? 'Switched off' : 'Idle · ready',
+        stateColor: working9 ? '#7C00FF' : off9 ? '#8C8899' : '#0E9355',
+        stateBg: working9 ? '#F5EEFF' : off9 ? '#F3F1F7' : '#E7F8EF',
+        dotAnim: working9 ? 'agDot 1.1s ease-in-out infinite' : off9 ? 'none' : 'agDot 2.4s ease-in-out infinite',
+      };
+    };
+    const RESULT = {
+      working: ['Working', '#7C00FF', '#F5EEFF'], review: ['Needs review', '#B8860B', '#FEF4E2'], watching: ['Chasing', '#2563EB', '#EAF1FE'],
+      done: ['Done', '#0E9355', '#E7F8EF'], dismissed: ['Dismissed', '#6F6C7A', '#F3F1F7'], failed: ['Failed', '#C0353A', '#FEECEC'],
+    };
+    const _agNav = (lk) => {
+      if (lk.client) { this._goClient && this._goClient(lk.client, lk.tab || 'Overview'); this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance', clientTab: lk.tab || 'Overview', clientSlug: null, agReviewId: null }); return; }
+      const to9 = { invoices: ['Invoices', 'Finance'], tasks: ['Task List', 'Operations'], requests: ['Requests Queue', 'Operations'], runs: ['Task List', 'Operations'] }[lk.kind];
+      if (to9) this.setState({ active: to9[0], activeGroup: to9[1], agReviewId: null });
+    };
+    const _agOpenTask = (a9, t9) => {
+      if (t9.source === 'intake' || !t9.output) { if (t9.client) _agNav({ client: t9.client, tab: t9.openTab || 'Overview' }); return; }
+      const d9 = t9.output.draft;
+      this.setState({ agReviewId: t9.id, agRvErr: '', agRvBusy: false, agDraftSubject: (d9 && d9.subject) || '', agDraftBody: (d9 && d9.body) || '' });
+    };
+    const agentsApi = {
+      agLiveLine: _agList.some(a9 => a9.state === 'working') ? 'An agent is working now' : 'Live · updates every few seconds',
+
+      agConn: [(() => {
+        const c9 = this.state.agentConn || {};
+        const providers9 = c9.providers || [];
+        const models9 = c9.models || [];
+        const any9 = models9.length > 0;
+        const lt9 = c9.lastTest;
+        const testM9 = models9.some(m9 => m9.id === this.state.agTestModel) ? this.state.agTestModel : (models9[0] && models9[0].id);
+        const using9 = _agList.filter(a9 => a9.enabled && a9.model && a9.modelUse !== 'none').map(a9 => a9.name + ' → ' + a9.modelLabel);
+        const ok9 = any9 && lt9 && lt9.ok;
+        const short9 = (id9) => { const m9 = models9.find(x9 => x9.id === id9); return m9 ? m9.label.replace(/^Claude /, '') : id9; };
+        return {
+          label: !any9 ? 'No model connected — built-in reader only' : !lt9 ? 'Configured · not tested' : lt9.ok ? 'Connected' : 'Last test failed',
+          color: !any9 ? '#6F6C7A' : ok9 ? '#0E9355' : '#B8860B', bg: !any9 ? '#F3F1F7' : ok9 ? '#E7F8EF' : '#FEF4E2',
+          stepBg1: any9 ? '#E7F8EF' : '#EFE6FC', stepInk1: any9 ? '#0E9355' : '#5B21B6',
+          stepBg3: ok9 ? '#E7F8EF' : '#EFE6FC', stepInk3: ok9 ? '#0E9355' : '#5B21B6',
+          providers: providers9.map(p9 => ({
+            name: p9.kind === 'anthropic' ? 'Claude (Anthropic)' : (p9.label || 'Self-hosted model'),
+            dot: p9.configured ? '#0E9355' : '#C4C0CE',
+            detail: p9.kind === 'anthropic'
+              ? (p9.configured ? 'Key set on the server. Data goes to Anthropic, outside Saudi Arabia.' : 'Not set up — ANTHROPIC_API_KEY')
+              : (p9.configured ? (p9.host + ' · ' + (p9.models || []).join(', ') + (p9.hasKey ? '' : ' · no API key set') + (p9.insecure ? ' · plain http over a public address — use a private link' : '')) : 'Not set up — OPENAI_COMPAT_BASE_URL and OPENAI_COMPAT_MODELS'),
+            detailColor: p9.insecure || (p9.configured && p9.kind !== 'anthropic' && !p9.hasKey) ? '#A12A2F' : '#6F6C7A',
+          })),
+          keyMissing: !any9,
+          keyText: any9 ? 'Set in the API server’s environment, never here — so nobody who signs in can redirect scans to another server.'
+            : 'Passports are read without any model. For everything else, set one of these in the API server’s .env and restart:',
+          modelsText: using9.length ? 'In use: ' + using9.join(' · ') + '. Change it on each agent below.'
+            : any9 ? 'Each agent below has its own setting. Agents that never use a model say so, and nothing is sent anywhere until an agent is set to a model.'
+            : 'Once a model is connected, each agent below gets its own setting. Until then Collections, Data Quality, Nitaqat Advisor, the renewal checks and passport reading all work without one.',
+          testText: !any9 ? 'Connect a model first.' : !lt9 ? 'Send one tiny request to confirm it answers.'
+            : lt9.ok ? 'Worked ' + _agAgo(lt9.at) + ' with ' + short9(lt9.model) + ' · ' + lt9.ms + ' ms'
+            : 'Failed ' + _agAgo(lt9.at) + ': ' + (lt9.error || 'unknown error'),
+          testColor: lt9 && !lt9.ok ? '#A12A2F' : '#4B4757',
+          canTest: any9 && _agAdmin,
+          testLabel: this.state.agTesting ? 'Testing…' : 'Test',
+          testModels: models9.map(m9 => ({
+            label: m9.label.replace(/^Claude /, ''), pick: () => this.setState({ agTestModel: m9.id }),
+            border: testM9 === m9.id ? '#7C00FF' : '#DDD9E6', bg: testM9 === m9.id ? '#F5EEFF' : '#fff', color: testM9 === m9.id ? '#5B21B6' : '#6F6C7A',
+          })),
+          test: () => {
+            if (this.state.agTesting || !testM9) return;
+            this.setState({ agTesting: true });
+            fetch(_agBase() + '/api/agents/connection/test', { method: 'POST', headers: _agHeaders(), body: JSON.stringify({ model: testM9 }) }).then(_agJson)
+              .then(({ ok, j }) => { this.setState({ agTesting: false }); if (!ok) _agToast((j && j.error) || 'The test could not run.'); this._loadAgentConn(); })
+              .catch(() => { this.setState({ agTesting: false }); _agToast('Could not reach the server.'); });
+          },
+        };
+      })()],
+
+      agTiles: _agList.map(a9 => {
+        const s9 = _agState(a9);
+        const sel9 = a9.key === _agSelKey;
+        return {
+          name: a9.name, cadence: a9.cadence, icon: AG_ICONS[a9.icon] || AG_ICONS.scan,
+          isWorking: s9.working9, stateLabel: s9.stateLabel, stateColor: s9.stateColor, stateBg: s9.stateBg, dotAnim: s9.dotAnim,
+          bg: sel9 ? '#FBF8FF' : '#fff', border: sel9 ? '#7C00FF' : '#EDEBF2', shadow: sel9 ? '0 6px 20px rgba(124,0,255,.12)' : '0 1px 2px rgba(38,7,77,.04)',
+          iconBg: s9.working9 ? '#EFE3FF' : s9.off9 ? '#F1EFF5' : '#EAF7EF', ink: s9.working9 ? '#7C00FF' : s9.off9 ? '#A9A6B4' : '#0E9355',
+          iconAnim: s9.working9 ? 'agBreathe 1.4s ease-in-out infinite' : 'none',
+          modelChip: a9.modelUse === 'none' ? 'No model' : a9.modelLabel,
+          hasReview: a9.review > 0, reviewLabel: a9.review + ' to review',
+          pick: () => this.setState({ agSel: a9.key, agAnswer: null, agAskErr: '' }),
+        };
+      }),
+
+      agentCards: _agSel ? [(() => {
+        const a9 = _agSel;
+        const s9 = _agState(a9);
+        const maxDay9 = Math.max(1, ...(a9.days || []).map(d9 => d9.count));
+        const TONE = { good: '#0E9355', warn: '#B8860B', bad: '#C0353A' };
+        const avail9 = (((this.state.agentsData || {}).connection || {}).models || []);
+        // The choices are what the server has configured right now. A model chosen earlier whose connection has since gone is still shown, marked, so the setting is not silently lost.
+        const models9 = [...(a9.modelUse === 'optional' ? [[null, a9.key === 'document-intake' ? 'Passports only' : 'No model']] : []), ...avail9.map(m9 => [m9.id, m9.label.replace(/^Claude /, '')]), ...(a9.model && !avail9.some(m9 => m9.id === a9.model) ? [[a9.model, (a9.model.startsWith('oc:') ? a9.model.slice(3) : a9.model) + ' (not connected)']] : [])];
+        return {
+          name: a9.name, does: a9.does, never: a9.never, modelWhy: a9.modelWhy, modelLabel: a9.modelUse === 'none' ? 'Never uses a model' : a9.modelLabel,
+          icon: AG_ICONS[a9.icon] || AG_ICONS.scan,
+          why: a9.why || '', hasWhy: !!a9.why && !s9.working9,
+          isWorking: s9.working9, stateLabel: s9.stateLabel, stateColor: s9.stateColor, stateBg: s9.stateBg, dotAnim: s9.dotAnim,
+          tint: s9.working9 ? '#F6EEFF' : s9.off9 ? '#F7F6FA' : '#F3FBF6',
+          tileBg: s9.working9 ? '#EFE3FF' : s9.off9 ? '#EEECF2' : '#EAF7EF',
+          tileAnim: s9.working9 || s9.off9 ? 'none' : 'agBreathe 3.2s ease-in-out infinite',
+          cornerAnim: s9.working9 ? 'agCorners 1.6s ease-in-out infinite' : 'none',
+          ink: s9.working9 ? '#7C00FF' : s9.off9 ? '#B9B5C4' : '#0E9355',
+          faceBg: s9.off9 ? '#E4E1EA' : '#EDE3FA', lineBg: s9.off9 ? '#ECEAF1' : '#E7DDF6',
+          nowLabel: a9.nowLabel || 'Working',
+          canEnable: _agAdmin && !a9.enabled && !(a9.modelUse === 'required' && !((this.state.agentsData || {}).connection || {}).keyPresent), enable: () => _agPut(a9.key, { enabled: true }),
+          canDisable: _agAdmin && a9.enabled, disable: () => _agPut(a9.key, { enabled: false }),
+          canRunNow: !!a9.canRunNow, runNow: () => {
+            fetch(_agBase() + '/api/agents/' + a9.key + '/run', { method: 'POST', headers: _agHeaders() }).then(_agJson)
+              .then(({ ok, j }) => { _agToast(ok ? a9.name + ' finished its pass.' : ((j && j.error) || 'The agent could not run.')); this._loadAgents(); })
+              .catch(() => _agToast('Could not reach the server.'));
+            setTimeout(() => this._loadAgents(), 300);
+          },
+          showModels: _agAdmin && a9.modelUse !== 'none' && models9.length > 1,
+          modelChips: models9.map(([id9, l9]) => {
+            const on9 = (a9.model || null) === id9;
+            return { label: l9, title: id9 ? 'Use ' + l9 : 'Work from templates and database checks only',
+              border: on9 ? '#7C00FF' : '#DDD9E6', bg: on9 ? '#F5EEFF' : '#fff', color: on9 ? '#5B21B6' : '#6F6C7A',
+              pick: () => { if (!on9) _agPut(a9.key, { model: id9 }); } };
+          }),
+          hasQiwa: a9.key === 'data-quality' && _agAdmin,
+          hasBankUpload: a9.key === 'bank-reconciliation',
+          bankUploadLabel: this.state.agBankBusy ? 'Reading the statement…' : 'Upload bank statement (CSV)',
+          bankPick: (e9) => {
+            const file9 = e9 && e9.target && e9.target.files && e9.target.files[0];
+            if (!file9 || this.state.agBankBusy) return;
+            if (!/\.csv$/i.test(file9.name)) { _agToast('Save the statement as CSV from your bank or from Excel, then upload that.'); return; }
+            if (file9.size > 3 * 1024 * 1024) { _agToast('That statement is over 3 MB.'); return; }
+            this.setState({ agBankBusy: true });
+            const rd9 = new FileReader();
+            rd9.onload = () => {
+              fetch(_agBase() + '/api/agents/bank-reconciliation/statements', { method: 'POST', headers: _agHeaders(), body: JSON.stringify({ fileName: file9.name, text: String(rd9.result || '') }) }).then(_agJson)
+                .then(({ ok, j }) => {
+                  this.setState({ agBankBusy: false });
+                  if (!ok) return _agToast((j && j.error) || 'The statement could not be read.');
+                  _agToast(j.added + ' new line' + (j.added === 1 ? '' : 's') + (j.duplicates ? ' (' + j.duplicates + ' already imported)' : '') + ': ' + j.recorded + ' already recorded, ' + j.proposed + ' matched to confirm, ' + j.unmatched + ' not placed.');
+                  this._loadAgents();
+                })
+                .catch(() => { this.setState({ agBankBusy: false }); _agToast('Could not reach the server.'); });
+            };
+            rd9.readAsText(file9);
+          },
+          hasCenters: a9.key === 'visit-planner' && _agAdmin,
+          centersLabel: a9.options ? 'In-person centers (' + a9.options.inPersonCount + (a9.options.inPersonConfigured ? '' : ', guessed') + ')' : 'In-person centers',
+          openCenters: () => this.setState({ agCentersOpen: true, agCentersSel: ((a9.options && a9.options.centers) || []).filter(c9 => c9.inPerson).map(c9 => c9.name) }),
+          qiwaLabel: a9.options && a9.options.qiwaOccupations ? 'Qiwa occupation list (' + a9.options.qiwaOccupations + ')' : 'Load Qiwa occupation list',
+          openQiwa: () => {
+            this.setState({ agQiwaOpen: true, agQiwaText: '' });
+            fetch(_agBase() + '/api/agents/data-quality/qiwa', { headers: _agHeaders() }).then(_agJson)
+              .then(({ ok, j }) => { if (ok && Array.isArray(j.list)) this.setState({ agQiwaText: j.list.join('\n') }); }).catch(() => {});
+          },
+          footnote: (a9.lastRunAt ? 'Last pass ' + _agAgo(a9.lastRunAt) + ' · ' : '') + a9.cadence + (_agAdmin ? '' : ' · an admin controls this agent'),
+          statTiles: (a9.key === 'bank-reconciliation' && a9.options ? [
+            { label: 'Deposits imported', value: a9.options.credits, sub: a9.options.lastFile ? 'last: ' + a9.options.lastFile : 'last 30 days' },
+            { label: 'Already recorded', value: a9.options.recorded + a9.options.matched, sub: a9.options.matched + ' confirmed here', tone: 'good' },
+            { label: 'To confirm', value: a9.options.proposed, sub: 'matched, waiting for you', tone: a9.options.proposed ? 'warn' : undefined },
+            { label: 'Not placed', value: a9.options.unmatched, sub: 'record by hand, or set aside', tone: a9.options.unmatched ? 'bad' : undefined },
+          ] : (a9.tiles || [])).map(t9 => ({ label: t9.label, value: String(t9.value), sub: t9.sub || '', color: TONE[t9.tone] || '#1A1523' })),
+          days: (a9.days || []).map(d9 => ({ label: d9.label.slice(0, 2), title: d9.count + ' on ' + d9.day, h: Math.max(3, Math.round((d9.count / maxDay9) * 30)) + 'px', color: d9.count ? '#B990F5' : '#EEEAF4' })),
+        };
+      })()] : [],
+
+      agTasksTitle: _agSel && _agSel.key === 'console-assistant' ? 'Questions answered' : 'Tasks done',
+      agTasksCaption: _agSel ? ((_agSel.review ? _agSel.review + ' waiting for a person · ' : '') + ((_agSel.tasks || []).length ? 'most recent ' + _agSel.tasks.length : '')) : '',
+      agHasTasks: !!_agSel && (_agSel.tasks || []).length > 0,
+      agNoTasks: !_agSel || (_agSel.tasks || []).length === 0,
+      agEmptyIcon: _agSel ? (AG_ICONS[_agSel.icon] || AG_ICONS.scan) : AG_ICONS.scan,
+      agEmptyText: !_agSel ? '' : ({
+        'document-intake': 'Scan a document from any client’s Documents tab. Each reading appears here — what it read, what you corrected, and who accepted it.',
+        'renewal-prep': 'When a renewal run reaches its gate check, the prepared checks and the drafted fee message appear here for the officer.',
+        'request-triage': 'When a client files a request in the portal, the agent’s reading of it — service, employee, missing documents and a drafted reply — appears here.',
+        'collections': 'When a client reports a payment, the matched invoices appear here for the accountant to confirm. Tailored reminders are listed as they go out.',
+        'data-quality': 'Findings from the daily sweep appear here. A finding that gets fixed closes itself on the next pass.',
+        'nitaqat-advisor': 'Warnings appear here when exits or hires in progress would drop a client’s band.',
+        'console-assistant': 'Questions asked above appear here with their answers.',
+        'unbilled-work': 'Work that was done but never invoiced appears here, each with a draft invoice ready to raise.',
+        'document-chaser': 'Anything waiting on a client — missing documents, a renewal on hold, an unanswered fee approval — appears here with the reminders sent, and closes itself when the client provides it.',
+        'sla-rescue': 'Steps likely to miss their deadline, overloaded officers, work left with inactive accounts and late tasks appear here, with who should take the work.',
+        'bank-reconciliation': 'Upload a bank statement (CSV) with the button above. Each deposit it matches appears here to confirm; deposits already recorded are recognised, and anything it cannot place is listed.',
+        'visit-planner': 'The week’s plan appears here once there are appointments, steps at government offices or courier jobs to go to — each trip listed with what to do there.',
+      })[_agSel.key] + (_agSel.enabled || _agSel.key === 'document-intake' ? '' : ' Turn the agent on to start.'),
+      agTaskRows: (_agSel ? _agSel.tasks || [] : []).map(t9 => {
+        const r9 = RESULT[t9.status] || RESULT.review;
+        const secs9 = t9.finishedAt && t9.source === 'intake' ? Math.max(0, Math.round((Date.parse(t9.finishedAt) - Date.parse(t9.createdAt)) / 1000)) : null;
+        return {
+          result: t9.status === 'done' && t9.source === 'intake' ? 'Accepted' : t9.status === 'dismissed' && t9.source === 'intake' ? 'Rejected' : t9.status === 'working' && t9.source === 'intake' ? 'Reading' : r9[0],
+          color: r9[1], bg: r9[2], dotAnim: t9.status === 'working' ? 'agDot 1.1s ease-in-out infinite' : 'none',
+          title: t9.title,
+          sub: (t9.kind || '').replace(/-/g, ' ') + (secs9 != null ? ' · read in ' + secs9 + 's' : '') + (t9.model ? ' · with a model' : ''),
+          client: t9.client || '—',
+          detail: t9.summary || '',
+          detailColor: t9.status === 'failed' ? '#A12A2F' : '#4B4757',
+          when: _agAgo(t9.decidedAt || t9.finishedAt || t9.createdAt),
+          who: t9.decidedBy ? (t9.status === 'dismissed' ? 'Dismissed by ' : 'Decided by ') + t9.decidedBy : t9.by ? 'By ' + t9.by : t9.status === 'done' && t9.decision && t9.decision.auto ? 'Closed by the agent' : '',
+          open: () => _agOpenTask(_agSel, t9),
+        };
+      }),
+
+      // the console assistant
+      agIsAssistant: !!_agSel && _agSel.key === 'console-assistant',
+      agQ: this.state.agQ || '', setAgQ: (e9) => this.setState({ agQ: e9.target.value }),
+      agAskLabel: this.state.agAskBusy ? 'Asking…' : 'Ask',
+      agAskBusy: !!this.state.agAskBusy,
+      agHasAskErr: !!this.state.agAskErr, agAskErr: this.state.agAskErr || '',
+      agHasAnswer: !!(this.state.agAnswer && this.state.agAnswer.answer), agAnswer: (this.state.agAnswer && this.state.agAnswer.answer) || '',
+      agAnswerMeta: this.state.agAnswer ? (this.state.agAnswer.lookups + ' LOOKUP' + (this.state.agAnswer.lookups === 1 ? '' : 'S')) : '',
+      agAnswerLinks: ((this.state.agAnswer && this.state.agAnswer.links) || []).map(lk9 => ({ label: lk9.label, go: () => _agNav(lk9) })),
+      agExamples: ['Which Iqamas expire this month, and what is blocking each?', 'Which invoices are overdue?', 'What band is each client in?'].map(x9 => ({ text: x9, use: () => this.setState({ agQ: x9 }) })),
+      agAsk: () => {
+        const q9 = String(this.state.agQ || '').trim();
+        if (!q9 || this.state.agAskBusy) return;
+        this.setState({ agAskBusy: true, agAskErr: '', agAnswer: null });
+        setTimeout(() => this._loadAgents(), 400);
+        fetch(_agBase() + '/api/agents/assistant/ask', { method: 'POST', headers: _agHeaders(), body: JSON.stringify({ question: q9 }) }).then(_agJson)
+          .then(({ ok, j }) => { this.setState({ agAskBusy: false, ...(ok ? { agAnswer: j } : { agAskErr: (j && j.error) || 'The question could not be answered.' }) }); this._loadAgents(); })
+          .catch(() => this.setState({ agAskBusy: false, agAskErr: 'Could not reach the server.' }));
+      },
+
+      // one task, opened
+      agReviewOpen: !!this.state.agReviewId,
+      agReviewClose: () => this.setState({ agReviewId: null }),
+      ...(() => {
+        const t9 = _agSel && this.state.agReviewId ? (_agSel.tasks || []).find(x9 => x9.id === this.state.agReviewId) : null;
+        const o9 = (t9 && t9.output) || {};
+        const r9 = t9 ? (RESULT[t9.status] || RESULT.review) : RESULT.review;
+        const review9 = !!t9 && (t9.status === 'review' || t9.status === 'watching');
+        const acts9 = t9 ? (t9.actions || []) : [];
+        const hasSend9 = acts9.some(a9 => a9.key === 'send');
+        const lists9 = [];
+        const people9 = o9.people || [];
+        if (people9.length) lists9.push({ title: 'People' + (o9.more ? ' (first ' + people9.length + ' of ' + (people9.length + o9.more) + ')' : ''), items: people9.map(p9 => ({ text: [p9.name, p9.code, p9.govId ? 'ID ' + p9.govId : '', p9.role ? '“' + p9.role + '”' : '', p9.client].filter(Boolean).join(' · ') })) });
+        if ((o9.documents || []).length) lists9.push({ title: 'Documents' + (o9.more ? ' (first ' + o9.documents.length + ' of ' + (o9.documents.length + o9.more) + ')' : ''), items: o9.documents.map(d9 => ({ text: d9.docType + (d9.number ? ' ' + d9.number : '') + ' · ' + d9.person + ' · expired ' + d9.expiry + ' (' + d9.daysAgo + ' days ago)' })) });
+        if ((o9.exits || []).length) lists9.push({ title: 'Exits counted', items: o9.exits.map(e9 => ({ text: e9.name + ' · ' + (e9.national ? 'Saudi' : 'expat') + ' · ' + String(e9.status).replace(/_/g, ' ') + (e9.date ? ' · last day ' + e9.date : '') })) });
+        if ((o9.hires || []).length) lists9.push({ title: 'Hires in progress', items: o9.hires.map(h9 => ({ text: h9.name + ' · ' + (h9.national ? 'Saudi' : 'expat') + ' · ' + h9.run })) });
+        if ((o9.options || []).length) lists9.push({ title: 'Ways to hold the band — fewest people first', items: o9.options.map(op9 => ({ text: op9.text })) });
+        if (o9.match && (o9.match.allocations || []).length) lists9.push({ title: 'Receipts to record', items: o9.match.allocations.map(al9 => ({ text: al9.number + ' · ' + (o9.currency || '') + ' ' + Number(al9.amount).toLocaleString() + (al9.amount < al9.outstanding ? ' (part of ' + Number(al9.outstanding).toLocaleString() + ')' : ' (settles it)') })) });
+        const facts9 = [];
+        if (o9.runTitle) facts9.push({ label: 'Renewal run', value: o9.runTitle + (o9.stepTitle ? ' — ' + o9.stepTitle : '') });
+        if (o9.service) facts9.push({ label: 'Service', value: o9.service.name + ' — ' + o9.service.how });
+        if (o9.request) facts9.push({ label: 'Request', value: (o9.request.number || '') + ' · ' + (o9.request.type || '') + (o9.request.message ? ' — “' + String(o9.request.message).slice(0, 160) + '”' : '') });
+        if (o9.employee) facts9.push({ label: 'Employee', value: o9.employee.name + ' — ' + o9.employee.how });
+        if (o9.now && o9.projected) facts9.push({ label: 'Band now → projected', value: o9.now.band + ' ' + o9.now.ratioPct + '% → ' + o9.projected.band + ' ' + o9.projected.ratioPct + '% (' + o9.threshold.band + ' needs ' + o9.threshold.minPct + '%)' });
+        if (o9.question) facts9.push({ label: 'Question', value: o9.question });
+        if (o9.profile) facts9.push({ label: 'Payment history', value: o9.profile });
+        // Agents that describe their own facts and lists.
+        (Array.isArray(o9.facts) ? o9.facts : []).forEach(fc9 => fc9 && fc9.label && facts9.push({ label: fc9.label, value: String(fc9.value == null ? '' : fc9.value) }));
+        (Array.isArray(o9.lists) ? o9.lists : []).forEach(ls9 => ls9 && Array.isArray(ls9.items) && ls9.items.length && lists9.push({ title: ls9.title || 'Details', items: ls9.items.map(it9 => ({ text: String(it9 && it9.text != null ? it9.text : it9) })) }));
+        if (Array.isArray(o9.lines) && o9.lines.length && o9.source) lists9.push({ title: 'Draft invoice lines', items: o9.lines.map(l9 => ({ text: (l9.name || 'Line') + ' · ' + (l9.units || 1) + ' × ' + Number(l9.price || 0).toLocaleString() })) });
+        if (Array.isArray(o9.reminders)) lists9.push({ title: o9.reminders.length ? 'Reminders sent' : 'Reminders', items: o9.reminders.length ? o9.reminders.map((r9, i9) => ({ text: 'Reminder ' + (i9 + 1) + ' · ' + new Date(r9.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' · ' + (r9.to || []).join(', ') + (r9.delivered === false ? ' (email not set up — recorded, not delivered)' : '') })) : [{ text: 'None yet — the first goes out on day 2' }] });
+        if (Array.isArray(o9.needs) && o9.kind) facts9.push({ label: 'Waiting on the client for', value: o9.needs.join('; ') }, { label: 'Waiting since', value: o9.since ? new Date(o9.since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' });
+        const dec9 = t9 && t9.decision;
+        const decText9 = !t9 || review9 || !dec9 ? '' : dec9.auto ? 'Closed by the agent: ' + dec9.auto
+          : dec9.sent ? 'Sent by ' + (t9.decidedBy || 'staff') + ' to ' + dec9.sent.to.join(', ') + (dec9.sent.edited ? ' after editing the draft' : ' as drafted') + (dec9.sent.delivered === false ? ' (email not set up — logged, not delivered)' : '')
+          : dec9.accepted ? 'Accepted by ' + (t9.decidedBy || 'staff') + ' — ' + [dec9.accepted.taskRef, dec9.accepted.service].filter(Boolean).join(' · ')
+          : dec9.quoted ? 'Draft quotation ' + dec9.quoted + ' created by ' + (t9.decidedBy || 'staff')
+          : dec9.recorded ? 'Recorded by ' + (t9.decidedBy || 'staff') + ': ' + dec9.recorded.join(', ')
+          : dec9.invoiced ? 'Draft invoice ' + dec9.invoiced + ' raised by ' + (t9.decidedBy || 'staff')
+          : dec9.moved ? (t9.decidedBy || 'Staff') + ' moved ' + dec9.moved + ' step' + (dec9.moved === 1 ? '' : 's') + ' to ' + (dec9.to || []).join(', ')
+          : dec9.reason !== undefined ? 'Dismissed by ' + (t9.decidedBy || 'staff') + (dec9.reason ? ' — ' + dec9.reason : '')
+          : 'Handled by ' + (t9.decidedBy || 'staff');
+        const MARK = { ok: ['✓', '#0E9355', '#F3FBF6', '#D5F0E0', ''], flag: ['!', '#D48A0B', '#FEF8EC', '#F6E2B8', ''], unknown: ['?', '#A9A6B4', '#FAF9FC', '#EDEBF2', ''] };
+        const run9 = (a9) => () => {
+          if (this.state.agRvBusy) return;
+          if (a9.key === 'dismiss' && !window.confirm(_agSel.key === 'data-quality' ? 'Mark this as not a problem? It will not be raised again.' : _agSel.key === 'document-chaser' ? 'Stop reminding the client about this? It will not be chased again.' : _agSel.key === 'unbilled-work' ? 'Mark this as covered? It will not be proposed again.' : 'Dismiss this without acting on it?')) return;
+          const input9 = a9.key === 'send' ? { subject: this.state.agDraftSubject, body: this.state.agDraftBody } : {};
+          this.setState({ agRvBusy: true, agRvErr: '' });
+          fetch(_agBase() + '/api/agents/tasks/' + t9.id + '/act', { method: 'POST', headers: _agHeaders(), body: JSON.stringify({ action: a9.key, input: input9 }) }).then(_agJson)
+            .then(({ ok, j }) => {
+              if (!ok) return this.setState({ agRvBusy: false, agRvErr: (j && j.error) || 'That did not work.' });
+              this.setState({ agRvBusy: false, agReviewId: a9.key === 'send' && t9.actions.some(x9 => x9.key === 'accept' || x9.key === 'quote') ? t9.id : null });
+              _agToast((j && j.message) || 'Done.');
+              this._loadAgents();
+            })
+            .catch(() => this.setState({ agRvBusy: false, agRvErr: 'Could not reach the server — nothing was changed.' }));
+        };
+        return {
+          agRv: t9 ? [{
+            agentName: _agSel.name, title: t9.title, result: r9[0], color: r9[1], bg: r9[2],
+            hasClient: !!t9.client, client: t9.client || '', openClient: () => _agNav({ client: t9.client, tab: t9.openTab || 'Overview' }),
+            when: _agAgo(t9.finishedAt || t9.createdAt) + (t9.model ? ' · a model contributed' : ''),
+            summary: t9.status === 'done' && o9.answer ? o9.answer : (t9.summary || ''),
+            hasNote: !!(o9.note || (o9.draft && o9.draft.note) || o9.caveat), note: o9.note || (o9.draft && o9.draft.note) || o9.caveat || '',
+            hasFacts: facts9.length > 0, facts: facts9,
+            hasChecks: (o9.checks || []).length > 0,
+            checks: (o9.checks || []).map(c9 => { const m9 = MARK[c9.state] || MARK.unknown; return { mark: m9[0], dot: m9[1], bg: m9[2], border: m9[3], label: c9.label, note: c9.note, tag: c9.ticked ? '  · ticked on the step' : '', tagColor: '#0E9355' }; }),
+            lists: lists9,
+            hasProposal: review9 && !!(o9.proposal && o9.proposal.text), proposal: (o9.proposal && o9.proposal.text) || '',
+            hasDecision: !!decText9, decision: decText9,
+          }] : [],
+          agRvHasDraft: review9 && hasSend9 && !!o9.draft,
+          agRvHasSubject: _agSel && _agSel.key === 'renewal-prep',
+          agRvDraftTitle: _agSel && _agSel.key === 'request-triage' ? (o9.replied ? 'REPLY SENT — SEND ANOTHER?' : 'REPLY TO THE CLIENT') : 'MESSAGE TO THE CLIENT',
+          agRvDraftBy: o9.draft ? (o9.draft.writtenBy === 'model' ? 'Written by a model — check every figure' : 'Standard wording') : '',
+          agRvDraftTo: o9.draft && (o9.draft.to || []).length ? 'Goes to: ' + o9.draft.to.join(', ') : _agSel && _agSel.key === 'request-triage' ? 'Posted on the request and emailed to the client.' : 'This client has no email address on file yet.',
+          agDraftSubject: this.state.agDraftSubject || '', setAgDraftSubject: (e9) => this.setState({ agDraftSubject: e9.target.value }),
+          agDraftBody: this.state.agDraftBody || '', setAgDraftBody: (e9) => this.setState({ agDraftBody: e9.target.value }),
+          agRvHasErr: !!this.state.agRvErr, agRvErr: this.state.agRvErr || '',
+          agRvHasActions: review9 && acts9.length > 0,
+          agRvActions: acts9.map(a9 => ({
+            label: this.state.agRvBusy ? '…' : a9.label, run: run9(a9),
+            bg: a9.primary ? '#7C00FF' : '#fff', color: a9.primary ? '#fff' : a9.key === 'dismiss' ? '#8C8899' : '#5B21B6',
+            border: a9.primary ? 'none' : '1px solid ' + (a9.key === 'dismiss' ? '#E4E1EA' : '#D9C6F5'),
+          })),
+        };
+      })(),
+
+      // in-person centers
+      agCentersOpen: !!this.state.agCentersOpen,
+      agCentersClose: () => this.setState({ agCentersOpen: false }),
+      agCentersNote: (() => { const v9 = _agList.find(a9 => a9.key === 'visit-planner'); return v9 && v9.options && !v9.options.inPersonConfigured ? 'Right now the ticks are a guess from the center names.' : ''; })(),
+      agCenterRows: (() => {
+        const v9 = _agList.find(a9 => a9.key === 'visit-planner');
+        const sel9 = this.state.agCentersSel || [];
+        return ((v9 && v9.options && v9.options.centers) || []).map(c9 => {
+          const on9 = sel9.includes(c9.name);
+          return { name: c9.name, mark: on9 ? '✓' : '', box: on9 ? '#7C00FF' : '#C9C4D6', fill: on9 ? '#7C00FF' : '#fff', bg: on9 ? '#FBF8FF' : '#fff', border: on9 ? '#D9C6F5' : '#EDEBF2',
+            toggle: () => this.setState({ agCentersSel: on9 ? sel9.filter(n9 => n9 !== c9.name) : [...sel9, c9.name] }) };
+        });
+      })(),
+      agCentersSave: () => _agPut('visit-planner', { inPersonCenters: this.state.agCentersSel || [] }, () => { this.setState({ agCentersOpen: false }); _agToast('Saved. The next plan uses these centers.'); }),
+      agCentersAuto: () => _agPut('visit-planner', { inPersonCenters: null }, () => { this.setState({ agCentersOpen: false }); _agToast('Back to guessing from the center names.'); }),
+
+      // Qiwa list
+      agQiwaOpen: !!this.state.agQiwaOpen,
+      agQiwaClose: () => this.setState({ agQiwaOpen: false }),
+      agQiwaText: this.state.agQiwaText || '', setAgQiwaText: (e9) => this.setState({ agQiwaText: e9.target.value }),
+      agQiwaCount: (() => { const n9 = String(this.state.agQiwaText || '').split(/\r?\n/).map(s9 => s9.trim()).filter(Boolean).length; return n9 + ' title' + (n9 === 1 ? '' : 's'); })(),
+      agQiwaSave: () => _agPut('data-quality', { qiwaOccupations: String(this.state.agQiwaText || '') }, () => { this.setState({ agQiwaOpen: false }); _agToast('Qiwa list saved. It is used on the next pass.'); }),
+    };
+    // ── Receipts: what an empty list should say ──
+    // An empty table with only its headings reads as "still loading" or "broken". Three different
+    // situations produce it, and each has a different next step, so the message follows the facts:
+    //   nothing recorded, nothing owed      → there is nothing to collect yet; invoices come first
+    //   nothing recorded, invoices unpaid   → money is owed; record it when it arrives
+    //   payments exist, this method has none → it is the filter, not the data
+    const _payAllN = Array.isArray(this.state.paymentsData) ? this.state.paymentsData.length : 0;
+    const _payShownN = payments.filter(p9 => payFilter === "All" || p9.via === payFilter).length;
+    const _payableN = invoicesFull.filter(v => v.payable).length;
+    const payEmptyApi = (() => {
+      const filtered = _payAllN > 0 && _payShownN === 0;
+      const owed = !filtered && _payableN > 0;
+      return {
+        payEmpty: _payShownN === 0,
+        payEmptyIsFilter: filtered,
+        payEmptyShowAll: () => this.setState({ payFilter: 'All' }),
+        payEmptyTitle: filtered ? 'No ' + payFilter.toLowerCase() + ' payments'
+          : owed ? 'No payments recorded yet' : 'No receipts yet',
+        payEmptyText: filtered
+          ? 'Nothing has been received by ' + payFilter.toLowerCase() + ' so far. Choose another method, or show every receipt.'
+          : owed
+            ? _payableN + ' unpaid invoice' + (_payableN === 1 ? '' : 's') + ' totalling ' + fmtCur(invOutstanding) + (_payableN === 1 ? ' is' : ' are') + ' waiting. When money arrives, record it against the invoice and its receipt appears here.'
+            : 'A receipt appears here each time a payment is recorded against a client invoice. There are no invoices waiting to be paid yet.',
+        payEmptyCta: filtered ? 'Show all receipts' : owed ? 'Record a payment' : 'Go to invoices',
+        payEmptyGo: filtered
+          ? () => this.setState({ payFilter: 'All' })
+          : owed
+            ? () => financeApi.openRecordPay(null)
+            : () => this.setState({ active: 'Invoices', activeGroup: 'Finance' }),
+      };
+    })();
     return {
+      ...agentsApi,
+      ...payEmptyApi,
       ...emptyStatesApi,
       railGroups, panelGroups, activeGroupTitle: activeDef[0], activeLabel: act, trendBars, greeting, greetName, greetLine,
       opsStats, pipeSteps, pipeInFlight, team, revenue, clientHealth, receivables, dashRequests, ...dashNav,

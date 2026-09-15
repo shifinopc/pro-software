@@ -2331,6 +2331,25 @@
           <span style="font-size:10.5px; font-weight:700; color:{{ threadStColor }}; background:{{ threadStBg }}; padding:3px 10px; border-radius:99px;">{{ threadStatus }}</span>
           <div onClick="{{ closeThread }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
+        <sc-if value="{{ threadDocsShow }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px 22px 14px; border-bottom:1px solid #F0EDF6; background:#fff;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <span style="font-size:12px; font-weight:700; color:{{ threadDocsHeadColor }};">{{ threadDocsHead }}</span>
+              <span style="font-size:10.5px; color:#A9A6B4;">{{ threadDocsNote }}</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:9px;">
+              <sc-for list="{{ threadDocs }}" as="d" hint-placeholder-count="2">
+                <div style="display:flex; align-items:center; gap:10px; border:1px solid {{ d.border }}; background:{{ d.bg }}; border-radius:11px; padding:7px 10px;">
+                  <span style="width:18px; height:18px; border-radius:99px; background:{{ d.dot }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.mark }}</span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600; color:#1A1523;">{{ d.label }}</div><div style="font-size:10.5px; color:#8C8899;">{{ d.sub }}</div></div>
+                  <sc-if value="{{ d.canUpload }}" hint-placeholder-val="{{ false }}">
+                    <label style="font-size:11.5px; font-weight:700; color:#fff; background:#7C00FF; padding:6px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ d.uploadLabel }}<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange="{{ d.pick }}" style="display:none;"></label>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
         <div style="flex:1; overflow-y:auto; padding:18px 22px; display:flex; flex-direction:column; gap:12px; background:#FCFBFE;">
           <sc-for list="{{ threadMsgs }}" as="m" hint-placeholder-count="3">
             <div style="display:flex; gap:9px; flex-direction:{{ m.dir }}; align-items:flex-end;">
@@ -4969,7 +4988,57 @@ class Component extends DCLogic {
           .catch(() => {});
       }
     };
+    // What the request still needs, and uploading it here — the answer to "please send the photo" that
+    // used to have no way in except typing a reply.
+    this._loadThreadDocs = this._loadThreadDocs || ((rid9) => {
+      fetch(CRED_API + '/api/portal/service-requests/' + rid9 + '/documents', { headers: { Authorization: 'Bearer ' + credTok() } })
+        .then(r9 => (r9.ok ? r9.json() : null)).then(v9 => { if (v9) this.setState({ threadDocsData: { rid: rid9, ...v9 } }); }).catch(() => {});
+    });
+    const _tdData = openTicket && openTicket.realId && this.state.threadDocsData && this.state.threadDocsData.rid === openTicket.realId ? this.state.threadDocsData : null;
+    const _tdReq = _tdData ? (_tdData.required || []).filter(d9 => d9.required) : [];
+    const _tdMissing = _tdReq.filter(d9 => !d9.received);
+    const _tdClosed = openTicket && ['Completed', 'Declined'].includes(openTicket.status);
+    const _tdUpload = (d9) => (e9) => {
+      const file9 = e9 && e9.target && e9.target.files && e9.target.files[0];
+      if (!file9 || !openTicket || !openTicket.realId) return;
+      if (file9.size > 4 * 1024 * 1024) return this.toast && this.toast('That file is over 4 MB — use a smaller scan or photo.');
+      const rid9 = openTicket.realId;
+      this.setState({ threadDocsBusy: d9.key });
+      const rd9 = new FileReader();
+      rd9.onload = () => {
+        fetch(CRED_API + '/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + credTok() }, body: JSON.stringify({ name: file9.name, data: String(rd9.result) }) })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(up9 => {
+            if (!up9 || !up9.id) throw new Error('upload');
+            return fetch(CRED_API + '/api/portal/service-requests/' + rid9 + '/attachments', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + credTok() }, body: JSON.stringify({ attachments: [{ fileId: up9.id, key: d9.key, label: d9.label }] }) })
+              .then(r9 => r9.json().then(j9 => ({ ok: r9.ok, j9 })));
+          })
+          .then(({ ok, j9 }) => {
+            this.setState({ threadDocsBusy: null });
+            if (!ok) return this.toast && this.toast((j9 && j9.error) || 'Could not attach that file.');
+            this.toast && this.toast(d9.label + ' sent to your PRO team.');
+            this._loadThreadDocs(rid9);
+          })
+          .catch(() => { this.setState({ threadDocsBusy: null }); this.toast && this.toast('Could not upload — try again.'); });
+      };
+      rd9.readAsDataURL(file9);
+    };
+    const threadDocsApi = {
+      threadDocsShow: !!_tdData && _tdReq.length > 0,
+      threadDocsHead: _tdMissing.length ? 'Documents we still need (' + _tdMissing.length + ')' : 'All documents received',
+      threadDocsHeadColor: _tdMissing.length ? '#B54708' : '#0E9355',
+      threadDocsNote: _tdData && _tdData.service ? _tdData.service.name : '',
+      threadDocs: _tdReq.map(d9 => ({
+        label: d9.label, sub: d9.received ? 'Received — your PRO team will check it' : (d9.hint || 'Not received yet'),
+        mark: d9.received ? '✓' : '!', dot: d9.received ? '#0E9355' : '#F79009',
+        bg: d9.received ? '#F3FBF6' : '#FFFAF0', border: d9.received ? '#D5F0E0' : '#FBE3B8',
+        canUpload: !d9.received && !_tdClosed,
+        uploadLabel: this.state.threadDocsBusy === d9.key ? 'Uploading…' : 'Upload',
+        pick: _tdUpload(d9),
+      })),
+    };
     const threadApi = {
+      ...threadDocsApi,
       showThread: !!openTicket, threadMsgs,
       threadSubject: openTicket ? openTicket.subject : '', threadId: openTicket ? openTicket.id : '',
       threadStatus: openTicket ? openTicket.status : '', threadStBg: openTicket ? openTicket.stBg : '#fff', threadStColor: openTicket ? openTicket.stColor : '#000',
@@ -5834,8 +5903,9 @@ class Component extends DCLogic {
       // Opening a real request loads its REAL conversation from the API (PRO replies included) and
       // clears any local echoes — the server copy becomes the single source, never both.
       open: () => {
-        this.setState({ threadTicket: { id: rq.id, realId: rq.realId, subject: rq.subject, status: rq.status, stBg: rq.stBg, stColor: rq.stColor }, threadReply: '' });
+        this.setState({ threadTicket: { id: rq.id, realId: rq.realId, subject: rq.subject, status: rq.status, stBg: rq.stBg, stColor: rq.stColor }, threadReply: '', threadDocsData: null });
         if (rq.realId) {
+          this._loadThreadDocs && this._loadThreadDocs(rq.realId);
           fetch(CRED_API + '/api/portal/service-requests/' + rq.realId + '/messages', { headers: { Authorization: 'Bearer ' + credTok() } })
             .then(r9 => (r9.ok ? r9.json() : null)).then(v9 => {
               if (!Array.isArray(v9)) return;

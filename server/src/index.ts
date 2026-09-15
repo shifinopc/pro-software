@@ -32,6 +32,14 @@ import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, D
 import { syncMailbox, saveConnection } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
+import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
+import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent } from "./agents.js";
+import { AgentActionError } from "./agent-core.js";
+import { qiwaOccupations } from "./agent-data-quality.js";
+import { requestDocStatus, attachToRequest } from "./request-docs.js";
+import { importStatement, StatementError } from "./agent-bank.js";
+import { warmPassportReader } from "./mrz-reader.js";
+import { aiConnection, testConnection, AiError } from "./ai.js";
 
 /**
  * The OAuth `state`, signed.
@@ -1448,30 +1456,18 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
     // Attach the uploaded files to the request, AGAINST the document each one is meant to be.
     // The client sends file ids, never paths: an id is checked against what this account actually
     // uploaded, so nobody can attach another company's file by quoting its URL.
-    const wanted = Array.isArray(attachments) ? attachments.slice(0, 25) : [];
+    const wanted = Array.isArray(attachments) ? attachments : [];
     if (wanted.length) {
-      const ids = wanted.map((x: any) => String(x?.fileId ?? "")).filter(Boolean);
-      const owned = await prisma.fileAsset.findMany({ where: { id: { in: ids }, uploadedBy: a.sub } });
-      const byId = new Map(owned.map(f => [f.id, f]));
-      const rows = wanted
-        .map((x: any) => ({ x, f: byId.get(String(x?.fileId ?? "")) }))
-        .filter(({ f }) => !!f)
-        .map(({ x, f }) => ({
-          requestId: created.id,
-          docKey: String(x.key || "other").slice(0, 60),
-          label: x.label ? String(x.label).slice(0, 120) : null,
-          path: f!.path, name: f!.name, size: f!.size,
-          at: new Date().toISOString(),
-        }));
-      if (rows.length) await prisma.requestAttachment.createMany({ data: rows });
+      const out = await attachToRequest(created.id, wanted, a.sub);
       // Say it plainly rather than silently dropping: a file that did not attach is one the client
       // believes they sent.
-      if (rows.length < ids.length) console.warn(`[requests] ${ids.length - rows.length} attachment(s) on ${created.number} referenced files this account does not own`);
+      if (out.refused) console.warn(`[requests] ${out.refused} attachment(s) on ${created.number} referenced files this account does not own`);
     }
     logActivity({ type: "client", message: `Service request from ${co?.name ?? clientName ?? "a client"}: ${type ?? "request"}`, user: co?.name ?? clientName ?? "Client" });
     // Tells the staff inbox AND acknowledges to the client by email. Not awaited: SMTP must never
     // hold up the client's response.
     notifyNewServiceRequest({ companyId: target, clientName: co?.name ?? clientName, type, message });
+    kickAgent("request-triage");
     res.status(201).json(created);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -3903,6 +3899,158 @@ app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requi
   }
 });
 
+// ── DOCUMENT INTAKE AGENT ──
+// The rules, the model call and the checks live in intake-agent.ts. These routes only do auth,
+// client scope, and turning its IntakeErrors into readable responses. A suggestion is never a
+// document until a member of staff accepts it.
+const intakeFail = (res: any, e: any, where: string) =>
+  e instanceof IntakeError ? res.status(e.status).json({ error: e.message }) : fail(res, 500, e, where);
+
+/** The Agents screen: each agent's state, live work, totals and recent tasks. */
+const agentActor = async (req: any) => {
+  const a = req.auth;
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }).catch(() => null);
+  return { id: a.sub as string, name: me?.name ?? a.email ?? "Staff", email: me?.email ?? null, role: a.role as string | undefined };
+};
+const agentFail = (res: any, e: any, where: string) =>
+  e instanceof AgentActionError || e instanceof AiError ? res.status(e.status).json({ error: e.message }) : fail(res, 500, e, where);
+app.get("/api/agents", requireAuth, requireStaff, async (req, res) => {
+  try { res.json(await agentsOverview(await agentActor(req))); } catch (e: any) { return agentFail(res, e, "agents"); }
+});
+/** How the agents reach a model. Never returns the key — only whether the server has one. */
+app.get("/api/agents/connection", requireAuth, requireStaff, async (_req, res) => {
+  try { res.json(await aiConnection()); } catch (e: any) { return agentFail(res, e, "agents.connection"); }
+});
+app.post("/api/agents/connection/test", requireAuth, requireStaff, async (req, res) => {
+  const actor = await agentActor(req);
+  if (actor.role !== "admin" && actor.role !== "super_admin") return res.status(403).json({ error: "Only an admin can test the model connection." });
+  try {
+    const out = await testConnection(String(req.body?.model ?? ""));
+    await logAudit({ action: "agents.connection.test", actorId: actor.id, detail: `${out.model} ${out.ok ? "ok" : out.error}` });
+    res.json(out);
+  } catch (e: any) { return agentFail(res, e, "agents.connection.test"); }
+});
+// Bank statements come in as CSV text, read in the browser — no file lands on disk.
+app.post("/api/agents/bank-reconciliation/statements", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const actor = await agentActor(req);
+    res.status(201).json(await importStatement({ fileName: String(req.body?.fileName ?? "statement.csv"), text: String(req.body?.text ?? ""), actor }));
+  } catch (e: any) {
+    if (e instanceof StatementError) return res.status(e.status).json({ error: e.message });
+    return agentFail(res, e, "agents.bank.import");
+  }
+});
+app.get("/api/agents/data-quality/qiwa", requireAuth, requireStaff, async (_req, res) => {
+  try { res.json({ list: await qiwaOccupations() }); } catch (e: any) { return agentFail(res, e, "agents.qiwa"); }
+});
+app.put("/api/agents/:key", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const actor = await agentActor(req);
+    const { enabled, model, qiwaOccupations, inPersonCenters } = req.body ?? {};
+    await updateAgent(req.params.key, {
+      enabled: typeof enabled === "boolean" ? enabled : undefined,
+      model: model === undefined ? undefined : (model || null),
+      qiwaOccupations: Array.isArray(qiwaOccupations) ? qiwaOccupations : typeof qiwaOccupations === "string" ? qiwaOccupations.split(/\r?\n/) : undefined,
+      inPersonCenters: inPersonCenters === null ? null : Array.isArray(inPersonCenters) ? inPersonCenters : undefined,
+    }, actor);
+    await logAudit({ action: "agents.settings", actorId: actor.id, target: req.params.key, detail: JSON.stringify({ enabled, model, qiwaOccupations: qiwaOccupations ? "updated" : undefined }) });
+    res.json({ ok: true });
+  } catch (e: any) { return agentFail(res, e, "agents.update"); }
+});
+app.post("/api/agents/:key/run", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const actor = await agentActor(req);
+    const out = await runNow(req.params.key, actor);
+    await logAudit({ action: "agents.run", actorId: actor.id, target: req.params.key });
+    res.json(out);
+  } catch (e: any) { return agentFail(res, e, "agents.run"); }
+});
+app.post("/api/agents/tasks/:id/act", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const actor = await agentActor(req);
+    const out = await actOnTask(req.params.id, String(req.body?.action ?? ""), req.body?.input ?? {}, actor);
+    await logAudit({ action: `agents.task.${String(req.body?.action ?? "")}`, actorId: actor.id, target: req.params.id });
+    res.json(out && (out as any).message ? out : { ok: true });
+  } catch (e: any) { return agentFail(res, e, "agents.act"); }
+});
+app.post("/api/agents/assistant/ask", requireAuth, requireStaff, async (req, res) => {
+  try { res.json(await askAssistant(String(req.body?.question ?? ""), await agentActor(req))); }
+  catch (e: any) { return agentFail(res, e, "agents.ask"); }
+});
+
+/** Whether the agent can run, and why not. Safe for any staff member to read: no key is exposed. */
+app.get("/api/intake/status", requireAuth, requireStaff, async (_req, res) => {
+  const status = await intakeStatus();
+  // The scan dialog asks for this when it opens: start the OCR workers now, so the scan does not wait for them.
+  if (status.ready) warmPassportReader();
+  res.json(status);
+});
+
+/**
+ * Switch the agent on or off. Admins only, because switching it on is the decision to send identity
+ * documents to Anthropic for reading — which is a data-transfer decision for the firm, not a
+ * convenience setting.
+ */
+app.put("/api/intake/settings", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  if (a?.role !== "admin" && a?.role !== "super_admin") return res.status(403).json({ error: "Only an admin can change document intake" });
+  const body = req.body ?? {};
+  const next = await setIntakeSettings({ enabled: typeof body.enabled === "boolean" ? body.enabled : undefined, model: body.model ? String(body.model) : undefined });
+  await logAudit({ action: "intake.settings", actorId: a.sub, target: "intakeAgent", detail: `enabled=${next.enabled} model=${next.model}`, ip: clientIp(req) });
+  res.json(next);
+});
+
+/** Read an uploaded scan and store what was read as a pending suggestion. */
+app.post("/api/intake/extract", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const companyId = String(req.body?.companyId ?? "");
+    const fileAssetId = String(req.body?.fileAssetId ?? "");
+    if (!companyId || !fileAssetId) return res.status(400).json({ error: "Choose the client and upload a scan first" });
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { ownerId: true } });
+    if (!co) return res.status(404).json({ error: "That client no longer exists" });
+    if (a?.role === "sales" && co.ownerId !== a.sub) return res.status(403).json({ error: "This client belongs to another sales rep" });
+    const suggestion = await createSuggestion({
+      companyId, fileAssetId, actorId: a?.sub ?? null, privateDir: PRIVATE_FILES_DIR,
+      employeeId: req.body?.employeeId ? String(req.body.employeeId) : null,
+    });
+    await logAudit({ action: "intake.read", actorId: a?.sub, target: suggestion.id, detail: `${suggestion.docType ?? "unrecognised"} · ${suggestion.model}`, ip: clientIp(req) });
+    res.status(201).json(suggestion);
+  } catch (e: any) { return intakeFail(res, e, "intake.extract"); }
+});
+
+app.get("/api/intake/suggestions", requireAuth, requireStaff, async (req, res) => {
+  const where: any = {};
+  if (req.query.companyId) where.companyId = String(req.query.companyId);
+  if (req.query.status) where.status = String(req.query.status);
+  res.json(await prisma.documentSuggestion.findMany({ where, orderBy: { createdAt: "desc" }, take: 200 }));
+});
+
+app.post("/api/intake/suggestions/:id/accept", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const b = req.body ?? {};
+    const out = await acceptSuggestion(req.params.id, {
+      actorId: a?.sub ?? null,
+      docType: b.docType, employeeId: b.employeeId === undefined ? undefined : (b.employeeId || null),
+      number: b.number, expiry: b.expiry, issueDate: b.issueDate,
+    });
+    const edited = Object.keys(out.changed);
+    await logAudit({ action: "intake.accepted", actorId: a?.sub, target: out.document.id, detail: `${out.document.docType} · ${out.document.person}${edited.length ? ` · officer changed ${edited.join(", ")}` : ""}${out.superseded ? " · superseded older record" : ""}`, ip: clientIp(req) });
+    logActivity({ type: "compliance", message: `${out.document.docType} for ${out.document.person} added from a scan`, user: a?.email });
+    res.json(out);
+  } catch (e: any) { return intakeFail(res, e, "intake.accept"); }
+});
+
+app.post("/api/intake/suggestions/:id/reject", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const s = await rejectSuggestion(req.params.id, a?.sub ?? null, String(req.body?.reason ?? "").trim());
+    await logAudit({ action: "intake.rejected", actorId: a?.sub, target: s.id, detail: String(req.body?.reason ?? "").slice(0, 200), ip: clientIp(req) });
+    res.json(s);
+  } catch (e: any) { return intakeFail(res, e, "intake.reject"); }
+});
+
 /** Edit an employee's details, appending to the same history[] the exit flow writes. */
 app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
@@ -4447,6 +4595,7 @@ app.post("/api/portal/payment-notice", requireAuth, requirePortal, async (req, r
       lines: [`Amount: <b>${amt.toLocaleString()}</b>`, `Method: ${method ?? "not stated"}`, reference ? `Reference: ${reference}` : "", "Verify the funds have landed, then record the payment against the invoice to settle it."],
       cta: { label: "Open the requests queue", url: (process.env.CONSOLE_URL || "https://pro.ionob.in") + "/requests-queue" } });
     await logAudit({ action: "portal.payment.notice", actorId: a.sub, target: created.id, detail: `${amt} ${method ?? ""} ${reference ?? ""}`.trim() });
+    kickAgent("collections");
     res.status(201).json({ request: created });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -4609,6 +4758,34 @@ app.get("/api/portal/service-requests/:id/messages", requireAuth, requirePortal,
   const msgs = await prisma.serviceRequestMessage.findMany({ where: { requestId: r.id, internal: false }, orderBy: { at: "asc" } });
   await prisma.serviceRequest.update({ where: { id: r.id }, data: { clientReadAt: nowStamp() } });
   res.json(msgs);
+});
+
+// Portal: what a request still needs, and adding it later. Before these, a client asked for a missing
+// passport copy could only type a reply — the file had no way in, and nothing could tell it had come.
+app.get("/api/portal/service-requests/:id/documents", requireAuth, requirePortal, async (req, res) => {
+  const a = (req as any).auth;
+  const st = await requestDocStatus(req.params.id);
+  if (!st || !st.request.companyId || !(await portalCompanyInScope(a, st.request.companyId))) return res.status(404).json({ error: "Not found" });
+  res.json({ service: st.service, required: st.required, missing: st.missing, files: st.files.map(f => ({ key: f.docKey, label: f.label, name: f.name, at: f.at })) });
+});
+app.post("/api/portal/service-requests/:id/attachments", requireAuth, requirePortal, requireNotSuspended, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const rq = await prisma.serviceRequest.findUnique({ where: { id: req.params.id } });
+    if (!rq || !rq.companyId || !(await portalCompanyInScope(a, rq.companyId))) return res.status(404).json({ error: "Not found" });
+    if (["rejected", "resolved"].includes(String(rq.status).toLowerCase())) return res.status(409).json({ error: "This request is closed. Reply to reopen it, or file a new one." });
+    const wanted = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+    if (!wanted.length) return res.status(400).json({ error: "Choose at least one file." });
+    const out = await attachToRequest(rq.id, wanted, a.sub);
+    if (!out.attached.length) return res.status(400).json({ error: "None of those files could be attached." });
+    await prisma.serviceRequest.update({ where: { id: rq.id }, data: { lastClientMsgAt: new Date().toISOString() } });
+    const labels = out.attached.map(x => x.label || x.key).join(", ");
+    logActivity({ type: "client", message: `${rq.clientName ?? "A client"} uploaded ${labels} to ${rq.number ?? "a request"}`, user: rq.clientName ?? "Client" });
+    publish("request", { requestId: rq.id, companyId: rq.companyId, uploaded: out.attached }, { to: "staff" });
+    await logAudit({ action: "portal.request.attach", actorId: a.sub, target: rq.id, detail: labels.slice(0, 200) });
+    const st = await requestDocStatus(rq.id);
+    res.status(201).json({ attached: out.attached, missing: st?.missing ?? [] });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // Portal: reply. A reply to a resolved/rejected request REOPENS it — otherwise a client's follow-up

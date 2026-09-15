@@ -2332,3 +2332,101 @@ model EmailMessage {
   @@index([companyId, sentAt])
   @@index([threadId])
 }
+
+// WHAT THE DOCUMENT INTAKE AGENT READ, BEFORE A PERSON HAS SAID IT IS RIGHT.
+//
+// The agent reads a scanned passport, Iqama, CR or permit and proposes a document. It never creates
+// one. A suggestion carries what it read, how sure it was per field, and every problem the system
+// found checking it against what is already on file; a member of staff accepts it (becoming a real
+// Document) or rejects it. Kept after the decision, so "why does this Iqama say 2027?" has an answer:
+// which scan, what the model read, what the officer changed, who accepted it and when.
+model DocumentSuggestion {
+  id          String  @id @default(cuid())
+  companyId   String
+  employeeId  String?
+  fileAssetId String
+  fileName    String?
+  // "reading" while the model call is in flight, so anyone watching the Agents screen sees work in
+  // progress rather than a guess; then pending | failed once the reading returns; then accepted |
+  // rejected once a person decides.
+  status      String  @default("pending") // reading | pending | accepted | rejected | failed
+  readAt      String? // when the reading finished — with createdAt, how long the agent took
+  docType     String?
+  fields      Json? // { number, expiry, issueDate, name, nationality, dob } as read
+  confidence  Json? // { number: "high" | "medium" | "low", ... }
+  issues      Json? // [{ level: "error" | "warning" | "info", code, message }]
+  notes       String? @db.Text
+  model       String?
+  error       String? @db.Text
+  createdBy   String?
+  createdAt   String
+  decidedBy   String?
+  decidedAt   String?
+  decision    Json? // what the officer changed from the reading, and why a rejection happened
+  documentId  String?
+
+  @@index([companyId, status])
+}
+
+// ── AGENTS ──
+// One row per piece of work an agent did: a renewal it prepared, a request it triaged, a payment
+// notice it matched, a data problem it found, a band drop it saw coming, a question it answered.
+// The document intake agent keeps its own DocumentSuggestion table and is folded in on read.
+//
+// A row is the agent's PROPOSAL. `status` is "review" while a person has something to decide, and
+// only a person moves it to "done" or "dismissed". Findings the agent re-checks and no longer sees
+// are closed by the agent with decision.auto, so a queue never fills with problems already fixed.
+model AgentTask {
+  id         String  @id @default(cuid())
+  agent      String // renewal-prep | request-triage | collections | data-quality | nitaqat-advisor | console-assistant
+  kind       String // what sort of work: gate-check, triage, payment-match, reminder, finding, band-drop, question
+  // Stops the same work being done twice. A dismissed finding keeps its key, so it stays dismissed.
+  dedupeKey  String  @db.VarChar(191)
+  status     String  @default("working") // working | review | done | dismissed | failed
+  title      String  @db.VarChar(500)
+  summary    String? @db.Text
+  companyId  String?
+  employeeId String?
+  refType    String? // workflowInstance | serviceRequest | invoice | employee | document | company
+  refId      String?
+  output     Json? // checks, drafts, proposals — whatever the review needs
+  model      String? // set only when a model call contributed
+  error      String? @db.Text
+  createdBy  String?
+  createdAt  String
+  finishedAt String?
+  decidedBy  String?
+  decidedAt  String?
+  decision   Json?
+
+  @@unique([agent, dedupeKey])
+  @@index([agent, status])
+  @@index([companyId])
+}
+
+// ── BANK RECONCILIATION ──
+// One line of an uploaded bank statement. Only the file's own facts are stored; what it was matched
+// to is recorded here once a person confirms it. `fingerprint` stops the same line being imported twice
+// when overlapping statements are uploaded — which is how statements are usually downloaded.
+model BankLine {
+  id          String  @id @default(cuid())
+  statementId String // one upload
+  fileName    String?
+  date        String // YYYY-MM-DD
+  description String  @db.Text
+  reference   String?
+  amountMinor Int // positive = money in, negative = money out
+  currency    String  @default("SAR")
+  fingerprint String  @unique @db.VarChar(191)
+  status      String  @default("unmatched") // unmatched | proposed | matched | recorded | ignored
+  paymentIds  Json? // payments this line became, or was found to already be
+  note        String? @db.Text
+  uploadedBy  String?
+  createdAt   String
+  decidedBy   String?
+  decidedAt   String?
+
+  @@index([statementId])
+  @@index([status])
+  @@index([date])
+}

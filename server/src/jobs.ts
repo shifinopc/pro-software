@@ -9,6 +9,7 @@
 //     screen renders; if they drift, the scoreboard and the actor disagree.
 //  3. NON-FATAL — one job failing must not stop the others or kill the process.
 // ─────────────────────────────────────────────────────────────
+import { reminderNote } from "./agent-collections.js";
 import { prisma } from "./db.js";
 import { homeCurrency } from "./orgsettings.js";
 import { jobRules } from "./jobrules.js";
@@ -957,7 +958,11 @@ export async function chaseOverdueInvoices(): Promise<DunningResult> {
     });
     if (!first) continue; // this rung already went out — the hourly tick must not repeat it
 
+    // With the collections agent on, the reminder carries a sentence written from this client's own
+    // payment history. Its failure must never cost the client the reminder itself.
+    const note = await reminderNote({ id: inv.id, number: inv.number, companyId: inv.companyId, clientName: inv.clientName ?? inv.company?.name ?? null, rung, promisedDate: inv.promisedDate, currency: inv.currency }).catch(() => null);
     await notifyInvoiceOverdue({
+      note,
       companyId: inv.companyId,
       number: inv.number,
       outstanding,

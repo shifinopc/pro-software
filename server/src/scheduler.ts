@@ -361,9 +361,13 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
     }
   }
 
+  // The agents last: they read what the jobs above just changed (a renewal run opened this tick is
+  // prepared this tick, not an hour later). Each is off until an admin turns it on.
+  const agents = await safely("agents", async () => { const { runAgents } = await import("./agents.js"); return runAgents(source); });
+
   // Every job that ran belongs in the result. A job missing from here ran invisibly — the tick
   // response is the only place anyone can see what the hourly pass actually did.
-  return { source, ms: Date.now() - started, compliance, periodic, renewals, sla, statutory, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail };
+  return { source, ms: Date.now() - started, compliance, periodic, renewals, sla, statutory, billing, parked, dunning, drafts, orphans, workforce: wfBands, workforceHistory: wfSnap, followUps, renewalDeals, quotes, idleLeads: idle, digest, mail, agents };
 }
 
 let timer: NodeJS.Timeout | null = null;

@@ -46,7 +46,9 @@ export type RuleKey =
   | "New website enquiry"
   // ── addressed to the person the work sits with (this is what reaches a pro_officer) ──────────
   | "Work assigned to you"
-  | "Your task is running late";
+  | "Your task is running late"
+  // ── the document chaser agent: reminders to a client whose documents or approval the work waits on ──
+  | "Client documents needed";
 
 const RULE_DEFAULTS: Record<RuleKey, boolean> = {
   "Approval requested": true,
@@ -65,6 +67,8 @@ const RULE_DEFAULTS: Record<RuleKey, boolean> = {
   "New website enquiry": true,
   "Work assigned to you": true,
   "Your task is running late": true,
+  // On here, but nothing is sent unless an admin also switches the Client Document Chaser agent on.
+  "Client documents needed": true,
 };
 
 async function ruleOn(key: RuleKey): Promise<boolean> {
@@ -95,7 +99,7 @@ async function staffRecipients(): Promise<string[]> {
 }
 
 /** Where to reach a client: their portal logins, falling back to the company's own contact address. */
-async function clientRecipients(companyId?: string | null): Promise<string[]> {
+export async function clientRecipients(companyId?: string | null): Promise<string[]> {
   if (!companyId) return [];
   try {
     const users = await prisma.user.findMany({
@@ -241,6 +245,38 @@ async function run(args: NotifyArgs) {
   await deliver(to, args.subject, html, text);
 }
 
+/**
+ * A message a member of staff reviewed and chose to send — an agent's draft, approved. Not subject to
+ * the notification rules: those switch AUTOMATIC mail on and off, and this is a person pressing Send.
+ */
+export async function sendClientMessage(a: { companyId: string | null; subject: string; heading: string; body: string }) {
+  const to = [...new Set(await clientRecipients(a.companyId))];
+  if (!to.length) return { to };
+  const ctx = await emailContext();
+  const { html, text } = renderEmail(ctx, {
+    heading: a.heading,
+    lines: a.body.split(/\n{2,}/).map(p => p.trim()).filter(Boolean).map(p => `<span style="white-space:pre-wrap;">${esc(p)}</span>`),
+    note: `You're receiving this because you have an account with ${esc(ctx.org)}.`,
+  });
+  await deliver(to, a.subject, html, text);
+  return { to };
+}
+
+/**
+ * A reminder from the document chaser: what the work is waiting on, and where to provide it. Returns
+ * who it went to, so the agent can record it — and can tell a client with no address from one reached.
+ */
+export async function notifyClientWaiting(a: { companyId: string | null; subject: string; heading: string; lines: string[]; ctaLabel: string; ctaPath: string }) {
+  const to = await clientRecipients(a.companyId);
+  if (!to.length) return { to };
+  await run({
+    rule: "Client documents needed", audience: "client", companyId: a.companyId,
+    subject: a.subject, heading: a.heading, lines: a.lines.map(esc),
+    cta: { label: a.ctaLabel, url: `${portalUrl()}${a.ctaPath}` },
+  });
+  return { to, ruleOn: await ruleOn("Client documents needed") };
+}
+
 /** Call this from request handlers. Never awaited — the caller's response must not wait on SMTP. */
 export function notify(args: NotifyArgs) {
   run(args).catch((e) => console.error(`[notify] ${args.rule} failed: ${e?.message ?? e}`));
@@ -348,6 +384,8 @@ export function notifyDocumentExpiring(a: { companyId?: string | null; docType?:
 export function notifyInvoiceOverdue(a: {
   companyId?: string | null; number?: string | null; outstanding: number; currency?: string | null;
   dueDate?: string | null; daysOverdue: number; alsoStaff?: boolean; clientName?: string | null;
+  /** A sentence written for THIS client from their payment history — see agent-collections.ts. */
+  note?: string | null;
 }) {
   void (async () => {
   const amt = await money(a.outstanding, a.currency);
@@ -367,6 +405,7 @@ export function notifyInvoiceOverdue(a: {
       firm
         ? "Please settle this, or reply to let us know when payment is coming — we'd rather hear from you than chase."
         : "If you've already paid, tell us in the portal and we'll confirm it against the invoice.",
+      a.note ? esc(a.note) : "",
     ],
     cta: { label: "View the invoice", url: `${portalUrl()}/portal/invoices` },
   });
