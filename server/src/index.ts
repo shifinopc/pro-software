@@ -33,7 +33,7 @@ import { syncMailbox, saveConnection } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
-import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent } from "./agents.js";
+import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
 import { qiwaOccupations } from "./agent-data-quality.js";
 import { requestDocStatus, attachToRequest } from "./request-docs.js";
@@ -69,7 +69,7 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
-import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels } from "./permissions.js";
+import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, type InviteResult } from "./invitations.js";
@@ -3938,6 +3938,17 @@ app.post("/api/agents/bank-reconciliation/statements", requireAuth, requireStaff
   } catch (e: any) {
     if (e instanceof StatementError) return res.status(e.status).json({ error: e.message });
     return agentFail(res, e, "agents.bank.import");
+  }
+});
+// A Muqeem / Qiwa / GOSI employee export, as CSV text read in the browser. Compared, never written back.
+app.post("/api/agents/portal-reconciler/exports", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const actor = await agentActor(req);
+    if (!(await can(actor.role, "Compliance", "Edit"))) return res.status(403).json({ error: "Your role cannot reconcile government exports." });
+    res.status(201).json(await importGovExport({ fileName: String(req.body?.fileName ?? "export.csv"), text: String(req.body?.text ?? ""), companyId: req.body?.companyId ? String(req.body.companyId) : null, actor }));
+  } catch (e: any) {
+    if (e instanceof GovExportError) return res.status(e.status).json({ error: e.message });
+    return agentFail(res, e, "agents.portal_export");
   }
 });
 app.get("/api/agents/data-quality/qiwa", requireAuth, requireStaff, async (_req, res) => {

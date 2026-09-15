@@ -30,7 +30,7 @@ export class StatementError extends Error { constructor(message: string, public 
 
 // ── reading the file ──────────────────────────────────────────────────────────────────────────
 
-function splitCsv(text: string) {
+export function splitCsv(text: string) {
   const firstLine = text.split(/\r?\n/).find(l => l.trim()) ?? "";
   const delim = [",", ";", "\t"].sort((a, b) => firstLine.split(b).length - firstLine.split(a).length)[0];
   const rows: string[][] = [];

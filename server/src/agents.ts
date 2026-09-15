@@ -20,13 +20,24 @@ import * as chaser from "./agent-chaser.js";
 import * as sla from "./agent-sla.js";
 import * as bank from "./agent-bank.js";
 import * as visits from "./agent-visits.js";
+import * as crm from "./agent-crm.js";
+import * as proOps from "./agent-pro-ops.js";
+import * as clientsAg from "./agent-clients.js";
+import * as compliance from "./agent-compliance.js";
+import * as financeOps from "./agent-finance-ops.js";
+import * as brief from "./agent-brief.js";
 
 type Def = {
   key: string; name: string; icon: string; does: string; never: string;
   modelUse: ModelUse; modelWhy: string; cadence: string;
   run?: () => Promise<any>; daily?: boolean;
   act?: (id: string, action: string, input: any, actor: AgentActor) => Promise<any>;
+  /** Agents built on agent-kit: their actions come from what the item carries — see kitActions. */
+  kit?: boolean; openTab?: string;
 };
+
+const NONE = "Every check is a comparison of records — nothing is sent to a model.";
+const daily = (d: Omit<Def, "modelUse" | "modelWhy" | "daily" | "kit">): Def => ({ modelUse: "none", modelWhy: NONE, daily: true, kit: true, ...d });
 
 export const AGENTS: Def[] = [
   {
@@ -113,6 +124,73 @@ export const AGENTS: Def[] = [
     modelUse: "required", modelWhy: "Understanding the question needs a model. The records it looks up to answer are sent to it.",
     cadence: "When someone asks",
   },
+  // ── CRM ──
+  daily({ key: crm.LEADS, name: "Lead Follow-up", icon: "phone", cadence: "Once a day", run: crm.runLeadFollowUp, act: crm.actLeads, openTab: "Overview",
+    does: "Builds each salesperson's call list: follow-ups that are due or overdue, and leads nobody has contacted for a week — most urgent first. Unowned leads get their own list.",
+    never: "Never calls, emails or changes a lead. The list clears itself as calls are logged." }),
+  daily({ key: crm.QUOTES, name: "Quotation Chaser", icon: "quote", cadence: "Once a day", run: crm.runQuoteChaser, act: crm.actQuotes, openTab: "Overview",
+    does: "Follows every sent quotation: a first, second and third follow-up at 3, 7 and 14 days with what to say, and quotations that expired unanswered so they are re-issued or recorded as lost.",
+    never: "Never contacts the client or changes a quotation's status." }),
+  daily({ key: crm.WON, name: "Won Deal to Onboarding", icon: "handshake", cadence: "Once a day", run: crm.runWonOnboarding, act: crm.actWon, openTab: "Overview",
+    does: "When a quotation is accepted or a deal is won, checks the client is really set up — client record, CR, package, portal, employees, work started, invoiced — and prepares the onboarding tasks.",
+    never: "Creates tasks only when someone presses the button. Changes no record." }),
+  daily({ key: crm.DUPES, name: "Duplicate Records", icon: "copy", cadence: "Once a day", run: crm.runCrmDuplicates, act: crm.actDupes, openTab: "Overview",
+    does: "Finds leads and clients entered twice — same CR, phone, email or name — and contacts that appear at several companies.",
+    never: "Never merges or deletes anything." }),
+  // ── PRO work ──
+  daily({ key: proOps.STUCK, name: "Stuck Workflows", icon: "pause", cadence: "Once a day", run: proOps.runStuckWorkflows, act: proOps.actStuck, openTab: "Overview",
+    does: "Finds workflow runs that stopped moving: no step open but never finished, steps nobody can pick up, approvals waiting two days or more, and runs with no movement for five days.",
+    never: "Never moves, completes or cancels a step." }),
+  daily({ key: proOps.EXIT, name: "Employee Exit", icon: "exit", cadence: "Once a day", run: proOps.runEmployeeExits, act: proOps.actExit, openTab: "Employees",
+    does: "For everyone leaving, checks the full exit — final exit visa, Qiwa contract ended, GOSI removal, insurance cancelled, final settlement — flags renewals still running on them, and prepares the missing tasks.",
+    never: "Cancels nothing and closes no exit. Tasks are created only when someone presses the button." }),
+  daily({ key: proOps.APPT, name: "Appointment Prep", icon: "calendar", cadence: "Once a day", run: proOps.runAppointmentPrep, act: proOps.actAppt, openTab: "Overview",
+    does: "Checks the next two days' government appointments: confirmed, time and place set, the employee on file, passport and Iqama not expired, and an officer assigned.",
+    never: "Never books, confirms or reschedules." }),
+  daily({ key: proOps.ORIGINALS, name: "Original Documents", icon: "folder", cadence: "Once a day", run: proOps.runOriginalsTracker, act: proOps.actOriginals, openTab: "Overview",
+    does: "Tracks original passports and cards the office collected: which have been held over 14 days without being sent back, and courier jobs past their expected date.",
+    never: "Never changes a courier job." }),
+  daily({ key: proOps.REPEAT, name: "Repeat Work", icon: "repeat", cadence: "Once a day", run: proOps.runRepeatWork, act: proOps.actRepeat, openTab: "Overview",
+    does: "Spots work done by hand again and again — services with no workflow requested several times, and the same task typed in for many clients — so it can become a workflow.",
+    never: "Suggests only. Creates no template." }),
+  // ── Clients ──
+  daily({ key: clientsAg.ONBOARD, name: "Client Onboarding", icon: "userplus", cadence: "Once a day", run: clientsAg.runClientOnboarding, act: clientsAg.actOnboard, openTab: "Overview",
+    does: "For clients taken on in the last 90 days, checks CR, a contact with email, package, portal sign-in, employees and company documents — and keeps the gap list until it is complete.",
+    never: "Changes nothing on the client." }),
+  daily({ key: clientsAg.WEEKLY, name: "Weekly Client Report", icon: "mail", cadence: "Once a day, one draft per client per week", run: clientsAg.runWeeklyClientReport, act: clientsAg.actWeekly, openTab: "Overview",
+    does: "Drafts each client's weekly update: work in progress, what is waiting on them, documents expiring in 30 days and invoices open. Staff read it, edit it and send it.",
+    never: "Never sends by itself. Unsent drafts are replaced by the next week's." }),
+  daily({ key: clientsAg.PORTAL, name: "Portal Adoption", icon: "key", cadence: "Once a day", run: clientsAg.runPortalAdoption, act: clientsAg.actPortal, openTab: "Overview",
+    does: "Finds clients with no portal access, and clients whose invitations were never used — and re-sends those invitations when you press the button.",
+    never: "Never creates a portal user. Invitations go out only when someone presses Re-send." }),
+  daily({ key: clientsAg.RISK, name: "Client Risk Watch", icon: "alert", cadence: "Once a day", run: clientsAg.runClientRisk, act: clientsAg.actRisk, openTab: "Overview",
+    does: "Adds up warning signs for each client — overdue invoices, missed deadlines, ignored document requests, rejected requests, no contact for 60 days, a package not set to renew — and flags those that may leave.",
+    never: "Advice only. Contacts nobody." }),
+  // ── Compliance ──
+  { key: compliance.RECON, name: "Government Portal Reconciler", icon: "compare", modelUse: "none", modelWhy: NONE, kit: true, openTab: "Employees", act: compliance.actRecon,
+    cadence: "When an export is uploaded",
+    does: "Upload an employee export from Muqeem, Qiwa or GOSI (CSV). It lists people the government counts that you do not have, employees you have that the portal does not, and different expiry dates, occupations and names.",
+    never: "Never updates an employee or document from the file — a person decides which side is wrong." },
+  daily({ key: compliance.LICENCES, name: "Company Licence Watch", icon: "building", cadence: "Once a day", run: compliance.runCompanyLicences, act: compliance.actLicences, openTab: "Documents",
+    does: "Watches each client's company documents — CR, Chamber, GOSI and Zakat certificates, municipality licence — and warns 60 days before one expires with no renewal started.",
+    never: "Starts no renewal." }),
+  daily({ key: compliance.INTEGRITY, name: "Document Integrity", icon: "shield", cadence: "Once a day", run: compliance.runDocumentIntegrity, act: compliance.actIntegrity, openTab: "Documents",
+    does: "Finds documents that contradict their owner: one number on two people, an Iqama number that is not the employee's ID, a name that does not match, an expiry before the issue date.",
+    never: "Never edits or moves a document." }),
+  daily({ key: compliance.FAMILY, name: "Dependents and Re-entry", icon: "family", cadence: "Once a day", run: compliance.runDependentsWatch, act: compliance.actFamily, openTab: "Documents",
+    does: "Watches dependents' Iqamas, family visas and exit re-entry visas — the ones that are not the employee's own and get forgotten — and warns 45 days before they expire.",
+    never: "Starts no renewal." }),
+  // ── Finance ──
+  daily({ key: financeOps.FEES, name: "Government Fee Recovery", icon: "coins", cadence: "Once a day", run: financeOps.runFeeRecovery, act: financeOps.actFees, openTab: "Invoices",
+    does: "Finds government fees recorded on renewals done by hand that were never charged back to the client, and proposes a draft invoice for each. (Fees on workflow runs are covered by Unbilled Work.)",
+    never: "Creates a draft only when someone presses the button; the draft still needs approving." }),
+  daily({ key: financeOps.SUBS, name: "Subscription Billing Check", icon: "receipt", cadence: "Once a day", run: financeOps.runSubscriptionBilling, act: financeOps.actSubs, openTab: "Invoices",
+    does: "Checks every active package: no invoice for a full billing period, a plan invoice at a different price, and add-ons unlocked but never charged.",
+    never: "Creates a draft only when someone presses the button." }),
+  // ── Management ──
+  daily({ key: brief.BRIEF, name: "Daily Manager Brief", icon: "sun", cadence: "Every morning", run: brief.runManagerBrief, act: brief.actBrief, openTab: "Overview",
+    does: "One page each morning: late tasks, steps past deadline, legal deadlines in 3 days, today's appointments, cash expected this week and overdue, workload per person, and what every agent is waiting on.",
+    never: "Read-only." }),
 ];
 const byKey = (k: string) => AGENTS.find(a => a.key === k);
 
@@ -187,12 +265,28 @@ export async function actOnTask(id: string, action: string, input: any, actor: A
 }
 
 export const askAssistant = assistant.ask;
+export const importGovExport = compliance.importExport;
+export const GovExportError = compliance.ExportError;
 
 // ── the screen ────────────────────────────────────────────────────────────────────────────────
 
 const STALE_WORKING_MS = 5 * 60 * 1000;
 
+function kitActions(t: { agent: string; status: string; output: any }) {
+  if (t.status !== "review") return [];
+  const o = t.output ?? {};
+  const a: { key: string; label: string; primary?: boolean }[] = [];
+  if (t.agent === clientsAg.PORTAL && Array.isArray(o.invitees) && o.invitees.length) a.push({ key: "resend", label: "Re-send invitations", primary: true });
+  if (Array.isArray(o.tasks) && o.tasks.length) a.push({ key: "tasks", label: `Create ${o.tasks.length} task${o.tasks.length === 1 ? "" : "s"}`, primary: true });
+  if (Array.isArray(o.lines) && o.lines.length) a.push({ key: "invoice", label: "Create draft invoice", primary: true });
+  if (o.draft) a.push({ key: "send", label: "Review and send", primary: true });
+  a.push({ key: "done", label: t.agent === brief.BRIEF ? "Mark read" : "Mark handled", primary: !a.length });
+  if (t.agent !== brief.BRIEF) a.push({ key: "dismiss", label: "Not a problem" });
+  return a;
+}
+
 function actionsFor(t: { agent: string; kind: string; status: string; output: any }) {
+  if (byKey(t.agent)?.kit) return kitActions(t);
   if (t.agent === chaser.KEY && (t.status === "review" || t.status === "watching")) {
     return [{ key: "done", label: t.status === "review" ? "Called the client" : "Handled another way", primary: t.status === "review" }, { key: "dismiss", label: "Stop reminding" }];
   }
@@ -317,6 +411,7 @@ export async function agentsOverview(actor: AgentActor) {
           const credits = lines.filter(l => l.amountMinor > 0);
           return { imported: lines.length, credits: credits.length, recorded: credits.filter(l => l.status === "recorded").length, matched: credits.filter(l => l.status === "matched").length, proposed: credits.filter(l => l.status === "proposed").length, unmatched: credits.filter(l => l.status === "unmatched").length, lastFile: lines[0]?.fileName ?? null, lastAt: lines[0]?.createdAt ?? null };
         })()
+        : def.key === compliance.RECON ? { lastUpload: await lastRun(def.key) }
         : undefined,
       // What needs a person first, then what is being watched, then the most recent.
       tasks: mine.filter(r => r.kind !== "question" || r.createdBy === actor.id || isAdmin(actor))
@@ -326,7 +421,7 @@ export async function agentsOverview(actor: AgentActor) {
         title: r.title, summary: r.status === "failed" ? (r.error || "Failed") : r.summary, companyId: r.companyId, client: coName(r.companyId),
         createdAt: r.createdAt, finishedAt: r.finishedAt, decidedAt: r.decidedAt, decidedBy: userName(r.decidedBy), by: userName(r.createdBy),
         decision: r.decision, model: r.model, output: r.output, actions: actionsFor(r as any),
-        openTab: r.agent === nitaqat.KEY ? "Workforce" : r.agent === quality.KEY ? (r.kind === "expired-no-renewal" ? "Documents" : "Employees") : r.agent === unbilled.KEY ? "Invoices" : r.agent === chaser.KEY ? (r.refType === "document" ? "Documents" : "Overview") : "Overview",
+        openTab: byKey(r.agent)?.openTab ? byKey(r.agent)!.openTab : r.agent === nitaqat.KEY ? "Workforce" : r.agent === quality.KEY ? (r.kind === "expired-no-renewal" ? "Documents" : "Employees") : r.agent === unbilled.KEY ? "Invoices" : r.agent === chaser.KEY ? (r.refType === "document" ? "Documents" : "Overview") : "Overview",
       })),
     });
   }
