@@ -655,7 +655,9 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
               // Stamped with the run that created it, so the work can be traced back from the record
               // — and so a hire the government refuses halfway through can withdraw exactly the
               // documents that hire produced, rather than every document with the same name on it.
-              const created = await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft, issuedByRunId: inst.id } });
+              // A company document issued by a run for one of the client's CRs stays with that CR.
+              const establishmentId = subjectKind === "company" && vars.establishmentId ? String(vars.establishmentId) : null;
+              const created = await prisma.document.create({ data: { companyId: inst.companyId, person, employeeId, establishmentId, docType, expiryDate: expiry || null, issueDate: issue || null, issuingAuthority: authority, docNumber: number || null, status: st.status, daysLeft: st.daysLeft, issuedByRunId: inst.id } });
               await log("document.issued", nodeId, `${docType} (${subjectKind}) for ${person} → ${expiry || "?"}`);
               // What this replaces leaves the live reports. Without it, a second run of the same
               // onboarding left two identical live rows and every reminder fired twice.
@@ -1616,6 +1618,8 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
       const dt1 = await prisma.documentType.findFirst({ where: { name: docType1 } });
       const byCompany = (dt1?.subjectKind ?? "employee") === "company";
       const employeeId = byCompany ? null : (vars.employeeId ? String(vars.employeeId) : null);
+      // Which of the client's CRs a company document belongs to. Null is the main CR.
+      const establishmentId1 = byCompany && vars.establishmentId ? String(vars.establishmentId) : null;
       let person = byCompany ? (inst.clientName || "Company") : String(vars.applicant ?? vars.employee ?? "");
       if (!byCompany && !person && employeeId) {
         const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
@@ -1627,7 +1631,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
         // two of the same type, and this used to take whichever the database returned — so a renewal
         // could update the wrong passport and leave the real one untouched.
         const existing = await prisma.document.findFirst({
-          where: { docType: docType1, companyId: inst.companyId, supersededAt: null, ...(employeeId ? { employeeId } : { person }) },
+          where: { docType: docType1, companyId: inst.companyId, supersededAt: null, ...(employeeId ? { employeeId } : byCompany ? { employeeId: null, establishmentId: establishmentId1 } : { person }) },
           orderBy: [{ expiryDate: "desc" }],
         });
         // Anything else still live for the same subject and type is history the moment this step
@@ -1641,7 +1645,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
         const alsoLive = canSupersede
           ? await prisma.document.findMany({
               where: { docType: docType1, companyId: inst.companyId, supersededAt: null,
-                ...(employeeId ? { employeeId } : {}), ...(existing ? { NOT: { id: existing.id } } : {}) },
+                ...(employeeId ? { employeeId } : { employeeId: null, establishmentId: establishmentId1 }), ...(existing ? { NOT: { id: existing.id } } : {}) },
             })
           : [];
         if (!canSupersede) {
@@ -1704,7 +1708,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
           // compliance count. The captured answers are not lost: they are on the run and on the step,
           // which is where a name and a department belong. They were never facts about a visa.
           const made = await prisma.document.create({
-            data: { companyId: inst.companyId, person, employeeId, docType: docType1, expiryDate: effExpiry,
+            data: { companyId: inst.companyId, person, employeeId, establishmentId: establishmentId1, docType: docType1, expiryDate: effExpiry,
               issueDate: issue, docNumber: number, issuingAuthority: dt1?.authority ?? null,
               customData: custom, status, daysLeft },
           });

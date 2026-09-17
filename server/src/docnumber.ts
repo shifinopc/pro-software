@@ -71,7 +71,7 @@ export function clashMessage(c: NumberClash): string {
  * number would miss precisely it.
  */
 export async function supersedePriorLive(
-  created: { id: string; companyId: string; docType: string; person: string | null; employeeId: string | null },
+  created: { id: string; companyId: string; docType: string; person: string | null; employeeId: string | null; establishmentId?: string | null },
   by: string,
 ): Promise<number> {
   if (!created.companyId || !created.docType) return 0;
@@ -80,8 +80,10 @@ export async function supersedePriorLive(
   if (created.employeeId) subject.push({ employeeId: created.employeeId });
   if (!subject.length) return 0;
 
+  // A company document belongs to one of the client's CRs: a sub CR's certificate is a different subject
+  // from the main CR's, even though both carry the company's name as the person.
   const prior = await prisma.document.findMany({
-    where: { companyId: created.companyId, docType: created.docType, supersededAt: null, NOT: { id: created.id }, OR: subject },
+    where: { companyId: created.companyId, docType: created.docType, supersededAt: null, NOT: { id: created.id }, OR: subject, ...(created.employeeId ? {} : { employeeId: null, establishmentId: created.establishmentId ?? null }) },
     select: { id: true, docNumber: true, expiryDate: true, history: true },
   });
   if (!prior.length) return 0;

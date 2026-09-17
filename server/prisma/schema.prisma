@@ -170,6 +170,7 @@ model Company {
   group                ClientGroup?     @relation(fields: [groupId], references: [id])
   groupId              String?
   employeeList         Employee[]
+  establishments       Establishment[]
   documents            Document[]
   credentials          SiteCredential[]
   invoices             Invoice[]
@@ -358,12 +359,18 @@ model Employee {
   exitDate       String? // last working day, as declared by the client
   exitReason     String? // resignation | termination | end_of_contract | transfer | other
   exitRequestId  String? // the ServiceRequest that tracks the exit
+  /// Which of the client's CRs this person works under. Null = the client's main CR.
+  ///
+  /// Null rather than stamped with the main CR's id, so a client that never adds a second CR never
+  /// needs a single employee touched, and moving the "main" flag to another CR moves them with it.
+  establishmentId String?
 
   // Per client, not per system: each client numbers its own staff, so EMP-0002 may exist at several
   // clients at once. Still a real constraint — one client cannot issue the same code twice.
   @@unique([companyId, code])
   @@index([companyId, archived])
   @@index([exitStatus])
+  @@index([establishmentId])
 }
 
 model Document {
@@ -406,6 +413,10 @@ model Document {
   // withdrawn, and nothing could say which ones they were. Matching on the person's name and the
   // document types the run happened to mention would catch a record from somebody's previous job.
   issuedByRunId    String? // WorkflowInstance that created this document
+  /// For a COMPANY document (CR, Chamber, Baladiya…): which of the client's CRs it belongs to. Null =
+  /// the main CR. It is part of the document's SUBJECT: a sub CR's certificate and the main CR's are
+  /// two live documents, and renewing one must never supersede the other.
+  establishmentId  String?
 
   @@index([supersededAt])
   @@index([status])
@@ -413,6 +424,7 @@ model Document {
   @@index([companyId, status])
   @@index([employeeId])
   @@index([issuedByRunId])
+  @@index([establishmentId])
 }
 
 // Admin-defined document types with their own dynamic fields + renewal config (no-code).
@@ -2340,6 +2352,43 @@ model EmailMessage {
 // found checking it against what is already on file; a member of staff accepts it (becoming a real
 // Document) or rejects it. Kept after the decision, so "why does this Iqama say 2027?" has an answer:
 // which scan, what the model read, what the officer changed, who accepted it and when.
+/// ONE OF A CLIENT'S COMMERCIAL REGISTRATIONS — the main CR or a sub (branch) CR.
+///
+/// A client used to carry one CR in `Company.cr`. Firms with branches hold a main CR and several sub
+/// CRs, each with its own certificate, its own expiry and often its own Qiwa file, while being ONE
+/// client: one portal, one contact list, one package, one account to invoice. Splitting them into
+/// separate clients would split all of that too, so they are rows under the client instead.
+///
+/// `Company.cr` is kept and is now a MIRROR of the main CR's number, written only by the
+/// establishments code — the same single-writer mirror as the primary contact. Eight screens and
+/// the client validation read it, and a mirror with one writer cannot drift.
+///
+/// Cancelled, never deleted: employees and documents point here, and a cancelled branch's history
+/// must still say which CR it was.
+model Establishment {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+  crNumber  String
+  /// Trade name as on the certificate — "Al Noor Trading — Jeddah branch".
+  name      String?
+  /// main | branch. Exactly one main per client, enforced where it is written.
+  kind      String  @default("branch")
+  city      String?
+  /// Qiwa / labour office establishment number (e.g. 1-2345678) — what a Qiwa export identifies.
+  qiwaNo    String?
+  gosiNo    String?
+  /// The 700 unified number, when the firm uses one.
+  unifiedNo String?
+  /// active | cancelled
+  status    String  @default("active")
+  notes     String? @db.Text
+  createdAt String?
+
+  @@index([companyId])
+  @@index([crNumber])
+}
+
 model DocumentSuggestion {
   id          String  @id @default(cuid())
   companyId   String

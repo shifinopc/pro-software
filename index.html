@@ -1924,6 +1924,35 @@
                 <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:16px 18px;"><div style="font-size:10px; font-weight:700; color:#B8860B; letter-spacing:.05em;">EXPIRING ≤30D</div><div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:5px; color:#B8860B;">{{ cdExpiring }}</div></div>
               </div>
 
+              <!-- Commercial registrations. A client with branches holds a main CR and sub CRs; each keeps its
+                   own employees, certificates and renewals, while the client stays one client. -->
+              <sc-if value="{{ crShow }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:18px 22px 12px;">
+                  <div style="min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Commercial registrations</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ crSub }}</div></div>
+                  <sc-if value="{{ crCanAdd }}" hint-placeholder-val="{{ false }}"><button onClick="{{ crOpenAdd }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF; border-color:#7C00FF;">{{ crAddLabel }}</button></sc-if>
+                </div>
+                <sc-if value="{{ crHasRows }}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{ crRows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 22px; border-top:1px solid #F4F2F8; opacity:{{ r.opacity }};">
+                      <span style="font-size:9.5px; font-weight:800; letter-spacing:.06em; color:{{ r.kindColor }}; background:{{ r.kindBg }}; padding:3px 9px; border-radius:6px; flex-shrink:0;">{{ r.kind }}</span>
+                      <div style="flex:1; min-width:180px;">
+                        <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;"><span style="font-family:ui-monospace,monospace; font-size:13px; font-weight:700; color:#1A1523;">{{ r.crNumber }}</span><span style="font-size:12.5px; color:#4B4757; font-weight:600;">{{ r.title }}</span></div>
+                        <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ r.meta }}</div>
+                      </div>
+                      <div style="text-align:right; font-size:11.5px; color:#6F6C7A; line-height:1.5;"><div>{{ r.people }}</div><div style="color:#A9A6B4;">{{ r.docs }}</div></div>
+                      <div style="display:flex; gap:10px; align-items:center;">
+                        <sc-if value="{{ r.canMain }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.makeMain }}" style="font-size:11px; font-weight:600; color:#4B4757; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Make main</span></sc-if>
+                        <sc-if value="{{ r.canCancel }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.cancel }}" style="font-size:11px; font-weight:600; color:#C0353A; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Cancel CR</span></sc-if>
+                        <sc-if value="{{ r.canRestore }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.restore }}" style="font-size:11px; font-weight:600; color:#0E9355; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Reactivate</span></sc-if>
+                        <sc-if value="{{ r.canEdit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.edit }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">Edit</span></sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+              </div>
+              </sc-if>
+
               <!-- Workforce nationalisation. The RATIO is counted from employee records; the BAND is a
                    fact somebody read on the official portal and wrote down, never a number this app
                    works out for itself — its thresholds vary by sector and size, so a computed band
@@ -2406,11 +2435,13 @@
           </sc-if>
           <sc-if value="{{ cdTabEmployees }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .5s ease both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px; gap:14px; flex-wrap:wrap;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Employees · {{ cdEmployees }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Documents added here flow into Compliance</div></div><div style="display:flex; align-items:center; gap:12px;"><sc-if value="{{ cdHasFormer }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cdToggleFormer }}" style="font-size:11.5px; font-weight:700; color:{{ cdFormerColor }}; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ cdFormerLabel }}</span></sc-if><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ cdImportEmp }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button><button onClick="{{ cdAddEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add employee</button></sc-if></div></div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 14px; gap:14px; flex-wrap:wrap;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Employees · {{ cdEmployees }}</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Documents added here flow into Compliance</div></div><div style="display:flex; align-items:center; gap:12px;"><sc-if value="{{ cdHasFormer }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cdToggleFormer }}" style="font-size:11.5px; font-weight:700; color:{{ cdFormerColor }}; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ cdFormerLabel }}</span></sc-if><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ cdEmpTemplate }}" title="A CSV with the columns the import reads and example rows" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>Template</button><button onClick="{{ cdImportEmp }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button><button onClick="{{ cdAddEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add employee</button></sc-if></div></div>
+              <sc-if value="{{ cdCrFilterShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; gap:6px; flex-wrap:wrap; padding:0 24px 12px;"><sc-for list="{{ cdCrFilters }}" as="f" hint-placeholder-count="3"><span onClick="{{ f.pick }}" style="font-size:11px; font-weight:600; padding:5px 11px; border-radius:99px; cursor:pointer; border:1px solid {{ f.border }}; background:{{ f.bg }}; color:{{ f.color }}; white-space:nowrap;">{{ f.label }}</span></sc-for></div></sc-if>
               <sc-for list="{{ cdEmployeesList }}" as="e" hint-placeholder-count="4">
                 <div style="display:flex; align-items:center; gap:12px; padding:12px 24px; border-bottom:1px solid #FAF8FC; opacity:{{ e.rowOpacity }};" style-hover="background:#FAF7FE;">
                   <div style="width:34px; height:34px; border-radius:99px; background:{{ e.avBg }}; color:{{ e.avColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ e.initials }}</div>
                   <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600;">{{ e.name }}</div><div style="font-size:10.5px; color:#A9A6B4;">{{ e.role }}</div></div>
+                  <sc-if value="{{ e.hasCr }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:600; color:#5B21B6; background:#F5EEFF; padding:2px 9px; border-radius:99px; white-space:nowrap;">{{ e.crTag }}</span></sc-if>
                   <div style="text-align:right;">
                     <span style="font-size:10.5px; font-weight:700; color:{{ e.stColor }}; background:{{ e.stBg }}; padding:3px 10px; border-radius:99px;">{{ e.status }}</span>
                     <sc-if value="{{ e.exiting }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#A9A6B4; margin-top:3px;">{{ e.exitHint }}</div></sc-if>
@@ -8940,6 +8971,7 @@
                 <input data-fm-field="eename" value="{{ eeName }}" onChange="{{ setEeName }}" class="{{ eeNameCls }}">
                 <sc-if value="{{ eeErrName }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ eeErrName }}</div></sc-if>
               </div>
+              <sc-if value="{{ eeCrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-wide"><label class="fm-lab">CR this person works under</label><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ eeCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
 
               <div>
                 <label class="fm-lab">Role / designation</label>
@@ -9497,6 +9529,7 @@
             <div style="background:#FEECEC; border-radius:12px; padding:11px 13px;"><div style="font-size:10px; font-weight:700; color:#C0353A; letter-spacing:.05em;">REFUSED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; color:#C0353A;">{{ eiRefused }}</div></div>
           </div>
           <div style="margin-top:10px; font-size:12px; color:#4B4757;">{{ eiSummary }}</div>
+          <sc-if value="{{ eiHasCrs }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px; font-size:12px; color:#5B21B6; background:#F8F2FF; border-radius:10px; padding:8px 12px;"><b>By CR</b> — {{ eiCrSplit }}</div></sc-if>
 
           <sc-if value="{{ eiHasRefused }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:16px; font-size:10.5px; font-weight:700; color:#C0353A; letter-spacing:.06em;">NOT IMPORTED — FIX THESE ROWS AND IMPORT AGAIN</div>
@@ -9520,10 +9553,11 @@
             <div style="margin-top:14px; font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHO WILL BE IMPORTED</div>
             <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; max-height:220px; overflow-y:auto;" data-hidescroll="true">
               <sc-for list="{{ eiPreviewRows }}" as="x" hint-placeholder-count="4">
-                <div style="display:grid; grid-template-columns:1fr 44px 120px 80px 70px; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:12px;">
+                <div style="display:grid; grid-template-columns:1fr 40px 104px 92px 70px 60px; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:12px;">
                   <span style="font-weight:600; color:#26074D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
                   <span style="color:#6F6C7A;">{{ x.nationality }}</span>
                   <span style="color:#8C8899; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.govId }}</span>
+                  <span title="CR" style="color:#5B21B6; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.cr }}</span>
                   <span style="font-size:10px; font-weight:700; color:{{ x.color }}; background:{{ x.bg }}; padding:2px 8px; border-radius:99px; width:fit-content;">{{ x.action }}</span>
                   <span style="color:#8C8899; text-align:right; white-space:nowrap;">{{ x.docs }}</span>
                 </div>
@@ -9621,6 +9655,7 @@
                 <input data-fm-field="name" value="{{ eName }}" onChange="{{ setEName }}" placeholder="e.g. Priya Sharma" class="{{ eNameCls }}">
                 <sc-if value="{{ eErrName }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ eErrName }}</div></sc-if>
               </div>
+              <sc-if value="{{ eCrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-wide"><label class="fm-lab">CR this person works under</label><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ eCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
 
               <div>
                 <label class="fm-lab">Role / designation <span class="fm-req">*</span></label>
@@ -10112,6 +10147,30 @@
     </div>
   </sc-if>
 
+  <!-- Add / edit a client CR (see the Commercial registrations card) -->
+  <sc-if value="{{ crFormOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ crFormClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:520px; max-height:calc(100vh - 48px); overflow-y:auto; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ crFormTitle }}</div>
+        <div style="font-size:12px; color:#8C8899; margin-top:4px; line-height:1.5;">{{ crFormSub }}</div>
+        <sc-if value="{{ crFormErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ crFormErr }}</div></sc-if>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;">
+          <div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER *</div><input value="{{ crF_crNumber }}" onChange="{{ crSet_crNumber }}" placeholder="e.g. 4030123456" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style=""><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TRADE NAME</div><input value="{{ crF_name }}" onChange="{{ crSet_name }}" placeholder="As on the certificate" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style=""><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CITY</div><input value="{{ crF_city }}" onChange="{{ crSet_city }}" placeholder="e.g. Jeddah" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style=""><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">QIWA ESTABLISHMENT NO.</div><input value="{{ crF_qiwaNo }}" onChange="{{ crSet_qiwaNo }}" placeholder="e.g. 1-2345678" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style=""><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">GOSI NO.</div><input value="{{ crF_gosiNo }}" onChange="{{ crSet_gosiNo }}" placeholder="" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">700 UNIFIED NO.</div><input value="{{ crF_unifiedNo }}" onChange="{{ crSet_unifiedNo }}" placeholder="if the firm uses one" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">NOTES</div><textarea value="{{ crF_notes }}" onChange="{{ crSet_notes }}" rows="2" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; font-family:inherit; background:#FCFBFE; resize:vertical;"></textarea></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
+          <button onClick="{{ crFormClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;">Cancel</button>
+          <button onClick="{{ crFormSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ crFormSaveLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ showAddRecord }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeAddRecord }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -10122,6 +10181,7 @@
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENT TYPE</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddArTypeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ arTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddArTypeOptions }}" as="o" hint-placeholder-count="7"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">HOLDER <span style="color:#B9B5C4; font-weight:600;">(person / blank for company)</span></div><input value="{{ arHolder }}" onChange="{{ setArHolder }}" placeholder="e.g. A. Khan" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
           <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AUTHORITY</div><input value="{{ arAuthority }}" onChange="{{ setArAuthority }}" placeholder="e.g. GDRFA" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+          <sc-if value="{{ arCrShow }}" hint-placeholder-val="{{ false }}"><div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHICH CR</div><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ arCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
           <div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EXPIRY DATE *</div><input value="{{ arExpiry }}" onChange="{{ setArExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
         </div>
         <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;"><button onClick="{{ closeAddRecord }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Add record</button></div>
@@ -10559,6 +10619,7 @@
           <span style="width:7px; height:7px; border-radius:99px; background:{{ udScopeDot }};"></span>
           <span style="font-size:11.5px; font-weight:600; color:{{ udScopeColor }};">{{ udScopeLabel }}</span>
         </div>
+        <sc-if value="{{ udCrShow }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHICH CR *</div><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ udCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
         <sc-if value="{{ udIsEmployee }}" hint-placeholder-val="{{ false }}">
           <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">EMPLOYEE *</div>
           <div style="position:relative; margin-top:6px; flex:1; min-width:0;">
@@ -16611,6 +16672,36 @@ class Component extends DCLogic {
   }
   renderVals() {
 
+    // ── A client's CRs (main + sub), loaded per client on first use — see server/src/establishments.ts ──
+    if (!this._crLoad) {
+      this._crLoading = {};
+      this._crLoad = (id9, force9) => {
+        const t9 = localStorage.getItem('stimespro:token');
+        if (!id9 || !t9) return;
+        if (!force9 && (this._crLoading[id9] || (this.state.crByCo || {})[id9])) return;
+        this._crLoading[id9] = true;
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + id9 + '/establishments', { headers: { Authorization: 'Bearer ' + t9 } })
+          .then(r9 => (r9.ok ? r9.json() : [])).catch(() => [])
+          .then(rows9 => { this._crLoading[id9] = false; this.setState(s9 => ({ crByCo: { ...(s9.crByCo || {}), [id9]: Array.isArray(rows9) ? rows9 : [] } })); });
+      };
+      // Never fetches during render: the load is queued, and the render that follows shows the rows.
+      this._crRows = (id9) => { const r9 = (this.state.crByCo || {})[id9]; if (!r9 && id9 && !this._crLoading[id9]) setTimeout(() => this._crLoad(id9), 0); return r9 || []; };
+      this._crLabel = (e9) => (e9 ? (e9.kind === 'main' ? 'Main CR' : (e9.city || e9.name || 'Sub CR')) + ' · ' + e9.crNumber : '');
+      // Null establishmentId is the main CR.
+      this._crOf = (co9, est9) => { const rows9 = this._crRows(co9); return est9 ? rows9.find(e9 => e9.id === est9) : rows9.find(e9 => e9.kind === 'main' && e9.status === 'active'); };
+      this._crMulti = (co9) => this._crRows(co9).filter(e9 => e9.status === 'active').length > 1;
+      // Chips rather than a dropdown — the console's own rule for short lists. Only offered when there is a choice.
+      this._crChips = (co9, sel9, pick9) => {
+        const rows9 = this._crRows(co9).filter(e9 => e9.status === 'active');
+        if (rows9.length < 2) return [];
+        const main9 = rows9.find(e9 => e9.kind === 'main');
+        const cur9 = sel9 && rows9.some(e9 => e9.id === sel9) ? sel9 : (main9 && main9.id);
+        return rows9.map(e9 => { const on9 = e9.id === cur9; return { label: this._crLabel(e9), pick: () => pick9(e9.kind === 'main' ? null : e9.id), border: on9 ? '#7C00FF' : '#DDD9E6', bg: on9 ? '#F5EEFF' : '#fff', color: on9 ? '#5B21B6' : '#4B4757' }; });
+      };
+      // A CR the client no longer has (or another client's) is sent as the main CR.
+      this._crValid = (co9, est9) => (est9 && this._crRows(co9).some(e9 => e9.id === est9 && e9.status === 'active' && e9.kind !== 'main') ? est9 : null);
+    }
+
     // ── In-app dialog bindings ──
     const _dlg = this.state.dlg || null;
     const _dlgDone = (result) => {
@@ -18454,6 +18545,8 @@ class Component extends DCLogic {
       // ratio, so a blank one quietly made the number less certain forever.
       eeClient: this.state.eeClient || false,
       eeName: this.state.eeName || '', setEeName: (e9) => this.setState({ eeName: e9.target.value, eeErr: '', eeErrField: '' }),
+      eeCrChips: this.state.eeOpen && this.state.eeCompanyId ? this._crChips(this.state.eeCompanyId, this.state.eeEst, (v9) => this.setState({ eeEst: v9 })) : [],
+      eeCrShow: !!(this.state.eeOpen && this.state.eeCompanyId && this._crMulti(this.state.eeCompanyId)),
       eeRole: this.state.eeRole || '', setEeRole: (e9) => this.setState({ eeRole: e9.target.value }),
       eeExpiry: this.state.eeExpiry || '', setEeExpiry: (e9) => this.setState({ eeExpiry: e9.target.value, eeErr: '' }),
       eeDob: this.state.eeDob || '', setEeDob: (e9) => this.setState({ eeDob: e9.target.value }),
@@ -18487,6 +18580,8 @@ class Component extends DCLogic {
             employmentType: st9.eeType || null, jobCategory: st9.eeCat || null,
             countingTraits: Array.isArray(st9.eeTraits) ? st9.eeTraits : [],
             department: st9.eeDept || null, joinDate: st9.eeJoin || null, visaQuota: Number(st9.eeQuota) || 1,
+            // Only when the client has a choice of CRs — otherwise the field is left as it is.
+            ...(this._crMulti(st9.eeCompanyId) ? { establishmentId: this._crValid(st9.eeCompanyId, st9.eeEst) } : {}),
           }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
@@ -18931,8 +19026,10 @@ class Component extends DCLogic {
       eiHasWarn: !!(_eiPlan && _eiPlan.warnings.length),
       eiWarnRows: _eiPlan ? _eiPlan.warnings : [],
       eiHasPreview: !!(_eiPlan && _eiPlan.preview.length),
+      eiHasCrs: !!(_eiPlan && Array.isArray(_eiPlan.crs) && _eiPlan.crs.length),
+      eiCrSplit: _eiPlan && Array.isArray(_eiPlan.crs) ? _eiPlan.crs.map(c9 => c9.label + ': ' + _eiN(c9.rows, 'person', 'people') + (c9.saudis ? ' (' + c9.saudis + ' Saudi)' : '')).join(' · ') : '',
       eiPreviewRows: (_eiPlan ? _eiPlan.preview.slice(0, 100) : []).map(x9 => ({
-        name: x9.name, nationality: x9.nationality, govId: x9.govId || '—',
+        name: x9.name, nationality: x9.nationality, govId: x9.govId || '—', cr: x9.cr || '—',
         action: x9.action === 'new' ? 'New' : 'Update',
         color: x9.action === 'new' ? '#0E9355' : '#6D5BD0',
         bg: x9.action === 'new' ? '#E7F8EF' : '#EFEBFF',
@@ -18965,17 +19062,30 @@ class Component extends DCLogic {
       eiCommit: () => { if (!this.state.eiBusy) this._eiSend(true); },
       // The headings the importer reads, plus one example row showing the date format — which is the
       // mistake that matters most and the one nobody sees until a birthday has moved four months.
-      eiTemplate: () => {
-        const head9 = ['full_name', 'nationality', 'gov_id', 'gender', 'date_of_birth', 'role', 'job_category', 'employment_type', 'department', 'joining_date', 'salary_monthly', 'passport_number', 'passport_expiry', 'iqama_expiry', 'work_permit_expiry', 'health_insurance_expiry'];
-        const ex9 = ['Mohammed Rahman', 'India', '2123456789', 'male', '06/10/1994', 'Electrician', 'skilled', 'full_time', 'Maintenance', '01/03/2024', '3500', 'Z1234567', '15/08/2031', '20/11/2026', '20/11/2026', '31/12/2026'];
-        const blob9 = new Blob(['﻿' + head9.join(',') + '\n' + ex9.join(',') + '\n'], { type: 'text/csv;charset=utf-8' });
-        const a9 = document.createElement('a');
-        a9.href = URL.createObjectURL(blob9);
-        a9.download = 'employee-import-template.csv';
-        document.body.appendChild(a9); a9.click(); a9.remove();
-        setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
-      },
+      eiTemplate: () => this._eiTemplateFor(this.state.eiCompanyId, this.state.eiClient),
     };
+    // The headings the importer reads, with example rows showing the date format — the mistake that matters
+    // most and the one nobody sees until a birthday has moved four months. A client with sub CRs gets one
+    // example row per CR, so the CR column is filled in the way the importer reads it.
+    this._eiTemplateFor = this._eiTemplateFor || ((coId9, coName9) => {
+      const head9 = ['full_name', 'nationality', 'gov_id', 'cr_number', 'gender', 'date_of_birth', 'role', 'job_category', 'employment_type', 'department', 'joining_date', 'salary_monthly', 'passport_number', 'passport_expiry', 'iqama_expiry', 'work_permit_expiry', 'health_insurance_expiry'];
+      const crs9 = coId9 ? this._crRows(coId9).filter(e9 => e9.status === 'active') : [];
+      const people9 = [
+        ['Mohammed Rahman', 'India', '2123456789', 'male', '06/10/1994', 'Electrician', 'skilled', 'full_time', 'Maintenance', '01/03/2024', '3500', 'Z1234567', '15/08/2031', '20/11/2026', '20/11/2026', '31/12/2026'],
+        ['Abdullah Al Harbi', 'Saudi', '1098765432', 'male', '14/02/1990', 'Accountant', 'high skilled', 'full_time', 'Finance', '15/01/2023', '9000', '', '', '', '', '31/12/2026'],
+        ['Maria Santos', 'Philippines', '2234567890', 'female', '22/07/1992', 'Receptionist', 'basic skilled', 'full_time', 'Admin', '10/05/2025', '3000', 'P7654321', '03/04/2030', '09/05/2027', '09/05/2027', '31/12/2026'],
+      ];
+      const rows9 = (crs9.length ? crs9.slice(0, 3) : [null]).map((cr9, i9) => { const p9 = people9[i9 % people9.length]; return [...p9.slice(0, 3), cr9 ? cr9.crNumber : '', ...p9.slice(3)]; });
+      const csv9 = (v9) => (/[",\n]/.test(v9) ? '"' + String(v9).replace(/"/g, '""') + '"' : v9);
+      const blob9 = new Blob(['\uFEFF' + [head9, ...rows9].map(r9 => r9.map(csv9).join(',')).join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
+      const slug9 = String(coName9 || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const a9 = document.createElement('a');
+      a9.href = URL.createObjectURL(blob9);
+      a9.download = 'employee-import-template' + (slug9 ? '-' + slug9 : '') + '.csv';
+      document.body.appendChild(a9); a9.click(); a9.remove();
+      setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+      this.toast && this.toast('Template downloaded — dates are DD/MM/YYYY' + (crs9.length > 1 ? ', and each row names its CR' : ''));
+    });
     // ── SCAN DOCUMENT (the intake agent) ──
     const _sdApiBase = () => this._apiBase || 'http://localhost:4100';
     const _sdHeaders = () => { const t9 = localStorage.getItem('stimespro:token'); return { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }; };
@@ -19326,6 +19436,8 @@ class Component extends DCLogic {
       closeEmp: () => this.setState({ empModal: false }),
       // Typing into the field clears its own complaint — an error that outlives the fix teaches people to ignore errors.
       setEName: (e) => this.setState({ eName: e.target.value, eError: '', eErrField: '' }),
+      ...(() => { const co9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.name === this.state.eClient); const id9 = co9 && co9.id;
+        return { eCrShow: !!(this.state.empModal && id9 && this._crMulti(id9)), eCrChips: this.state.empModal && id9 ? this._crChips(id9, this.state.eEst, (v9) => this.setState({ eEst: v9 })) : [] }; })(),
       setERole: (e) => this.setState({ eRole: e.target.value, eError: '', eErrField: '' }),
       // Departments come from the Configure → Departments master. Any department already on an
       // employee is merged in so historic values never vanish from the picker.
@@ -19414,7 +19526,8 @@ class Component extends DCLogic {
             // A column, not customData, for the same reason the nationality is: the ratio reads it,
             // and a fact with two homes is a count that is right on the empty one.
             countingTraits: Array.isArray(st.eTraits) ? st.eTraits : [],
-            customData: { department: st.eDept || null, visaQuota: Number(st.eVisaQuota) || 1, joinDate: st.eJoinDate || null } }) })
+            customData: { department: st.eDept || null, visaQuota: Number(st.eVisaQuota) || 1, joinDate: st.eJoinDate || null },
+            establishmentId: this._crValid(co9.id, st.eEst) }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
             if (!ok) { const msg9 = (j9 && j9.error) || ''; return this._empReject('', msg9 && msg9.length < 140 ? msg9 : 'Could not add the employee — try again'); }
@@ -19959,6 +20072,78 @@ class Component extends DCLogic {
       clDetailApi.cdRestore = () => this._companyAction(clRow.realId, 'restore', {}, clRow.name + ' restored');
       clDetailApi.cdSub = clRow.industry + ' · ' + clRow.city + ' · CR ' + clRow.cr;
 
+      // ── Commercial registrations: the main CR and any sub CRs ──
+      const _crAll = clRow.realId ? this._crRows(clRow.realId) : [];
+      const _crActive = _crAll.filter(e9 => e9.status === 'active');
+      const _crSubCount = _crActive.filter(e9 => e9.kind !== 'main').length;
+      const _crIsMulti = _crActive.length > 1;
+      const _crMainId = (_crActive.find(e9 => e9.kind === 'main') || {}).id || null;
+      if (_crSubCount) clDetailApi.cdSub += ' · ' + _crSubCount + ' sub CR' + (_crSubCount === 1 ? '' : 's');
+      const _crSave = (id9, body9, msg9, onErr9) => {
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/establishments' + (id9 ? '/' + id9 : ''), {
+          method: id9 ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }, body: JSON.stringify(body9) })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            if (!ok) { const m9 = (j9 && j9.error) || 'Could not save the CR'; return onErr9 ? onErr9(m9) : this.toast(m9, 'error'); }
+            this.setState({ crForm: null, crErr: '', crBusy: false });
+            this.toast(msg9);
+            this._crLoad(clRow.realId, true);
+            // The main CR is mirrored onto the client, and people or certificates may have moved with it.
+            this._opReload && (this._opReload('companies', 'companiesData'), this._opReload('employees', 'employeesData'), this._opReload('documents', 'documentsData'));
+          })
+          .catch(() => (onErr9 ? onErr9('Server unreachable — nothing was saved') : this.toast('Server unreachable', 'error')));
+      };
+      clDetailApi.crShow = !!clRow.realId;
+      clDetailApi.crSub = !_crAll.length ? 'No CR recorded yet. Add the main CR, then any sub CRs.'
+        : _crIsMulti ? _crActive.length + ' active CRs — employees and company documents are kept per CR, and each renews separately.'
+        : 'One CR. If this client has branches with their own CR, add them as sub CRs.';
+      clDetailApi.crCanAdd = canWrite;
+      clDetailApi.crAddLabel = _crAll.length ? '+ Add sub CR' : '+ Add main CR';
+      clDetailApi.crHasRows = _crAll.length > 0;
+      clDetailApi.crRows = _crAll.map(e9 => {
+        const main9 = e9.kind === 'main', cancelled9 = e9.status !== 'active';
+        return {
+          kind: cancelled9 ? 'CANCELLED' : main9 ? 'MAIN' : 'SUB',
+          kindColor: cancelled9 ? '#8C8899' : main9 ? '#fff' : '#5B21B6', kindBg: cancelled9 ? '#F3F1F7' : main9 ? '#26074D' : '#F5EEFF',
+          crNumber: e9.crNumber, title: e9.name || e9.city || (main9 ? clRow.name : 'Sub CR'),
+          meta: [e9.city, e9.qiwaNo ? 'Qiwa ' + e9.qiwaNo : '', e9.gosiNo ? 'GOSI ' + e9.gosiNo : '', e9.unifiedNo ? '700 ' + e9.unifiedNo : ''].filter(Boolean).join(' · ') || 'No Qiwa or GOSI numbers recorded',
+          people: e9.employees + ' employee' + (e9.employees === 1 ? '' : 's') + (e9.saudiPct != null ? ' · ' + e9.saudiPct + '% Saudi' : ''),
+          docs: e9.documents + ' company document' + (e9.documents === 1 ? '' : 's'),
+          opacity: cancelled9 ? 0.6 : 1,
+          canEdit: canWrite,
+          canMain: canWrite && !main9 && !cancelled9,
+          canCancel: canWrite && !main9 && !cancelled9,
+          canRestore: canWrite && cancelled9,
+          edit: () => this.setState({ crErr: '', crBusy: false, crForm: { id: e9.id, crNumber: e9.crNumber || '', name: e9.name || '', city: e9.city || '', qiwaNo: e9.qiwaNo || '', gosiNo: e9.gosiNo || '', unifiedNo: e9.unifiedNo || '', notes: e9.notes || '' } }),
+          makeMain: () => { if (window.confirm('Make CR ' + e9.crNumber + ' the main CR of ' + clRow.name + '?\n\nEveryone and every certificate stays on the CR they are on now — only which CR counts as the main one changes.')) _crSave(e9.id, { kind: 'main' }, 'CR ' + e9.crNumber + ' is now the main CR'); },
+          cancel: () => { if (window.confirm('Cancel CR ' + e9.crNumber + '?\n\nIts certificates stay on file as history. A CR that still has active employees cannot be cancelled — move them first.')) _crSave(e9.id, { status: 'cancelled' }, 'CR ' + e9.crNumber + ' cancelled'); },
+          restore: () => _crSave(e9.id, { status: 'active' }, 'CR ' + e9.crNumber + ' is active again'),
+        };
+      });
+      clDetailApi.crOpenAdd = () => this.setState({ crErr: '', crBusy: false, crForm: { id: null, crNumber: '', name: '', city: '', qiwaNo: '', gosiNo: '', unifiedNo: '', notes: '' } });
+      const _crF = this.state.crForm || null;
+      clDetailApi.crFormOpen = !!_crF;
+      clDetailApi.crFormTitle = _crF && _crF.id ? 'Edit CR ' + _crF.crNumber : _crAll.length ? 'Add a sub CR' : 'Add the main CR';
+      clDetailApi.crFormSub = _crF && _crF.id ? clRow.name : _crAll.length
+        ? 'A branch registered under its own CR. Its employees, certificates and renewals are kept separately, under ' + clRow.name + '.'
+        : 'The client\'s main commercial registration.';
+      clDetailApi.crFormErr = this.state.crErr || false;
+      clDetailApi.crFormSaveLabel = this.state.crBusy ? 'Saving…' : _crF && _crF.id ? 'Save' : 'Add CR';
+      ['crNumber', 'name', 'city', 'qiwaNo', 'gosiNo', 'unifiedNo', 'notes'].forEach(f9 => {
+        clDetailApi['crF_' + f9] = (_crF && _crF[f9]) || '';
+        clDetailApi['crSet_' + f9] = (ev9) => { const v9 = ev9.target.value; this.setState(s9 => ({ crForm: { ...(s9.crForm || {}), [f9]: v9 }, crErr: '' })); };
+      });
+      clDetailApi.crFormClose = () => { if (!this.state.crBusy) this.setState({ crForm: null, crErr: '' }); };
+      clDetailApi.crFormSave = () => {
+        const f9 = this.state.crForm;
+        if (!f9 || this.state.crBusy) return;
+        if (!String(f9.crNumber || '').trim()) return this.setState({ crErr: 'Enter the CR number' });
+        this.setState({ crBusy: true, crErr: '' });
+        const { id: id9, ...body9 } = f9;
+        _crSave(id9, body9, id9 ? 'CR ' + f9.crNumber + ' saved' : 'CR ' + f9.crNumber + ' added to ' + clRow.name, (m9) => this.setState({ crBusy: false, crErr: m9 }));
+      };
+
       // ── Workforce nationalisation ────────────────────────────────────────
       // Everything here comes from the SERVER's count. Recomputing it in the browser would give the
       // console its own opinion of a compliance figure, and the two would drift the first time one
@@ -20152,13 +20337,14 @@ class Component extends DCLogic {
           sdEmpPick: '', sdFileName: '', sdPreviewUrl: '', sdIsPdf: false, sdStatus: null, sdResult: null });
         this._sdLoadStatus && this._sdLoadStatus();
       };
+      clDetailApi.cdEmpTemplate = () => this._eiTemplateFor(clRow.realId, clRow.name);
       clDetailApi.cdImportEmp = () => this.setState({
         eiOpen: true, eiCompanyId: clRow.realId, eiClient: clRow.name,
         eiStep: 'pick', eiErr: '', eiBusy: false, eiCsv: '', eiFileName: '', eiPlan: null, eiResult: null,
       });
       clDetailApi.cdAddEmp = () => this.setState({
         empModal: true, eError: '', eErrField: '',
-        eClient: clRow.name, eClientLocked: true,
+        eClient: clRow.name, eClientLocked: true, eEst: this.state.cdCrFilter && _crAll.some(x9 => x9.id === this.state.cdCrFilter) ? this.state.cdCrFilter : null,
         eDob: '', eNat: '', eSalary: '', eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0],
       });
       clDetailApi.wfOpenBand = () => this.setState({
@@ -20653,7 +20839,7 @@ class Component extends DCLogic {
         return {
           docNo: d7.docNumber || '',
           docNoShow: !!d7.docNumber,
-          doc: d7.docType + ((subject === 'Employee' && d7.person) ? ' — ' + d7.person : ''),
+          doc: d7.docType + ((subject === 'Employee' && d7.person) ? ' — ' + d7.person : (subject === 'Company' && _crIsMulti) ? ' — ' + this._crLabel(this._crOf(clRow.realId, d7.establishmentId)) : ''),
           subject, authority: d7.issuingAuthority || '—', expiry: d7.expiryDate || '—',
           status, stBg: t[0], stColor: t[1],
           subjBg: subject === 'Company' ? '#E4F4FD' : '#EFEBFF', subjColor: subject === 'Company' ? '#0284C7' : '#6D5BD0' };
@@ -20691,7 +20877,14 @@ class Component extends DCLogic {
         : 'Show ' + _cdFormer.length + ' former employee' + (_cdFormer.length === 1 ? '' : 's');
       clDetailApi.cdFormerColor = _cdShowFormer ? '#6F6C7A' : '#7C00FF';
       clDetailApi.cdToggleFormer = () => this.setState({ cdShowFormer: !_cdShowFormer });
-      clDetailApi.cdEmployeesList = _cdEmps.map(e9 => {
+      // Filter by CR when the client has more than one. Null establishmentId counts as the main CR.
+      const _cdCrKey = (e9) => e9.establishmentId || _crMainId;
+      const _cdCrSel = _crIsMulti && this.state.cdCrFilter && _crAll.some(x9 => x9.id === this.state.cdCrFilter) ? this.state.cdCrFilter : null;
+      const _cdEmpsCr = _cdCrSel ? _cdEmps.filter(e9 => _cdCrKey(e9) === _cdCrSel) : _cdEmps;
+      clDetailApi.cdCrFilterShow = _crIsMulti;
+      clDetailApi.cdCrFilters = !_crIsMulti ? [] : [{ id: null, label: 'All CRs · ' + _cdEmps.length }, ..._crActive.map(x9 => ({ id: x9.id, label: this._crLabel(x9) + ' · ' + _cdEmps.filter(e9 => _cdCrKey(e9) === x9.id).length }))]
+        .map(f9 => { const on9 = f9.id === _cdCrSel; return { label: f9.label, pick: () => this.setState({ cdCrFilter: f9.id }), border: on9 ? '#7C00FF' : '#E4E1EA', bg: on9 ? '#F5EEFF' : '#fff', color: on9 ? '#5B21B6' : '#6F6C7A' }; });
+      clDetailApi.cdEmployeesList = _cdEmpsCr.map(e9 => {
         const st9 = String(e9.status || 'valid').toLowerCase();
         const ex9 = String(e9.exitStatus || 'active');
         const former = !!e9.archived;
@@ -20703,6 +20896,7 @@ class Component extends DCLogic {
         const name = e9.name || '—', role = e9.role || '—';
         const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
         return { name, role, status, stBg: t[0], stColor: t[1], initials,
+          hasCr: _crIsMulti, crTag: _crIsMulti ? this._crLabel(this._crOf(clRow.realId, e9.establishmentId)) : '',
           former: canWrite && former, formerRow: former, rowOpacity: former ? .6 : 1,
           avBg: former ? '#F3F1F7' : '#EFEBFF', avColor: former ? '#8C8899' : '#6D5BD0',
           // Every exit action hits a requireWriteRole endpoint, so a read-only role must not see a
@@ -20726,6 +20920,7 @@ class Component extends DCLogic {
               eeCompanyId: (clRow && clRow.realId) || e9.companyId || '',
               eeTraits: Array.isArray(e9.countingTraits) ? e9.countingTraits : [],
               eeName: e9.name || '', eeRole: e9.role || '',
+              eeEst: e9.establishmentId || null,
               eeExpiry: d9(e9.iqamaExpiry), eeDob: d9(e9.dob), eeJoin: d9(cd9.joinDate),
               eeNat: e9.nationality || '', eeGender: e9.gender || '',
               eeDept: cd9.department || '',
@@ -21278,7 +21473,9 @@ class Component extends DCLogic {
       showUploadModal: !!this.state.udModal,
       // udClient is cleared on open so the dialog falls back to the current filter each time rather
       // than silently reusing whoever was picked last.
-      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udClient: null, udEmployee: (_udEmpNames[0] || '') }),
+      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udClient: null, udEst: null, udEmployee: (_udEmpNames[0] || '') }),
+      udCrShow: !!(this.state.udModal && _udCo && !udIsEmployee && this._crMulti(_udCo.id)),
+      udCrChips: this.state.udModal && _udCo && !udIsEmployee ? this._crChips(_udCo.id, this.state.udEst, (v9) => this.setState({ udEst: v9 })) : [],
       closeUpload: () => this.setState({ udModal: false }),
       udType, udIsEmployee,
       udScopeLabel: _udCo
@@ -21324,7 +21521,7 @@ class Component extends DCLogic {
         const tok = localStorage.getItem('stimespro:token');
         const H8 = { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) };
         const createDoc = (filePath) => {
-          const body = { companyId: _udCo.id, person: udIsEmployee ? emp8.name : _udCo.name, employeeId: emp8 ? emp8.id : null, docType: udType, docNumber: st.udNumber || null, expiryDate: st.udExpiry, status: status8, daysLeft: isNaN(days8) ? 0 : days8 };
+          const body = { companyId: _udCo.id, person: udIsEmployee ? emp8.name : _udCo.name, employeeId: emp8 ? emp8.id : null, establishmentId: udIsEmployee ? null : this._crValid(_udCo.id, st.udEst), docType: udType, docNumber: st.udNumber || null, expiryDate: st.udExpiry, status: status8, daysLeft: isNaN(days8) ? 0 : days8 };
           if (filePath) body.customData = { file: filePath };
           fetch(API + '/api/documents', { method: 'POST', headers: H8, body: JSON.stringify(body) })
             .then(r => { if (r.status === 401) { this.toast('Sign in first', 'error'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
@@ -23252,11 +23449,14 @@ class Component extends DCLogic {
                    : null)
           || ((compClientScope && compClientScope !== 'All clients') ? compClientScope
               : ((Array.isArray(coData) && coData.length) ? coData[0].name : '')),
-        arHolder: '', arAuthority: '', arExpiry: '', arErr: '' }),
+        arHolder: '', arAuthority: '', arExpiry: '', arErr: '', arEst: null }),
       closeAddRecord: () => this.setState({ addRecord: false }),
       arDoc: this.state.arDoc || '', arHolder: this.state.arHolder || '', arAuthority: this.state.arAuthority || '', arExpiry: this.state.arExpiry || '', arErr: this.state.arErr || false,
       setArDoc: (e) => this.setState({ arDoc: e.target.value, arErr: '' }),
       setArHolder: (e) => this.setState({ arHolder: e.target.value }),
+      ...(() => { const co9 = (Array.isArray(coData) ? coData : []).find(c9 => c9.name === (this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''))); const id9 = co9 && co9.id;
+        const show9 = !!(this.state.addRecord && id9 && !(this.state.arHolder || '').trim() && this._crMulti(id9));
+        return { arCrShow: show9, arCrChips: show9 ? this._crChips(id9, this.state.arEst, (v9) => this.setState({ arEst: v9 })) : [] }; })(),
       setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
       setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
       ...mkDd('ddArClient', (Array.isArray(coData) ? coData.map(c => c.name) : []), this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''), (v) => this.setState({ arClient: v })),
@@ -23281,6 +23481,7 @@ class Component extends DCLogic {
         fetch((this._apiBase || 'http://localhost:4100') + '/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
           body: JSON.stringify({ docType: type9, companyId: co9.id, person: holder9 || co9.name,
             employeeId: emp9 ? emp9.id : null, expiryDate: st9.arExpiry,
+            establishmentId: holder9 ? null : this._crValid(co9.id, st9.arEst),
             docNumber: (st9.arDoc || '').trim() || null, issuingAuthority: (st9.arAuthority || '').trim() || null, status: 'valid' }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {

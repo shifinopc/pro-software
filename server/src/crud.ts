@@ -11,6 +11,19 @@ import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } fr
 import { startDeliveryForQuotation } from "./delivery.js";
 import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
+import { resolveEstablishmentId, syncMainFromCompany, EstablishmentError } from "./establishments.js";
+
+/**
+ * An employee or company document may name one of the client's CRs. It must be an active CR of THAT
+ * client; the main CR is stored as null (see establishments.ts). Returns an error message, or null.
+ */
+async function checkEstablishment(modelName: string, body: any, companyId: string | null | undefined): Promise<string | null> {
+  if ((modelName !== "employee" && modelName !== "document") || !body || !("establishmentId" in body)) return null;
+  if (modelName === "document" && body.employeeId) { body.establishmentId = null; return null; } // an employee's own documents follow the employee
+  if (!companyId) return "Choose the client before the CR.";
+  try { body.establishmentId = await resolveEstablishmentId(String(companyId), body.establishmentId); return null; }
+  catch (e: any) { if (e instanceof EstablishmentError) return e.message; throw e; }
+}
 
 // The market this installation operates in now lives in Settings → General, read through
 // `homeCountry()`. It used to be `export const HOME_COUNTRY = "SA"` right here, carrying a comment
@@ -328,7 +341,11 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         const clash = await numberHeldByAnother(String((data as any).docType), (data as any).docNumber, (data as any).person);
         if (clash) return res.status(409).json({ error: clashMessage(clash), clash });
       }
+      const estErr = await checkEstablishment(modelName, data, (data as any)?.companyId);
+      if (estErr) return res.status(400).json({ error: estErr });
       const created = await model.create({ data });
+      // A client created with a CR has that CR as its main one from the start.
+      if (modelName === "company" && (created as any).cr) await syncMainFromCompany(created.id).catch(() => {});
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);
       if (act) logActivity(act);
@@ -439,10 +456,14 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
             })();
       }
 
+      const estErr = await checkEstablishment(modelName, req.body, req.body?.companyId ?? (before as any).companyId);
+      if (estErr) return res.status(400).json({ error: estErr });
       const updated = await model.update({
         where: { id: req.params.id },
         data: { ...sanitize(modelName, req.body), ...derived, ...(historyPatch ? { history: historyPatch } : {}) },
       });
+      // The client form edits `cr`, which mirrors the main CR: keep the main CR in step.
+      if (modelName === "company" && req.body && "cr" in req.body) await syncMainFromCompany(updated.id).catch(() => {});
       if (modelName === "invoice" && req.body?.status === "paid") {
         logActivity({ type: "finance", message: `Invoice ${updated.number} marked paid` });
         logNotification({ type: "payment", title: `Payment received: ${updated.number}`, message: updated.clientName ?? undefined });

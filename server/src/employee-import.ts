@@ -38,6 +38,7 @@
  *   empty and a warning naming it. Never both.
  */
 import { prisma } from "./db.js";
+import { normCr } from "./establishments.js";
 
 /** Nationality labels a client will actually type, mapped to the codes this system counts on. */
 const NATION: Record<string, string> = {
@@ -74,11 +75,13 @@ const ALIAS: Record<string, string> = {
   dob: "date_of_birth", "date of birth": "date_of_birth",
   salary: "salary_monthly", monthly_salary: "salary_monthly",
   sex: "gender",
+  cr: "cr_number", cr_no: "cr_number", "cr number": "cr_number", sub_cr: "cr_number", branch_cr: "cr_number",
+  commercial_registration: "cr_number", "commercial registration": "cr_number",
 };
 
 /** The columns the template offers, in order. */
 export const IMPORT_COLUMNS = [
-  "full_name", "nationality", "gov_id", "gender", "date_of_birth", "role", "job_category",
+  "full_name", "nationality", "gov_id", "cr_number", "gender", "date_of_birth", "role", "job_category",
   "employment_type", "department", "joining_date", "salary_monthly",
   "passport_number", "passport_expiry", "iqama_expiry", "work_permit_expiry", "health_insurance_expiry",
 ];
@@ -130,6 +133,9 @@ type PlannedRow = {
   employmentType: string | null; workCountry: string; department: string | null; joinDate: string | null;
   docs: PlannedDoc[];
   matchId: string | null;          // existing employee this updates, or null for a new one
+  /** The CR this person works under: an establishment id, null for the main CR, undefined = leave as it is. */
+  establishmentId?: string | null;
+  crLabel: string;
 };
 
 export type ImportPlan = {
@@ -142,7 +148,9 @@ export type ImportPlan = {
   saudization: { saudis: number; total: number; pct: number };
   refused: ImportIssue[];          // rows NOT imported
   warnings: ImportIssue[];         // rows imported, with something left out
-  preview: { line: number; name: string; nationality: string; govId: string | null; action: "new" | "update"; documents: number }[];
+  preview: { line: number; name: string; nationality: string; govId: string | null; action: "new" | "update"; documents: number; cr: string }[];
+  /** How the rows split across the client's CRs, with Saudis per CR. Empty when the file has no CR column. */
+  crs: { cr: string; label: string; rows: number; saudis: number }[];
   rows: PlannedRow[];
 };
 
@@ -163,6 +171,15 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
   const at = (r: string[], n: string) => { const i = col(n); return i < 0 ? "" : String(r[i] ?? "").trim(); };
 
   const existing = await prisma.employee.findMany({ where: { companyId: co.id }, select: { id: true, name: true, govId: true } });
+
+  // THE CR COLUMN. A client with sub CRs imports one file for all of them; each row names the CR the
+  // person works under. Blank means the main CR for a new person and "unchanged" for someone already on
+  // file. A CR that is not one of this client's active CRs refuses the row — it is far more likely a
+  // typo or the wrong client's file than a CR worth creating from a spreadsheet.
+  const hasCrColumn = col("cr_number") >= 0;
+  const ests = await prisma.establishment.findMany({ where: { companyId: co.id }, select: { id: true, crNumber: true, kind: true, status: true, name: true, city: true } });
+  const mainCr = ests.find(e => e.kind === "main" && e.status === "active") ?? null;
+  const knownCrs = ests.filter(e => e.status === "active").map(e => e.crNumber).join(", ") || "none added yet";
   const byGov = new Map(existing.filter(e => e.govId).map(e => [e.govId!, e]));
   const byName = new Map<string, typeof existing>();
   for (const e of existing) {
@@ -186,6 +203,23 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
     if (rowClient && rowClient.toLowerCase() !== co.name.toLowerCase()) {
       refused.push({ row: line, name, what: `the row says it belongs to "${rowClient}", not ${co.name}` });
       continue;
+    }
+
+    let establishmentId: string | null | undefined = undefined;
+    let crShown = "";
+    if (hasCrColumn) {
+      const crRaw = at(r, "cr_number");
+      const crN = normCr(crRaw);
+      if (crN) {
+        const hit = ests.find(e => normCr(e.crNumber) === crN);
+        if (!hit && !(ests.length === 0 && normCr((await prisma.company.findUnique({ where: { id: co.id }, select: { cr: true } }))?.cr) === crN)) {
+          refused.push({ row: line, name, what: `CR ${crRaw} is not one of ${co.name}'s CRs (${knownCrs}) — add it on the client's page first` });
+          continue;
+        }
+        if (hit && hit.status !== "active") { refused.push({ row: line, name, what: `CR ${crRaw} is cancelled` }); continue; }
+        establishmentId = !hit || hit.kind === "main" ? null : hit.id;
+        crShown = hit ? hit.crNumber : crN;
+      }
     }
 
     const natRaw = at(r, "nationality");
@@ -269,6 +303,9 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
       joinDate: joined.iso,
       docs,
       matchId,
+      // Blank CR: main CR for someone new, unchanged for someone already on file.
+      establishmentId: establishmentId !== undefined ? establishmentId : (hasCrColumn && !matchId ? null : undefined),
+      crLabel: crShown || (matchId && hasCrColumn ? "unchanged" : mainCr ? mainCr.crNumber : ""),
     });
   }
 
@@ -286,7 +323,13 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
     saudization: { saudis, total: planned.length, pct: planned.length ? Math.round((saudis * 1000) / planned.length) / 10 : 0 },
     refused,
     warnings,
-    preview: planned.slice(0, 200).map(p => ({ line: p.line, name: p.name, nationality: p.nat, govId: p.govId, action: p.matchId ? "update" as const : "new" as const, documents: p.docs.length })),
+    preview: planned.slice(0, 200).map(p => ({ line: p.line, name: p.name, nationality: p.nat, govId: p.govId, action: p.matchId ? "update" as const : "new" as const, documents: p.docs.length, cr: p.crLabel })),
+    crs: !hasCrColumn ? [] : [...planned.reduce((m, p) => {
+      const k = p.crLabel || "main";
+      const cur = m.get(k) ?? { cr: k, label: k === "unchanged" ? "CR unchanged (already on file)" : (() => { const e = ests.find(x => x.crNumber === k); return e ? `${e.kind === "main" ? "Main CR" : e.city || e.name || "Sub CR"} ${e.crNumber}` : `CR ${k}`; })(), rows: 0, saudis: 0 };
+      cur.rows++; if (p.nat === "SA") cur.saudis++;
+      return m.set(k, cur);
+    }, new Map<string, { cr: string; label: string; rows: number; saudis: number }>()).values()],
     rows: planned,
   };
 }
@@ -306,6 +349,7 @@ export async function applyEmployeeImport(plan: ImportPlan): Promise<{ made: num
     // Only write gender when the file said something. An update must not blank a gender that was
     // recorded by hand because the spreadsheet simply had no column for it.
     if (p.gender) data.gender = p.gender;
+    if (p.establishmentId !== undefined) data.establishmentId = p.establishmentId;
 
     const emp = p.matchId
       ? await prisma.employee.update({ where: { id: p.matchId }, data })

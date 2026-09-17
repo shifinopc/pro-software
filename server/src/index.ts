@@ -38,6 +38,7 @@ import { AgentActionError } from "./agent-core.js";
 import { qiwaOccupations } from "./agent-data-quality.js";
 import { requestDocStatus, attachToRequest } from "./request-docs.js";
 import { importStatement, StatementError } from "./agent-bank.js";
+import { listEstablishments, createEstablishment, updateEstablishment, ensureMainEstablishments, syncMainFromCompany, resolveEstablishmentId, EstablishmentError } from "./establishments.js";
 import { warmPassportReader } from "./mrz-reader.js";
 import { aiConnection, testConnection, AiError } from "./ai.js";
 
@@ -340,6 +341,33 @@ async function clientTeamRoles(): Promise<string[]> {
  * changes nothing, and a setting naming a role no template uses is a typo nobody would ever see the
  * consequences of.
  */
+// ── A client's CRs: the main CR and sub (branch) CRs — see establishments.ts ──
+app.get("/api/companies/:id/establishments", requireAuth, requireStaff, async (req, res) => {
+  try { res.json(await listEstablishments(String(req.params.id))); }
+  catch (e: any) { res.status(500).json({ error: e?.message ?? "Could not load the CRs" }); }
+});
+app.post("/api/companies/:id/establishments", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const row = await createEstablishment(String(req.params.id), req.body ?? {});
+    await logAudit({ action: "establishment.create", actorId: a?.sub, actorEmail: a?.email, target: row.crNumber, detail: `${row.kind} CR for client ${row.companyId}`, ip: clientIp(req) });
+    res.status(201).json(row);
+  } catch (e: any) {
+    if (e instanceof EstablishmentError) return res.status(e.status).json({ error: e.message });
+    res.status(500).json({ error: e?.message ?? "Could not add the CR" });
+  }
+});
+app.put("/api/companies/:id/establishments/:eid", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const row = await updateEstablishment(String(req.params.id), String(req.params.eid), req.body ?? {});
+    await logAudit({ action: "establishment.update", actorId: a?.sub, actorEmail: a?.email, target: row.crNumber, detail: JSON.stringify(req.body ?? {}).slice(0, 500), ip: clientIp(req) });
+    res.json(row);
+  } catch (e: any) {
+    if (e instanceof EstablishmentError) return res.status(e.status).json({ error: e.message });
+    res.status(500).json({ error: e?.message ?? "Could not change the CR" });
+  }
+});
 app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req, res) => {
   try {
     const co = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true, name: true, roleOwners: true } });
@@ -948,7 +976,10 @@ app.get("/api/portal/me", requireAuth, requirePortal, async (req, res) => {
   const _liveOvd = company.documents.filter(d => { const n = _left(d); return d.status === "overdue" || (n != null && n < 0); }).length;
   const _liveExp = company.documents.filter(d => { const n = _left(d); return d.status !== "overdue" && n != null && n >= 0 && n <= 30; }).length;
   res.json({
-    company: { ...company, employees: _liveEmp, overdue: _liveOvd, expiring: _liveExp, invoices, subscriptions }, groupCompanies, orgCurrency, orgName, orgPhone, orgTimezone,
+    company: { ...company, employees: _liveEmp, overdue: _liveOvd, expiring: _liveExp, invoices, subscriptions,
+      // The client's CRs, so the portal can show which CR each employee and certificate is under.
+      establishments: (await listEstablishments(company.id)).filter(e => e.status === "active").map(e => ({ id: e.id, crNumber: e.crNumber, name: e.name, kind: e.kind, city: e.city, employees: e.employees, saudiPct: e.saudiPct })) },
+    groupCompanies, orgCurrency, orgName, orgPhone, orgTimezone,
     // So the portal can explain the restriction rather than just failing when they try to act.
     suspended: company.status === "suspended",
     suspendedReason: company.status === "suspended" ? company.suspendedReason : null,
@@ -965,7 +996,8 @@ app.get("/api/portal/company/:id", requireAuth, requirePortal, async (req, res) 
     include: { group: true, employeeList: { where: { archived: false } }, documents: true, invoices: { where: { NOT: { status: "draft" } } } },
   });
   if (!company) return res.status(404).json({ error: "Not found" });
-  res.json({ ...company, subscriptions: await subsFor(company.id, company.groupId) });
+  const establishments = (await listEstablishments(company.id)).filter(e => e.status === "active").map(e => ({ id: e.id, crNumber: e.crNumber, name: e.name, kind: e.kind, city: e.city, employees: e.employees, saudiPct: e.saudiPct }));
+  res.json({ ...company, establishments, subscriptions: await subsFor(company.id, company.groupId) });
 });
 
 // Client edits its own contact details. Whitelisted to three fields — the client must never be able
@@ -3680,6 +3712,8 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
     });
     return updated;
   });
+  // The CR given on becoming a client is the client's main CR.
+  if (to === ACTIVE_CLIENT) await syncMainFromCompany(co.id).catch(() => {});
 
   // The portal login, once, on becoming a client. Same rules as the create route: only with a real
   // address, only if that address is not already a user. The account is created with NO password —
@@ -3839,7 +3873,9 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
     if (!by) return res.status(400).json({ error: "The replacing document no longer exists" });
     if (by.id === doc.id) return res.status(400).json({ error: "A document cannot replace itself" });
     if (by.docType !== doc.docType) return res.status(400).json({ error: `A ${by.docType} cannot replace a ${doc.docType}` });
-    const sameSubject = by.employeeId && doc.employeeId ? by.employeeId === doc.employeeId : by.person === doc.person;
+    const sameSubject = by.employeeId && doc.employeeId ? by.employeeId === doc.employeeId
+      : !by.employeeId && !doc.employeeId ? by.person === doc.person && (by.establishmentId ?? null) === (doc.establishmentId ?? null)
+      : by.person === doc.person;
     if (!sameSubject) return res.status(400).json({ error: "That document belongs to a different person" });
   }
 
@@ -4112,6 +4148,13 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
     ? (Array.isArray(emp.countingTraits) ? emp.countingTraits : [])
     : [...new Set((Array.isArray(b.countingTraits) ? b.countingTraits : []).map((x: any) => String(x ?? "").trim()).filter(Boolean))] as string[];
 
+  // Which of the client's CRs the person works under. Not sent = unchanged; the main CR is stored as null.
+  let nextEst = emp.establishmentId ?? null;
+  if (b.establishmentId !== undefined) {
+    try { nextEst = await resolveEstablishmentId(emp.companyId, b.establishmentId); }
+    catch (e: any) { if (e instanceof EstablishmentError) return res.status(e.status).json({ error: e.message }); throw e; }
+  }
+
   const cur: any = (emp.customData && typeof emp.customData === "object") ? emp.customData : {};
   const nextCustom = { ...cur };
   if (b.department !== undefined) nextCustom.department = str(b.department);
@@ -4131,6 +4174,10 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   note("joining date", cur.joinDate, nextCustom.joinDate);
   note("visa quota", cur.visaQuota, nextCustom.visaQuota);
   note("counted as", (Array.isArray(emp.countingTraits) ? emp.countingTraits : []).join(", ") || "everyone else", (nextTraits as string[]).join(", ") || "everyone else");
+  if (nextEst !== (emp.establishmentId ?? null)) {
+    const crOf = async (id: string | null) => id ? (await prisma.establishment.findUnique({ where: { id }, select: { crNumber: true } }))?.crNumber ?? "?" : "main CR";
+    changes.push(`CR: ${await crOf(emp.establishmentId ?? null)} → ${await crOf(nextEst)}`);
+  }
   if (!changes.length) return res.json({ employee: emp, unchanged: true });
 
   const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
@@ -4140,6 +4187,7 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
       name: nextName, role: nextRole, iqamaExpiry: nextExpiry,
       dob: nextDob, nationality: nextNat, gender: nextGender, salary: nextSalary,
       employmentType: nextType, jobCategory: nextCat, customData: nextCustom, countingTraits: nextTraits,
+      establishmentId: nextEst,
       history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
         { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],
     },
@@ -6444,4 +6492,6 @@ app.listen(port, () => {
   // The heartbeat. Single-instance only: if this is ever scaled out, disable it and drive
   // /api/cron/tick from one external scheduler instead, or every instance will tick.
   startScheduler();
+  // Every client's existing CR becomes its main CR. Idempotent, so it is safe on every start.
+  ensureMainEstablishments().then(n => { if (n) console.log(`[establishments] ${n} main CR(s) created from existing client CR numbers`); }).catch(e => console.error("[establishments]", e?.message ?? e));
 });

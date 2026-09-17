@@ -9,6 +9,7 @@
 //     screen renders; if they drift, the scoreboard and the actor disagree.
 //  3. NON-FATAL — one job failing must not stop the others or kill the process.
 // ─────────────────────────────────────────────────────────────
+import { crLabel } from "./establishments.js";
 import { reminderNote } from "./agent-collections.js";
 import { prisma } from "./db.js";
 import { homeCurrency } from "./orgsettings.js";
@@ -364,6 +365,10 @@ export async function triggerRenewals(): Promise<RenewalResult> {
       where: { docType, renewalRunId: null, supersededAt: null, NOT: { expiryDate: null } },
       include: { company: { select: { name: true } } },
     });
+    // A company document belongs to one of the client's CRs. Where a client has more than one, the run
+    // names the CR — "CR renewal — Al Noor · Jeddah branch (4030…)" — so two renewals of the same
+    // document type for one client can be told apart, and the CR travels with the run.
+    const ests = await prisma.establishment.findMany({ where: { companyId: { in: [...new Set(docs.filter(x => !x.employeeId).map(x => x.companyId))] } } });
 
     for (const d of docs) {
       const exp = parseDate(d.expiryDate);
@@ -398,12 +403,15 @@ export async function triggerRenewals(): Promise<RenewalResult> {
       try {
         // Hand the engine everything issue_document needs to RENEW (not re-issue): documentId makes it
         // archive old→new into history[] instead of creating a duplicate document.
+        const mine = d.employeeId ? [] : ests.filter(e => e.companyId === d.companyId);
+        const est = mine.length > 1 ? (d.establishmentId ? mine.find(e => e.id === d.establishmentId) : mine.find(e => e.kind === "main")) ?? null : null;
         const run = await startInstance(tpl.id, {
-          title: `${docType} renewal — ${d.person}`,
+          title: `${docType} renewal — ${d.person}${est ? ` · ${crLabel(est)}` : ""}`,
           companyId: d.companyId,
           clientName: d.company?.name ?? null,
           variables: {
             documentId: d.id, docType, person: d.person, employeeId: d.employeeId ?? null,
+            ...(d.employeeId ? {} : { establishmentId: d.establishmentId ?? null, crNumber: est?.crNumber ?? null }),
             currentExpiry: d.expiryDate, currentNumber: d.docNumber ?? null,
             fee: dt?.defaultFee ?? null, _trigger: "document_expiry", _autoStarted: nowISO(),
           },

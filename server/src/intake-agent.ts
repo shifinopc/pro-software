@@ -305,7 +305,7 @@ export async function createSuggestion(input: {
 /** Turn a suggestion into a Document — the only way one is created. */
 export async function acceptSuggestion(id: string, input: {
   actorId: string | null;
-  docType?: string; employeeId?: string | null;
+  docType?: string; employeeId?: string | null; establishmentId?: string | null;
   number?: string | null; expiry?: string | null; issueDate?: string | null;
 }) {
   const s = await prisma.documentSuggestion.findUnique({ where: { id } });
@@ -345,12 +345,13 @@ export async function acceptSuggestion(id: string, input: {
 
   const left = expiry ? Math.ceil((Date.parse(expiry) - Date.now()) / 86_400_000) : 0;
   const prior = await prisma.document.findFirst({
-    where: { docType: dt.name, supersededAt: null, ...(employee ? { employeeId: employee.id } : { companyId: s.companyId, employeeId: null }) },
+    where: { docType: dt.name, supersededAt: null, ...(employee ? { employeeId: employee.id } : { companyId: s.companyId, employeeId: null, establishmentId: input.establishmentId ?? null }) },
   });
 
   const doc = await prisma.document.create({
     data: {
       companyId: s.companyId, employeeId: employee?.id ?? null,
+      establishmentId: employee ? null : input.establishmentId ?? null,
       person: employee?.name ?? company?.name ?? "—",
       docType: dt.name, docNumber: number, expiryDate: expiry, issueDate,
       issuingAuthority: dt.authority ?? null,

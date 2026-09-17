@@ -1431,6 +1431,12 @@
             <input value="{{ empSearch }}" onChange="{{ setEmpSearch }}" placeholder="Search employees…" style="flex:1; border:none; outline:none; background:transparent; font-size:12px; color:#1A1523; font-family:'Inter',sans-serif;">
           </div>
         </section>
+        <sc-if value="{{ empCrShow }}" hint-placeholder-val="{{ false }}">
+          <section style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:11px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR</span>
+            <sc-for list="{{ empCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.select }}" style="font-size:12px; font-weight:600; color:{{ c.color }}; background:{{ c.bg }}; border:1px solid {{ c.border }}; border-radius:99px; padding:6px 13px; cursor:pointer; white-space:nowrap;">{{ c.label }}</span></sc-for>
+          </section>
+        </sc-if>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
           <div style="overflow-x:auto;">
             <div style="min-width:720px;">
@@ -1441,7 +1447,7 @@
                 <div style="display:grid; grid-template-columns:2.2fr 1.4fr 1fr 1fr 196px; gap:12px; align-items:center; padding:11px 20px; border-bottom:1px solid #F6F4FA; transition:background .12s;" style-hover="background:#FBFAFE;">
                   <div style="display:flex; align-items:center; gap:11px; min-width:0;">
                     <div style="width:32px; height:32px; border-radius:99px; background:{{ e.avBg }}; color:{{ e.avColor }}; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ e.initials }}</div>
-                    <span style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.name }}</span>
+                    <div style="min-width:0;"><div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.name }}</div><sc-if value="{{ e.hasCr }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.crTag }}</div></sc-if></div>
                   </div>
                   <span style="font-size:12px; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.role }}</span>
                   <span style="font-size:12px; color:#4B4757; font-variant-numeric:tabular-nums;">{{ e.eid }}</span>
@@ -3914,7 +3920,8 @@ class Component extends DCLogic {
       const path9 = cd9.filePath || null;
       const url9 = path9 ? (window.STIMES_API || 'http://localhost:4100') + path9 : '';
       return {
-        name: [d9.docType, d9.person && d9.person !== docFolder ? '— ' + d9.person : null].filter(Boolean).join(' '),
+        name: [d9.docType, d9.person && d9.person !== docFolder ? '— ' + d9.person : null].filter(Boolean).join(' ')
+          + ((() => { const est = Array.isArray(this.state.estItems) && this.state.estItems.length > 1 && !d9.employeeId ? (d9.establishmentId ? this.state.estItems.find(x => x.id === d9.establishmentId) : this.state.estItems.find(x => x.kind === 'main')) : null; return est ? ' · ' + (est.kind === 'main' ? 'Main CR' : (est.city || est.name || 'Sub CR')) + ' ' + est.crNumber : ''; })()),
         meta: [cd9.docNumber || d9.docNumber ? 'No. ' + (cd9.docNumber || d9.docNumber) : null,
           d9.expiryDate ? 'Expires ' + d9.expiryDate : null].filter(Boolean).join(' · ') || 'No expiry recorded',
         status: st9[0], stBg: st9[1], stColor: st9[2],
@@ -4090,6 +4097,12 @@ class Component extends DCLogic {
     // WIRED: employees from the real API (state.empItems from /me).
     const empStageOf = (s) => s === 'overdue' ? 'processing' : s === 'expiring' ? 'renewal' : 'active';
     const empFmtMon = (d) => { const t = new Date(d); return isNaN(t.getTime()) ? (d && d !== '—' ? d : '—') : t.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }); };
+    // The client's CRs. Only shown when there is more than one — a client with one CR sees nothing new.
+    const _estAll = Array.isArray(this.state.estItems) ? this.state.estItems : [];
+    const _estMain = _estAll.find(x => x.kind === 'main') || null;
+    const _estMulti = _estAll.length > 1;
+    const _estLabel = (x) => x ? ((x.kind === 'main' ? 'Main CR' : (x.city || x.name || 'Sub CR')) + ' · ' + x.crNumber) : '';
+    const _estOf = (emp) => (emp.establishmentId ? _estAll.find(x => x.id === emp.establishmentId) : _estMain) || _estMain;
     const employees = (this.state.empItems || []).map((emp, i) => {
       const v = empStageOf(emp.status); const sv = vStages[v]; const p = avPals[i % avPals.length];
       const eid = empFmtMon(emp.iqamaExpiry);
@@ -4099,6 +4112,7 @@ class Component extends DCLogic {
       const stage = exiting ? ['Exit ' + (emp.exitStatus === 'exit_requested' ? 'requested' : 'in progress'), '#FEECEC', '#C0353A'] : sv;
       return { name: emp.name, role: emp.role || '—', eid, visa: stage[0], vBg: stage[1], vColor: stage[2], avBg: p[0], avColor: p[1], id: emp.id,
         exiting: !!exiting, exitDate: emp.exitDate || null, rawStage: exiting ? 'exit' : v,
+        hasCr: _estMulti, crTag: _estMulti ? _estLabel(_estOf(emp)) : '', crId: (_estOf(emp) || {}).id || null,
         initials: (emp.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('') };
     });
     const employeesAll = employees.map(e => ({
@@ -4122,8 +4136,12 @@ class Component extends DCLogic {
         border: (key === 'all' ? !_empStage : _empStage === key) ? '#C9A2FF' : '#EDEBF2',
         select: () => this.setState({ empStageFilter: key === 'all' ? null : key }),
       }));
+    const _empCr = _estMulti && _estAll.some(x => x.id === this.state.empCrFilter) ? this.state.empCrFilter : null;
+    const empCrChips = !_estMulti ? [] : [{ id: null, label: 'All CRs', count: employeesAll.length }, ..._estAll.map(x => ({ id: x.id, label: _estLabel(x), count: employeesAll.filter(e => e.crId === x.id).length }))]
+      .map(c => ({ label: c.label + ' · ' + c.count, bg: c.id === _empCr ? '#F5EEFF' : '#fff', border: c.id === _empCr ? '#C9A2FF' : '#EDEBF2', color: c.id === _empCr ? '#5B21B6' : '#4B4757', select: () => this.setState({ empCrFilter: c.id }) }));
     const employeesVisible = employeesAll.filter(e =>
-      (!_empStage || e.rawStage === _empStage)
+      (!_empCr || e.crId === _empCr)
+      && (!_empStage || e.rawStage === _empStage)
       && (!_empQ || (e.name + ' ' + e.role).toLowerCase().includes(_empQ)));
 
     // WIRED: invoices from the real API (state.invItems from /me). Newest first.
@@ -4359,7 +4377,7 @@ class Component extends DCLogic {
                 this._loginEmail = email;
                 this._companyCount = (me && me.groupCompanies ? me.groupCompanies.length : 1) || 1;
                 this._contactFirst = co.contact ? String(co.contact).split(' ')[0] : null;
-                const prof = { sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: (me && me.groupCompanies) || [], groupName: (co.group && co.group.name) || '' };
+                const prof = { sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], estItems: co.establishments || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: (me && me.groupCompanies) || [], groupName: (co.group && co.group.name) || '' };
                 if (d.mustChangePassword) return this.setState({ auth: 'change', lError: '', pError: '', nPass: '', cPass: '', company: name || this.state.company, ...prof });
                 this.setState({ auth: 'in', lError: '', company: name || this.state.company, welcomeToast: true, ...prof });
                 this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadPayments(); this._loadSvcItems(); this._chatConnect();
@@ -4547,7 +4565,7 @@ class Component extends DCLogic {
       const tok = credTok(); if (!tok) return;
       this._load('/api/portal/me', 'portalMe', (me) => {
         const co = (me && me.company) || {};
-        this.setState({ empItems: co.employeeList || [], docItems: co.documents || [], invItems: co.invoices || [] });
+        this.setState({ empItems: co.employeeList || [], estItems: co.establishments || [], docItems: co.documents || [], invItems: co.invoices || [] });
       });
     };
     // Print a client's own copy of an invoice. The portal doesn't hold the console's Print Layout
@@ -4708,7 +4726,7 @@ class Component extends DCLogic {
       fetch(CRED_API + '/api/portal/me', { headers: { Authorization: 'Bearer ' + tok } })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((me) => { const co = (me && me.company) || {}; if (me && me.orgCurrency) this.setState({ sysCur: me.orgCurrency }); if (me && me.orgName) this.setState({ proTeamName: me.orgName }); this.setState({ proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '' });
-          this.setState({ suspended: !!me.suspended, suspendedReason: me.suspendedReason || null }); this.setState({ empItems: co.employeeList || [], invItems: co.invoices || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} } }); })
+          this.setState({ suspended: !!me.suspended, suspendedReason: me.suspendedReason || null }); this.setState({ empItems: co.employeeList || [], estItems: co.establishments || [], invItems: co.invoices || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} } }); })
         .catch(() => {});
     };
     // Reveals a stored password on demand (audited server-side); caches it into state.creds[i].pass.
@@ -4750,7 +4768,7 @@ class Component extends DCLogic {
             this._companyCount = (me.groupCompanies || []).length || 1;
             this._contactFirst = co.contact ? String(co.contact).split(' ')[0] : null;
             // No welcome toast on restore — the greeting belongs to a fresh sign-in.
-            this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
+            this.setState({ sysCur: (me && me.orgCurrency) || this.state.sysCur, proTeamName: (me && me.orgName) || this.state.proTeamName, proTeamPhone: (me && me.orgPhone) || '', proTeamTz: (me && me.orgTimezone) || '', suspended: !!(me && me.suspended), suspendedReason: (me && me.suspendedReason) || null, auth: "in", lError: '', company: co.name || this.state.company, sContact: co.contact || '', sEmail: co.email || '', sPhone: co.phone || '', profileName: co.contact || co.name || '', invItems: co.invoices || [], empItems: co.employeeList || [], estItems: co.establishments || [], docItems: co.documents || [], subItems: co.subscriptions || [], coMeta: { cr: co.cr || '', city: co.city || '', industry: co.industry || '', status: co.status || 'active', customData: co.customData || {} }, groupCompanies: me.groupCompanies || [], groupName: (co.group && co.group.name) || '' });
             this._loadCreds(); this._loadNotifs(); this._loadReqs(); this._loadAppts(); this._loadQuotes(); this._loadAddonReqs(); this._loadPayments(); this._loadSvcItems(); this._chatConnect();
           })
           // Bad or expired token: drop it and fall through to the sign-in form. Without flipping auth
@@ -6311,7 +6329,7 @@ class Component extends DCLogic {
       docExpiring: String((this.state.docItems || []).filter(d => String(d.status).toLowerCase() === 'expiring').length),
       docExpired: String((this.state.docItems || []).filter(d => Number(d.daysLeft) < 0 || /expired|overdue/i.test(String(d.status))).length),
       companyFields, officeRows, officeIncomplete, bizActivities, hasActivities, licHealth, licHealthEmpty,
-      employees: employeesVisible, empChips,
+      employees: employeesVisible, empChips, empCrChips, empCrShow: empCrChips.length > 0,
       empSearch: this.state.empSearch || '',
       setEmpSearch: (e) => this.setState({ empSearch: e.target.value }),
       empListEmpty: employeesVisible.length === 0,

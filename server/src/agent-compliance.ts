@@ -14,6 +14,7 @@ import { upsertFinding, markRun } from "./agent-core.js";
 import { splitCsv, toIsoDate } from "./agent-bank.js";
 import { ACTIVE_CLIENT } from "./validate.js";
 import { logAudit } from "./auth.js";
+import { crLabel } from "./establishments.js";
 
 // ── 14. Government portal reconciler ──────────────────────────────────────────────────────────
 
@@ -111,15 +112,18 @@ const LICENCE_DAYS = 60;
 export async function runCompanyLicences() {
   return runFindings(LICENCES, ["expiring"], async raise => {
     const cos = await prisma.company.findMany({ where: { lifecycle: ACTIVE_CLIENT }, select: { id: true, name: true, status: true } });
-    const docs = await prisma.document.findMany({ where: { companyId: { in: cos.map(c => c.id) }, employeeId: null, supersededAt: null, renewalRunId: null, renewalTaskId: null, expiryDate: { gte: today(), lte: addDays(today(), LICENCE_DAYS) } }, select: { id: true, companyId: true, docType: true, docNumber: true, expiryDate: true } });
+    const docs = await prisma.document.findMany({ where: { companyId: { in: cos.map(c => c.id) }, employeeId: null, supersededAt: null, renewalRunId: null, renewalTaskId: null, expiryDate: { gte: today(), lte: addDays(today(), LICENCE_DAYS) } }, select: { id: true, companyId: true, docType: true, docNumber: true, expiryDate: true, establishmentId: true } });
     const name = new Map(cos.map(c => [c.id, c.name]));
+    // A client with sub CRs: say which CR each certificate belongs to.
+    const ests = await prisma.establishment.findMany({ where: { companyId: { in: [...new Set(docs.map(d => d.companyId))] }, status: "active" } });
+    const crOf = (d: { companyId: string; establishmentId: string | null }) => { const mine = ests.filter(e => e.companyId === d.companyId); if (mine.length < 2) return ""; const e = d.establishmentId ? mine.find(x => x.id === d.establishmentId) : mine.find(x => x.kind === "main"); return e ? ` · ${crLabel(e)}` : ""; };
     for (const [co, rows] of groupBy(docs, d => d.companyId)) {
       rows.sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)));
       const first = daysFromToday(rows[0].expiryDate) ?? 0;
       await raise({ kind: "expiring", key: `licences:${co}`, companyId: co,
         title: `${plural(rows.length, "company licence")} expiring within ${LICENCE_DAYS} days — ${name.get(co)}`,
         summary: `First is ${rows[0].docType} in ${first} days, and no renewal has started. A lapsed CR or GOSI certificate stops every visa and Iqama for this client.`,
-        output: { lists: [{ title: "Expiring", items: rows.map(d => ({ text: `${d.docType}${d.docNumber ? ` ${d.docNumber}` : ""} — ${d.expiryDate} (in ${daysFromToday(d.expiryDate)} days)` })) }] } });
+        output: { lists: [{ title: "Expiring", items: rows.map(d => ({ text: `${d.docType}${d.docNumber ? ` ${d.docNumber}` : ""}${crOf(d)} — ${d.expiryDate} (in ${daysFromToday(d.expiryDate)} days)` })) }] } });
     }
   });
 }
