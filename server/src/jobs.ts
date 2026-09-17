@@ -322,12 +322,13 @@ export async function startPeriodicRuns(): Promise<PeriodicResult> {
 }
 
 
-export async function triggerRenewals(): Promise<RenewalResult> {
+/** `onlyCompanyId` scopes a pass to one client — for tests that must not start renewals on real data. */
+export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalResult> {
   const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, held: 0, details: [] };
 
   // Re-arm documents whose renewal is over (finished, cancelled, or the run was deleted). Without this
   // a stuck pointer would block that document from ever auto-renewing again.
-  const inFlight = await prisma.document.findMany({ where: { NOT: { renewalRunId: null } } });
+  const inFlight = await prisma.document.findMany({ where: { NOT: { renewalRunId: null }, ...(onlyCompanyId ? { companyId: onlyCompanyId } : {}) } });
   for (const d of inFlight) {
     const run = await prisma.workflowInstance.findUnique({ where: { id: d.renewalRunId! } });
     if (!run || run.status !== "running") {
@@ -362,7 +363,7 @@ export async function triggerRenewals(): Promise<RenewalResult> {
     const docs = await prisma.document.findMany({
       // A superseded row is history, not something to renew — renewing it would create a second
       // live document of the same type, which is the state this whole rule exists to prevent.
-      where: { docType, renewalRunId: null, supersededAt: null, NOT: { expiryDate: null } },
+      where: { docType, renewalRunId: null, supersededAt: null, NOT: { expiryDate: null }, ...(onlyCompanyId ? { companyId: onlyCompanyId } : {}) },
       include: { company: { select: { name: true } } },
     });
     // A company document belongs to one of the client's CRs. Where a client has more than one, the run
@@ -411,7 +412,7 @@ export async function triggerRenewals(): Promise<RenewalResult> {
           clientName: d.company?.name ?? null,
           variables: {
             documentId: d.id, docType, person: d.person, employeeId: d.employeeId ?? null,
-            ...(d.employeeId ? {} : { establishmentId: d.establishmentId ?? null, crNumber: est?.crNumber ?? null }),
+            ...(d.employeeId ? {} : { establishmentId: d.establishmentId ?? null, establishmentCr: est?.crNumber ?? null }),
             currentExpiry: d.expiryDate, currentNumber: d.docNumber ?? null,
             fee: dt?.defaultFee ?? null, _trigger: "document_expiry", _autoStarted: nowISO(),
           },

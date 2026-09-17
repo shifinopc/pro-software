@@ -64,7 +64,7 @@ const PORTAL_ONLY: Record<string, string> = {
   cr_data: "CR data must be compared against the MC portal record.",
 };
 
-async function proveItem(item: { key: string; label: string }, ctx: { companyId: string | null; employeeId: string | null }): Promise<Check> {
+async function proveItem(item: { key: string; label: string }, ctx: { companyId: string | null; employeeId: string | null; establishmentId?: string | null }): Promise<Check> {
   const { key, label } = item;
   const { companyId, employeeId } = ctx;
   switch (key) {
@@ -76,7 +76,10 @@ async function proveItem(item: { key: string; label: string }, ctx: { companyId:
       const co = companyId ? await prisma.company.findUnique({ where: { id: companyId }, select: { status: true, name: true } }) : null;
       if (!co) return { key, label, state: "unknown", note: "No client on this run." };
       if (String(co.status).toLowerCase() === "suspended") return { key, label, state: "flag", note: `${co.name} is suspended in this system.` };
-      const cr = await currentDoc("Commercial Registration", companyId, null);
+      // Which CR: the one the run names, else the one the employee works under. Null = the main CR.
+      const estId = ctx.establishmentId !== undefined ? ctx.establishmentId
+        : employeeId ? ((await prisma.employee.findUnique({ where: { id: employeeId }, select: { establishmentId: true } }))?.establishmentId ?? null) : undefined;
+      const cr = (await currentDoc("Commercial Registration", companyId, null, estId));
       const left = cr ? daysFromToday(cr.expiryDate) : null;
       if (cr && left !== null && left < 0) return { key, label, state: "flag", note: `The Commercial Registration expired on ${fmt(cr.expiryDate)}.` };
       if (cr) return { key, label, state: "ok", note: `Client active; CR ${cr.docNumber ?? ""} valid until ${fmt(cr.expiryDate)}.`.replace("  ", " ") };
@@ -187,7 +190,7 @@ export async function runRenewalPrep(onlyInstanceId?: string) {
         let changed = false;
         for (const it of items) {
           if (!it?.key) continue;
-          const c = await proveItem({ key: it.key, label: it.label ?? it.key }, { companyId: run.companyId, employeeId: v.employeeId ?? null });
+          const c = await proveItem({ key: it.key, label: it.label ?? it.key }, { companyId: run.companyId, employeeId: v.employeeId ?? null, establishmentId: v.establishmentId === undefined ? undefined : (v.establishmentId ?? null) });
           const s = { ...(state[it.key] ?? {}) };
           if (c.state === "ok" && !s.received && !s.rejected) {
             s.received = true; s.note = `Checked by agent: ${c.note}`; s.agent = true;

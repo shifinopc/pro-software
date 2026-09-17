@@ -23286,6 +23286,8 @@ class Component extends DCLogic {
                 templateId: wfTpl10.id, title: mainBody10.title, companyId: crRow._docCoId,
                 clientName: crRow.client !== '—' ? crRow.client : null,
                 variables: { docType: crRow.doc, complianceDocId: crRow._docId, assignee: asg10, dueDate: due10,
+                  // A company certificate belongs to one of the client's CRs (null = main CR).
+                  ...(() => { const d10 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).find(x10 => x10.id === crRow._docId); return d10 && !d10.employeeId ? { establishmentId: d10.establishmentId || null } : {}; })(),
                   ...(crRow.holder !== '—' ? { applicant: crRow.holder } : {}) } }) })
             : fetch(API10 + '/api/tasks', { method: 'POST', headers: H10, body: JSON.stringify(mainBody10) }),
         ];

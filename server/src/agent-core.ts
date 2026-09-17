@@ -160,9 +160,10 @@ export const daysFromToday = (v: unknown) => {
 export const normName = (s: string) => String(s ?? "").toUpperCase().replace(/[^A-Z\s]/g, " ").split(/\s+/).filter(t => t.length > 1);
 
 /** The client's current document of a type — the one not superseded, latest expiry first. */
-export async function currentDoc(docType: string, companyId: string | null, employeeId: string | null) {
+export async function currentDoc(docType: string, companyId: string | null, employeeId: string | null, establishmentId?: string | null) {
   return prisma.document.findFirst({
-    where: { docType, supersededAt: null, ...(companyId ? { companyId } : {}), ...(employeeId ? { employeeId } : { employeeId: null }) },
+    // establishmentId: undefined = any of the client's CRs; null = the main CR; an id = that sub CR.
+    where: { docType, supersededAt: null, ...(companyId ? { companyId } : {}), ...(employeeId ? { employeeId } : { employeeId: null, ...(establishmentId !== undefined ? { establishmentId } : {}) }) },
     orderBy: [{ expiryDate: "desc" }],
   });
 }
