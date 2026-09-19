@@ -558,6 +558,25 @@
   /* The activity feed gets its own scroll so it cannot push everything else off the
      page — it grows without limit and was the longest thing on the tab. */
   .pg-feed{max-height:360px;overflow-y:auto;overscroll-behavior:contain;}
+  .ov-hero{background:#fff;border:1px solid #EDEBF2;border-radius:20px;box-shadow:0 1px 2px rgba(38,7,77,.04);display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);overflow:hidden;}
+  .ov-hero-health{background:linear-gradient(135deg,#26074D 0%,#4A0B9A 55%,#6D1DDB 100%);color:#fff;padding:20px 22px;display:flex;align-items:center;gap:16px;}
+  .ov-hero-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}
+  .ov-metric{padding:18px 20px;border-left:1px solid #F2EFF7;cursor:pointer;min-width:0;transition:background .12s;}
+  .ov-attention{grid-column:1 / -1;border-top:1px solid #F2EFF7;padding:11px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#FCFBFE;}
+  .ov-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:16px;align-items:start;}
+  .ov-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
+  .ov-h{display:flex;align-items:flex-start;gap:11px;min-width:0;}
+  .ov-ic{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .ov-hbtn{font-size:11px;font-weight:700;color:#7C00FF;background:#F5EEFF;padding:6px 12px;border-radius:99px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  .ov-hbtn:hover{background:#EBDBFF;}
+  .ov-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+  .ov-field{display:flex;gap:11px;align-items:flex-start;padding:11px 12px;border:1px solid #F2EFF7;border-radius:13px;background:#FCFBFE;min-width:0;}
+  .ov-field-ic{width:28px;height:28px;border-radius:9px;background:#fff;border:1px solid #EDEBF2;color:#8C8899;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .ov-add{display:inline-block;margin-top:4px;font-size:11.5px;font-weight:700;color:#7C00FF;cursor:pointer;border-bottom:1px dashed #C9A2FF;}
+  .ov-hero-health{position:relative;overflow:hidden;}
+  .ov-hero-health::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.14),rgba(255,255,255,0) 70%);pointer-events:none;}
+  @media (max-width:1180px){.ov-grid{grid-template-columns:minmax(0,1fr);}.ov-hero{grid-template-columns:minmax(0,1fr);}.ov-metric:first-child{border-left:none;}}
+  @media (max-width:700px){.ov-hero-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}.ov-metric{border-top:1px solid #F2EFF7;}.ov-metric:nth-child(odd){border-left:none;}}
 @media (max-width: 900px){ .ag-shell{ grid-template-columns:minmax(0,1fr) !important; } .ag-rail{ position:static !important; max-height:280px !important; } }
 </style>
 </helmet>
@@ -1913,25 +1932,55 @@
 
           <sc-if value="{{ cdTabOverview }}" hint-placeholder-val="{{ true }}">
             <section style="animation:fadeUp .5s ease both; display:flex; flex-direction:column; gap:16px;">
-              <!-- quick stat band -->
-              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;">
-                <div style="position:relative; overflow:hidden; border-radius:16px; background:linear-gradient(135deg,#26074D,#5E00C4); color:#fff; padding:16px 18px; display:flex; align-items:center; gap:14px;">
-                  <div style="position:relative; width:52px; height:52px; flex-shrink:0;"><svg width="52" height="52" viewBox="0 0 60 60" style="transform:rotate(-90deg);"><circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="7"></circle><circle cx="30" cy="30" r="26" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ cdCirc }} 163"></circle></svg><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">{{ cdScore }}%</div></div>
-                  <div><div style="font-size:10px; font-weight:700; opacity:.75; letter-spacing:.05em;">COMPLIANCE</div><div style="font-size:11.5px; opacity:.85; margin-top:2px;">overall health</div></div>
+              <!-- The client at a glance: health, the four numbers that matter, and what needs doing. -->
+              <div class="ov-hero">
+                <div class="ov-hero-health">
+                  <div style="position:relative; width:74px; height:74px; flex-shrink:0;"><svg width="74" height="74" viewBox="0 0 60 60" style="transform:rotate(-90deg);"><circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="6"></circle><circle cx="30" cy="30" r="26" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-dasharray="{{ cdCirc }} 163"></circle></svg><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700;">{{ cdScore }}%</div></div>
+                  <div style="min-width:0;">
+                    <div style="font-size:10.5px; font-weight:700; letter-spacing:.08em; opacity:.7;">COMPLIANCE HEALTH</div>
+                    <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; margin-top:3px;">{{ cdHeroTitle }}</div>
+                    <div style="font-size:12px; opacity:.8; margin-top:3px; line-height:1.45;">{{ cdHeroLine }}</div>
+                  </div>
                 </div>
-                <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:16px 18px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">STAFF SPONSORED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:5px;">{{ cdEmployees }}</div></div>
-                <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:16px 18px;"><div style="font-size:10px; font-weight:700; color:#C0353A; letter-spacing:.05em;">OVERDUE DOCS</div><div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:5px; color:#C0353A;">{{ cdOverdue }}</div></div>
-                <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; padding:16px 18px;"><div style="font-size:10px; font-weight:700; color:#B8860B; letter-spacing:.05em;">EXPIRING ≤30D</div><div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:5px; color:#B8860B;">{{ cdExpiring }}</div></div>
+                <div class="ov-hero-metrics">
+                  <sc-for list="{{ cdMetrics }}" as="m" hint-placeholder-count="4">
+                    <div onClick="{{ m.go }}" class="ov-metric" style-hover="background:#FAF7FE;">
+                      <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.07em;">{{ m.label }}</div>
+                      <div style="font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700; color:{{ m.color }}; margin-top:4px; font-variant-numeric:tabular-nums;">{{ m.value }}</div>
+                      <div style="font-size:11px; color:#8C8899; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ m.sub }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ ovHasAttention }}" hint-placeholder-val="{{ false }}">
+                  <div class="ov-attention">
+                    <span style="font-size:10.5px; font-weight:800; color:#8C8899; letter-spacing:.07em; white-space:nowrap;">NEEDS ATTENTION</span>
+                    <div style="display:flex; gap:7px; flex-wrap:wrap; min-width:0;">
+                      <sc-for list="{{ ovAttention }}" as="a" hint-placeholder-count="3"><span onClick="{{ a.go }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:{{ a.color }}; background:{{ a.bg }}; border:1px solid {{ a.border }}; padding:5px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);"><span style="width:6px; height:6px; border-radius:99px; background:{{ a.color }};"></span>{{ a.label }}</span></sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ovAllClear }}" hint-placeholder-val="{{ false }}">
+                  <div class="ov-attention"><span style="font-size:12px; color:#0E9355; font-weight:600; display:inline-flex; align-items:center; gap:7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Nothing needs attention — documents in date, record complete, no open requests.</span></div>
+                </sc-if>
               </div>
 
+              <div class="ov-grid">
+                <div class="ov-col">
               <!-- Commercial registrations. A client with branches holds a main CR and sub CRs; each keeps its
                    own employees, certificates and renewals, while the client stays one client. -->
               <sc-if value="{{ crShow }}" hint-placeholder-val="{{ false }}">
               <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:18px 22px 12px;">
-                  <div style="min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Commercial registrations</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ crSub }}</div></div>
-                  <sc-if value="{{ crCanAdd }}" hint-placeholder-val="{{ false }}"><button onClick="{{ crOpenAdd }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF; border-color:#7C00FF;">{{ crAddLabel }}</button></sc-if>
+                  <div class="ov-h"><span class="ov-ic" style="background:#F3EBFF; color:#7C00FF;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"></path></svg></span><div style="min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Commercial registrations</div><div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ crSub }}</div></div></div>
+                  <sc-if value="{{ crHeadAdd }}" hint-placeholder-val="{{ false }}"><button onClick="{{ crOpenAdd }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF; border-color:#7C00FF;">{{ crAddLabel }}</button></sc-if>
                 </div>
+                <sc-if value="{{ crNoRows }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-top:1px solid #F4F2F8; padding:22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                    <div style="width:46px; height:46px; border-radius:14px; background:#F8F2FF; border:1px dashed #D9C6F5; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#7C00FF;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h2M13 7h2M9 11h2M13 11h2"></path></svg></div>
+                    <div style="flex:1; min-width:220px;"><div style="font-size:13px; font-weight:700; color:#1A1523;">No CR on file for this client</div><div style="font-size:12px; color:#8C8899; margin-top:3px; line-height:1.5;">Add the main CR first — its certificate, renewals and every sub CR hang off it. Branches with their own CR are added as sub CRs afterwards.</div></div>
+                    <sc-if value="{{ crCanAdd }}" hint-placeholder-val="{{ false }}"><button onClick="{{ crOpenAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">+ Add main CR</button></sc-if>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ crHasRows }}" hint-placeholder-val="{{ false }}">
                   <sc-for list="{{ crRows }}" as="r" hint-placeholder-count="2">
                     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 22px; border-top:1px solid #F4F2F8; opacity:{{ r.opacity }};">
@@ -1966,10 +2015,10 @@
               <sc-if value="{{ wfShow }}" hint-placeholder-val="{{ true }}">
               <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-                  <div>
+                  <div class="ov-h"><span class="ov-ic" style="background:#E7F8EF; color:#0E9355;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><div>
                     <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ wfTitle }}</div>
                     <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">{{ wfSub }}</div>
-                  </div>
+                  </div></div>
                   <!-- Only when there is a reading to UPDATE. Recording the first one is offered by
                        the cross-check link in the footer, where the comparison it feeds actually is —
                        two buttons for the same act, one of them at the far end of the card, is how a
@@ -2097,47 +2146,66 @@
                 </sc-if>
               </div>
               </sc-if>
-            <!-- Profile · open requests · activity.
-                 Rebuilt on the .pg-* primitives. The old version put ten fields in one
-                 undifferentiated block, so a client with half its details blank read as a wall of
-                 dashes, and the fixed 1.5fr/1fr split squeezed the left card on a laptop while the
-                 right one had room to spare. -->
-            <div class="pg-split">
               <div class="pg-card">
                 <div class="pg-card-h">
-                  <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-                    <div style="width:44px; height:44px; border-radius:13px; background:linear-gradient(135deg,#7C00FF,#A855F7); color:#fff; font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ cdInitials }}</div>
-                    <div style="min-width:0;">
-                      <div class="pg-card-t" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ cdName }}</div>
-                      <div class="pg-card-s">{{ cdSince }}</div>
-                    </div>
-                  </div>
-                  <div style="display:flex; align-items:center; gap:9px; flex-shrink:0;">
-                    <!-- How complete the record is, stated once. Otherwise the reader has to count
-                         the blanks themselves to notice anything is missing. -->
-                    <sc-if value="{{ cdHasMissing }}" hint-placeholder-val="{{ false }}">
-                      <span style="font-size:10.5px; font-weight:700; color:#7A5B12; background:#FEF9EF; border:1px solid #F6E3BC; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ cdMissingNote }}</span>
-                    </sc-if>
-                    <span style="font-size:10.5px; font-weight:700; color:{{ cdStColor }}; background:{{ cdStBg }}; padding:4px 12px; border-radius:99px; white-space:nowrap;">{{ cdStatus }}</span>
+                  <div class="ov-h"><span class="ov-ic" style="background:#E4F1FD; color:#0284C7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 16c.6-1.6 1.8-2.4 3-2.4s2.4.8 3 2.4M14 9h4M14 13h4"></path></svg></span><div><div class="pg-card-t">Company profile</div><div class="pg-card-s">{{ cdProfileSub }}</div></div></div>
+                  <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                    <div style="text-align:right;"><div style="font-size:11px; font-weight:700; color:{{ cdProfileColor }};">{{ cdProfileDone }}</div><div style="width:110px; height:5px; border-radius:99px; background:#F0EDF6; margin-top:4px; overflow:hidden;"><div style="height:100%; width:{{ cdProfilePct }}; background:{{ cdProfileColor }}; border-radius:99px;"></div></div></div>
+                    <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ openEditClient }}" class="ov-hbtn">Edit</span></sc-if>
                   </div>
                 </div>
                 <div class="pg-card-b">
-                  <sc-for list="{{ cdFieldGroups }}" as="g" hint-placeholder-count="3">
-                    <div class="pg-sec-lab">{{ g.label }}</div>
-                    <div class="pg-fields">
-                      <sc-for list="{{ g.fields }}" as="f" hint-placeholder-count="4">
-                        <div>
+                  <div class="ov-fields">
+                    <sc-for list="{{ cdProfileFields }}" as="f" hint-placeholder-count="6">
+                      <div class="ov-field">
+                        <span class="ov-field-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ f.icon }}"></path></svg></span>
+                        <div style="min-width:0;">
                           <div class="pg-f-k">{{ f.k }}</div>
-                          <div class="{{ f.cls }}">{{ f.v }}</div>
+                          <sc-if value="{{ f.has }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px; font-weight:600; color:#1A1523; margin-top:3px; word-break:break-word;">{{ f.v }}</div></sc-if>
+                          <sc-if value="{{ f.missing }}" hint-placeholder-val="{{ false }}"><span onClick="{{ f.add }}" class="ov-add">+ Add</span></sc-if>
                         </div>
-                      </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+                <div class="pg-card">
+                  <div class="pg-card-h"><div class="ov-h"><span class="ov-ic" style="background:#FEF4E2; color:#B8860B;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5"></path></svg></span><div><div class="pg-card-t">Contact history</div><div class="pg-card-s">Calls, meetings and emails with this client, newest first</div></div></div><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ cdLogContact }}" class="ov-hbtn">+ Log contact</span></sc-if></div>
+                  <div class="pg-card-b" style="padding-top:10px;">
+                  <!-- What was actually said, in order. The one question a client file could not
+                       answer before: "when did we last speak to them, and about what?" -->
+                                    <sc-for list="{{ cdTimeline }}" as="t" hint-placeholder-count="3">
+                    <div style="display:flex; gap:11px; padding:9px 0;">
+                      <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:3px;">
+                        <span style="width:8px; height:8px; border-radius:99px; background:{{ t.dot }};"></span>
+                        <span style="flex:1; width:1px; background:#EDEBF2; margin-top:4px;"></span>
+                      </div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                          <span style="font-size:12px; font-weight:700;">{{ t.kind }}</span>
+                          <span style="font-size:10.5px; color:#A9A6B4;">{{ t.when }}</span>
+                          <sc-if value="{{ t.openFollowUp }}" hint-placeholder-val="{{ false }}">
+                            <span style="font-size:9px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:2px 8px; border-radius:99px;">{{ t.followLabel }}</span>
+                          </sc-if>
+                        </div>
+                        <div style="font-size:11.5px; color:#4B4757; margin-top:3px; line-height:1.55;">{{ t.body }}</div>
+                      </div>
                     </div>
                   </sc-for>
-
+                  <sc-if value="{{ cdNoTimeline }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:12px; color:#A9A6B4; padding:10px 0; line-height:1.6;">No calls or meetings logged yet. Anything recorded here builds the answer to "when did we last speak to them".</div>
+                  </sc-if>
+                  </div>
+                </div>
+                </div>
+                <div class="ov-col">
+                <div class="pg-card">
+                  <div class="pg-card-h"><div class="ov-h"><span class="ov-ic" style="background:#F3EBFF; color:#7C00FF;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17 11l2 2 4-4"></path></svg></span><div><div class="pg-card-t">Relationship</div><div class="pg-card-s">Who owns this client, and who does their work</div></div></div></div>
+                  <div class="pg-card-b" style="padding-top:6px;">
                   <!-- Who owns the relationship. A picker rather than a printed value because it is
                        the one field on this panel that gets changed, and because leaving it blank
                        hides the client from every salesperson. -->
-                  <div class="pg-sec-lab" style="margin-top:18px;">Managed by</div>
+                  <div class="pg-sec-lab" style="margin-top:0;">Managed by</div>
                   <sc-if value="{{ cdCanSetOwner }}" hint-placeholder-val="{{ true }}">
                     <div class="fm-selwrap" style="max-width:320px;">
                       <div class="fm-combo">
@@ -2202,9 +2270,14 @@
                     </sc-if>
                   </sc-if>
 
+                  </div>
+                </div>
+                <div class="pg-card">
+                  <div class="pg-card-h"><div class="ov-h"><span class="ov-ic" style="background:#E4F1FD; color:#0284C7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"></path></svg></span><div><div class="pg-card-t">People</div><div class="pg-card-s">Who to call about what at this client</div></div></div></div>
+                  <div class="pg-card-b" style="padding-top:6px;">
                   <!-- The people. One of them is the MAIN contact, and that is not decoration: it is
                        who every notice, invoice and portal login is addressed to. -->
-                  <div class="pg-sec-lab" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                  <div class="pg-sec-lab" style="margin-top:0; display:flex; align-items:center; justify-content:space-between; gap:10px;">
                     <span>Contacts</span>
                     <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
                       <span onClick="{{ cdAddContact }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 12px; border-radius:99px; cursor:pointer; text-transform:none; letter-spacing:0;" style-hover="background:#EBDBFF;">+ Add person</span>
@@ -2235,69 +2308,34 @@
                     <div style="font-size:12px; color:#A9A6B4; padding:10px 0; line-height:1.6;">Nobody recorded yet. Add the people you actually deal with — the main one is who invoices and portal access go to.</div>
                   </sc-if>
 
-                  <!-- What was actually said, in order. The one question a client file could not
-                       answer before: "when did we last speak to them, and about what?" -->
-                  <div class="pg-sec-lab" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                    <span>Contact history</span>
-                    <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
-                      <span onClick="{{ cdLogContact }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 12px; border-radius:99px; cursor:pointer; text-transform:none; letter-spacing:0;" style-hover="background:#EBDBFF;">+ Log contact</span>
-                    </sc-if>
                   </div>
-                  <sc-for list="{{ cdTimeline }}" as="t" hint-placeholder-count="3">
-                    <div style="display:flex; gap:11px; padding:9px 0;">
-                      <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:3px;">
-                        <span style="width:8px; height:8px; border-radius:99px; background:{{ t.dot }};"></span>
-                        <span style="flex:1; width:1px; background:#EDEBF2; margin-top:4px;"></span>
-                      </div>
-                      <div style="flex:1; min-width:0;">
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                          <span style="font-size:12px; font-weight:700;">{{ t.kind }}</span>
-                          <span style="font-size:10.5px; color:#A9A6B4;">{{ t.when }}</span>
-                          <sc-if value="{{ t.openFollowUp }}" hint-placeholder-val="{{ false }}">
-                            <span style="font-size:9px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:2px 8px; border-radius:99px;">{{ t.followLabel }}</span>
-                          </sc-if>
-                        </div>
-                        <div style="font-size:11.5px; color:#4B4757; margin-top:3px; line-height:1.55;">{{ t.body }}</div>
-                      </div>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ cdNoTimeline }}" hint-placeholder-val="{{ false }}">
-                    <div style="font-size:12px; color:#A9A6B4; padding:10px 0; line-height:1.6;">No calls or meetings logged yet. Anything recorded here builds the answer to "when did we last speak to them".</div>
-                  </sc-if>
                 </div>
-              </div>
-
-              <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
                 <div class="pg-card">
                   <div class="pg-card-h">
-                    <div>
+                    <div class="ov-h"><span class="ov-ic" style="background:#FEF1F0; color:#C0353A;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"></path></svg></span><div>
                       <div class="pg-card-t">Open requests</div>
-                      <div class="pg-card-s">Anything this client is waiting on</div>
-                    </div>
-                    <sc-if value="{{ cdHasRequest }}" hint-placeholder-val="{{ false }}">
-                      <span style="font-size:9px; font-weight:800; color:#fff; background:#C0353A; padding:3px 9px; border-radius:99px; animation:pulseBadge 2s ease-in-out infinite; flex-shrink:0;">1 NEW</span>
-                    </sc-if>
+                      <div class="pg-card-s">{{ cdReqNote }}</div>
+                    </div></div>
+                    <sc-if value="{{ cdReqHasUnread }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:800; color:#fff; background:#C0353A; padding:3px 9px; border-radius:99px; animation:pulseBadge 2s ease-in-out infinite; flex-shrink:0;">{{ cdReqUnreadLabel }}</span></sc-if>
                   </div>
-                  <div class="pg-card-b">
-                    <sc-if value="{{ cdHasRequest }}" hint-placeholder-val="{{ true }}">
-                      <div onClick="{{ cdOpenReq }}" style="border:1px solid #F0EDF6; border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; cursor:pointer;" style-hover="border-color:#DDD1F5; background:#FCFBFE;">
-                        <span style="width:8px; height:8px; border-radius:99px; background:#C0353A; flex-shrink:0;"></span>
-                        <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600;">New Employment Visa request</div><div style="font-size:10.5px; color:#A9A6B4;">Client replied · 3h ago — open thread</div></div>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"></path></svg>
+                  <div class="pg-card-b" style="display:flex; flex-direction:column; gap:8px;">
+                    <sc-for list="{{ cdReqRows }}" as="q" hint-placeholder-count="2">
+                      <div onClick="{{ q.open }}" style="border:1px solid #F0EDF6; border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px; cursor:pointer;" style-hover="border-color:#DDD1F5; background:#FCFAFF;">
+                        <span style="width:8px; height:8px; border-radius:99px; background:{{ q.dot }}; flex-shrink:0;"></span>
+                        <div style="flex:1; min-width:0;"><div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.title }}</div><div style="font-size:10.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.meta }}</div></div>
+                        <span style="font-size:10px; font-weight:700; color:{{ q.color }}; background:{{ q.bg }}; padding:2px 8px; border-radius:99px; white-space:nowrap;">{{ q.status }}</span>
                       </div>
-                    </sc-if>
-                    <sc-if value="{{ cdNoRequest }}" hint-placeholder-val="{{ false }}">
-                      <div style="font-size:12px; color:#A9A6B4;">No open requests.</div>
-                    </sc-if>
+                    </sc-for>
+                    <sc-if value="{{ cdReqEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px; color:#A9A6B4;">No open requests from this client.</div></sc-if>
+                    <sc-if value="{{ cdReqMore }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cdReqAll }}" style="font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer; margin-top:2px;">{{ cdReqMoreLabel }}</span></sc-if>
                   </div>
                 </div>
-
                 <div class="pg-card">
                   <div class="pg-card-h">
-                    <div>
+                    <div class="ov-h"><span class="ov-ic" style="background:#F1EFF5; color:#6F6C7A;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg></span><div>
                       <div class="pg-card-t">Recent activity</div>
                       <div class="pg-card-s">{{ cdActivityNote }}</div>
-                    </div>
+                    </div></div>
                   </div>
                   <!-- Its own scroll: this list grows without limit and was the longest thing on the
                        tab, pushing everything else off the page on an active client. -->
@@ -2318,8 +2356,8 @@
                     </sc-if>
                   </div>
                 </div>
+                </div>
               </div>
-            </div>
             </section>
           </sc-if>
           <sc-if value="{{ cdTabContacts }}" hint-placeholder-val="{{ false }}">
@@ -2557,7 +2595,7 @@
               <div style="overflow-x:auto;"><div style="min-width:640px;">
                 <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; padding:10px 24px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Document</span><span>Subject</span><span>Authority</span><span>Expiry</span><span>Status</span><span></span></div>
                 <sc-for list="{{ cdDocs }}" as="d" hint-placeholder-count="6">
-                  <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; align-items:center; padding:12px 24px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
+                  <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; align-items:center; padding:12px 24px; border-bottom:1px solid #FAF8FC; font-size:12.5px; opacity:{{ d.rowOpacity }};" style-hover="background:#FAF7FE;">
                     <div style="min-width:0;">
                       <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.doc }}</div>
                       <sc-if value="{{ d.docNoShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#A9A6B4; font-family:ui-monospace,monospace;">{{ d.docNo }}</div></sc-if>
@@ -2566,10 +2604,16 @@
                     <span style="color:#8C8899;">{{ d.authority }}</span>
                     <span style="color:#6F6C7A; font-size:12px;">{{ d.expiry }}</span>
                     <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ d.stColor }}; background:{{ d.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:4px; height:4px; border-radius:99px; background:{{ d.stColor }};"></span>{{ d.status }}</span>
-                    <span style="text-align:right; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">Renew</span>
+                    <span style="display:flex; justify-content:flex-end; align-items:center; gap:10px;"><sc-if value="{{ d.canManage }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.manage }}" title="Move to another CR, or retire as a duplicate" style="font-size:11px; font-weight:600; color:#6F6C7A; cursor:pointer;" style-hover="color:#7C00FF;">Manage</span></sc-if><sc-if value="{{ d.canRenew }}" hint-placeholder-val="{{ true }}"><span onClick="{{ d.renew }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ d.renewLabel }}</span></sc-if></span>
                   </div>
                 </sc-for>
               </div></div>
+              <sc-if value="{{ cdRetiredHas }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 24px; background:#FBFAFD; border-top:1px solid #F4F2F8; font-size:11.5px; color:#8C8899;">
+                  <span>{{ cdRetiredText }}</span>
+                  <span onClick="{{ cdToggleRetired }}" style="font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">{{ cdRetiredBtn }}</span>
+                </div>
+              </sc-if>
               </sc-if>
             </section>
           </sc-if>
@@ -10176,6 +10220,41 @@
         <input value="{{ ccReceipt }}" onChange="{{ setCcReceipt }}" placeholder="RCP-…" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
         <div style="font-size:10px; color:#B9B5C4; margin-top:10px;">Archives the old version to history · closes the linked task</div>
         <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;"><button onClick="{{ closeCompComplete }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ confirmComplete }}" style="background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Complete &amp; archive</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- Manage a client document: move it to another CR, or retire it as a duplicate. -->
+  <sc-if value="{{ mdocOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ mdocClose }}" data-hidescroll="true" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; padding:24px; overflow-y:auto; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="margin:auto; background:#fff; border-radius:22px; width:100%; max-width:540px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; gap:12px; padding:20px 24px 14px; border-bottom:1px solid #F2EFF7;">
+          <div style="flex:1; min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">{{ mdocTitle }}</div><div style="font-size:12px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ mdocSub }}</div></div>
+          <div onClick="{{ mdocClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div style="padding:16px 24px 22px; display:flex; flex-direction:column; gap:18px;">
+          <sc-if value="{{ mdocErr }}" hint-placeholder-val="{{ false }}"><div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ mdocErr }}</div></sc-if>
+          <sc-if value="{{ mdocShowMove }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:12.5px; font-weight:700; color:#1A1523;">Move to another CR</div>
+              <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">For a certificate filed under the wrong CR. Only the CR changes.</div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:9px;"><sc-for list="{{ mdocCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div>
+              <div style="display:flex; justify-content:flex-end; margin-top:10px;"><button onClick="{{ mdocMove }}" style="background:{{ mdocMoveBg }}; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;">Move</button></div>
+            </div>
+          </sc-if>
+          <div>
+            <div style="font-size:12.5px; font-weight:700; color:#1A1523;">Retire as a duplicate</div>
+            <sc-if value="{{ mdocHasTwins }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#8C8899; margin-top:2px;">Choose the record to keep. This one is kept as history and leaves the lists and reminders.</div>
+              <div style="display:flex; flex-direction:column; gap:6px; margin-top:9px;">
+                <sc-for list="{{ mdocTwins }}" as="t" hint-placeholder-count="1"><div onClick="{{ t.pick }}" style="display:flex; align-items:center; gap:10px; border:1px solid {{ t.border }}; background:{{ t.bg }}; border-radius:11px; padding:9px 12px; cursor:pointer;"><span style="width:14px; height:14px; border-radius:99px; border:2px solid {{ t.ring }}; background:{{ t.dot }}; box-shadow:inset 0 0 0 2px #fff; flex-shrink:0;"></span><span style="font-size:12.5px; color:#1A1523;">Keep: {{ t.text }}</span></div></sc-for>
+              </div>
+              <div onClick="{{ mdocToggleMerge }}" style="display:flex; align-items:center; gap:9px; margin-top:10px; cursor:pointer; font-size:12px; color:#4B4757;"><span style="width:16px; height:16px; border-radius:5px; border:1.5px solid #7C00FF; background:{{ mdocMergeBox }}; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ mdocMergeTick }}</span>Copy anything only this record has (number, authority, issue date, file) onto the one kept</div>
+              <div style="display:flex; justify-content:flex-end; margin-top:12px;"><button onClick="{{ mdocRetire }}" style="background:{{ mdocRetireBg }}; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;">{{ mdocRetireLabel }}</button></div>
+            </sc-if>
+            <sc-if value="{{ mdocNoTwins }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#8C8899; margin-top:4px;">{{ mdocNoTwinsText }}</div></sc-if>
+          </div>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -20164,7 +20243,9 @@ class Component extends DCLogic {
       clDetailApi.cdCanRestore = canWrite && !!clRow.realId && _cdIsSusp;
       clDetailApi.cdSuspend = () => this.setState({ suOpen: clRow.realId, suName: clRow.name, suReason: 'Outstanding balance', suErr: '' });
       clDetailApi.cdRestore = () => this._companyAction(clRow.realId, 'restore', {}, clRow.name + ' restored');
-      clDetailApi.cdSub = clRow.industry + ' · ' + clRow.city + ' · CR ' + clRow.cr;
+      // Only what is known: "— · — · CR —" said three times that nothing was recorded.
+      const _cdHas9 = (v9) => v9 && String(v9).trim() && !/^[—–-]+$/.test(String(v9).trim());
+      clDetailApi.cdSub = [clRow.industry, clRow.city, _cdHas9(clRow.cr) ? 'CR ' + clRow.cr : ''].filter(_cdHas9).join(' · ') || 'Details not recorded yet';
 
       // ── Commercial registrations: the main CR and any sub CRs ──
       const _crAll = clRow.realId ? this._crRows(clRow.realId) : [];
@@ -20194,7 +20275,9 @@ class Component extends DCLogic {
         : 'One CR. If this client has branches with their own CR, add them as sub CRs.';
       clDetailApi.crCanAdd = canWrite;
       clDetailApi.crAddLabel = _crAll.length ? '+ Add sub CR' : '+ Add main CR';
+      clDetailApi.crHeadAdd = canWrite && _crAll.length > 0;
       clDetailApi.crHasRows = _crAll.length > 0;
+      clDetailApi.crNoRows = _crAll.length === 0 && !!(this.state.crByCo || {})[clRow.realId];
       clDetailApi.crRows = _crAll.map(e9 => {
         const main9 = e9.kind === 'main', cancelled9 = e9.status !== 'active';
         return {
@@ -20930,11 +21013,19 @@ class Component extends DCLogic {
       };
 
       // Documents listing (client-scoped)
-      const docStatusTone = { Valid: ['#E7F8EF', '#0E9355'], 'Expiring soon': ['#FEF4E2', '#B8860B'], Expired: ['#FEECEC', '#C0353A'], Processing: ['#EFEBFF', '#6D5BD0'], 'No expiry date': ['#F3F1F7', '#6F6C7A'] };
+      const docStatusTone = { Replaced: ['#F3F1F7', '#8C8899'], Valid: ['#E7F8EF', '#0E9355'], 'Expiring soon': ['#FEF4E2', '#B8860B'], Expired: ['#FEECEC', '#C0353A'], Processing: ['#EFEBFF', '#6D5BD0'], 'No expiry date': ['#F3F1F7', '#6F6C7A'] };
       // WIRED: this client's REAL documents. Was a literal six-row list (Trade License / M. Fernandes
       // / A. Khan) plus six invented folders, shown identically for every client.
-      const _cdDocs = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
+      const _cdDocsAll = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
         .filter(d7 => d7.companyId === clRow.realId);
+      const _cdRetired = _cdDocsAll.filter(d7 => d7.supersededAt);
+      const _cdDocs = this.state.cdShowRetired ? _cdDocsAll : _cdDocsAll.filter(d7 => !d7.supersededAt);
+      clDetailApi.cdRetiredHas = _cdRetired.length > 0;
+      clDetailApi.cdRetiredText = this.state.cdShowRetired
+        ? 'Showing ' + _cdRetired.length + ' replaced record' + (_cdRetired.length === 1 ? '' : 's') + ' — kept for history, not counted anywhere'
+        : _cdRetired.length + ' replaced record' + (_cdRetired.length === 1 ? '' : 's') + ' hidden (duplicates or older certificates, kept for history)';
+      clDetailApi.cdRetiredBtn = this.state.cdShowRetired ? 'Hide' : 'Show';
+      clDetailApi.cdToggleRetired = () => this.setState({ cdShowRetired: !this.state.cdShowRetired });
       const _cdDocStatus = (d7) => {
         const s7 = String(d7.status || '').toLowerCase();
         if (s7 === 'in_progress') return 'Processing';
@@ -20951,7 +21042,7 @@ class Component extends DCLogic {
       (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []).forEach(dt7 => { _dtByName[dt7.name] = dt7; });
       const _cdCoName = (_cdCo && _cdCo.name) || '';
       clDetailApi.cdDocs = _cdDocs.map(d7 => {
-        const status = _cdDocStatus(d7);
+        const status = d7.supersededAt ? 'Replaced' : _cdDocStatus(d7);
         const t = docStatusTone[status] || docStatusTone.Valid;
         const dt7 = _dtByName[d7.docType];
         const subject = dt7 && dt7.subjectKind
@@ -20965,10 +21056,76 @@ class Component extends DCLogic {
           doc: d7.docType + ((subject === 'Employee' && d7.person) ? ' — ' + d7.person : (subject === 'Company' && _crIsMulti) ? ' — ' + this._crLabel(this._crOf(clRow.realId, d7.establishmentId)) : ''),
           subject, authority: d7.issuingAuthority || '—', expiry: d7.expiryDate || '—',
           status, stBg: t[0], stColor: t[1],
-          subjBg: subject === 'Company' ? '#E4F4FD' : '#EFEBFF', subjColor: subject === 'Company' ? '#0284C7' : '#6D5BD0' };
+          subjBg: subject === 'Company' ? '#E4F4FD' : '#EFEBFF', subjColor: subject === 'Company' ? '#0284C7' : '#6D5BD0',
+          canManage: canWrite && !d7.supersededAt,
+          rowOpacity: d7.supersededAt ? '.55' : '1', isLive: !d7.supersededAt,
+          // Renew opens the same Start renewal dialog as Compliance — prerequisite gate, parking and the
+          // Phase-1 task included. One renewal path, not two. (It used to be a label with no handler.)
+          canRenew: canWrite && !d7.supersededAt,
+          renewLabel: String(d7.status || '').toLowerCase() === 'in_progress' ? 'Complete' : 'Renew',
+          renew: () => {
+            const i9 = allCompliance.findIndex(r9 => r9._docId === d7.id);
+            if (i9 < 0) { this.toast('This document is not on the compliance list yet — refresh and try again'); return; }
+            allCompliance[i9].act();
+          },
+          manage: () => this.setState({ mdocDocId: d7.id, mdocEst: undefined, mdocKeep: null, mdocMerge: true, mdocErr: '', mdocBusy: false }) };
       });
-      clDetailApi.cdDocsEmpty = _cdDocs.length === 0;
-      clDetailApi.cdDocsHas = _cdDocs.length > 0;
+      clDetailApi.cdDocsEmpty = _cdDocs.length === 0 && _cdRetired.length === 0;
+
+      // ── Manage one document: move it to another CR, or retire it as a duplicate ──
+      {
+        const all9 = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+        const dm9 = this.state.mdocDocId ? all9.find(d9 => d9.id === this.state.mdocDocId && d9.companyId === clRow.realId) : null;
+        const fd9 = (v9) => { const t9 = v9 ? new Date(v9) : null; return t9 && !isNaN(t9.getTime()) ? t9.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no expiry'; };
+        const describe9 = (d9) => [d9.docNumber ? 'No. ' + d9.docNumber : 'no number', 'expires ' + fd9(d9.expiryDate), d9.issuingAuthority || 'no authority', ((d9.customData || {}).file || (d9.customData || {}).filePath) ? 'file attached' : 'no file'].join(' · ');
+        const isCo9 = !!(dm9 && !dm9.employeeId);
+        const curEst9 = dm9 ? (dm9.establishmentId || null) : null;
+        const pickEst9 = this.state.mdocEst === undefined ? curEst9 : this.state.mdocEst;
+        // The other live records of the same document for the same subject — what this one could be a duplicate of.
+        const twins9 = !dm9 ? [] : all9.filter(d9 => d9.id !== dm9.id && !d9.supersededAt && d9.companyId === dm9.companyId && d9.docType === dm9.docType
+          && (dm9.employeeId ? d9.employeeId === dm9.employeeId : !d9.employeeId && (d9.establishmentId || null) === curEst9));
+        const keep9 = twins9.find(d9 => d9.id === this.state.mdocKeep) || null;
+        const dmReload9 = (msg9) => { this.setState({ mdocDocId: null, mdocBusy: false }); this.toast(msg9); this._afterDocumentChange(); this._crLoad && this._crLoad(clRow.realId, true); };
+        const dmPost9 = (path9, body9, done9) => {
+          const t9 = localStorage.getItem('stimespro:token');
+          this.setState({ mdocBusy: true, mdocErr: '' });
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + dm9.id + path9, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }, body: JSON.stringify(body9) })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => ok ? done9(j9) : this.setState({ mdocBusy: false, mdocErr: (j9 && j9.error) || 'That did not work' }))
+            .catch(() => this.setState({ mdocBusy: false, mdocErr: 'Server unreachable — nothing was changed' }));
+        };
+        Object.assign(clDetailApi, {
+          mdocOpen: !!dm9,
+          mdocTitle: dm9 ? dm9.docType : '',
+          mdocSub: dm9 ? (isCo9 ? (_crIsMulti ? this._crLabel(this._crOf(clRow.realId, curEst9)) : clRow.name) : (dm9.person || 'Employee')) + ' · ' + describe9(dm9) : '',
+          mdocErr: this.state.mdocErr || false,
+          mdocClose: () => { if (!this.state.mdocBusy) this.setState({ mdocDocId: null }); },
+          // Move to CR — company documents of a client with more than one CR
+          mdocShowMove: isCo9 && _crActive.length > 1,
+          mdocCrChips: !(isCo9 && _crActive.length > 1) ? [] : _crActive.map(e9 => { const id9 = e9.kind === 'main' ? null : e9.id; const on9 = id9 === pickEst9; const cur9 = id9 === curEst9;
+            return { label: this._crLabel(e9) + (cur9 ? ' · now' : ''), pick: () => this.setState({ mdocEst: id9, mdocErr: '' }), border: on9 ? '#7C00FF' : '#DDD9E6', bg: on9 ? '#F5EEFF' : '#fff', color: on9 ? '#5B21B6' : '#4B4757' }; }),
+          mdocMoveEnabled: isCo9 && pickEst9 !== curEst9 && !this.state.mdocBusy,
+          mdocMoveBg: isCo9 && pickEst9 !== curEst9 ? '#7C00FF' : '#E4DCF2',
+          mdocMove: () => { if (!dm9 || pickEst9 === curEst9 || this.state.mdocBusy) return;
+            dmPost9('/move-cr', { establishmentId: pickEst9 }, (j9) => dmReload9(dm9.docType + ' moved to ' + this._crLabel(this._crOf(clRow.realId, pickEst9)) + (j9 && j9.alongside ? ' — that CR now has ' + (j9.alongside + 1) + ' live ' + dm9.docType + ' records; retire the duplicate' : ''))); },
+          // Retire as duplicate
+          mdocHasTwins: twins9.length > 0,
+          mdocNoTwins: !!dm9 && twins9.length === 0,
+          mdocNoTwinsText: dm9 ? 'No other live ' + dm9.docType + ' for ' + (isCo9 ? (_crIsMulti ? 'this CR' : 'this client') : 'this person') + (isCo9 && _crActive.length > 1 ? ' — if it belongs to another CR, move it first.' : '.') : '',
+          mdocTwins: twins9.map(d9 => { const on9 = keep9 && keep9.id === d9.id; return { text: describe9(d9), pick: () => this.setState({ mdocKeep: d9.id, mdocErr: '' }), dot: on9 ? '#7C00FF' : '#fff', ring: on9 ? '#7C00FF' : '#C9C4D6', bg: on9 ? '#F8F2FF' : '#fff', border: on9 ? '#D9C6F5' : '#EDEBF2' }; }),
+          mdocMergeOn: this.state.mdocMerge !== false,
+          mdocMergeBox: this.state.mdocMerge !== false ? '#7C00FF' : '#fff',
+          mdocMergeTick: this.state.mdocMerge !== false ? '✓' : '',
+          mdocToggleMerge: () => this.setState({ mdocMerge: this.state.mdocMerge === false }),
+          mdocRetireEnabled: !!keep9 && !this.state.mdocBusy,
+          mdocRetireBg: keep9 ? '#C0353A' : '#F2D5D6',
+          mdocRetireLabel: this.state.mdocBusy ? 'Working…' : 'Retire this record',
+          mdocRetire: () => { if (!dm9 || !keep9 || this.state.mdocBusy) return;
+            dmPost9('/supersede', { replacedBy: keep9.id, mergeMissing: this.state.mdocMerge !== false, reason: 'Retired as a duplicate of ' + (keep9.docNumber ? 'No. ' + keep9.docNumber : 'another record') },
+              (j9) => dmReload9('Duplicate retired' + (j9 && j9.merged && j9.merged.length ? ' — copied ' + j9.merged.map(f9 => ({ docNumber: 'number', issuingAuthority: 'authority', issueDate: 'issue date', expiryDate: 'expiry', file: 'file' })[f9] || f9).join(', ') + ' onto the kept record' : ''))); },
+        });
+      }
+      clDetailApi.cdDocsHas = _cdDocs.length > 0 || _cdRetired.length > 0;
       const _cdCoTypes = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []).filter(t9 => !t9.retired && t9.subjectKind === 'company').map(t9 => t9.name);
       clDetailApi.cdDocsSuggest = _cdCoTypes.slice(0, 6).map(n9 => ({ label: n9 }));
       clDetailApi.cdDocsHasSuggest = _cdCoTypes.length > 0;
@@ -20978,7 +21135,7 @@ class Component extends DCLogic {
         + (_crIsMulti ? ' Each CR keeps its own certificates, so add one per CR.' : '');
       // Folders = the client's real document types, with the worst status in each.
       const _cdByType = {};
-      _cdDocs.forEach(d7 => { (_cdByType[d7.docType] = _cdByType[d7.docType] || []).push(d7); });
+      _cdDocs.filter(d7 => !d7.supersededAt).forEach(d7 => { (_cdByType[d7.docType] = _cdByType[d7.docType] || []).push(d7); });
       clDetailApi.cdDocFolders = Object.keys(_cdByType).map(type7 => {
         const rows7 = _cdByType[type7];
         const worst7 = rows7.map(_cdDocStatus);
@@ -21069,6 +21226,90 @@ class Component extends DCLogic {
           view: () => this.setState({ empProfile: { name, role, initials, client: clRow.name, companyId: clRow.realId } }) };
       });
       clDetailApi.cdEmpEmpty = _cdEmps.length === 0;
+      // ── Company profile ──
+      {
+        const has9 = (v9) => v9 != null && String(v9).trim() !== '' && !/^[—–-]+$/.test(String(v9).trim());
+        const edit9 = () => editClientApi.openEditClient();
+        const f9 = [
+          ['LEGAL NAME', clRow.name, 'M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16M9 7h6M9 11h6M9 15h3'],
+          ['CR NUMBER', clRow.cr, 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5'],
+          ['INDUSTRY', clRow.industry, 'M2 20h20M5 20V9l7-5 7 5v11M9 20v-6h6v6'],
+          ['CITY', clRow.city, 'M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z'],
+          ['CLIENT GROUP', clRow.group, 'M16 3h5v5M4 20l7-7M21 3l-7 7M8 3H3v5M3 21l0 0'],
+          ['PACKAGE', clRow.pkg, 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8'],
+        ].map(([k9, v9, ic9]) => ({ k: k9, v: has9(v9) ? String(v9) : '', has: has9(v9), missing: !has9(v9) && canWrite, icon: ic9, add: edit9 }));
+        const done9 = f9.filter(x9 => x9.has).length;
+        clDetailApi.cdProfileFields = f9;
+        clDetailApi.cdProfileDone = done9 + ' of ' + f9.length + ' recorded';
+        clDetailApi.cdProfilePct = Math.round(done9 / f9.length * 100) + '%';
+        clDetailApi.cdProfileColor = done9 === f9.length ? '#0E9355' : done9 >= 4 ? '#B8860B' : '#C0353A';
+        clDetailApi.cdProfileSub = [clDetailApi.cdSince, 'Account ' + (clRow.status || 'active').toLowerCase()].filter(Boolean).join(' · ');
+      }
+
+      // ── Overview summary: health line, four numbers, what needs attention, this client's real requests ──
+      {
+        const goTab9 = (t9) => () => { this._goClient(clRow && clRow.name, t9); this.setState({ clientTab: t9 }); };
+        const reqs9 = (Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : [])
+          .filter(r9 => r9.companyId === clRow.realId && ['open', 'accepted'].includes(String(r9.status || 'open').toLowerCase()))
+          .sort((a9, b9) => String(b9.lastClientMsgAt || b9.date || '').localeCompare(String(a9.lastClientMsgAt || a9.date || '')));
+        const unread9 = (r9) => !!(r9.lastClientMsgAt && String(r9.lastClientMsgAt) > String(r9.staffReadAt || ''));
+        const reqId9 = (r9) => r9.number || ('REQ-' + String(r9.id).slice(-4).toUpperCase());
+        const openReq9 = (r9) => () => {
+          const id9 = reqId9(r9);
+          this._goRecord && this._goRecord('Requests Queue', id9);
+          this.setState({ active: 'Requests Queue', activeGroup: 'Operations', qThread: id9, routeRecord: null, qRead: { ...(this.state.qRead || {}), [id9]: true }, qReply: '', qInternal: false });
+          const t9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/service-requests/' + r9.id + '/messages', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+            .then(x9 => (x9.ok ? x9.json() : null)).then(v9 => { if (Array.isArray(v9)) this.setState({ qMsgs: { ...(this.state.qMsgs || {}), [id9]: v9 } }); }).catch(() => {});
+          this._loadQAtt && this._loadQAtt(id9, r9.id);
+        };
+        const unreadN9 = reqs9.filter(unread9).length;
+        clDetailApi.cdReqRows = reqs9.slice(0, 4).map(r9 => {
+          const acc9 = String(r9.status).toLowerCase() === 'accepted', u9 = unread9(r9);
+          return { title: (r9.type || 'Service request') + ' · ' + reqId9(r9), meta: (u9 ? 'New message from the client · ' : '') + (r9.date ? String(r9.date).slice(0, 10) : ''),
+            status: acc9 ? 'In progress' : 'New', color: acc9 ? '#6D5BD0' : '#B8860B', bg: acc9 ? '#EFEBFF' : '#FEF4E2', dot: u9 ? '#C0353A' : acc9 ? '#6D5BD0' : '#B8860B', open: openReq9(r9) };
+        });
+        clDetailApi.cdReqEmpty = reqs9.length === 0;
+        clDetailApi.cdReqNote = reqs9.length ? reqs9.length + ' open · ' + (unreadN9 ? unreadN9 + ' waiting on a reply' : 'nothing waiting on you') : 'Anything this client is waiting on';
+        clDetailApi.cdReqHasUnread = unreadN9 > 0;
+        clDetailApi.cdReqUnreadLabel = unreadN9 + ' NEW';
+        clDetailApi.cdReqMore = reqs9.length > 4;
+        clDetailApi.cdReqMoreLabel = 'All ' + reqs9.length + ' requests →';
+        clDetailApi.cdReqAll = () => this.setState({ active: 'Requests Queue', activeGroup: 'Operations' });
+
+        const over9 = Number(clRow.overdue) || 0, exp9 = Number(clRow.expiring) || 0;
+        clDetailApi.cdHeroTitle = over9 ? 'Action needed' : exp9 ? 'Renewals coming up' : 'In good standing';
+        clDetailApi.cdHeroLine = over9 || exp9
+          ? [over9 ? over9 + ' document' + (over9 === 1 ? '' : 's') + ' overdue' : '', exp9 ? exp9 + ' expiring within 30 days' : ''].filter(Boolean).join(' · ')
+          : 'Every document on file is in date.';
+        clDetailApi.cdMetrics = [
+          { label: 'STAFF SPONSORED', value: String(clRow.employees || 0), sub: _crIsMulti ? 'across ' + _crActive.length + ' CRs' : 'on the books', color: '#1A1523', go: goTab9('Employees') },
+          { label: 'OVERDUE DOCS', value: String(over9), sub: over9 ? 'renew now' : 'none overdue', color: over9 ? '#C0353A' : '#1A1523', go: goTab9('Documents') },
+          { label: 'EXPIRING ≤30D', value: String(exp9), sub: exp9 ? 'plan the renewals' : 'nothing due soon', color: exp9 ? '#B8860B' : '#1A1523', go: goTab9('Documents') },
+          { label: 'OPEN REQUESTS', value: String(reqs9.length), sub: unreadN9 ? unreadN9 + ' new message' + (unreadN9 === 1 ? '' : 's') : reqs9.length ? 'in progress' : 'all answered', color: unreadN9 ? '#C0353A' : '#1A1523', go: reqs9.length ? openReq9(reqs9[0]) : () => {} },
+        ];
+
+        // What needs doing, most urgent first. Each chip goes where it is fixed.
+        const allDocs9 = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+        const certsOf9 = (e9) => allDocs9.filter(d9 => d9.companyId === clRow.realId && !d9.employeeId && !d9.supersededAt && /commercial reg/i.test(d9.docType)
+          && (e9.kind === 'main' ? (!d9.establishmentId || d9.establishmentId === e9.id) : d9.establishmentId === e9.id));
+        const noCert9 = _crActive.filter(e9 => certsOf9(e9).length === 0);
+        const dupCert9 = _crActive.filter(e9 => certsOf9(e9).length > 1);
+        const tone9 = { red: ['#B42318', '#FEF1F0', '#F8D0CC'], amber: ['#8A5A12', '#FEF8EC', '#F4DDB0'], violet: ['#5B21B6', '#F8F2FF', '#E6D6FB'] };
+        const chip9 = (label9, t9, go9) => ({ label: label9, color: tone9[t9][0], bg: tone9[t9][1], border: tone9[t9][2], go: go9 });
+        const noop9 = () => {};
+        clDetailApi.ovAttention = [
+          over9 ? chip9(over9 + ' overdue document' + (over9 === 1 ? '' : 's'), 'red', goTab9('Documents')) : null,
+          unreadN9 ? chip9(unreadN9 + ' client message' + (unreadN9 === 1 ? '' : 's') + ' to answer', 'red', openReq9(reqs9.find(unread9))) : null,
+          exp9 ? chip9(exp9 + ' expiring within 30 days', 'amber', goTab9('Documents')) : null,
+          ...noCert9.map(e9 => chip9('No CR certificate · ' + this._crLabel(e9), 'amber', noop9)),
+          ...dupCert9.map(e9 => chip9('Duplicate CR certificates · ' + this._crLabel(e9), 'amber', goTab9('Documents'))),
+          clDetailApi.cdOwnerUnassigned ? chip9('No account owner', 'violet', noop9) : null,
+          clDetailApi.cdMissingCount ? chip9(clDetailApi.cdMissingCount + ' detail' + (clDetailApi.cdMissingCount === 1 ? '' : 's') + ' not recorded', 'violet', noop9) : null,
+        ].filter(Boolean);
+        clDetailApi.ovHasAttention = clDetailApi.ovAttention.length > 0;
+        clDetailApi.ovAllClear = clDetailApi.ovAttention.length === 0 && !reqs9.length;
+      }
       // Credentials vault (client-scoped) — WIRED to the real, ENCRYPTED store (/api/credentials).
       // This tab used to render three literal rows with plaintext demo passwords ("Fx91##22kP") and a
       // fabricated change history, for every client, while the real audited API sat unused.

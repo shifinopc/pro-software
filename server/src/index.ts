@@ -3872,6 +3872,34 @@ app.post("/api/companies/:id/remove-addon", requireAuth, requireStaff, requireWr
  * a compliance system that forgets that has no audit trail. Every reader filters on
  * `supersededAt: null`, so exactly one document of a type stays authoritative for a subject.
  */
+// A company document filed under the wrong CR — the certificate of a sub CR sitting on the main one.
+// Only the CR changes; the move is recorded on the document and in the audit trail.
+app.post("/api/documents/:id/move-cr", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+    if (doc.employeeId) return res.status(400).json({ error: "An employee's document follows the employee — move the employee to another CR instead" });
+    if (doc.supersededAt) return res.status(409).json({ error: "This record has been superseded — move the one that replaced it" });
+    const to = await resolveEstablishmentId(doc.companyId, req.body?.establishmentId ?? null);
+    if ((doc.establishmentId ?? null) === to) return res.json({ document: doc, unchanged: true });
+    const crOf = async (id: string | null) => id ? (await prisma.establishment.findUnique({ where: { id }, select: { crNumber: true } }))?.crNumber ?? "?" : "main CR";
+    const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+    const fromLabel = await crOf(doc.establishmentId ?? null), toLabel = await crOf(to);
+    const document = await prisma.document.update({ where: { id: doc.id }, data: { establishmentId: to,
+      history: [...(Array.isArray(doc.history) ? (doc.history as any[]) : []), { at: new Date().toISOString(), by: me?.name ?? "Staff", kind: "moved", note: `Moved from ${fromLabel} to ${toLabel}` }] } });
+    // Already a live one of this type on the CR it moved to? Said, not refused — it may be the duplicate
+    // the person is about to retire next.
+    const alongside = await prisma.document.count({ where: { companyId: doc.companyId, employeeId: null, supersededAt: null, docType: doc.docType, establishmentId: to, NOT: { id: doc.id } } });
+    await logAudit({ action: "document.move_cr", actorId: a?.sub, target: doc.id, detail: `${doc.docType} · ${fromLabel} → ${toLabel}`, ip: clientIp(req) });
+    logActivity({ type: "compliance", message: `${doc.docType} for ${doc.person} moved from ${fromLabel} to ${toLabel}`, user: me?.name ?? "Staff" });
+    res.json({ document, alongside });
+  } catch (e: any) {
+    if (e instanceof EstablishmentError) return res.status(e.status).json({ error: e.message });
+    res.status(500).json({ error: e?.message ?? "Could not move the document" });
+  }
+});
+
 app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
@@ -3893,17 +3921,43 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
   }
 
   const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+
+  // RETIRING A DUPLICATE. Two records of one certificate usually each hold half of it — one has the
+  // number and the scan, the other the issuing authority. `mergeMissing` copies onto the record being
+  // kept only what it LACKS; nothing it already has is overwritten, and the copy is written into its history.
+  let merged: string[] = [];
+  if (byId && req.body?.mergeMissing) {
+    const by = await prisma.document.findUnique({ where: { id: byId } });
+    if (by) {
+      const fill: any = {};
+      for (const f of ["docNumber", "issuingAuthority", "issueDate", "expiryDate"] as const) {
+        if (((by as any)[f] == null || String((by as any)[f]).trim() === "") && (doc as any)[f]) { fill[f] = (doc as any)[f]; merged.push(f); }
+      }
+      const byCd: any = by.customData && typeof by.customData === "object" ? by.customData : {};
+      const docCd: any = doc.customData && typeof doc.customData === "object" ? doc.customData : {};
+      const file = docCd.file || docCd.filePath;
+      if (file && !byCd.file && !byCd.filePath) { fill.customData = { ...byCd, file }; merged.push("file"); }
+      if (merged.length) {
+        const prior = Array.isArray(by.history) ? (by.history as any[]) : [];
+        await prisma.document.update({ where: { id: by.id }, data: { ...fill,
+          history: [...prior, { at: new Date().toISOString(), by: me?.name ?? "Staff", kind: "merged", from: doc.id, fields: merged,
+            note: `Copied ${merged.map(f => ({ docNumber: "the number", issuingAuthority: "the issuing authority", issueDate: "the issue date", expiryDate: "the expiry date", file: "the scanned file" } as any)[f] ?? f).join(", ")} from a duplicate record that was retired` }] } });
+      }
+    }
+  }
+
   const document = await prisma.document.update({
     where: { id: doc.id },
-    data: { supersededAt: new Date().toISOString(), supersededById: byId },
+    data: { supersededAt: new Date().toISOString(), supersededById: byId,
+      history: [...(Array.isArray(doc.history) ? (doc.history as any[]) : []), { at: new Date().toISOString(), by: me?.name ?? "Staff", kind: "superseded", replacedBy: byId, note: req.body?.reason ? String(req.body.reason).slice(0, 300) : byId ? "Retired as a duplicate" : "Retired" }] },
   });
   logActivity({
     type: "compliance",
     message: `${doc.docType} for ${doc.person}: an older record (${doc.docNumber ?? "no number"}, exp ${doc.expiryDate ?? "none"}) was superseded`,
     user: me?.name ?? "Staff",
   });
-  await logAudit({ action: "document.supersede", actorId: a.sub, target: doc.id, detail: `${doc.docType} · ${doc.person} · exp ${doc.expiryDate ?? "none"}` });
-  res.json({ document });
+  await logAudit({ action: "document.supersede", actorId: a.sub, target: doc.id, detail: `${doc.docType} · ${doc.person} · exp ${doc.expiryDate ?? "none"}${byId ? ` · replaced by ${byId}` : ""}${merged.length ? ` · copied ${merged.join(", ")} onto it` : ""}` });
+  res.json({ document, merged });
 });
 
 /**
