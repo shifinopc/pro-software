@@ -2599,12 +2599,14 @@
                     <div style="min-width:0;">
                       <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.doc }}</div>
                       <sc-if value="{{ d.docNoShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#A9A6B4; font-family:ui-monospace,monospace;">{{ d.docNo }}</div></sc-if>
+                      <sc-if value="{{ d.hasFile }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.viewFile }}" title="Open the attached file" style="display:inline-flex; align-items:center; gap:4px; margin-top:3px; font-size:10.5px; font-weight:700; color:#0284C7; cursor:pointer;" style-hover="text-decoration:underline;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"></path></svg>View file</span></sc-if>
+                      <sc-if value="{{ d.noFile }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block; margin-top:3px; font-size:10.5px; color:#B8B4C2;">No file attached</span></sc-if>
                     </div>
                     <span style="font-size:10px; font-weight:700; color:{{ d.subjColor }}; background:{{ d.subjBg }}; padding:2px 9px; border-radius:99px; width:fit-content;">{{ d.subject }}</span>
                     <span style="color:#8C8899;">{{ d.authority }}</span>
                     <span style="color:#6F6C7A; font-size:12px;">{{ d.expiry }}</span>
                     <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ d.stColor }}; background:{{ d.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:4px; height:4px; border-radius:99px; background:{{ d.stColor }};"></span>{{ d.status }}</span>
-                    <span style="display:flex; justify-content:flex-end; align-items:center; gap:10px;"><sc-if value="{{ d.canManage }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.manage }}" title="Move to another CR, or retire as a duplicate" style="font-size:11px; font-weight:600; color:#6F6C7A; cursor:pointer;" style-hover="color:#7C00FF;">Manage</span></sc-if><sc-if value="{{ d.canRenew }}" hint-placeholder-val="{{ true }}"><span onClick="{{ d.renew }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ d.renewLabel }}</span></sc-if></span>
+                    <span style="display:flex; justify-content:flex-end; align-items:center; gap:10px;"><sc-if value="{{ d.canManage }}" hint-placeholder-val="{{ false }}"><span onClick="{{ d.manage }}" title="View or replace the file, move to another CR, or retire as a duplicate" style="font-size:11px; font-weight:600; color:#6F6C7A; cursor:pointer;" style-hover="color:#7C00FF;">Manage</span></sc-if><sc-if value="{{ d.canRenew }}" hint-placeholder-val="{{ true }}"><span onClick="{{ d.renew }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">{{ d.renewLabel }}</span></sc-if></span>
                   </div>
                 </sc-for>
               </div></div>
@@ -3630,7 +3632,8 @@
                   <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ f.meta }}</div>
                 </div>
                 <span style="font-size:10.5px; font-weight:700; color:{{ f.stColor }}; background:{{ f.stBg }}; padding:3px 10px; border-radius:99px; flex-shrink:0;">{{ f.status }}</span>
-                <div style="display:flex; gap:12px; font-size:11.5px; flex-shrink:0;"><a href="#">Preview</a><a href="#" style="color:#8C8899;">Download</a></div>
+                <sc-if value="{{ f.hasFile }}" hint-placeholder-val="{{ true }}"><div style="display:flex; gap:12px; font-size:11.5px; font-weight:600; flex-shrink:0;"><span onClick="{{ f.preview }}" style="color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Preview</span><span onClick="{{ f.download }}" style="color:#6F6C7A; cursor:pointer;" style-hover="color:#1A1523;">Download</span></div></sc-if>
+                <sc-if value="{{ f.noFile }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; color:#B8B4C2; flex-shrink:0; width:110px; text-align:right;">No file attached</span></sc-if>
               </div>
             </sc-for>
           </div>
@@ -3649,8 +3652,24 @@
                     <span title="{{ dd.tip }}" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:{{ dd.color }}; background:{{ dd.bg }}; padding:4px 11px; border-radius:99px; cursor:pointer;">{{ dd.glyph }} {{ dd.label }}</span>
                   </sc-for>
                 </div>
-                <a href="#" style="font-size:11.5px; flex-shrink:0;">Open folder</a>
+                <span onClick="{{ ed.toggleFolder }}" style="font-size:11.5px; font-weight:600; color:#7C00FF; cursor:pointer; flex-shrink:0;" style-hover="text-decoration:underline;">{{ ed.folderLabel }}</span>
               </div>
+              <sc-if value="{{ ed.folderOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px; border:1px solid #F0EDF6; border-radius:12px; overflow:hidden;">
+                  <sc-if value="{{ ed.folderEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px; font-size:12px; color:#A9A6B4;">No documents on file for this person yet.</div></sc-if>
+                  <sc-for list="{{ ed.folderFiles }}" as="ef" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid #F7F5FA; flex-wrap:wrap;" style-hover="background:#FAF7FE;">
+                      <div style="flex:1; min-width:180px;">
+                        <div style="font-size:12.5px; font-weight:600;">{{ ef.name }}</div>
+                        <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ ef.meta }}</div>
+                      </div>
+                      <span style="font-size:10.5px; font-weight:700; color:{{ ef.stColor }}; background:{{ ef.stBg }}; padding:3px 10px; border-radius:99px; flex-shrink:0;">{{ ef.status }}</span>
+                      <sc-if value="{{ ef.hasFile }}" hint-placeholder-val="{{ true }}"><div style="display:flex; gap:12px; font-size:11.5px; font-weight:600; flex-shrink:0;"><span onClick="{{ ef.preview }}" style="color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Preview</span><span onClick="{{ ef.download }}" style="color:#6F6C7A; cursor:pointer;" style-hover="color:#1A1523;">Download</span></div></sc-if>
+                      <sc-if value="{{ ef.noFile }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; color:#B8B4C2; flex-shrink:0; width:110px; text-align:right;">No file attached</span></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
             </div>
           </sc-for>
           <sc-if value="{{ docEmployeeEmpty }}" hint-placeholder-val="{{ false }}">
@@ -10234,6 +10253,18 @@
         </div>
         <div style="padding:16px 24px 22px; display:flex; flex-direction:column; gap:18px;">
           <sc-if value="{{ mdocErr }}" hint-placeholder-val="{{ false }}"><div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ mdocErr }}</div></sc-if>
+          <div>
+            <div style="font-size:12.5px; font-weight:700; color:#1A1523;">File</div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:9px; border:1px solid #EDEBF2; border-radius:12px; padding:10px 12px; background:#FCFBFE;">
+              <span style="width:32px; height:32px; border-radius:9px; background:#E4F1FD; color:#0284C7; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></span>
+              <div style="flex:1; min-width:0;">
+                <sc-if value="{{ mdocHasFile }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px; font-weight:600; color:#1A1523; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ mdocFileName }}</div><div style="font-size:11px; color:#8C8899; margin-top:1px;">Replacing keeps the old file in the history</div></sc-if>
+                <sc-if value="{{ mdocNoFile }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px; font-weight:600; color:#8C8899;">No file attached</div><div style="font-size:11px; color:#A9A6B4; margin-top:1px;">PDF, JPG or PNG · up to 4 MB</div></sc-if>
+              </div>
+              <sc-if value="{{ mdocHasFile }}" hint-placeholder-val="{{ true }}"><span onClick="{{ mdocViewFile }}" style="font-size:11.5px; font-weight:700; color:#0284C7; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">View</span></sc-if>
+              <label style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">{{ mdocFileBtn }}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange="{{ mdocPickFile }}" style="display:none;"></label>
+            </div>
+          </div>
           <sc-if value="{{ mdocShowMove }}" hint-placeholder-val="{{ false }}">
             <div>
               <div style="font-size:12.5px; font-weight:700; color:#1A1523;">Move to another CR</div>
@@ -17607,9 +17638,16 @@ class Component extends DCLogic {
     const folderFiles = (_docsReal
       ? _docsReal.filter(d9 => _docCatOf(d9) === docFolder).map(d9 => {
           const t9 = _docStTone[String(d9.status)] || _docStTone.valid;
-          return { name: (d9.docType || 'Document') + (d9.person ? ' — ' + d9.person : ''), meta: [_docFmtExp(d9.expiryDate), d9.issuingAuthority || ''].filter(Boolean).join(' · ') || '—', status: t9[0], stBg: t9[1], stColor: t9[2] };
+          // Preview / Download were dead links. They now open or save the document's real file, and a
+          // record with no file says so instead of offering links that go nowhere.
+          const cd9 = d9.customData && typeof d9.customData === 'object' ? d9.customData : {};
+          const f9 = String(cd9.filePath || cd9.file || '');
+          const has9 = f9.startsWith('/');
+          const nm9 = cd9.fileName || ((d9.docType || 'Document') + (d9.docNumber ? ' ' + d9.docNumber : '') + (/.pdf$/i.test(f9) ? '.pdf' : ''));
+          return { name: (d9.docType || 'Document') + (d9.person ? ' — ' + d9.person : '') + (d9.docNumber ? ' · ' + d9.docNumber : ''), meta: [_docFmtExp(d9.expiryDate), d9.issuingAuthority || ''].filter(Boolean).join(' · ') || '—', status: t9[0], stBg: t9[1], stColor: t9[2],
+            hasFile: has9, noFile: !has9, preview: () => has9 && this._openFile(f9, nm9), download: () => has9 && this._downloadFile(f9, nm9) };
         })
-      : (folderFilesMap[docFolder] || []).map(([name, meta, st]) => ({ name, meta, status: st[0], stBg: st[1], stColor: st[2] })));
+      : (folderFilesMap[docFolder] || []).map(([name, meta, st]) => ({ name, meta, status: st[0], stBg: st[1], stColor: st[2], hasFile: false, noFile: true })));
     const folderApi = {
       showDocFolder: !!docFolder && (this.state.docScope || 'company') === 'company',
       folderName: docFolder || '', folderCount: folderFiles.length,
@@ -21064,6 +21102,9 @@ class Component extends DCLogic {
           subjBg: subject === 'Company' ? '#E4F4FD' : '#EFEBFF', subjColor: subject === 'Company' ? '#0284C7' : '#6D5BD0',
           canManage: canWrite && !d7.supersededAt,
           rowOpacity: d7.supersededAt ? '.55' : '1', isLive: !d7.supersededAt,
+          ...(() => { const cd7 = d7.customData && typeof d7.customData === 'object' ? d7.customData : {}; const f7 = cd7.filePath || cd7.file || '';
+            const ok7 = !!f7 && String(f7).startsWith('/');
+            return { hasFile: ok7, noFile: !ok7 && !d7.supersededAt, fileName: cd7.fileName || 'Attached file', viewFile: () => this._openFile(String(f7), cd7.fileName || d7.docType) }; })(),
           // Renew opens the same Start renewal dialog as Compliance — prerequisite gate, parking and the
           // Phase-1 task included. One renewal path, not two. (It used to be a label with no handler.)
           canRenew: canWrite && !d7.supersededAt,
@@ -21099,7 +21140,24 @@ class Component extends DCLogic {
             .then(({ ok, j9 }) => ok ? done9(j9) : this.setState({ mdocBusy: false, mdocErr: (j9 && j9.error) || 'That did not work' }))
             .catch(() => this.setState({ mdocBusy: false, mdocErr: 'Server unreachable — nothing was changed' }));
         };
+        const cdF9 = dm9 && dm9.customData && typeof dm9.customData === 'object' ? dm9.customData : {};
+        const file9 = cdF9.filePath || cdF9.file || '';
+        const hasFile9 = !!file9 && String(file9).startsWith('/');
         Object.assign(clDetailApi, {
+          mdocHasFile: hasFile9,
+          mdocNoFile: !!dm9 && !hasFile9,
+          mdocFileName: cdF9.fileName || (hasFile9 ? 'Attached file' : ''),
+          mdocFileBtn: this.state.mdocBusy ? 'Uploading…' : hasFile9 ? 'Replace file' : 'Attach file',
+          mdocViewFile: () => hasFile9 && this._openFile(String(file9), cdF9.fileName || (dm9 && dm9.docType)),
+          mdocPickFile: (ev9) => {
+            const f9 = ev9 && ev9.target && ev9.target.files && ev9.target.files[0];
+            if (ev9 && ev9.target) ev9.target.value = '';
+            if (!f9 || !dm9 || this.state.mdocBusy) return;
+            this.setState({ mdocBusy: true, mdocErr: '' });
+            this._uploadDocFile(f9)
+              .then(u9 => dmPost9('/file', { file: u9.path }, (j9) => dmReload9((j9 && j9.replaced ? 'File replaced — the old one is kept in the history' : 'File attached') + ' · ' + u9.name)))
+              .catch(e9 => this.setState({ mdocBusy: false, mdocErr: String(e9.message || e9) }));
+          },
           mdocOpen: !!dm9,
           mdocTitle: dm9 ? dm9.docType : '',
           mdocSub: dm9 ? (isCo9 ? (_crIsMulti ? this._crLabel(this._crOf(clRow.realId, curEst9)) : clRow.name) : (dm9.person || 'Employee')) + ' · ' + describe9(dm9) : '',
@@ -21796,7 +21854,24 @@ class Component extends DCLogic {
           : d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
         return { label: tn, kind, tip };
       });
+      // "Open folder" was a dead link. It now opens this person's documents in place — every live
+      // record, not only the five headline types — each with its file.
+      const key7 = e7.id || e7.name || String(i);
+      const open7 = this.state.docEmpOpen === key7;
+      const _stT7 = { valid: ['Valid', '#E7F8EF', '#0E9355'], expiring: ['Expiring', '#FEF4E2', '#B8860B'], overdue: ['Expired', '#FEECEC', '#C0353A'], expired: ['Expired', '#FEECEC', '#C0353A'], unknown: ['No expiry date', '#F3F1F7', '#6F6C7A'], in_progress: ['In renewal', '#EFEBFF', '#6D5BD0'] };
+      const files7 = !open7 ? [] : mine.slice().sort((a8, b8) => String(a8.docType).localeCompare(String(b8.docType))).map(d8 => {
+        const cd8 = d8.customData && typeof d8.customData === 'object' ? d8.customData : {};
+        const f8 = String(cd8.filePath || cd8.file || ''); const has8 = f8.startsWith('/');
+        const nm8 = cd8.fileName || ((d8.docType || 'Document') + ' ' + (e7.name || '') + (d8.docNumber ? ' ' + d8.docNumber : '')).trim();
+        const t8 = _stT7[String(d8.status || 'valid').toLowerCase()] || _stT7.valid;
+        return { name: (d8.docType || 'Document') + (d8.docNumber ? ' · ' + d8.docNumber : ''),
+          meta: [d8.expiryDate ? 'Expires ' + d8.expiryDate : 'No expiry date', d8.issuingAuthority || ''].filter(Boolean).join(' · '),
+          status: t8[0], stBg: t8[1], stColor: t8[2], hasFile: has8, noFile: !has8,
+          preview: () => has8 && this._openFile(f8, nm8), download: () => has8 && this._downloadFile(f8, nm8) };
+      });
       return {
+        folderOpen: open7, folderLabel: open7 ? 'Close folder' : 'Open folder', folderFiles: files7, folderEmpty: open7 && files7.length === 0,
+        toggleFolder: () => this.setState({ docEmpOpen: open7 ? null : key7 }),
         name: e7.name || '—', role: e7.role || '—', avBg: p[0], avColor: p[1],
         initials: String(e7.name || '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         complete: docs.filter(d7 => d7.kind === 'ok').length, total: docs.length,
@@ -23358,6 +23433,29 @@ class Component extends DCLogic {
     };
     // A client document is served from a route that checks who is asking, so it cannot be a plain
     // href — an <a> carries no Authorization header. Fetch it, then hand the browser a blob.
+    // Upload one picked file as a private document scan; resolves to { path, name }.
+    this._uploadDocFile = (file9) => new Promise((ok9, bad9) => {
+      if (!file9) return bad9(new Error('No file chosen'));
+      if (!/\.(pdf|png|jpe?g|webp)$/i.test(file9.name)) return bad9(new Error('Only PDF, JPG, PNG or WEBP files can be attached'));
+      if (file9.size > 4 * 1024 * 1024) return bad9(new Error('The file must be under 4 MB'));
+      const rd9 = new FileReader();
+      rd9.onerror = () => bad9(new Error('Could not read that file'));
+      rd9.onload = () => {
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }, body: JSON.stringify({ kind: 'document', name: file9.name, data: String(rd9.result) }) })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => (r9.ok && j9.path ? ok9({ path: j9.path, name: j9.name || file9.name }) : bad9(new Error((j9 && j9.error) || 'Upload failed')))))
+          .catch(() => bad9(new Error('Server unreachable — the file was not uploaded')));
+      };
+      rd9.readAsDataURL(file9);
+    });
+    // Save a private file to disk under its real name (the link needs the token, so a plain <a> can't).
+    this._downloadFile = (p9, name9) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + p9, { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.blob() : Promise.reject(new Error('denied'))))
+        .then(b9 => { const u9 = URL.createObjectURL(b9); const a9 = document.createElement('a'); a9.href = u9; a9.download = String(name9 || 'document').replace(/[\/:*?"<>|]+/g, '_'); document.body.appendChild(a9); a9.click(); a9.remove(); setTimeout(() => URL.revokeObjectURL(u9), 60000); })
+        .catch(() => this.toast('Could not download ' + (name9 || 'that file'), 'error'));
+    };
     this._openFile = (p9, name9) => {
       const t9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + p9, { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })

@@ -3872,6 +3872,33 @@ app.post("/api/companies/:id/remove-addon", requireAuth, requireStaff, requireWr
  * a compliance system that forgets that has no audit trail. Every reader filters on
  * `supersededAt: null`, so exactly one document of a type stays authoritative for a subject.
  */
+// Attach or replace the scan on a document. The previous file is not deleted: it stays on the
+// server and its link is written into the document's history, so a wrong replacement can be undone
+// and nobody can quietly swap a certificate without it showing.
+app.post("/api/documents/:id/file", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+  if (!doc) return res.status(404).json({ error: "Document not found" });
+  if (doc.supersededAt) return res.status(409).json({ error: "This record has been replaced — attach the file to the live one" });
+  const file = String(req.body?.file ?? "").trim();
+  const m = file.match(/^\/api\/files\/([A-Za-z0-9_-]+)$/);
+  if (!m) return res.status(400).json({ error: "Upload the file first" });
+  const asset = await prisma.fileAsset.findUnique({ where: { id: m[1] } });
+  if (!asset) return res.status(400).json({ error: "That upload was not found — try again" });
+  const cd: any = doc.customData && typeof doc.customData === "object" ? { ...(doc.customData as any) } : {};
+  const prev = cd.filePath || cd.file || null;
+  const prevName = cd.fileName || null;
+  cd.file = file; cd.fileName = asset.name || "file";
+  delete cd.filePath;
+  const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } });
+  const document = await prisma.document.update({ where: { id: doc.id }, data: { customData: cd,
+    history: [...(Array.isArray(doc.history) ? (doc.history as any[]) : []), { at: new Date().toISOString(), by: me?.name ?? "Staff", kind: "file",
+      file, fileName: cd.fileName, prevFile: prev, prevFileName: prevName,
+      note: prev ? `File replaced with ${cd.fileName}${prevName ? ` (was ${prevName})` : ""}` : `File attached: ${cd.fileName}` }] } });
+  await logAudit({ action: prev ? "document.file_replace" : "document.file_attach", actorId: a?.sub, target: doc.id, detail: `${doc.docType} · ${doc.person} · ${cd.fileName}${prev ? ` · previous ${prev}` : ""}`, ip: clientIp(req) });
+  res.json({ document, replaced: !!prev });
+});
+
 // A company document filed under the wrong CR — the certificate of a sub CR sitting on the main one.
 // Only the CR changes; the move is recorded on the document and in the audit trail.
 app.post("/api/documents/:id/move-cr", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
