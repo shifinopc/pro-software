@@ -958,13 +958,18 @@
         <sc-if value="{{ showCal }}" hint-placeholder-val="{{ false }}">
           <div data-pop class="hdr-pop" style="position:absolute; top:calc(100% + 8px); right:0; width:300px; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:16px; z-index:60; animation:popIn .2s cubic-bezier(.34,1.4,.64,1) both;">
             <div style="display:flex; align-items:center; justify-content:space-between;">
-              <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">July 2026</span>
-              <span onClick="{{ calGoRenewals }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">Open Renewals →</span>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span onClick="{{ calPrev }}" title="Previous month" style="width:24px; height:24px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#6F6C7A;" style-hover="background:#F3EFFA;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; min-width:118px; text-align:center;">{{ calTitle }}</span>
+                <span onClick="{{ calNext }}" title="Next month" style="width:24px; height:24px; border-radius:7px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#6F6C7A;" style-hover="background:#F3EFFA;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                <sc-if value="{{ calNotThisMonth }}" hint-placeholder-val="{{ false }}"><span onClick="{{ calToday }}" style="font-size:10.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:3px 8px; border-radius:99px; cursor:pointer; margin-left:2px;">Today</span></sc-if>
+              </div>
+              <span onClick="{{ calGoRenewals }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">Renewals →</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-top:12px; text-align:center;">
               <span style="font-size:9px; font-weight:700; color:#A9A6B4;">MO</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">TU</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">WE</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">TH</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">FR</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">SA</span><span style="font-size:9px; font-weight:700; color:#A9A6B4;">SU</span>
               <sc-for list="{{ calDays }}" as="cd" hint-placeholder-count="35">
-                <div title="{{ cd.tip }}" style="display:flex; flex-direction:column; align-items:center; gap:1px; padding:4px 0 3px; border-radius:8px; background:{{ cd.bg }}; cursor:default;">
+                <div onClick="{{ cd.pick }}" title="{{ cd.tip }}" style="display:flex; flex-direction:column; align-items:center; gap:1px; padding:4px 0 3px; border-radius:8px; background:{{ cd.bg }}; box-shadow:inset 0 0 0 1px {{ cd.border }}; cursor:{{ cd.cursor }};">
                   <span style="font-size:11px; font-weight:{{ cd.weight }}; color:{{ cd.color }}; font-variant-numeric:tabular-nums;">{{ cd.d }}</span>
                   <span style="width:4px; height:4px; border-radius:99px; background:{{ cd.dot }};"></span>
                 </div>
@@ -973,16 +978,19 @@
             <div style="display:flex; gap:11px; margin-top:12px; border-top:1px solid #F0EDF6; padding-top:11px; font-size:10px; color:#6F6C7A; flex-wrap:wrap;">
               <span style="display:flex; align-items:center; gap:4px;"><span style="width:6px; height:6px; border-radius:99px; background:#E5484D;"></span>Overdue / expired</span>
               <span style="display:flex; align-items:center; gap:4px;"><span style="width:6px; height:6px; border-radius:99px; background:#F59E0B;"></span>Expiring</span>
-              <span style="display:flex; align-items:center; gap:4px;"><span style="width:6px; height:6px; border-radius:99px; background:#7C00FF;"></span>Appointment</span>
+              <span style="display:flex; align-items:center; gap:4px;"><span style="width:6px; height:6px; border-radius:99px; background:#7C00FF;"></span>Task due</span>
             </div>
-            <div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">
+            <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase; margin-top:11px;">{{ calListTitle }}</div>
+            <div style="display:flex; flex-direction:column; gap:2px; margin-top:6px;">
+              <sc-if value="{{ calEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#A9A6B4; padding:4px 0;">Nothing due.</div></sc-if>
               <sc-for list="{{ calItems }}" as="ci" hint-placeholder-count="3">
-                <div style="display:flex; align-items:center; gap:9px; font-size:11.5px;">
+                <div onClick="{{ ci.go }}" style="display:flex; align-items:center; gap:9px; font-size:11.5px; padding:5px 6px; margin:0 -6px; border-radius:8px; cursor:pointer;" style-hover="background:#F7F4FC;">
                   <span style="width:7px; height:7px; border-radius:99px; background:{{ ci.color }}; flex-shrink:0;"></span>
                   <span style="flex:1; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ci.label }}</span>
                   <span style="color:#A9A6B4; flex-shrink:0;">{{ ci.when }}</span>
                 </div>
               </sc-for>
+              <sc-if value="{{ calHasMore }}" hint-placeholder-val="{{ false }}"><span onClick="{{ calGoRenewals }}" style="font-size:11px; font-weight:600; color:#7C00FF; cursor:pointer; padding-top:3px;">{{ calMore }}</span></sc-if>
             </div>
           </div>
         </sc-if>
@@ -3646,10 +3654,6 @@
             </div>
           </sc-for>
         </section>
-        <div style="display:flex; align-items:center; gap:7px; font-size:11.5px; color:#A9A6B4; padding:0 4px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v4h1"></path></svg>
-          Documents are filed into folders by their type automatically. Types are managed in <b style="color:#7C00FF; font-weight:600;">Configure → Document Types</b>.
-        </div>
         </div></sc-if>
         <sc-if value="{{ dxListMode }}" hint-placeholder-val="{{ false }}"><section style="animation:fadeUp .3s ease both; background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
           <div style="padding:14px 20px; border-bottom:1px solid #F2EFF7; font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ dxRowsTitle }}</div>
@@ -36287,46 +36291,75 @@ class Component extends DCLogic {
       planUpgradeStatus: this.state.upgradeModal === 'sent' || this.state.upgradeRequested ? 'Enterprise — requested' : 'No upgrade requested',
       planUpgradeSub: this.state.upgradeModal === 'sent' || this.state.upgradeRequested ? 'Sara Khan will confirm pricing shortly' : 'Unlock the full catalog with Enterprise',
     };
-    // ---- Header compliance calendar (July 2026, 1st = Wednesday) ----
-    // WIRED: calendar markers = real document expiries + task due dates in the current month.
-    const calEvents = (() => {
-      if (!Array.isArray(this.state.documentsData) && !Array.isArray(this.state.tasksData)) return {
-        15: ['#E5484D', 'Vehicle Registration — overdue'], 29: ['#F59E0B', 'Trade License expires'],
-      };
-      const ev2 = {};
-      const now2 = new Date(); const m2 = now2.getMonth(); const y2 = now2.getFullYear();
-      (this.state.documentsData || []).forEach(d2 => {
-        const dd = new Date(d2.expiryDate); if (isNaN(+dd) || dd.getMonth() !== m2 || dd.getFullYear() !== y2) return;
-        const day2 = dd.getDate();
-        const col2 = d2.status === 'overdue' ? '#E5484D' : '#F59E0B';
-        if (!ev2[day2] || col2 === '#E5484D') ev2[day2] = [col2, d2.docType + (d2.person ? ' — ' + d2.person : '') + (d2.status === 'overdue' ? ' · overdue' : ' expires')];
+    // ---- Header compliance calendar ----
+    // Was titled "July 2026" whatever the month, listed three invented items under it, and numbered the
+    // spill-over days as if every month had 28 or 31 days. It now shows the month being looked at, can
+    // move between months, and lists real document expiries and task due dates.
+    const _calNow = new Date(); _calNow.setHours(0, 0, 0, 0);
+    const _calOff = Number(this.state.calOff) || 0;
+    const _calBase = new Date(_calNow.getFullYear(), _calNow.getMonth() + _calOff, 1);
+    const _calY = _calBase.getFullYear(), _calM = _calBase.getMonth();
+    const _calMon = (d9) => d9.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const _calKey = (d9) => d9.getFullYear() + '-' + d9.getMonth() + '-' + d9.getDate();
+    const _calEv = {};   // "y-m-d" → [{ color, label, when, rank, go }]
+    const _calScope = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : null;
+    const _calCoIds = _calScope ? new Set((Array.isArray(this.state.companiesData) ? this.state.companiesData : []).filter(c9 => c9.name === _calScope).map(c9 => c9.id)) : null;
+    (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).forEach(d2 => {
+      if (!d2.expiryDate || (_calCoIds && !_calCoIds.has(d2.companyId))) return;
+      const dd = new Date(d2.expiryDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
+      const st2 = String(d2.status || '').toLowerCase();
+      if (st2 === 'in_progress') return;   // already being renewed — not a date anyone has to act on
+      const late2 = dd < _calNow;
+      const days2 = Math.round((dd - _calNow) / 86400000);
+      (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
+        color: late2 ? '#E5484D' : '#F59E0B', rank: late2 ? 0 : 1,
+        label: d2.docType + (d2.person ? ' — ' + d2.person : ''),
+        when: late2 ? Math.abs(days2) + 'd overdue' : days2 === 0 ? 'expires today' : 'expires ' + _calMon(dd),
+        go: () => this.setState({ calOpen: false, active: 'Compliance', activeGroup: 'Clients & Compliance', compFilter: 'All', compQ: d2.docNumber || d2.person || d2.docType }),
       });
-      (this.state.tasksData || []).forEach(t2 => {
-        if (t2.archived || t2.status === 'done') return;
-        const dd = new Date(t2.dueDate); if (isNaN(+dd) || dd.getMonth() !== m2 || dd.getFullYear() !== y2) return;
-        const day2 = dd.getDate();
-        if (!ev2[day2]) ev2[day2] = ['#7C00FF', t2.title + ' · due'];
+    });
+    (Array.isArray(this.state.tasksData) ? this.state.tasksData : []).forEach(t2 => {
+      if (t2.archived || t2.status === 'done' || !t2.dueDate) return;
+      const dd = new Date(t2.dueDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
+      (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
+        color: '#7C00FF', rank: 2, label: t2.title || 'Task', when: (dd < _calNow ? 'was due ' : 'due ') + _calMon(dd),
+        go: () => this.setState({ calOpen: false }),
       });
-      return ev2;
-    })();
+    });
+    const _calSel = this.state.calSel && String(this.state.calSel).startsWith(_calY + '-' + _calM + '-') ? this.state.calSel : null;
     const calDays = [];
-    const _calNow = new Date();
-    const _calFirstDow = (new Date(_calNow.getFullYear(), _calNow.getMonth(), 1).getDay() + 6) % 7; // Mon-first
-    const _calDim = new Date(_calNow.getFullYear(), _calNow.getMonth() + 1, 0).getDate();
-    for (let i = 0; i < 35; i++) {
-      const d = i - _calFirstDow + 1;
-      const inMonth = d >= 1 && d <= _calDim;
-      const ev = inMonth ? calEvents[d] : null;
-      const today = d === _calNow.getDate();
+    const _calFirstDow = (new Date(_calY, _calM, 1).getDay() + 6) % 7; // Monday first
+    const _calDim = new Date(_calY, _calM + 1, 0).getDate();
+    const _calCells = Math.ceil((_calFirstDow + _calDim) / 7) * 7;   // 5 or 6 rows, whatever the month needs
+    for (let i = 0; i < _calCells; i++) {
+      const dt9 = new Date(_calY, _calM, i - _calFirstDow + 1);
+      const inMonth = dt9.getMonth() === _calM;
+      const k9 = _calKey(dt9);
+      const ev9 = inMonth ? (_calEv[k9] || []) : [];
+      const isToday = dt9.getTime() === _calNow.getTime();
+      const isSel = inMonth && k9 === _calSel;
+      const top9 = ev9.slice().sort((a9, b9) => a9.rank - b9.rank)[0];
       calDays.push({
-        d: inMonth ? d : (d < 1 ? 28 + d : d - 31),
-        weight: today ? 800 : 500,
-        color: today ? '#fff' : inMonth ? '#1A1523' : '#D6D2DE',
-        bg: today ? '#7C00FF' : 'transparent',
-        dot: ev ? ev[0] : 'transparent',
-        tip: ev ? ev[1] : '',
+        d: dt9.getDate(),
+        weight: isToday || isSel ? 800 : 500,
+        color: isToday ? '#fff' : isSel ? '#5B21B6' : inMonth ? '#1A1523' : '#D6D2DE',
+        bg: isToday ? '#7C00FF' : isSel ? '#F0E6FF' : 'transparent',
+        border: isSel && !isToday ? '#C9A2FF' : 'transparent',
+        dot: top9 ? top9.color : 'transparent',
+        tip: ev9.length ? ev9.length + ' item' + (ev9.length === 1 ? '' : 's') + ': ' + ev9.map(e9 => e9.label).slice(0, 3).join(', ') : '',
+        cursor: ev9.length ? 'pointer' : 'default',
+        pick: () => ev9.length && this.setState({ calSel: isSel ? null : k9 }),
       });
     }
+    // Under the grid: the chosen day, else what is coming up this month (overdue first).
+    const _calList = (() => {
+      if (_calSel) return (_calEv[_calSel] || []).slice().sort((a9, b9) => a9.rank - b9.rank);
+      const out9 = [];
+      Object.keys(_calEv).forEach(k9 => { const [y9, m9, d9] = k9.split('-').map(Number); if (y9 !== _calY || m9 !== _calM) return;
+        const dt9 = new Date(y9, m9, d9); if (_calOff === 0 && dt9 < _calNow && !_calEv[k9].some(e9 => e9.rank === 0)) return;
+        _calEv[k9].forEach(e9 => out9.push({ ...e9, t: dt9.getTime() })); });
+      return out9.sort((a9, b9) => a9.rank === 0 && b9.rank !== 0 ? -1 : b9.rank === 0 && a9.rank !== 0 ? 1 : a9.t - b9.t);
+    })();
     // ---- Global search + Quick Create ----
     const gsQuery = this.state.gsQuery || '';
     const gsq = gsQuery.toLowerCase();
@@ -37018,13 +37051,19 @@ class Component extends DCLogic {
     const calApi = {
       calDays,
       showCal: !!this.state.calOpen,
-      toggleCal: () => togglePop('calOpen'),
+      toggleCal: () => { if (!this.state.calOpen) this.setState({ calOff: 0, calSel: null }); togglePop('calOpen'); },
       calGoRenewals: () => this.setState({ calOpen: false, active: 'Renewals', activeGroup: 'Main' }),
-      calItems: [
-        { color: '#E5484D', label: 'Vehicle Registration — 2d overdue', when: '15 Jul' },
-        { color: '#F59E0B', label: 'Trade License expires', when: '29 Jul' },
-        { color: '#7C00FF', label: 'Medical test — M. Fernandes', when: '21 Jul, 9:30 AM' },
-      ],
+      calTitle: _calBase.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+      calPrev: () => this.setState({ calOff: _calOff - 1, calSel: null }),
+      calNext: () => this.setState({ calOff: _calOff + 1, calSel: null }),
+      calToday: () => this.setState({ calOff: 0, calSel: null }),
+      calNotThisMonth: _calOff !== 0,
+      calListTitle: _calSel ? (() => { const [y9, m9, d9] = _calSel.split('-').map(Number); return new Date(y9, m9, d9).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }); })()
+        : (_calOff === 0 ? 'Coming up this month' : 'In ' + _calBase.toLocaleDateString('en-GB', { month: 'long' })),
+      calItems: _calList.slice(0, 5),
+      calMore: _calList.length > 5 ? '+ ' + (_calList.length - 5) + ' more' : '',
+      calHasMore: _calList.length > 5,
+      calEmpty: _calList.length === 0,
     };
 
     const isMobile = !!this.state.isMobile;
