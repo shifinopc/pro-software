@@ -1939,6 +1939,11 @@
                       <div style="flex:1; min-width:180px;">
                         <div style="display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;"><span style="font-family:ui-monospace,monospace; font-size:13px; font-weight:700; color:#1A1523;">{{ r.crNumber }}</span><span style="font-size:12.5px; color:#4B4757; font-weight:600;">{{ r.title }}</span></div>
                         <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ r.meta }}</div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                          <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ r.certColor }}; background:{{ r.certBg }}; padding:3px 9px; border-radius:99px;"><span style="width:5px; height:5px; border-radius:99px; background:{{ r.certColor }};"></span>{{ r.cert }}</span>
+                          <sc-if value="{{ r.hasCertExtra }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px; font-weight:600; color:#B8860B;">{{ r.certExtra }}</span></sc-if>
+                          <sc-if value="{{ r.canAddCert }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.addCert }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ r.addCertLabel }}</span></sc-if>
+                        </div>
                       </div>
                       <div style="text-align:right; font-size:11.5px; color:#6F6C7A; line-height:1.5;"><div>{{ r.people }}</div><div style="color:#A9A6B4;">{{ r.docs }}</div></div>
                       <div style="display:flex; gap:10px; align-items:center;">
@@ -10199,21 +10204,79 @@
     </div>
   </sc-if>
 
+  <!-- Add a document: what it is, whose it is, then its details. -->
   <sc-if value="{{ showAddRecord }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeAddRecord }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; padding:26px 28px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
-        <div style="display:flex; align-items:center; justify-content:space-between;"><span style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Add compliance record</span><div onClick="{{ closeAddRecord }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
-        <sc-if value="{{ arErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ arErr }}</div></sc-if>
-        <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:13px; margin-top:16px;">
-          <sc-if value="{{ arClientPick }}" hint-placeholder-val="{{ true }}"><div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddArClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ arClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddArClientOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div></sc-if><sc-if value="{{ arClientLocked }}" hint-placeholder-val="{{ false }}"><div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT</div><div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; font-size:13px; font-weight:600; color:#26074D; background:#F8F5FC; display:flex; align-items:center; gap:8px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h2M13 7h2M9 11h2M13 11h2"></path></svg><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ arClientVal }}</span></div></div></sc-if>
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENT TYPE</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddArTypeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ arTypeColor }};">{{ arTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddArTypeOptions }}" as="o" hint-placeholder-count="7"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">HOLDER <span style="color:#B9B5C4; font-weight:600;">(person / blank for company)</span></div><input value="{{ arHolder }}" onChange="{{ setArHolder }}" placeholder="e.g. A. Khan" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">DOCUMENT NUMBER</div><input value="{{ arDoc }}" onChange="{{ setArDocNo }}" placeholder="e.g. 7038415670" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">AUTHORITY</div><input value="{{ arAuthority }}" onChange="{{ setArAuthority }}" placeholder="e.g. GDRFA" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
-          <sc-if value="{{ arCrShow }}" hint-placeholder-val="{{ false }}"><div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHICH CR</div><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ arCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
-          <div style="grid-column:1 / -1;"><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EXPIRY DATE *</div><input value="{{ arExpiry }}" onChange="{{ setArExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;"></div>
+    <div onClick="{{ closeAddRecord }}" data-hidescroll="true" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; padding:24px; overflow-y:auto; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="margin:auto; background:#fff; border-radius:22px; width:100%; max-width:540px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; gap:13px; padding:22px 24px 16px; border-bottom:1px solid #F2EFF7;">
+          <div style="width:40px; height:40px; border-radius:12px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M12 12v6M9 15h6"></path></svg></div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#1A1523;">Add a document</div>
+            <sc-if value="{{ arHasTitleFor }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px; color:#8C8899; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">for <b style="color:#26074D; font-weight:700;">{{ arTitleFor }}</b></div></sc-if>
+            <sc-if value="{{ arClientPick }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px; color:#8C8899; margin-top:2px;">Tracked in Compliance, with renewals from its expiry date</div></sc-if>
+          </div>
+          <div onClick="{{ closeAddRecord }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
-        <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;"><button onClick="{{ closeAddRecord }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Add record</button></div>
+
+        <div style="padding:18px 24px 6px; display:flex; flex-direction:column; gap:16px;">
+          <sc-if value="{{ arErr }}" hint-placeholder-val="{{ false }}"><div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ arErr }}</div></sc-if>
+
+          <sc-if value="{{ arClientPick }}" hint-placeholder-val="{{ true }}"><div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">CLIENT *</div><div class="fm-selwrap" style="margin-top:6px;"><div class="fm-combo"><input data-dd data-open="{{ ddArClientOpen }}" onClick="{{ ddArClientOpenList }}" onInput="{{ ddArClientSetQuery }}" onKeyDown="{{ ddArClientKey }}" value="{{ ddArClientValue }}" placeholder="{{ ddArClientPlaceholder }}" autocomplete="off" class="fm-inp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-if value="{{ ddArClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddArClientRows }}" as="o" hint-placeholder-count="5"><sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if><sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="display:flex; align-items:center; gap:10px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.label }}</span><span style="margin-left:auto; flex-shrink:0; text-align:right; font-size:11px; font-weight:500; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45%;">{{ o.hint }}</span></div></sc-if></sc-for></div></sc-if></div></div></sc-if>
+
+          <div>
+            <div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">DOCUMENT TYPE *</div>
+            <div class="fm-selwrap" style="margin-top:6px;"><div class="fm-combo"><input data-dd data-open="{{ ddArTypeOpen }}" onClick="{{ ddArTypeOpenList }}" onInput="{{ ddArTypeSetQuery }}" onKeyDown="{{ ddArTypeKey }}" value="{{ ddArTypeValue }}" placeholder="{{ ddArTypePlaceholder }}" autocomplete="off" class="fm-inp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-if value="{{ ddArTypeNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No document type matches that</div></sc-if><sc-for list="{{ ddArTypeRows }}" as="o" hint-placeholder-count="5"><sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if><sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="display:flex; align-items:center; gap:10px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.label }}</span><span style="margin-left:auto; flex-shrink:0; text-align:right; font-size:11px; font-weight:500; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45%;">{{ o.hint }}</span></div></sc-if></sc-for></div></sc-if></div>
+            <sc-if value="{{ arHasTypeHint }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px; color:#6D5BD0; margin-top:6px;">{{ arTypeHint }}</div></sc-if>
+          </div>
+
+          <sc-if value="{{ arShowWho }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">{{ arWhoLabel }}</div>
+              
+              <sc-if value="{{ arEmpHas }}" hint-placeholder-val="{{ false }}"><div class="fm-selwrap" style="margin-top:6px;"><div class="fm-combo"><input data-dd data-open="{{ ddArEmpOpen }}" onClick="{{ ddArEmpOpenList }}" onInput="{{ ddArEmpSetQuery }}" onKeyDown="{{ ddArEmpKey }}" value="{{ ddArEmpValue }}" placeholder="{{ ddArEmpPlaceholder }}" autocomplete="off" class="fm-inp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddArEmpOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-if value="{{ ddArEmpNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No employee matches that</div></sc-if><sc-for list="{{ ddArEmpRows }}" as="o" hint-placeholder-count="5"><sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if><sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="display:flex; align-items:center; gap:10px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.label }}</span><span style="margin-left:auto; flex-shrink:0; text-align:right; font-size:11px; font-weight:500; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:45%;">{{ o.hint }}</span></div></sc-if></sc-for></div></sc-if></div></sc-if>
+              <sc-if value="{{ arEmpNone }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px; font-size:12px; color:#8A5A12; background:#FEF8EC; border-radius:10px; padding:8px 11px;">This client has no employees on file yet. Add the employee first, then their documents.</div></sc-if>
+              <sc-if value="{{ arCrShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><sc-for list="{{ arCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ arCrSuggest }}" hint-placeholder-val="{{ false }}"><div style="margin-top:-8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:#5B21B6; background:#F8F2FF; border-radius:10px; padding:8px 11px;"><span>{{ arCrSuggestText }}</span><span onClick="{{ arCrSuggestAdd }}" style="font-weight:700; color:#7C00FF; cursor:pointer; text-decoration:underline;">Add it as a sub CR</span></div></sc-if>
+          <sc-if value="{{ arNewCrOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:-8px; border:1px dashed #C9A2FF; background:#FCFAFF; border-radius:12px; padding:11px 12px;">
+              <div style="font-size:10.5px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">NEW SUB CR</div>
+              <sc-if value="{{ arNewCrErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:6px; font-size:11.5px; font-weight:600; color:#C0353A;">{{ arNewCrErr }}</div></sc-if>
+              <div style="display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto; gap:8px; margin-top:7px; align-items:center;">
+                <input value="{{ arNewCrNumber }}" onChange="{{ setArNewCrNumber }}" placeholder="Sub CR number" style="border:1px solid #DDD9E6; border-radius:10px; padding:8px 11px; font-size:12.5px; background:#fff; min-width:0;">
+                <input value="{{ arNewCrCity }}" onChange="{{ setArNewCrCity }}" placeholder="City (optional)" style="border:1px solid #DDD9E6; border-radius:10px; padding:8px 11px; font-size:12.5px; background:#fff; min-width:0;">
+                <div style="display:flex; gap:6px;"><button onClick="{{ arNewCrCancel }}" style="background:#fff; color:#6F6C7A; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 11px; border-radius:99px; cursor:pointer;">Cancel</button><button onClick="{{ arNewCrSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:600; padding:8px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ arNewCrLabel }}</button></div>
+              </div>
+              <div style="font-size:11px; color:#A9A6B4; margin-top:6px;">Added to the client's Commercial registrations; Qiwa and GOSI numbers can be filled in there later.</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ arHasExisting }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFF9EE; border:1px solid #F4DDB0; border-radius:12px; padding:11px 13px;">
+              <div style="display:flex; gap:9px; align-items:flex-start;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#B8860B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:1px;"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 8v4M12 16h.01"></path></svg><div style="font-size:12.5px; color:#7A5A12; line-height:1.45;">{{ arExistingText }}</div></div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:9px; padding-left:24px;">
+                <span onClick="{{ arPickReplace }}" style="font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ arReplaceBd }}; background:{{ arReplaceBg }}; color:{{ arReplaceFg }};">Replace it — this is the renewed one</span>
+                <span onClick="{{ arPickKeep }}" style="font-size:11.5px; font-weight:600; padding:5px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ arKeepBd }}; background:{{ arKeepBg }}; color:{{ arKeepFg }};">Keep both</span>
+              </div>
+              <div style="font-size:11px; color:#A68A4E; margin-top:6px; padding-left:24px;">{{ arReplaceNote }}</div>
+            </div>
+          </sc-if>
+          <div style="border-top:1px dashed #ECE8F3; padding-top:14px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:13px;">
+            <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">DOCUMENT NUMBER</div><input value="{{ arDoc }}" onChange="{{ setArDocNo }}" placeholder="{{ arNumberPh }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
+            <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">ISSUING AUTHORITY</div><input value="{{ arAuthority }}" onChange="{{ setArAuthority }}" placeholder="{{ arAuthorityPh }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
+            <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">ISSUE DATE</div><input value="{{ arIssue }}" onChange="{{ setArIssue }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
+            <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">{{ arExpiryLabel }}</div><input value="{{ arExpiry }}" onChange="{{ setArExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 24px 20px;">
+          <span style="font-size:11.5px; color:#A9A6B4; display:inline-flex; align-items:center; gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"></path></svg>Renewal reminders start from the expiry date</span>
+          <div style="display:flex; gap:10px;">
+            <button onClick="{{ closeAddRecord }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+            <button onClick="{{ submitAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ arSaveLabel }}</button>
+          </div>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -16558,7 +16621,9 @@ class Component extends DCLogic {
     } else if (localStorage.getItem('stimespro:token')) {
       // If a valid staff token already exists, skip the login screen and go straight in.
       fetch(API + '/api/auth/me', { headers: { Authorization: 'Bearer ' + localStorage.getItem('stimespro:token') } })
-        .then(r => { if (r.ok) this.setState({ auth: 'in' }); else { localStorage.removeItem('stimespro:token'); this.setState({ auth: 'login' }); } })
+        // Only a REJECTED session signs you out. A busy server (429) or a failing one (5xx) says nothing about
+        // the session, and clearing it there turned a rate limit into a forced logout.
+        .then(r => { if (r.ok || r.status === 429 || r.status >= 500) this.setState({ auth: 'in' }); else { localStorage.removeItem('stimespro:token'); this.setState({ auth: 'login' }); } })
         .catch(() => {});
     } else {
       this.setState({ auth: 'login' });
@@ -20148,6 +20213,35 @@ class Component extends DCLogic {
           makeMain: () => { if (window.confirm('Make CR ' + e9.crNumber + ' the main CR of ' + clRow.name + '?\n\nEveryone and every certificate stays on the CR they are on now — only which CR counts as the main one changes.')) _crSave(e9.id, { kind: 'main' }, 'CR ' + e9.crNumber + ' is now the main CR'); },
           cancel: () => { if (window.confirm('Cancel CR ' + e9.crNumber + '?\n\nIts certificates stay on file as history. A CR that still has active employees cannot be cancelled — move them first.')) _crSave(e9.id, { status: 'cancelled' }, 'CR ' + e9.crNumber + ' cancelled'); },
           restore: () => _crSave(e9.id, { status: 'active' }, 'CR ' + e9.crNumber + ' is active again'),
+          // The CR's own certificate: is one on file, and is it in date? Null establishmentId is the main CR.
+          ...(() => {
+            const fd9 = (d9) => { const t9 = d9 ? new Date(d9) : null; return t9 && !isNaN(t9.getTime()) ? t9.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no expiry'; };
+            const certs9 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).filter(d9 =>
+              d9.companyId === clRow.realId && !d9.employeeId && !d9.supersededAt && /commercial reg/i.test(d9.docType)
+              && (main9 ? (!d9.establishmentId || d9.establishmentId === e9.id) : d9.establishmentId === e9.id))
+              .sort((a9, b9) => String(b9.expiryDate || '').localeCompare(String(a9.expiryDate || '')));
+            const c9 = certs9[0];
+            const left9 = c9 && c9.expiryDate ? Math.ceil((new Date(c9.expiryDate).getTime() - Date.now()) / 86400000) : null;
+            const renewing9 = !!(c9 && (c9.renewalRunId || c9.renewalTaskId));
+            const tone9 = !c9 ? ['#8C8899', '#F3F1F7'] : renewing9 ? ['#6D5BD0', '#EFEBFF'] : left9 != null && left9 < 0 ? ['#C0353A', '#FEECEC'] : left9 != null && left9 <= 45 ? ['#B8860B', '#FEF4E2'] : ['#0E9355', '#E7F8EF'];
+            const cr9t = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []).find(t9 => /commercial reg/i.test(t9.name));
+            const openAdd9 = () => this.setState({ addRecord: true, arClientLocked: true, arClient: clRow.name, arType: (cr9t && cr9t.name) || 'Commercial Registration', arAuthority: (cr9t && cr9t.authority) || '',
+              arEst: main9 ? null : e9.id, arEstPicked: true, arNewCr: null, arEmp: null, arWho: null, arDoc: '', arIssue: '', arExpiry: '', arErr: '', arReplace: true, arBusy: false });
+            return {
+              cert: !c9 ? 'No CR certificate on file'
+                : renewing9 ? 'Renewal in progress · current certificate expires ' + fd9(c9.expiryDate)
+                : left9 == null ? 'Certificate on file · no expiry date recorded'
+                : left9 < 0 ? 'Certificate expired ' + fd9(c9.expiryDate)
+                : left9 <= 45 ? 'Certificate expires in ' + left9 + ' day' + (left9 === 1 ? '' : 's') + ' · ' + fd9(c9.expiryDate)
+                : 'Certificate valid until ' + fd9(c9.expiryDate),
+              certColor: tone9[0], certBg: tone9[1],
+              certExtra: certs9.length > 1 ? certs9.length + ' live certificates — check for a duplicate' : '',
+              hasCertExtra: certs9.length > 1,
+              canAddCert: canWrite && !cancelled9,
+              addCertLabel: c9 ? 'Add renewed certificate' : 'Add certificate',
+              addCert: openAdd9,
+            };
+          })(),
         };
       });
       clDetailApi.crOpenAdd = () => this.setState({ crErr: '', crBusy: false, crForm: { id: null, crNumber: '', name: '', city: '', qiwaNo: '', gosiNo: '', unifiedNo: '', notes: '' } });
@@ -23482,66 +23576,191 @@ class Component extends DCLogic {
        * The client whose page you are standing on wins. It is the only one of the three that is not
        * a guess.
        */
-      // Opened from inside a client, the record is for THAT client and the picker is locked. It used to find
-      // the client from the address only, so a client opened another way fell back to the first client
-      // in the list — and a certificate could be filed under somebody else.
-      openAddRecord: () => this.setState({ addRecord: true, arDoc: '', arType: '',
+      // ── Add a document ──
+      // Two questions: WHAT it is (the type) and WHOSE it is (the company — on which CR — or one employee,
+      // picked from the client's staff). The holder used to be a free-text name matched by spelling, so a
+      // typo filed an employee's passport as a company document.
+      //
+      // Opened from inside a client, it is for THAT client and says so in the title. It used to find the
+      // client from the address only, so a client opened another way fell back to the first in the list.
+      openAddRecord: () => this.setState({ addRecord: true, arDoc: '', arType: '', arWho: null, arEmp: null, arIssue: '', arReplace: true, arNewCr: null, arEst: null, arEstPicked: false,
         arClientLocked: !!(this.state.active === 'Clients' && clRow),
         arClient: (this.state.active === 'Clients' && clRow && clRow.name)
           || (this.state.active === 'Clients' && this.state.clientSlug
                    ? ((Array.isArray(coData) ? coData : []).find(c9 => _clSlug(c9.name) === this.state.clientSlug) || {}).name
                    : null)
-          || ((compClientScope && compClientScope !== 'All clients') ? compClientScope
-              : ((Array.isArray(coData) && coData.length) ? coData[0].name : '')),
-        arHolder: '', arAuthority: '', arExpiry: '', arErr: '', arEst: null }),
-      closeAddRecord: () => this.setState({ addRecord: false }),
-      arDoc: this.state.arDoc || '', arHolder: this.state.arHolder || '', arAuthority: this.state.arAuthority || '', arExpiry: this.state.arExpiry || '', arErr: this.state.arErr || false,
-      setArDoc: (e) => this.setState({ arDoc: e.target.value, arErr: '' }),
-      setArHolder: (e) => this.setState({ arHolder: e.target.value }),
-      ...(() => { const co9 = (Array.isArray(coData) ? coData : []).find(c9 => c9.name === (this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''))); const id9 = co9 && co9.id;
-        const show9 = !!(this.state.addRecord && id9 && !(this.state.arHolder || '').trim() && this._crMulti(id9));
-        return { arCrShow: show9, arCrChips: show9 ? this._crChips(id9, this.state.arEst, (v9) => this.setState({ arEst: v9 })) : [] }; })(),
-      setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
-      setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
-      ...mkDd('ddArClient', (Array.isArray(coData) ? coData.map(c => c.name) : []), this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : ''), (v) => this.setState({ arClient: v })),
-      arClientVal: this.state.arClient || (Array.isArray(coData) && coData[0] ? coData[0].name : 'Select a client'),
-      ...mkDd('ddArType', (Array.isArray(this.state.docTypesData) && this.state.docTypesData.length ? this.state.docTypesData.map(d => d.name) : ['Trade License', 'Emirates ID']), this.state.arType || (Array.isArray(this.state.docTypesData) && this.state.docTypesData[0] ? this.state.docTypesData[0].name : 'Trade License'), (v) => this.setState({ arType: v })),
-      // No type is picked for you: a pre-filled "Health Insurance" was saved as-is by anyone who did not notice it.
-      arTypeVal: this.state.arType || 'Select a document type',
-      arTypeColor: this.state.arType ? '#1A1523' : '#A9A6B4',
-      arType: this.state.arType || '',
-      arClientLocked: !!this.state.arClientLocked,
-      arClientPick: !this.state.arClientLocked,
-      setArDocNo: (e) => this.setState({ arDoc: e.target.value, arErr: '' }),
-      // WIRED: this used to validate the expiry and then just close — the client, type, holder,
-      // authority and expiry the user typed were all discarded and no record was ever created.
-      submitAddRecord: () => {
+          || ((compClientScope && compClientScope !== 'All clients') ? compClientScope : ''),
+        arHolder: '', arAuthority: '', arExpiry: '', arErr: '', arEst: null, arBusy: false }),
+      closeAddRecord: () => { if (!this.state.arBusy) this.setState({ addRecord: false, openDd: null }); },
+      ...(() => {
         const st9 = this.state;
-        if (!(st9.arExpiry || '').trim()) return this.setState({ arErr: 'Expiry date is required' });
-        const clientName9 = st9.arClient || (Array.isArray(coData) && coData.length ? coData[0].name : '');
-        const co9 = (Array.isArray(coData) ? coData : []).find(c9 => c9.name === clientName9);
-        if (!co9) return this.setState({ arErr: 'Pick the client this document belongs to' });
-        if (!st9.arType) return this.setState({ arErr: 'Choose the document type' });
-        const type9 = st9.arType;
-        const holder9 = (st9.arHolder || '').trim();
-        // A holder name means it's an employee document; match it so the record links to that person.
-        const emp9 = holder9 ? (Array.isArray(this.state.employeesData) ? this.state.employeesData : [])
-          .find(e9 => e9.companyId === co9.id && String(e9.name).toLowerCase() === holder9.toLowerCase()) : null;
-        const t9 = localStorage.getItem('stimespro:token');
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
-          body: JSON.stringify({ docType: type9, companyId: co9.id, person: holder9 || co9.name,
-            employeeId: emp9 ? emp9.id : null, expiryDate: st9.arExpiry,
-            establishmentId: holder9 ? null : this._crValid(co9.id, st9.arEst),
-            docNumber: (st9.arDoc || '').trim() || null, issuingAuthority: (st9.arAuthority || '').trim() || null, status: 'valid' }) })
-          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
-          .then(({ ok, j9 }) => {
-            if (!ok) return this.setState({ arErr: (j9 && j9.error && String(j9.error).slice(0, 140)) || 'Could not save the record' });
-            this.setState({ addRecord: false, arDoc: '', arHolder: '', arAuthority: '', arExpiry: '', arErr: '' });
-            this.toast(type9 + ' tracked for ' + (holder9 || co9.name));
-            this._afterDocumentChange();
-          })
-          .catch(() => this.setState({ arErr: 'Server unreachable — the record was NOT saved' }));
-      },
+        const cos9 = Array.isArray(coData) ? coData : [];
+        const co9 = cos9.find(c9 => c9.name === st9.arClient) || null;
+        const types9 = (Array.isArray(st9.docTypesData) ? st9.docTypesData : []).filter(t9 => !t9.retired);
+        const dt9 = types9.find(t9 => t9.name === st9.arType) || null;
+        // The type decides whose it is — a CR is always the company's, an Iqama always a person's.
+        const who9 = dt9 ? (dt9.subjectKind === 'company' ? 'company' : 'employee') : null;
+        const emps9 = co9 ? (Array.isArray(st9.employeesData) ? st9.employeesData : []).filter(e9 => e9.companyId === co9.id && !e9.archived) : [];
+        const emp9 = emps9.find(e9 => e9.id === st9.arEmp) || null;
+        // A Commercial Registration always says WHICH CR it is — even for a client with only its main CR on
+        // file, because the certificate in hand may be a sub CR's, and without the question it silently
+        // became "the main CR's", offering to replace the real main certificate.
+        const isCrType9 = !!(dt9 && /commercial reg/i.test(dt9.name));
+        const crRows9 = co9 ? this._crRows(co9.id).filter(e9 => e9.status === 'active') : [];
+        const crMain9 = crRows9.find(e9 => e9.kind === 'main') || null;
+        // No CR is chosen for you. `arEstPicked` says a person picked one (null arEst then means the main CR).
+        const crSel9 = !st9.arEstPicked ? null : st9.arEst && crRows9.some(e9 => e9.id === st9.arEst) ? st9.arEst : (crMain9 && crMain9.id);
+        const crShow9 = !!(st9.addRecord && co9 && who9 === 'company' && (crRows9.length > 1 || (isCrType9 && crRows9.length > 0)));
+        const normCr9 = (v9) => String(v9 || '').replace(/[\s\-–./]/g, '');
+        const typedCr9 = isCrType9 ? normCr9(st9.arDoc) : '';
+        const typedKnown9 = typedCr9 ? crRows9.find(e9 => normCr9(e9.crNumber) === typedCr9) : null;
+        const newCr9 = st9.arNewCr || null;
+        return {
+          arTitleFor: st9.arClientLocked && co9 ? co9.name : '',
+          arHasTitleFor: !!(st9.arClientLocked && co9),
+          arClientPick: !st9.arClientLocked,
+          // The app's shared searchable picker: type into the field, Enter takes the top match, Escape is
+          // left to the global handler so it closes the list and not the dialog.
+          ...mkDdCombo('ddArClient', [{ title: 'CLIENTS', options: cos9.map(c9 => ({ value: c9.name, label: c9.name, hint: c9.cr && /\d/.test(c9.cr) ? 'CR ' + c9.cr : '' })) }], st9.arClient || '', (v9) => this.setState({ arClient: v9, arEmp: null, arEst: null, arErr: '' }), 'Search clients…'),
+          arClientVal: st9.arClient || 'Select a client',
+          arClientColor: st9.arClient ? '#1A1523' : '#A9A6B4',
+          ...mkDdCombo('ddArType', [
+            { title: 'COMPANY DOCUMENTS', options: types9.filter(t9 => t9.subjectKind === 'company').map(t9 => ({ value: t9.name, label: t9.name, hint: t9.authority || '' })) },
+            { title: 'EMPLOYEE DOCUMENTS', options: types9.filter(t9 => t9.subjectKind !== 'company').map(t9 => ({ value: t9.name, label: t9.name, hint: t9.authority || '' })) },
+          ], st9.arType || '', (v9) => {
+            const t9 = types9.find(x9 => x9.name === v9);
+            this.setState({ arType: v9, arWho: null, arErr: '', arAuthority: (t9 && t9.authority) || '' });
+          }, 'Search document types…'),
+          // Nothing is picked for you: a pre-filled "Health Insurance" was saved as-is by anyone who missed it.
+          arTypeVal: st9.arType || 'Select a document type',
+          arTypeColor: st9.arType ? '#1A1523' : '#A9A6B4',
+          arTypeHint: dt9 ? [dt9.subjectKind === 'company' ? 'Company document' : 'Employee document', dt9.authority ? 'issued by ' + dt9.authority : '', dt9.neverExpires ? 'does not expire' : 'reminders ' + (dt9.leadDays || 30) + ' days before expiry'].filter(Boolean).join(' · ') : '',
+          arHasTypeHint: !!dt9,
+          arShowWho: !!dt9 && (who9 === 'employee' || crShow9),
+          arWhoLabel: who9 === 'employee' ? 'EMPLOYEE *' : 'WHICH CR *',
+          arIsEmployee: who9 === 'employee',
+          arEmpNone: who9 === 'employee' && !!co9 && emps9.length === 0,
+          arEmpHas: who9 === 'employee' && emps9.length > 0,
+          ...mkDdCombo('ddArEmp', [{ title: 'EMPLOYEES', options: emps9.map(e9 => ({ value: e9.id, label: e9.name, hint: [e9.code, e9.role, e9.govId].filter(Boolean).join(' · ') })) }], st9.arEmp || '', (v9) => this.setState({ arEmp: v9, arErr: '' }), 'Search by name, code or ID…'),
+          arEmpVal: emp9 ? [emp9.name, emp9.code].filter(Boolean).join(' · ') : 'Select an employee of ' + ((co9 && co9.name) || 'the client'),
+          arEmpColor: emp9 ? '#1A1523' : '#A9A6B4',
+          arCrShow: crShow9,
+          arCrChips: !crShow9 ? [] : [
+            ...crRows9.map(e9 => { const on9 = e9.id === crSel9; return { label: this._crLabel(e9), pick: () => this.setState(on9 ? { arEst: null, arEstPicked: false, arErr: '' } : { arEst: e9.kind === 'main' ? null : e9.id, arEstPicked: true, arNewCr: null, arErr: '' }), border: on9 ? '#7C00FF' : '#DDD9E6', bg: on9 ? '#F5EEFF' : '#fff', color: on9 ? '#5B21B6' : '#4B4757' }; }),
+            ...(canWrite ? [{ label: '+ New sub CR', pick: () => this.setState({ arNewCr: { crNumber: typedCr9 && !typedKnown9 ? typedCr9 : '', city: '', err: '', busy: false } }), border: '#C9A2FF', bg: newCr9 ? '#F5EEFF' : '#FCFAFF', color: '#7C00FF' }] : []),
+          ],
+          // Typed a CR number that is not one of this client's CRs: offer to add it as a sub CR.
+          arCrSuggest: !!(crShow9 && typedCr9.length >= 5 && !typedKnown9 && !newCr9 && canWrite),
+          arCrSuggestText: typedCr9 + ' is not one of ' + ((co9 && co9.name) || 'this client') + '\'s CRs yet.',
+          arCrSuggestAdd: () => this.setState({ arNewCr: { crNumber: typedCr9, city: '', err: '', busy: false } }),
+          arNewCrOpen: !!newCr9,
+          arNewCrNumber: (newCr9 && newCr9.crNumber) || '', arNewCrCity: (newCr9 && newCr9.city) || '',
+          arNewCrErr: (newCr9 && newCr9.err) || false,
+          arNewCrLabel: newCr9 && newCr9.busy ? 'Adding…' : 'Add sub CR',
+          setArNewCrNumber: (e9) => { const v9 = e9.target.value; this.setState(x9 => ({ arNewCr: { ...(x9.arNewCr || {}), crNumber: v9, err: '' } })); },
+          setArNewCrCity: (e9) => { const v9 = e9.target.value; this.setState(x9 => ({ arNewCr: { ...(x9.arNewCr || {}), city: v9 } })); },
+          arNewCrCancel: () => this.setState({ arNewCr: null }),
+          arNewCrSave: () => {
+            const f9 = this.state.arNewCr;
+            if (!f9 || f9.busy || !co9) return;
+            if (!normCr9(f9.crNumber)) return this.setState({ arNewCr: { ...f9, err: 'Enter the sub CR number' } });
+            this.setState({ arNewCr: { ...f9, busy: true, err: '' } });
+            const t9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + co9.id + '/establishments', { method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+              body: JSON.stringify({ crNumber: f9.crNumber, city: f9.city || null, kind: 'branch' }) })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                if (!ok) return this.setState({ arNewCr: { ...f9, busy: false, err: (j9 && j9.error) || 'Could not add the sub CR' } });
+                // Added to the list straight away, so the certificate cannot be saved against the main CR
+                // in the moment before the reload arrives.
+                this.setState(x9 => ({ arNewCr: null, arEst: j9.id, arEstPicked: true, arDoc: x9.arDoc || j9.crNumber,
+                  crByCo: { ...(x9.crByCo || {}), [co9.id]: [...((x9.crByCo || {})[co9.id] || []), { ...j9, employees: 0, saudis: 0, saudiPct: null, documents: 0 }] } }));
+                this.toast('Sub CR ' + j9.crNumber + ' added to ' + co9.name);
+                this._crLoad && this._crLoad(co9.id, true);
+              })
+              .catch(() => this.setState({ arNewCr: { ...f9, busy: false, err: 'Server unreachable — the sub CR was not added' } }));
+          },
+          arCrMissingHint: false,
+          // WHAT IS ALREADY ON FILE. Adding by hand used to create a second live copy next to the old one —
+          // a renewed CR added this way left two certificates, both counted and both reminding. When the
+          // same subject already holds this type, the person decides: replace it (the usual case) or keep both.
+          ...(() => {
+            const fd9 = (d9) => { const t9 = d9 ? new Date(d9) : null; return t9 && !isNaN(t9.getTime()) ? t9.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'no expiry'; };
+            const est9 = co9 ? this._crValid(co9.id, st9.arEst) : null;
+            const live9 = !dt9 || !co9 || (who9 === 'employee' && !emp9) || (crShow9 && !st9.arEstPicked) ? [] : (Array.isArray(st9.documentsData) ? st9.documentsData : []).filter(d9 =>
+              !d9.supersededAt && d9.docType === dt9.name && d9.companyId === co9.id
+              && (who9 === 'employee' ? d9.employeeId === emp9.id : !d9.employeeId && (d9.establishmentId || null) === est9));
+            const replace9 = st9.arReplace !== false;
+            const whose9 = who9 === 'employee' ? (emp9 && emp9.name) : crShow9 ? this._crLabel(this._crOf(co9.id, est9)) : co9 && co9.name;
+            const pill9 = (on9) => ({ bd: on9 ? '#7C00FF' : '#E4DCF2', bg: on9 ? '#F5EEFF' : '#fff', fg: on9 ? '#5B21B6' : '#6F6C7A' });
+            return {
+              arHasExisting: live9.length > 0,
+              arExistingText: live9.length === 1
+                ? whose9 + ' already has a ' + dt9.name + ' on file' + (live9[0].docNumber ? ' — No. ' + live9[0].docNumber : '') + ', expires ' + fd9(live9[0].expiryDate) + '.'
+                : whose9 + ' already has ' + live9.length + ' ' + (dt9 ? dt9.name : '') + ' records on file.',
+              arReplaceBd: pill9(replace9).bd, arReplaceBg: pill9(replace9).bg, arReplaceFg: pill9(replace9).fg,
+              arKeepBd: pill9(!replace9).bd, arKeepBg: pill9(!replace9).bg, arKeepFg: pill9(!replace9).fg,
+              arPickReplace: () => this.setState({ arReplace: true }),
+              arPickKeep: () => this.setState({ arReplace: false }),
+              arReplaceNote: replace9 ? 'The old one is kept as history and leaves the lists and reminders.' : 'Both stay live — only for a genuine second document.',
+              _arLive: live9.map(d9 => d9.id), _arReplace: replace9,
+            };
+          })(),
+          arDoc: st9.arDoc || '', arAuthority: st9.arAuthority || '', arIssue: st9.arIssue || '', arExpiry: st9.arExpiry || '', arErr: st9.arErr || false,
+          arAuthorityPh: (dt9 && dt9.authority) || 'e.g. Ministry of Commerce',
+          arNumberPh: dt9 && dt9.subjectKind === 'company' ? 'e.g. 7038415670' : 'as printed on the document',
+          arExpiryLabel: dt9 && dt9.neverExpires ? 'EXPIRY DATE' : 'EXPIRY DATE *',
+          arSaveLabel: st9.arBusy ? 'Saving…' : 'Add document',
+          setArDocNo: (e) => {
+            const v9 = e.target.value;
+            const hit9 = isCrType9 && normCr9(v9) ? crRows9.find(x9 => normCr9(x9.crNumber) === normCr9(v9)) : null;
+            this.setState({ arDoc: v9, arErr: '', ...(hit9 ? { arEst: hit9.kind === 'main' ? null : hit9.id, arEstPicked: true } : {}) });
+          },
+          setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
+          setArIssue: (e) => this.setState({ arIssue: e.target.value, arErr: '' }),
+          setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
+          submitAddRecord: () => {
+            if (st9.arBusy) return;
+            if (!co9) return this.setState({ arErr: 'Choose the client this document belongs to' });
+            if (!dt9) return this.setState({ arErr: 'Choose the document type' });
+            if (who9 === 'employee' && !emp9) return this.setState({ arErr: emps9.length ? 'Choose the employee this document belongs to' : co9.name + ' has no employees on file — add the employee first' });
+            if (crShow9 && !st9.arEstPicked) return this.setState({ arErr: 'Choose which CR this ' + dt9.name + ' belongs to — or add it as a new sub CR' });
+            if (!dt9.neverExpires && !String(st9.arExpiry || '').trim()) return this.setState({ arErr: 'Enter the expiry date' });
+            if (st9.arIssue && st9.arExpiry && st9.arIssue >= st9.arExpiry) return this.setState({ arErr: 'The expiry date must be after the issue date' });
+            const days9 = st9.arExpiry ? Math.round((new Date(st9.arExpiry).getTime() - Date.now()) / 86400000) : null;
+            const t9 = localStorage.getItem('stimespro:token');
+            this.setState({ arBusy: true, arErr: '' });
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+              body: JSON.stringify({ docType: dt9.name, companyId: co9.id,
+                person: emp9 ? emp9.name : co9.name, employeeId: emp9 ? emp9.id : null,
+                establishmentId: emp9 ? null : this._crValid(co9.id, st9.arEst),
+                expiryDate: st9.arExpiry || null, issueDate: st9.arIssue || null,
+                docNumber: String(st9.arDoc || '').trim() || null, issuingAuthority: String(st9.arAuthority || '').trim() || null,
+                status: days9 == null ? 'valid' : days9 < 0 ? 'overdue' : days9 <= (dt9.leadDays || 30) ? 'expiring' : 'valid', daysLeft: days9 == null ? 0 : days9 }) })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                if (!ok) return this.setState({ arBusy: false, arErr: (j9 && j9.error && String(j9.error).slice(0, 160)) || 'Could not save the document' });
+                // Replace: every earlier live record of this type for this subject is superseded BY the new
+                // one, through the same audited route a person uses by hand.
+                const old9 = st9.arReplace !== false && !(crShow9 && !st9.arEstPicked) ? (Array.isArray(st9.documentsData) ? st9.documentsData : []).filter(d9 =>
+                  !d9.supersededAt && d9.id !== (j9 && j9.id) && d9.docType === dt9.name && d9.companyId === co9.id
+                  && (emp9 ? d9.employeeId === emp9.id : !d9.employeeId && (d9.establishmentId || null) === this._crValid(co9.id, st9.arEst))).map(d9 => d9.id) : [];
+                const H9 = { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) };
+                Promise.all(old9.map(id9 => fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + id9 + '/supersede', { method: 'POST', headers: H9, body: JSON.stringify({ replacedBy: j9 && j9.id }) }).then(r9 => r9.ok).catch(() => false)))
+                  .then(res9 => {
+                    const failed9 = res9.filter(x9 => !x9).length;
+                    this.setState({ addRecord: false, arBusy: false, arDoc: '', arAuthority: '', arExpiry: '', arIssue: '', arErr: '', openDd: null, arReplace: true });
+                    this.toast(dt9.name + ' added for ' + (emp9 ? emp9.name : co9.name) + (old9.length ? (failed9 ? ' — but the old record could not be replaced; retire it from Compliance' : ' · the old record was replaced') : ''), failed9 ? 'error' : undefined);
+                    this._afterDocumentChange();
+                    // The CR card counts certificates per CR — refresh it too.
+                    this._crLoad && this._crLoad(co9.id, true);
+                  });
+              })
+              .catch(() => this.setState({ arBusy: false, arErr: 'Server unreachable — the document was NOT saved' }));
+          },
+        };
+      })(),
       ...renewApi, ...completeApi, ...compDetailApi,
       renewalsRows: compScoped.filter(r => r.status === 'Expiring' || r.status === 'Expired' || r.status === 'Processing').sort((a, z) => a.days - z.days),
       renewalsDue30: compScoped.filter(r => r.status === 'Expiring').length,

@@ -118,12 +118,25 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeade
  * express-rate-limit says this out loud at startup (ERR_ERL_KEY_GEN_IPV6); it was being printed on
  * every boot.
  */
+/** The signed-in principal behind a request, read from its token — or null when there is no valid one. */
+const tokenPrincipal = (req: any): string | null => {
+  const h = String(req?.headers?.authorization ?? "");
+  if (!h.startsWith("Bearer ")) return null;
+  try { const p: any = verifyToken(h.slice(7)); return p?.sub ? `u:${p.type ?? "staff"}:${p.sub}` : null; } catch { return null; }
+};
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1200,
+  // One full console load is ~90 requests and the Agents screen polls every few seconds, so a signed-in
+  // person gets room for a busy morning; the tighter ceiling is for callers nobody has identified.
+  max: (req: any) => (tokenPrincipal(req) ? 3000 : 1200),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: any) => String(req?.auth?.sub ?? ipKeyGenerator(req.ip ?? "")),
+  // WHO, NOT WHERE. This limiter is mounted before any route's requireAuth, so `req.auth` is never set
+  // yet — and keying on it silently fell back to the address for everyone. An office behind one public
+  // IP then shared a single allowance: a few open consoles polling every few seconds locked the whole
+  // firm out, sign-in included. The token is read here instead (a signature check, no database), and
+  // only a request without a valid one is counted by address.
+  keyGenerator: (req: any) => tokenPrincipal(req) ?? ipKeyGenerator(req.ip ?? ""),
   message: { error: "Too many requests — slow down and try again shortly." },
 });
 
