@@ -15492,7 +15492,7 @@ class Component extends DCLogic {
         .catch(() => {});
       this._loadAssignableOwners();
       this._load('/api/employees', 'employeesData', (v) => this.setState({ employeesData: v }));
-      this._load('/api/documents', 'documentsData', (v) => this.setState({ documentsData: v }));
+      this._load('/api/documents', 'documentsData', (v) => this.setState(this._docsState(v)));
       this._load('/api/tasks', 'tasksData', (v) => this.setState({ tasksData: v }));
       this._load('/api/service-requests', 'serviceRequestsData', (v) => this.setState({ serviceRequestsData: v }));
       fetch(API + '/api/upgrade-requests', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ upgradeRequestsData: v }); }).catch(() => {});
@@ -16310,11 +16310,16 @@ class Component extends DCLogic {
       this._opReload && this._opReload('documents', 'documentsData');
       this._opReload && this._opReload('companies', 'companiesData');
     };
+    // A document retired as a duplicate or replaced by a renewal is history. documentsData holds only
+    // LIVE records, so every count, list and status (Compliance, dashboard, renewals, search…) agrees
+    // with the server, which already counts live only. The few screens that show history on purpose
+    // read documentsAllData.
+    this._docsState = (v) => ({ documentsData: (Array.isArray(v) ? v : []).filter(d => !d.supersededAt), documentsAllData: Array.isArray(v) ? v : [] });
     this._opReload = (pathE, key, after) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/' + pathE, { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
         .then(r => (r.ok ? r.json() : null))
-        .then(v => { if (Array.isArray(v)) this.setState({ [key]: v }, typeof after === 'function' ? after : undefined); })
+        .then(v => { if (Array.isArray(v)) this.setState(key === 'documentsData' ? this._docsState(v) : { [key]: v }, typeof after === 'function' ? after : undefined); })
         .catch(() => {});
     };
     // Persist one checklist item action (receive/unreceive/verify/reject) to the workflow engine.
@@ -19426,7 +19431,7 @@ class Component extends DCLogic {
       ...(() => {
         const id9 = this.state.eeOpen;
         const nm9 = this.state.eeName || '';
-        const all9 = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+        const all9 = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []));
         const forMe9 = id9 ? all9.filter(d9 => (d9.employeeId && d9.employeeId === id9) || (!d9.employeeId && d9.person === nm9)) : [];
         // LIVE ones only drive "what this person holds". A superseded record is history: it is kept
         // for the audit trail but it is not current, and listing it beside the live one is what made
@@ -20746,7 +20751,7 @@ class Component extends DCLogic {
       clDetailApi.cdActivity = (() => {
         const out7 = [];
         const push7 = (title, meta, ts, color) => out7.push({ title, meta: meta || '', ts: ts || 0, color: color || '#7C00FF' });
-        (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).filter(d7 => d7.companyId === clRow.realId)
+        (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])).filter(d7 => d7.companyId === clRow.realId)
           .forEach(d7 => (Array.isArray(d7.history) ? d7.history : []).forEach(h7 => push7(
             d7.docType + ' renewed' + (d7.person && d7.employeeId ? ' — ' + d7.person : ''),
             [h7.newExpiry ? 'new expiry ' + h7.newExpiry : null, h7.by].filter(Boolean).join(' · '), new Date(h7.at).getTime(), '#0E9355')));
@@ -21016,7 +21021,7 @@ class Component extends DCLogic {
       const docStatusTone = { Replaced: ['#F3F1F7', '#8C8899'], Valid: ['#E7F8EF', '#0E9355'], 'Expiring soon': ['#FEF4E2', '#B8860B'], Expired: ['#FEECEC', '#C0353A'], Processing: ['#EFEBFF', '#6D5BD0'], 'No expiry date': ['#F3F1F7', '#6F6C7A'] };
       // WIRED: this client's REAL documents. Was a literal six-row list (Trade License / M. Fernandes
       // / A. Khan) plus six invented folders, shown identically for every client.
-      const _cdDocsAll = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
+      const _cdDocsAll = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []))
         .filter(d7 => d7.companyId === clRow.realId);
       const _cdRetired = _cdDocsAll.filter(d7 => d7.supersededAt);
       const _cdDocs = this.state.cdShowRetired ? _cdDocsAll : _cdDocsAll.filter(d7 => !d7.supersededAt);
@@ -25312,7 +25317,7 @@ class Component extends DCLogic {
       // at would leave those documents naming a type that no longer exists, and every lookup that
       // resolves a document to its type (lead days, subject kind, issuing authority, the renewal
       // prerequisites) would quietly fall back to defaults.
-      const inUse9 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
+      const inUse9 = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []))
         .filter(d9 => d9.docType === name).length;
       const isSample9 = !id9;
       return {
@@ -25476,7 +25481,7 @@ class Component extends DCLogic {
       },
       dtnDelete: () => {
         if (!this.state.dtEditId) return;
-        const inUse9 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).filter(d9 => d9.docType === this.state.dtnName).length;
+        const inUse9 = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])).filter(d9 => d9.docType === this.state.dtnName).length;
         if (inUse9) return this.toast('Cannot delete — ' + inUse9 + ' document' + (inUse9 === 1 ? '' : 's') + ' use this type', 'error');
         this._confirm('Delete document type?', { body: '"' + this.state.dtnName + '" will be removed.', danger: true }).then((ok9) => {
           if (!ok9) return;
@@ -36315,7 +36320,7 @@ class Component extends DCLogic {
     const courFilter = this.state.courFilter || 'All';
     // What each shipment carries, resolved from the documents already loaded. Named rather than
     // guessed from the free-text description.
-    const _crDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+    const _crDocs = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []));
     const _crTasks = Array.isArray(this.state.tasksData) ? this.state.tasksData : [];
     const allCourier = courierDefs.map(([id, type, subject, route, courier, status0, docId9, taskId9, note9]) => {
       const status = _courLadder.canon(courStatusMap[id] || status0); const t = _courLadder.tone(status);
