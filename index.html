@@ -565,6 +565,8 @@
   .ov-attention{grid-column:1 / -1;border-top:1px solid #F2EFF7;padding:11px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#FCFBFE;}
   .ov-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:16px;align-items:start;}
   .ov-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
+  @media (max-width: 1200px){ .cx-top{grid-template-columns:minmax(0,1fr) !important;} }
+  @media (max-width: 760px){ .cx-tiles{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} }
   .ov-h{display:flex;align-items:flex-start;gap:11px;min-width:0;}
   .ov-ic{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
   .ov-hbtn{font-size:11px;font-weight:700;color:#7C00FF;background:#F5EEFF;padding:6px 12px;border-radius:99px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
@@ -3495,66 +3497,86 @@
           <div>
             <div style="font-size:11.5px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">CLIENTS &amp; COMPLIANCE</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Compliance</h1>
-            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Every tracked document across clients, by status</div>
+            <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Every tracked document, ordered by what needs doing first</div>
           </div>
-          <div style="display:flex; align-items:center; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div style="position:relative; width:280px; max-width:100%;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:13px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+              <input value="{{ cxQ }}" onInput="{{ cxSetQ }}" placeholder="Search document, number, client, person…" autocomplete="off" style="width:100%; box-sizing:border-box; background:#fff; border:1px solid #DDD9E6; border-radius:99px; padding:9px 34px; font-size:12.5px; font-family:inherit; color:#1A1523; outline:none;" style-focus="border-color:#7C00FF; box-shadow:0 0 0 3px rgba(124,0,255,.12);">
+              <sc-if value="{{ cxHasQ }}" hint-placeholder-val="{{ false }}"><span onClick="{{ cxClearQ }}" title="Clear" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); width:20px; height:20px; border-radius:99px; background:#F3F1F7; color:#6F6C7A; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer;">×</span></sc-if>
+            </div>
             <div style="position:relative;"><div data-dd onClick="{{ ddCompScopeToggle }}" style="background:#fff; border:1px solid #DDD9E6; border-radius:99px; padding:8px 15px; font-size:12px; font-weight:600; color:#4B4757; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span>{{ compClientScope }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCompScopeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); right:0; min-width:190px; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCompScopeOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:12.5px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add record</button></sc-if>
           </div>
         </section>
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:250px 1fr; gap:16px;">
-          <div style="position:relative; overflow:hidden; border-radius:18px; background:linear-gradient(135deg,#26074D,#5E00C4); color:#fff; padding:22px; display:flex; align-items:center; gap:18px; box-shadow:0 10px 30px rgba(124,0,255,.2);">
-            <div style="position:absolute; right:-30px; top:-30px; width:120px; height:120px; border-radius:99px; background:rgba(255,255,255,.08);"></div>
-            <div style="position:relative; width:82px; height:82px; flex-shrink:0;">
-              <svg width="82" height="82" viewBox="0 0 60 60" style="transform:rotate(-90deg);">
-                <circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="7"></circle>
-                <circle cx="30" cy="30" r="26" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ compCirc }} 163"></circle>
-              </svg>
-              <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><span style="font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:700;">{{ compScore }}%</span></div>
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:minmax(280px,340px) minmax(0,1fr); gap:14px;" class="cx-top">
+          <div style="position:relative; overflow:hidden; border-radius:16px; background:linear-gradient(135deg,#26074D,#5E00C4); color:#fff; padding:14px 18px; box-shadow:0 10px 30px rgba(124,0,255,.2); display:flex; flex-direction:column; justify-content:center; gap:10px;">
+            <div style="position:absolute; right:-40px; top:-40px; width:150px; height:150px; border-radius:99px; background:rgba(255,255,255,.07);"></div>
+            <div style="position:relative; display:flex; align-items:center; gap:16px;">
+              <div style="position:relative; width:58px; height:58px; flex-shrink:0;">
+                <svg width="58" height="58" viewBox="0 0 60 60" style="transform:rotate(-90deg);"><circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="7"></circle><circle cx="30" cy="30" r="26" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ compCirc }} 163"></circle></svg>
+                <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ compScore }}%</span></div>
+              </div>
+              <div style="min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Compliance score</div><div style="font-size:11.5px; opacity:.85; margin-top:3px;">{{ cxScoreLine }}</div><div style="font-size:10.5px; opacity:.65; margin-top:1px;">{{ cxScopeLine }}</div></div>
             </div>
-            <div style="position:relative;"><div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Portfolio compliance</div><div style="font-size:10.5px; opacity:.8; margin-top:3px;">weighted across all clients</div></div>
+            <div style="position:relative;">
+              <div style="display:flex; height:7px; border-radius:99px; overflow:hidden; background:rgba(255,255,255,.15);"><span style="width:{{ cxWValid }}; background:#34D399;"></span><span style="width:{{ cxWProg }}; background:#C4B5FD;"></span><span style="width:{{ cxWSoon }}; background:#FBBF24;"></span><span style="width:{{ cxWExp }}; background:#F87171;"></span><span style="width:{{ cxWMiss }}; background:rgba(255,255,255,.45);"></span></div>
+            </div>
           </div>
-          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
-            <sc-for list="{{ complianceSummary }}" as="s" hint-placeholder-count="4">
-              <div style="position:relative; overflow:hidden; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:16px 18px;">
-                <div style="position:absolute; left:0; top:0; bottom:0; width:4px; background:{{ s.color }};"></div>
-                <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:{{ s.color }};"></span><span style="font-size:11px; color:#6F6C7A; font-weight:600;">{{ s.label }}</span></div>
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:6px; color:{{ s.color }};">{{ s.count }}</div>
+          <div class="cx-tiles" style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px;">
+            <sc-for list="{{ cxTiles }}" as="t" hint-placeholder-count="5">
+              <div onClick="{{ t.pick }}" style="background:#fff; border:1px solid {{ t.border }}; box-shadow:{{ t.ring }}; border-radius:16px; padding:12px 15px; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:4px; transition:border-color .15s, box-shadow .15s, transform .15s;" style-hover="transform:translateY(-1px);">
+                <div style="display:flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; color:#6F6C7A;"><span style="width:8px; height:8px; border-radius:99px; background:{{ t.dot }};"></span>{{ t.label }}</div>
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; color:{{ t.fg }}; font-variant-numeric:tabular-nums; line-height:1.1;">{{ t.value }}</div>
+                <div style="font-size:11px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.caption }}</div>
               </div>
             </sc-for>
           </div>
         </section>
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:flex; align-items:center; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
-          <sc-for list="{{ complianceTabs }}" as="t" hint-placeholder-count="6"><span onClick="{{ t.select }}" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 15px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}<span style="font-size:10px; font-weight:800; opacity:.7;">{{ t.count }}</span></span></sc-for>
+        <section style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:-4px;">
+          <span style="font-size:11px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase; margin-right:2px;">Renewal outlook</span>
+          <sc-for list="{{ cxHorizon }}" as="h" hint-placeholder-count="4"><span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:#4B4757; background:{{ h.bg }}; padding:4px 11px; border-radius:99px;"><b style="font-weight:700; color:{{ h.fg }};">{{ h.value }}</b>{{ h.label }}</span></sc-for>
         </section>
+        <sc-if value="{{ cxFiltering }}" hint-placeholder-val="{{ false }}"><section style="display:flex; align-items:center; gap:10px;"><span style="display:inline-flex; align-items:center; gap:8px; font-size:11.5px; font-weight:600; color:#5B21B6; background:#F5EEFF; border:1px solid #E4D2FB; padding:5px 6px 5px 12px; border-radius:99px;">Filtered: {{ cxFilterText }}<span onClick="{{ cxClear }}" style="width:18px; height:18px; border-radius:99px; background:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:#7C00FF;">×</span></span></section></sc-if>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-          <div style="overflow-x:auto;"><div style="min-width:900px;">
-            <div style="display:grid; grid-template-columns:1.4fr 1.6fr 92px 1fr 120px 130px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
-              <span>Document</span><span>Client / holder</span><span>Type</span><span>Days left</span><span>Status</span><span></span>
+          <div style="overflow-x:auto;"><div style="min-width:920px;">
+            <div style="display:grid; grid-template-columns:1.5fr 1.5fr 88px 150px 130px 140px; gap:12px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+              <span>Document</span><span>Client / holder</span><span>Type</span><span>Time left</span><span>Status</span><span></span>
             </div>
-            <sc-for list="{{ complianceRows }}" as="c" hint-placeholder-count="8">
-              <div style="display:grid; grid-template-columns:1.4fr 1.6fr 92px 1fr 120px 130px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px;" style-hover="background:#FAF7FE;">
-                <div onClick="{{ c.openDetail }}" style="min-width:0; cursor:pointer;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.doc }}</div><div style="font-size:10px; color:#A9A6B4;">{{ c.authority }} · {{ c.docNo }}</div></div>
-                <div style="min-width:0;"><div style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.subject }}</div><sc-if value="{{ c.wfStage }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:700; color:#6D5BD0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">⚙ {{ c.wfStage }}</div></sc-if>
-                  <!-- Where the physical document is, when it is in an envelope somewhere. -->
+            <sc-for list="{{ cxGroups }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px; padding:11px 22px; background:#FBFAFD; border-bottom:1px solid #F2EFF7;">
+                <span style="width:8px; height:8px; border-radius:99px; background:{{ g.fg }};"></span>
+                <span style="font-size:12.5px; font-weight:700; color:#1A1523;">{{ g.title }}</span>
+                <span style="font-size:10.5px; font-weight:700; color:{{ g.fg }}; background:{{ g.bg }}; padding:2px 9px; border-radius:99px;">{{ g.count }}</span>
+                <span style="font-size:11px; color:#A9A6B4;">{{ g.sub }}</span>
+              </div>
+              <sc-for list="{{ g.rows }}" as="c" hint-placeholder-count="4">
+              <div style="display:grid; grid-template-columns:1.5fr 1.5fr 88px 150px 130px 140px; gap:12px; align-items:center; padding:12px 22px; border-bottom:1px solid #F7F5FA; font-size:12.5px;" style-hover="background:#FAF7FE;">
+                <div style="min-width:0; display:flex; align-items:center; gap:10px;">
+                  <div onClick="{{ c.openDetail }}" style="min-width:0; cursor:pointer; flex:1;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="color:#7C00FF;">{{ c.doc }}</div><div style="font-size:10.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span style="font-family:ui-monospace,monospace;">{{ c.cxNo }}</span> · {{ c.cxSubLine }}</div></div>
+                  <sc-if value="{{ c.cxHasFile }}" hint-placeholder-val="{{ false }}"><span onClick="{{ c.cxPreview }}" title="Preview the file" style="width:26px; height:26px; border-radius:8px; background:#F3EBFF; color:#7C00FF; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#E9DBFF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span></sc-if>
+                </div>
+                <div style="min-width:0;"><div style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.subject }}</div><sc-if value="{{ c.wfStage }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:700; color:#6D5BD0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.wfStage }}</div></sc-if>
                   <sc-if value="{{ c.hasShipment }}" hint-placeholder-val="{{ false }}"><div onClick="{{ c.openShipment }}" style="font-size:10px; font-weight:700; color:{{ c.shipmentColor }}; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="text-decoration:underline;">📦 {{ c.shipmentLine }}</div></sc-if>
                 </div>
                 <span style="font-size:10px; font-weight:700; color:{{ c.kindColor }}; background:{{ c.kindBg }}; padding:3px 9px; border-radius:99px; width:fit-content;">{{ c.kind }}</span>
-                <span style="font-size:11.5px; font-weight:700; color:{{ c.daysColor }};">{{ c.daysText }}</span>
+                <div><div style="font-size:11.5px; font-weight:700; color:{{ c.daysColor }};">{{ c.daysText }}</div><div style="height:4px; border-radius:99px; background:#F0EDF6; margin-top:5px; overflow:hidden; width:110px;"><div style="height:100%; width:{{ c.cxLife }}; background:{{ c.cxLifeColor }}; border-radius:99px;"></div></div></div>
                 <div style="display:flex; flex-direction:column; gap:3px;">
-                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ c.stColor }}; background:{{ c.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><sc-if value="{{ c.isProcessing }}" hint-placeholder-val="{{ false }}"><span style="width:9px; height:9px; border-radius:99px; border:2px solid {{ c.stColor }}; border-top-color:transparent; animation:spinP .8s linear infinite;"></span></sc-if><sc-if value="{{ c.notProcessing }}" hint-placeholder-val="{{ true }}"><span style="width:4px; height:4px; border-radius:99px; background:{{ c.stColor }};"></span></sc-if>{{ c.status }}</span>
-                  <sc-if value="{{ c.hasPrereq }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px; font-weight:700; color:#B8860B;">⚠ prereq</span></sc-if>
-                  <sc-if value="{{ c.isAuto }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px; font-weight:700; color:#6D5BD0;">🤖 auto</span></sc-if>
+                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ c.stColor }}; background:{{ c.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ c.status }}</span>
+                  <sc-if value="{{ c.hasPrereq }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#B8860B;">⚠ prerequisite</span></sc-if>
+                  <sc-if value="{{ c.isAuto }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#6D5BD0;">Auto-renewing</span></sc-if>
                 </div>
                 <div style="text-align:right;" onClick="{{ c.act }}">
                   <sc-if value="{{ c.btnDisabled }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px; font-weight:700; color:#6D5BD0;">Auto-running…</span></sc-if>
-                  <sc-if value="{{ c.btnGhost }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:{{ c.btnColor }}; background:{{ c.btnBg }}; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">{{ c.btnLabel }}</span></sc-if>
-                  <sc-if value="{{ c.btnComplete }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ c.btnLabel }}</span></sc-if>
-                  <sc-if value="{{ c.btnPrimary }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#fff; background:#7C00FF; padding:6px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ c.btnLabel }}</span></sc-if>
+                  <sc-if value="{{ c.btnGhost }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:{{ c.btnColor }}; background:{{ c.btnBg }}; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">{{ c.btnLabel }}</span></sc-if>
+                  <sc-if value="{{ c.btnComplete }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#fff; background:#12B76A; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">{{ c.btnLabel }}</span></sc-if>
+                  <sc-if value="{{ c.btnPrimary }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#fff; background:#7C00FF; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">{{ c.btnLabel }}</span></sc-if>
                 </div>
               </div>
+              </sc-for>
             </sc-for>
-            <sc-if value="{{ complianceEmpty }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ cxNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:36px 20px; text-align:center;"><div style="font-size:13px; font-weight:700; color:#1A1523;">Nothing matches</div><div style="font-size:12px; color:#8C8899; margin-top:4px;">Try another search, or <span onClick="{{ cxClear }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">clear the filters</span>.</div></div></sc-if>
+            <sc-if value="{{ cxNothing }}" hint-placeholder-val="{{ false }}">
               <div style="padding:48px 24px; text-align:center;">
                 <div style="width:52px; height:52px; border-radius:15px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; margin:0 auto;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4M12 3l7 4v5c0 4.4-3 8.5-7 9.5-4-1-7-5.1-7-9.5V7z"></path></svg></div>
                 <div style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700; margin-top:14px;">No documents tracked</div>
@@ -3578,7 +3600,7 @@
               <input value="{{ dxQ }}" onInput="{{ dxSetQ }}" placeholder="Search documents, people, numbers…" autocomplete="off" style="width:100%; box-sizing:border-box; background:#fff; border:1px solid #DDD9E6; border-radius:99px; padding:9px 34px 9px 34px; font-size:12.5px; font-family:inherit; color:#1A1523; outline:none;" style-focus="border-color:#7C00FF; box-shadow:0 0 0 3px rgba(124,0,255,.12);">
               <sc-if value="{{ dxHasQ }}" hint-placeholder-val="{{ false }}"><span onClick="{{ dxClearQ }}" title="Clear" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); width:20px; height:20px; border-radius:99px; background:#F3F1F7; color:#6F6C7A; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer;">×</span></sc-if>
             </div>
-            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;" onClick="{{ openUpload }}">Upload documents</button></sc-if>
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ docScanDoc }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:12.5px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap;" style-hover="background:#F5EEFF; border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>Scan document</button><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25); white-space:nowrap;" style-hover="background:#6900D6;">+ Add document</button></sc-if>
           </div>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;">
@@ -9504,6 +9526,13 @@
         </sc-if>
 
         <!-- 1. choose who and upload -->
+        <sc-if value="{{ sdNeedClient }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px;">
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHICH CLIENT IS IT FOR *</div>
+            <div class="fm-selwrap" style="margin-top:6px;"><div class="fm-combo"><input data-dd data-open="{{ ddSdClientOpen }}" onClick="{{ ddSdClientOpenList }}" onInput="{{ ddSdClientSetQuery }}" onKeyDown="{{ ddSdClientKey }}" value="{{ ddSdClientValue }}" placeholder="{{ ddSdClientPlaceholder }}" autocomplete="off" class="fm-inp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddSdClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-if value="{{ ddSdClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddSdClientRows }}" as="o" hint-placeholder-count="5"><sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if><sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="display:flex; align-items:center; gap:10px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.label }}</span><span style="margin-left:auto; flex-shrink:0; font-size:11px; font-weight:500; color:#A9A6B4; white-space:nowrap;">{{ o.hint }}</span></div></sc-if></sc-for></div></sc-if></div>
+            <div style="font-size:11.5px; color:#8C8899; margin-top:8px;">The scan is filed against this client, and the agent matches it to one of their employees.</div>
+          </div>
+        </sc-if>
         <sc-if value="{{ sdStepUpload }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:18px; display:grid; grid-template-columns:1fr; gap:14px;">
             <div>
@@ -19468,12 +19497,15 @@ class Component extends DCLogic {
     const _sdRole = (_sdSt.meUser && _sdSt.meUser.role) || '';
     const sdApi = {
       showScanDoc: !!_sdSt.sdOpen,
-      sdClient: _sdSt.sdClient || '',
+      sdClient: _sdSt.sdClient || 'No client chosen',
+      sdNeedClient: !_sdSt.sdCompanyId && (_sdSt.sdStep || 'upload') === 'upload' && !!(_sdStatus && _sdStatus.ready),
+      ...mkDdCombo('ddSdClient', [{ title: 'CLIENTS', options: (Array.isArray(_sdSt.companiesData) ? _sdSt.companiesData : []).map(c9 => ({ value: c9.id, label: c9.name, hint: c9.cr && /\d/.test(c9.cr) ? 'CR ' + c9.cr : '' })) }],
+        _sdSt.sdCompanyId || '', (v9) => { const c9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(x9 => x9.id === v9); this.setState({ sdCompanyId: v9, sdClient: c9 ? c9.name : '', sdEmpPick: '', sdErr: '' }); }, 'Search clients…'),
       sdErr: _sdSt.sdErr || '', sdHasErr: !!_sdSt.sdErr,
       sdUnavailable: !!(_sdStatus && !_sdStatus.ready) && (_sdSt.sdStep || 'upload') === 'upload',
       sdWhy: (_sdStatus && _sdStatus.why) || '',
       sdCanEnable: !!(_sdStatus && _sdStatus.keyPresent && !_sdStatus.enabled && (_sdRole === 'admin' || _sdRole === 'super_admin')),
-      sdStepUpload: (_sdSt.sdStep || 'upload') === 'upload' && !!(_sdStatus && _sdStatus.ready),
+      sdStepUpload: (_sdSt.sdStep || 'upload') === 'upload' && !!(_sdStatus && _sdStatus.ready) && !!_sdSt.sdCompanyId,
       sdStepReading: _sdSt.sdStep === 'reading',
       sdReadingLabel: _sdSt.sdPhase === 'upload' ? 'Uploading the scan…' : 'Reading the document…',
       sdStepReview: _sdSt.sdStep === 'review',
@@ -22035,7 +22067,7 @@ class Component extends DCLogic {
     // for the number field, with a generic fallback for anything it has no entry for.
     const _udRealTypes = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : []);
     const udTypeOptions = _udRealTypes.length ? _udRealTypes.map(t8 => t8.name) : Object.keys(numberLabels);
-    const udType = this.state.udType || udTypeOptions[0] || 'Trade License';
+    const udType = this.state.udType || '';
     // Subject scope comes from the type's own subjectKind — the authoritative field — rather than a
     // hardcoded list of four company documents that knew nothing about types added since.
     const _udTypeRow = _udRealTypes.find(t8 => t8.name === udType);
@@ -22062,11 +22094,20 @@ class Component extends DCLogic {
       showUploadModal: !!this.state.udModal,
       // udClient is cleared on open so the dialog falls back to the current filter each time rather
       // than silently reusing whoever was picked last.
-      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udClient: null, udEst: null, udEmployee: (_udEmpNames[0] || '') }),
+      // Nothing pre-selected: a default type and a default person were how a passport got filed as
+      // "Health Insurance — Maria Fernandes" by someone who only chose the file.
+      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udClient: null, udEst: null, udType: '', udEmployee: '' }),
+      docScanDoc: () => {
+        const nm9 = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : '';
+        const co9 = nm9 ? (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.name === nm9) : null;
+        this.setState({ sdOpen: true, sdCompanyId: co9 ? co9.id : null, sdClient: co9 ? co9.name : '', sdStep: 'upload', sdErr: '', sdSug: null,
+          sdEmpPick: '', sdFileName: '', sdPreviewUrl: '', sdIsPdf: false, sdStatus: null, sdResult: null });
+        this._sdLoadStatus && this._sdLoadStatus();
+      },
       udCrShow: !!(this.state.udModal && _udCo && !udIsEmployee && this._crMulti(_udCo.id)),
       udCrChips: this.state.udModal && _udCo && !udIsEmployee ? this._crChips(_udCo.id, this.state.udEst, (v9) => this.setState({ udEst: v9 })) : [],
       closeUpload: () => this.setState({ udModal: false }),
-      udType, udIsEmployee,
+      udType: udType || 'Select a document type', udIsEmployee,
       udScopeLabel: _udCo
         ? (udIsEmployee ? 'Employee document — linked to ' + (this.state.udEmployee || _udEmpNames[0] || 'the employee') + ' (' + _udCo.name + ')' : 'Company document — linked to ' + _udCo.name)
         : '⚠ Choose the client this document belongs to',
@@ -22096,6 +22137,7 @@ class Component extends DCLogic {
         // Required-ness follows the field's own label rather than naming one type. The old test was
         // `udType !== 'Medical Certificate'`, which stopped meaning anything once the list came from
         // configured types — every type added since was silently forced to carry a number.
+        if (!udType) return this.setState({ udError: 'Choose the document type' });
         if (/\*\s*$/.test(_udNumLabel) && !(st.udNumber || '').trim()) return this.setState({ udError: 'Document number is required' });
         if (!st.udExpiry) return this.setState({ udError: 'Expiry date is required' });
         if (!st.udFile) return this.setState({ udError: 'Attach the document file' });
@@ -22157,7 +22199,7 @@ class Component extends DCLogic {
         empProfile: null,
         udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '',
         udClient: co7 ? co7.name : null,
-        ...(docLabel ? { udType: docLabel } : {}),
+        udType: docLabel || '',
         udEmployee: ep.name,
       });
       if (!co7) this.toast('Could not resolve this employee\'s client — pick it in the dialog', 'warn');
@@ -23799,7 +23841,33 @@ class Component extends DCLogic {
       };
     });
     const compScoped = allCompliance.filter(r => compClientScope === 'All clients' || r.client === compClientScope);
-    const complianceRows = compScoped.filter(r => compFilter === 'All' || r.status === compFilter);
+    // Search runs over what a person would type: the document, its number, the client, the holder.
+    const _cxQ = String(this.state.compQ || '').trim().toLowerCase();
+    const complianceRows = compScoped.filter(r => (compFilter === 'All' || r.status === compFilter)
+      && (!_cxQ || [r.doc, r.docNo, r.client, r.holder, r.authority].join(' ').toLowerCase().includes(_cxQ)));
+    // Grouped by what has to happen next, most urgent first; within a group, soonest first.
+    const _cxDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+    const _cxGroupDefs = [
+      ['now', 'Needs action now', 'Expired, or never issued', '#C0353A', '#FEECEC', r => r.status === 'Expired' || r.status === 'Missing'],
+      ['soon', 'Due in the next 30 days', 'Start these renewals now', '#B8860B', '#FEF4E2', r => r.status === 'Expiring'],
+      ['prog', 'In renewal', 'Being processed', '#6D5BD0', '#EFEBFF', r => r.status === 'Processing'],
+      ['ok', 'Valid', 'Nothing to do yet', '#0E9355', '#E7F8EF', r => r.status === 'Valid'],
+    ];
+    const _cxRow = (r) => {
+      const d9 = r._docId ? _cxDocs.find(x9 => x9.id === r._docId) : null;
+      const cd9 = d9 && d9.customData && typeof d9.customData === 'object' ? d9.customData : {};
+      const f9 = String(cd9.filePath || cd9.file || ''); const has9 = f9.startsWith('/');
+      const dn9 = Number(r.days);
+      // How far through its life the document is: full when just issued, empty at expiry.
+      const life9 = r.status === 'Missing' ? 0 : r.status === 'Processing' ? 100 : Number.isFinite(dn9) ? Math.max(0, Math.min(100, Math.round(dn9 / 365 * 100))) : 0;
+      return { ...r, cxHasFile: has9, cxPreview: () => has9 && this._openFile(f9, cd9.fileName || (r.doc + (r.docNo && r.docNo !== '—' ? ' ' + r.docNo : ''))),
+        cxLife: life9 + '%', cxLifeColor: r.status === 'Expired' || r.status === 'Missing' ? '#E5484D' : r.status === 'Expiring' ? '#F59E0B' : r.status === 'Processing' ? '#8B5CF6' : '#12B76A',
+        cxNo: r.docNo && r.docNo !== '—' ? r.docNo : 'No number', cxSubLine: [r.authority && r.authority !== '—' ? r.authority : '', r.expiry && r.expiry !== '—' ? 'expires ' + r.expiry : ''].filter(Boolean).join(' · ') };
+    };
+    const cxGroups = _cxGroupDefs.map(([key9, title9, sub9, fg9, bg9, test9]) => {
+      const rows9 = complianceRows.filter(test9).sort((a9, b9) => (Number(a9.days) || 0) - (Number(b9.days) || 0)).map(_cxRow);
+      return { key: key9, title: title9, sub: sub9, fg: fg9, bg: bg9, rows: rows9, count: String(rows9.length), has: rows9.length > 0 };
+    }).filter(g9 => g9.has);
     const cCount = (st) => compScoped.filter(r => r.status === st).length;
     const compScore = compScoped.length ? Math.round((cCount('Valid') + cCount('Processing')) / compScoped.length * 100) : 0;
     const complianceTabs = ['All', 'Valid', 'Expiring', 'Expired', 'Missing', 'Processing'].map(k => ({
@@ -24050,6 +24118,49 @@ class Component extends DCLogic {
     const complianceApi = {
       complianceRows, complianceTabs, complianceSummary, compScore,
       compCirc: Math.round(compScore / 100 * 163), complianceEmpty: complianceRows.length === 0,
+      cxGroups,
+      ...(() => {
+        const tot9 = compScoped.length || 1;
+        const tile9 = (key9, label9, n9, cap9, fg9, dot9) => {
+          const on9 = compFilter === key9;
+          return { label: label9, value: String(n9), caption: cap9, fg: fg9, dot: dot9, border: on9 ? fg9 : '#EDEBF2', ring: on9 ? '0 0 0 3px ' + dot9 + '22' : '0 1px 2px rgba(38,7,77,.04)',
+            pick: () => this.setState({ compFilter: on9 ? 'All' : key9 }) };
+        };
+        const days9 = (st9) => compScoped.filter(r9 => r9.status === st9).map(r9 => Number(r9.days)).filter(Number.isFinite);
+        const worst9 = days9('Expired').length ? Math.min(...days9('Expired')) : null;
+        const next9 = days9('Expiring').length ? Math.min(...days9('Expiring')) : null;
+        const n9 = { Expired: cCount('Expired'), Expiring: cCount('Expiring'), Processing: cCount('Processing'), Missing: cCount('Missing'), Valid: cCount('Valid') };
+        const inWin9 = (lo9, hi9) => compScoped.filter(r9 => (r9.status === 'Valid' || r9.status === 'Expiring') && Number(r9.days) >= lo9 && Number(r9.days) <= hi9).length;
+        const pw9 = (k9) => (n9[k9] / tot9 * 100).toFixed(1) + '%';
+        const clients9 = new Set(compScoped.map(r9 => r9.client)).size;
+        return {
+          cxTiles: [
+            tile9('Expired', 'Expired', n9.Expired, worst9 != null ? 'oldest ' + Math.abs(worst9) + 'd overdue' : 'none overdue', '#C0353A', '#E5484D'),
+            tile9('Expiring', 'Expiring ≤ 30d', n9.Expiring, next9 != null ? 'next in ' + next9 + 'd' : 'nothing due', '#B8860B', '#F59E0B'),
+            tile9('Processing', 'In renewal', n9.Processing, n9.Processing ? 'being processed' : 'none running', '#6D5BD0', '#8B5CF6'),
+            tile9('Missing', 'Missing', n9.Missing, n9.Missing ? 'never issued' : 'none missing', '#4B4757', '#8C8899'),
+            tile9('Valid', 'Valid', n9.Valid, Math.round(n9.Valid / tot9 * 100) + '% of documents', '#0E9355', '#12B76A'),
+          ],
+          cxScoreLine: compScoped.length ? (n9.Valid + n9.Processing) + ' of ' + compScoped.length + ' documents current' : 'No documents tracked yet',
+          cxScopeLine: compClientScope === 'All clients' ? 'across ' + clients9 + ' client' + (clients9 === 1 ? '' : 's') : 'for ' + compClientScope,
+          cxWValid: pw9('Valid'), cxWProg: pw9('Processing'), cxWSoon: pw9('Expiring'), cxWExp: pw9('Expired'), cxWMiss: pw9('Missing'),
+          cxHorizon: [
+            { label: 'Overdue', value: String(n9.Expired), fg: '#C0353A', bg: '#FEECEC' },
+            { label: 'Next 30 days', value: String(inWin9(0, 30)), fg: '#B8860B', bg: '#FEF4E2' },
+            { label: '31 – 60 days', value: String(inWin9(31, 60)), fg: '#6F6C7A', bg: '#F6F4FA' },
+            { label: '61 – 90 days', value: String(inWin9(61, 90)), fg: '#6F6C7A', bg: '#F6F4FA' },
+          ],
+          cxQ: this.state.compQ || '',
+          cxSetQ: (ev9) => this.setState({ compQ: ev9 && ev9.target ? ev9.target.value : '' }),
+          cxHasQ: !!_cxQ,
+          cxClearQ: () => this.setState({ compQ: '' }),
+          cxFiltering: compFilter !== 'All' || !!_cxQ,
+          cxFilterText: [compFilter !== 'All' ? ({ Expiring: 'Expiring ≤ 30 days', Processing: 'In renewal' }[compFilter] || compFilter) : '', _cxQ ? '“' + String(this.state.compQ).trim() + '”' : ''].filter(Boolean).join(' · '),
+          cxClear: () => this.setState({ compFilter: 'All', compQ: '' }),
+          cxNoMatch: compScoped.length > 0 && complianceRows.length === 0,
+          cxNothing: compScoped.length === 0,
+        };
+      })(),
       compClientScope,
       ...mkDd('ddCompScope', ['All clients', ...(Array.isArray(coData) ? coData.map(c => c.name) : [])], compClientScope, (v) => this.setState({ clientFilter: v })),
       showAddRecord: !!this.state.addRecord,
