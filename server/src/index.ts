@@ -6500,7 +6500,14 @@ app.get("/api/files/:id", requireAuth, async (req, res) => {
   const asset = await prisma.fileAsset.findUnique({ where: { id: req.params.id } });
   if (!asset) return res.status(404).json({ error: "Not found" });
   if (!asset.private) return res.redirect(asset.path); // public asset, nothing to gate
-  if (a?.type === "portal" && asset.companyId !== a.companyId) return res.status(404).json({ error: "Not found" });
+  // A client may read its own uploads, and any file the firm attached to one of the client's own
+  // documents. Staff uploads carry no company, so the old rule ("uploaded by this company") hid every
+  // certificate the PRO team filed — the client saw "not found" for their own papers.
+  if (a?.type === "portal" && asset.companyId !== a.companyId) {
+    const path = "/api/files/" + asset.id;
+    const hit = a?.companyId ? await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM Document WHERE companyId = ${a.companyId} AND (JSON_UNQUOTE(JSON_EXTRACT(customData, '$.file')) = ${path} OR JSON_UNQUOTE(JSON_EXTRACT(customData, '$.filePath')) = ${path}) LIMIT 1` : [];
+    if (!hit.length) return res.status(404).json({ error: "Not found" });
+  }
   const onDisk = fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(asset.id));
   if (!onDisk) return res.status(404).json({ error: "The file is no longer on the server" });
   res.setHeader("X-Content-Type-Options", "nosniff");

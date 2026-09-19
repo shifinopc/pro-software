@@ -1119,7 +1119,7 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Renewals</h1>
             <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">You request — {{ proTeam }} handles every government step</div>
           </div>
-          <button style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;" onClick="{{ openReq }}">Request renewal</button>
+          <button onClick="{{ epRequestRenewal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;" onClick="{{ openReq }}">Request renewal</button>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;">
           <div style="position:relative; overflow:hidden; border-radius:16px; background:linear-gradient(112deg,#E5484D,#B93036); color:#fff; padding:16px 20px;">
@@ -1529,7 +1529,7 @@
                   <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ f.meta }}</div>
                 </div>
                 <span style="font-size:10.5px; font-weight:700; color:{{ f.stColor }}; background:{{ f.stBg }}; padding:3px 10px; border-radius:99px; flex-shrink:0;">{{ f.status }}</span>
-                <div style="display:flex; gap:12px; font-size:11.5px; flex-shrink:0;"><sc-if value="{{ f.hasFile }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.open }}" style="color:#7C00FF; font-weight:600; cursor:pointer;" style-hover="text-decoration:underline;">Preview</span><a href="{{ f.fileUrl }}" download="{{ f.fileName }}" style="color:#8C8899;">Download</a></sc-if><sc-if value="{{ f.noFile }}" hint-placeholder-val="{{ false }}"><span style="color:#B9B5C4;">No file uploaded</span></sc-if></div>
+                <div style="display:flex; gap:12px; font-size:11.5px; flex-shrink:0;"><sc-if value="{{ f.hasFile }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.open }}" style="color:#7C00FF; font-weight:600; cursor:pointer;" style-hover="text-decoration:underline;">Preview</span><span onClick="{{ f.download }}" style="color:#8C8899; cursor:pointer;" style-hover="color:#1A1523;">Download</span></sc-if><sc-if value="{{ f.noFile }}" hint-placeholder-val="{{ false }}"><span style="color:#B9B5C4;">No file uploaded</span></sc-if></div>
               </div>
             </sc-for>
           </div>
@@ -1548,8 +1548,20 @@
                     <span title="{{ dd.tip }}" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:{{ dd.color }}; background:{{ dd.bg }}; padding:4px 11px; border-radius:99px; cursor:pointer;">{{ dd.glyph }} {{ dd.label }}</span>
                   </sc-for>
                 </div>
-                <a href="#" style="font-size:11.5px; flex-shrink:0;">Open folder</a>
+                <span onClick="{{ ed.toggleFolder }}" style="font-size:11.5px; font-weight:600; color:#7C00FF; cursor:pointer; flex-shrink:0;" style-hover="text-decoration:underline;">{{ ed.folderLabel }}</span>
               </div>
+              <sc-if value="{{ ed.folderOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px; border:1px solid #F0EDF6; border-radius:12px; overflow:hidden;">
+                  <sc-if value="{{ ed.folderEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px; font-size:12px; color:#A9A6B4;">No documents on file for this person yet.</div></sc-if>
+                  <sc-for list="{{ ed.folderFiles }}" as="ef" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid #F7F5FA; flex-wrap:wrap;">
+                      <div style="flex:1; min-width:180px;"><div style="font-size:12.5px; font-weight:600;">{{ ef.name }}</div><div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ ef.meta }}</div></div>
+                      <sc-if value="{{ ef.hasFile }}" hint-placeholder-val="{{ true }}"><div style="display:flex; gap:12px; font-size:11.5px; font-weight:600;"><span onClick="{{ ef.preview }}" style="color:#7C00FF; cursor:pointer;">Preview</span><span onClick="{{ ef.download }}" style="color:#6F6C7A; cursor:pointer;">Download</span></div></sc-if>
+                      <sc-if value="{{ ef.noFile }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; color:#B8B4C2;">No file uploaded</span></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
             </div>
           </sc-for>
           <div style="display:flex; align-items:center; gap:12px; background:#F3E8FF; border:1px solid #E4CCFF; border-radius:14px; padding:12px 18px;">
@@ -1851,7 +1863,7 @@
                   <div style="font-size:13px; font-weight:700;">{{ proTeam }}</div>
                   <div style="font-size:11px; color:#8C8899;">PRO officer · your assigned contact</div>
                 </div>
-                <button style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Live chat</button>
+                <button onClick="{{ openTicket }}" style="background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Message us</button>
               </div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:10px;">
                 <sc-if value="{{ hasSupportPhone }}" hint-placeholder-val="{{ true }}">
@@ -1994,7 +2006,7 @@
               <div>
                 <div style="display:flex; align-items:center; gap:5px;"><span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4"></path></svg></div>
                 <div title="Login email is managed by your PRO team" style="margin-top:6px; width:100%; border:1px solid #F0EDF6; border-radius:11px; padding:10px 13px; font-size:13px; color:#6F6C7A; background:#F8F5FD; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sEmail }}</div>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:4px;">Login email — <a href="#" style="font-size:10px;">raise a request</a> to change</div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:4px;">Login email — <span onClick="{{ raiseEmailChange }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">raise a request</span> to change</div>
               </div>
               <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PHONE</div><input value="{{ sPhone }}" onChange="{{ setSPhone }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
             </div>
@@ -2138,6 +2150,34 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"></path></svg>
       </div>
       <span style="font-size:13px; font-weight:600; color:#1A1523;">{{ welcomeMsg }}</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ fpOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ fpClose }}" data-hidescroll="true" style="position:fixed; inset:0; background:rgba(26,21,35,.62); backdrop-filter:blur(4px); z-index:160; display:flex; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="margin:auto; background:#fff; border-radius:20px; width:100%; max-width:1000px; height:calc(100vh - 48px); max-height:980px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(38,7,77,.35);">
+        <div style="display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid #F2EFF7; flex-shrink:0;">
+          <div style="flex:1; min-width:0;"><div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ fpName }}</div><div style="font-size:11px; color:#8C8899; margin-top:1px;">{{ fpKind }}</div></div>
+          <sc-if value="{{ fpReady }}" hint-placeholder-val="{{ false }}"><button onClick="{{ fpDownload }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:7px 14px; border-radius:99px; cursor:pointer;">Download</button></sc-if>
+          <div onClick="{{ fpClose }}" title="Close (Esc)" style="width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div style="flex:1; min-height:0; position:relative; background:#F4F2F8; display:flex; align-items:center; justify-content:center; overflow:auto;">
+          <sc-if value="{{ fpLoading }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px; color:#8C8899;">Loading the file…</div></sc-if>
+          <sc-if value="{{ fpErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px; font-weight:700; color:#C0353A; padding:24px; text-align:center;">{{ fpErr }}</div></sc-if>
+          <sc-if value="{{ fpIsPdf }}" hint-placeholder-val="{{ false }}"><iframe src="{{ fpUrl }}" title="{{ fpName }}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; background:#fff;"></iframe></sc-if>
+          <sc-if value="{{ fpIsImg }}" hint-placeholder-val="{{ false }}"><img src="{{ fpUrl }}" alt="{{ fpName }}" style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; padding:16px; box-sizing:border-box;"></sc-if>
+          <sc-if value="{{ fpIsOther }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px; color:#6F6C7A; padding:24px; text-align:center;">This file type can't be shown here — use Download.</div></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ newVersion }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:170; display:flex; align-items:center; gap:12px; background:#26074D; color:#fff; padding:10px 10px 10px 18px; border-radius:99px; box-shadow:0 12px 32px rgba(38,7,77,.35); font-size:12.5px; max-width:calc(100vw - 32px); animation:fadeUp .3s ease both;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C4B5FD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"></path></svg>
+      <span style="font-weight:600;">A new version is available.</span>
+      <span onClick="{{ reloadApp }}" style="background:#fff; color:#5B21B6; font-weight:700; padding:6px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;">Reload</span>
+      <span onClick="{{ dismissNewVersion }}" title="Later" style="width:24px; height:24px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:rgba(255,255,255,.7);">×</span>
     </div>
   </sc-if>
 
@@ -2569,7 +2609,7 @@
         <input value="{{ pfName }}" onChange="{{ setPfName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
         <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:13px;">DESIGNATION</div>
         <input value="{{ pfRole }}" onChange="{{ setPfRole }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
-        <div style="margin-top:12px; font-size:11px; color:#A9A6B4; line-height:1.5;">Email and role permissions are managed by your PRO team — <a href="#" style="font-size:11px;">raise a request</a> to change them.</div>
+        <div style="margin-top:12px; font-size:11px; color:#A9A6B4; line-height:1.5;">Email and role permissions are managed by your PRO team — <span onClick="{{ raiseEmailChange }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">raise a request</span> to change them.</div>
         <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;">
           <button onClick="{{ closeEditProfile }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
           <button onClick="{{ saveProfile }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save profile</button>
@@ -2951,7 +2991,7 @@
           </sc-for>
           <div style="display:flex; justify-content:space-between; font-size:13px; padding:9px 0 7px;"><span style="font-weight:700;">Total</span><span style="font-family:'Space Grotesk',sans-serif; font-weight:700;">{{ qTotal }}</span></div>
         </div>
-        <div style="font-size:11px; color:#A9A6B4; margin-top:9px;">Approving converts this to a tracked service · <a href="#" style="font-size:11px;">Download PDF</a></div>
+        <div style="font-size:11px; color:#A9A6B4; margin-top:9px;">Approving converts this to a tracked service · <span onClick="{{ qPrint }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">Download PDF</span></div>
         <sc-if value="{{ qActionable }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex; gap:8px; margin-top:16px;">
             <button onClick="{{ qApprove }}" style="flex:1.3; background:#12B76A; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.95);">Approve</button>
@@ -3021,7 +3061,7 @@
             </div>
           </div>
           <div style="display:flex; gap:9px; margin-top:16px;">
-            <button style="flex:1; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Ask about this</button>
+            <button onClick="{{ trackAsk }}" style="flex:1; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Ask about this</button>
             <button onClick="{{ closeTrack }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:700; padding:10px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Close</button>
           </div>
         </div>
@@ -3320,6 +3360,45 @@ class Component extends DCLogic {
       }
     };
     document.addEventListener('keydown', this._a11yKey);
+    // NEW VERSION CHECK. After a deploy, a tab left open kept running the old page until someone
+    // happened to refresh. The page's own address is asked (HEAD, no cache) for its Last-Modified /
+    // ETag every few minutes and whenever the tab comes back into view; when it changes, a banner
+    // offers a reload. Nothing reloads by itself — a half-filled form is never thrown away.
+    this._verCheck = () => {
+      fetch(location.pathname + (location.pathname.indexOf('?') < 0 ? '?' : '&') + '__v=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+        .then(r9 => (r9.ok ? (r9.headers.get('etag') || r9.headers.get('last-modified')) : null))
+        .then(tag9 => { if (!tag9) return; if (!this._verTag) { this._verTag = tag9; return; } if (tag9 !== this._verTag && !this.state.newVersion) this.setState({ newVersion: true }); })
+        .catch(() => {});
+    };
+    this._verCheck();
+    this._verTimer = setInterval(this._verCheck, 5 * 60 * 1000);
+    this._verVis = () => { if (document.visibilityState === 'visible') this._verCheck(); };
+    document.addEventListener('visibilitychange', this._verVis);
+    const _fpBase = () => window.STIMES_API || 'http://localhost:4100';
+    const _fpTok = () => { try { return localStorage.getItem('stimespro:portalToken'); } catch (e) { return null; } };
+    // Files open in an in-portal preview. Private files are fetched with the token and shown from a
+    // blob URL — opening the address directly returned "unauthorised".
+    this._openFile = (p9, name9) => {
+      if (this.state.fpUrl) URL.revokeObjectURL(this.state.fpUrl);
+      const seq9 = (this._fpSeq = (this._fpSeq || 0) + 1);
+      this.setState({ fpOpen: true, fpLoading: true, fpErr: '', fpUrl: '', fpType: '', fpName: name9 || 'Document' });
+      fetch(_fpBase() + p9, { headers: _fpTok() ? { Authorization: 'Bearer ' + _fpTok() } : {} })
+        .then(r9 => (r9.ok ? r9.blob() : Promise.reject(new Error(r9.status === 404 ? 'The file is no longer available' : 'You do not have access to this file'))))
+        .then(b9 => {
+          if (seq9 !== this._fpSeq || !this.state.fpOpen) return;
+          const ty9 = b9.type || (/\.pdf$/i.test(p9 + ' ' + name9) ? 'application/pdf' : '');
+          const blob9 = ty9 && ty9 !== b9.type ? new Blob([b9], { type: ty9 }) : b9;
+          this.setState({ fpLoading: false, fpUrl: URL.createObjectURL(blob9), fpType: ty9 });
+        })
+        .catch(e9 => { if (seq9 === this._fpSeq) this.setState({ fpLoading: false, fpErr: String((e9 && e9.message) || 'Could not open the file') }); });
+    };
+    this._closeFile = () => { if (this.state.fpUrl) URL.revokeObjectURL(this.state.fpUrl); this._fpSeq = (this._fpSeq || 0) + 1; this.setState({ fpOpen: false, fpUrl: '', fpLoading: false, fpErr: '' }); };
+    this._downloadFile = (p9, name9) => {
+      fetch(_fpBase() + p9, { headers: _fpTok() ? { Authorization: 'Bearer ' + _fpTok() } : {} })
+        .then(r9 => (r9.ok ? r9.blob() : Promise.reject(new Error('denied'))))
+        .then(b9 => { const u9 = URL.createObjectURL(b9); const a9 = document.createElement('a'); a9.href = u9; a9.download = String(name9 || 'document').replace(/[\\/:*?"<>|]+/g, '_'); document.body.appendChild(a9); a9.click(); a9.remove(); setTimeout(() => URL.revokeObjectURL(u9), 60000); })
+        .catch(() => this.toast && this.toast('Could not download ' + (name9 || 'that file')));
+    };
     // ── URL routing: reflect the active screen in the hash (#/renewals) and honor it on load/back ──
     const NAVG = {
       'Dashboard': 'Main', 'My Company': 'Main', 'Service Catalog': 'Main', 'My Requests': 'Main',
@@ -3694,6 +3773,7 @@ class Component extends DCLogic {
       trackStage: ta ? ta.stage : '', trackStBg: ta ? ta.stageBg : '#fff', trackStColor: ta ? ta.stageColor : '#000',
       trackNote: ta ? 'Everything is on track for ' + (ta.service || 'this renewal').toLowerCase() + '. No action needed from you — I will update here as soon as the government responds.' : '',
       closeTrack: () => this.setState({ trackApp: null }),
+      trackAsk: () => this.setState({ trackApp: null, ticketModal: true, tSubject: 'Question about ' + (ta ? (ta.service || 'my application') + (ta.no ? ' ' + ta.no : '') : 'my application'), tDesc: ta && ta.employee ? 'For ' + ta.employee + '. ' : '' }),
     };
 
     // unified renewals page list: in-progress (tracked) + upcoming
@@ -3917,8 +3997,9 @@ class Component extends DCLogic {
       // The uploaded file's path is already stored on the document (customData.filePath) — Preview and
       // Download were href="#" and never used it. When there's no file we say so rather than offering
       // links that do nothing.
-      const path9 = cd9.filePath || null;
+      const path9 = [cd9.filePath, cd9.file].find(p8 => typeof p8 === 'string' && p8.startsWith('/')) || null;
       const url9 = path9 ? (window.STIMES_API || 'http://localhost:4100') + path9 : '';
+      const nm9 = cd9.fileName || ((d9.docType || 'Document') + (d9.docNumber ? ' ' + d9.docNumber : ''));
       return {
         name: [d9.docType, d9.person && d9.person !== docFolder ? '— ' + d9.person : null].filter(Boolean).join(' ')
           + ((() => { const est = Array.isArray(this.state.estItems) && this.state.estItems.length > 1 && !d9.employeeId ? (d9.establishmentId ? this.state.estItems.find(x => x.id === d9.establishmentId) : this.state.estItems.find(x => x.kind === 'main')) : null; return est ? ' · ' + (est.kind === 'main' ? 'Main CR' : (est.city || est.name || 'Sub CR')) + ' ' + est.crNumber : ''; })()),
@@ -3927,7 +4008,8 @@ class Component extends DCLogic {
         status: st9[0], stBg: st9[1], stColor: st9[2],
         hasFile: !!path9, noFile: !path9, fileUrl: url9,
         fileName: (cd9.file || (path9 ? String(path9).split('/').pop() : '')) || 'document',
-        open: () => { if (url9) window.open(url9, '_blank', 'noopener'); },
+        open: () => { if (path9) this._openFile(path9, nm9); },
+        download: () => { if (path9) this._downloadFile(path9, nm9); },
       };
     });
     const folderApi = {
@@ -4212,6 +4294,17 @@ class Component extends DCLogic {
     const canSubmit = this.state.tSubject.trim().length > 2;
     const ticketApi = {
       showTicketModal: this.state.ticketModal,
+      newVersion: !!this.state.newVersion && !this.state.newVersionLater,
+      reloadApp: () => { try { location.reload(); } catch (e9) {} },
+      dismissNewVersion: () => this.setState({ newVersionLater: true }),
+      fpOpen: !!this.state.fpOpen, fpName: this.state.fpName || 'Document', fpLoading: !!this.state.fpLoading, fpErr: this.state.fpErr || false, fpUrl: this.state.fpUrl || '',
+      fpIsPdf: !!this.state.fpUrl && /pdf/i.test(this.state.fpType || ''), fpIsImg: !!this.state.fpUrl && /^image\//i.test(this.state.fpType || ''),
+      fpIsOther: !!this.state.fpUrl && !/pdf/i.test(this.state.fpType || '') && !/^image\//i.test(this.state.fpType || ''), fpReady: !!this.state.fpUrl,
+      fpKind: this.state.fpLoading ? 'Loading…' : /pdf/i.test(this.state.fpType || '') ? 'PDF document' : /^image\//i.test(this.state.fpType || '') ? 'Image' : (this.state.fpType || 'File'),
+      fpClose: () => this._closeFile(),
+      fpDownload: () => { const ext9 = { 'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' }[this.state.fpType] || ''; const nm9 = String(this.state.fpName || 'document'); const a9 = document.createElement('a'); a9.href = this.state.fpUrl; a9.download = (/\.[a-z0-9]{2,4}$/i.test(nm9) ? nm9 : nm9 + ext9).replace(/[\\/:*?"<>|]+/g, '_'); document.body.appendChild(a9); a9.click(); a9.remove(); },
+      // "raise a request" was a dead link. It opens the request form with the subject filled in.
+      raiseEmailChange: () => this.setState({ ticketModal: true, tSubject: 'Please change our portal login email', tDesc: 'New email: ' }),
       openTicket: () => this.setState({ ticketModal: true }),
       closeTicket: () => this.setState({ ticketModal: false }),
       stopClick: (e) => e.stopPropagation(),
@@ -5350,7 +5443,18 @@ class Component extends DCLogic {
           : d7.expiryDate ? ((kind === 'ok' ? 'Valid to ' : kind === 'warn' ? 'Expires ' : 'Expired ') + d7.expiryDate) : 'On file';
         return { label: tn, kind, tip };
       });
+      const key7 = e7.id || e7.name || String(i);
+      const open7 = this.state.docEmpOpen === key7;
+      const files7 = !open7 ? [] : mine.map(d8 => {
+        const cd8 = d8.customData && typeof d8.customData === 'object' ? d8.customData : {};
+        const f8 = [cd8.filePath, cd8.file].find(p8 => typeof p8 === 'string' && p8.startsWith('/')) || '';
+        const nm8 = cd8.fileName || ((d8.docType || 'Document') + ' ' + (e7.name || '')).trim();
+        return { name: (d8.docType || 'Document') + (d8.docNumber ? ' · ' + d8.docNumber : ''), meta: d8.expiryDate ? 'Expires ' + d8.expiryDate : 'No expiry date',
+          hasFile: !!f8, noFile: !f8, preview: () => f8 && this._openFile(f8, nm8), download: () => f8 && this._downloadFile(f8, nm8) };
+      });
       return {
+        folderOpen: open7, folderLabel: open7 ? 'Close folder' : 'Open folder', folderFiles: files7, folderEmpty: open7 && files7.length === 0,
+        toggleFolder: () => this.setState({ docEmpOpen: open7 ? null : key7 }),
         name: e7.name || '—', role: e7.role || '—', avBg: p[0], avColor: p[1],
         initials: String(e7.name || '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
         complete: docs.filter(d7 => d7.kind === 'ok').length, total: docs.length,
@@ -5456,6 +5560,7 @@ class Component extends DCLogic {
       showEmpProfile: !!ep,
       closeEmpProfile: () => this.setState({ empProfile: null }),
       epName: ep ? ep.name : '', epRole: ep ? ep.role : '', epInitials: ep ? ep.initials : '',
+      epRequestRenewal: () => this.setState({ empProfile: null, ticketModal: true, tSubject: 'Renewal request — ' + (ep ? ep.name : 'employee'), tDesc: 'Please renew the following document(s): ' }),
       epAvBg: ep ? ep.avBg : '#eee', epAvColor: ep ? ep.avColor : '#000',
       epVisa: ep ? ep.visa : '', epVBg: ep ? ep.vBg : '#fff', epVColor: ep ? ep.vColor : '#000',
       epEid: ep ? ep.eid : '—', epLabour: ep ? ep.labour : '—',
@@ -6111,6 +6216,22 @@ class Component extends DCLogic {
       showQuote: !!qOpen,
       closeQuote: () => this.setState({ quoteOpen: null }),
       qId: qOpen ? qOpen.id : '', qTitle: qOpen ? qOpen.title : '', qTotal: qOpen ? qOpen.amount : '',
+      // "Download PDF" was a dead link. It opens a clean printable copy; the browser's print dialog
+      // saves it as a PDF.
+      qPrint: () => {
+        if (!qOpen || !qOpenRow) return;
+        const esc9 = (x9) => String(x9 == null ? '' : x9).replace(/[&<>"]/g, c9 => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c9]);
+        const items9 = (Array.isArray(qOpenRow.items) && qOpenRow.items.length)
+          ? qOpenRow.items.map(it9 => [it9.name + (Number(it9.units) > 1 ? ' × ' + it9.units : ''), _qMoney((Number(it9.price) || 0) * (Number(it9.units) || 1))])
+          : [[qOpenRow.service || 'Professional services', _qMoney(qOpenRow.amount)]];
+        const html9 = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc9(qOpen.id) + '</title><style>body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#1A1523;margin:48px;}h1{font-size:22px;margin:0 0 4px}.m{color:#6F6C7A;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:28px;font-size:14px}td{padding:10px 0;border-bottom:1px solid #EDEBF2}td.r{text-align:right;font-variant-numeric:tabular-nums}tr.t td{font-weight:700;border-bottom:none;padding-top:14px}</style></head><body>'
+          + '<h1>Quotation ' + esc9(qOpen.id) + '</h1><div class="m">' + esc9(this.state.companyName || '') + (qOpen.title ? ' · ' + esc9(qOpen.title) : '') + ' · ' + esc9(qOpenStatus) + '</div>'
+          + '<table>' + items9.map(([l9, a9]) => '<tr><td>' + esc9(l9) + '</td><td class="r">' + esc9(a9) + '</td></tr>').join('') + '<tr class="t"><td>Total</td><td class="r">' + esc9(qOpen.amount) + '</td></tr></table>'
+          + '<script>window.onload=function(){setTimeout(function(){window.print()},200)}<\/script></body></html>';
+        const w9 = window.open('', '_blank');
+        if (!w9) return this.toast && this.toast('Allow pop-ups to download the PDF');
+        w9.document.open(); w9.document.write(html9); w9.document.close();
+      },
       // Real line items when the quotation carries them, else the single service line.
       qItems: qOpenRow ? ((Array.isArray(qOpenRow.items) && qOpenRow.items.length)
         ? qOpenRow.items.map(it9 => ({ label: it9.name + (Number(it9.units) > 1 ? ' × ' + it9.units : ''), amount: _qMoney((Number(it9.price) || 0) * (Number(it9.units) || 1)) }))
