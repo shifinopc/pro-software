@@ -17799,7 +17799,7 @@ class Component extends DCLogic {
     };
     const folderFiles = (_docsReal
       ? _docsReal.filter(d9 => _docCatOf(d9) === docFolder && _dxPass(d9)).map(_dxRow)
-      : (folderFilesMap[docFolder] || []).map(([name, meta, st]) => ({ name, meta, status: st[0], stBg: st[1], stColor: st[2], hasFile: false, noFile: true })));
+      : (_authed ? [] : (folderFilesMap[docFolder] || [])).map(([name, meta, st]) => ({ name, meta, status: st[0], stBg: st[1], stColor: st[2], hasFile: false, noFile: true })));
     const folderApi = {
       showDocFolder: !!docFolder && (this.state.docScope || 'company') === 'company',
       folderName: docFolder || '', folderCount: folderFiles.length,
@@ -17846,10 +17846,10 @@ class Component extends DCLogic {
       })(),
       folderFiles,
       closeFolder: () => this.setState({ docFolder: null }),
-      docChipTracked: _docsReal ? _docsReal.length : 86,
-      docChipValid: _docsReal ? _docsReal.filter(d9 => d9.status === 'valid').length : 74,
-      docChipExpiring: _docsReal ? _docsReal.filter(d9 => d9.status === 'expiring').length : 7,
-      docChipExpired: _docsReal ? _docsReal.filter(d9 => ['overdue', 'expired'].includes(String(d9.status))).length : 3,
+      docChipTracked: _docsReal ? _docsReal.length : (_authed ? 0 : 86),
+      docChipValid: _docsReal ? _docsReal.filter(d9 => d9.status === 'valid').length : (_authed ? 0 : 74),
+      docChipExpiring: _docsReal ? _docsReal.filter(d9 => d9.status === 'expiring').length : (_authed ? 0 : 7),
+      docChipExpired: _docsReal ? _docsReal.filter(d9 => ['overdue', 'expired'].includes(String(d9.status))).length : (_authed ? 0 : 3),
       // Documents held with no usable expiry date. They are tracked by nothing until someone adds one,
       // so they get their own count rather than quietly disappearing from Valid/Expiring/Expired.
       docChipUndated: _docsReal ? String(_docsReal.filter(d9 => d9.status === 'unknown' || !d9.expiryDate).length) : '0',
@@ -18003,7 +18003,7 @@ class Component extends DCLogic {
           if (!isNaN(+x8) && x8 < new Date(new Date().toDateString())) st8 = 'expired'; // past date always wins
           return [e.name, e.role || '—', st8, e.iqamaExpiry || '—', '—', coNameById[e.companyId] || '—'];
         })
-      : (empData ? [] : [
+      : ((empData || _authed) ? [] : [
         ['Maria Fernandes', 'Software Engineer', 'processing', 'Nov 2027', 'Feb 2027', 'Falcon Technologies'],
         ['Sara Lim', 'UX Designer', 'active', 'Mar 2028', 'Mar 2028', 'Falcon Trading'],
         ['James Okoro', 'DevOps Engineer', 'renewal', 'Sep 2026', 'Sep 2026', 'Zenith Contracting'],
@@ -18022,11 +18022,11 @@ class Component extends DCLogic {
     // Employees screen header — live counts once real employees are loaded.
     const _empStatsReal = Array.isArray(empData);
     const empScreenApi = {
-      empSubtitle: (_empStatsReal ? employeesAll.length : 99) + ' sponsored staff managed across all client companies',
-      empChipActive: _empStatsReal ? employeesAll.filter(e => e.visa === 'Active').length : 37,
-      empChipRenewal: _empStatsReal ? employeesAll.filter(e => e.visa === 'Renewal due').length : 3,
+      empSubtitle: (_empStatsReal ? employeesAll.length : (_authed ? 0 : 99)) + ' sponsored staff managed across all client companies',
+      empChipActive: _empStatsReal ? employeesAll.filter(e => e.visa === 'Active').length : (_authed ? 0 : 37),
+      empChipRenewal: _empStatsReal ? employeesAll.filter(e => e.visa === 'Renewal due').length : (_authed ? 0 : 3),
       empChipExpired: _empStatsReal ? employeesAll.filter(e => e.visa === 'Expired').length : 0,
-      empChipProcessing: _empStatsReal ? employeesAll.filter(e => e.visa === 'Processing').length : 2,
+      empChipProcessing: _empStatsReal ? employeesAll.filter(e => e.visa === 'Processing').length : (_authed ? 0 : 2),
     };
 
 
@@ -18602,7 +18602,7 @@ class Component extends DCLogic {
     };
     const invBase = (Array.isArray(invData) && invData.length
       ? invData.map(v => [v.number || '—', fmtInvDate(v.date), v.clientName || v.client || '—', v.services || (Array.isArray(v.items) && v.items[0] ? v.items[0].name : '') || '—', _docTotal(v), _invEffStatus(v), v.id, v.currency || null])
-      : (invData ? [] : [
+      : ((invData || _authed) ? [] : [
         ['INV-1187', '16 Jul', 'Falcon Technologies', 'Employment visa — M. Fernandes', 2300, 'Unpaid', null],
         ['INV-1173', '28 Jun', 'Falcon Trading', 'Trade license amendment', 5400, 'Paid', null],
         ['INV-DRAFT', '—', 'Marina Hospitality', 'Company formation (draft)', 12500, 'Draft', null],
@@ -19293,9 +19293,9 @@ class Component extends DCLogic {
     const _cfTiles = [['#F3E8FF', '#8B17FF'], ['#E4F4FD', '#0284C7'], ['#FEF4E2', '#F79009'], ['#E7F8EF', '#12B76A'], ['#EFEBFF', '#6D5BD0'], ['#FEECEC', '#C0353A']];
     const _cfInit = (nm) => ((nm || '').split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('') || '—').toUpperCase();
     const _cfStaff = (coId) => (Array.isArray(this.state.employeesData) ? this.state.employeesData : []).filter(e => e.companyId === coId && !e.archived).length;
-    const clientFilterDefs = (_cfCos && _cfCos.length)
+    const clientFilterDefs = ((_cfCos && _cfCos.length) || _authed)
       ? [['All clients', 'Portfolio-wide view', 'ALL', '#F3E8FF', '#7C00FF'],
-         ..._cfCos.map((c2, i) => [c2.name, (c2.city ? c2.city + ' · ' : '') + _cfStaff(c2.id) + ' staff', _cfInit(c2.name), _cfTiles[i % _cfTiles.length][0], _cfTiles[i % _cfTiles.length][1]])]
+         ...(_cfCos || []).map((c2, i) => [c2.name, (c2.city ? c2.city + ' · ' : '') + _cfStaff(c2.id) + ' staff', _cfInit(c2.name), _cfTiles[i % _cfTiles.length][0], _cfTiles[i % _cfTiles.length][1]])]
       : [['All clients', 'Portfolio-wide view', 'ALL', '#F3E8FF', '#7C00FF'],
          ['Falcon Technologies LLC', 'Dubai · 42 staff', 'FT', '#F3E8FF', '#8B17FF'],
          ['Falcon Trading LLC', 'Abu Dhabi · 18 staff', 'FT', '#E4F4FD', '#0284C7'],
@@ -20291,7 +20291,7 @@ class Component extends DCLogic {
           // Resolved by the server, so the list does not have to hold every staff account to read
           // one name off a row.
           (c.team && c.team.pro_officer) || null])
-      : (coData ? [] : [
+      : ((coData || _authed) ? [] : [
         ['Falcon Technologies LLC', 'CN-1109842', 'Technology', 'Dubai', 'Ahmed Al Mazrouei', 'accounts@falcontech.ae', '+971 50 224 8190', 'Active', 'Falcon Group', 'Aisha', 'Enterprise', 42, 2, 3, true, null, null],
         ['Falcon Trading LLC', 'CN-2048871', 'Trading', 'Abu Dhabi', 'Rania Haddad', 'ops@falcontrading.ae', '+971 55 771 3320', 'Active', 'Falcon Group', 'Rashid', 'Business Plus', 18, 1, 2, true, null, null],
         ['Zenith Contracting', 'CN-3390118', 'Construction', 'Sharjah', 'Tariq Rahman', 'founder@zenith.ae', '+971 56 330 7781', 'Onboarding', '—', 'Aisha', 'Prospect / unassigned', 6, 0, 0, true, null, null],
@@ -20414,7 +20414,7 @@ class Component extends DCLogic {
           approveLabel: u.kind === 'addon' ? 'Review & price' : 'Approve & swap package',
           amount: u.kind === 'addon' ? (u.note ? '“' + u.note + '”' : 'No note') : '',
           realId: u.id }))
-      : (this.state.clUpgradeResolved ? [] : [
+      : ((this.state.clUpgradeResolved || _authed) ? [] : [
         { id: 'UPG-014', client: 'Zenith Contracting', to: 'Enterprise', amount: 'AED 2,400/mo', realId: null,
           isAddon: false, icon: '⬆️', kindLabel: 'Upgrade request', approveLabel: 'Approve & swap package' },
       ])).map(u => ({ ...u,
@@ -22155,7 +22155,7 @@ class Component extends DCLogic {
       udScopeBg: udIsEmployee ? '#EFEBFF' : '#F3E8FF',
       udScopeDot: udIsEmployee ? '#6D5BD0' : '#7C00FF',
       udScopeColor: udIsEmployee ? '#4E3FA8' : '#5B00BC',
-      udEmployee: this.state.udEmployee || 'Maria Fernandes',
+      udEmployee: this.state.udEmployee || 'Select an employee',
       udNumber: this.state.udNumber || '', udExpiry: this.state.udExpiry || '', udError: this.state.udError || false,
       udNumberLabel: _udNumLabel,
       udNumberPh: (numberLabels[udType] || ['', ''])[1],
@@ -22778,7 +22778,7 @@ class Component extends DCLogic {
           // any document of the right type at the client — two employees can share a name.
           _blockedBy: t.blockedBy || null, _companyId: t.companyId || null, _employeeId: t.employeeId || null,
         }))
-      : (tData ? [] : [
+      : ((tData || _authed) ? [] : [
         { title: 'Trade License renewal typing', client: 'Falcon Trading', assignee: 'Aisha', priority: 'High', status: 'To do', dueIn: 0, dept: 'DED', docType: 'Trade License', comp: 'TL-88213 · Trade License' },
         { title: 'VAT registration documents', client: 'Falcon Trading', assignee: 'Aisha', priority: 'Low', status: 'To do', dueIn: 4, dept: 'FTA', docType: 'VAT' },
         { title: 'Client call — Zenith onboarding', client: 'Zenith Contracting', assignee: 'Rashid', priority: 'Low', status: 'To do', dueIn: 0, dept: '—', docType: '' },
@@ -23816,7 +23816,7 @@ class Component extends DCLogic {
             d.issuingAuthority || '—', d.docNumber || '—', d.expiryDate || '—',
             DOC_STATUS_LABEL[String(d.status || '').toLowerCase()] || 'Valid', Number(d.daysLeft) || 0, dt.leadDays || 30, prereqTxt, !!d.renewalRunId, null, d.id, d.companyId || null, _pqRules];
         })
-      : (docsData ? [] : [
+      : ((docsData || _authed) ? [] : [
         ['Trade License', 'Falcon Technologies', '—', 'Company', 'DED', 'TL-88213', '29 Jul 2026', 'Expiring', 11, 30, null, false, null],
         ['Emirates ID', 'Falcon Trading', 'A. Khan', 'Employee', 'ICP', 'EID-77420', '22 Jul 2026', 'Expiring', 4, 30, 'Passport ≥ 6 months', false, null],
         ['VAT Certificate', 'Falcon Logistics', '—', 'Company', 'FTA', 'VAT-8890', '14 Mar 2027', 'Valid', 240, 30, null, false, null],
