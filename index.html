@@ -565,6 +565,28 @@
   .ov-attention{grid-column:1 / -1;border-top:1px solid #F2EFF7;padding:11px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#FCFBFE;}
   .ov-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);gap:16px;align-items:start;}
   .ov-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
+  .cl-row:hover .cl-go,.cl-card:hover .cl-go{background:#7C00FF;color:#fff;}
+  .cl-table .cl-row:last-child{border-bottom:none;}
+  .cl-table .cl-row:hover{background:#FBF8FF !important;box-shadow:inset 3px 0 0 #7C00FF;}
+  .cl-stat:hover{background:#FCFAFF;}
+  .cl-tabs::-webkit-scrollbar{display:none;}
+  @keyframes clRowIn{0%{opacity:0;transform:translateY(18px);}60%{opacity:1;}100%{opacity:1;transform:none;}}
+  @keyframes clRowFade{from{opacity:0;}to{opacity:1;}}
+  /* reduced motion: no movement, but rows still arrive one after another */
+  @media (prefers-reduced-motion: reduce){ .cl-row{animation-name:clRowFade !important; animation-duration:.45s !important;} }
+  .cl-table .cl-row .cl-chev{transition:transform .18s, stroke .18s;}
+  .cl-table .cl-row:hover .cl-chev{transform:translateX(3px);}
+  .cl-table [data-cltab]{transition:color .15s, box-shadow .2s;}
+  .cl-table .cl-row:hover .cl-chev{stroke:#7C00FF;}
+  .cl-stat + .cl-stat{border-left:1px solid #F0EDF5;}
+  .cl-stat:hover{background:#FAFAFC;}
+  @media (max-width: 1100px){ .cl-stats{grid-template-columns:repeat(3,minmax(0,1fr)) !important;} }
+  @media (max-width: 640px){ .cl-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} }
+  .cl-seg + .cl-seg::before{content:"";position:absolute;left:0;top:18px;bottom:18px;width:1px;background:rgba(255,255,255,.12);}
+  @media (max-width: 1100px){ .cl-banner-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;} }
+  @media (max-width: 640px){ .cl-banner-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} .cl-seg + .cl-seg::before{display:none;} }
+  @media (max-width: 1100px){ .cl-tiles{grid-template-columns:repeat(3,minmax(0,1fr)) !important;} }
+  @media (max-width: 640px){ .cl-tiles{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} }
   @media (max-width: 1200px){ .cx-top{grid-template-columns:minmax(0,1fr) !important;} }
   @media (max-width: 760px){ .cx-tiles{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} }
   .ov-h{display:flex;align-items:flex-start;gap:11px;min-width:0;}
@@ -1840,11 +1862,17 @@
               <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; letter-spacing:-.01em;">Clients</h1>
               <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Every company you manage — profile, package, compliance &amp; portal access</div>
             </div>
-            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openAddClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add client</button></sc-if>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openAddClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add client</button></sc-if>
+            </div>
           </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px;">
-            <sc-for list="{{ clStats }}" as="s" hint-placeholder-count="4">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:15px 18px;"><div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:{{ s.color }};"></span><span style="font-size:11px; color:#6F6C7A; font-weight:600;">{{ s.label }}</span></div><div style="font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700; margin-top:6px; color:{{ s.color }};">{{ s.count }}</div></div>
+          <section class="cl-stats" style="background:#fff; border:1px solid #ECE9F2; border-radius:16px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); overflow:hidden;">
+            <sc-for list="{{ clTiles }}" as="t" hint-placeholder-count="5">
+              <div onClick="{{ t.pick }}" class="cl-stat" style="position:relative; padding:16px 20px; cursor:{{ t.cursor }}; background:{{ t.plainBg }}; box-shadow:inset 0 2px 0 {{ t.plainTop }}; transition:background .15s, box-shadow .2s;">
+                <div style="display:flex; align-items:center; gap:7px; font-size:12px; font-weight:500; color:{{ t.plainLabel }};"><span style="width:6px; height:6px; border-radius:99px; background:{{ t.plainDot }};"></span>{{ t.label }}</div>
+                <div style="font-size:24px; font-weight:700; color:{{ t.plainNum }}; margin-top:6px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1; font-family:'Space Grotesk',sans-serif;">{{ t.value }}</div>
+                <div style="font-size:11.5px; color:#9A97A6; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.caption }}</div>
+              </div>
             </sc-for>
           </section>
           <sc-if value="{{ clUpgradeShow }}" hint-placeholder-val="{{ false }}">
@@ -1857,55 +1885,61 @@
               </section>
             </sc-for>
           </sc-if>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .12s both; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-wrap:wrap;">
-              <sc-for list="{{ clStatChips }}" as="c" hint-placeholder-count="6"><span onClick="{{ c.select }}" style="font-size:12px; font-weight:600; color:{{ c.color }}; background:{{ c.bg }}; padding:6px 14px; border-radius:99px; cursor:pointer; box-shadow:{{ c.shadow }};">{{ c.label }} <span style="opacity:.6; font-size:10.5px;">{{ c.count }}</span></span></sc-for>
-            </div>
-            <div style="flex:1;"></div>
-            <div style="display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:8px 14px; min-width:200px;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-              <input value="{{ clSearch }}" onChange="{{ setClSearch }}" placeholder="Search name, CR, industry…" style="border:none; outline:none; background:none; font-size:12.5px; flex:1; color:#1A1523;">
-            </div>
-          </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .12s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-            <div style="overflow-x:auto;"><div style="min-width:900px;">
-              <div style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; padding:12px 22px 9px; font-size:10.5px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
-                <span>Client</span><span>Industry</span><span>PRO officer</span><span>Staff</span><span>Workforce</span><span>Doc health</span><span>Status</span><span>Requests</span><span></span>
+          <section>
+            <div class="cl-table" style="background:#fff; border:1px solid #ECE9F2; border-radius:16px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:14px; padding:0 18px 0 22px; border-bottom:1px solid #EEEBF3; flex-wrap:nowrap; min-height:52px;">
+                <div class="cl-tabs" style="display:flex; align-items:stretch; gap:14px; align-self:stretch; overflow-x:auto; min-width:0; flex-shrink:1; scrollbar-width:none;">
+                  <sc-for list="{{ clStatChips }}" as="c" hint-placeholder-count="6"><span data-cltab onClick="{{ c.select }}" style="display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:{{ c.tabColor }}; cursor:pointer; white-space:nowrap; box-shadow:inset 0 -2px 0 {{ c.tabLine }}; padding:0 1px;">{{ c.label }}<span style="font-size:10.5px; font-weight:700; color:{{ c.tabCount }}; background:{{ c.tabCountBg }}; padding:1px 7px; border-radius:99px;">{{ c.count }}</span></span></sc-for>
+                </div>
+                <div style="flex:1;"></div>
+                <sc-if value="{{ clFocusOn }}" hint-placeholder-val="{{ false }}"><span onClick="{{ clClearFocus }}" style="font-size:12px; color:#7C00FF; cursor:pointer;">Clear filters</span></sc-if>
+                <div style="position:relative; width:180px; flex-shrink:0; margin:9px 0;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:11px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                  <input value="{{ clSearch }}" onInput="{{ setClSearch }}" placeholder="Search clients…" autocomplete="off" style="width:100%; box-sizing:border-box; background:#F8F6FC; border:1px solid #EFEAF7; border-radius:10px; padding:7px 12px 7px 31px; font-size:12.5px; font-family:inherit; color:#18151F; outline:none;" style-focus="background:#fff; border-color:#C9A2FF; box-shadow:0 0 0 3px rgba(124,0,255,.10);">
+                </div>
+                <div style="display:flex; align-items:center; gap:2px; flex-shrink:0;">
+                  <span style="font-size:12px; color:#B9B6C4; margin-right:2px;">Sort</span>
+                  <sc-for list="{{ clSortChips }}" as="o" hint-placeholder-count="3"><span onClick="{{ o.select }}" style="font-size:12px; font-weight:600; color:{{ o.qColor }}; background:{{ o.qBg }}; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap;">{{ o.label }}</span></sc-for>
+                </div>
+              </div>
+              <div class="cl-scroll" style="overflow:auto; height:calc(100vh - 420px); min-height:340px;"><div class="cl-rows" style="min-width:920px;">
+              <div style="display:grid; grid-template-columns:minmax(280px,2.6fr) 150px 64px 150px 150px 110px 24px; gap:12px; padding:11px 22px; background:#FBF9FE; border-bottom:1px solid #EFEAF7; font-size:11.5px; font-weight:600; color:#8C7FA8; position:sticky; top:0; z-index:2;">
+                <span>Client</span><span>PRO officer</span><span style="text-align:right;">Staff</span><span>Workforce</span><span>Documents</span><span>Status</span><span></span>
               </div>
               <sc-for list="{{ clients }}" as="c" hint-placeholder-count="6">
-                <div onClick="{{ c.open }}" title="{{ c.suspTitle }}" style="display:grid; grid-template-columns:2fr 1fr 120px 74px 132px 128px 108px 82px 84px; gap:10px; align-items:center; padding:12px 22px; border-bottom:1px solid #FAF8FC; font-size:12.5px; cursor:pointer; background:{{ c.rowBg }}; box-shadow:{{ c.rowAccent }};" style-hover="background:#FAF7FE;">
-                  <div style="display:flex; align-items:center; gap:11px; min-width:0;"><div style="width:34px; height:34px; border-radius:10px; background:#26074D; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</div><div style="min-width:0;"><div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</div><div style="font-size:10.5px; color:#A9A6B4;">CR {{ c.cr }} · {{ c.city }}</div></div></div>
-                  <span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.industry }}</span>
-                  <!-- WHO HANDLES THIS CLIENT. Named on the client, and worth a column: it is the one
-                       thing on this screen an officer scans for to find their own work, and it was
-                       only visible by opening each client in turn. A blank is not a gap — it means
-                       the work goes to whoever is free, which is a perfectly good answer. -->
-                  <span title="{{ c.proTitle }}" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ c.proColor }}; font-weight:{{ c.proWeight }};">{{ c.pro }}</span>
-                  <span style="font-weight:700;">{{ c.employees }}</span>
-                  <!-- The nationalisation band, per client, at a glance. It was reachable only by
-                       opening each client in turn, which is no use for spotting the one that slipped. -->
+                <div onClick="{{ c.open }}" title="{{ c.suspTitle }}" class="cl-row" style="animation:clRowIn .6s cubic-bezier(.22,1,.36,1) both; animation-delay:{{ c.rowDelay }}; display:grid; grid-template-columns:minmax(280px,2.6fr) 150px 64px 150px 150px 110px 24px; gap:12px; align-items:center; padding:13px 22px; border-bottom:1px solid #F3F1F6; font-size:13px; color:#4B4757; cursor:pointer; background:#fff; transition:background .12s;">
+                  <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+                    <div style="width:36px; height:36px; border-radius:11px; background:{{ c.avBg }}; color:{{ c.avFg }}; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</div>
+                    <div style="min-width:0;">
+                      <div style="display:flex; align-items:center; gap:7px; min-width:0;"><span style="font-weight:600; color:#18151F; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</span><sc-if value="{{ c.unread }}" hint-placeholder-val="{{ false }}"><span onClick="{{ c.openRequests }}" title="Unread request" style="flex-shrink:0; font-size:9.5px; font-weight:700; color:#7C00FF; background:#F3EBFF; padding:2px 7px; border-radius:99px;">New request</span></sc-if></div>
+                      <div style="font-size:11px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.crLine }}</div>
+                    </div>
+                  </div>
+                  <div title="{{ c.proTitle }}" style="display:flex; align-items:center; gap:7px; min-width:0;">
+                    <sc-if value="{{ c.proHas }}" hint-placeholder-val="{{ false }}"><span style="width:22px; height:22px; border-radius:99px; background:#EDE3FF; color:#5B21B6; font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.proInit }}</span></sc-if>
+                    <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:{{ c.proColor }}; font-weight:{{ c.proWeight }};">{{ c.pro }}</span>
+                  </div>
+                  <span style="font-variant-numeric:tabular-nums; color:#18151F; text-align:right; padding-right:6px;">{{ c.employees }}</span>
                   <div style="min-width:0;">
-                    <sc-if value="{{ c.wfBand }}" hint-placeholder-val="{{ false }}">
-                      <span title="{{ c.wfTitle }}" style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:{{ c.wfColor }}; background:{{ c.wfBg }}; padding:3px 9px; border-radius:99px; white-space:nowrap; max-width:100%;"><span style="overflow:hidden; text-overflow:ellipsis;">{{ c.wfBand }}</span><span style="opacity:.65; font-weight:600;">{{ c.wfPct }}</span><sc-if value="{{ c.wfArrow }}" hint-placeholder-val="{{ false }}"><span title="{{ c.wfTrendTitle }}" style="font-weight:700; margin-left:1px;">{{ c.wfArrow }}</span></sc-if></span>
-                    </sc-if>
+                    <sc-if value="{{ c.wfBand }}" hint-placeholder-val="{{ false }}"><span title="{{ c.wfTitle }}" style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:{{ c.wfColor }}; background:{{ c.wfBg }}; padding:3px 9px; border-radius:99px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis;">{{ c.wfBand }}<span style="opacity:.7; font-weight:600;">{{ c.wfPct }}</span></span></sc-if>
                     <sc-if value="{{ c.wfNone }}" hint-placeholder-val="{{ true }}">
-                      <span title="{{ c.wfTitle }}" style="font-size:10.5px; color:#C4C0CE;">{{ c.wfNone }}</span>
+                      <span title="{{ c.wfTitle }}" style="font-size:12px; color:#B9B6C4;">{{ c.wfNone }}</span>
                     </sc-if>
                   </div>
-                  <div style="display:flex; gap:6px;">
-                    <sc-if value="{{ c.hasOverdue }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:700; color:#C0353A; background:#FEECEC; padding:2px 8px; border-radius:99px;">{{ c.overdue }} overdue</span></sc-if>
-                    <sc-if value="{{ c.hasExpiring }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:700; color:#B8860B; background:#FEF4E2; padding:2px 8px; border-radius:99px;">{{ c.expiring }} soon</span></sc-if>
+                  <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <sc-if value="{{ c.hasOverdue }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#C0353A; background:#FEECEC; padding:3px 9px; border-radius:99px; white-space:nowrap;"><span style="width:5px; height:5px; border-radius:99px; background:#C0353A;"></span>{{ c.overdue }} overdue</span></sc-if>
+                    <sc-if value="{{ c.hasExpiring }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#B8860B; background:#FEF4E2; padding:3px 9px; border-radius:99px; white-space:nowrap;"><span style="width:5px; height:5px; border-radius:99px; background:#B8860B;"></span>{{ c.expiring }} due soon</span></sc-if>
+                    <sc-if value="{{ c.docsClear }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:3px 9px; border-radius:99px; white-space:nowrap;"><span style="width:5px; height:5px; border-radius:99px; background:#0E9355;"></span>Up to date</span></sc-if>
+                    <sc-if value="{{ c.docsNone }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px; color:#B9B6C4;">—</span></sc-if>
                   </div>
-                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:{{ c.stColor }}; background:{{ c.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:4px; height:4px; border-radius:99px; background:{{ c.stColor }};"></span>{{ c.status }}</span>
-                  <div onClick="{{ c.openRequests }}" style="display:flex; align-items:center; justify-content:center; position:relative;">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                    <sc-if value="{{ c.unread }}" hint-placeholder-val="{{ false }}"><span style="position:absolute; top:-2px; right:14px; width:8px; height:8px; border-radius:99px; background:#C0353A; border:1.5px solid #fff;"></span></sc-if>
-                  </div>
-                  <div style="text-align:right;"><span onClick="{{ c.open }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:6px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Open</span></div>
+                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:{{ c.stColor }}; background:{{ c.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:5px; height:5px; border-radius:99px; background:{{ c.stColor }};"></span>{{ c.status }}</span>
+                  <svg class="cl-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9C6D3" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg>
                 </div>
               </sc-for>
-              <sc-if value="{{ clientsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:36px; text-align:center; font-size:12.5px; color:#A9A6B4;">No clients match this view.</div></sc-if>
+              <sc-if value="{{ clientsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:90px 20px; text-align:center;"><div style="font-size:13px; font-weight:700; color:#1A1523;">No clients match this view</div><div style="font-size:12px; color:#8C8899; margin-top:4px;">Try another filter or search.</div></div></sc-if>
             </div></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:11px 22px; background:#fff; border-top:1px solid #F3F1F6; font-size:11.5px; color:#9A97A6;"><span>{{ clShown }}</span><span>Click a row to open the client</span></div>
+            </div>
           </section>
         </sc-if>
 
@@ -20310,7 +20344,7 @@ class Component extends DCLogic {
         // A named officer who has LEFT or changed team is ignored by the engine — their work is back
         // with the balancer — so printing the name would say something untrue. Called out instead.
         pro: proOfficer ? (proOfficer.ok ? proOfficer.name : proOfficer.name) : 'Whoever is free',
-        proColor: proOfficer ? (proOfficer.ok ? '#4B4757' : '#B8860B') : '#A9A6B4',
+        proColor: proOfficer ? (proOfficer.ok ? '#4B4757' : '#B8860B') : '#B9B6C4',
         proWeight: proOfficer && proOfficer.ok ? '600' : '400',
         proTitle: proOfficer
           ? (proOfficer.ok
@@ -20366,11 +20400,23 @@ class Component extends DCLogic {
         // not only in the status column. Safe to bind inside sc-for: the runtime hoists mostly-static
         // styles into classes and stops re-evaluating them, but sc-for items are rebuilt each render.
         rowBg: status === 'Suspended' ? '#FFF8F8' : 'transparent',
+        rowCard: status === 'Suspended' ? '#FFF8F8' : '#FFFFFF',
         rowAccent: status === 'Suspended' ? 'inset 3px 0 0 #C0353A' : 'none',
         suspTitle: status === 'Suspended'
           ? name + ' is suspended — every user under this client is locked out of the portal and new requests are paused.'
           : '',
         initials: name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+        // A stable colour per client, so a row is recognisable at a glance without reading it.
+        ...(() => { const P9 = [['#F3EBFF', '#6D28D9'], ['#EEEBFF', '#4F46E5'], ['#F7ECFF', '#9333EA'], ['#FBEBF6', '#A21CAF'], ['#EDF0FF', '#3B5BDB'], ['#F1EDFB', '#5B21B6']];
+          let h9 = 0; for (const ch of String(name)) h9 = (h9 * 31 + ch.charCodeAt(0)) >>> 0; const p9 = P9[h9 % P9.length];
+          return { avBg: p9[0], avFg: p9[1], avRing: p9[1] + '22' }; })(),
+        crLine: [cr && cr !== '—' ? 'CR ' + cr : 'No CR yet', city && city !== '—' ? city : '', industry && industry !== '—' ? industry : ''].filter(Boolean).join(' · '),
+        industryShow: industry && industry !== '—' ? industry : '—',
+        proInit: proOfficer && proOfficer.name ? String(proOfficer.name).split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : '',
+        proHas: !!(proOfficer && proOfficer.name),
+        docsClear: !(overdue > 0) && !(expiring > 0) && Number(employees) > 0,
+        docsNone: !(overdue > 0) && !(expiring > 0) && !(Number(employees) > 0),
+        attention: (Number(overdue) || 0) * 100 + (Number(expiring) || 0),
         archived: !!clArchived[i],
         // The address is updated alongside the state, so this client can be refreshed into,
         // linked to, and returned to with the back button.
@@ -20379,15 +20425,25 @@ class Component extends DCLogic {
         archive: () => this.setState({ clArchivedMap: { ...clArchived, [i]: !clArchived[i] } }),
       };
     });
+    // Focus = the tile picked above the list (needs attention / expiring / suspended); it narrows
+    // whatever status chip is on. Sort is newest first unless asked otherwise.
+    // Re-run the row cascade when the list itself changes (tab, stat filter, sort) — not on every keystroke.
+    const _clReplay = () => setTimeout(() => { try { document.getAnimations().filter(a9 => (a9.animationName === 'clRowIn' || a9.animationName === 'clRowFade')).forEach(a9 => { a9.cancel(); a9.play(); }); } catch (e9) {} }, 0);
+    const clFocus = this.state.clFocus || null;
+    const clSort = this.state.clSort || 'newest';
     const clVisible = allClients.filter(c => !c.archived
       && (clFilter === 'All' || c.status === clFilter)
-      && (!clSearch || c.name.toLowerCase().includes(clSearch) || c.cr.toLowerCase().includes(clSearch) || c.industry.toLowerCase().includes(clSearch)));
+      && (!clFocus || (clFocus === 'attention' ? c.overdue > 0 : clFocus === 'expiring' ? c.expiring > 0 : clFocus === 'suspended' ? c.status === 'Suspended' : true))
+      && (!clSearch || c.name.toLowerCase().includes(clSearch) || c.cr.toLowerCase().includes(clSearch) || c.industry.toLowerCase().includes(clSearch)
+        || String(c.city || '').toLowerCase().includes(clSearch) || String(c.pro || '').toLowerCase().includes(clSearch)))
+      .slice().sort((a9, b9) => clSort === 'name' ? a9.name.localeCompare(b9.name) : clSort === 'attention' ? (b9.attention - a9.attention) || (a9.idx - b9.idx) : a9.idx - b9.idx);
     const clCount = (s2) => allClients.filter(c => c.status === s2 && !c.archived).length;
     const clStatChips = ['All', 'Active', 'Prospect', 'Onboarding', 'Suspended', 'Inactive'].map(k => ({
       label: k, count: k === 'All' ? allClients.filter(c => !c.archived).length : clCount(k),
-      select: () => this.setState({ clFilter: k }),
+      select: () => { this.setState({ clFilter: k }); _clReplay(); },
       color: clFilter === k ? '#7C00FF' : '#8C8899', bg: clFilter === k ? '#fff' : 'transparent',
       shadow: clFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
+      tabColor: clFilter === k ? '#5B21B6' : '#8B8898', tabLine: clFilter === k ? '#7C00FF' : 'transparent', tabCount: clFilter === k ? '#7C00FF' : '#B9B6C4', tabCountBg: clFilter === k ? '#F3EBFF' : '#F4F3F7',
     }));
     const clStats = [
       ['Total clients', allClients.filter(c => !c.archived).length, '#7C00FF', '#F3E8FF'],
@@ -20396,6 +20452,45 @@ class Component extends DCLogic {
       ['Employees managed', Array.isArray(this.state.employeesData) ? this.state.employeesData.filter(e9 => !e9.archived).length : allClients.reduce((s2, c) => s2 + c.employees, 0), '#0284C7', '#E4F4FD'],
       ['Overdue docs', allClients.reduce((s2, c) => s2 + c.overdue, 0), '#C0353A', '#FEECEC'],
     ].map(([label, count, color, bg]) => ({ label, count, color, bg }));
+    const clTiles = (() => {
+      const live9 = allClients.filter(c => !c.archived);
+      const att9 = live9.filter(c => c.overdue > 0), soon9 = live9.filter(c => c.expiring > 0), sus9 = live9.filter(c => c.status === 'Suspended');
+      const ovd9 = live9.reduce((s2, c) => s2 + (Number(c.overdue) || 0), 0), exp9 = live9.reduce((s2, c) => s2 + (Number(c.expiring) || 0), 0);
+      const emp9 = Array.isArray(this.state.employeesData) ? this.state.employeesData.filter(e9 => !e9.archived).length : live9.reduce((s2, c) => s2 + (Number(c.employees) || 0), 0);
+      const IC9 = { null: 'M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2',
+        attention: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+        expiring: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+        suspended: 'M10 15V9M14 15V9M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+        undefined: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8' };
+      const t9 = (key9, label9, value9, cap9, fg9, dot9) => { const on9 = key9 !== undefined && clFocus === key9;
+        return { label: label9, value: String(value9), caption: cap9, fg: fg9, dot: dot9, icon: IC9[String(key9)],
+          bannerIcBg: dot9 + '66',
+          // Plain strip: colour only where it means something (overdue / due soon), grey otherwise.
+          plainBg: on9 ? '#FAF6FF' : '#fff', plainLabel: on9 ? '#5B21B6' : '#77738A', plainNum: key9 === 'attention' && value9 ? '#C0353A' : key9 === 'expiring' && value9 ? '#B8860B' : key9 === undefined ? '#0369A1' : '#26074D',
+          plainTop: on9 ? '#7C00FF' : 'transparent',
+          plainDot: key9 === 'attention' ? '#E5484D' : key9 === 'expiring' ? '#F59E0B' : key9 === 'suspended' ? '#A9A6B4' : key9 === undefined ? '#0EA5E9' : '#7C00FF',
+          segBg: on9 ? 'rgba(255,255,255,.14)' : 'transparent', segLine: on9 ? '#FFFFFF' : 'transparent', segHover: key9 === undefined ? '' : 'background:rgba(255,255,255,.08);',
+          iconBg: dot9 + '1F', bg: on9 ? 'linear-gradient(160deg,' + dot9 + '14,#FFFFFF 70%)' : '#fff',
+          border: on9 ? dot9 + '80' : '#EEEBF4', ring: on9 ? '0 8px 24px ' + dot9 + '26' : '0 1px 2px rgba(38,7,77,.04)',
+          cursor: key9 === undefined ? 'default' : 'pointer', pick: () => { if (key9 !== undefined) { this.setState({ clFocus: on9 ? null : key9 }); _clReplay(); } } }; };
+      return [
+        t9(null, 'All clients', live9.length, clCount('Active') + ' active · ' + clCount('Onboarding') + ' onboarding', '#26074D', '#7C00FF'),
+        t9('attention', 'Needs attention', att9.length, ovd9 ? ovd9 + ' overdue document' + (ovd9 === 1 ? '' : 's') : 'nothing overdue', '#C0353A', '#E5484D'),
+        t9('expiring', 'Expiring soon', soon9.length, exp9 ? exp9 + ' document' + (exp9 === 1 ? '' : 's') + ' within 30 days' : 'nothing due', '#B8860B', '#F59E0B'),
+        t9('suspended', 'Suspended', sus9.length, sus9.length ? 'requests paused' : 'none', '#6F6C7A', '#A9A6B4'),
+        t9(undefined, 'Employees managed', emp9, 'across ' + live9.length + ' client' + (live9.length === 1 ? '' : 's'), '#0284C7', '#0284C7'),
+      ];
+    })();
+    const clView = 'list';
+    const clViewChips = [['grid', 'Grid', 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z'], ['list', 'List', 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01']].map(([k9, l9, ic9]) => ({
+      label: l9, icon: ic9, select: () => this.setState({ clView: k9 }),
+      color: clView === k9 ? '#7C00FF' : '#8C8899', bg: clView === k9 ? '#fff' : 'transparent', shadow: clView === k9 ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
+    }));
+    const clSortChips = [['newest', 'Newest'], ['name', 'Name A–Z'], ['attention', 'Needs attention']].map(([k9, l9]) => ({
+      label: l9, select: () => { this.setState({ clSort: k9 }); _clReplay(); },
+      color: clSort === k9 ? '#7C00FF' : '#8C8899', bg: clSort === k9 ? '#fff' : 'transparent', shadow: clSort === k9 ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
+      qColor: clSort === k9 ? '#5B21B6' : '#9A97A6', qBg: clSort === k9 ? '#F3EBFF' : 'transparent',
+    }));
     // WIRED: upgrade banner = real pending upgrade requests; decisions persist. Design sample only
     // when unauthenticated.
     const _upgReal = Array.isArray(this.state.upgradeRequestsData) ? this.state.upgradeRequestsData : null;
@@ -21805,7 +21900,11 @@ class Component extends DCLogic {
     const clientsApi = {
       ...nfApi,
       ...addonQuoteApi,
-      clients: clVisible, clStatChips, clStats, clUpgrades, clUpgradeShow: clUpgrades.length > 0, showClientList: !clRow,
+      clients: clVisible.map((c9, i9) => ({ ...c9, rowDelay: (80 + Math.min(i9, 14) * 70) + 'ms' })), clStatChips, clStats, clTiles, clSortChips, clViewChips, clUpgrades,
+      clGrid: clView === 'grid', clList: clView === 'list',
+      clShown: clVisible.length + ' of ' + allClients.filter(c => !c.archived).length + ' client' + (allClients.filter(c => !c.archived).length === 1 ? '' : 's'),
+      clFocusOn: !!clFocus || !!clSearch,
+      clClearFocus: () => this.setState({ clFocus: null, clSearch: '' }), clUpgradeShow: clUpgrades.length > 0, showClientList: !clRow,
       clSearch: this.state.clSearch || '', setClSearch: (e) => this.setState({ clSearch: e.target.value }),
       clientsEmpty: clVisible.length === 0,
       ...clDetailApi, ...editClientApi,
