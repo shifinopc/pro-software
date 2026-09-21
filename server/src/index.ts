@@ -2130,6 +2130,16 @@ app.get("/api/setup-check", requireAuth, requireStaff, async (req, res) => {
  * Counts come back for EVERY kind including the zeroes, so the filter bar keeps its shape as it is
  * used rather than dropping chips as they stop matching.
  */
+// The SYSTEM activity log (workflow started, renewal completed, payment recorded…) — what the Activity
+// Timeline and the dashboard's "Recent activity" show. It used to be read from /api/activities, but
+// that address became the CRM contact log (calls, meetings) and answers in a different shape, so
+// both screens silently fell back to invented events. Newest first, a bounded page.
+app.get("/api/activity-log", requireAuth, requireStaff, async (req, res) => {
+  const take = Math.max(1, Math.min(300, Number(req.query.limit ?? 150) || 150));
+  const rows = await prisma.activity.findMany({ orderBy: [{ date: "desc" }, { id: "desc" }], take });
+  res.json(rows.map(r => ({ id: r.id, type: r.type, message: r.message, user: r.user, at: r.date, date: r.date })));
+});
+
 app.get("/api/activities", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   const scoped = await salesCompanyIds(req as any);
   const days = Math.max(1, Math.min(365, Number(req.query.days ?? 14) || 14));

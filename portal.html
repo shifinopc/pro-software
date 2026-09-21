@@ -2466,9 +2466,9 @@
         <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">LEGAL COMPANY NAME *</div>
         <input value="{{ acName }}" onChange="{{ setAcName }}" placeholder="e.g. Acme Trading LLC" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
-          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TRADE LICENSE NO. *</div><input value="{{ acLicense }}" onChange="{{ setAcLicense }}" placeholder="TL-000000" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
+          <div><div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER *</div><input value="{{ acLicense }}" onChange="{{ setAcLicense }}" placeholder="TL-000000" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
           <div>
-            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMIRATE</div>
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CITY</div>
             <div style="position:relative; margin-top:6px; flex:1; min-width:0;">
                 <div data-dd onClick="{{ ddAcEmToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acEmirate }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
                 <sc-if value="{{ ddAcEmOpen }}" hint-placeholder-val="{{ false }}">
@@ -3891,7 +3891,7 @@ class Component extends DCLogic {
     const _apMon = (ds) => { const m = String(ds || '').match(/([A-Za-z]{3,})/); return m ? m[1].slice(0, 3).toUpperCase() : '—'; };
     const _apDayN = (ds) => { const m = String(ds || '').match(/(\d{1,2})/); return m ? m[1] : '—'; };
     const _apRaw = Array.isArray(this.state.apptItems) ? this.state.apptItems : null;
-    const appointments = (_apRaw || (this._companyId ? [] : [
+    const appointments = (_apRaw || ((this._companyId || ((() => { try { return !!localStorage.getItem('stimespro:portalToken'); } catch (e9) { return false; } })())) ? [] : [
       { type: 'Medical test — M. Fernandes', location: 'Smart Salem, DIFC', date: '21 Jul', time: '9:30 AM', status: 'Confirmed' },
       { type: 'Biometrics — A. Khan', location: 'ICP Center, Al Barsha', date: '23 Jul', time: '11:00 AM', status: 'Confirmed' },
     ])).map(a2 => {
@@ -4279,10 +4279,10 @@ class Component extends DCLogic {
             printReceipt: () => this._printReceipt(p, inv, paidAmt, owed),
           };
         })
-      : [
+      : (((() => { try { return !!localStorage.getItem('stimespro:portalToken'); } catch (e9) { return false; } })()) ? [] : [
         ['28 Jun', 'INV-1173 · Trade license amendment', 'Bank transfer', _money(5400), 'Completed'],
         ['15 May', 'INV-1152 · Monthly PRO plan', 'Bank transfer', _money(1450), 'Completed'],
-      ].map(([date, ref, method, amount, status]) => ({ date, ref, method, amount, status, printReceipt: () => this.toast('This is a sample row') })));
+      ]).map(([date, ref, method, amount, status]) => ({ date, ref, method, amount, status, printReceipt: () => this.toast('This is a sample row') })));
     const paymentsEmpty = !!_payReal && _payReal.length === 0;
 
     const catDefs = ['Visa & Immigration', 'Trade License', 'Billing', 'Documents', 'Other'];
@@ -5296,19 +5296,19 @@ class Component extends DCLogic {
       groupCards, pendingCompanies,
       openGroup: () => this.setState({ active: 'Group Overview', companyMenu: false }),
       showAddCompanyModal: !!this.state.acModal,
-      openAddCompany: () => this.setState({ acModal: true, acName: '', acLicense: '', acEmirate: 'Dubai', acError: '', companyMenu: false }),
+      openAddCompany: () => this.setState({ acModal: true, acName: '', acLicense: '', acEmirate: '', acError: '', companyMenu: false }),
       closeAddCompany: () => this.setState({ acModal: false }),
-      acName: this.state.acName || '', acLicense: this.state.acLicense || '', acEmirate: this.state.acEmirate || 'Dubai', acError: this.state.acError || false,
+      acName: this.state.acName || '', acLicense: this.state.acLicense || '', acEmirate: this.state.acEmirate || '', acError: this.state.acError || false,
       setAcName: (e) => this.setState({ acName: e.target.value, acError: '' }),
       setAcLicense: (e) => this.setState({ acLicense: e.target.value, acError: '' }),
-      ...mkDd('ddAcEm', ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'RAK', 'Fujairah', 'UAQ'], this.state.acEmirate || 'Dubai', (v) => this.setState({ acEmirate: v })),
+      ...mkDd('ddAcEm', ['Riyadh', 'Jeddah', 'Dammam', 'Al Khobar', 'Makkah', 'Madinah', 'Jubail', 'Other'], this.state.acEmirate || 'Choose a city', (v) => this.setState({ acEmirate: v })),
       // A client can't create a company record itself (onboarding is a staff/contract step), so the
       // details used to sit in local state and vanish. They now reach the PRO team as a REAL service
       // request instead of being silently dropped.
       submitAddCompany: () => {
         const st = this.state;
         if (!(st.acName || '').trim()) return this.setState({ acError: 'Legal company name is required' });
-        if (!(st.acLicense || '').trim()) return this.setState({ acError: 'Trade license number is required' });
+        if (!(st.acLicense || '').trim()) return this.setState({ acError: 'CR number is required' });
         const tok = credTok();
         if (!tok) return this.setState({ acError: 'Your session expired — sign in again' });
         const detail = ['Please add this company to our group:', 'Name: ' + st.acName.trim(), 'Trade licence: ' + st.acLicense.trim(),
@@ -5429,7 +5429,7 @@ class Component extends DCLogic {
     const _pdDocs = Array.isArray(this.state.docItems) ? this.state.docItems : [];
     const _pdTypes = [...new Set(_pdDocs.filter(d7 => d7.employeeId || (d7.person && d7.person !== this.state.company)).map(d7 => d7.docType))].slice(0, 5);
     const _pdTypeList = _pdTypes.length ? _pdTypes : ['Passport', 'Visa', 'Emirates ID', 'Labour Card', 'Medical Certificate'];
-    const employeeDocs = (_pdEmps.length ? _pdEmps : (this._companyId ? [] : edDefs.map(([name, role]) => ({ name, role })))).map((e7, i) => {
+    const employeeDocs = (_pdEmps.length ? _pdEmps : ((this._companyId || ((() => { try { return !!localStorage.getItem('stimespro:portalToken'); } catch (e9) { return false; } })())) ? [] : edDefs.map(([name, role]) => ({ name, role })))).map((e7, i) => {
       const p = avPals[i % avPals.length];
       const mine = _pdDocs.filter(d7 => (d7.employeeId && e7.id && d7.employeeId === e7.id) || (!d7.employeeId && d7.person === e7.name));
       const docs = _pdTypeList.map(tn => {
