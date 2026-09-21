@@ -20271,8 +20271,16 @@ class Component extends DCLogic {
     // "Unassigned" rather than a dash: a dash reads as a value, and an unowned client is a thing
     // somebody should notice and fix.
     const _repOf = (c9) => _ownerName9(c9.ownerId) || 'Unassigned';
+    // Newest client first. Most rows have no createdAt (it means 'client since' and was never
+    // filled), but every id carries its creation time: a cuid holds it in base36 after the 'c', and
+    // the older ids are 'cl' + milliseconds.
+    const _coBorn = (c9) => { const t9 = c9 && c9.createdAt ? Date.parse(c9.createdAt) : NaN; if (Number.isFinite(t9)) return t9;
+      const id9 = String((c9 && c9.id) || ''); const m9 = id9.match(/^cl?(\d{13})/); if (m9) return Number(m9[1]);
+      if (/^c[a-z0-9]{20,}$/.test(id9)) { const n9 = parseInt(id9.slice(1, 9), 36); if (Number.isFinite(n9)) return n9; }
+      return 0; };
+    const _coNewest = Array.isArray(coData) ? coData.slice().sort((a9, b9) => _coBorn(b9) - _coBorn(a9)) : coData;
     const clDefs = (Array.isArray(coData) && coData.length
-      ? coData.map(c => [c.name, c.cr || '—', c.industry || '—', c.city || '—', c.contact || '—', c.email || '—', c.phone || '—',
+      ? _coNewest.map(c => [c.name, c.cr || '—', c.industry || '—', c.city || '—', c.contact || '—', c.email || '—', c.phone || '—',
           // Sales rep and package were LITERAL dashes — the columns existed, the screen rendered them,
           // and nothing ever filled them in. A client on a real plan read "Package —" on its own
           // overview while the Add-employee dialog quoted that same plan's visa allowance two clicks
