@@ -104,6 +104,17 @@ cd .. && docker compose -f app/stack/docker-compose.yml --env-file .env up -d --
 
 The schema is re-pushed on start; the volumes are untouched.
 
+**Then purge the Cloudflare cache.** Cloudflare → ionob.in → Caching → Configuration → *Purge
+Everything*. The console document is 3.3 MB and is marked `no-cache`, so before it was cached at the
+edge every cold visit re-fetched it from Finland and had it compressed on the way — 2.2 s for the
+document alone. A cache rule (*Cache STIMES PRO console + portal HTML*, hostnames `pro.ionob.in` and
+`cp.ionob.in`) now holds it at the edge for an hour, which brings that to ~0.6 s.
+
+The cost of that is this step: browsers still revalidate on every load, but they revalidate against
+the edge, so **until the cache is purged the edge keeps serving the previous deploy's HTML — for up
+to an hour.** The in-app "new version" banner cannot help, because a reload gets the same cached
+document. Purging takes one click and is the last step of every deploy.
+
 ## Things that will cost you time if you skip them
 
 - **`CRED_KEY` is unrecoverable.** AES-256 key for the client credential vault. Lose or change it
