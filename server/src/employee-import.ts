@@ -39,34 +39,8 @@
  */
 import { prisma } from "./db.js";
 import { normCr } from "./establishments.js";
+import { resolveCountry } from "./countries.js";
 
-/** Nationality labels a client will actually type, mapped to the codes this system counts on. */
-const NATION: Record<string, string> = {
-  india: "IN", indian: "IN",
-  bangladesh: "BD", bangladeshi: "BD",
-  saudi: "SA", "saudi arabia": "SA", "saudi arabian": "SA", ksa: "SA",
-  pakistan: "PK", pakistani: "PK",
-  philippines: "PH", filipino: "PH", philippine: "PH",
-  nepal: "NP", nepali: "NP", nepalese: "NP",
-  egypt: "EG", egyptian: "EG",
-  syria: "SY", syrian: "SY",
-  jordan: "JO", jordanian: "JO",
-  yemen: "YE", yemeni: "YE",
-  sudan: "SD", sudanese: "SD",
-  "sri lanka": "LK", "sri lankan": "LK",
-  ethiopia: "ET", ethiopian: "ET",
-  kenya: "KE", kenyan: "KE",
-  uganda: "UG", ugandan: "UG",
-  indonesia: "ID", indonesian: "ID",
-  afghanistan: "AF", afghan: "AF",
-  lebanon: "LB", lebanese: "LB",
-  morocco: "MA", moroccan: "MA",
-  tunisia: "TN", tunisian: "TN",
-  turkey: "TR", turkish: "TR",
-  "united arab emirates": "AE", uae: "AE", emirati: "AE",
-  nigeria: "NG", nigerian: "NG",
-  ghana: "GH", ghanaian: "GH",
-};
 
 /** Column names people actually use, mapped to the ones this reads. */
 const ALIAS: Record<string, string> = {
@@ -223,7 +197,7 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
     }
 
     const natRaw = at(r, "nationality");
-    const nat = /^[A-Za-z]{2}$/.test(natRaw) ? natRaw.toUpperCase() : NATION[natRaw.toLowerCase()];
+    const nat = resolveCountry(natRaw);
     if (!nat) { refused.push({ row: line, name, what: natRaw ? `nationality "${natRaw}" is not one this system recognises — use the country name or its 2-letter code` : "no nationality" }); continue; }
 
     // Digits only. One real file arrived with a stray byte in front of an Iqama number, which would
