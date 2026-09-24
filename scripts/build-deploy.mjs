@@ -7,9 +7,8 @@
 //      `window.STIMES_API || 'http://localhost:4100'`, so WITHOUT this the live site calls localhost).
 //   2. Stages deploy/console, deploy/portal (portal.html → index.html), deploy/api.
 //   3. Leaves staging dirs ready to zip (zipping done by the caller / PowerShell Compress-Archive).
-import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync, statSync } from "fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } from "fs";
 import { join } from "path";
-import { brotliCompressSync, gzipSync, constants as zlibConstants } from "zlib";
 
 const ROOT = process.cwd();
 const API_URL = process.env.API_URL || "https://proapi.ionob.in";
@@ -67,32 +66,6 @@ mkdirSync(prismaOut, { recursive: true });
 cpSync(join(S, "prisma", "migrations"), join(prismaOut, "migrations"), { recursive: true });
 if (existsSync(join(S, ".env.example"))) cpSync(join(S, ".env.example"), join(apiDir, ".env.example"));
 console.log("staged deploy/api");
-
-// 3. Pre-compress the HTML.
-//
-// index.html is 3.3 MB of markup and app logic, and it is marked no-cache so every cold visit
-// downloads it again. Compressing it per request — at nginx, and again at the CDN, because a CDN
-// will not cache a no-cache document — added roughly two thirds of a second to time-to-first-byte
-// for a file that only changes on deploy. Compressing it once, here, takes that work off every
-// visit, and brotli at full quality is also ~200 KB smaller than what a CDN produces on the fly
-// (it compresses at a low quality setting because it is doing it while you wait).
-//
-// Both encodings are written because a client that cannot take brotli must still get a
-// pre-compressed file, and nginx serves whichever the request allows. The uncompressed original
-// stays beside them: nginx falls back to it, so a missing or stale .br/.gz can never blank the app.
-const precompress = (dir, file) => {
-  const src = join(dir, file);
-  if (!existsSync(src)) return;
-  const buf = readFileSync(src);
-  writeFileSync(src + ".br", brotliCompressSync(buf, { params: {
-    [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-    [zlibConstants.BROTLI_PARAM_SIZE_HINT]: buf.length,
-  } }));
-  writeFileSync(src + ".gz", gzipSync(buf, { level: 9 }));
-  const kb = (n) => Math.round(n / 1024) + " KB";
-  console.log(`compressed ${file}: ${kb(buf.length)} -> br ${kb(statSync(src + ".br").size)}, gzip ${kb(statSync(src + ".gz").size)}`);
-};
-[consoleDir, portalDir].forEach((d) => precompress(d, "index.html"));
 
 console.log("\nStaging complete. Now zip each folder's CONTENTS (files at root):");
 console.log("  deploy/console → stimespro-console.zip");
