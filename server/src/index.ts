@@ -4871,6 +4871,130 @@ app.post("/api/employees/:id/exit", requireAuth, requireStaff, requireWriteRole,
   res.json({ employee });
 });
 
+// ── Removing an employee added by mistake ───────────────────────────
+//
+// NOT the same thing as an exit, and the difference matters. An exit records that a real person
+// stopped working somewhere — it belongs in the client's history and every headcount and audit
+// depends on it still being there. This is for a row that should never have existed: a typo
+// duplicate, or someone keyed in under the wrong client. Leaving those as "Former" pollutes the
+// headcount and the compliance score with a person who was never employed.
+//
+// So it is a real delete, and it is deliberately narrow. Anything that shows real work happened on
+// this person blocks it and says so; an exit that has already begun blocks it too, because that is
+// a claim about a real employment and the way back is to cancel the exit first.
+//
+// Their documents go with them. A mistaken employee's documents are the same mistake keyed in at
+// the same moment, and leaving them behind would strand compliance records pointing at nobody. The
+// caller has to ask for that explicitly and is told the count first, because those documents can
+// carry uploaded identity papers, which are deleted from disk as well — for a person who should
+// not be in the system, keeping their passport scan is the worse outcome.
+const employeeRemoval = async (id: string) => {
+  const emp = await prisma.employee.findUnique({ where: { id } });
+  if (!emp) return null;
+
+  const [docs, tasks, suggestions, agentTasks] = await Promise.all([
+    prisma.document.findMany({ where: { employeeId: id }, select: { id: true, docType: true, customData: true } }),
+    prisma.task.count({ where: { employeeId: id } }),
+    prisma.documentSuggestion.count({ where: { employeeId: id } }),
+    prisma.agentTask.count({ where: { employeeId: id } }),
+  ]);
+
+  const blockers: string[] = [];
+  if (emp.archived || emp.exitStatus !== "active")
+    blockers.push(emp.archived
+      ? "they have been offboarded — a former employee is part of this client's history"
+      : "an exit is already under way for them — cancel the exit first if this record was a mistake");
+  if (tasks) blockers.push(`${tasks} ${tasks === 1 ? "task refers" : "tasks refer"} to them — close or reassign ${tasks === 1 ? "it" : "them"} first`);
+
+  return { emp, docs, tasks, suggestions, agentTasks, blockers };
+};
+
+/** What deleting this employee would remove, or why it cannot be. The console asks before offering
+ *  Remove, so a row that cannot be deleted explains itself instead of failing on the click. */
+app.get("/api/employees/:id/removal", requireAuth, requireStaff, async (req, res) => {
+  const r = await employeeRemoval(req.params.id);
+  if (!r) return res.status(404).json({ error: "Employee not found" });
+  res.json({
+    name: r.emp.name,
+    canDelete: r.blockers.length === 0,
+    blockers: r.blockers,
+    removes: {
+      documents: r.docs.length,
+      documentTypes: [...new Set(r.docs.map(d => d.docType))],
+      files: r.docs.filter(d => {
+        const cd = (d.customData ?? {}) as any;
+        return typeof (cd.filePath || cd.file) === "string";
+      }).length,
+      suggestions: r.suggestions,
+      agentTasks: r.agentTasks,
+    },
+  });
+});
+
+app.delete("/api/employees/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const r = await employeeRemoval(req.params.id);
+  if (!r) return res.status(404).json({ error: "Employee not found" });
+  const { emp, docs, blockers } = r;
+
+  if (blockers.length)
+    return res.status(409).json({ error: `${emp.name} cannot be removed: ${blockers.join("; and ")}.`, blockers });
+
+  // Deleting the documents is a separate yes. The count is in the GET above and in the confirmation
+  // the console shows, so nobody gets here without having been told what goes with them.
+  const body = (req.body ?? {}) as any;
+  if (docs.length && body.withDocuments !== true)
+    return res.status(409).json({
+      error: `${emp.name} has ${docs.length} document${docs.length === 1 ? "" : "s"} on file. Removing them deletes ${docs.length === 1 ? "it" : "those"} too — confirm to continue.`,
+      needsConfirmation: "withDocuments",
+      documents: docs.length,
+    });
+
+  // The uploaded scans, off the disk as well as out of the database. Only assets this employee's
+  // documents point at, and only when nothing else still references them.
+  const paths = docs.map(d => {
+    const cd = (d.customData ?? {}) as any;
+    return typeof (cd.filePath || cd.file) === "string" ? String(cd.filePath || cd.file) : null;
+  }).filter(Boolean) as string[];
+  const assetIds = [...new Set(paths.map(p => p.startsWith("/api/files/") ? p.slice("/api/files/".length) : null).filter(Boolean) as string[])];
+
+  let filesRemoved = 0;
+  for (const assetId of assetIds) {
+    const asset = await prisma.fileAsset.findUnique({ where: { id: assetId } });
+    if (!asset) continue;
+    // A scan reused by a document that is staying put is left alone — better a stray file than a
+    // document whose evidence silently disappears.
+    const stillUsed = await prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT COUNT(*) AS n FROM Document
+      WHERE (employeeId IS NULL OR employeeId <> ${emp.id})
+        AND (JSON_UNQUOTE(JSON_EXTRACT(customData, '$.file')) = ${"/api/files/" + assetId}
+          OR JSON_UNQUOTE(JSON_EXTRACT(customData, '$.filePath')) = ${"/api/files/" + assetId})`;
+    if (Number(stillUsed?.[0]?.n ?? 0) > 0) continue;
+    try {
+      for (const ext of [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".svg"]) {
+        const f = path.join(PRIVATE_FILES_DIR, assetId + ext);
+        if (fs.existsSync(f)) { fs.unlinkSync(f); filesRemoved++; break; }
+      }
+    } catch { /* a file already gone must not stop the deletion */ }
+    await prisma.fileAsset.delete({ where: { id: assetId } }).catch(() => {});
+  }
+
+  await prisma.document.deleteMany({ where: { employeeId: emp.id } });
+  await prisma.documentSuggestion.deleteMany({ where: { employeeId: emp.id } });
+  await prisma.agentTask.deleteMany({ where: { employeeId: emp.id } });
+  await prisma.employee.delete({ where: { id: emp.id } });
+
+  // The row is gone, so the audit entry is the only remaining record that this person was ever
+  // here — it carries what identified them, not just their id.
+  await logAudit({
+    action: "employee.delete", actorId: a?.sub, target: emp.id,
+    detail: `${emp.name}${emp.code ? ` · ${emp.code}` : ""}${emp.govId ? ` · ID ${emp.govId}` : ""} · ${docs.length} document${docs.length === 1 ? "" : "s"}, ${filesRemoved} file${filesRemoved === 1 ? "" : "s"} deleted`,
+    ip: clientIp(req),
+  });
+  logActivity({ type: "client", message: `Employee removed: ${emp.name}` });
+  res.json({ ok: true, documents: docs.length, files: filesRemoved });
+});
+
 // ── Realtime (SSE): live typing + instant message delivery ───────────
 // Two steps: authenticate normally to get a short-lived ticket, then open the stream with it
 // (EventSource can't set headers, and a JWT in a query string would land in access logs).

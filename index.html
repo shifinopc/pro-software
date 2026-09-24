@@ -2551,6 +2551,7 @@
                     <span onClick="{{ e.reinstate }}" title="Bring them back — restores the record and resumes renewals" style="font-size:11px; font-weight:700; color:#0E9355; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Reinstate</span>
                   </sc-if>
                   <sc-if value="{{ e.canEdit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ e.edit }}" style="font-size:11px; font-weight:600; color:#4B4757; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Edit</span></sc-if>
+                  <sc-if value="{{ e.canRemove }}" hint-placeholder-val="{{ false }}"><span onClick="{{ e.remove }}" title="Added by mistake — delete the record. For someone who is leaving, use the exit instead." style="font-size:11px; font-weight:600; color:#A9A6B4; cursor:pointer; white-space:nowrap;" style-hover="color:#C0353A;">Remove</span></sc-if>
                   <span onClick="{{ e.view }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">View</span>
                 </div>
               </sc-for>
@@ -10321,6 +10322,45 @@
         <input value="{{ ccReceipt }}" onChange="{{ setCcReceipt }}" placeholder="RCP-…" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; background:#FCFBFE;">
         <div style="font-size:10px; color:#B9B5C4; margin-top:10px;">Archives the old version to history · closes the linked task</div>
         <div style="display:flex; gap:10px; margin-top:18px; justify-content:flex-end;"><button onClick="{{ closeCompComplete }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ confirmComplete }}" style="background:#12B76A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Complete &amp; archive</button></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- Removing an employee added by mistake. Deliberately not the exit flow: this one deletes. -->
+  <sc-if value="{{ ermOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ ermClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:470px; padding:24px 26px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:11px; background:#FEECEC; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#1A1523;">Remove {{ ermName }}?</div>
+            <div style="font-size:12px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ ermSub }}</div>
+          </div>
+          <div onClick="{{ ermClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <sc-if value="{{ ermLoading }}" hint-placeholder-val="{{ false }}"><div style="margin-top:16px; font-size:12.5px; color:#8C8899;">Checking what is attached to this record…</div></sc-if>
+        <sc-if value="{{ ermErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:10px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ermErr }}</div></sc-if>
+
+        <!-- Why it cannot be deleted, in the words the server used. -->
+        <sc-if value="{{ ermHasBlockers }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; background:#FFF9EE; border:1px solid #F4DDB0; border-radius:12px; padding:12px 14px;">
+            <div style="font-size:12px; font-weight:700; color:#7A5A12;">This record cannot be removed</div>
+            <sc-for list="{{ ermBlockers }}" as="b" hint-placeholder-count="2"><div style="font-size:12px; color:#7A5A12; margin-top:5px; line-height:1.5;">· {{ b.text }}</div></sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ ermHasDocs }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; background:#FDF6F6; border:1px solid #F3D9D9; border-radius:12px; padding:12px 14px;">
+            <div style="font-size:12px; font-weight:700; color:#A03B40;">{{ ermDocsText }}</div>
+            <div style="font-size:11.5px; color:#A9776F; margin-top:4px; line-height:1.5;">Any uploaded scans are deleted from the server too. This cannot be undone.</div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+          <button onClick="{{ ermClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <sc-if value="{{ ermCanDelete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ ermConfirm }}" style="background:#C0353A; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(192,53,58,.25);" style-hover="filter:brightness(.95);">{{ ermBtn }}</button></sc-if>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -21667,6 +21707,10 @@ class Component extends DCLogic {
               eeType: e9.employmentType || '', eeCat: e9.jobCategory || '',
             });
           },
+          // Only while they are still a plain active record. Once an exit has started or finished,
+          // what exists is a claim about a real employment, and the server refuses to delete it.
+          canRemove: canWrite && !former && ex9 === 'active',
+          remove: () => this._empRemove(e9.id, name),
           startExit: () => this._empExit(e9.id, 'exiting', name),
           finishExit: () => this._empExit(e9.id, 'exited', name),
           cancelExit: () => this._empExit(e9.id, 'cancel', name),
@@ -23849,6 +23893,39 @@ class Component extends DCLogic {
       };
       rd9.readAsDataURL(file9);
     });
+    // Removing an employee added by mistake. The server is asked FIRST what would go with them, so
+    // the confirmation names the real consequence instead of a generic warning — and a record that
+    // cannot be deleted says why here rather than after the click.
+    this._empRemove = (id9, name9) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      this.setState({ ermId: id9, ermName: name9, ermLoading: true, ermErr: '', ermInfo: null, ermBusy: false });
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/employees/' + id9 + '/removal', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+        .then(({ ok, j9 }) => ok ? this.setState({ ermLoading: false, ermInfo: j9 })
+                                 : this.setState({ ermLoading: false, ermErr: (j9 && j9.error) || 'Could not check this record' }))
+        .catch(() => this.setState({ ermLoading: false, ermErr: 'Server unreachable — nothing was changed' }));
+    };
+    this._empRemoveConfirm = () => {
+      const t9 = localStorage.getItem('stimespro:token');
+      const id9 = this.state.ermId, info9 = this.state.ermInfo || {};
+      if (!id9 || this.state.ermBusy) return;
+      this.setState({ ermBusy: true, ermErr: '' });
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/employees/' + id9, { method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        body: JSON.stringify({ withDocuments: true }) })
+        .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+        .then(({ ok, j9 }) => {
+          if (!ok) return this.setState({ ermBusy: false, ermErr: (j9 && j9.error) || 'Could not remove this record' });
+          const docs9 = (info9.removes || {}).documents || 0;
+          this.setState({ ermId: null, ermBusy: false, ermInfo: null });
+          this.toast(this.state.ermName + ' removed' + (docs9 ? ' with ' + docs9 + ' document' + (docs9 === 1 ? '' : 's') : ''));
+          // The headcount, the ratio and the client's staff count all move, not just the list — the
+          // same reload the exit flow does, for the same reason. Documents too, since theirs went.
+          this._afterWorkforceChange();
+          this._afterDocumentChange();
+        })
+        .catch(() => this.setState({ ermBusy: false, ermErr: 'Server unreachable — nothing was changed' }));
+    };
     // Save a private file to disk under its real name (the link needs the token, so a plain <a> can't).
     this._downloadFile = (p9, name9) => {
       const t9 = localStorage.getItem('stimespro:token');
@@ -24645,6 +24722,31 @@ class Component extends DCLogic {
         };
       })(),
       ...renewApi, ...completeApi, ...compDetailApi,
+      // ── Remove an employee added by mistake ──
+      ...(() => {
+        const st8 = this.state, info8 = st8.ermInfo || null;
+        const rm8 = (info8 && info8.removes) || {};
+        const docs8 = Number(rm8.documents || 0);
+        const blk8 = Array.isArray(info8 && info8.blockers) ? info8.blockers : [];
+        const types8 = Array.isArray(rm8.documentTypes) ? rm8.documentTypes : [];
+        return {
+          ermOpen: !!st8.ermId,
+          ermName: st8.ermName || 'this employee',
+          // Says what this is FOR, because the row also offers an exit and the two are one click apart.
+          ermSub: 'For a record added by mistake — a duplicate, or the wrong client. Someone who is actually leaving should go through the exit instead, which keeps them on record here.',
+          ermLoading: !!st8.ermLoading,
+          ermErr: st8.ermErr || false,
+          ermHasBlockers: blk8.length > 0,
+          ermBlockers: blk8.map(b8 => ({ text: String(b8) })),
+          ermHasDocs: !!info8 && !blk8.length && docs8 > 0,
+          ermDocsText: docs8 + (docs8 === 1 ? ' document' : ' documents') + ' will be deleted with them'
+            + (types8.length ? ' — ' + types8.slice(0, 3).join(', ') + (types8.length > 3 ? '…' : '') : ''),
+          ermCanDelete: !!info8 && !blk8.length && !st8.ermLoading,
+          ermBtn: st8.ermBusy ? 'Removing…' : docs8 ? 'Remove anyway' : 'Remove',
+          ermConfirm: () => this._empRemoveConfirm(),
+          ermClose: () => { if (!st8.ermBusy) this.setState({ ermId: null, ermInfo: null, ermErr: '', ermLoading: false }); },
+        };
+      })(),
       fpOpen: !!this.state.fpOpen, fpName: this.state.fpName || 'Document', fpLoading: !!this.state.fpLoading, fpErr: this.state.fpErr || false,
       fpUrl: this.state.fpUrl || 'data:,',
       fpIsPdf: !!this.state.fpUrl && /pdf/i.test(this.state.fpType || ''),
