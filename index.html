@@ -13252,9 +13252,9 @@
   <sc-if value="{{ newVersion }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:170; display:flex; align-items:center; gap:12px; background:#26074D; color:#fff; padding:10px 10px 10px 18px; border-radius:99px; box-shadow:0 12px 32px rgba(38,7,77,.35); font-size:12.5px; max-width:calc(100vw - 32px); animation:fadeUp .3s ease both;">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C4B5FD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"></path></svg>
-      <span style="font-weight:600;">A new version is available.</span>
-      <span onClick="{{ reloadApp }}" style="background:#fff; color:#5B21B6; font-weight:700; padding:6px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;">Reload</span>
-      <span onClick="{{ dismissNewVersion }}" title="Later" style="width:24px; height:24px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:rgba(255,255,255,.7);">×</span>
+      <span style="font-weight:600;">{{ verText }}</span>
+      <span onClick="{{ reloadApp }}" style="background:#fff; color:#5B21B6; font-weight:700; padding:6px 14px; border-radius:99px; cursor:pointer; white-space:nowrap;">Update now</span>
+      <span onClick="{{ dismissNewVersion }}" title="Stay on this version" style="width:24px; height:24px; border-radius:99px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:rgba(255,255,255,.7);">×</span>
     </div>
   </sc-if>
 
@@ -15190,12 +15190,46 @@ class Component extends DCLogic {
     document.addEventListener('keydown', this._a11yKey);
     // NEW VERSION CHECK. After a deploy, a tab left open kept running the old page until someone
     // happened to refresh. The page's own address is asked (HEAD, no cache) for its Last-Modified /
-    // ETag every few minutes and whenever the tab comes back into view; when it changes, a banner
-    // offers a reload. Nothing reloads by itself — a half-filled form is never thrown away.
+    // ETag every few minutes and whenever the tab comes back into view.
+    //
+    // It then updates ITSELF, counting down in the open, rather than waiting for somebody to notice a
+    // button. Left to a button the banner is just another thing to dismiss, and the version that is
+    // actually running stops being knowable — which is how people end up reporting bugs that were
+    // fixed a week ago.
+    //
+    // It still never throws work away. A reload loses whatever is only on the screen, so the count
+    // pauses whenever that would cost something: a dialog open, a cursor in a field, or a keystroke
+    // in the last half-minute all hold it, and the banner says so. It resumes on its own the moment
+    // the screen is idle again, so nobody has to come back to it.
+    this._verBusy = () => {
+      // A dialog is up. Every modal in this app is a fixed, full-viewport overlay; the banner itself
+      // is fixed but not inset, which is what keeps it from blocking its own reload.
+      if (document.querySelector('div[style*="position:fixed"][style*="inset:0"]')) return 'dialog';
+      const el9 = document.activeElement;
+      if (el9 && (/^(INPUT|TEXTAREA|SELECT)$/.test(el9.tagName) || el9.isContentEditable)) return 'typing';
+      if (Date.now() - (this._verLastKey || 0) < 30000) return 'typing';
+      return '';
+    };
+    this._verTick = () => {
+      if (!this.state.newVersion || this.state.newVersionLater) return;
+      if (this._verBusy()) return this.setState({ verHold: true });
+      const left9 = Math.max(0, (this.state.verIn == null ? 10 : this.state.verIn) - 1);
+      if (left9 <= 0) { clearInterval(this._verCount); return this._reloadApp(); }
+      this.setState({ verIn: left9, verHold: false });
+    };
+    this._verArm = () => {
+      if (this._verCount) return;
+      this.setState({ newVersion: true, verIn: 10, verHold: false });
+      this._verCount = setInterval(this._verTick, 1000);
+    };
+    this._reloadApp = () => { try { clearInterval(this._verCount); location.reload(); } catch (e9) {} };
+    this._verLastKey = 0;
+    this._verKey = () => { this._verLastKey = Date.now(); };
+    document.addEventListener('keydown', this._verKey, true);
     this._verCheck = () => {
       fetch(location.pathname + (location.pathname.indexOf('?') < 0 ? '?' : '&') + '__v=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
         .then(r9 => (r9.ok ? (r9.headers.get('etag') || r9.headers.get('last-modified')) : null))
-        .then(tag9 => { if (!tag9) return; if (!this._verTag) { this._verTag = tag9; return; } if (tag9 !== this._verTag && !this.state.newVersion) this.setState({ newVersion: true }); })
+        .then(tag9 => { if (!tag9) return; if (!this._verTag) { this._verTag = tag9; return; } if (tag9 !== this._verTag && !this.state.newVersion) this._verArm(); })
         .catch(() => {});
     };
     this._verCheck();
@@ -37551,8 +37585,14 @@ class Component extends DCLogic {
       toggleCal: () => { if (!this.state.calOpen) this.setState({ calOff: 0, calSel: null }); togglePop('calOpen'); },
       calGoRenewals: () => this.setState({ calOpen: false, active: 'Renewals', activeGroup: 'Main' }),
       newVersion: !!this.state.newVersion && !this.state.newVersionLater,
-      reloadApp: () => { try { location.reload(); } catch (e9) {} },
-      dismissNewVersion: () => this.setState({ newVersionLater: true }),
+      // Counting down in words, so nobody has to wonder whether the page is about to move under them.
+      verText: this.state.verHold
+        ? 'A new version is ready — it will update when you have finished here.'
+        : 'A new version is available. Updating in ' + (this.state.verIn == null ? 10 : this.state.verIn) + 's…',
+      reloadApp: () => this._reloadApp(),
+      // Dismissing stops the countdown for good on this tab: someone who says not now has usually
+      // said it because they are in the middle of something long.
+      dismissNewVersion: () => { clearInterval(this._verCount); this._verCount = null; this.setState({ newVersionLater: true }); },
       calTitle: _calBase.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
       calPrev: () => this.setState({ calOff: _calOff - 1, calSel: null }),
       calNext: () => this.setState({ calOff: _calOff + 1, calSel: null }),
