@@ -10481,6 +10481,23 @@
             <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">ISSUE DATE</div><input value="{{ arIssue }}" onChange="{{ setArIssue }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
             <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">{{ arExpiryLabel }}</div><input value="{{ arExpiry }}" onChange="{{ setArExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
           </div>
+
+          <!-- The scan itself. Optional, because the details are often typed from a certificate that is
+               still being couriered — but offering it here is the only moment anyone actually has the
+               file in hand. Attaching it later means finding the document again and opening Manage,
+               which is why 453 of 455 documents had no file on them. -->
+          <div style="border-top:1px dashed #ECE8F3; padding-top:14px;">
+            <div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">DOCUMENT FILE</div>
+            <div style="margin-top:7px; display:flex; align-items:center; gap:10px; border:1px dashed {{ arFileBorder }}; background:{{ arFileBg }}; border-radius:12px; padding:10px 13px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ arFileIcon }}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6"></path></svg>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:12.5px; font-weight:600; color:{{ arFileFg }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ arFileName }}</div>
+                <div style="font-size:11px; color:#A9A6B4; margin-top:1px;">{{ arFileHint }}</div>
+              </div>
+              <sc-if value="{{ arHasFile }}" hint-placeholder-val="{{ false }}"><span onClick="{{ arFileClear }}" style="font-size:11.5px; font-weight:600; color:#8C8899; cursor:pointer; white-space:nowrap;" style-hover="color:#C0353A;">Remove</span></sc-if>
+              <label style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#F5EEFF;">{{ arFileBtn }}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange="{{ arPickFile }}" style="display:none;"></label>
+            </div>
+          </div>
         </div>
 
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 24px 20px;">
@@ -24425,7 +24442,7 @@ class Component extends DCLogic {
                    : null)
           || ((compClientScope && compClientScope !== 'All clients') ? compClientScope : ''),
         arHolder: '', arAuthority: '', arExpiry: '', arErr: '', arEst: null, arBusy: false }),
-      closeAddRecord: () => { if (!this.state.arBusy) this.setState({ addRecord: false, openDd: null }); },
+      closeAddRecord: () => { if (!this.state.arBusy) this.setState({ addRecord: false, openDd: null, arFile: null, arFileName: '' }); },
       ...(() => {
         const st9 = this.state;
         const cos9 = Array.isArray(coData) ? coData : [];
@@ -24554,6 +24571,25 @@ class Component extends DCLogic {
           setArAuthority: (e) => this.setState({ arAuthority: e.target.value }),
           setArIssue: (e) => this.setState({ arIssue: e.target.value, arErr: '' }),
           setArExpiry: (e) => this.setState({ arExpiry: e.target.value, arErr: '' }),
+          arHasFile: !!st9.arFile,
+          arFileName: st9.arFile ? st9.arFileName || st9.arFile.name : 'No file chosen',
+          arFileHint: st9.arFile ? 'Attached when the document is saved' : 'Optional · PDF, JPG, PNG or WEBP, up to 4 MB',
+          arFileBtn: st9.arFile ? 'Change' : 'Choose file',
+          arFileBorder: st9.arFile ? '#C9A2FF' : '#E6E1F0',
+          arFileBg: st9.arFile ? '#FCFAFF' : '#FCFBFE',
+          arFileIcon: st9.arFile ? '#7C00FF' : '#A9A6B4',
+          arFileFg: st9.arFile ? '#26074D' : '#A9A6B4',
+          arFileClear: () => this.setState({ arFile: null, arFileName: '' }),
+          // Validated here rather than at save time: being told the file is too big AFTER the record
+          // is already created leaves a document saved and a file lost, with nothing on screen saying so.
+          arPickFile: (ev9) => {
+            const f9 = ev9 && ev9.target && ev9.target.files && ev9.target.files[0];
+            if (ev9 && ev9.target) ev9.target.value = '';
+            if (!f9) return;
+            if (!/\.(pdf|png|jpe?g|webp)$/i.test(f9.name)) return this.setState({ arErr: 'Only PDF, JPG, PNG or WEBP files can be attached' });
+            if (f9.size > 4 * 1024 * 1024) return this.setState({ arErr: 'The file must be under 4 MB' });
+            this.setState({ arFile: f9, arFileName: f9.name, arErr: '' });
+          },
           submitAddRecord: () => {
             if (st9.arBusy) return;
             if (!co9) return this.setState({ arErr: 'Choose the client this document belongs to' });
@@ -24584,11 +24620,24 @@ class Component extends DCLogic {
                 Promise.all(old9.map(id9 => fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + id9 + '/supersede', { method: 'POST', headers: H9, body: JSON.stringify({ replacedBy: j9 && j9.id }) }).then(r9 => r9.ok).catch(() => false)))
                   .then(res9 => {
                     const failed9 = res9.filter(x9 => !x9).length;
-                    this.setState({ addRecord: false, arBusy: false, arDoc: '', arAuthority: '', arExpiry: '', arIssue: '', arErr: '', openDd: null, arReplace: true });
-                    this.toast(dt9.name + ' added for ' + (emp9 ? emp9.name : co9.name) + (old9.length ? (failed9 ? ' — but the old record could not be replaced; retire it from Compliance' : ' · the old record was replaced') : ''), failed9 ? 'error' : undefined);
-                    this._afterDocumentChange();
-                    // The CR card counts certificates per CR — refresh it too.
-                    this._crLoad && this._crLoad(co9.id, true);
+                    const base9 = dt9.name + ' added for ' + (emp9 ? emp9.name : co9.name) + (old9.length ? (failed9 ? ' — but the old record could not be replaced; retire it from Compliance' : ' · the old record was replaced') : '');
+                    const done9 = (msg9, kind9) => {
+                      this.setState({ addRecord: false, arBusy: false, arDoc: '', arAuthority: '', arExpiry: '', arIssue: '', arErr: '', openDd: null, arReplace: true, arFile: null, arFileName: '' });
+                      this.toast(msg9, kind9);
+                      this._afterDocumentChange();
+                      // The CR card counts certificates per CR — refresh it too.
+                      this._crLoad && this._crLoad(co9.id, true);
+                    };
+                    // The document is already saved by this point. If the file fails to upload the
+                    // record must still be kept — so this reports the failure and tells the user where
+                    // to attach it by hand, rather than making the whole save look like it did nothing.
+                    const file9 = st9.arFile;
+                    if (!file9 || !(j9 && j9.id)) return done9(base9, failed9 ? 'error' : undefined);
+                    this._uploadDocFile(file9)
+                      .then(u9 => fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + j9.id + '/file', { method: 'POST', headers: H9, body: JSON.stringify({ file: u9.path }) })
+                        .then(r9 => (r9.ok ? done9(base9 + ' · ' + u9.name + ' attached', failed9 ? 'error' : undefined)
+                                           : done9(base9 + ' — saved, but the file could not be attached. Open the document and use Attach file.', 'error'))))
+                      .catch(e9 => done9(base9 + ' — saved, but the file was not uploaded (' + String(e9.message || e9) + '). Open the document and use Attach file.', 'error'));
                   });
               })
               .catch(() => this.setState({ arBusy: false, arErr: 'Server unreachable — the document was NOT saved' }));
