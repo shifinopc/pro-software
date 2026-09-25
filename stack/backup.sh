@@ -50,7 +50,17 @@ die() { log "FAILED — $*"; exit 1; }
 if [ "${1:-}" = "--install" ]; then
   SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
   LINE="17 2 * * * $SELF >> $LOG 2>&1"
-  ( crontab -l 2>/dev/null | grep -Fv "$SELF" ; echo "$LINE" ) | crontab -
+  TMP="$(mktemp)"
+  # Every step here is allowed to "fail": `crontab -l` exits 1 when there is no crontab yet, and
+  # `grep -Fv` exits 1 when it filters everything out. Both are the normal first-install case, and
+  # letting `set -e` see them once wrote an EMPTY crontab and said nothing — which looks exactly
+  # like a scheduled backup right up until the night you need one.
+  { crontab -l 2>/dev/null || true; } | { grep -Fv "$SELF" || true; } > "$TMP"
+  echo "$LINE" >> "$TMP"
+  crontab "$TMP"
+  rm -f "$TMP"
+  # Read it back. An install that did not install is the whole failure mode.
+  crontab -l 2>/dev/null | grep -Fq "$SELF" || die "crontab did not take the entry — is cron installed?"
   log "installed: $LINE"
   exec "$SELF"
 fi
