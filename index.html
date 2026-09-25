@@ -20863,7 +20863,11 @@ class Component extends DCLogic {
             const openAdd9 = () => this.setState({ addRecord: true, arClientLocked: true, arClient: clRow.name, arType: (cr9t && cr9t.name) || 'Commercial Registration', arAuthority: (cr9t && cr9t.authority) || '',
               arEst: main9 ? null : e9.id, arEstPicked: true, arNewCr: null, arEmp: null, arWho: null, arDoc: '', arIssue: '', arExpiry: '', arErr: '', arReplace: true, arBusy: false });
             return {
-              cert: !c9 ? 'No CR certificate on file'
+              // "No CR certificate" sat directly under the CR number and was read as "this client has
+              // no CR" — by the person who built it. The number and the certificate are different
+              // records: one is a field, the other is a document with an expiry that renewals run
+              // from. The sentence now says which one is missing.
+              cert: !c9 ? 'CR number recorded · certificate not on file'
                 : renewing9 ? 'Renewal in progress · current certificate expires ' + fd9(c9.expiryDate)
                 : left9 == null ? 'Certificate on file · no expiry date recorded'
                 : left9 < 0 ? 'Certificate expired ' + fd9(c9.expiryDate)
@@ -21512,10 +21516,28 @@ class Component extends DCLogic {
       clDetailApi.cdOverdue = clRow.overdue; clDetailApi.cdExpiring = clRow.expiring; clDetailApi.cdEmployees = clRow.employees;
       clDetailApi.cdHasRequest = clRow.unread;
       clDetailApi.cdNoRequest = !clRow.unread;
-      const _cdScore = Math.max(30, Math.min(100, 100 - clRow.overdue * 9 - clRow.expiring * 3));
-      clDetailApi.cdScore = _cdScore;
-      clDetailApi.cdScoreColor = _cdScore >= 80 ? '#12B76A' : _cdScore >= 60 ? '#B8860B' : '#C0353A';
-      clDetailApi.cdCirc = (_cdScore / 100 * 163).toFixed(1);
+      // A client with nothing on file used to read 100% — "In good standing · Every document on file
+      // is in date" — which is true only in the way that an empty shelf is tidy. The score now says
+      // how much of what IS tracked is in date, and refuses to give a figure when nothing is.
+      //
+      // The old formula (100 − overdue×9 − expiring×3, floored at 30) also ignored how many documents
+      // there were, so one overdue out of one scored the same as one out of fifty, and nothing could
+      // ever fall below 30 however bad it got. This matches the basis the client-health list uses.
+      const _cdLive = (Array.isArray(this.state.documentsData) ? this.state.documentsData : [])
+        .filter(d9 => d9.companyId === clRow.realId && !d9.supersededAt);
+      const _cdNever = new Set((Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
+        .filter(t9 => t9.neverExpires).map(t9 => t9.name));
+      const _cdTracked = _cdLive.length;
+      // Undated counts against it: "we do not know when this expires" is not "this is in good
+      // standing", and rounding it up to healthy is the dangerous direction.
+      const _cdUndated = _cdLive.filter(d9 => !d9.expiryDate && !_cdNever.has(d9.docType)).length;
+      const _cdBad = (Number(clRow.overdue) || 0) + (Number(clRow.expiring) || 0) + _cdUndated;
+      const _cdScore = _cdTracked ? Math.max(0, Math.round((_cdTracked - _cdBad) / _cdTracked * 100)) : null;
+      clDetailApi.cdScore = _cdScore == null ? '—' : _cdScore;
+      clDetailApi.cdScoreColor = _cdScore == null ? '#A9A6B4' : _cdScore >= 80 ? '#12B76A' : _cdScore >= 60 ? '#B8860B' : '#C0353A';
+      clDetailApi.cdNothingTracked = _cdTracked === 0;
+      // An empty ring, not a full one: there is no figure, so there is nothing to fill it with.
+      clDetailApi.cdCirc = ((_cdScore == null ? 0 : _cdScore) / 100 * 163).toFixed(1);
       // Was `['2021','2022','2023','2024'][clRow.idx % 4]` — a year chosen by the client's position
       // in the list. A company created today read "Client since 2024". Companies now record a real
       // createdAt; those taken on before that column existed genuinely do not know, and say nothing
@@ -21854,8 +21876,11 @@ class Component extends DCLogic {
         clDetailApi.cdReqAll = () => this.setState({ active: 'Requests Queue', activeGroup: 'Operations' });
 
         const over9 = Number(clRow.overdue) || 0, exp9 = Number(clRow.expiring) || 0;
-        clDetailApi.cdHeroTitle = over9 ? 'Action needed' : exp9 ? 'Renewals coming up' : 'In good standing';
-        clDetailApi.cdHeroLine = over9 || exp9
+        clDetailApi.cdHeroTitle = clDetailApi.cdNothingTracked ? 'Nothing tracked yet'
+          : over9 ? 'Action needed' : exp9 ? 'Renewals coming up' : 'In good standing';
+        clDetailApi.cdHeroLine = clDetailApi.cdNothingTracked
+          ? 'No documents on file for this client, so there is nothing to measure.'
+          : over9 || exp9
           ? [over9 ? over9 + ' document' + (over9 === 1 ? '' : 's') + ' overdue' : '', exp9 ? exp9 + ' expiring within 30 days' : ''].filter(Boolean).join(' · ')
           : 'Every document on file is in date.';
         clDetailApi.cdMetrics = [
@@ -21878,7 +21903,7 @@ class Component extends DCLogic {
           over9 ? chip9(over9 + ' overdue document' + (over9 === 1 ? '' : 's'), 'red', goTab9('Documents')) : null,
           unreadN9 ? chip9(unreadN9 + ' client message' + (unreadN9 === 1 ? '' : 's') + ' to answer', 'red', openReq9(reqs9.find(unread9))) : null,
           exp9 ? chip9(exp9 + ' expiring within 30 days', 'amber', goTab9('Documents')) : null,
-          ...noCert9.map(e9 => chip9('No CR certificate · ' + this._crLabel(e9), 'amber', noop9)),
+          ...noCert9.map(e9 => chip9('CR certificate not on file · ' + this._crLabel(e9), 'amber', noop9)),
           ...dupCert9.map(e9 => chip9('Duplicate CR certificates · ' + this._crLabel(e9), 'amber', goTab9('Documents'))),
           clDetailApi.cdOwnerUnassigned ? chip9('No account owner', 'violet', noop9) : null,
           clDetailApi.cdMissingCount ? chip9(clDetailApi.cdMissingCount + ' detail' + (clDetailApi.cdMissingCount === 1 ? '' : 's') + ' not recorded', 'violet', noop9) : null,
