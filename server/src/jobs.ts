@@ -41,9 +41,20 @@ export function parseDate(s?: string | null): number | null {
   return isNaN(t) ? null : t;
 }
 const daysUntil = (ms: number) => Math.round((ms - Date.now()) / DAY);
-/** Format back in "15 Aug 2026" style — the format Subscription.endDate already uses. */
+/**
+ * For prose only — invoice lines, activity entries, the tick's own log. Never for a stored column.
+ *
+ * It used to write Subscription.endDate, on the reasoning that the column already held that format.
+ * It did, and that was the bug: `en-GB` renders September as "Sept", and `new Date()` reads that as
+ * LOCAL midnight while it reads an ISO date as UTC midnight. So a round trip through this function
+ * moves the date by a day on any server not running UTC — a subscription ending "28 Sept 2026" reads
+ * back as the 27th and expires a day early. Live happens to run on UTC, which is the only reason
+ * nobody has seen it.
+ */
 const fmtDisplay = (ms: number) =>
   new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+/** What goes in a column: unambiguous, sortable, and read back as the same day everywhere. */
+const fmtIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /** Insert a notification at most once per key. The unique index IS the dedupe — no read-then-write race. */
 async function notifyOnce(key: string, entry: { type: string; title: string; message?: string }) {
@@ -741,7 +752,7 @@ export async function renewSubscriptions(): Promise<BillingResult> {
           }),
           prisma.subscription.update({
             where: { id: s.id },
-            data: { endDate: fmtDisplay(next), lastBilledFor: periodEnd, lastRenewedAt: nowISO(), daysLeft: daysUntil(next) },
+            data: { endDate: fmtIso(next), lastBilledFor: periodEnd, lastRenewedAt: nowISO(), daysLeft: daysUntil(next) },
           }),
         ]);
         out.invoiced++;
