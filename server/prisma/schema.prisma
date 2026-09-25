@@ -538,7 +538,7 @@ model Task {
   blockedBy          Json?
   // Human-facing reference (TSK-0001) from the configured record sequence. A task was identified
   // only by its cuid, which nobody can read out over a phone.
-  ref                String?
+  ref                String?  @unique
 
   @@index([status])
   @@index([assignee])
@@ -550,7 +550,12 @@ model Task {
 
 model Invoice {
   id             String   @id @default(cuid())
-  number         String
+  /// UNIQUE because the allocator cannot promise it alone. Numbers are handed out by reading the
+  /// highest one in use and adding one, so two requests arriving together read the same maximum and
+  /// receive the same number — a double-clicked Create button was enough to produce two records
+  /// sharing a reference. The index is what actually makes that impossible; the retry around the
+  /// insert is what makes the second request succeed with the next number instead of failing.
+  number         String   @unique
   company        Company? @relation(fields: [companyId], references: [id])
   companyId      String?
   clientName     String?
@@ -788,7 +793,7 @@ model ServiceRequest {
   // Reference (REQ-0001) from the configured record sequence. Both apps used to display
   // "SRV-" + the last four characters of the cuid — a label derived from a database id, which
   // nobody can quote back and which is not unique in any meaningful sense.
-  number             String?
+  number             String? @unique
   companyId          String?
   clientName         String?
   type               String?
@@ -1953,7 +1958,7 @@ model Payment {
   id            String  @id @default(cuid())
   // Receipt number (RCP-2026-001) from the configured record sequence. `reference` is the client's
   // bank/cheque reference and is a different thing entirely — this is OUR document number.
-  number        String?
+  number        String? @unique
   invoiceId     String?
   invoiceNumber String?
   companyId     String?
@@ -1971,7 +1976,7 @@ model Payment {
 
 model Quotation {
   id            String  @id @default(cuid())
-  number        String
+  number        String  @unique
   companyId     String?
   clientName    String?
   service       String?

@@ -23471,7 +23471,7 @@ class Component extends DCLogic {
       // "Rashid" — neither of which exists in this system. Left alone, that is what got submitted.
       // It now opens on the first REAL client and unassigned, and falls back to nothing rather than
       // to a name someone invented.
-      openTaskModal: () => this.setState({ taskModal: true, ntPane: 0, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntPrioSet: false, ntDue: '', ntPortalRef: '', ntErr: '' }),
+      openTaskModal: () => this.setState({ taskModal: true, ntBusy: false, ntPane: 0, ntKind: 'plain', ntKindQuery: '', ntTitle: '', ntClient: '', ntApplicant: '', ntAssignee: 'Unassigned', ntPrio: 'Medium', ntPrioSet: false, ntDue: '', ntPortalRef: '', ntErr: '' }),
       closeTaskModal: () => this.setState({ taskModal: false }),
       // THE SAME SHAPE AS THE STEP WIZARD, and for the same reason. Two numbered steps meant the
       // kind of work was a door you walked through once: to change it you pressed Back and lost your
@@ -23614,6 +23614,9 @@ class Component extends DCLogic {
       // report success on a confirmed 2xx and reload the relevant views from the server.
       submitTask: () => {
         const s2 = this.state;
+        // A double-click used to create two tasks. The server can no longer give them the same
+        // reference, but two tasks is still two tasks — the click has to stop at the door.
+        if (s2.ntBusy) return;
         // TAKE THEM TO THE FIELD, not just to the message. The form is sections now, so an error
         // raised while Assignment is open names a field that is not on screen — the reader is told
         // what is wrong and shown somewhere it cannot be fixed.
@@ -23622,6 +23625,7 @@ class Component extends DCLogic {
         const prMap = { Critical: 'high', High: 'high', Medium: 'medium', Low: 'low' };
         const isWorkflow = (this.state.ntKind || 'plain') !== 'plain';
         const tok8 = localStorage.getItem('stimespro:token');
+        if (tok8) this.setState({ ntBusy: true, ntErr: '' });
         const API8 = this._apiBase || 'http://localhost:4100';
         const co8 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c8 => c8.name === s2.ntClient);
         if (!tok8) { // design mode keeps the local preview
@@ -23657,8 +23661,8 @@ class Component extends DCLogic {
               body: JSON.stringify({ templateId: ntSel.id, title: s2.ntTitle.trim(), companyId: co8 ? co8.id : null, clientName: s2.ntClient || null, variables }) })
               .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
               .then(({ ok, j8 }) => {
-                if (!ok) return this.setState({ ntErr: (j8 && j8.error) || 'Could not start the workflow — try again' });
-                this.setState({ taskModal: false });
+                if (!ok) return this.setState({ ntBusy: false, ntErr: (j8 && j8.error) || 'Could not start the workflow — try again' });
+                this.setState({ taskModal: false, ntBusy: false });
                 // The run is the machinery; this is the row a person looks for. Linked by
                 // workflowInstanceId so the list can show "Workflow run attached" and open it.
                 fetch(API8 + '/api/tasks', {
@@ -23681,7 +23685,7 @@ class Component extends DCLogic {
                 this._reloadMyWork && this._reloadMyWork();
                 this._reloadTasks && this._reloadTasks();
               })
-              .catch(() => this.setState({ ntErr: 'Cannot reach the server — the workflow was NOT started' }));
+              .catch(() => this.setState({ ntBusy: false, ntErr: 'Cannot reach the server — the workflow was NOT started' }));
           };
           // The prerequisite dialog, declared before the check that calls it so it keeps every local
           // here — the run starter, the selected type, the resolved employee.
@@ -23738,7 +23742,7 @@ class Component extends DCLogic {
             })
             // Refused, not waved through. Starting work while the gate is unreachable is exactly the
             // silent pass this whole feature exists to prevent.
-            .catch(() => this.setState({ ntErr: 'Could not check the prerequisites for ' + ntSel.doc + ' — nothing was started. Try again.' }));
+            .catch(() => this.setState({ ntBusy: false, ntErr: 'Could not check the prerequisites for ' + ntSel.doc + ' — nothing was started. Try again.' }));
           return;
         }
         // Plain task
@@ -23752,12 +23756,12 @@ class Component extends DCLogic {
             govCenter: (s2.ntPortalRef || '').trim() || null }) })
           .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
           .then(({ ok, j8 }) => {
-            if (!ok) return this.setState({ ntErr: (j8 && j8.error) || 'Could not create the task — try again' });
-            this.setState({ taskModal: false });
+            if (!ok) return this.setState({ ntBusy: false, ntErr: (j8 && j8.error) || 'Could not create the task — try again' });
+            this.setState({ taskModal: false, ntBusy: false });
             this.toast('Task created');
             this._reloadTasks && this._reloadTasks();
           })
-          .catch(() => this.setState({ ntErr: 'Cannot reach the server — the task was NOT saved' }));
+          .catch(() => this.setState({ ntBusy: false, ntErr: 'Cannot reach the server — the task was NOT saved' }));
       },
     };
 

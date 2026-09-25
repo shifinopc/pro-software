@@ -343,7 +343,30 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
       const estErr = await checkEstablishment(modelName, data, (data as any)?.companyId);
       if (estErr) return res.status(400).json({ error: estErr });
-      const created = await model.create({ data });
+      // A reference is allocated by reading the highest one in use and adding one, so two requests
+      // arriving together are handed the same number — a double-clicked Create button was enough.
+      // The unique index now refuses the second insert; this turns that refusal into the next number
+      // rather than an error the person has to understand. Bounded, because if it is still colliding
+      // after a few attempts the problem is not contention.
+      const NUMBERED: Record<string, { field: string; kind: any; perCompany?: boolean }> = {
+        task: { field: "ref", kind: "task" },
+        payment: { field: "number", kind: "receipt" },
+        serviceRequest: { field: "number", kind: "request" },
+        employee: { field: "code", kind: "employee", perCompany: true },
+      };
+      const numbered = NUMBERED[modelName];
+      let created: any;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          created = await model.create({ data });
+          break;
+        } catch (e: any) {
+          const clashedOn = e?.code === "P2002" ? ([] as string[]).concat(e?.meta?.target ?? []) : [];
+          const ours = numbered && clashedOn.some(t => String(t).includes(numbered.field));
+          if (!ours || attempt >= 4) throw e;
+          data[numbered.field] = await nextNumber(numbered.kind, numbered.perCompany ? { companyId: data.companyId } : {});
+        }
+      }
       // A client created with a CR has that CR as its main one from the start.
       if (modelName === "company" && (created as any).cr) await syncMainFromCompany(created.id).catch(() => {});
       // Persisted activity feed + notifications for compliance-critical events
