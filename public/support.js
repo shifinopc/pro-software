@@ -433,6 +433,12 @@
         if (key.includes("-") && !(kind === "x-import" && (key.startsWith("aria-") || key.startsWith("data-"))))
           key = kebabToCamel(key);
       } else {
+        // `data-dcattr-<name>` sets `<name>` on the rendered element. It exists for URL attributes
+        // whose value is a binding: written as `src="{{ x }}"`, the browser's preload scanner fetches
+        // the literal `{{ x }}` out of the static markup long before this runtime resolves anything,
+        // and on a catch-all server that request comes back as the whole document. Writing
+        // `data-dcattr-src="{{ x }}"` leaves nothing fetchable in the parsed HTML.
+        if (key.startsWith("data-dcattr-")) key = key.slice(12);
         if (key === "class") key = "className";
         else if (key === "for") key = "htmlFor";
         else if (key.startsWith("on"))
