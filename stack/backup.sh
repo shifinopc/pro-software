@@ -106,16 +106,22 @@ log "  env.txt       (CRED_KEY + JWT_SECRET — keep this set off the box)"
   echo "host      : $(hostname)"
   echo "commit    : $(git -C "$STACK_DIR/app" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   echo "files     :"
-  ( cd "$SET_DIR" && sha256sum ./* )
+  # Everything except the manifest itself, which is still open on this line and would otherwise be
+  # listed with the hash of a half-written file — and fail its own `sha256sum -c` on restore.
+  ( cd "$SET_DIR" && find . -maxdepth 1 -type f ! -name MANIFEST.txt -print0 | sort -z | xargs -0 sha256sum )
 } > "$SET_DIR/MANIFEST.txt"
 
 # ── 5. Rotation ───────────────────────────────────────────────────────────────
+# `find`, not a glob: an empty directory makes `ls dir/*/` exit 2, and under `pipefail` that status
+# reaches the assignment and `set -e` kills the whole run — after the backup is safely written, which
+# is the most misleading moment possible for the script to report failure.
 prune() {
-  local dir="$1" keep="$2" n
-  n=$(ls -1d "$dir"/*/ 2>/dev/null | wc -l)
+  local dir="$1" keep="$2" sets=() i
+  while IFS= read -r d; do sets+=("$d"); done     < <(find "$dir" -mindepth 1 -maxdepth 1 -type d | sort)
+  local n=${#sets[@]}
   [ "$n" -gt "$keep" ] || return 0
-  ls -1d "$dir"/*/ | sort | head -n "$((n - keep))" | while read -r old; do
-    rm -rf "$old"; log "  pruned $(basename "$old")"
+  for (( i = 0; i < n - keep; i++ )); do
+    rm -rf "${sets[i]}"; log "  pruned $(basename "${sets[i]}")"
   done
 }
 prune "$OUT_DIR/daily"   "$KEEP_DAILY"
