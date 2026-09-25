@@ -85,7 +85,7 @@ model Company {
   // implicitly Saudi. That is fine for one market and is the first thing in the way of a second one,
   // because there is nowhere to hang "this client is judged by UAE rules, not Saudi ones". Nullable
   // so existing rows are valid; backfilled to SA, which is what every one of them is.
-  country              String?
+  country             String?
   // Workforce nationalisation — Saudization here, Emiratisation next door, the same shape either way.
   //
   // The RATIO is computed from employee records and never stored: a stored percentage is wrong the
@@ -117,18 +117,18 @@ model Company {
   /// When qualification was recorded, so "qualified three weeks ago, still no deal" is askable.
   qualAt              String?
 
-  workforceBand        String?
-  workforceBandAt      String?
-  workforceBandNote    String?
-  workforceBandRatioBp Int?
+  workforceBand          String?
+  workforceBandAt        String?
+  workforceBandNote      String?
+  workforceBandRatioBp   Int?
   /// The last band the SYSTEM computed for this client, and when it noticed.
   ///
   /// Separate from workforceBand (what a human read on the portal): this is how a CHANGE is detected
   /// at all. Without it every tick would either re-announce the same band forever or announce nothing,
   /// and "this client dropped out of Green" — the one thing worth interrupting somebody for — could
   /// never be said.
-  workforceBandSeen    String?
-  workforceBandSeenAt  String?
+  workforceBandSeen      String?
+  workforceBandSeenAt    String?
   /// Which band scheme was in force when `workforceBandSeen` was written.
   ///
   /// Without this, moving a client onto a different scheme looks exactly like the client falling out
@@ -143,7 +143,7 @@ model Company {
   /// was never going to be right — a contractor and a retailer with identical headcounts are held to
   /// different targets. See WorkforceBandSet for why this points at a shared scheme rather than
   /// giving every client its own private copy of the numbers.
-  workforceBandSetId   String?
+  workforceBandSetId     String?
   /// Who at the firm does this client's work, per role — { "pro_officer": "u_abc", … }.
   ///
   /// Steps are handed to whoever holds the role and is carrying least, which is the right default and
@@ -157,26 +157,26 @@ model Company {
   /// Nothing here can STALL work: a named person who has left, been deactivated or changed team is
   /// ignored and the balancer takes over, because a client team is a preference and an unassigned
   /// task is a failure.
-  roleOwners           Json?
+  roleOwners             Json?
   // Billing suspension. `status` carries "suspended"; these record why and since when so the console
   // and the client's banner can both explain it rather than just showing a red badge.
-  suspendedAt          String?
-  suspendedReason      String?
-  customData           Json? // values for admin-defined custom client fields (Form Builder)
+  suspendedAt            String?
+  suspendedReason        String?
+  customData             Json? // values for admin-defined custom client fields (Form Builder)
   // When this client was taken on. Deliberately nullable with NO default: existing rows genuinely
   // do not know, and stamping them all with the migration date would replace one fabrication
   // ("Client since 2024", picked from a hardcoded array by row position) with a tidier one.
-  createdAt            String?
-  group                ClientGroup?     @relation(fields: [groupId], references: [id])
-  groupId              String?
-  employeeList         Employee[]
-  establishments       Establishment[]
-  documents            Document[]
-  credentials          SiteCredential[]
-  invoices             Invoice[]
-  tasks                Task[]
-  subscriptions        Subscription[]
-  upgradeRequests      UpgradeRequest[]
+  createdAt              String?
+  group                  ClientGroup?     @relation(fields: [groupId], references: [id])
+  groupId                String?
+  employeeList           Employee[]
+  establishments         Establishment[]
+  documents              Document[]
+  credentials            SiteCredential[]
+  invoices               Invoice[]
+  tasks                  Task[]
+  subscriptions          Subscription[]
+  upgradeRequests        UpgradeRequest[]
 
   @@index([status])
   @@index([lifecycle])
@@ -291,10 +291,10 @@ model Subscription {
 }
 
 model Employee {
-  id             String  @id @default(cuid())
-  company        Company @relation(fields: [companyId], references: [id])
-  companyId      String
-  name           String
+  id              String  @id @default(cuid())
+  company         Company @relation(fields: [companyId], references: [id])
+  companyId       String
+  name            String
   // WHAT MAKES THIS PERSON THIS PERSON.
   //
   // The row carried nothing unique but the name, so two employees called Mohammed Ali were
@@ -306,34 +306,34 @@ model Employee {
   // The code is unique WITHIN A CLIENT, not across the firm — see @@unique below. Each client numbers
   // its own staff from 1, so two clients both having an EMP-0002 is normal and must not be blocked.
   // An invoice number is the opposite case and stays firm-wide unique.
-  code           String?
-  govId          String? // Iqama / national ID / passport no. — whatever identifies them officially
+  code            String?
+  govId           String? // Iqama / national ID / passport no. — whatever identifies them officially
   // Facts a PREREQUISITE can test. A rule could only ever say "another document, valid N months",
   // because there was nothing else on the row to compare against — a minimum-age rule needs a date.
   //
   // Nationality previously lived in `customData["cf-nat"]`, a Form Builder field. It is a column now
   // and that field was retired from the employee form: two places to type the same fact means the rule
   // reads one while the user fills the other, and the check silently passes on an empty value.
-  dob            String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
+  dob             String? // ISO date. Age is derived, never stored — a stored age is wrong within a year.
   // ISO 3166-1 alpha-2, NOT free text. It was a text box with the placeholder "e.g. Saudi", which
   // invites "Saudi", "Saudi Arabian", "KSA" and "saudi" as four different countries. A nationality
   // that four spellings can hide behind is fine as a label and useless as something to count, and a
   // workforce quota that misses a spelling under-reports — the dangerous direction. Comparisons go
   // through resolveCountry(), so a rule written as "Saudi" still matches a row stored as "SA".
-  nationality    String?
+  nationality     String?
   /// male | female | null. A fact the government portals record, and the only thing a counting rule
   /// conditioned on gender could ever match on.
   ///
   /// A COLUMN, not a counting trait. A trait is something CLAIMED about a person -- "counts under the
   /// disability rule" -- and gender is not a claim; modelled as a tick box it would read as one, and
   /// an unticked box would be indistinguishable from "not recorded".
-  gender         String?
+  gender          String?
   // Which country's workforce this person counts toward. Usually the employer's, but a group with
   // entities in two countries needs to say which one — an employee counts once, not everywhere.
-  workCountry    String?
+  workCountry     String?
   // Facts a workforce-quota calculation needs and the row did not carry. All nullable: a percentage
   // computed from incomplete data must report how much it could see rather than quietly assume.
-  salary         Int? // monthly, in minor units — see money.ts for why money is never a float
+  salary          Int? // monthly, in minor units — see money.ts for why money is never a float
   /// Which counting rules this person is claimed under, as a list of rule keys — ["disability"].
   ///
   /// The rules themselves live on the client's band ladder, so this is deliberately just keys: the
@@ -343,22 +343,22 @@ model Employee {
   /// ABSENT MEANS NOT CLAIMED, WHICH IS NOT THE SAME AS NO — and is the safe direction. A missed
   /// disability makes a client's ratio read WORSE than it is; the opposite error would quietly tell
   /// somebody they were compliant when they were not.
-  countingTraits Json?
-  employmentType String? // full_time | part_time — part-time counts fractionally in some regimes
-  jobCategory    String? // skilled | unskilled | … — some regimes count only part of the workforce
-  role           String?
-  iqamaExpiry    String?
-  status         String  @default("valid")
-  customData     Json? // values for admin-defined custom employee fields (Form Builder / CustomObject)
-  archived       Boolean @default(false)
-  history        Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
+  countingTraits  Json?
+  employmentType  String? // full_time | part_time — part-time counts fractionally in some regimes
+  jobCategory     String? // skilled | unskilled | … — some regimes count only part of the workforce
+  role            String?
+  iqamaExpiry     String?
+  status          String  @default("valid")
+  customData      Json? // values for admin-defined custom employee fields (Form Builder / CustomObject)
+  archived        Boolean @default(false)
+  history         Json? // append-only audit: [{ at, event, detail, by }] — e.g. workflow approved/rejected
   // Offboarding. `archived` stays the FINAL state (every headcount already filters on it); these track
   // the run-up to it. The moment this leaves "active" the renewal engine stops touching their
   // documents — renewing the visa of someone who is leaving is the bug this exists to prevent.
-  exitStatus     String  @default("active") // active | exit_requested | exiting | exited
-  exitDate       String? // last working day, as declared by the client
-  exitReason     String? // resignation | termination | end_of_contract | transfer | other
-  exitRequestId  String? // the ServiceRequest that tracks the exit
+  exitStatus      String  @default("active") // active | exit_requested | exiting | exited
+  exitDate        String? // last working day, as declared by the client
+  exitReason      String? // resignation | termination | end_of_contract | transfer | other
+  exitRequestId   String? // the ServiceRequest that tracks the exit
   /// Which of the client's CRs this person works under. Null = the client's main CR.
   ///
   /// Null rather than stamped with the main CR's id, so a client that never adds a second CR never
@@ -470,7 +470,7 @@ model DocumentType {
   // are the same null, and the compliance engine had to guess: it marked them "unknown" and the SLA
   // Monitor read the missing date as due today, so seven GOSI rows sat there with an Escalate button.
   neverExpires        Boolean @default(false)
-  statutoryDays       Int?    // days allowed after the trigger event
+  statutoryDays       Int? // days allowed after the trigger event
   statutoryFrom       String? // the event the clock starts from — entry to the country, employment start…
   statutoryBasis      String? // the regulation or service page it comes from, so nobody takes the number on trust
   defaultFee          Int? // default renewal fee (SAR)
@@ -478,6 +478,19 @@ model DocumentType {
   defaultAssigneeRole String? // role a renewal task defaults to
   authority           String? // issuing authority (GDRFA, MOHRE, Qiwa…) shown on the type + its docs
   subjectKind         String  @default("employee") // who the doc belongs to: "employee" (Iqama, visa…) | "company" (CR, GOSI, VAT…)
+  /// This type IS a client's licence to use a government portal — the thing that expires and stops
+  /// the login working, as opposed to the login itself, which lives in the credential vault.
+  ///
+  /// DECLARED, not inferred from `authority`. A client can hold several company documents issued by
+  /// the same authority (a Commercial Registration and an MC portal licence are both "MC"), so
+  /// matching on the authority alone would pick whichever came back first and present that guess as
+  /// the reason an officer could not log in. The same lesson as SiteCredential.govCenter.
+  ///
+  /// Everything that makes this useful already exists on a document: expiry recomputed hourly,
+  /// Compliance and Renewals listing, reminders, the fee and receipt captured on renewal, per-CR
+  /// scoping and the renewal history. This flag is only what lets the credential vault and a
+  /// workflow step find the licence that governs them.
+  portalLicence       Boolean @default(false)
 
   @@index([packKey])
 }
@@ -596,7 +609,7 @@ model User {
   /// zero: a rate of zero says "this person earns no commission", and null says "we have not been
   /// told". The Targets screen shows the first as 0% and the second as a dash, and computes a
   /// payable figure only for the first.
-  commissionRateBp Int?
+  commissionRateBp   Int?
   name               String
   email              String  @unique
   passwordHash       String?
@@ -1077,8 +1090,8 @@ model WorkforceSnapshot {
 /// a band, and silently filing a client under thresholds nobody chose would be guessing with extra
 /// steps.
 model WorkforceBandSet {
-  id           String  @id @default(cuid())
-  country      String?
+  id             String  @id @default(cuid())
+  country        String?
   /// The client this ladder was set up for, when it was set up on their screen.
   ///
   /// Thresholds are managed per client here — there is no country-level editor, by the firm's own
@@ -1086,12 +1099,12 @@ model WorkforceBandSet {
   /// and everybody else's second. It is provenance, not ownership: a ladder can be used by any
   /// number of clients, and the editor says so before it lets anybody change one that is shared.
   ownerCompanyId String?
-  name         String
+  name           String
   /// The economic activity this scheme is published for, in the regulator's own words.
-  activity     String?
+  activity       String?
   /// The size bracket it covers, in headcount. `sizeMax` null means "and above".
-  sizeMin      Int?
-  sizeMax      Int?
+  sizeMin        Int?
+  sizeMax        Int?
   /// How each person is COUNTED toward this client's ratio, when the regulator does not count
   /// everybody as one.
   ///
@@ -1114,19 +1127,19 @@ model WorkforceBandSet {
   ///   appliesTo  "both" (default) counts the weight in the ratio AND in the workforce total;
   ///              "nationals" counts it only on top. The two give materially different percentages
   ///              and no default is safe to assume, so it is stated per rule and shown in the working.
-  counting     Json?
+  counting       Json?
   /// The scheme a client falls to when it has not been given one. At most one per country.
   ///
   /// No longer settable from the console: thresholds are set up per client, so there is no screen
   /// on which "the default for everybody" would be a sensible thing to choose. It survives because
   /// COUNTRY PACKS still ship one, and an installation that has just taken a pack should place its
   /// clients somewhere until each has been set up individually.
-  isDefault    Boolean @default(false)
-  sort         Int     @default(0)
-  retired      Boolean @default(false)
-  packKey      String?
-  packVersion  String?
-  packModified Boolean @default(false)
+  isDefault      Boolean @default(false)
+  sort           Int     @default(0)
+  retired        Boolean @default(false)
+  packKey        String?
+  packVersion    String?
+  packModified   Boolean @default(false)
 
   @@index([packKey])
   @@index([country])
@@ -1171,22 +1184,22 @@ model WorkforceBand {
 /// Carries the same provenance columns as every other config model, so a stage set travels in a
 /// country pack and can be upgraded, retired and uninstalled like anything else.
 model PipelineStage {
-  id             String        @id @default(cuid())
-  country        String?
-  name           String
-  color          String?
-  bg             String?
+  id              String        @id @default(cuid())
+  country         String?
+  name            String
+  color           String?
+  bg              String?
   /// Left to right. Two stages with the same sort are a configuration error the editor refuses.
-  sort           Int           @default(0)
+  sort            Int           @default(0)
   /// The odds a deal in this column closes, in basis points — 2500 = 25%. Used for the weighted
   /// total at the top of each column, so "SAR 400,000 in the pipeline" can be read as what it is
   /// rather than as money anybody expects to bank.
-  probabilityBp  Int           @default(0)
+  probabilityBp   Int           @default(0)
   /// The two terminal columns. An opportunity's status is DERIVED from these — see Opportunity.
   /// Exactly one of each per country; the editor enforces it, because a pipeline with no won column
   /// can never record a sale and one with two has no single answer to "did we win it".
-  isWon          Boolean       @default(false)
-  isLost         Boolean       @default(false)
+  isWon           Boolean       @default(false)
+  isLost          Boolean       @default(false)
   /// HOW LONG A DEAL MAY SIT IN THIS COLUMN before it is called stalled. Null falls back to the
   /// global `staleDealDays` setting.
   ///
@@ -1200,18 +1213,18 @@ model PipelineStage {
   /// had sat in one COLUMN, and neither said which it meant. Both measures are useful; having two
   /// unlabelled ones was the bug. See src/dealhealth.ts, which is now the only place either is
   /// worked out.
-  maxDays        Int?
+  maxDays         Int?
   /// How many days after landing here somebody should chase, or null for "no rule".
   ///
   /// The stale-deal nudge already catches a deal nobody has touched for a fortnight, but that is a
   /// backstop, not a plan: a quotation sent on Monday wants chasing on Thursday, not in two weeks.
   /// A window per stage is the difference between the pipeline reminding people and the pipeline
   /// merely recording what they remembered.
-  followUpDays   Int?
+  followUpDays    Int?
   /// What the chase actually IS, in the words the owner will read on their queue. "Follow up" tells
   /// nobody anything; "Chase for a decision on the quotation" is a task. Falls back to a sentence
   /// naming the stage when left empty.
-  followUpAction String?
+  followUpAction  String?
   /// WHAT A DEAL MUST SATISFY TO LEAVE THIS STAGE.
   ///
   /// "dynamic" resolves `checklistRuleId` against facts the deal already holds — its source, its
@@ -1228,11 +1241,11 @@ model PipelineStage {
   /// A `document` item is never ticked by a person — it is satisfied when a live Document of that
   /// type exists for the deal's company, so the list reads as a status rather than a second to-do.
   checklistItems  Json?
-  retired        Boolean       @default(false)
-  packKey        String?
-  packVersion    String?
-  packModified   Boolean       @default(false)
-  opportunities  Opportunity[]
+  retired         Boolean       @default(false)
+  packKey         String?
+  packVersion     String?
+  packModified    Boolean       @default(false)
+  opportunities   Opportunity[]
 
   @@index([packKey])
   @@index([country])

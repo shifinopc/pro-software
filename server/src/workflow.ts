@@ -2281,13 +2281,61 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
     where: { companyId: inst.companyId, govCenter: task.govCenter },
     select: { id: true, label: true, url: true, username: true },
   });
-  if (!cred) return res.json({ portal: task.govCenter, found: false, reason: `No ${task.govCenter} login is stored for this client.` });
+  if (!cred) return res.json({ portal: task.govCenter, found: false, licence: await portalLicence(inst.companyId, task.govCenter), reason: `No ${task.govCenter} login is stored for this client.` });
 
   // Reveal is admin-only, exactly as the vault screen is. Told plainly rather than shown a button
   // that returns 403.
   const canReveal = a?.role === "admin" || a?.role === "super_admin";
-  res.json({ portal: task.govCenter, found: true, ...cred, canReveal });
+  res.json({ portal: task.govCenter, found: true, ...cred, licence: await portalLicence(inst.companyId, task.govCenter), canReveal });
 });
+
+/**
+ * The client's licence to use this portal, if the firm tracks one.
+ *
+ * A login and the right to use it are different things, and only one of them expires: the password
+ * keeps working right up until the licence behind it lapses, at which point the officer discovers it
+ * by failing to sign in, halfway through a step with an SLA running on it. So the answer is fetched
+ * beside the credential and shown before the work starts, not after.
+ *
+ * The licence is an ordinary Document of a type flagged `portalLicence`, which is what gives it an
+ * expiry the scheduler already recomputes, a place in Compliance and Renewals, reminders, a renewal
+ * workflow and a fee recorded against it. Nothing here re-implements any of that; it only reads the
+ * state the document already carries.
+ *
+ * Superseded rows are excluded for the same reason every other reader excludes them: the renewed
+ * licence is the one that governs, and the old one is history.
+ */
+async function portalLicence(companyId: string, govCenter: string) {
+  const types = await prisma.documentType.findMany({
+    where: { portalLicence: true, retired: false, authority: govCenter },
+    select: { name: true, leadDays: true },
+  });
+  if (!types.length) return null; // the firm does not track a licence for this authority
+
+  const lead = Math.max(...types.map(t => t.leadDays ?? 30));
+  const docs = await prisma.document.findMany({
+    where: { companyId, supersededAt: null, docType: { in: types.map(t => t.name) } },
+    select: { id: true, docType: true, expiryDate: true, status: true, daysLeft: true },
+  });
+  if (!docs.length) return { tracked: true, found: false, type: types[0].name };
+
+  // The one that expires first: a client with two licences for an authority is only as covered as
+  // its earliest lapse.
+  const soonest = docs.slice().sort((x, y) => {
+    const a2 = x.expiryDate ? Date.parse(x.expiryDate) : Infinity;
+    const b2 = y.expiryDate ? Date.parse(y.expiryDate) : Infinity;
+    return a2 - b2;
+  })[0];
+
+  const days = soonest.expiryDate ? Math.round((Date.parse(soonest.expiryDate) - Date.now()) / 86400000) : null;
+  return {
+    tracked: true, found: true, id: soonest.id, type: soonest.docType,
+    expiryDate: soonest.expiryDate, days,
+    // Expired is the only state worth interrupting someone for; expiring is worth saying quietly.
+    state: days == null ? "unknown" : days < 0 ? "expired" : days <= lead ? "expiring" : "valid",
+    count: docs.length,
+  };
+}
 
 R.get("/tasks", requireAuth, requireStaff, async (req, res) => {
   const where: any = {};
