@@ -6807,6 +6807,51 @@ app.post("/api/cron/tick", requireAuth, requireStaff, requireWriteRole, async (_
 });
 
 /**
+ * THE API ANSWERS IN JSON, INCLUDING WHEN IT FAILS.
+ *
+ * Anything that reached here matched no route, or threw. Express's defaults handle both by sending
+ * an HTML page — `Cannot GET /api/nope`, or in development the exception with its full stack. That
+ * stack named the server's absolute filesystem path, its OS, and its dependency versions, and it
+ * came back to an unauthenticated caller who only had to post `{bad` to /api/auth/login to see it.
+ *
+ * Production already hides the stack, so live was never leaking it. These handlers exist so that
+ * staying safe does not depend on one environment variable being set correctly on every host the
+ * API is ever run on — and so a client that parses JSON never gets handed an HTML document by a
+ * failure path it did not expect.
+ *
+ * Must be registered after every route: Express picks middleware in order.
+ */
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "No such endpoint" });
+});
+
+// Four arguments, including the unused `next`. Express identifies error middleware by arity, so
+// dropping it silently turns this back into an ordinary handler that never runs.
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // The detail goes to the log, where the people entitled to it can read it.
+  console.error(`[error] ${req.method} ${req.path} —`, err?.stack ?? err);
+
+  if (res.headersSent) return;   // a streamed response already started; anything more corrupts it
+
+  // Body-parser's failures are the caller's fault and worth saying so precisely, because "something
+  // went wrong" for a malformed body sends people hunting through server logs for their own typo.
+  const status =
+    err?.type === "entity.too.large" ? 413 :
+    err instanceof SyntaxError && "body" in (err as any) ? 400 :
+    Number(err?.status ?? err?.statusCode) || 500;
+
+  const message =
+    status === 413 ? "That request body is too large" :
+    status === 400 ? "Malformed JSON in the request body" :
+    status < 500 ? (typeof err?.message === "string" ? err.message : "Bad request") :
+    // Never the exception's own text for a 500: it is written for us, not for the caller, and is
+    // exactly where internals leak back out.
+    "Something went wrong on our end";
+
+  res.status(status).json({ error: message });
+});
+
+/**
  * ONE BAD REQUEST MUST NOT TAKE THE SERVER WITH IT.
  *
  * Express 4 does not forward errors thrown inside an async handler — nothing catches them, so they
