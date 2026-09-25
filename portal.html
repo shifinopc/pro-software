@@ -4449,7 +4449,9 @@ class Component extends DCLogic {
           .then((r) => r.json().catch(() => ({})).then((d) => ({ ok: r.ok, d: d })))
           .then(({ ok, d }) => {
             if (!ok || !d.token) return this.setState({ lError: (d && d.error) || 'Invalid credentials — check your email and password' });
-            try { localStorage.setItem('stimespro:portalToken', d.token); } catch (e) {}
+            // Their own credentials, their own session — anything left over from staff viewing this
+            // portal no longer describes who is holding it.
+            try { localStorage.setItem('stimespro:portalToken', d.token); localStorage.removeItem('stimespro:portalImpersonate'); } catch (e) {}
             // Boot no longer stamps a path while signed out, so sign-in does it — restoring the screen
             // they originally asked for if there was one. `slug` is a local of componentDidMount and
             // not visible here, hence the inline form.
@@ -6463,7 +6465,18 @@ class Component extends DCLogic {
       railGoProfile: () => this.setState({ railMenu: false, active: 'Profile & Settings', activeGroup: 'Account' }),
       railGoCreds: () => this.setState({ railMenu: false, active: 'Credentials', activeGroup: 'Account' }),
       railGoSupport: () => this.setState({ railMenu: false, active: 'Support Center', activeGroup: 'Support' }),
-      railLogout: () => { try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} this._pendingPw = null; this._contactFirst = null; this.setState({ railMenu: false, auth: 'login', lPass: '', lError: '', active: 'Dashboard', activeGroup: 'Main' }); },
+      railLogout: () => {
+        // Revoke first — otherwise the token stays good for the rest of its life and "log out" only
+        // means "clear this browser". Fire-and-forget: the sign-out below happens either way.
+        // Skipped when staff are viewing this portal, whose token belongs to the client, not to them.
+        try {
+          const tok9 = localStorage.getItem('stimespro:portalToken');
+          if (tok9 && !localStorage.getItem('stimespro:portalImpersonate')) {
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + tok9 }, keepalive: true }).catch(() => {});
+          }
+          localStorage.removeItem('stimespro:portalImpersonate');
+        } catch (e) {}
+        try { localStorage.removeItem('stimespro:portalToken'); } catch (e) {} this._pendingPw = null; this._contactFirst = null; this.setState({ railMenu: false, auth: 'login', lPass: '', lError: '', active: 'Dashboard', activeGroup: 'Main' }); },
       ...ticketApi, ...bookApi, ...authApi, ...switcherApi, ...empApi, ...reqApi, ...threadApi, ...credApi, ...settingsApi,
       ...groupApi, ...payApi, ...docApi, ...empProfileApi, ...notifApi, ...editProfileApi, ...trackApi, ...uploadApi, ...folderApi, ...rdApi,
       ...wizardApi, ...upgradeApi, services, renewalGroups,

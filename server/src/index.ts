@@ -6758,6 +6758,36 @@ app.delete("/api/api-keys/:id", requireAuth, requireStaff, requireWriteRole, req
 });
 
 // Sign out everywhere: bump tokenVersion (invalidates every issued JWT) and re-issue THIS session's.
+/**
+ * Sign out, for real.
+ *
+ * Logging out cleared the browser's copy of the token and nothing else, so the token itself stayed
+ * valid for the rest of its twelve hours. Anyone holding it — from a shared machine, a copied
+ * localStorage, a log — kept full access long after the person believed they had left.
+ *
+ * Revoking is a `tokenVersion` bump, which requireAuth already compares on every request. That also
+ * ends the person's other sessions, which is the safe direction to err in for a console holding
+ * clients' government credentials: "log out" meaning "log out here but stay signed in on the machine
+ * you left it on" is not what anybody clicking it intends.
+ *
+ * Deliberately NOT requireHuman, unlike logout-all: ending your own session must never be the thing
+ * that is refused.
+ */
+app.post("/api/auth/logout", requireAuth, async (req, res) => {
+  const a = (req as any).auth;
+  // An API key has no session to end, and its `sub` is not a user id. Say so rather than reporting
+  // a revocation that did not happen — keys are revoked on the API keys screen.
+  if (a?.apiKey) return res.status(400).json({ error: "API keys have no session; revoke the key instead" });
+  try {
+    const u = await prisma.user.update({ where: { id: a.sub }, data: { tokenVersion: { increment: 1 } } });
+    await logAudit({ action: "auth.logout", actorId: u.id, actorEmail: u.email, ip: clientIp(req) });
+  } catch {
+    // The browser is signing out regardless; a failure here must not leave someone stuck on a screen
+    // they are trying to leave.
+  }
+  res.json({ ok: true });
+});
+
 app.post("/api/auth/logout-all", requireAuth, requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const u = await prisma.user.update({ where: { id: a.sub }, data: { tokenVersion: { increment: 1 } } });

@@ -17053,6 +17053,9 @@ class Component extends DCLogic {
           if (!ok) return this.toast(j.error || 'Could not impersonate', 'error');
           if (j.user && j.user.type === 'portal') {
             localStorage.setItem('stimespro:portalToken', j.token);
+            // Same origin as the portal, so that tab reads this key too — and its "log out" would
+            // otherwise revoke the CLIENT's token because a member of staff finished looking.
+            localStorage.setItem('stimespro:portalImpersonate', '1');
             window.open('/portal/dashboard', '_blank');
             this.toast('Opened the client portal as ' + (j.user.name || 'user'));
           } else {
@@ -38500,6 +38503,21 @@ class Component extends DCLogic {
       // full document load, because clearing storage does not clear the previous user's clients,
       // tasks and invoices out of the in-memory state this component is holding.
       railLogout: () => {
+        // Tell the server first, or the token stays valid for the rest of its twelve hours and
+        // "logged out" means nothing beyond this browser. Fire-and-forget: the sign-out below must
+        // happen whether or not the call lands, so an unreachable server cannot trap someone in a
+        // session they are trying to leave.
+        //
+        // Skipped while viewing as a client: the subject of the token is THEIR account, so revoking
+        // it would sign the client out of their own portal because a member of staff stopped looking.
+        try {
+          const tok9 = localStorage.getItem('stimespro:token');
+          const impersonating9 = !!localStorage.getItem('stimespro:tokenOrig');
+          if (tok9 && !impersonating9) {
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/auth/logout',
+              { method: 'POST', headers: { Authorization: 'Bearer ' + tok9 }, keepalive: true }).catch(() => {});
+          }
+        } catch (e9) { /* storage unavailable — carry on and drop the in-memory session */ }
         try {
           localStorage.removeItem('stimespro:token');
           localStorage.removeItem('stimespro:user');
