@@ -115,6 +115,55 @@ the edge, so **until the cache is purged the edge keeps serving the previous dep
 to an hour.** The in-app "new version" banner cannot help, because a reload gets the same cached
 document. Purging takes one click and is the last step of every deploy.
 
+## Backups
+
+```bash
+~/stimespro/app/stack/backup.sh --install     # crontab entry + an immediate first run
+~/stimespro/app/stack/backup.sh               # by hand, any time, safe to repeat
+```
+
+Writes a dated set to `~/stimespro/backups/{daily,monthly}/`: the database, the three file volumes,
+a copy of `.env`, and a `MANIFEST.txt` of sha256 sums. Fourteen nightly sets, six monthly. About
+4 MB a set today, so rotation is generous — but it refuses to run with less than 1 GB free rather
+than trusting that.
+
+It verifies its own work: a `mysqldump` that dies halfway still exits 0 through a pipe, so the
+script checks for mysqldump's `-- Dump completed` marker and fails loudly if the dump is truncated.
+
+**`.env` is in the set on purpose.** `CRED_KEY` is the AES-256 key for the credential vault, and a
+database restored without it gives you every client's portal password as ciphertext nobody can open.
+The key and the data have to travel together — which also means every copy of a backup set is as
+sensitive as the vault itself.
+
+**Nothing leaves the box until you set `OFFSITE_CMD`.** Until then these sets protect you from a bad
+deploy or a dropped table and not from losing the server, since they sit on the disk they came from.
+Set it in `~/stimespro/.env` and the script runs it with the set directory as `$1`.
+
+### Restoring from a backup
+
+```bash
+cd ~/stimespro
+SET=backups/daily/2026-09-25-0217          # the set you want
+
+# 1. Check it is intact before you destroy anything.
+( cd "$SET" && sha256sum -c <(grep '^[0-9a-f]\{64\}  ' MANIFEST.txt) )
+
+# 2. Database. --databases in the dump means it recreates the schema itself.
+zcat "$SET/db.sql.gz" | docker compose -p stimespro exec -T db   sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
+
+# 3. Files. Each tar replaces the volume's contents.
+for v in uploads uploads_private packs; do
+  [ -f "$SET/$v.tgz" ] || continue
+  docker run --rm -v "stimespro_$v":/data -v "$PWD/$SET":/in alpine     sh -c "rm -rf /data/* && tar xzf /in/$v.tgz -C /data"
+done
+
+# 4. Secrets — compare before overwriting; a CRED_KEY that does not match the dump
+#    makes every stored credential unreadable.
+diff "$SET/env.txt" .env
+
+docker compose -p stimespro restart api
+```
+
 ## Things that will cost you time if you skip them
 
 - **`CRED_KEY` is unrecoverable.** AES-256 key for the client credential vault. Lose or change it
