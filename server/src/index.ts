@@ -70,6 +70,7 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
+import { toIsoDate, DateValueError } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
@@ -1370,8 +1371,10 @@ app.post("/api/portal/documents", requireAuth, requirePortal, async (req, res) =
   try {
     const { person, docType, expiryDate, status, daysLeft, customData } = req.body ?? {};
     if (!docType) return res.status(400).json({ error: "Document type is required" });
+    const docExpiry = isoDateOr400(res, expiryDate, "Expiry date");
+    if (docExpiry === undefined) return;
     const created = await prisma.document.create({
-      data: { companyId: a.companyId, person: String(person || ""), docType: String(docType), expiryDate: expiryDate ?? null, status: status ?? "valid", daysLeft: Number(daysLeft) || 0, customData: customData ?? undefined },
+      data: { companyId: a.companyId, person: String(person || ""), docType: String(docType), expiryDate: docExpiry, status: status ?? "valid", daysLeft: Number(daysLeft) || 0, customData: customData ?? undefined },
     });
     res.status(201).json(created);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
@@ -1388,8 +1391,10 @@ app.post("/api/portal/appointments", requireAuth, requirePortal, requireNotSuspe
   try {
     const { type, employee, date, time, clientName } = req.body ?? {};
     if (!type || !date) return res.status(400).json({ error: "Type and date are required" });
+    const apptDate = isoDateOr400(res, date, "Date");
+    if (apptDate === undefined) return;
     const created = await prisma.appointment.create({
-      data: { title: `${type}${clientName ? ` — ${clientName}` : ""}`, type: String(type), companyId: a.companyId, clientName: clientName ?? null, employee: employee ?? null, date: String(date), time: time ?? null, status: "Requested",
+      data: { title: `${type}${clientName ? ` — ${clientName}` : ""}`, type: String(type), companyId: a.companyId, clientName: clientName ?? null, employee: employee ?? null, date: apptDate, time: time ?? null, status: "Requested",
         history: [{ at: new Date().toISOString(), by: clientName || "Client", event: "Created", detail: `Requested for ${date}${time ? ` ${time}` : ""}` }] },
     });
     logActivity({ type: "client", message: `Appointment requested${clientName ? ` by ${clientName}` : ""}: ${type} · ${date}`, user: clientName ?? "Client" });
@@ -1417,10 +1422,14 @@ app.post("/api/portal/appointments/:id/reschedule-request", requireAuth, require
     if (appt.status === "Cancelled" || appt.status === "Attended") return res.status(400).json({ error: "This appointment can no longer be rescheduled" });
     const { date, time, note, by } = req.body ?? {};
     if (!date) return res.status(400).json({ error: "Pick the preferred new date" });
+    // Stored to become the appointment's own date when staff approve it, so it has to be a date now
+    // rather than at approval time, when whoever typed it is no longer there to be asked.
+    const wantDate = isoDateOr400(res, date, "Date");
+    if (wantDate === undefined) return;
     const who = by || appt.clientName || "Client";
     const hist = Array.isArray(appt.history) ? (appt.history as any[]) : [];
     const updated = await prisma.appointment.update({ where: { id: appt.id }, data: {
-      pendingReschedule: { date: String(date), time: time ?? null, note: note ?? null, by: who, at: new Date().toISOString() },
+      pendingReschedule: { date: wantDate, time: time ?? null, note: note ?? null, by: who, at: new Date().toISOString() },
       history: [...hist, { at: new Date().toISOString(), by: who, event: "Reschedule requested", detail: `${date}${time ? ` ${time}` : ""}${note ? ` · ${note}` : ""}` }],
     } });
     logActivity({ type: "client", message: `Reschedule requested by ${who}: ${appt.type ?? "appointment"} → ${date}${time ? ` ${time}` : ""}`, user: who });
@@ -1496,7 +1505,7 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
     // Stamp lastClientMsgAt on creation so a brand-new request counts as unread for staff — the
     // opening message is a client message, even though it predates the thread.
     const created = await prisma.serviceRequest.create({
-      data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
+      data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
     });
     // Attach the uploaded files to the request, AGAINST the document each one is meant to be.
     // The client sends file ids, never paths: an id is checked against what this account actually
@@ -4312,9 +4321,12 @@ app.post("/api/invoices/:id/extend", requireAuth, requireStaff, requireWriteRole
     await logAudit({ action: "invoice.extend.clear", actorId: a.sub, target: inv.id, detail: inv.number });
     return res.json({ invoice });
   }
-  const when = String(promisedDate ?? "").trim();
-  if (!when || isNaN(new Date(when).getTime())) return res.status(400).json({ error: "A valid payment date is required" });
-  if (new Date(when).getTime() < Date.now() - 86400000)
+  // `new Date(...)` alone accepted anything it could guess at and stored it as typed, so the agreed
+  // date could go in as "16 Jul 2026" while every other invoice date was ISO — and these get compared.
+  const when = isoDateOr400(res, String(promisedDate ?? "").trim() || null, "Payment date");
+  if (when === undefined) return;
+  if (!when) return res.status(400).json({ error: "A valid payment date is required" });
+  if (new Date(when + "T23:59:59Z").getTime() < Date.now() - 86400000)
     return res.status(400).json({ error: "The agreed date is in the past — pick a future date" });
   const invoice = await prisma.invoice.update({
     where: { id: inv.id },
@@ -4399,11 +4411,13 @@ app.post("/api/service-requests/:id/accept", requireAuth, requireStaff, requireW
   const a = (req as any).auth;
   try {
     const { serviceItemId, assignee, dueDate } = req.body ?? {};
+    const acceptDue = isoDateOr400(res, dueDate, "Due date");
+    if (acceptDue === undefined) return;
     const out = await acceptServiceRequest(req.params.id, {
       actor: a?.email ?? a?.sub,
       serviceItemId: serviceItemId ? String(serviceItemId) : null,
       assignee: assignee ? String(assignee) : null,
-      dueDate: dueDate ? String(dueDate) : null,
+      dueDate: acceptDue,
     });
     await logAudit({ action: "request.accepted", actorId: a?.sub, target: req.params.id, detail: [out.taskRef, out.serviceName, out.workflowInstanceId ? "run started" : "no run"].filter(Boolean).join(" · ") });
     res.json(out);
@@ -4748,7 +4762,7 @@ app.post("/api/portal/payment-notice", requireAuth, requirePortal, async (req, r
   try {
     const created = await prisma.serviceRequest.create({
       data: { number: await nextNumber("request"), companyId: a.companyId, clientName: company?.name ?? null, type: "Payment notification",
-        message, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
+        message, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
     });
     logActivity({ type: "client", message: `Payment reported by ${company?.name ?? "a client"}: ${amt.toLocaleString()}`, user: company?.name ?? "Client" });
     notify({ rule: "Approval requested", audience: "staff",
@@ -4805,17 +4819,19 @@ app.post("/api/portal/employees/:id/exit-request", requireAuth, requirePortal, r
 
   // Resolved before the transaction opens: it reads the same table the transaction writes to.
   const exitReqNo = await nextNumber("request");
+  const exitOn = isoDateOr400(res, exitDate, "Exit date");
+  if (exitOn === undefined) return;
   try {
     // Atomic: the request, the status freeze, and releasing any in-flight renewal must land together.
     // If the freeze were a second call that failed, we'd have an exit on file AND a renewal running.
     const [request] = await prisma.$transaction([
       prisma.serviceRequest.create({
         data: { number: exitReqNo, companyId: a.companyId, clientName: emp.company?.name ?? null, type: "Employee exit",
-          message, status: "open", date: "Just now", lastClientMsgAt: new Date().toISOString() },
+          message, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
       }),
       prisma.employee.update({
         where: { id: emp.id },
-        data: { exitStatus: "exit_requested", exitDate: String(exitDate), exitReason: why,
+        data: { exitStatus: "exit_requested", exitDate: exitOn, exitReason: why,
           history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
             { at: new Date().toISOString(), event: "exit_requested", by: "client",
               detail: `Last working day ${exitDate} · ${why.replace(/_/g, " ")}${picked.length ? ` · ${picked.join(", ")}` : ""}` }],
@@ -6620,6 +6636,23 @@ app.put("/api/settings/:key", requireAuth, requireStaff, requireWriteRole, async
     res.json(row.value);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+
+/**
+ * The generic CRUD routes normalise dates for every model (see dates.ts). These handlers do not go
+ * through them — they build their Prisma call by hand — so a date from the request body reached the
+ * database exactly as typed. That is how an appointment came to be stored as "30 Jul", with no year
+ * at all, which no comparison can place and no report can order.
+ *
+ * Returns the ISO date, or sends a 400 and returns undefined; callers stop when it does.
+ */
+function isoDateOr400(res: express.Response, value: unknown, label: string): string | null | undefined {
+  try {
+    return toIsoDate(value, label) ?? null;
+  } catch (e) {
+    res.status(400).json({ error: e instanceof DateValueError ? e.message : `${label} is not a valid date` });
+    return undefined;
+  }
+}
 
 // ── File uploads (logos, document scans, attachments) ──
 // Files land in server/uploads-files and are served publicly at /files/<name>. The client sends

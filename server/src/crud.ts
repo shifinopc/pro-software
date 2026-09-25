@@ -6,6 +6,7 @@ import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { idleDaysOf } from "./lifecycle.js";
 import { homeCountry } from "./orgsettings.js";
 import { validate } from "./validate.js";
+import { normalizeDates } from "./dates.js";
 import { logActivity, logNotification } from "./auth.js";
 import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
 import { startDeliveryForQuotation } from "./delivery.js";
@@ -299,6 +300,10 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
   });
 
   r.post("/", async (req, res) => {
+    // Before validation, because normalising is part of deciding whether the value is acceptable:
+    // "15 Jul 2026" is a date and becomes one, "Just now" is not and is refused here.
+    const dateErr = normalizeDates(modelName, req.body);
+    if (dateErr) return res.status(400).json({ error: dateErr });
     const err = validate(modelName, req.body, true);
     if (err) return res.status(400).json({ error: err });
     try {
@@ -387,6 +392,8 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
   });
 
   r.put("/:id", async (req, res) => {
+    const dateErr = normalizeDates(modelName, req.body);
+    if (dateErr) return res.status(400).json({ error: dateErr });
     const err = validate(modelName, req.body, false);
     if (err) return res.status(400).json({ error: err });
     try {
