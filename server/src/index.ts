@@ -6657,6 +6657,50 @@ app.use("/files", express.static(FILES_DIR, {
     if (/\.(svg|html?|xml|xhtml)$/i.test(filePath)) res.setHeader("Content-Disposition", "attachment");
   },
 }));
+/**
+ * WHAT A FILE *IS*, NOT WHAT IT IS CALLED.
+ *
+ * Validation used to read the filename and nothing else, so `evil.png` containing HTML was stored
+ * and later served as `image/png`. nosniff and the CSP below stop that being executable, but the
+ * file is still a document that can never be opened — a client uploads their passport scan, the
+ * server says 201, and every future viewer gets a broken image with no explanation of why.
+ *
+ * Returns the extension the CONTENT deserves, or null if it is not one of the accepted types. The
+ * caller stores it under that extension rather than the claimed one, so a mislabelled-but-valid
+ * file (a JPEG named .png, which happens constantly) is filed correctly instead of rejected.
+ */
+function sniffFileType(buf: Buffer): ".png" | ".jpg" | ".webp" | ".pdf" | ".svg" | null {
+  if (buf.length < 4) return null;
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return ".png";
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return ".jpg";
+  if (buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP") return ".webp";
+  // A PDF is allowed a little junk before the header; readers tolerate it and so do we.
+  if (buf.subarray(0, 1024).toString("latin1").includes("%PDF-")) return ".pdf";
+  // SVG is text, so there are no magic bytes to match — look for the root element past any BOM,
+  // XML declaration, doctype or comment.
+  const head = buf.subarray(0, 4096).toString("utf8").replace(/^\uFEFF/, "");
+  if (/<svg[\s>]/i.test(head)) return ".svg";
+  return null;
+}
+
+/**
+ * SVG is the one accepted format that is also a script host. It is kept because logos and print
+ * watermarks are genuinely SVG and rasterising them would visibly degrade printed invoices — so
+ * active content is refused at the door instead.
+ *
+ * Serving already neutralises it (nosniff, `sandbox` CSP, forced download), but that is one header
+ * set away from a mistake, and a scripted SVG has no legitimate reason to be in this system at all.
+ * Refusing it is both defence in depth and an honest error message.
+ */
+function svgCarriesScript(buf: Buffer): boolean {
+  const text = buf.toString("utf8");
+  return /<script[\s>]/i.test(text)
+    || /\son\w+\s*=/i.test(text)              // onload=, onclick=, …
+    || /javascript:/i.test(text)
+    || /<foreignObject[\s>]/i.test(text)       // arbitrary HTML smuggled inside the SVG
+    || /<(iframe|embed|object)[\s>]/i.test(text);
+}
+
 // Staff upload anything; a PORTAL client may upload too, but only its own document scans — the
 // kind is forced so a client can't overwrite branding assets like the org logo.
 app.post("/api/upload", requireAuth, async (req, res) => {
@@ -6670,9 +6714,15 @@ app.post("/api/upload", requireAuth, async (req, res) => {
   const named = String(name || "").trim();
   const extMatch = named ? named.match(/\.(png|jpe?g|svg|webp|pdf)$/i) : null;
   if (named && !extMatch) return res.status(400).json({ error: "Only PNG, JPG, SVG, WEBP or PDF files can be uploaded" });
-  const safeExt = (extMatch ? extMatch[0] : ".png").toLowerCase();
   const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
   if (!buf.length || buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "File must be under 4 MB" });
+  // The name got a vote; the bytes get the decision.
+  const sniffed = sniffFileType(buf);
+  if (!sniffed) return res.status(400).json({ error: "That file is not a PNG, JPG, WEBP, PDF or SVG — check you picked the right one" });
+  if (sniffed === ".svg" && svgCarriesScript(buf)) {
+    return res.status(400).json({ error: "That SVG contains scripting and cannot be stored. Export it as a plain image, or upload a PNG." });
+  }
+  const safeExt = sniffed;
   // A person's identity papers do not go in a publicly served folder. Branding does — an <img> tag
   // carries no Authorization header, so a logo behind auth simply would not render.
   const isPrivate = PRIVATE_KINDS.has(String(kind || ""));
@@ -6728,6 +6778,50 @@ app.get("/api/files/:id", requireAuth, async (req, res) => {
   // Named for the human, not for the disk: the client sees "passport.pdf", not a cuid.
   res.setHeader("Content-Disposition", `inline; filename="${String(asset.name || onDisk).replace(/[^\w. -]/g, "_")}"`);
   res.sendFile(path.join(PRIVATE_FILES_DIR, onDisk));
+});
+
+/**
+ * Delete an upload. There was no way to remove one at all, so a file picked by mistake — the wrong
+ * passport, a document belonging to the wrong client — stayed on the server permanently with only
+ * the reference to it removed.
+ *
+ * Refuses while anything still points at the file. A document row whose scan silently disappears is
+ * worse than an orphan: the record still claims to be evidenced, and nobody finds out until someone
+ * opens it in front of a government officer. The caller is told which client's document holds it.
+ *
+ * Staff only, and never portal clients: a client being able to delete the firm's copy of a filing is
+ * a different feature with different consequences, and not one anyone has asked for.
+ */
+app.delete("/api/files/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const asset = await prisma.fileAsset.findUnique({ where: { id: req.params.id } });
+  if (!asset) return res.status(404).json({ error: "Not found" });
+
+  const ref = asset.private ? "/api/files/" + asset.id : asset.path;
+  const inUse = await prisma.$queryRaw<{ id: string; companyId: string | null; docType: string }[]>`
+    SELECT id, companyId, docType FROM Document
+    WHERE JSON_UNQUOTE(JSON_EXTRACT(customData, '$.file')) = ${ref}
+       OR JSON_UNQUOTE(JSON_EXTRACT(customData, '$.filePath')) = ${ref}
+    LIMIT 1`;
+  if (inUse.length) {
+    return res.status(409).json({ error: `Still attached to a ${inUse[0].docType} — detach it there first` });
+  }
+
+  // Disk first would leave a row pointing at nothing if the delete below failed; this way the worst
+  // case is a file with no row, which the orphan report can find.
+  await prisma.fileAsset.delete({ where: { id: asset.id } });
+  try {
+    if (asset.private) {
+      const onDisk = fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(asset.id));
+      if (onDisk) fs.unlinkSync(path.join(PRIVATE_FILES_DIR, onDisk));
+    } else if (asset.path?.startsWith("/files/")) {
+      // basename only — never let a stored path walk out of the uploads folder.
+      fs.unlinkSync(path.join(FILES_DIR, path.basename(asset.path)));
+    }
+  } catch { /* already gone from disk; the row is what mattered */ }
+
+  await logAudit({ action: "file.delete", actorId: a?.sub, target: ref, detail: `${asset.kind} · ${asset.size}b`, ip: clientIp(req) });
+  res.json({ ok: true });
 });
 
 // ── API keys: list (safe fields), create (full key returned ONCE), revoke ──
