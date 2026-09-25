@@ -5529,10 +5529,24 @@ async function coName(companyId?: string | null): Promise<string> {
 }
 app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    // licenceExpiry is not a column on this model — it is filed against the client's licence
-    // document below — so it is taken out before the rest reaches Prisma.
-    const { password, licenceExpiry, ...rest } = req.body ?? {};
-    const created = await prisma.siteCredential.create({ data: { ...rest, password: encrypt(String(password ?? "")) } });
+    // NAMED, not spread. The body used to go into Prisma whole, so anything the model happened to
+    // have a column for could be set by whoever called this — and licenceExpiry, which is not a
+    // column at all, is filed against the client's licence document instead.
+    const b = (req.body ?? {}) as any;
+    const { password, licenceExpiry } = b;
+    const companyId = String(b.companyId ?? "");
+    if (!companyId) return res.status(400).json({ error: "companyId is required" });
+    if (!await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } }))
+      return res.status(400).json({ error: "No such client" });
+    const created = await prisma.siteCredential.create({ data: {
+      companyId,
+      label: String(b.label ?? "").trim(),
+      url: String(b.url ?? "").trim(),
+      username: b.username ? String(b.username).trim() : null,
+      notes: b.notes ? String(b.notes) : null,
+      govCenter: b.govCenter ? String(b.govCenter).trim() : null,
+      password: encrypt(String(password ?? "")),
+    } });
     if (licenceExpiry && created.govCenter) await filePortalLicence({ companyId: created.companyId, govCenter: created.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
     const cn = await coName(created.companyId);
     logActivity({ type: "client", message: `Site credential added (${created.label})${cn ? ` for ${cn}` : ""}`, user: (req as any).auth?.email });
@@ -5545,8 +5559,17 @@ app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async 
 });
 app.put("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { password, id: _id, licenceExpiry, ...rest } = req.body ?? {};
-    const data: any = { ...rest };
+    // A credential does not change hands. companyId is deliberately absent from this list: a single
+    // PUT used to move one client's government login onto another client, and the audit line that
+    // followed recorded the NEW owner, so the trail did not show that it had happened.
+    const b = (req.body ?? {}) as any;
+    const { password, licenceExpiry } = b;
+    const data: any = {};
+    if (b.label !== undefined) data.label = String(b.label).trim();
+    if (b.url !== undefined) data.url = String(b.url).trim();
+    if (b.username !== undefined) data.username = b.username ? String(b.username).trim() : null;
+    if (b.notes !== undefined) data.notes = b.notes ? String(b.notes) : null;
+    if (b.govCenter !== undefined) data.govCenter = b.govCenter ? String(b.govCenter).trim() : null;
     // Only re-encrypt when a new password is actually provided (blank = keep existing).
     if (typeof password === "string" && password.length > 0) data.password = encrypt(password);
     const updated = await prisma.siteCredential.update({ where: { id: req.params.id }, data });

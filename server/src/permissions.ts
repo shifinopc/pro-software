@@ -219,7 +219,17 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/service-requests", "Clients"],
   ["/api/workforce", "Clients"],
   ["/api/workforce-history", "Clients"],
-  ["/api/credentials", "Clients"],
+  // NOT "/api/credentials". The vault holds every client's government portal passwords, and mapping
+  // it here handed it to the Clients module — which PRO Officer, Accountant and Sales all hold View
+  // on by default. Because requireReadRole defers to this grid whenever it governs a route, the
+  // admin-only rule written on those routes became dead code, and any of those roles could list the
+  // vault and reveal any client's password in plaintext. Verified against a running server before
+  // this line was removed.
+  //
+  // Ungoverned here means it keeps its own gate — requireReadRole("super_admin", "admin") on the
+  // list and the reveal, requireWriteRole on the writes — which is what those routes always claimed
+  // to do. The coverage report lists it as ungoverned, which is the honest answer: this grid is not
+  // the whole story for the vault, deliberately.
   ["/api/documents", "Compliance"],
   ["/api/courier-shipments", "Compliance"],
   ["/api/setup-check", "Compliance"],
