@@ -414,8 +414,11 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
             documentId: d.id, docType, person: d.person, employeeId: d.employeeId ?? null,
             ...(d.employeeId ? {} : { establishmentId: d.establishmentId ?? null, establishmentCr: est?.crNumber ?? null }),
             currentExpiry: d.expiryDate, currentNumber: d.docNumber ?? null,
-            fee: dt?.defaultFee ?? null, _trigger: "document_expiry", _autoStarted: nowISO(),
+            fee: dt?.defaultFee ?? null,
           },
+          // Not in `variables` above: that path strips underscore keys, so these were being set and
+          // silently dropped on every renewal this job has ever started.
+          engineVariables: { _trigger: "document_expiry", _autoStarted: nowISO() },
         });
         // Claim the document immediately so the next tick skips it.
         await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: run!.id } });

@@ -1055,7 +1055,19 @@ export async function describeTemplate(templateId: string): Promise<{
   return { name: tpl.name, steps: g.nodes.filter(waits).length, firstStep, hasSteps: g.nodes.length > 0 };
 }
 
-export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any }) {
+/**
+ * `engineVariables` is for bookkeeping the ENGINE sets about a run, not values a caller supplies.
+ *
+ * `callerVariables` strips every key beginning with an underscore, which is right for anything
+ * arriving over HTTP — those names belong to the engine and a caller must not be able to forge them.
+ * But the expiry job is the engine, and it was going through the same door: it set `_trigger:
+ * "document_expiry"` on every renewal it started and the key was thrown away on the way in. Ninety-
+ * five auto-renewals on the live system carry no `_trigger`, and the unbilled-work agent skips any
+ * run without it — so a completed renewal has never once been proposed for invoicing.
+ *
+ * Trusted keys therefore go in separately, after sanitisation, and never from a request body.
+ */
+export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any; engineVariables?: Record<string, any> }) {
   const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId } });
   if (!tpl) throw new Error("Template not found");
   // A retired template must not start new work. Hiding it from the lists is not enough: a service
@@ -1071,7 +1083,7 @@ export async function startInstance(templateId: string, opts: { title?: string; 
       title: opts.title || tpl.name,
       companyId: opts.companyId ?? null,
       clientName: opts.clientName ?? null,
-      variables: seedableVariables(g, callerVariables(opts.variables).vars),
+      variables: { ...seedableVariables(g, callerVariables(opts.variables).vars), ...(opts.engineVariables ?? {}) },
       status: "running",
       startedAt: nowISO(),
     },
