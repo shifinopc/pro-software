@@ -10668,6 +10668,13 @@
             </div>
           </sc-if>
         </div>
+        <sc-if value="{{ ccLicAsk }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px;">
+            <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">LICENCE EXPIRES</div>
+            <input value="{{ ccLicExpiry }}" onChange="{{ setCcLicExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;">
+            <div style="font-size:11.5px; color:#8C8899; margin-top:6px; line-height:1.5;">{{ ccLicHint }}</div>
+          </div>
+        </sc-if>
         <sc-if value="{{ ccLicShow }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:10px; border:1px solid {{ ccLicBd }}; background:{{ ccLicBg }}; border-radius:12px; padding:11px 13px;">
             <div style="display:flex; align-items:flex-start; gap:9px;">
@@ -10675,7 +10682,6 @@
               <div style="flex:1; min-width:0;">
                 <div style="font-size:12.5px; font-weight:700; color:{{ ccLicFg }};">{{ ccLicTitle }}</div>
                 <div style="font-size:11.5px; color:{{ ccLicFg }}; opacity:.85; margin-top:3px; line-height:1.5;">{{ ccLicNote }}</div>
-                <sc-if value="{{ ccLicCanAdd }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ccLicAdd }}" style="display:inline-block; margin-top:8px; font-size:11.5px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Record the licence and its expiry →</span></sc-if>
               </div>
             </div>
           </div>
@@ -21936,7 +21942,13 @@ class Component extends DCLogic {
               .then(r7 => (r7.ok ? r7.json() : Promise.reject())).then(j7 => { this.setState({ cdCredPass: { ...cdCredPass, [c7.id]: j7.password || '' } }); go(j7.password); })
               .catch(() => go(''));
           },
-          edit: () => this.setState({ cdCredModal: true, ccLabel: c7.label, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id, ccPortal: c7.govCenter || _CC_NO_PORTAL }),
+          edit: () => {
+            // Seeded from the licence already on file — an empty box beside a licence that exists
+            // would read as "none recorded", and saving would then look like it had erased it.
+            const L7 = _licFor(c7.govCenter);
+            this.setState({ cdCredModal: true, ccLabel: c7.label, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id,
+              ccPortal: c7.govCenter || _CC_NO_PORTAL, ccLicExpiry: (L7 && !L7.missing && L7.expiry) ? String(L7.expiry).slice(0, 10) : '' });
+          },
           copyUser: () => { try { navigator.clipboard && navigator.clipboard.writeText(c7.username || ''); } catch (e) {} this.toast('Username copied'); },
           // No fabricated change log: the model keeps no credential history, and the real audit trail
           // of reveals/edits lives in Settings → Audit.
@@ -21964,8 +21976,8 @@ class Component extends DCLogic {
       // The button said "Add credential" while the heading above it said "Edit credential" — the
       // same dialog telling you two different things about what the click will do.
       clDetailApi.cdCredSave = this.state.ccEditId ? 'Save changes' : 'Add credential';
-      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccLabel: '', ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL });
-      clDetailApi.closeCdCred = () => this.setState({ cdCredModal: false, ccEditId: null });
+      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccLabel: '', ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '' });
+      clDetailApi.closeCdCred = () => this.setState({ cdCredModal: false, ccEditId: null, ccLicExpiry: '' });
       // Which authority this login is for. Optional — plenty of client logins are not a government
       // portal at all — but when it IS set, the step doing work at that authority can point at it.
       clDetailApi.ccPortalVal = this.state.ccPortal || _CC_NO_PORTAL;
@@ -21986,6 +21998,14 @@ class Component extends DCLogic {
         const known8 = port8 && port8 !== _CC_NO_PORTAL;
         const lic8 = known8 ? _licFor(port8) : null;
         Object.assign(clDetailApi, {
+          // Asked for any government portal, whether or not a licence type exists yet — the type is
+          // created from this the first time somebody records one, rather than being a thing to go
+          // and configure sixteen times before a single date can be saved.
+          ccLicAsk: known8,
+          ccLicExpiry: this.state.ccLicExpiry || '',
+          ccLicHint: lic8 && !lic8.missing
+            ? 'Filed against this client’s ' + lic8.type + '. Changing it here updates that record, which is what Compliance and the reminders read.'
+            : 'Kept as the client’s ' + (port8 || 'portal') + ' licence, so it appears in Compliance, reminds before it lapses, and can be renewed like any other document.',
           ccLicShow: !!lic8,
           ...(lic8 ? (lic8.missing
             ? { ccLicTitle: 'No ' + lic8.type + ' on file for this client',
@@ -22016,6 +22036,7 @@ class Component extends DCLogic {
           },
         });
       }
+      clDetailApi.setCcLicExpiry = (e) => this.setState({ ccLicExpiry: e.target.value, ccErr: '' });
       clDetailApi.setCcLabel = (e) => this.setState({ ccLabel: e.target.value, ccErr: '' });
       clDetailApi.setCcUrl = (e) => this.setState({ ccUrl: e.target.value, ccErr: '' });
       clDetailApi.setCcUser = (e) => this.setState({ ccUser: e.target.value });
@@ -22033,14 +22054,21 @@ class Component extends DCLogic {
           // Which authority this login belongs to. Declared here rather than guessed from the label,
           // so a step that names a portal can point straight at it — see the step drawer.
           govCenter: (st.ccPortal && st.ccPortal !== _CC_NO_PORTAL) ? st.ccPortal : null,
+          // Typed here, filed as the client's licence document for this portal — the only place an
+          // expiry drives anything in this system.
+          ...((st.ccLicExpiry || '').trim() ? { licenceExpiry: st.ccLicExpiry.trim() } : {}),
           ...(st.ccPass ? { password: st.ccPass } : {}) };
         fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials' + (st.ccEditId ? '/' + st.ccEditId : ''), { method: st.ccEditId ? 'PUT' : 'POST', headers: H7, body: JSON.stringify(body7) })
           .then(r7 => r7.json().catch(() => ({})).then(j7 => ({ ok: r7.ok, j7 })))
           .then(({ ok, j7 }) => {
             if (!ok) return this.setState({ ccErr: (j7 && j7.error && String(j7.error).slice(0, 140)) || 'Could not save the credential' });
-            this.setState({ cdCredModal: false, ccEditId: null, ccPass: '' });
-            this.toast(st.ccEditId ? 'Credential updated' : 'Credential stored');
+            this.setState({ cdCredModal: false, ccEditId: null, ccPass: '', ccLicExpiry: '' });
+            const lic7 = (st.ccLicExpiry || '').trim() && st.ccPortal && st.ccPortal !== _CC_NO_PORTAL;
+            this.toast((st.ccEditId ? 'Credential updated' : 'Credential stored') + (lic7 ? ' · licence expiry recorded' : ''));
             this._opReload('credentials', 'credentialsData');
+            // The licence lives in documents, so without this the chip beside the login would keep
+            // showing what was true before the save.
+            if (lic7) this._afterDocumentChange();
           })
           .catch(() => this.setState({ ccErr: 'Server unreachable — nothing was saved' }));
       };

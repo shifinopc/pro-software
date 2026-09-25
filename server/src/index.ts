@@ -5458,6 +5458,58 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
   }
 });
 
+/**
+ * File the expiry a person typed beside a government login as that client's licence for the portal.
+ *
+ * The expiry is asked for on the credential because that is where somebody is thinking about it —
+ * they have the portal open, they can see the date. It is STORED as a document because that is the
+ * only place in this system where an expiry does anything: recomputed hourly, listed in Compliance
+ * and Renewals, reminded on, renewable by a workflow that records the fee and keeps the history.
+ * Putting the column on the credential instead would have meant writing all of that a second time.
+ *
+ * The licence type is created on first use rather than demanded up front. Sixteen authorities are
+ * configured; requiring somebody to define sixteen document types before a single expiry could be
+ * saved is how a feature ends up unused. It is created DECLARED — portalLicence true, authority set
+ * — so everything that reads it behaves correctly, and it is an ordinary type afterwards: rename it,
+ * set its fee, give it a longer reminder.
+ */
+async function filePortalLicence(opts: { companyId: string; govCenter: string; expiry: string; actorId?: string | null }) {
+  const { companyId, govCenter, expiry } = opts;
+  if (!companyId || !govCenter || !expiry) return null;
+
+  let type = await prisma.documentType.findFirst({ where: { portalLicence: true, retired: false, authority: govCenter } });
+  if (!type) {
+    const name = `${govCenter} Portal Licence`;
+    // A type of that name may already exist without the flag — adopt it rather than create a second
+    // one the pickers would show side by side.
+    const existing = await prisma.documentType.findFirst({ where: { name } });
+    type = existing
+      ? await prisma.documentType.update({ where: { id: existing.id }, data: { portalLicence: true, authority: govCenter, subjectKind: "company" } })
+      : await prisma.documentType.create({ data: { name, subjectKind: "company", authority: govCenter, portalLicence: true, leadDays: 30 } });
+    await logAudit({ action: "document-type.create", actorId: opts.actorId ?? null, target: name, detail: `portal licence for ${govCenter}, created from the credential vault` });
+  }
+
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+  const days = Math.round((Date.parse(expiry) - Date.now()) / 86400000);
+  const lead = type.leadDays ?? 30;
+  const state = { status: days < 0 ? "overdue" : days <= lead ? "expiring" : "valid", daysLeft: days };
+
+  // One live licence per client per portal. A renewal supersedes rather than edits, so the row being
+  // updated here is the current one and its history is untouched.
+  const live = await prisma.document.findFirst({ where: { companyId, docType: type.name, supersededAt: null } });
+  if (live) {
+    if (live.expiryDate === expiry) return live;
+    const doc = await prisma.document.update({ where: { id: live.id }, data: { expiryDate: expiry, ...state } });
+    await logAudit({ action: "document.expiry.set", actorId: opts.actorId ?? null, target: `${type.name} (${doc.id})`, detail: `${company?.name ?? companyId} · ${live.expiryDate ?? "none"} → ${expiry}` });
+    return doc;
+  }
+  const doc = await prisma.document.create({
+    data: { companyId, person: company?.name ?? govCenter, docType: type.name, expiryDate: expiry, issuingAuthority: govCenter, ...state },
+  });
+  logActivity({ type: "client", message: `${type.name} recorded — expires ${expiry}${company?.name ? ` · ${company.name}` : ""}` });
+  return doc;
+}
+
 // Encrypted credential vault (staff): list without secret, dedicated reveal, encrypt on create
 app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (_req, res) => {
   const creds = await prisma.siteCredential.findMany({ take: 500 }); // hard cap
@@ -5477,8 +5529,11 @@ async function coName(companyId?: string | null): Promise<string> {
 }
 app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { password, ...rest } = req.body ?? {};
+    // licenceExpiry is not a column on this model — it is filed against the client's licence
+    // document below — so it is taken out before the rest reaches Prisma.
+    const { password, licenceExpiry, ...rest } = req.body ?? {};
     const created = await prisma.siteCredential.create({ data: { ...rest, password: encrypt(String(password ?? "")) } });
+    if (licenceExpiry && created.govCenter) await filePortalLicence({ companyId: created.companyId, govCenter: created.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
     const cn = await coName(created.companyId);
     logActivity({ type: "client", message: `Site credential added (${created.label})${cn ? ` for ${cn}` : ""}`, user: (req as any).auth?.email });
     await logAudit({ action: "credential.create", actorId: (req as any).auth?.sub, target: `${created.label} (${created.id})`, detail: `company ${created.companyId}`, ip: clientIp(req) });
@@ -5490,11 +5545,12 @@ app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async 
 });
 app.put("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { password, id: _id, ...rest } = req.body ?? {};
+    const { password, id: _id, licenceExpiry, ...rest } = req.body ?? {};
     const data: any = { ...rest };
     // Only re-encrypt when a new password is actually provided (blank = keep existing).
     if (typeof password === "string" && password.length > 0) data.password = encrypt(password);
     const updated = await prisma.siteCredential.update({ where: { id: req.params.id }, data });
+    if (licenceExpiry && updated.govCenter) await filePortalLicence({ companyId: updated.companyId, govCenter: updated.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
     const cn = await coName(updated.companyId);
     logActivity({ type: "client", message: `Site credential updated (${updated.label})${cn ? ` for ${cn}` : ""}`, user: (req as any).auth?.email });
     await logAudit({ action: "credential.update", actorId: (req as any).auth?.sub, target: `${updated.label} (${updated.id})`, detail: `company ${updated.companyId}`, ip: clientIp(req) });
