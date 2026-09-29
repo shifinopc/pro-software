@@ -15414,6 +15414,42 @@ class Component extends DCLogic {
     // console stores under stimespro:token; without one the GET 401s and the design defaults show.
     const API = window.STIMES_API || 'http://localhost:4100';
     this._apiBase = API;
+
+    /**
+     * ONE PLACE THAT NOTICES THE SESSION HAS DIED.
+     *
+     * `_load` already handled 401 on reads: it raises the "Your session has expired / Sign in"
+     * banner. Every WRITE goes out through its own bare `fetch`, of which there are around a
+     * hundred, and each one just printed whatever the server said. So a token that expired while
+     * somebody was filling in a form ended with the API's own words — "Invalid or expired token" —
+     * rendered as a validation error inside the dialog. It reads like the form is wrong, there is
+     * no way back to sign in, and everything typed is stranded.
+     *
+     * Wrapping fetch once catches all of them, including the ones written after this. The check is
+     * narrow on purpose: a 401 only counts when the request carried OUR Authorization header, so a
+     * failed sign-in (401, no header) stays a wrong-password message and is not mistaken for an
+     * expired session.
+     *
+     * The body is replaced as well as the banner raised. Once the session is dead the response has
+     * nothing else worth saying, and rewriting it here is what stops every existing call site from
+     * needing to learn about this.
+     */
+    if (!window.__stimesAuthFetch) {
+      window.__stimesAuthFetch = true;
+      const _rawFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => _rawFetch(input, init).then((res) => {
+        if (res.status !== 401) return res;
+        const hdrs = (init && init.headers) || (input && input.headers) || {};
+        const auth = typeof hdrs.get === 'function'
+          ? hdrs.get('Authorization')
+          : (hdrs.Authorization || hdrs.authorization);
+        if (!auth) return res;
+        try { this.setState({ authExpired: true }); } catch (e9) {}
+        return new Response(
+          JSON.stringify({ error: 'Your session has expired — sign in again, then try once more.' }),
+          { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
+      });
+    }
     // Load every backend-wired area with the current staff token. Called on mount AND right after a
     // successful login so the real data replaces the design's fallback samples without a page reload.
     this._hydrateAuthed = () => {

@@ -3255,6 +3255,34 @@ class Component extends DCLogic {
       this.setState({ loadState: { ...cur, [key]: st } });
     };
     /**
+     * ONE PLACE THAT NOTICES THE SESSION HAS DIED.
+     *
+     * `_load` below handles 401 on reads. Every write goes out through its own bare `fetch` and
+     * printed whatever the server said, so a token that expired while a client was filling in a
+     * form ended with the API's own words — "Invalid or expired token" — shown as if the form were
+     * wrong, with no way back to sign in and everything typed stranded.
+     *
+     * Narrow on purpose: a 401 only counts when the request carried OUR Authorization header, so a
+     * failed sign-in stays a wrong-password message.
+     */
+    if (!window.__stimesAuthFetch) {
+      window.__stimesAuthFetch = true;
+      const _rawFetch = window.fetch.bind(window);
+      window.fetch = (input, init) => _rawFetch(input, init).then((res) => {
+        if (res.status !== 401) return res;
+        const hdrs = (init && init.headers) || (input && input.headers) || {};
+        const auth = typeof hdrs.get === 'function'
+          ? hdrs.get('Authorization')
+          : (hdrs.Authorization || hdrs.authorization);
+        if (!auth) return res;
+        try { this.setState({ authExpired: true }); } catch (e9) {}
+        return new Response(
+          JSON.stringify({ error: 'Your session has expired — sign in again, then try once more.' }),
+          { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
+      });
+    }
+
+    /**
      * The one place a fetch failure is interpreted.
      *
      * 401 is the session, not the dataset: it is raised globally, because a expired token breaks
