@@ -24635,20 +24635,19 @@ class Component extends DCLogic {
           this.setState({ compProgress: np, compComplete: null, compRenewedOk: ccRow.doc });
           return this.toast('Renewal completed & archived');
         }
-        // FEE and RECEIPT were collected and dropped, even though the compliance drawer renders a
-        // fee/receipt ledger from Document.history — so the renewal record was always incomplete.
-        const prevDoc11 = (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).find(d11 => d11.id === ccRow._docId) || {};
+        // POSTS TO /renew, not the generic PUT.
+        //
+        // This used to PUT expiryDate and docNumber straight onto the document. Once those became
+        // part of the protected government record the server started refusing it — correctly, but
+        // the message it gave ("use correct or supersede") described neither what had happened nor
+        // anything this dialog can do, so finishing a renewal became impossible. /renew is the act
+        // this screen performs: the server writes the history entry, recomputes the countdown from
+        // the document type's own lead days, and closes the linked task.
         const newNo11 = (this.state.ccDocNo || ccRow.docNo || '').trim() || null;
-        const feeNum11 = parseFloat(String(this.state.ccFee || '').replace(/[^0-9.]/g, ''));
-        const entry11 = { at: new Date().toISOString(), by: (this.state.meUser || {}).name || 'Staff',
-          oldExpiry: prevDoc11.expiryDate || null, newExpiry: this.state.ccExpiry,
-          oldNumber: prevDoc11.docNumber || null, newNumber: newNo11,
-          fee: Number.isFinite(feeNum11) ? feeNum11 : null,
-          receipt: (this.state.ccReceipt || '').trim() || null };
-        fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + ccRow._docId, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok11 },
-          body: JSON.stringify({ status: 'valid', expiryDate: this.state.ccExpiry, docNumber: newNo11,
-            history: [...(Array.isArray(prevDoc11.history) ? prevDoc11.history : []), entry11] }) })
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/documents/' + ccRow._docId + '/renew', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok11 },
+          body: JSON.stringify({ expiryDate: this.state.ccExpiry, docNumber: newNo11,
+            fee: this.state.ccFee || null, receipt: (this.state.ccReceipt || '').trim() || null }) })
           .then(r11 => r11.json().catch(() => ({})).then(j11 => ({ ok: r11.ok, j11 })))
           .then(({ ok, j11 }) => {
             if (!ok) return this.setState({ ccErr: (j11 && j11.error) || 'Could not complete the renewal — nothing was saved' });

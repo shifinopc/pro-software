@@ -76,7 +76,8 @@ import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected } from "./notify.js";
+import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
+import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -5998,6 +5999,99 @@ const actorName = async (req: any) => {
   const u = a?.sub ? await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }) : null;
   return u?.name ?? u?.email ?? a?.sub ?? "unknown";
 };
+
+/**
+ * RENEWAL IS THE THIRD NAMED ACT.
+ *
+ * The generic PUT refuses to touch expiryDate or docNumber, and rightly: a government record must
+ * not change because somebody typed in a form. It offers two ways through — "correct" (this row was
+ * always wrong) and "supersede" (a different document replaces it).
+ *
+ * But the commonest thing that happens to one of these records is neither. The authority renews it:
+ * same document, same number as often as not, new expiry. Complete renewal was doing that through
+ * the generic PUT, so the guard caught it and the officer who had just finished the government work
+ * was told to use "correct" or "supersede" — neither of which describes what happened, and neither
+ * of which that dialog can do. The renewal could not be recorded at all.
+ *
+ * The engine has always had this act: issue_document's renew branch updates the record in place and
+ * prepends a history entry. This is that same act with a door on it, so the screen can perform it
+ * too, with the fee and receipt the officer has in hand.
+ */
+app.post("/api/documents/:id/renew", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (doc.supersededAt) return res.status(409).json({ error: "This record has been replaced — renew the document that replaced it" });
+
+    const expiryDate = isoDateOr400(res, req.body?.expiryDate, "New expiry date");
+    if (expiryDate === undefined) return;
+    if (!expiryDate) return res.status(400).json({ error: "A renewal needs the new expiry date" });
+    const issueDate = isoDateOr400(res, req.body?.issueDate ?? undefined, "Issue date");
+    if (issueDate === undefined && req.body?.issueDate !== undefined) return;
+
+    const docNumber = String(req.body?.docNumber ?? "").trim() || doc.docNumber;
+    // The same number cannot belong to two people — the same rule the workflow applies when it
+    // issues one. A renewal keeping its number for the same person is the normal case and allowed.
+    if (docNumber && docNumber !== doc.docNumber && doc.person) {
+      const clash = await numberHeldByAnother(doc.docType, docNumber, doc.person);
+      if (clash) return res.status(409).json({ error: clashMessage(clash) });
+    }
+
+    // The countdown is the type's own, not a hardcoded thirty: a licence that warns ninety days out
+    // would otherwise come back from its renewal reading "expiring".
+    const dt = await prisma.documentType.findFirst({ where: { name: doc.docType }, select: { leadDays: true } });
+    const leadDays = dt?.leadDays ?? 30;
+    const daysLeft = Math.round((new Date(expiryDate + "T00:00:00Z").getTime() - Date.now()) / 86400000);
+    const status = daysLeft < 0 ? "overdue" : daysLeft <= leadDays ? "expiring" : "valid";
+
+    const feeRaw = req.body?.fee;
+    const fee = feeRaw === undefined || feeRaw === null || String(feeRaw).trim() === ""
+      ? null : Number(String(feeRaw).replace(/[^0-9.]/g, ""));
+    const receipt = String(req.body?.receipt ?? "").trim() || null;
+
+    // Same shape the compliance drawer's renewal ledger already reads, plus `kind` so a renewal can
+    // be told apart from a correction in the same list.
+    const entry = {
+      at: new Date().toISOString(), by: await actorName(req), kind: "renewed",
+      oldExpiry: doc.expiryDate ?? null, newExpiry: expiryDate,
+      oldNumber: doc.docNumber ?? null, newNumber: docNumber ?? null,
+      fee: Number.isFinite(fee as number) ? fee : null, receipt,
+    };
+    const prior = Array.isArray(doc.history) ? (doc.history as any[]) : [];
+
+    const updated = await prisma.document.update({
+      where: { id: doc.id },
+      data: {
+        expiryDate, docNumber: docNumber ?? null, status, daysLeft,
+        ...(issueDate ? { issueDate } : {}),
+        // The renewal is over, so the record must stop claiming one is underway — otherwise the
+        // compliance agents keep skipping it as "already being renewed" and it is never chased again.
+        renewalRunId: null, renewalTaskId: null,
+        history: [...prior, entry],
+      },
+    });
+
+    // The dialog promises it closes the linked task. It never did: the task stayed open on somebody's
+    // board after the work it described was finished and filed.
+    let closedTask: string | null = null;
+    if (doc.renewalTaskId) {
+      const task = await prisma.task.findUnique({ where: { id: doc.renewalTaskId }, select: { id: true, ref: true, status: true } });
+      if (task && task.status !== "done") {
+        await prisma.task.update({ where: { id: task.id }, data: { status: "done" } });
+        closedTask = task.ref ?? task.id;
+      }
+    }
+
+    await logAudit({ action: "document.renewed", actorId: (req as any).auth?.sub, target: doc.id,
+      detail: `${doc.docType} · ${doc.person} · exp ${doc.expiryDate ?? "none"} → ${expiryDate}`
+        + `${docNumber !== doc.docNumber ? ` · no. ${doc.docNumber ?? "none"} → ${docNumber}` : ""}`
+        + `${fee ? ` · fee ${fee}` : ""}${receipt ? ` · receipt ${receipt}` : ""}${closedTask ? ` · closed ${closedTask}` : ""}` });
+    logActivity({ type: "compliance", message: `${doc.docType} renewed for ${doc.person} — new expiry ${expiryDate}` });
+    notifyDocumentRenewed({ companyId: doc.companyId, docType: doc.docType, person: doc.person, expiryDate, docNumber });
+
+    res.json({ document: updated, closedTask });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
 
 app.post("/api/documents/:id/correct", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
