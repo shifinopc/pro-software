@@ -1417,7 +1417,7 @@
       <!-- Active requests across clients -->
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.28s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
         <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px 12px;">
-          <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Active requests across clients</span>
+          <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">{{ dashReqTitle }}</span>
           <a href="#" onClick="{{ goRequests }}" style="font-size:12.5px;">Open queue →</a>
         </div>
         <div style="overflow-x:auto;"><div style="min-width:880px;">
@@ -1443,7 +1443,7 @@
       <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) 0.35s both; display:grid; grid-template-columns:1.15fr 1fr; gap:18px;">
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:20px 24px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Client portfolio health</span>
+            <span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">{{ dashHealthTitle }}</span>
             <a href="#" onClick="{{ goClients }}" style="font-size:12px;">All clients →</a>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; margin-top:12px;">
@@ -17567,10 +17567,30 @@ class Component extends DCLogic {
       amber: ['#FEF4E2', '#F59E0B'], red: ['#FEECEC', '#E5484D'], slate: ['#F3F1F7', '#6F6C7A'],
       sky: ['#EAF4FE', '#0284C7'], rose: ['#FEECEC', '#E5484D'],
     };
+    // GLOBAL client scope from the header CLIENT filter (null = All clients / portfolio-wide).
+    //
+    // Declared HERE, above the dashboard, because it used to be declared below it — so the one screen
+    // people look at first was the one screen the filter could not reach. Its own popup is headed
+    // "FILTER DASHBOARD BY CLIENT" and it did everything except that: picking a client scoped
+    // Employees, Compliance and Renewals, while the dashboard kept showing another client's activity,
+    // another client's request and another client's unpaid invoice under a header naming the one you
+    // had chosen.
+    const _clientScope = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : null;
+    // The scope matches on a row's CLIENT NAME; rows carrying only a companyId need this to be read.
+    const coNameById = {}; (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).forEach(c => { coNameById[c.id] = c.name; });
+
     // WIRED: dashboard KPI strip from real requests / documents / invoices.
-    const _dSrv = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : null;
-    const _dDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : null;
-    const _dInv = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : null;
+    //
+    // Scoped AT SOURCE rather than panel by panel. Every number on this screen is derived from these
+    // three arrays — the hero counts, operations health, the request pipeline, receivables — so
+    // filtering each panel separately would be a dozen places to keep in step, and the first one
+    // anybody forgot would put a portfolio-wide figure next to a client-scoped one and look like a
+    // sum that does not add up.
+    const _scopeRows = (rows) => (rows && _clientScope)
+      ? rows.filter(r2 => (r2.clientName || coNameById[r2.companyId] || '') === _clientScope) : rows;
+    const _dSrv = _scopeRows(Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : null);
+    const _dDocs = _scopeRows(Array.isArray(this.state.documentsData) ? this.state.documentsData : null);
+    const _dInv = _scopeRows(Array.isArray(this.state.invoicesData) ? this.state.invoicesData : null);
     const _dTasks = Array.isArray(this.state.tasksData) ? this.state.tasksData : null;
     // Signed-in? (token present). Design/sample fallbacks below are for the UNAUTHENTICATED design
     // preview only — once logged in we show REAL data (and an empty state when there's nothing yet),
@@ -17628,11 +17648,16 @@ class Component extends DCLogic {
       tileBg: color === '#E5484D' ? '#FEECEC' : color === '#F59E0B' ? '#FEF4E2' : color === '#7C00FF' ? '#F3E8FF' : '#F3F1F7',
     }));
 
+
     // WIRED: dashboard recent-activity list from /api/activities (top 6).
     const _racts = Array.isArray(this.state.activitiesData) ? this.state.activitiesData : null;
     const ACT_ICON = { task: [I.check, pal.green], client: [I.users, pal.purple], payment: [I.invoice, pal.purple], finance: [I.invoice, pal.purple], compliance: [I.refresh, pal.violet], renewal: [I.refresh, pal.amber], alert: [I.alert, pal.red] };
-    const activities = (_racts && _racts.length
-      ? _racts.slice(0, 6).map(a2 => {
+    // Scoped to the chosen client. The feed carries the client's name on each row, which is what the
+    // line under each entry already prints — so filtering on it shows exactly the rows whose subtitle
+    // would have named somebody else.
+    const _ractsScoped = (_racts && _clientScope) ? _racts.filter(a2 => (a2.client || '') === _clientScope) : _racts;
+    const activities = (_ractsScoped && _ractsScoped.length
+      ? _ractsScoped.slice(0, 6).map(a2 => {
           const ic = ACT_ICON[a2.type] || [I.file, pal.slate];
           return [(a2.message || a2.text || '—').slice(0, 55), [a2.client, a2.time].filter(Boolean).join(' · ') || '—', ic[0], ic[1]];
         })
@@ -18191,7 +18216,11 @@ class Component extends DCLogic {
         tm4.push(_thrDaily ? String(d4.getDate()) : d4.toLocaleDateString('en-GB', { month: 'short' }));
         sub4.push(0); comp4.push(0);
       }
-      if (_wfInst) _wfInst.forEach(inst4 => {
+      // Scoped with everything else on this screen: a run for another client is not this client's
+      // throughput, and a bar counting it would disagree with the request list directly beside it.
+      const _wfScoped = (_wfInst && _clientScope)
+        ? _wfInst.filter(i4 => (i4.clientName || coNameById[i4.companyId] || '') === _clientScope) : _wfInst;
+      if (_wfScoped) _wfScoped.forEach(inst4 => {
         const idxOf = (ds4) => {
           const d4 = new Date(ds4); if (isNaN(+d4)) return -1;
           if (_thrDaily) {
@@ -18260,7 +18289,6 @@ class Component extends DCLogic {
     // WIRED: real employees from /api/employees (state.employeesData); company name resolved from
     // companiesData; visa stage derived from the employee's document status (valid/expiring/overdue).
     const empData = this.state.employeesData;
-    const coNameById = {}; (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).forEach(c => { coNameById[c.id] = c.name; });
     const EMP_STAGE = { valid: 'active', expiring: 'renewal', overdue: 'expired', expired: 'expired' };
     const employees = (Array.isArray(empData) && empData.length
       ? empData.filter(e => !e.archived).map(e => {
@@ -18283,8 +18311,6 @@ class Component extends DCLogic {
         iqColor: d9 == null ? '#B9B6C4' : d9 < 0 ? '#C0353A' : d9 <= 30 ? '#B8860B' : '#0E9355',
         initials: name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() };
     });
-    // GLOBAL client scope from the header CLIENT filter (null = All clients / portfolio-wide).
-    const _clientScope = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : null;
     const employeesAllRaw = [...(this.state.addedEmployees || []), ...employees].map(e => ({
       ...e, view: () => this.setState({ empProfile: e }),
       docsView: () => this.setState({ active: 'Documents', activeGroup: 'Documents & Billing', docScope: 'employees' }),
@@ -30964,8 +30990,10 @@ class Component extends DCLogic {
 
     // WIRED: client health = real per-company doc counts (score = share of docs not overdue/expiring).
     const CH_AV = ['#8B17FF', '#0284C7', '#F79009', '#12B76A', '#B8860B', '#6D5BD0'];
-    const clientHealth = ((Array.isArray(coData) && coData.length)
-      ? coData.slice(0, 6).map((c2, i2) => {
+    const _coDataScoped = (Array.isArray(coData) && _clientScope)
+      ? coData.filter(c2 => (c2.name || '') === _clientScope) : coData;
+    const clientHealth = ((Array.isArray(_coDataScoped) && _coDataScoped.length)
+      ? _coDataScoped.slice(0, 6).map((c2, i2) => {
           // Scored from the live counts the API already computes for every company row, so this bar and
           // the "n open" beside it can never disagree.
           //
@@ -31001,7 +31029,9 @@ class Component extends DCLogic {
 
     // WIRED: top open client requests from the real queue; design sample only when unauthenticated.
     const clientRequests = _authed
-      ? (Array.isArray(_dSrv) ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').slice(0, 5).map(r2 => [
+      ? (Array.isArray(_dSrv) ? _dSrv
+          .filter(r2 => String(r2.status).toLowerCase() === 'open')
+          .slice(0, 5).map(r2 => [
           r2.reference || r2.number || ('REQ-' + String(r2.id || '').slice(-4)), r2.service || r2.title || 'Request',
           r2.clientName || coNameById[r2.companyId] || '—', r2.employee || r2.person || '—', 'review', r2.date || '—', r2.assignee || 'Unassigned']) : [])
       : [
@@ -38053,6 +38083,10 @@ class Component extends DCLogic {
       clientHealthEmpty: clientHealth.length === 0,
       teamEmpty: team.length === 0,
       receivablesEmpty: receivables.length === 0,
+      // A heading that says "across clients" above a list showing one client is the same lie the
+      // filter was telling, just smaller. Both titles follow the scope.
+      dashReqTitle: _clientScope ? ('Active requests · ' + _clientScope) : 'Active requests across clients',
+      dashHealthTitle: _clientScope ? ('Compliance health · ' + _clientScope) : 'Client portfolio health',
       dashRequestsEmpty: dashRequests.length === 0,
       dashActivityEmpty: activities.length === 0,
     };
