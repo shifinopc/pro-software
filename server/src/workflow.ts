@@ -126,6 +126,17 @@ export async function pickAssignee(
   // Nested, that job would quietly hand a client's backlog to whoever happened to be free.
   const owner = await clientRoleOwner(facts?.companyId, role);
   if (owner) return { ...owner, why: `this client's ${role.replace(/_/g, " ")}` };
+
+  // "ONLY THE PERSON NAMED GETS IT."
+  //
+  // With this on, the balancer below does not run. No officer named for the client means the step
+  // stays in the role's shared queue, where any holder of the role can see and claim it — rather
+  // than being handed to whoever was free, who has no relationship to that client and did not ask
+  // for their work. Returning null is what leaves it unclaimed; the caller logs and alerts on it,
+  // so an unowned step is visible rather than quietly waiting.
+  const { clientOfficerOnly } = await import("./orgsettings.js");
+  if (await clientOfficerOnly()) return null;
+
   const candidates = await prisma.user.findMany({
     where: { roleId: role, status: "active", type: "staff" },
     select: { id: true, name: true, email: true },
@@ -140,9 +151,14 @@ export async function pickAssignee(
     _count: { _all: true },
   });
   const byId = new Map(load.map(l => [l.assigneeId as string, l._count._all]));
-  return people
+  const winner = people
     .map(p => ({ p, c: byId.get(p.id) ?? 0 }))
-    .sort((a, b) => (a.c - b.c) || a.p.name.localeCompare(b.p.name))[0].p;
+    .sort((a, b) => (a.c - b.c) || a.p.name.localeCompare(b.p.name))[0];
+  // SAY SO. Every other rung of this ladder returns a reason and gets a `step.assigned` line; the
+  // balancer returned a bare user and wrote nothing, so the commonest assignment path was the one
+  // that left no trace. Asked where a step came from, the run log had nothing to say — which is how
+  // an assignment engine stops being trusted.
+  return { ...winner.p, why: `fewest open steps (${winner.c}) of the ${role.replace(/_/g, " ")}s` };
 }
 
 // The effective checklist for a task node at runtime: dynamic rule (if configured) else the node's own list.

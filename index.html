@@ -7662,6 +7662,16 @@
                     </div>
                   </div>
                 </div>
+                <div style="display:flex; align-items:flex-start; gap:14px; margin-top:20px; border-top:1px solid #F0EDF6; padding-top:18px;">
+                  <div style="flex:1;">
+                    <div style="font-size:12.5px; font-weight:700;">Only the client's own officer gets their work</div>
+                    <div style="font-size:11px; color:#A9A6B4; margin-top:3px; line-height:1.5;">{{ genOfficerOnlyHint }}</div>
+                    <sc-if value="{{ genOfficerOnlyWarn }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; font-weight:600; color:#B8860B; margin-top:6px;">{{ genOfficerOnlyWarnText }}</div></sc-if>
+                  </div>
+                  <div onClick="{{ toggleOfficerOnly }}" style="width:42px; height:24px; border-radius:99px; background:{{ genOfficerOnlyBg }}; flex-shrink:0; cursor:pointer; display:flex; align-items:center; padding:3px; transition:background .15s;">
+                    <div style="width:18px; height:18px; border-radius:99px; background:#fff; box-shadow:0 1px 3px rgba(38,7,77,.25); transition:transform .15s; transform:translateX({{ genOfficerOnlyX }});"></div>
+                  </div>
+                </div>
                 <div style="display:flex; align-items:center; gap:14px; margin-top:20px; border-top:1px solid #F0EDF6; padding-top:18px;">
                   <div role="img" aria-label="Organization logo" style="width:56px; height:56px; border-radius:14px; background:#F5EEFF center/contain no-repeat; background-image:url('{{ orgLogoSrc }}');"></div>
                   <div style="flex:1;"><div style="font-size:12.5px; font-weight:700;">Organization logo</div><div style="font-size:11px; color:#A9A6B4; margin-top:1px;">PNG or SVG · shown on invoices and the portal</div></div>
@@ -28511,6 +28521,41 @@ class Component extends DCLogic {
       loginLogoUpload: () => { const el2 = document.getElementById('loginLogoFileInput'); if (el2) el2.click(); },
       orgLogoPick: (ev2) => this._uploadLogo(ev2, 'org-logo', 'logoUrl'),
       loginLogoPick: (ev2) => this._uploadLogo(ev2, 'login-logo', 'loginLogoUrl'),
+      // ASSIGNMENT POLICY. Off = a step with no officer named for the client goes to whoever has the
+      // fewest open steps. On = it waits in the role's shared queue instead, claimable by anyone who
+      // holds the role, and nobody is given another client's work for being free.
+      ...(() => {
+        const on8 = (orgCur.assignOnlyToClientOfficer === true);
+        // How many clients would actually be covered if it were switched on. Saying "0 of 19" is the
+        // difference between a setting somebody can judge and one they have to try and find out.
+        const cos8 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+          .filter(c8 => String(c8.lifecycle || 'client') === 'client');
+        const owned8 = cos8.filter(c8 => c8.team && typeof c8.team === 'object' && c8.team.pro_officer).length;
+        return {
+          genOfficerOnlyBg: on8 ? '#7C00FF' : '#DDD9E6',
+          genOfficerOnlyX: on8 ? '18px' : '0px',
+          genOfficerOnlyHint: on8
+            ? 'New work goes to the officer named on the client. When no officer is named it waits in the shared queue for somebody to claim — it is not handed to whoever is free.'
+            : 'When no officer is named on the client, new work goes to whoever has the fewest open steps. Turn this on to stop that.',
+          genOfficerOnlyWarn: cos8.length > 0 && owned8 < cos8.length,
+          genOfficerOnlyWarnText: owned8 + ' of ' + cos8.length + ' clients have a PRO officer named'
+            + (on8 ? ' — work for the other ' + (cos8.length - owned8) + ' will wait unclaimed.'
+                   : ' — name them first, or work for the other ' + (cos8.length - owned8) + ' will wait unclaimed.'),
+          toggleOfficerOnly: () => {
+            const next8 = { ...(this.state.orgSet || {}), ...(this.state.orgDraft || {}), assignOnlyToClientOfficer: !on8 };
+            const t8 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/settings/org', { method: 'PUT',
+              headers: { 'Content-Type': 'application/json', ...(t8 ? { Authorization: 'Bearer ' + t8 } : {}) },
+              body: JSON.stringify(next8) })
+              .then(r8 => { if (!r8.ok) return this.toast('That could not be saved', 'error');
+                this.setState({ orgSet: next8 });
+                this.toast(!on8
+                  ? 'New work now goes only to the officer named on the client'
+                  : 'New work can go to whoever is free again'); })
+              .catch(() => this.toast('Server unreachable — nothing changed'));
+          },
+        };
+      })(),
     };
     // Read the picked file, upload it, persist its /files path into settings, refresh the preview.
     this._uploadLogo = this._uploadLogo || ((ev2, kind2, key2) => {
