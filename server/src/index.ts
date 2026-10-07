@@ -6077,7 +6077,8 @@ app.post("/api/documents/:id/renew", requireAuth, requireStaff, requireWriteRole
     if (doc.renewalTaskId) {
       const task = await prisma.task.findUnique({ where: { id: doc.renewalTaskId }, select: { id: true, ref: true, status: true } });
       if (task && task.status !== "done") {
-        await prisma.task.update({ where: { id: task.id }, data: { status: "done" } });
+        await prisma.task.update({ where: { id: task.id },
+          data: { status: "done", completedAt: new Date().toISOString(), completedBy: await actorName(req) } });
         closedTask = task.ref ?? task.id;
       }
     }

@@ -3067,6 +3067,10 @@
               <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Everything waiting on you — tasks &amp; workflow steps, triaged by deadline</div>
             </div><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openTaskModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New task</button></sc-if>
           </section>
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:4px; background:#F3F1F7; border-radius:99px; padding:4px; align-self:flex-start;">
+            <sc-for list="{{ mtTabs }}" as="t" hint-placeholder-count="2"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 17px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}</span></sc-for>
+          </section>
+          <sc-if value="{{ mtPending }}" hint-placeholder-val="{{ true }}">
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;">
             <div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:16px; padding:15px 18px;"><div style="font-size:10.5px; font-weight:700; letter-spacing:.06em; color:#C0353A;">OVERDUE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; margin-top:6px; color:#C0353A;">{{ wkOverdue }}</div></div>
             <div style="background:#FEF4E2; border:1px solid #FBE2B8; border-radius:16px; padding:15px 18px;"><div style="font-size:10.5px; font-weight:700; letter-spacing:.06em; color:#B8860B;">DUE TODAY</div><div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; margin-top:6px; color:#B8860B;">{{ wkToday }}</div></div>
@@ -3110,6 +3114,30 @@
             </section>
           </sc-for>
           <sc-if value="{{ myWorkEmpty }}" hint-placeholder-val="{{ false }}"><div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:48px; text-align:center; font-size:13px; color:#A9A6B4;">🎉 Nothing waiting on you. Inbox zero.</div></sc-if>
+          </sc-if>
+          <sc-if value="{{ mtDone }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ myDoneGroups }}" as="dg" hint-placeholder-count="2">
+              <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .12s both;">
+                <div style="display:flex; align-items:center; gap:9px; margin-bottom:10px;"><span style="width:8px; height:8px; border-radius:99px; background:#0E9355;"></span><span style="font-size:11.5px; font-weight:800; letter-spacing:.06em; color:#0E9355; text-transform:uppercase;">{{ dg.title }}</span><span style="font-size:10.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:1px 9px; border-radius:99px;">{{ dg.count }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:9px;">
+                  <sc-for list="{{ dg.rows }}" as="d" hint-placeholder-count="3">
+                    <div onClick="{{ d.open }}" style="background:#fff; border:1px solid #EDEBF2; border-radius:16px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:13px 18px; display:flex; align-items:center; gap:15px; cursor:pointer; transition:border-color .12s, box-shadow .12s;" style-hover="border-color:#BFEBD2; box-shadow:0 8px 22px rgba(14,147,85,.08);">
+                      <div style="width:46px; height:46px; border-radius:12px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                      </div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:13.5px; font-weight:600; color:#1A1523;">{{ d.title }}</div>
+                        <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ d.meta }}</div>
+                      </div>
+                      <span style="font-size:10.5px; font-weight:700; color:{{ d.chipColor }}; background:{{ d.chipBg }}; padding:3px 11px; border-radius:99px; flex-shrink:0;">{{ d.chip }}</span>
+                      <span style="font-size:11.5px; color:#A9A6B4; flex-shrink:0;">{{ d.whenText }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </section>
+            </sc-for>
+            <sc-if value="{{ myDoneEmpty }}" hint-placeholder-val="{{ false }}"><div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; padding:48px; text-align:center; font-size:13px; color:#A9A6B4;">Nothing finished yet. Work you complete shows up here.</div></sc-if>
+          </sc-if>
         </div></sc-if>
 
         <sc-if value="{{ showActivity }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:18px;" data-screen-label="Activity Timeline">
@@ -23307,6 +23335,10 @@ class Component extends DCLogic {
           // Carried so the Resume gate can match a prerequisite against THIS person rather than against
           // any document of the right type at the client — two employees can share a name.
           _blockedBy: t.blockedBy || null, _companyId: t.companyId || null, _employeeId: t.employeeId || null,
+          // When the work finished, and who finished it. Carried so the Completed tab can group by
+          // day and order newest-first instead of guessing from the due date, which is when it was
+          // SUPPOSED to be done and frequently is not when it was.
+          completedAt: t.completedAt || null, completedBy: t.completedBy || null,
         }))
       : ((tData || _authed) ? [] : [
         { title: 'Trade License renewal typing', client: 'Falcon Trading', assignee: 'Aisha', priority: 'High', status: 'To do', dueIn: 0, dept: 'DED', docType: 'Trade License', comp: 'TL-88213 · Trade License' },
@@ -30674,8 +30706,89 @@ class Component extends DCLogic {
         },
       };
     }
+    // ---- Pending / Completed ----
+    //
+    // My Tasks is an actionable queue, so a task leaves it the moment it is closed and there was
+    // nowhere in the screen to see what you had got through. Finished work is a different question
+    // from outstanding work, so it is a tab rather than another urgency bucket: mixing "done" into
+    // a list sorted by how late things are makes the list worse at the job it already does.
+    const mtMode = this.state.mtMode === 'done' ? 'done' : 'pending';
+    // Fetched on first open rather than at boot. Nobody opens this on every page load, and the
+    // completed list is capped at ninety days server-side precisely so it stays a tab and not a
+    // report.
+    const _mtDoneRaw = Array.isArray(this.state.myDoneData) ? this.state.myDoneData : null;
+    if (mtMode === 'done' && _mtDoneRaw === null && !this._mtDoneLoading) {
+      this._mtDoneLoading = true;
+      const tok6 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/my-work?completed=1&scope=personal',
+        { headers: tok6 ? { Authorization: 'Bearer ' + tok6 } : {} })
+        .then(r6 => (r6.ok ? r6.json() : []))
+        .then(v6 => { this._mtDoneLoading = false; this.setState({ myDoneData: Array.isArray(v6) ? v6 : [] }); })
+        .catch(() => { this._mtDoneLoading = false; this.setState({ myDoneData: [] }); });
+    }
+
+    const _mtWhen = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(+d)) return '';
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+        + ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    };
+    // Today / Yesterday / This week / Earlier, from the completion stamp. A flat list of fifty rows
+    // answers "did it get done" but not "did it get done today", which is the thing being asked.
+    const _mtBucket = (iso) => {
+      if (!iso) return 'Earlier';
+      const d = new Date(iso); if (isNaN(+d)) return 'Earlier';
+      const day = (x) => Date.UTC(x.getFullYear(), x.getMonth(), x.getDate());
+      const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+      return diff <= 0 ? 'Today' : diff === 1 ? 'Yesterday' : diff <= 7 ? 'This week' : 'Earlier';
+    };
+
+    const _mtDoneTasks = allTasks
+      .filter(t => t.assignee === currentUser && _taskClosed(t.status) && !t.archived && !t._wfId)
+      .map(t => ({
+        id: t.id, title: t.title,
+        meta: [t.client, t.docType || t.comp || t.wf].filter(x => x && x !== '—').join(' · ') || '—',
+        chip: t.status === 'Cancelled' ? 'Cancelled' : 'Done',
+        chipColor: t.status === 'Cancelled' ? '#8C2226' : '#0E9355',
+        chipBg: t.status === 'Cancelled' ? '#FEECEC' : '#E7F8EF',
+        at: t.completedAt || null,
+        open: () => this.setState({ workRow: t.id }),
+      }));
+    const _mtDoneSteps = (_mtDoneRaw || []).map(w => ({
+      id: w.id, title: w.title || 'Workflow step',
+      meta: [(w.instance && w.instance.clientName) || '', (w.instance && w.instance.title) || ''].filter(Boolean).join(' · ') || '—',
+      chip: w.status === 'approved' ? 'Approved' : 'Step done',
+      chipColor: '#4E3FA8', chipBg: '#EFEBFF',
+      at: w.completedAt || null,
+      open: () => this.setState({ workRow: w.id }),
+    }));
+    const _mtDoneRows = [..._mtDoneTasks, ..._mtDoneSteps]
+      .map(r => ({ ...r, whenText: _mtWhen(r.at) || 'no date recorded', _b: _mtBucket(r.at) }))
+      // Newest first. Anything with no stamp is older work closed before completions were dated, so
+      // it sinks rather than floating to the top pretending to be the most recent thing you did.
+      .sort((a, z) => String(z.at || '').localeCompare(String(a.at || '')));
+    const _mtDoneOrder = ['Today', 'Yesterday', 'This week', 'Earlier'];
+    const myDoneGroups = _mtDoneOrder
+      .map(b => ({ title: b, rows: _mtDoneRows.filter(r => r._b === b) }))
+      .filter(g => g.rows.length)
+      .map(g => ({ ...g, count: g.rows.length }));
+
     const myWorkApi = {
       myWorkGroups, wkOverdue, wkToday, wkWeek, wkBlocked, myWorkEmpty: allWorkRows.length === 0,
+      mtPending: mtMode === 'pending',
+      mtDone: mtMode === 'done',
+      myDoneGroups, myDoneEmpty: mtMode === 'done' && _mtDoneRows.length === 0 && _mtDoneRaw !== null,
+      mtTabs: [
+        ['pending', 'Pending', allWorkRows.length],
+        ['done', 'Completed', _mtDoneTasks.length + (_mtDoneRaw ? _mtDoneSteps.length : 0)],
+      ].map(([k, label, n]) => ({
+        label: label + ' · ' + n,
+        select: () => this.setState({ mtMode: k }),
+        color: mtMode === k ? '#7C00FF' : '#8C8899',
+        bg: mtMode === k ? '#fff' : 'transparent',
+        shadow: mtMode === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
+      })),
       ...drawerApi,
     };
 

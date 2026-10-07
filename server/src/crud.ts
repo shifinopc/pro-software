@@ -438,6 +438,30 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         }
       }
 
+      // WHEN A TASK FINISHES, RECORD WHEN.
+      //
+      // The status flipping to "done" was the whole record of a completion, so nothing could answer
+      // "what did this officer close this month" for ordinary tasks — only for workflow steps, which
+      // have always carried completedAt. Stamped here rather than in each caller, because "done" is
+      // reachable from the task drawer, a bulk action and the renewal flow, and three places that
+      // each remember to set it is three places that can forget.
+      //
+      // Cleared on the way back out: a task reopened from done is not a finished task with a date on
+      // it, and leaving the stamp would have it counted as closed forever.
+      let completionPatch: any = undefined;
+      if (modelName === "task" && req.body?.status !== undefined) {
+        const CLOSED = ["done", "cancelled"];
+        const was = CLOSED.includes(String((before as any).status ?? "").toLowerCase());
+        const now = CLOSED.includes(String(req.body.status ?? "").toLowerCase());
+        if (now && !was) {
+          const a = (req as any).auth;
+          const who = a?.sub ? await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }) : null;
+          completionPatch = { completedAt: new Date().toISOString(), completedBy: who?.name ?? who?.email ?? null };
+        } else if (!now && was) {
+          completionPatch = { completedAt: null, completedBy: null };
+        }
+      }
+
       let historyPatch: any = undefined;
       if (modelName === "document") {
         const WATCHED: [string, string][] = [
@@ -490,7 +514,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (estErr) return res.status(400).json({ error: estErr });
       const updated = await model.update({
         where: { id: req.params.id },
-        data: { ...sanitize(modelName, req.body), ...derived, ...(historyPatch ? { history: historyPatch } : {}) },
+        data: { ...sanitize(modelName, req.body), ...derived, ...(historyPatch ? { history: historyPatch } : {}), ...(completionPatch ?? {}) },
       });
       // The client form edits `cr`, which mirrors the main CR: keep the main CR in step.
       if (modelName === "company" && req.body && "cr" in req.body) await syncMainFromCompany(updated.id).catch(() => {});

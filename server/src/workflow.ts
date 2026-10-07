@@ -2236,7 +2236,20 @@ R.post("/instances/:id/cancel", requireAuth, requireStaff, requireWriteRole, asy
 R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
   const me = await prisma.user.findUnique({ where: { id: a.sub } });
-  const tasks = await prisma.workflowTask.findMany({ where: { status: "active" }, orderBy: { id: "desc" } });
+  // `?completed=1` asks for finished work instead of the queue. My Tasks needs it to show somebody
+  // what they have got through — until now the console was never sent a completed step at all, so a
+  // step vanished the moment it was closed and there was nowhere to see it again.
+  //
+  // Bounded rather than unbounded: the last ninety days, newest first. "Everything I have ever
+  // closed" is a report, not an inbox, and shipping the whole history to the browser on a tab click
+  // is how a screen that was fast becomes slow a year from now.
+  const wantDone = String(req.query.completed ?? "") === "1";
+  const since = new Date(Date.now() - 90 * 86400000).toISOString();
+  const tasks = wantDone
+    ? await prisma.workflowTask.findMany({
+        where: { status: { in: ["done", "approved"] }, completedAt: { gte: since } },
+        orderBy: { completedAt: "desc" }, take: 300 })
+    : await prisma.workflowTask.findMany({ where: { status: "active" }, orderBy: { id: "desc" } });
   const isAdmin = a.role === "admin" || a.role === "super_admin";
   // scope=personal → strictly "my work": only steps for my role or assigned to me by name.
   // Default (broad) is used by the Approvals queue: admins see everything + unassigned open work is visible.
@@ -2244,8 +2257,11 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   const mine = tasks.filter(t =>
     (t.assigneeRole && t.assigneeRole === a.role) ||
     (t.assignee && me?.name && t.assignee === me.name) ||
-    (!personal && isAdmin) ||                          // oversight view: admins see all
-    (!personal && !t.assigneeRole && !t.assignee)      // oversight view: unassigned open work
+    // Oversight only widens the QUEUE. On the completed view it would answer "everything the firm
+    // has closed" to someone asking what they themselves got through, which is a different question
+    // and a much longer list.
+    (!personal && !wantDone && isAdmin) ||             // oversight view: admins see all
+    (!personal && !wantDone && !t.assigneeRole && !t.assignee) // oversight view: unassigned open work
   );
   // attach instance context
   const instIds = [...new Set(mine.map(t => t.instanceId))];
