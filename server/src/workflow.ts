@@ -86,7 +86,7 @@ export async function clientRoleOwner(companyId: string | null | undefined, role
   if (!userId) return null;
   // ACTIVE, STAFF, AND STILL HOLDING THE ROLE. A named officer who left, was deactivated or moved
   // teams is ignored rather than assigned to — the alternative is work handed to somebody who cannot
-  // do it or is not there, which is worse than the load balancer being unaware of the relationship.
+  // do it or is not there. The step then waits in the role's queue, which somebody will see.
   return prisma.user.findFirst({
     where: { id: userId, status: "active", type: "staff", roleId: role },
     select: { id: true, name: true, email: true },
@@ -98,8 +98,8 @@ export async function pickAssignee(
   /** What the step is about, so a routing rule can say who is right for it rather than who is free. */
   facts?: import("./routing.js").RoutingFacts & { companyId?: string | null },
 ): Promise<{ id: string; name: string; email: string; why?: string } | null> {
-  // A routing rule refines this decision; it never invents one. Nothing matching leaves the
-  // load balancer below untouched, which is exactly how this behaved before rules existed.
+  // A routing rule refines this decision; it never invents one. Nothing matching falls through to
+  // the client's own officer below, which is where the answer normally comes from.
   if (facts) {
     const { routeFor } = await import("./routing.js");
     const routed = await routeFor("task", facts);
@@ -110,55 +110,31 @@ export async function pickAssignee(
       const u = await prisma.user.findUnique({ where: { id: routed.userId }, select: { id: true, name: true, email: true } });
       if (u) return { ...u, why: routed.why };
     }
-    // A rule naming a ROLE redirects which team balances, then falls through to the same logic.
+    // A rule naming a ROLE redirects WHICH role is looked up on the client, then falls through.
     if (routed.role) role = routed.role;
   }
 
-  // THE CLIENT'S OWN OFFICER, below a rule that named a person and above the balancer.
+  // THE CLIENT'S OWN OFFICER, AND NOBODY ELSE.
   //
   // A person-naming rule is about a KIND of work — "GOSI deregistration goes to Noura" — and is
-  // narrower than "Omar handles this client", so it wins. The client's officer in turn beats the
-  // balancer, because knowing the file is worth more than being free this minute, which is the whole
-  // reason anybody names one.
+  // narrower than "Omar handles this client", so it wins. Below that, the officer named on the
+  // client is the answer, and when there is no such officer the answer is NOBODY.
+  //
+  // There used to be a load balancer here, handing the step to whoever had fewest open steps. It
+  // kept work moving and it did not know whose client it was, so on an installation where nobody
+  // had named a client's officer it spread every client's work evenly across the team: fifty-nine
+  // steps sat with one officer for clients he had no relationship to, and the client screen said
+  // "Whoever is free" the whole time, truthfully. Being free is not a reason to be given somebody
+  // else's client.
+  //
+  // Returning null leaves the step in the ROLE's queue, which is not the same as losing it: every
+  // holder of that role sees it and can claim it, and mayActOnTask lets any of them act on it. The
+  // caller logs and alerts on an unowned step, so it is waiting in the open rather than quietly.
   //
   // OUTSIDE the routing block on purpose. It reads a fact about the client, not a rule, so a caller
   // that passes no routing facts — the job that re-tries orphaned steps — must still honour it.
-  // Nested, that job would quietly hand a client's backlog to whoever happened to be free.
   const owner = await clientRoleOwner(facts?.companyId, role);
-  if (owner) return { ...owner, why: `this client's ${role.replace(/_/g, " ")}` };
-
-  // "ONLY THE PERSON NAMED GETS IT."
-  //
-  // With this on, the balancer below does not run. No officer named for the client means the step
-  // stays in the role's shared queue, where any holder of the role can see and claim it — rather
-  // than being handed to whoever was free, who has no relationship to that client and did not ask
-  // for their work. Returning null is what leaves it unclaimed; the caller logs and alerts on it,
-  // so an unowned step is visible rather than quietly waiting.
-  const { clientOfficerOnly } = await import("./orgsettings.js");
-  if (await clientOfficerOnly()) return null;
-
-  const candidates = await prisma.user.findMany({
-    where: { roleId: role, status: "active", type: "staff" },
-    select: { id: true, name: true, email: true },
-  });
-  const people = candidates.filter(c => c.name);
-  if (!people.length) return null;
-  // Counted by id now. Load was grouped by NAME, so two staff sharing one had their queues merged
-  // and the balancer read one of them as twice as busy as they were.
-  const load = await prisma.workflowTask.groupBy({
-    by: ["assigneeId"],
-    where: { status: "active", assigneeId: { in: people.map(p => p.id) } },
-    _count: { _all: true },
-  });
-  const byId = new Map(load.map(l => [l.assigneeId as string, l._count._all]));
-  const winner = people
-    .map(p => ({ p, c: byId.get(p.id) ?? 0 }))
-    .sort((a, b) => (a.c - b.c) || a.p.name.localeCompare(b.p.name))[0];
-  // SAY SO. Every other rung of this ladder returns a reason and gets a `step.assigned` line; the
-  // balancer returned a bare user and wrote nothing, so the commonest assignment path was the one
-  // that left no trace. Asked where a step came from, the run log had nothing to say — which is how
-  // an assignment engine stops being trusted.
-  return { ...winner.p, why: `fewest open steps (${winner.c}) of the ${role.replace(/_/g, " ")}s` };
+  return owner ? { ...owner, why: `this client's ${role.replace(/_/g, " ")}` } : null;
 }
 
 // The effective checklist for a task node at runtime: dynamic rule (if configured) else the node's own list.
@@ -879,13 +855,21 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // land with no owner and wait forever in a pile addressed to nobody. Falling back to
         // unassigned is right; doing it silently is not.
         if (role && !picked && !c.assignee && !ownerFallback) {
-          await log("step.unassigned", nodeId, `${node.label ?? nodeId}: nobody holds the role "${role}" on this installation`);
-          logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — nobody holds the role "${role}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
+          // TELL THE TRUTH ABOUT WHICH OF THE TWO IT IS. This said "nobody holds the role" whatever
+          // the cause, so a step left waiting because the CLIENT has no officer named reported a
+          // staffing problem that did not exist — and the fix it implied (hire someone) was not the
+          // fix it needed (name the officer on the client).
+          const anyone = await prisma.user.count({ where: { roleId: role, status: "active", type: "staff" } });
+          const why = anyone === 0
+            ? `nobody holds the role "${role}" on this installation`
+            : `no ${role.replace(/_/g, " ")} is named on ${inst.clientName ?? "this client"}, so it is waiting in the ${role.replace(/_/g, " ")} queue`;
+          await log("step.unassigned", nodeId, `${node.label ?? nodeId}: ${why}`);
+          logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — ${why}${inst.clientName ? ` (${inst.clientName})` : ""}` });
         }
         // WHY THIS LANDED ON THEM. routing.ts states the principle — an assignment engine nobody can
         // interrogate is one people stop trusting the first time it surprises them — and then this
-        // path threw the reason away. A named officer makes that worse, because the balancer's answer
-        // at least changes visibly with load while a standing preference looks like nothing at all.
+        // path threw the reason away. It is recorded now, so the run can answer where its owner came
+        // from without anybody having to read the database to find out.
         if (picked?.why) await log("step.assigned", nodeId, `${node.label ?? nodeId} → ${picked.name} (${picked.why})`);
         const assignee = c.assignee || picked?.name || ownerFallback;
         const assigneeId = c.assignee

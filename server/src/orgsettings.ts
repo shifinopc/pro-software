@@ -43,31 +43,6 @@ async function org(): Promise<Record<string, unknown>> {
   }
 }
 
-/**
- * WHO GETS WORK WHEN NOBODY HAS SAID WHO SHOULD.
- *
- * A step names a ROLE, never a person, so somebody has to be chosen when the run reaches it. The
- * order is: a routing rule naming a person, then the client's own officer for that role, then a load
- * balancer that picks whoever has fewest open steps.
- *
- * That last rung is the one firms disagree about. It keeps work moving and it does not care whose
- * client it is, so on an installation where nobody has named a client's officer it spreads every
- * client's work evenly across the team — which reads, correctly, as work landing on people who have
- * no relationship to that client.
- *
- * Turning this on removes the balancer: the client's own officer gets the work, and when no officer
- * is named the step stays in the role's shared queue for somebody to claim rather than being given
- * to a person who was merely free.
- *
- * OFF by default, and that is deliberate rather than timid. On an installation where no client has
- * an officer named, switching it on means every new step arrives unclaimed — safe, visible, and
- * still a change of behaviour nobody should get without asking for it.
- */
-export async function clientOfficerOnly(): Promise<boolean> {
-  const v = await org();
-  return v.assignOnlyToClientOfficer === true;
-}
-
 /** The market this installation operates in, for records created without one stated. */
 export async function homeCountry(): Promise<string> {
   const v = await org();
