@@ -296,7 +296,30 @@ const EXEMPT = [
   "/api/portal", "/api/upload", "/api/files", "/api/stream", "/api/stream-ticket", "/book/",
 ];
 
-const isExempt = (path: string) => EXEMPT.some(p => path === p || path.startsWith(p + "/") || path.startsWith(p));
+/**
+ * ACTING ON A STEP THAT IS ASSIGNED TO YOU IS NOT EDITING THE TASK BOARD.
+ *
+ * These three already carry the authority on who may act: `mayActOnTask` requires the step to be
+ * queued to your role, assigned to you by name, unclaimed, or you to be an admin — plus a scoped
+ * rule letting a lead cover their own discipline. The matrix was a second, blunter gate on top of
+ * it, and it mapped these to Tasks.Edit because the path ends in `/complete`.
+ *
+ * Which meant the Accountant preset — Tasks: View only, deliberately, because accountants do not
+ * run the task board — refused an accountant the one thing a workflow had explicitly routed to
+ * them. "Pay the Fee" on a live Work Permit renewal sat with the accountant it was assigned to,
+ * and pressing Complete step answered "Your role does not have Edit access to Tasks". No
+ * permission could be ticked to fix it without also handing that role the whole board.
+ *
+ * So the step's own gate is the authority here, and the matrix stands aside. Deliberately NOT the
+ * whole `/tasks/` subtree: `/credential` reads a client's vault entry and keeps its Tasks.View
+ * requirement.
+ */
+const STEP_ACTIONS = ["/complete", "/checklist", "/reassign"];
+const isStepAction = (path: string) =>
+  path.startsWith("/api/workflow/tasks/") && STEP_ACTIONS.some(a => path.endsWith(a));
+
+const isExempt = (path: string) =>
+  isStepAction(path) || EXEMPT.some(p => path === p || path.startsWith(p + "/") || path.startsWith(p));
 
 /**
  * WHAT THIS GRID ACTUALLY GOVERNS.
