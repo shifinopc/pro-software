@@ -3575,6 +3575,7 @@
 
                     <sc-if value="{{ ppManyTemplates }}" hint-placeholder-val="{{ false }}">
                       <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">TEMPLATE</div>
+                      <sc-if value="{{ ppWhyTemplate }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px; color:#8C8899; margin-top:4px; line-height:1.45;">{{ ppWhyTemplate }}</div></sc-if>
                       <div style="display:flex; flex-direction:column; gap:6px; margin-top:7px;">
                         <sc-for list="{{ ppTemplates }}" as="t" hint-placeholder-count="2">
                           <div onClick="{{ t.pick }}" style="border:1px solid {{ t.border }}; background:{{ t.bg }}; border-radius:11px; padding:9px 12px; cursor:pointer;" style-hover="border-color:#C9A2FF;">
@@ -8032,9 +8033,18 @@
                       <div style="display:flex; align-items:center; gap:12px; border:1px solid #F0EDF6; border-radius:13px; padding:12px 15px;">
                         <div style="width:34px; height:34px; border-radius:10px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></div>
                         <div style="flex:1; min-width:0;">
-                          <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</div>
+                          <div style="display:flex; align-items:center; gap:7px;">
+                            <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</div>
+                            <sc-if value="{{ t.isDefault }}" hint-placeholder-val="{{ false }}"><span style="flex-shrink:0; font-size:9.5px; font-weight:700; letter-spacing:.05em; color:#7C00FF; background:#F5EEFF; border-radius:99px; padding:2px 7px;">DEFAULT</span></sc-if>
+                          </div>
                           <div style="font-size:11px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.meta }}</div>
+                          <!-- What kind of work this proposal is for. Typed by the firm, because the
+                               kinds of work it sells are not knowable in advance. -->
+                          <input value="{{ t.appliesTo }}" onChange="{{ t.setAppliesTo }}" onBlur="{{ t.saveAppliesTo }}" placeholder="Used for… e.g. business setup, MISA, CR" style="margin-top:7px; width:100%; max-width:420px; border:1px solid #F0EDF6; border-radius:9px; padding:7px 10px; font-size:11.5px; background:#FBFAFD; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
                         </div>
+                        <sc-if value="{{ t.canDefault }}" hint-placeholder-val="{{ true }}">
+                          <span onClick="{{ t.makeDefault }}" title="Use this one when nothing matches" class="row-ic" style-hover="background:#F5EEFF; color:#7C00FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg></span>
+                        </sc-if>
                         <span onClick="{{ t.remove }}" title="Retire this template" class="row-ic" style-hover="background:#FEECEC; color:#C0353A;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"></path></svg></span>
                       </div>
                     </sc-for>
@@ -17737,6 +17747,39 @@ class Component extends DCLogic {
 
     // Proposal templates — the firm's uploaded .docx designs. Loaded once with everything else.
     const _propTemplates = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
+    // WHICH TEMPLATE A QUOTATION SHOULD USE.
+    //
+    // A firm sells several kinds of work and each kind has its own proposal: business setup reads
+    // nothing like a PRO-services retainer, which reads nothing like an audit engagement. They are
+    // all uploaded, and the one that fits is chosen here rather than left to be remembered.
+    //
+    // Matched on the words the firm itself typed against the quotation's service line and its
+    // items — "audit" on the template, "Statutory audit 2026" on the quotation. Scored by how many
+    // of those words appear, so a template claiming two matching words beats one claiming a single
+    // generic word. Nothing matches, or two tie, and the default template is used; the dialog shows
+    // the choice and lets anybody change it before the document goes anywhere.
+    this._pickTemplate = this._pickTemplate || ((raw, tpls) => {
+      const list = (tpls || []).filter(t9 => t9.active !== false);
+      if (!list.length) return null;
+      if (raw && raw.templateId) {
+        const chosen9 = list.find(t9 => t9.id === raw.templateId);
+        if (chosen9) return chosen9;          // already decided on this quotation
+      }
+      const hay = [raw && raw.service, raw && raw.clientName,
+                   ...((raw && Array.isArray(raw.items) ? raw.items : []).map(i9 => i9 && (i9.name || i9.description)))]
+        .filter(Boolean).join(' ').toLowerCase();
+      let best = null, bestScore = 0, tied = false;
+      for (const t9 of list) {
+        const words = Array.isArray(t9.appliesTo) ? t9.appliesTo : [];
+        const score = words.filter(w9 => w9 && hay.includes(String(w9).toLowerCase())).length;
+        if (!score) continue;
+        if (score > bestScore) { best = t9; bestScore = score; tied = false; }
+        else if (score === bestScore) tied = true;
+      }
+      if (best && !tied) return best;
+      return list.find(t9 => t9.isDefault) || (list.length === 1 ? list[0] : null);
+    });
+
     // Who may be named as presenting a proposal: active staff, never portal logins — a client's own
     // user appearing in that list is how a proposal goes out presented by the person receiving it.
     const _ppStaff = (Array.isArray(this.state.usersData) ? this.state.usersData : [])
@@ -17753,8 +17796,7 @@ class Component extends DCLogic {
     this._openProposal = this._openProposal || ((quotationId, number, client, raw) => {
       if (!quotationId) return;
       const tpls = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
-      const chosen = (raw && raw.templateId && tpls.find(t => t.id === raw.templateId))
-        || (tpls.length === 1 ? tpls[0] : null);
+      const chosen = this._pickTemplate(raw, tpls);
       this.setState({ propPick: {
         quotationId, number: number || '', client: client || '',
         templateId: chosen ? chosen.id : '',
@@ -28827,6 +28869,22 @@ class Component extends DCLogic {
       propTplEmpty: _propTemplates.length === 0,
       propTplRows: _propTemplates.map(t8 => ({
         name: t8.name,
+        isDefault: !!t8.isDefault,
+        canDefault: !t8.isDefault,
+        // Held in state while it is being typed, so a re-render mid-word does not snap the box back
+        // to what the server last knew.
+        appliesTo: this.state['tplFor_' + t8.id] !== undefined
+          ? this.state['tplFor_' + t8.id]
+          : (Array.isArray(t8.appliesTo) ? t8.appliesTo.join(', ') : ''),
+        setAppliesTo: (e8) => this.setState({ ['tplFor_' + t8.id]: e8.target.value }),
+        saveAppliesTo: () => {
+          const v8 = this.state['tplFor_' + t8.id];
+          if (v8 === undefined) return;
+          const was8 = Array.isArray(t8.appliesTo) ? t8.appliesTo.join(', ') : '';
+          if (String(v8).trim() === was8) return;            // nothing typed, nothing to save
+          this._savePropTpl(t8.id, { appliesTo: v8 }, 'Saved what ' + t8.name + ' is used for');
+        },
+        makeDefault: () => this._savePropTpl(t8.id, { isDefault: true }, t8.name + ' is now the default'),
         // What it ASKS FOR, because a template whose tokens do not match the data is the one failure
         // mode here and it is invisible until somebody sends the document.
         meta: ((t8.tokens || []).length + ' field' + ((t8.tokens || []).length === 1 ? '' : 's')
@@ -28844,6 +28902,19 @@ class Component extends DCLogic {
         },
       })),
       propTplUpload: () => { const el8 = document.getElementById('propTplFileInput'); if (el8) el8.click(); },
+      _tplSaverInstalled: (this._savePropTpl = this._savePropTpl || ((id8, patch8, okMsg8) => {
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/proposal-templates/' + id8,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+            body: JSON.stringify(patch8) })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            if (!ok) return this.toast((j9 && j9.error) || 'Could not save that', 'error');
+            this.toast(okMsg8);
+            this._load('/api/proposal-templates', 'propTemplates', (v9) => this.setState({ propTemplates: v9 }));
+          })
+          .catch(() => this.toast('Server unreachable', 'error'));
+      })) && true,
       propTplPick: (ev8) => {
         const f8 = ev8.target.files && ev8.target.files[0];
         if (!f8) return;
@@ -37476,6 +37547,18 @@ class Component extends DCLogic {
           ppPreviewNone: !P.previewBusy && !P.previewUrl,
           ppPreviewWhy: P.previewWhy || 'Choose a template to see it',
           ppManyTemplates: _propTemplates.length > 1,
+          // Named out loud. An automatically chosen document that does not announce itself is one
+          // nobody checks, and the cost of getting it wrong is a client reading the wrong offer.
+          ppWhyTemplate: (() => {
+            const t9 = _propTemplates.find(x9 => x9.id === tplId);
+            if (!t9 || _propTemplates.length < 2) return false;
+            const words9 = Array.isArray(t9.appliesTo) ? t9.appliesTo : [];
+            const hay9 = [q8.service, ...(Array.isArray(q8.items) ? q8.items : []).map(i9 => i9 && (i9.name || i9.description))]
+              .filter(Boolean).join(' ').toLowerCase();
+            const hit9 = words9.filter(w9 => w9 && hay9.includes(String(w9).toLowerCase()));
+            if (hit9.length) return 'Chosen because this quotation mentions ' + hit9.slice(0, 3).join(', ') + '.';
+            return t9.isDefault ? 'Nothing matched, so your default template is used.' : false;
+          })(),
           ppTemplates: _propTemplates.map(t9 => ({
             name: t9.name,
             meta: ((t9.tokens || []).length + ' field' + ((t9.tokens || []).length === 1 ? '' : 's')

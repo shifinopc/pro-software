@@ -6155,14 +6155,55 @@ app.post("/api/proposal-templates", requireAuth, requireStaff, requireWriteRole,
 
     const fname = `tpl-${crypto.randomBytes(12).toString("hex")}.docx`;
     fs.writeFileSync(path.join(TEMPLATE_DIR, fname), buf);
+    const appliesTo = parseAppliesTo(req.body?.appliesTo);
+    const wantDefault = req.body?.isDefault === true || req.body?.isDefault === "true";
+    // The FIRST template uploaded becomes the default on its own. A firm with one template should
+    // never have to be told about a setting that has only one possible answer.
+    const isFirst = (await prisma.proposalTemplate.count({ where: { active: true } })) === 0;
+    if (wantDefault || isFirst) await prisma.proposalTemplate.updateMany({ data: { isDefault: false } });
     const row = await prisma.proposalTemplate.create({
-      data: { name, file: fname, tokens, size: buf.length, uploadedBy: (req as any).auth?.sub ?? null,
+      data: { name, file: fname, tokens, appliesTo, isDefault: wantDefault || isFirst,
+              size: buf.length, uploadedBy: (req as any).auth?.sub ?? null,
               createdAt: new Date().toISOString() },
     });
     await logAudit({ action: "proposal_template.upload", actorId: (req as any).auth?.sub, target: name,
       detail: `${tokens.length} token(s) · ${buf.length}b`, ip: clientIp(req) });
     res.status(201).json(row);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * Accepts either a list or one comma-separated string, because the form sends the string a person
+ * typed and an API client sends an array, and neither should have to know about the other.
+ */
+function parseAppliesTo(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : String(v ?? "").split(/[,;\n]/);
+  return [...new Set(raw.map(x => String(x).trim().toLowerCase()).filter(Boolean))].slice(0, 30);
+}
+
+/** Rename a template, say what it is for, or make it the default. The file itself never changes. */
+app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const t = await prisma.proposalTemplate.findUnique({ where: { id: req.params.id } });
+  if (!t) return res.status(404).json({ error: "Not found" });
+  const data: any = {};
+  if (req.body?.name !== undefined) {
+    const name = String(req.body.name).trim();
+    if (!name) return res.status(400).json({ error: "A template needs a name" });
+    data.name = name;
+  }
+  if (req.body?.appliesTo !== undefined) data.appliesTo = parseAppliesTo(req.body.appliesTo);
+  if (req.body?.isDefault === true) {
+    // Exactly one default. Cleared across the board first, so two rows can never both claim it —
+    // which would make which document goes out depend on row order.
+    await prisma.proposalTemplate.updateMany({ data: { isDefault: false } });
+    data.isDefault = true;
+  } else if (req.body?.isDefault === false) {
+    data.isDefault = false;
+  }
+  const row = await prisma.proposalTemplate.update({ where: { id: t.id }, data });
+  await logAudit({ action: "proposal_template.edit", actorId: (req as any).auth?.sub, target: row.name,
+    detail: Object.keys(data).join(", "), ip: clientIp(req) });
+  res.json(row);
 });
 
 app.delete("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
