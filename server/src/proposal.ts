@@ -186,9 +186,13 @@ export async function proposalData(quotationId: string): Promise<Record<string, 
   const officer = !creator && ownerId
     ? await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true, email: true } })
     : null;
+  // …and the firm itself at the end of the chain. A quotation written before the creator was
+  // recorded, for a client with no officer named, printed "Presented by :" and then nothing — which
+  // on a document somebody signs looks like a fault rather than a gap in old data.
   const owner = creator
     ?? (q.createdByName ? { name: q.createdByName, email: "" } : null)
-    ?? officer;
+    ?? officer
+    ?? ((org.legalName ?? org.orgName) ? { name: String(org.legalName ?? org.orgName), email: "" } : null);
 
   const rawItems: any[] = Array.isArray(q.items) ? (q.items as any[]) : [];
   const items = rawItems.map((it, i) => {

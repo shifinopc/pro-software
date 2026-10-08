@@ -6237,7 +6237,17 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     const co = q.companyId ? await prisma.company.findUnique({ where: { id: q.companyId } }) : null;
     const to = String(req.body?.to ?? co?.email ?? "").trim();
     if (!to) return res.status(400).json({ error: "No email address — add one on the client, or type one here" });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: `"${to}" is not an email address` });
+    const looksLikeEmail = (a: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a);
+    if (!looksLikeEmail(to)) return res.status(400).json({ error: `"${to}" is not an email address` });
+
+    // CC, for the colleague who has to know the offer went out. Split on commas and semicolons
+    // because people paste from everywhere, and checked individually — one bad address in a list
+    // makes the whole send fail at the mail server, which reads as "the system is broken" rather
+    // than "there is a typo in the third one".
+    const cc = String(req.body?.cc ?? "")
+      .split(/[,;]/).map(a => a.trim()).filter(Boolean);
+    const badCc = cc.filter(a => !looksLikeEmail(a));
+    if (badCc.length) return res.status(400).json({ error: `Not an email address: ${badCc.join(", ")}` });
 
     const data = await proposalData(q.id);
     if (!data) return res.status(404).json({ error: "Quotation not found" });
@@ -6251,26 +6261,38 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     const org = (await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any ?? {};
     const firm = org.legalName ?? org.orgName ?? "";
     const who = String((data as any)["owner.name"] ?? "");
-    const total = `${(data as any)["total.currency"]} ${(data as any)["total.amount"]}`;
+    // Two decimals HERE, even though the document prints "35,000". The proposal follows the firm's
+    // own sample, where whole riyals carry no decimals; an email quoting a figure reads as money, and
+    // "SAR 11.5" looks like a typo for 11.50. Formatted from the minor units rather than reusing the
+    // document's token, so neither has to compromise for the other.
+    const totalMinor8 = q.totalMinor ?? q.subtotalMinor ?? Math.round(Number(q.amount ?? 0) * 100);
+    const total = `${(data as any)["total.currency"]} `
+      + (totalMinor8 / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const valid = String((data as any)["proposal.validUntil"] ?? "");
 
     const subject = String(req.body?.subject ?? "").trim()
       || `${q.service ? q.service + " \u2014 " : ""}Proposal ${q.number ?? ""}`.trim();
     const note = String(req.body?.message ?? "").trim();
     const esc = (t: string) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // The CONTACT first: "Dear Abdul Zahir Bashir Electronic LLC" is addressed to a company, and
+    // nobody writes to a company. The client name is the fallback, not the preference.
+    const greeting = String(co?.contact ?? "").trim() || String(q.clientName ?? "").trim() || "Sir or Madam";
     const html = [
-      `<p>Dear ${esc(q.clientName ?? co?.contact ?? "Sir or Madam")},</p>`,
+      `<p>Dear ${esc(greeting)},</p>`,
       note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>`
            : `<p>Please find our proposal attached${q.service ? ` for ${esc(q.service)}` : ""}.</p>`,
       `<p><b>Reference:</b> ${esc(q.number ?? "")}<br><b>Total:</b> ${esc(total)}`
         + (valid ? `<br><b>Valid until:</b> ${esc(valid)}` : "") + `</p>`,
       `<p>We are happy to go through any of it with you.</p>`,
-      `<p>${esc(who)}${firm ? `<br>${esc(firm)}` : ""}</p>`,
-    ].join("\n");
+      // Skipped entirely when there is nobody to sign it, rather than sending an empty paragraph —
+      // which most mail clients render as a stray blank line at the foot of the message.
+      (who || firm) ? `<p>${esc(who)}${who && firm ? "<br>" : ""}${firm ? esc(firm) : ""}</p>` : "",
+    ].filter(Boolean).join("\n");
 
     const filename = `${q.number ?? "proposal"}.${pdf ? "pdf" : "docx"}`;
     try {
-      const r = await sendMail({ to, subject, html, kind: "proposal", attachments: [{ filename, content: out }] });
+      const r = await sendMail({ to, cc: cc.length ? cc : undefined, subject, html, kind: "proposal",
+                                 attachments: [{ filename, content: out }] });
       if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
     } catch (e: any) {
       return res.status(502).json({ error: `The mail server refused it: ${e?.message ?? e}` });
@@ -6285,9 +6307,10 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     }
     logActivity({ type: "client", message: `Proposal ${q.number ?? ""} emailed to ${q.clientName ?? to}`, user: who || undefined });
     await logAudit({ action: "proposal.emailed", actorId: (req as any).auth?.sub,
-      target: `${q.number ?? ""} \u00b7 ${to}`, detail: `${tpl.name}${released ? " \u00b7 released to the client" : ""}`, ip: clientIp(req) });
+      target: `${q.number ?? ""} \u00b7 ${to}${cc.length ? ` (cc ${cc.join(", ")})` : ""}`,
+      detail: `${tpl.name}${released ? " \u00b7 released to the client" : ""}`, ip: clientIp(req) });
 
-    res.json({ ok: true, to, subject, released, filename });
+    res.json({ ok: true, to, cc, subject, released, filename });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 

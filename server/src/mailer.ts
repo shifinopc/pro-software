@@ -112,7 +112,7 @@ async function record(entry: { to: string; subject: string; status: "sent" | "fa
  * The mail log records that something was sent and its filename, never the bytes — a log that keeps
  * every attachment is a file store nobody is pruning.
  */
-export async function sendMail(opts: { to: string; subject: string; html: string; text?: string; kind?: string;
+export async function sendMail(opts: { to: string; cc?: string[]; subject: string; html: string; text?: string; kind?: string;
                                        attachments?: { filename: string; content: Buffer }[] }) {
   const cfg = await getEmailConfig();
   if (!cfg.enabled) {
@@ -125,6 +125,7 @@ export async function sendMail(opts: { to: string; subject: string; html: string
   try {
     await transportFor(cfg).sendMail({
       from: cfg.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text,
+      ...(opts.cc && opts.cc.length ? { cc: opts.cc } : {}),
       ...(cfg.replyTo ? { replyTo: cfg.replyTo } : {}),
       ...(opts.attachments && opts.attachments.length ? { attachments: opts.attachments } : {}),
     });

@@ -3585,6 +3585,13 @@
                 <div style="margin-top:16px;">
                   <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">EMAIL TO</div>
                   <input value="{{ ppTo }}" onChange="{{ setPpTo }}" placeholder="name@client.com" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:11px 14px; font-size:13px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px;">
+                    <span style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">CC</span>
+                    <sc-if value="{{ ppCcHidden }}" hint-placeholder-val="{{ true }}"><span onClick="{{ ppShowCc }}" style="font-size:11px; font-weight:600; color:#7C00FF; cursor:pointer;">Add</span></sc-if>
+                  </div>
+                  <sc-if value="{{ ppCcShown }}" hint-placeholder-val="{{ false }}">
+                    <input value="{{ ppCc }}" onChange="{{ setPpCc }}" placeholder="colleague@firm.com, another@firm.com" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:11px 14px; font-size:13px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+                  </sc-if>
                   <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-top:12px;">COVERING NOTE</div>
                   <textarea onChange="{{ setPpMsg }}" rows="3" placeholder="Optional — a line or two before the attachment." value="{{ ppMsg }}" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:11px 14px; font-size:13px; background:#F6F4FA; resize:vertical; font-family:inherit;" style-focus="background:#fff; border-color:#7C00FF;"></textarea>
                 </div>
@@ -17714,6 +17721,7 @@ class Component extends DCLogic {
         quotationId, number: number || '', client: client || '',
         templateId: chosen ? chosen.id : '',
         previewUrl: '', previewBusy: !!chosen, previewWhy: '',
+        cc: '', ccOpen: false,
         // Prefilled from the client record, and editable: the person who should receive a proposal
         // is often not the address on file.
         to: (raw && raw.clientEmail) || '',
@@ -37407,6 +37415,13 @@ class Component extends DCLogic {
           })),
           ppTo: P.to || '',
           setPpTo: (e9) => set({ to: e9.target.value, err: '' }),
+          // Hidden until asked for. Most proposals go to one person, and a second always-visible
+          // address field is one more thing to read past every time.
+          ppCcHidden: !P.ccOpen,
+          ppCcShown: !!P.ccOpen,
+          ppShowCc: () => set({ ccOpen: true }),
+          ppCc: P.cc || '',
+          setPpCc: (e9) => set({ cc: e9.target.value, err: '' }),
           ppMsg: P.msg || '',
           setPpMsg: (e9) => set({ msg: e9.target.value }),
           ppErr: P.err || false,
@@ -37424,12 +37439,14 @@ class Component extends DCLogic {
             const tok8 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + P.quotationId + '/proposal/email',
               { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok8 ? { Authorization: 'Bearer ' + tok8 } : {}) },
-                body: JSON.stringify({ templateId: t8, to: to8, message: P.msg || '' }) })
+                body: JSON.stringify({ templateId: t8, to: to8, cc: P.cc || '', message: P.msg || '' }) })
               .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
               .then(({ ok, j8 }) => {
                 if (!ok) return set({ busy: false, err: (j8 && j8.error) || 'It could not be sent.' });
                 this.setState({ propPick: null });
-                this.toast('Proposal emailed to ' + j8.to + (j8.released ? ' · quotation released' : ''));
+                this.toast('Proposal emailed to ' + j8.to
+                  + ((j8.cc && j8.cc.length) ? ' (cc ' + j8.cc.length + ')' : '')
+                  + (j8.released ? ' · quotation released' : ''));
                 this._opReload('quotations', 'quotationsData');
               })
               .catch(() => set({ busy: false, err: 'Server unreachable — nothing was sent.' }));
