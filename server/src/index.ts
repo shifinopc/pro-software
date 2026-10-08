@@ -6194,6 +6194,83 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+/**
+ * Email the proposal to the client, with the document attached.
+ *
+ * A link to a portal the recipient may never have signed into is not the same as sending somebody
+ * a proposal, and the firm's own covering note is half of what makes it one. So this attaches the
+ * generated .docx and writes a short message around it.
+ *
+ * It also RELEASES the quotation. Mailing an offer to a client and leaving it marked draft would
+ * leave the record disagreeing with what the client is holding, and the portal hiding a document
+ * they have already read. Said plainly in the response so the screen can report it.
+ */
+app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+    if (!q) return res.status(404).json({ error: "Quotation not found" });
+
+    const templateId = String(req.body?.templateId ?? q.templateId ?? "").trim();
+    if (!templateId) return res.status(400).json({ error: "Choose a proposal template" });
+    const tpl = await prisma.proposalTemplate.findUnique({ where: { id: templateId } });
+    if (!tpl) return res.status(404).json({ error: "That template no longer exists" });
+    const file = path.join(TEMPLATE_DIR, tpl.file);
+    if (!fs.existsSync(file)) return res.status(410).json({ error: "The template file is missing from the server" });
+
+    // Where it goes: what the sender typed, else the client record. Never guessed from the company
+    // name — a proposal sent to the wrong address cannot be recalled.
+    const co = q.companyId ? await prisma.company.findUnique({ where: { id: q.companyId } }) : null;
+    const to = String(req.body?.to ?? co?.email ?? "").trim();
+    if (!to) return res.status(400).json({ error: "No email address — add one on the client, or type one here" });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: `"${to}" is not an email address` });
+
+    const data = await proposalData(q.id);
+    if (!data) return res.status(404).json({ error: "Quotation not found" });
+    const out = await renderDocx(fs.readFileSync(file), data);
+
+    const org = (await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any ?? {};
+    const firm = org.legalName ?? org.orgName ?? "";
+    const who = String((data as any)["owner.name"] ?? "");
+    const total = `${(data as any)["total.currency"]} ${(data as any)["total.amount"]}`;
+    const valid = String((data as any)["proposal.validUntil"] ?? "");
+
+    const subject = String(req.body?.subject ?? "").trim()
+      || `${q.service ? q.service + " \u2014 " : ""}Proposal ${q.number ?? ""}`.trim();
+    const note = String(req.body?.message ?? "").trim();
+    const esc = (t: string) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = [
+      `<p>Dear ${esc(q.clientName ?? co?.contact ?? "Sir or Madam")},</p>`,
+      note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>`
+           : `<p>Please find our proposal attached${q.service ? ` for ${esc(q.service)}` : ""}.</p>`,
+      `<p><b>Reference:</b> ${esc(q.number ?? "")}<br><b>Total:</b> ${esc(total)}`
+        + (valid ? `<br><b>Valid until:</b> ${esc(valid)}` : "") + `</p>`,
+      `<p>We are happy to go through any of it with you.</p>`,
+      `<p>${esc(who)}${firm ? `<br>${esc(firm)}` : ""}</p>`,
+    ].join("\n");
+
+    const filename = `${q.number ?? "proposal"}.docx`;
+    try {
+      const r = await sendMail({ to, subject, html, kind: "proposal", attachments: [{ filename, content: out }] });
+      if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
+    } catch (e: any) {
+      return res.status(502).json({ error: `The mail server refused it: ${e?.message ?? e}` });
+    }
+
+    // Released only once the mail is actually away. The other order would mark it sent and then
+    // fail, leaving a client who has been told nothing looking at a record that says otherwise.
+    let released = false;
+    if (["draft", "approved"].includes(String(q.status ?? "").toLowerCase())) {
+      await prisma.quotation.update({ where: { id: q.id }, data: { status: "sent", sentAt: new Date().toISOString() } });
+      released = true;
+    }
+    logActivity({ type: "client", message: `Proposal ${q.number ?? ""} emailed to ${q.clientName ?? to}`, user: who || undefined });
+    await logAudit({ action: "proposal.emailed", actorId: (req as any).auth?.sub,
+      target: `${q.number ?? ""} \u00b7 ${to}`, detail: `${tpl.name}${released ? " \u00b7 released to the client" : ""}`, ip: clientIp(req) });
+
+    res.json({ ok: true, to, subject, released, filename });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 app.post("/api/documents/:id/correct", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
     const doc = await prisma.document.findUnique({ where: { id: req.params.id } });

@@ -106,10 +106,25 @@ export async function proposalData(quotationId: string): Promise<Record<string, 
   const org = (await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any ?? {};
   const currency = String(org.currency ?? "SAR").split(/[\s—-]/)[0] || "SAR";
 
-  // The owner is whoever the client's work belongs to, falling back to the firm. A proposal signed
-  // "presented by" nobody reads as unfinished.
+  // "PRESENTED BY" IS WHOEVER WROTE THE OFFER.
+  //
+  // It used to be the client's standing PRO officer, which is a different person and a different
+  // fact: the officer handles the client's government work, while the proposal is put together by
+  // whoever is selling. On a document somebody signs, the name has to be the person the client will
+  // reply to.
+  //
+  // Falls back to the client's officer and then the firm, for quotations written before this was
+  // recorded — a proposal presented by nobody reads as unfinished.
+  const creator = q.createdById
+    ? await prisma.user.findUnique({ where: { id: q.createdById }, select: { name: true, email: true } })
+    : null;
   const ownerId = (co?.roleOwners as any)?.pro_officer ?? null;
-  const owner = ownerId ? await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true, email: true } }) : null;
+  const officer = !creator && ownerId
+    ? await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true, email: true } })
+    : null;
+  const owner = creator
+    ?? (q.createdByName ? { name: q.createdByName, email: "" } : null)
+    ?? officer;
 
   const rawItems: any[] = Array.isArray(q.items) ? (q.items as any[]) : [];
   const items = rawItems.map((it, i) => {

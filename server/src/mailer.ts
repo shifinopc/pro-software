@@ -105,7 +105,15 @@ async function record(entry: { to: string; subject: string; status: "sent" | "fa
   }
 }
 
-export async function sendMail(opts: { to: string; subject: string; html: string; text?: string; kind?: string }) {
+/**
+ * `attachments` is nodemailer's own shape, passed straight through. Added for proposals: the firm
+ * sends the client a document, and a link to a login they may not have is not the same thing.
+ *
+ * The mail log records that something was sent and its filename, never the bytes — a log that keeps
+ * every attachment is a file store nobody is pruning.
+ */
+export async function sendMail(opts: { to: string; subject: string; html: string; text?: string; kind?: string;
+                                       attachments?: { filename: string; content: Buffer }[] }) {
   const cfg = await getEmailConfig();
   if (!cfg.enabled) {
     console.log(`[mailer:disabled] would send to ${opts.to} — "${opts.subject}"\n${opts.text ?? opts.html}`);
@@ -118,6 +126,7 @@ export async function sendMail(opts: { to: string; subject: string; html: string
     await transportFor(cfg).sendMail({
       from: cfg.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text,
       ...(cfg.replyTo ? { replyTo: cfg.replyTo } : {}),
+      ...(opts.attachments && opts.attachments.length ? { attachments: opts.attachments } : {}),
     });
   } catch (e: any) {
     // Recorded, then re-thrown unchanged. Callers already decide what a failure means to them —

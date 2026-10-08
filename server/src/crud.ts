@@ -319,6 +319,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       // caller supplying its own reference keeps it.
       const data = sanitize(modelName, req.body);
       if (modelName === "task" && !data.ref) data.ref = await nextNumber("task");
+      // WHO WROTE THIS OFFER. The proposal prints "Presented by", and the honest answer is whoever
+      // put it together — not the client's standing officer, who may never have seen it. Stamped
+      // from the session rather than accepted from the body: a caller naming somebody else as the
+      // author of their own quotation is not a feature.
+      if (modelName === "quotation") {
+        const a2 = (req as any).auth;
+        const me2 = a2?.sub ? await prisma.user.findUnique({ where: { id: a2.sub }, select: { id: true, name: true, email: true } }) : null;
+        data.createdById = me2?.id ?? null;
+        data.createdByName = me2?.name ?? me2?.email ?? null;
+      }
       if (modelName === "payment" && !data.number) data.number = await nextNumber("receipt");
       if (modelName === "serviceRequest" && !data.number) data.number = await nextNumber("request");
       // Every new employee gets a code, because a name is not an identity: two people called Mohammed

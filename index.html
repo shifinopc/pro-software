@@ -3532,19 +3532,52 @@
           </section>
           <sc-if value="{{ showPropPick }}" hint-placeholder-val="{{ false }}">
             <div onClick="{{ closePropPick }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(2px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px;">
-              <div onClick="{{ stopProp }}" style="background:#fff; border-radius:20px; width:100%; max-width:420px; padding:22px 24px; box-shadow:0 24px 60px rgba(38,7,77,.22);">
-                <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Which proposal?</div>
-                <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ propPickSub }}</div>
-                <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
-                  <sc-for list="{{ propPickOptions }}" as="t" hint-placeholder-count="2">
-                    <div onClick="{{ t.pick }}" style="border:1px solid #EDEBF2; border-radius:13px; padding:12px 14px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#FBF7FF;">
-                      <div style="font-size:13px; font-weight:600; color:#1A1523;">{{ t.name }}</div>
-                      <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ t.meta }}</div>
+              <div onClick="{{ stopProp }}" style="background:#fff; border-radius:20px; width:100%; max-width:540px; max-height:88vh; overflow:auto; padding:22px 24px; box-shadow:0 24px 60px rgba(38,7,77,.22);">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                  <div>
+                    <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Proposal</div>
+                    <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ ppSub }}</div>
+                  </div>
+                  <div onClick="{{ closePropPick }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+                </div>
+
+                <div style="margin-top:16px; background:#FBF9FE; border:1px solid #F0EDF6; border-radius:13px; padding:13px 15px;">
+                  <sc-for list="{{ ppFacts }}" as="f" hint-placeholder-count="4">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:3px 0;">
+                      <span style="font-size:11px; color:#8C8899;">{{ f.k }}</span>
+                      <span style="font-size:12.5px; font-weight:600; color:#1A1523; text-align:right;">{{ f.v }}</span>
                     </div>
                   </sc-for>
                 </div>
-                <div style="display:flex; justify-content:flex-end; margin-top:18px;">
-                  <button onClick="{{ closePropPick }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+
+                <sc-if value="{{ ppManyTemplates }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:14px;">
+                    <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">TEMPLATE</div>
+                    <div style="display:flex; flex-direction:column; gap:7px; margin-top:6px;">
+                      <sc-for list="{{ ppTemplates }}" as="t" hint-placeholder-count="2">
+                        <div onClick="{{ t.pick }}" style="border:1px solid {{ t.border }}; background:{{ t.bg }}; border-radius:12px; padding:10px 13px; cursor:pointer;" style-hover="border-color:#C9A2FF;">
+                          <div style="font-size:12.5px; font-weight:600;">{{ t.name }}</div>
+                          <div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ t.meta }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="margin-top:16px;">
+                  <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">EMAIL TO</div>
+                  <input value="{{ ppTo }}" onChange="{{ setPpTo }}" placeholder="name@client.com" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:11px 14px; font-size:13px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+                  <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-top:12px;">COVERING NOTE</div>
+                  <textarea onChange="{{ setPpMsg }}" rows="3" placeholder="Optional — a line or two before the attachment." value="{{ ppMsg }}" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:11px 14px; font-size:13px; background:#F6F4FA; resize:vertical; font-family:inherit;" style-focus="background:#fff; border-color:#7C00FF;"></textarea>
+                </div>
+
+                <sc-if value="{{ ppErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ ppErr }}</div></sc-if>
+                <sc-if value="{{ ppWillRelease }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; font-size:11px; color:#B8860B;">Emailing it also releases the quotation to the client portal.</div></sc-if>
+
+                <div style="display:flex; align-items:center; justify-content:flex-end; gap:9px; margin-top:18px; flex-wrap:wrap;">
+                  <button onClick="{{ closePropPick }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:10px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+                  <button onClick="{{ ppDownload }}" style="background:#fff; color:#7C00FF; border:1px solid #D9C6F5; font-size:12.5px; font-weight:700; padding:10px 18px; border-radius:99px; cursor:pointer;" style-hover="background:#F9F5FF;">{{ ppDownloadLabel }}</button>
+                  <button onClick="{{ ppEmail }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:10px 20px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ ppEmailLabel }}</button>
                 </div>
               </div>
             </div>
@@ -11801,7 +11834,7 @@
           <sc-if value="{{ ddCanQuote }}" hint-placeholder-val="{{ false }}">
             <button onClick="{{ ddQuote }}" style="margin-top:10px; width:100%; background:#fff; color:#7C00FF; border:1px dashed #C9A2FF; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Create quotation for this deal</button>
           <sc-if value="{{ ddCanProposal }}" hint-placeholder-val="{{ false }}">
-            <button onClick="{{ ddProposal }}" title="{{ ddProposalTitle }}" style="margin-top:8px; width:100%; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.22);" style-hover="background:#6900D6;">Download the proposal</button>
+            <button onClick="{{ ddProposal }}" title="{{ ddProposalTitle }}" style="margin-top:8px; width:100%; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.22);" style-hover="background:#6900D6;">Proposal</button>
           </sc-if>
           <sc-if value="{{ ddNoTemplates }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:8px; font-size:10.5px; color:#A9A6B4; text-align:center;">Upload a proposal template in Settings to produce one from this quotation.</div>
@@ -17651,6 +17684,30 @@ class Component extends DCLogic {
     // the query. An <a href> carries no headers, so the obvious shortcut is to put the JWT in the
     // URL — where it lands in browser history, in any proxy log, and in the Referer of whatever the
     // page loads next. A few megabytes held for a moment is the cheaper price.
+    // Opens the proposal rather than downloading it. Picking the template, seeing what is about to
+    // go out, and choosing between saving it and sending it are one decision, so they are one
+    // dialog — and the default is no longer a file silently appearing in Downloads.
+    this._openProposal = this._openProposal || ((quotationId, number, client, raw) => {
+      if (!quotationId) return;
+      const tpls = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
+      const chosen = (raw && raw.templateId && tpls.find(t => t.id === raw.templateId))
+        || (tpls.length === 1 ? tpls[0] : null);
+      this.setState({ propPick: {
+        quotationId, number: number || '', client: client || '',
+        templateId: chosen ? chosen.id : '',
+        // Prefilled from the client record, and editable: the person who should receive a proposal
+        // is often not the address on file.
+        to: (raw && raw.clientEmail) || '',
+        msg: '', err: '', busy: false,
+        total: (raw && raw.total) || '', validUntil: (raw && raw.validUntil) || '',
+        status: (raw && raw.status) || '',
+      } });
+      // The client's address lives on the company, not the quotation.
+      const co = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+        .find(c => raw && (c.id === raw.companyId || c.name === raw.clientName));
+      if (co && co.email) this.setState({ propPick: { ...this.state.propPick, to: co.email } });
+    });
+
     this._downloadProposal = this._downloadProposal || ((quotationId, templateId) => {
       const t9 = localStorage.getItem('stimespro:token');
       this.setState({ propPick: null, propBusy: true });
@@ -35307,16 +35364,8 @@ class Component extends DCLogic {
           // list offers, reachable where the salesperson actually is.
           ddCanProposal: !!(q9 && q9.id) && _propTemplates.length > 0,
           ddNoTemplates: !!(q9 && q9.id) && _propTemplates.length === 0,
-          ddProposalTitle: _propTemplates.length === 1
-            ? ('Fill in “' + _propTemplates[0].name + '” with this quotation')
-            : 'Choose a template and fill it in with this quotation',
-          ddProposal: () => {
-            if (!q9 || !q9.id) return;
-            const chosen9 = (q9.templateId && _propTemplates.find(t9 => t9.id === q9.templateId))
-              || (_propTemplates.length === 1 ? _propTemplates[0] : null);
-            if (!chosen9) { close9(); return this.setState({ active: 'Quotations', activeGroup: 'Finance', propPick: { quotationId: q9.id, number: q9.number || '', client: D9.clientName || '' } }); }
-            this._downloadProposal(q9.id, chosen9.id);
-          },
+          ddProposalTitle: 'Review the proposal, then download or email it',
+          ddProposal: () => { close9(); this._openProposal(q9.id, q9.number || '', D9.clientName || '', q9); },
           ddStages: (D9.stages || []).slice().sort((a, b) => a.sort - b.sort).map(x => {
             const isCur = x.id === D9.stageId;
             const passed = !!(cur9 && x.sort < cur9.sort);
@@ -36962,17 +37011,12 @@ class Component extends DCLogic {
         // a fetch: the browser names the file from the server's Content-Disposition and nothing has
         // to be held in memory.
         canProposal: _propTemplates.length > 0 && !!realId,
-        proposalTitle: _propTemplates.length === 1
-          ? ('Download the proposal — ' + _propTemplates[0].name)
-          : 'Download the proposal',
-        proposal: () => {
-          if (!realId) return;
-          const tpl9 = (raw0 && raw0.templateId && _propTemplates.find(t9 => t9.id === raw0.templateId))
-            || (_propTemplates.length === 1 ? _propTemplates[0] : null);
-          // More than one template and nothing chosen yet: ask, rather than picking for them.
-          if (!tpl9) return this.setState({ propPick: { quotationId: realId, number: id, client: cli0 } });
-          this._downloadProposal(realId, tpl9.id);
-        },
+        proposalTitle: 'Proposal — review, download or email it',
+        // OPENS, rather than downloading. A proposal is something somebody looks at before it goes
+        // anywhere near a client, and the commonest thing to do with it is send it — so the button
+        // puts the document in front of you with both choices, instead of silently filling the
+        // downloads folder.
+        proposal: () => this._openProposal(realId, id, cli0, raw0),
         when: (raw0 && raw0.date) ? ((['draft', 'approved'].includes(rawSt) ? 'created ' : 'sent ') + raw0.date) : '—',
         validLabel: (raw0 && raw0.validUntil) ? 'valid to ' + raw0.validUntil : '',
         hasValid: !!(raw0 && raw0.validUntil),
@@ -37268,19 +37312,76 @@ class Component extends DCLogic {
         qvInvoice: () => { this.setState({ qtView: null }); qtViewRow.convert(); },
       } : {}),
       quotes: quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter),
-      // Only asked when there is a real choice to make; one template downloads straight away.
-      showPropPick: !!this.state.propPick,
-      propPickSub: this.state.propPick
-        ? (this.state.propPick.number + ' · ' + (this.state.propPick.client || 'client'))
-        : '',
-      propPickOptions: _propTemplates.map(t9 => ({
-        name: t9.name,
-        meta: ((t9.tokens || []).length + ' field' + ((t9.tokens || []).length === 1 ? '' : 's')
-               + ' · ' + Math.round((t9.size || 0) / 1024) + ' KB'),
-        pick: () => this._downloadProposal(this.state.propPick.quotationId, t9.id),
-      })),
-      closePropPick: () => this.setState({ propPick: null }),
-      stopProp: (e9) => { if (e9 && e9.stopPropagation) e9.stopPropagation(); },
+      // ── The proposal dialog ──
+      ...(() => {
+        const P = this.state.propPick;
+        if (!P) return { showPropPick: false };
+        const q8 = (Array.isArray(this.state.quotationsData) ? this.state.quotationsData : [])
+          .find(x => x.id === P.quotationId) || {};
+        const set = (patch) => this.setState({ propPick: { ...this.state.propPick, ...patch } });
+        const tplId = P.templateId || (_propTemplates.length === 1 ? _propTemplates[0].id : '');
+        const needTpl = () => {
+          if (tplId) return tplId;
+          set({ err: 'Choose which template to use.' });
+          return null;
+        };
+        const lines8 = Array.isArray(q8.items) ? q8.items.length : 0;
+        const cur8 = String((this.state.orgSet && this.state.orgSet.currency) || 'SAR').split(' ')[0];
+        const tot8 = (q8.totalMinor != null ? q8.totalMinor / 100 : Number(q8.amount || 0));
+        return {
+          showPropPick: true,
+          ppSub: (P.number || q8.number || '') + ' · ' + (P.client || q8.clientName || 'client'),
+          // What is about to go out, before it goes out. The commonest mistake here is sending the
+          // wrong quotation, and the number alone does not catch it.
+          ppFacts: [
+            ['Client', P.client || q8.clientName || '—'],
+            ['Lines', lines8 ? (lines8 + ' service' + (lines8 === 1 ? '' : 's')) : 'none yet'],
+            ['Total', cur8 + ' ' + tot8.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })],
+            ['Valid until', q8.validUntil || 'not set'],
+            ['Presented by', q8.createdByName || 'whoever created it'],
+          ].map(([k, v]) => ({ k, v })),
+          ppManyTemplates: _propTemplates.length > 1,
+          ppTemplates: _propTemplates.map(t9 => ({
+            name: t9.name,
+            meta: ((t9.tokens || []).length + ' field' + ((t9.tokens || []).length === 1 ? '' : 's')
+                   + ' · ' + Math.round((t9.size || 0) / 1024) + ' KB'),
+            border: t9.id === tplId ? '#7C00FF' : '#EDEBF2',
+            bg: t9.id === tplId ? '#FBF7FF' : '#fff',
+            pick: () => set({ templateId: t9.id, err: '' }),
+          })),
+          ppTo: P.to || '',
+          setPpTo: (e9) => set({ to: e9.target.value, err: '' }),
+          ppMsg: P.msg || '',
+          setPpMsg: (e9) => set({ msg: e9.target.value }),
+          ppErr: P.err || false,
+          // Said before they press it, not after: emailing an offer releases it, and somebody who
+          // meant only to send a copy should know that first.
+          ppWillRelease: ['draft', 'approved'].includes(String(q8.status || '').toLowerCase()),
+          ppDownloadLabel: P.busy ? 'Working\u2026' : 'Download',
+          ppEmailLabel: P.busy ? 'Sending\u2026' : 'Email to client',
+          ppDownload: () => { const t8 = needTpl(); if (t8) this._downloadProposal(P.quotationId, t8); },
+          ppEmail: () => {
+            const t8 = needTpl(); if (!t8) return;
+            const to8 = String(P.to || '').trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to8)) return set({ err: 'Enter the address to send it to.' });
+            set({ busy: true, err: '' });
+            const tok8 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + P.quotationId + '/proposal/email',
+              { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok8 ? { Authorization: 'Bearer ' + tok8 } : {}) },
+                body: JSON.stringify({ templateId: t8, to: to8, message: P.msg || '' }) })
+              .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
+              .then(({ ok, j8 }) => {
+                if (!ok) return set({ busy: false, err: (j8 && j8.error) || 'It could not be sent.' });
+                this.setState({ propPick: null });
+                this.toast('Proposal emailed to ' + j8.to + (j8.released ? ' · quotation released' : ''));
+                this._opReload('quotations', 'quotationsData');
+              })
+              .catch(() => set({ busy: false, err: 'Server unreachable — nothing was sent.' }));
+          },
+          closePropPick: () => this.setState({ propPick: null }),
+          stopProp: (e9) => { if (e9 && e9.stopPropagation) e9.stopPropagation(); },
+        };
+      })(),
       quotesEmpty: quotes.length === 0,
       qtTabs,
       qtAwaiting: fmtCur(_qtSum(q9 => q9.status === 'sent' && _qtLive(q9))),
