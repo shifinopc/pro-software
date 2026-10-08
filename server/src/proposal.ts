@@ -29,6 +29,48 @@ export async function renderDocx(docx: Buffer, data: Record<string, unknown>): P
   return handler.process(docx, data as any);
 }
 
+/**
+ * The same document as a PDF, for previewing and for sending.
+ *
+ * LibreOffice converts it, because nothing else reproduces the firm's design — and the design is
+ * the one thing this feature promised not to touch. It is driven as a command rather than a library
+ * since there is no binding worth the dependency, and it insists on writing to a directory rather
+ * than a stream, so the file goes to a temporary one and is cleaned up either way.
+ *
+ * `-env:UserInstallation` gives each run its own profile directory. Without it two conversions at
+ * once fight over one profile in $HOME and the second fails with a lock error — which on a screen
+ * that previews on open means the second person to click sees nothing and no reason why.
+ *
+ * Returns null rather than throwing when LibreOffice is absent: an installation without it should
+ * still be able to download the .docx, which is what it did before this existed.
+ */
+export async function docxToPdf(docx: Buffer): Promise<Buffer | null> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const run = promisify(execFile);
+
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "proposal-"));
+  const src = path.join(dir, "in.docx");
+  try {
+    await fs.writeFile(src, docx);
+    await run("soffice", [
+      `-env:UserInstallation=file://${path.join(dir, "profile")}`,
+      "--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, src,
+    ], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
+    return await fs.readFile(path.join(dir, "in.pdf"));
+  } catch (e: any) {
+    // ENOENT is "not installed", which is a configuration fact rather than a fault; anything else is
+    // worth seeing in the log, because a conversion that fails silently looks like a slow preview.
+    if (e?.code !== "ENOENT") console.error("[proposal] could not convert to PDF:", e?.message ?? e);
+    return null;
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 // ── Money ─────────────────────────────────────────────────────────────────────
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",

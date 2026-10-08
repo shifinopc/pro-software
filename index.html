@@ -3541,6 +3541,24 @@
                   <div onClick="{{ closePropPick }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
 
+                <div style="margin-top:16px; border:1px solid #EDEBF2; border-radius:14px; overflow:hidden; background:#F6F4FA; height:320px; position:relative;">
+                  <sc-if value="{{ ppPreviewReady }}" hint-placeholder-val="{{ false }}">
+                    <iframe data-dcattr-src="{{ ppPreviewUrl }}" title="Proposal preview" style="position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff;"></iframe>
+                  </sc-if>
+                  <sc-if value="{{ ppPreviewBusy }}" hint-placeholder-val="{{ true }}">
+                    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#A9A6B4;">
+                      <div style="width:22px; height:22px; border:2.5px solid #E4D3FB; border-top-color:#7C00FF; border-radius:99px; animation:spin .7s linear infinite;"></div>
+                      <div style="font-size:11.5px;">Building the proposal…</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ ppPreviewNone }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:0 28px; text-align:center;">
+                      <div style="font-size:22px;">📄</div>
+                      <div style="font-size:12px; font-weight:600; color:#6F6C7A;">{{ ppPreviewWhy }}</div>
+                      <div style="font-size:11px; color:#A9A6B4;">Download it to check the document itself.</div>
+                    </div>
+                  </sc-if>
+                </div>
                 <div style="margin-top:16px; background:#FBF9FE; border:1px solid #F0EDF6; border-radius:13px; padding:13px 15px;">
                   <sc-for list="{{ ppFacts }}" as="f" hint-placeholder-count="4">
                     <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:3px 0;">
@@ -17695,6 +17713,7 @@ class Component extends DCLogic {
       this.setState({ propPick: {
         quotationId, number: number || '', client: client || '',
         templateId: chosen ? chosen.id : '',
+        previewUrl: '', previewBusy: !!chosen, previewWhy: '',
         // Prefilled from the client record, and editable: the person who should receive a proposal
         // is often not the address on file.
         to: (raw && raw.clientEmail) || '',
@@ -17706,6 +17725,33 @@ class Component extends DCLogic {
       const co = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
         .find(c => raw && (c.id === raw.companyId || c.name === raw.clientName));
       if (co && co.email) this.setState({ propPick: { ...this.state.propPick, to: co.email } });
+      if (chosen) this._buildPreview(quotationId, chosen.id);
+    });
+
+    // The document itself, as a PDF, in the viewer this console already uses for scanned files.
+    // Asked for on open rather than behind a button: the question "is this the right proposal" is
+    // the reason the dialog exists, and a preview nobody clicks answers nothing.
+    this._buildPreview = this._buildPreview || ((quotationId, templateId) => {
+      const set = (patch) => { if (this.state.propPick) this.setState({ propPick: { ...this.state.propPick, ...patch } }); };
+      if (this.state.propPick && this.state.propPick.previewUrl) URL.revokeObjectURL(this.state.propPick.previewUrl);
+      set({ previewBusy: true, previewUrl: '', previewWhy: '' });
+      const tok = localStorage.getItem('stimespro:token');
+      // Sequenced, so switching template twice quickly cannot leave the slower answer on screen.
+      const seq = (this._ppSeq = (this._ppSeq || 0) + 1);
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
+            + '/proposal?format=pdf&templateId=' + encodeURIComponent(templateId),
+        { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+        .then(r => {
+          if (!r.ok) return r.json().catch(() => ({})).then(j => { throw new Error(j.error || 'It could not be built'); });
+          // The server says which of the two it managed. A .docx in an <iframe> is a download prompt,
+          // not a preview, so it is reported rather than shown.
+          if ((r.headers.get('X-Proposal-Format') || '') !== 'pdf') {
+            throw new Error('Preview needs the PDF converter, which this server does not have');
+          }
+          return r.blob();
+        })
+        .then(b => { if (seq !== this._ppSeq) return; set({ previewBusy: false, previewUrl: URL.createObjectURL(b) }); })
+        .catch(e => { if (seq !== this._ppSeq) return; set({ previewBusy: false, previewWhy: e.message || 'It could not be built' }); });
     });
 
     this._downloadProposal = this._downloadProposal || ((quotationId, templateId) => {
@@ -37340,6 +37386,11 @@ class Component extends DCLogic {
             ['Valid until', q8.validUntil || 'not set'],
             ['Presented by', q8.createdByName || 'whoever created it'],
           ].map(([k, v]) => ({ k, v })),
+          ppPreviewReady: !!P.previewUrl,
+          ppPreviewUrl: P.previewUrl || 'about:blank',
+          ppPreviewBusy: !!P.previewBusy,
+          ppPreviewNone: !P.previewBusy && !P.previewUrl,
+          ppPreviewWhy: P.previewWhy || 'Choose a template to see it',
           ppManyTemplates: _propTemplates.length > 1,
           ppTemplates: _propTemplates.map(t9 => ({
             name: t9.name,
@@ -37347,7 +37398,7 @@ class Component extends DCLogic {
                    + ' · ' + Math.round((t9.size || 0) / 1024) + ' KB'),
             border: t9.id === tplId ? '#7C00FF' : '#EDEBF2',
             bg: t9.id === tplId ? '#FBF7FF' : '#fff',
-            pick: () => set({ templateId: t9.id, err: '' }),
+            pick: () => { set({ templateId: t9.id, err: '' }); this._buildPreview(P.quotationId, t9.id); },
           })),
           ppTo: P.to || '',
           setPpTo: (e9) => set({ to: e9.target.value, err: '' }),
@@ -37378,7 +37429,11 @@ class Component extends DCLogic {
               })
               .catch(() => set({ busy: false, err: 'Server unreachable — nothing was sent.' }));
           },
-          closePropPick: () => this.setState({ propPick: null }),
+          closePropPick: () => {
+            // The preview is a few megabytes held by the page; dropping the state alone would leak it.
+            if (P.previewUrl) URL.revokeObjectURL(P.previewUrl);
+            this.setState({ propPick: null });
+          },
           stopProp: (e9) => { if (e9 && e9.stopPropagation) e9.stopPropagation(); },
         };
       })(),

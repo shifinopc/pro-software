@@ -78,7 +78,7 @@ import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
-import { tokensIn, renderDocx, proposalData } from "./proposal.js";
+import { tokensIn, renderDocx, proposalData, docxToPdf } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -6182,14 +6182,29 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     const data = await proposalData(q.id);
     if (!data) return res.status(404).json({ error: "Quotation not found" });
 
-    const out = await renderDocx(fs.readFileSync(file), data);
+    const docx = await renderDocx(fs.readFileSync(file), data);
+
+    // `?format=pdf` for the preview, and for anybody who would rather send something the client
+    // cannot accidentally edit. Falls back to the .docx when LibreOffice is not installed rather
+    // than failing: an installation without it worked before this existed and still should.
+    const wantPdf = String(req.query.format ?? "").toLowerCase() === "pdf";
+    const pdf = wantPdf ? await docxToPdf(docx) : null;
+    const out = pdf ?? docx;
+    const asPdf = !!pdf;
 
     await logAudit({ action: "proposal.generated", actorId: (req as any).auth?.sub,
       target: `${q.number} · ${q.clientName ?? ""}`.trim(), detail: tpl.name, ip: clientIp(req) });
 
-    const safe = `${q.number ?? "proposal"}-${String(q.clientName ?? "").replace(/[^\w ]+/g, "").trim() || "client"}.docx`;
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-    res.setHeader("Content-Disposition", `attachment; filename="${safe}"`);
+    const stem = `${q.number ?? "proposal"}-${String(q.clientName ?? "").replace(/[^\w ]+/g, "").trim() || "client"}`;
+    res.setHeader("Content-Type", asPdf
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    // `inline` for the PDF: this is what the console's own document viewer opens, and `attachment`
+    // would make the preview download instead of appearing.
+    res.setHeader("Content-Disposition", `${asPdf ? "inline" : "attachment"}; filename="${stem}.${asPdf ? "pdf" : "docx"}"`);
+    // Says which of the two came back, so a console asking for a preview can tell it did not get one
+    // instead of handing an unreadable .docx to an <iframe>.
+    res.setHeader("X-Proposal-Format", asPdf ? "pdf" : "docx");
     res.send(out);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
@@ -6226,7 +6241,12 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
 
     const data = await proposalData(q.id);
     if (!data) return res.status(404).json({ error: "Quotation not found" });
-    const out = await renderDocx(fs.readFileSync(file), data);
+    const docx = await renderDocx(fs.readFileSync(file), data);
+    // PDF by default when the firm can make one: a client who receives a .docx can edit the offer,
+    // and the copy they quote back at you later should be the one that was sent.
+    const asDocx = String(req.body?.format ?? "").toLowerCase() === "docx";
+    const pdf = asDocx ? null : await docxToPdf(docx);
+    const out = pdf ?? docx;
 
     const org = (await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any ?? {};
     const firm = org.legalName ?? org.orgName ?? "";
@@ -6248,7 +6268,7 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
       `<p>${esc(who)}${firm ? `<br>${esc(firm)}` : ""}</p>`,
     ].join("\n");
 
-    const filename = `${q.number ?? "proposal"}.docx`;
+    const filename = `${q.number ?? "proposal"}.${pdf ? "pdf" : "docx"}`;
     try {
       const r = await sendMail({ to, subject, html, kind: "proposal", attachments: [{ filename, content: out }] });
       if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });

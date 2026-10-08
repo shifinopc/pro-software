@@ -11,8 +11,18 @@
 FROM node:22-bookworm-slim
 
 # openssl: Prisma's query engine links against it. ca-certificates: outbound TLS (SMTP).
+#
+# libreoffice-writer turns a generated proposal into a PDF — for the preview the console already
+# knows how to show, and so a client can be sent something they cannot accidentally edit. Writer
+# alone, not the suite: the full libreoffice package drags in Calc, Impress, Draw and Java for
+# several times the size, and nothing here opens a spreadsheet. The font packages are not optional
+# decoration — without them Writer substitutes whatever it can find, and the firm's typography,
+# which is the entire reason their own .docx is the template, changes on the way to PDF.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && apt-get install -y --no-install-recommends \
+      openssl ca-certificates \
+      libreoffice-writer \
+      fonts-liberation fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
