@@ -3586,7 +3586,21 @@
                     </sc-if>
 
                     <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">ON THE DOCUMENT</div>
-                    <input value="{{ ppBy }}" onChange="{{ setPpBy }}" placeholder="Presented by" style="margin-top:7px; border:1px solid transparent; border-radius:10px; padding:9px 11px; font-size:12.5px; background:#F6F4FA; width:100%; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                    <div class="fm-selwrap" style="margin-top:7px;">
+                      <div class="fm-combo">
+                        <input data-dd data-open="{{ ddPpByOpen }}" onClick="{{ ddPpByOpenList }}" onInput="{{ ddPpBySetQuery }}" onKeyDown="{{ ddPpByKey }}" value="{{ ddPpByValue }}" placeholder="{{ ddPpByPlaceholder }}" autocomplete="off" class="fm-inp">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ ddPpByOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" class="fm-dd">
+                          <sc-if value="{{ ddPpByNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:12px; color:#A9A6B4;">Nobody in your team matches that</div></sc-if>
+                          <sc-for list="{{ ddPpByRows }}" as="o" hint-placeholder-count="3">
+                            <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                            <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
                     <div style="display:flex; gap:7px; margin-top:7px;">
                       <div style="flex:1; min-width:0;">
                         <div style="font-size:10px; color:#A9A6B4; margin-bottom:3px;">Date</div>
@@ -3604,6 +3618,7 @@
                       <sc-if value="{{ ppCcHidden }}" hint-placeholder-val="{{ true }}"><span onClick="{{ ppShowCc }}" style="font-size:11px; font-weight:650; color:#7C00FF; cursor:pointer;">+ Cc</span></sc-if>
                     </div>
                     <input value="{{ ppTo }}" onChange="{{ setPpTo }}" placeholder="name@client.com" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:11px; padding:10px 13px; font-size:12.5px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+                    <sc-if value="{{ ppNoEmail }}" hint-placeholder-val="{{ false }}"><div style="margin-top:6px; font-size:10.5px; color:#B8860B; line-height:1.45;">{{ ppNoEmailWhy }}</div></sc-if>
                     <sc-if value="{{ ppCcShown }}" hint-placeholder-val="{{ false }}">
                       <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:11px;">CC</div>
                       <input value="{{ ppCc }}" onChange="{{ setPpCc }}" placeholder="colleague@firm.com, another@firm.com" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:11px; padding:10px 13px; font-size:12.5px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
@@ -17722,6 +17737,12 @@ class Component extends DCLogic {
 
     // Proposal templates — the firm's uploaded .docx designs. Loaded once with everything else.
     const _propTemplates = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
+    // Who may be named as presenting a proposal: active staff, never portal logins — a client's own
+    // user appearing in that list is how a proposal goes out presented by the person receiving it.
+    const _ppStaff = (Array.isArray(this.state.usersData) ? this.state.usersData : [])
+      .filter(u9 => u9.type !== 'portal' && String(u9.status || 'active').toLowerCase() === 'active')
+      .map(u9 => String(u9.name || '').trim()).filter(Boolean)
+      .sort((a9, b9) => a9.localeCompare(b9));
     // Fetched with the Authorization header and saved from the blob, NOT linked to with the token in
     // the query. An <a href> carries no headers, so the obvious shortcut is to put the JWT in the
     // URL — where it lands in browser history, in any proxy log, and in the Referer of whatever the
@@ -17751,10 +17772,20 @@ class Component extends DCLogic {
         total: (raw && raw.total) || '', validUntil: (raw && raw.validUntil) || '',
         status: (raw && raw.status) || '',
       } });
-      // The client's address lives on the company, not the quotation.
+      // The client's address lives on the company, not the quotation — and often not on the company
+      // either. MATCHED BY NAME AS WELL AS ID because a quotation can carry a client name with no
+      // companyId at all (QT-001 on live does), and then an id-only lookup finds nothing and the
+      // box sits empty as though the fetch had failed.
       const co = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
-        .find(c => raw && (c.id === raw.companyId || c.name === raw.clientName));
-      if (co && co.email) this.setState({ propPick: { ...this.state.propPick, to: co.email } });
+        .find(c => raw && ((raw.companyId && c.id === raw.companyId) || (raw.clientName && c.name === raw.clientName)));
+      // Then the people: a firm that records no general address usually still has one for whoever
+      // it deals with, the primary contact first.
+      const cts = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
+        .filter(c9 => co && c9.companyId === co.id);
+      const person = cts.find(c9 => c9.isPrimary && c9.email) || cts.find(c9 => c9.email) || cts[0] || null;
+      const addr = (co && co.email) || (person && person.email) || '';
+      if (addr || person) this.setState({ propPick: { ...this.state.propPick,
+        ...(addr ? { to: addr } : {}), contactName: (person && person.name) || (co && co.contact) || '' } });
       if (chosen) this._buildPreview(quotationId, chosen.id);
     });
 
@@ -37458,8 +37489,18 @@ class Component extends DCLogic {
           // proposal printed "Presented by :" and then a blank, and the only way to change it was to
           // go and edit the quotation. Typed here they take effect in the preview immediately, and
           // are written back to the quotation only when it is actually sent.
-          ppBy: P.presentedBy || '',
-          setPpBy: (e9) => { set({ presentedBy: e9.target.value, err: '' }); this._ppTouch(); },
+          // PICKED FROM THE TEAM, not typed. A name on a document a client signs should be somebody
+          // who works here, spelled the way the rest of the system spells them — free text produced
+          // "Administrator" on the live proposal, and would as happily produce a typo nobody notices
+          // until the client quotes it back. The current value is carried as its own option so a
+          // quotation presented by somebody who has since left does not silently lose their name.
+          ...mkDdCombo('ddPpBy',
+            [{ title: 'Your team', options: _ppStaff.map(n9 => ({ value: n9, label: n9 })) },
+             ...((P.presentedBy && !_ppStaff.includes(P.presentedBy))
+                 ? [{ title: 'On this quotation', options: [{ value: P.presentedBy, label: P.presentedBy }] }] : [])],
+            P.presentedBy || '',
+            (v9) => { set({ presentedBy: v9, err: '' }); this._ppTouch(); },
+            'Choose who presents it'),
           ppDate: P.docDate || '',
           setPpDate: (e9) => { set({ docDate: e9.target.value, err: '' }); this._ppTouch(); },
           ppValid: P.docValid || '',
@@ -37469,6 +37510,14 @@ class Component extends DCLogic {
                 || (P.docValid || '') !== (q8.validUntil || ''),
           ppTo: P.to || '',
           setPpTo: (e9) => set({ to: e9.target.value, err: '' }),
+          // An empty box with a placeholder in it looks like the system failed to fetch something.
+          // Usually there is nothing to fetch: no address on the client, none on any of its
+          // contacts. Say which, so the fix is obvious and happens on the client record where it
+          // will serve every future document rather than being retyped here each time.
+          ppNoEmail: !String(P.to || '').trim(),
+          ppNoEmailWhy: 'No email address on file for ' + (P.client || q8.clientName || 'this client')
+            + (P.contactName ? ' (' + P.contactName + ' has none either)' : '')
+            + ' \u2014 type one here, or add it on the client record.',
           // Hidden until asked for. Most proposals go to one person, and a second always-visible
           // address field is one more thing to read past every time.
           ppCcHidden: !P.ccOpen,

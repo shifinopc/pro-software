@@ -6240,8 +6240,19 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
 
     // Where it goes: what the sender typed, else the client record. Never guessed from the company
     // name — a proposal sent to the wrong address cannot be recalled.
-    const co = q.companyId ? await prisma.company.findUnique({ where: { id: q.companyId } }) : null;
-    const to = String(req.body?.to ?? co?.email ?? "").trim();
+    // BY NAME TOO. A quotation can carry a client name and no companyId (several on live do), and
+    // an id-only lookup then finds no client, no address and no contact to greet.
+    const co = q.companyId
+      ? await prisma.company.findUnique({ where: { id: q.companyId } })
+      : (q.clientName ? await prisma.company.findFirst({ where: { name: q.clientName } }) : null);
+    // A firm that records no general address usually still has one for the person it deals with.
+    const contact = co
+      ? await prisma.contact.findFirst({
+          where: { companyId: co.id, email: { not: null } },
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+        })
+      : null;
+    const to = String(req.body?.to ?? co?.email ?? contact?.email ?? "").trim();
     if (!to) return res.status(400).json({ error: "No email address — add one on the client, or type one here" });
     const looksLikeEmail = (a: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a);
     if (!looksLikeEmail(to)) return res.status(400).json({ error: `"${to}" is not an email address` });
@@ -6297,7 +6308,8 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     const esc = (t: string) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     // The CONTACT first: "Dear Abdul Zahir Bashir Electronic LLC" is addressed to a company, and
     // nobody writes to a company. The client name is the fallback, not the preference.
-    const greeting = String(co?.contact ?? "").trim() || String(q.clientName ?? "").trim() || "Sir or Madam";
+    const greeting = String(contact?.name ?? "").trim() || String(co?.contact ?? "").trim()
+      || String(q.clientName ?? "").trim() || "Sir or Madam";
     const html = [
       `<p>Dear ${esc(greeting)},</p>`,
       note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>`

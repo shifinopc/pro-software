@@ -233,9 +233,21 @@ export async function proposalData(
     const raw = rawItems[i] ?? {};
     return a + Math.round(Number(raw.price ?? 0) * 100) * (Number(raw.units ?? raw.qty ?? 1) || 1);
   }, 0);
-  const storedTotal = q.totalMinor ?? q.subtotalMinor ?? Math.round(Number(q.amount ?? 0) * 100);
-  const totalMinor = storedTotal || linesMinor;
-  const subtotalMinor = q.subtotalMinor || totalMinor;
+  // THE DOCUMENT PRINTS MONEY EXCLUSIVE OF TAX.
+  //
+  // The line amounts always were — they are the prices as entered — but the total was taken from
+  // `totalMinor`, which the quotation stores with VAT added. So a proposal listing 10.00 and 22.00
+  // footed up to 36.80, under terms that say in as many words "all fees are exclusive of VAT and
+  // government fees". Three figures, two of them disagreeing with the third and with the paragraph
+  // beneath them.
+  //
+  // `total.gross` is still published for a template that wants to show the tax-inclusive figure —
+  // this fixes which number the standard `total.amount` carries, it does not decide for every firm.
+  const netMinor = q.subtotalMinor || linesMinor
+    || q.totalMinor || Math.round(Number(q.amount ?? 0) * 100);
+  const grossMinor = q.totalMinor || netMinor;
+  const totalMinor = netMinor;
+  const subtotalMinor = netMinor;
 
   // A proposal with no schedule recorded still has to print terms, and "all of it, on signing" is
   // the honest reading of no schedule — not a blank page where the payment terms should be.
@@ -276,6 +288,8 @@ export async function proposalData(
     "total.amount": money(totalMinor),
     "total.subtotal": money(subtotalMinor),
     "total.vat": money(q.vatMinor ?? 0),
+    // The tax-inclusive figure, for a template whose prices are quoted with VAT in them.
+    "total.gross": money(grossMinor),
     "total.words": amountInWords(totalMinor, currency),
     "total.currency": currency,
 
