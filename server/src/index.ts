@@ -67,6 +67,7 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
     return { sub: String(j.sub), provider: j.provider === "microsoft" ? "microsoft" : "google" };
   } catch { return null; }
 }
+import compression from "compression";
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
@@ -237,6 +238,26 @@ app.post("/api/public/enquiry", intakeByIp, intakeByKey, express.json({ limit: "
     return res.status(500).json({ error: "Could not record that enquiry" });
   }
 });
+
+// ── Compress what goes out ──
+//
+// The console asks for about ninety endpoints when it loads, and on live that is roughly a megabyte
+// of JSON — sent uncompressed, because nothing here compressed it. Cloudflare compresses the last
+// hop to the browser, but the long leg from this server to the edge carried the full megabyte, and
+// for a client in Jeddah talking to a server in Helsinki that leg is the expensive one. JSON gzips
+// to about a tenth of itself.
+//
+// SSE IS EXCLUDED BY HAND. `compression`'s default filter asks the `compressible` library, which
+// says yes to everything under text/*, and that includes text/event-stream — the realtime feed would
+// then sit in a buffer waiting for enough bytes to be worth sending, which is the one thing a stream
+// of single-line events cannot survive.
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path === "/stream" || req.path === "/api/stream") return false;
+    if (String(res.getHeader("Content-Type") ?? "").includes("text/event-stream")) return false;
+    return compression.filter(req, res);
+  },
+}));
 
 app.use(express.json({ limit: '6mb' })); // raised for base64 logo/file uploads
 // Mounted here so it sees every /api route, including the generic CRUD registered much further down.
