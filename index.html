@@ -17743,9 +17743,14 @@ class Component extends DCLogic {
         { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
         .then(r => {
           if (!r.ok) return r.json().catch(() => ({})).then(j => { throw new Error(j.error || 'It could not be built'); });
-          // The server says which of the two it managed. A .docx in an <iframe> is a download prompt,
-          // not a preview, so it is reported rather than shown.
-          if ((r.headers.get('X-Proposal-Format') || '') !== 'pdf') {
+          // WHICH OF THE TWO CAME BACK. Content-Type first, because it is one of the handful of
+          // headers cross-origin JavaScript may read without being granted permission — the custom
+          // header needs Access-Control-Expose-Headers, and when that was missing this reported
+          // "no converter" on a server that had just built the PDF perfectly well. Belt and braces:
+          // either answer is accepted, so one of them going missing cannot hide the other.
+          const fmt9 = (r.headers.get('X-Proposal-Format') || '').toLowerCase();
+          const ct9 = (r.headers.get('Content-Type') || '').toLowerCase();
+          if (fmt9 !== 'pdf' && ct9.indexOf('pdf') === -1) {
             throw new Error('Preview needs the PDF converter, which this server does not have');
           }
           return r.blob();

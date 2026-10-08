@@ -193,7 +193,7 @@ app.use(cors((req, cb) => {
   // otherwise, so the proposal arrived as "proposal.docx" instead of "QT-344-Acme Trading.docx" —
   // the server had named it correctly and the browser simply would not hand the name over.
   if (!origin || sameOrigin || allowedOrigins.includes(origin))
-    return cb(null, { origin: true, credentials: true, exposedHeaders: ["Content-Disposition"] });
+    return cb(null, { origin: true, credentials: true, exposedHeaders: ["Content-Disposition", "X-Proposal-Format"] });
   cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
 /**
