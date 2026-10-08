@@ -2034,9 +2034,39 @@ model Quotation {
   supersededAt   String?
   supersededById String?
 
+  /// The proposal template this quotation is presented with, if any. A quotation without one still
+  /// prints the plain built-in document — the template is a presentation choice, not a requirement.
+  templateId String?
+  /// Payment milestones, [{ label, pct, amount }]. The firm's proposals bill in stages ("50% on
+  /// signing, 30% on the MISA licence, 20% on the CR") and there was nowhere to record that, so the
+  /// schedule lived only in whatever Word file somebody edited by hand.
+  milestones Json?
+
   @@index([companyId])
   @@index([status])
   @@index([revisesId])
+}
+
+/// A .docx the firm designed, used as the shape of a proposal.
+///
+/// The design is NOT rebuilt in the app. The firm's own Word file is the template: it is uploaded
+/// as-is, its `{{tokens}}` are filled from the quotation, and what comes out is their document with
+/// the values in it. A second kind of proposal — PRO services, a different firm's branding — is
+/// another upload rather than another screen.
+model ProposalTemplate {
+  id         String  @id @default(cuid())
+  name       String
+  /// Filename on disk under uploads-private. The .docx is never publicly served.
+  file       String
+  /// The tokens found when it was uploaded, so the picker can show what a template needs and a
+  /// quotation missing one of them can say so before anybody sends the document.
+  tokens     Json?   @default("[]")
+  active     Boolean @default(true)
+  size       Int     @default(0)
+  uploadedBy String?
+  createdAt  String
+
+  @@index([active])
 }
 
 // ── Service catalog (gov fee + service fee per offered service) ──

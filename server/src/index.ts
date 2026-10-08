@@ -78,6 +78,7 @@ import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
+import { tokensIn, renderDocx, proposalData } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -187,7 +188,12 @@ app.use(cors((req, cb) => {
   const origin = req.headers.origin;
   const host = req.headers.host;
   const sameOrigin = !!origin && !!host && (origin === `http://${host}` || origin === `https://${host}`);
-  if (!origin || sameOrigin || allowedOrigins.includes(origin)) return cb(null, { origin: true, credentials: true });
+  // Content-Disposition is EXPOSED, or the console cannot read the filename off a download it
+  // fetched. Cross-origin JavaScript sees only a handful of response headers unless the server says
+  // otherwise, so the proposal arrived as "proposal.docx" instead of "QT-344-Acme Trading.docx" —
+  // the server had named it correctly and the browser simply would not hand the name over.
+  if (!origin || sameOrigin || allowedOrigins.includes(origin))
+    return cb(null, { origin: true, credentials: true, exposedHeaders: ["Content-Disposition"] });
   cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
 /**
@@ -6091,6 +6097,100 @@ app.post("/api/documents/:id/renew", requireAuth, requireStaff, requireWriteRole
     notifyDocumentRenewed({ companyId: doc.companyId, docType: doc.docType, person: doc.person, expiryDate, docNumber });
 
     res.json({ document: updated, closedTask });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// ── Proposal templates ────────────────────────────────────────────────────────
+//
+// A template is the firm's own .docx, stored whole. Nothing here parses their design or tries to
+// understand it: it is uploaded, its tokens are read so a human can see what it asks for, and it is
+// handed back to the renderer with values. Kept in uploads-private, never publicly served — a
+// template carries the firm's letterhead and its terms.
+const TEMPLATE_DIR = path.resolve(process.cwd(), "uploads-private");
+
+app.get("/api/proposal-templates", requireAuth, requireStaff, async (_req, res) => {
+  res.json(await prisma.proposalTemplate.findMany({ where: { active: true }, orderBy: { createdAt: "desc" } }));
+});
+
+app.post("/api/proposal-templates", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
+  try {
+    const name = String(req.body?.name ?? "").trim();
+    const data = String(req.body?.data ?? "");
+    if (!name) return res.status(400).json({ error: "Give the template a name" });
+    if (!data) return res.status(400).json({ error: "No file was uploaded" });
+
+    const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
+    if (!buf.length || buf.length > 20 * 1024 * 1024) return res.status(400).json({ error: "The template must be under 20 MB" });
+    // A .docx is a ZIP. Checking the signature rather than the filename, for the same reason uploads
+    // are sniffed elsewhere: a file that is not what it claims fails later, somewhere less obvious.
+    if (!(buf[0] === 0x50 && buf[1] === 0x4b)) return res.status(400).json({ error: "That is not a .docx file" });
+
+    let tokens: string[];
+    try {
+      tokens = await tokensIn(buf);
+    } catch (e: any) {
+      return res.status(400).json({ error: `That .docx could not be read as a template: ${e?.message ?? e}` });
+    }
+
+    const fname = `tpl-${crypto.randomBytes(12).toString("hex")}.docx`;
+    fs.writeFileSync(path.join(TEMPLATE_DIR, fname), buf);
+    const row = await prisma.proposalTemplate.create({
+      data: { name, file: fname, tokens, size: buf.length, uploadedBy: (req as any).auth?.sub ?? null,
+              createdAt: new Date().toISOString() },
+    });
+    await logAudit({ action: "proposal_template.upload", actorId: (req as any).auth?.sub, target: name,
+      detail: `${tokens.length} token(s) · ${buf.length}b`, ip: clientIp(req) });
+    res.status(201).json(row);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
+  const t = await prisma.proposalTemplate.findUnique({ where: { id: req.params.id } });
+  if (!t) return res.status(404).json({ error: "Not found" });
+  // Retired, not erased: a quotation already sent names this template, and the document it produced
+  // should still be explicable a year from now.
+  await prisma.proposalTemplate.update({ where: { id: t.id }, data: { active: false } });
+  await logAudit({ action: "proposal_template.retire", actorId: (req as any).auth?.sub, target: t.name, ip: clientIp(req) });
+  res.json({ ok: true });
+});
+
+/**
+ * Produce the proposal for a quotation.
+ *
+ * Returns the .docx itself rather than storing it. The document is derived — regenerate it and you
+ * get today's figures — so keeping a copy would mean two answers to "what did we send them", and the
+ * quotation is already the record of that.
+ *
+ * A GET, and it writes nothing. Producing the document from a quotation somebody can already read is
+ * a read: as a POST the permission matrix scored it Sales.Create, which would have refused it to the
+ * PRO officer and the sales rep whose quotation it is. Which template to use is remembered on the
+ * quotation through the ordinary edit, not as a side effect of downloading.
+ */
+app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+    if (!q) return res.status(404).json({ error: "Quotation not found" });
+
+    const templateId = String(req.query.templateId ?? q.templateId ?? "").trim();
+    if (!templateId) return res.status(400).json({ error: "Choose a proposal template" });
+    const tpl = await prisma.proposalTemplate.findUnique({ where: { id: templateId } });
+    if (!tpl) return res.status(404).json({ error: "That template no longer exists" });
+
+    const file = path.join(TEMPLATE_DIR, tpl.file);
+    if (!fs.existsSync(file)) return res.status(410).json({ error: "The template file is missing from the server" });
+
+    const data = await proposalData(q.id);
+    if (!data) return res.status(404).json({ error: "Quotation not found" });
+
+    const out = await renderDocx(fs.readFileSync(file), data);
+
+    await logAudit({ action: "proposal.generated", actorId: (req as any).auth?.sub,
+      target: `${q.number} · ${q.clientName ?? ""}`.trim(), detail: tpl.name, ip: clientIp(req) });
+
+    const safe = `${q.number ?? "proposal"}-${String(q.clientName ?? "").replace(/[^\w ]+/g, "").trim() || "client"}.docx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${safe}"`);
+    res.send(out);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 

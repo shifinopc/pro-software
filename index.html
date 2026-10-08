@@ -3522,6 +3522,7 @@
                          client rejected it. -->
                     <sc-if value="{{ q.isSuperseded }}" hint-placeholder-val="{{ false }}"><span title="{{ q.supersededNote }}" style="font-size:10.5px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:6px 11px; border-radius:9px; white-space:nowrap;">Superseded</span></sc-if>
                     <sc-if value="{{ q.hasInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.openInvoice }}" title="Open the invoice this quotation became" style="font-size:11px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);">{{ q.invoicedAs }} →</span></sc-if>
+                    <sc-if value="{{ q.canProposal }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.proposal }}" title="{{ q.proposalTitle }}" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#7C00FF; background:#F5EEFF; border:1px solid #E4D3FB; border-radius:9px; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 15l2 2 4-4"></path></svg></span></sc-if>
                     <span onClick="{{ q.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span>
                     <span onClick="{{ q.view }}" title="View the quotation" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4B4757" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
                   </div>
@@ -3529,6 +3530,25 @@
               </sc-for>
             </div></div>
           </section>
+          <sc-if value="{{ showPropPick }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closePropPick }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(2px); z-index:120; display:flex; align-items:center; justify-content:center; padding:24px;">
+              <div onClick="{{ stopProp }}" style="background:#fff; border-radius:20px; width:100%; max-width:420px; padding:22px 24px; box-shadow:0 24px 60px rgba(38,7,77,.22);">
+                <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700;">Which proposal?</div>
+                <div style="font-size:11.5px; color:#8C8899; margin-top:3px;">{{ propPickSub }}</div>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+                  <sc-for list="{{ propPickOptions }}" as="t" hint-placeholder-count="2">
+                    <div onClick="{{ t.pick }}" style="border:1px solid #EDEBF2; border-radius:13px; padding:12px 14px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#FBF7FF;">
+                      <div style="font-size:13px; font-weight:600; color:#1A1523;">{{ t.name }}</div>
+                      <div style="font-size:11px; color:#A9A6B4; margin-top:2px;">{{ t.meta }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-top:18px;">
+                  <button onClick="{{ closePropPick }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
           <sc-if value="{{ quotesEmpty }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px dashed #DDD1F5; border-radius:18px; padding:40px 24px; text-align:center;">
               <div style="font-size:30px;">🧾</div>
@@ -7662,6 +7682,29 @@
                     </div>
                   </div>
                 </div>
+                <div style="margin-top:20px; border-top:1px solid #F0EDF6; padding-top:18px;">
+                  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
+                    <div>
+                      <div style="font-size:12.5px; font-weight:700;">Proposal templates</div>
+                      <div style="font-size:11px; color:#A9A6B4; margin-top:3px; line-height:1.5; max-width:470px;">Your own Word file, used as the shape of a proposal. Upload it with <span style="font-family:ui-monospace,monospace; font-size:10.5px; background:#F3F1F7; padding:1px 4px; border-radius:4px;">{{ propTokenEg }}</span> where the values go — the design is never touched.</div>
+                    </div>
+                    <input id="propTplFileInput" type="file" accept=".docx" onChange="{{ propTplPick }}" style="display:none;">
+                    <button onClick="{{ propTplUpload }}" style="flex-shrink:0; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ propTplBtn }}</button>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:7px; margin-top:12px;">
+                    <sc-for list="{{ propTplRows }}" as="t" hint-placeholder-count="2">
+                      <div style="display:flex; align-items:center; gap:11px; border:1px solid #F0EDF6; border-radius:12px; padding:10px 13px;">
+                        <div style="width:30px; height:30px; border-radius:9px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></div>
+                        <div style="flex:1; min-width:0;">
+                          <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.name }}</div>
+                          <div style="font-size:10.5px; color:#A9A6B4; margin-top:1px;">{{ t.meta }}</div>
+                        </div>
+                        <span onClick="{{ t.remove }}" title="Retire this template" class="row-ic" style-hover="background:#FEECEC; color:#C0353A;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"></path></svg></span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ propTplEmpty }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px; color:#A9A6B4; padding:4px 2px;">None yet. Until one is uploaded, quotations print the built-in document.</div></sc-if>
+                  </div>
+                </div>
                 <div style="display:flex; align-items:center; gap:14px; margin-top:20px; border-top:1px solid #F0EDF6; padding-top:18px;">
                   <div role="img" aria-label="Organization logo" style="width:56px; height:56px; border-radius:14px; background:#F5EEFF center/contain no-repeat; background-image:url('{{ orgLogoSrc }}');"></div>
                   <div style="flex:1;"><div style="font-size:12.5px; font-weight:700;">Organization logo</div><div style="font-size:11px; color:#A9A6B4; margin-top:1px;">PNG or SVG · shown on invoices and the portal</div></div>
@@ -11741,6 +11784,12 @@
           </sc-if>
           <sc-if value="{{ ddCanQuote }}" hint-placeholder-val="{{ false }}">
             <button onClick="{{ ddQuote }}" style="margin-top:10px; width:100%; background:#fff; color:#7C00FF; border:1px dashed #C9A2FF; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#FBF7FF;">+ Create quotation for this deal</button>
+          <sc-if value="{{ ddCanProposal }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ ddProposal }}" title="{{ ddProposalTitle }}" style="margin-top:8px; width:100%; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.22);" style-hover="background:#6900D6;">Download the proposal</button>
+          </sc-if>
+          <sc-if value="{{ ddNoTemplates }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:8px; font-size:10.5px; color:#A9A6B4; text-align:center;">Upload a proposal template in Settings to produce one from this quotation.</div>
+          </sc-if>
           </sc-if>
 
           <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:22px;">STAGE PROGRESS</div>
@@ -15574,6 +15623,7 @@ class Component extends DCLogic {
       fetch(API + '/api/settings/countryRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ countryRulesData: v }); }).catch(() => {});
       fetch(API + '/api/settings/departments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ deptData: v }); }).catch(() => {});
       this._load('/api/companies', 'companiesData', (v) => this.setState({ companiesData: v }));
+      this._load('/api/proposal-templates', 'propTemplates', (v) => this.setState({ propTemplates: v }));
       // Leads and prospects, asked for explicitly. /api/companies defaults to CLIENTS ONLY so that
       // every screen written before the lifecycle existed stays right; this is the one caller that
       // wants the other end of it, and it keeps them in their own state rather than mixing the two
@@ -17578,6 +17628,39 @@ class Component extends DCLogic {
     const _clientScope = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : null;
     // The scope matches on a row's CLIENT NAME; rows carrying only a companyId need this to be read.
     const coNameById = {}; (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).forEach(c => { coNameById[c.id] = c.name; });
+
+    // Proposal templates — the firm's uploaded .docx designs. Loaded once with everything else.
+    const _propTemplates = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
+    // Fetched with the Authorization header and saved from the blob, NOT linked to with the token in
+    // the query. An <a href> carries no headers, so the obvious shortcut is to put the JWT in the
+    // URL — where it lands in browser history, in any proxy log, and in the Referer of whatever the
+    // page loads next. A few megabytes held for a moment is the cheaper price.
+    this._downloadProposal = this._downloadProposal || ((quotationId, templateId) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      this.setState({ propPick: null, propBusy: true });
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
+            + '/proposal?templateId=' + encodeURIComponent(templateId),
+        { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => {
+          if (!r9.ok) return r9.json().catch(() => ({})).then(j9 => { throw new Error(j9.error || 'Could not produce the proposal'); });
+          // The server names the file; fall back to the quotation number if the header is stripped.
+          const cd9 = r9.headers.get('Content-Disposition') || '';
+          const m9 = /filename="?([^"]+)"?/.exec(cd9);
+          return r9.blob().then(b9 => ({ blob: b9, name: (m9 && m9[1]) || 'proposal.docx' }));
+        })
+        .then(({ blob, name }) => {
+          const url9 = URL.createObjectURL(blob);
+          const a9 = document.createElement('a');
+          a9.href = url9; a9.download = name;
+          document.body.appendChild(a9); a9.click(); a9.remove();
+          // Revoked on the next tick: released immediately, Safari cancels the download it just started.
+          setTimeout(() => URL.revokeObjectURL(url9), 10000);
+          this.setState({ propBusy: false });
+          this.toast('Proposal downloaded');
+        })
+        .catch(e9 => { this.setState({ propBusy: false }); this.toast(e9.message || 'Server unreachable', 'error'); });
+    });
+
 
     // WIRED: dashboard KPI strip from real requests / documents / invoices.
     //
@@ -28535,6 +28618,54 @@ class Component extends DCLogic {
       loginLogoSrc: (this._apiBase && orgCur.loginLogoUrl) ? (this._apiBase + orgCur.loginLogoUrl) : 'stimes-logo.svg',
       orgLogoUpload: () => { const el2 = document.getElementById('orgLogoFileInput'); if (el2) el2.click(); },
       loginLogoUpload: () => { const el2 = document.getElementById('loginLogoFileInput'); if (el2) el2.click(); },
+      // ── Proposal templates ──
+      propTokenEg: '{{client.name}}',
+      propTplBtn: this.state.propTplBusy ? 'Reading…' : 'Upload .docx',
+      propTplEmpty: _propTemplates.length === 0,
+      propTplRows: _propTemplates.map(t8 => ({
+        name: t8.name,
+        // What it ASKS FOR, because a template whose tokens do not match the data is the one failure
+        // mode here and it is invisible until somebody sends the document.
+        meta: ((t8.tokens || []).length + ' field' + ((t8.tokens || []).length === 1 ? '' : 's')
+               + ' · ' + Math.round((t8.size || 0) / 1024) + ' KB'
+               + ((t8.tokens || []).length ? ' · ' + (t8.tokens || []).slice(0, 4).join(', ')
+                  + ((t8.tokens || []).length > 4 ? '…' : '') : '')),
+        remove: () => {
+          const t9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/proposal-templates/' + t8.id,
+            { method: 'DELETE', headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+            .then(r9 => { if (!r9.ok) return this.toast('Could not retire that template', 'error');
+              this.toast(t8.name + ' retired');
+              this._load('/api/proposal-templates', 'propTemplates', (v9) => this.setState({ propTemplates: v9 })); })
+            .catch(() => this.toast('Server unreachable'));
+        },
+      })),
+      propTplUpload: () => { const el8 = document.getElementById('propTplFileInput'); if (el8) el8.click(); },
+      propTplPick: (ev8) => {
+        const f8 = ev8.target.files && ev8.target.files[0];
+        if (!f8) return;
+        if (!/\.docx$/i.test(f8.name)) return this.toast('Templates must be .docx files', 'error');
+        if (f8.size > 20 * 1024 * 1024) return this.toast('The template must be under 20 MB', 'error');
+        this.setState({ propTplBusy: true });
+        const rd8 = new FileReader();
+        rd8.onload = () => {
+          const t9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/proposal-templates', { method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+            // Named from the file, which is what the person just chose it by. Renaming is an edit
+            // they can make later; being asked to name it twice is friction now.
+            body: JSON.stringify({ name: f8.name.replace(/\.docx$/i, ''), data: rd8.result }) })
+            .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
+            .then(({ ok, j8 }) => {
+              this.setState({ propTplBusy: false });
+              if (!ok) return this.toast(j8.error || 'That template could not be read', 'error');
+              this.toast(j8.name + ' added · ' + ((j8.tokens || []).length) + ' field(s) found');
+              this._load('/api/proposal-templates', 'propTemplates', (v8) => this.setState({ propTemplates: v8 }));
+            })
+            .catch(() => { this.setState({ propTplBusy: false }); this.toast('Server unreachable'); });
+        };
+        rd8.readAsDataURL(f8);
+      },
       orgLogoPick: (ev2) => this._uploadLogo(ev2, 'org-logo', 'logoUrl'),
       loginLogoPick: (ev2) => this._uploadLogo(ev2, 'login-logo', 'loginLogoUrl'),
     };
@@ -35154,6 +35285,21 @@ class Component extends DCLogic {
             : 'Nothing has been quoted. The value above is an estimate somebody typed, not a figure this client has been given.',
           ddCanQuote: canWrite && !q9 && !term9,
           ddQuote: () => { close9(); this._quoteDeal(D9.id, D9.title); },
+          // THE PROPOSAL, FROM THE DEAL. The lead becomes a deal, the deal gets a quotation, and the
+          // quotation is what the proposal is made of — so this is the same download the Quotations
+          // list offers, reachable where the salesperson actually is.
+          ddCanProposal: !!(q9 && q9.id) && _propTemplates.length > 0,
+          ddNoTemplates: !!(q9 && q9.id) && _propTemplates.length === 0,
+          ddProposalTitle: _propTemplates.length === 1
+            ? ('Fill in “' + _propTemplates[0].name + '” with this quotation')
+            : 'Choose a template and fill it in with this quotation',
+          ddProposal: () => {
+            if (!q9 || !q9.id) return;
+            const chosen9 = (q9.templateId && _propTemplates.find(t9 => t9.id === q9.templateId))
+              || (_propTemplates.length === 1 ? _propTemplates[0] : null);
+            if (!chosen9) { close9(); return this.setState({ active: 'Quotations', activeGroup: 'Finance', propPick: { quotationId: q9.id, number: q9.number || '', client: D9.clientName || '' } }); }
+            this._downloadProposal(q9.id, chosen9.id);
+          },
           ddStages: (D9.stages || []).slice().sort((a, b) => a.sort - b.sort).map(x => {
             const isCur = x.id === D9.stageId;
             const passed = !!(cur9 && x.sort < cur9.sort);
@@ -36792,6 +36938,24 @@ class Component extends DCLogic {
         // Client as its own column with an initials chip, matching the invoice list.
         client: cli0,
         initials: String(cli0).split(' ').filter(Boolean).map(w9 => w9[0]).slice(0, 2).join('').toUpperCase() || '—',
+        // PROPOSAL — the firm's own .docx, filled in from this quotation.
+        //
+        // Offered only when a template has been uploaded, because the button is otherwise an
+        // invitation to an error message. The download is a GET, so it is a plain link rather than
+        // a fetch: the browser names the file from the server's Content-Disposition and nothing has
+        // to be held in memory.
+        canProposal: _propTemplates.length > 0 && !!realId,
+        proposalTitle: _propTemplates.length === 1
+          ? ('Download the proposal — ' + _propTemplates[0].name)
+          : 'Download the proposal',
+        proposal: () => {
+          if (!realId) return;
+          const tpl9 = (raw0 && raw0.templateId && _propTemplates.find(t9 => t9.id === raw0.templateId))
+            || (_propTemplates.length === 1 ? _propTemplates[0] : null);
+          // More than one template and nothing chosen yet: ask, rather than picking for them.
+          if (!tpl9) return this.setState({ propPick: { quotationId: realId, number: id, client: cli0 } });
+          this._downloadProposal(realId, tpl9.id);
+        },
         when: (raw0 && raw0.date) ? ((['draft', 'approved'].includes(rawSt) ? 'created ' : 'sent ') + raw0.date) : '—',
         validLabel: (raw0 && raw0.validUntil) ? 'valid to ' + raw0.validUntil : '',
         hasValid: !!(raw0 && raw0.validUntil),
@@ -37087,6 +37251,19 @@ class Component extends DCLogic {
         qvInvoice: () => { this.setState({ qtView: null }); qtViewRow.convert(); },
       } : {}),
       quotes: quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter),
+      // Only asked when there is a real choice to make; one template downloads straight away.
+      showPropPick: !!this.state.propPick,
+      propPickSub: this.state.propPick
+        ? (this.state.propPick.number + ' · ' + (this.state.propPick.client || 'client'))
+        : '',
+      propPickOptions: _propTemplates.map(t9 => ({
+        name: t9.name,
+        meta: ((t9.tokens || []).length + ' field' + ((t9.tokens || []).length === 1 ? '' : 's')
+               + ' · ' + Math.round((t9.size || 0) / 1024) + ' KB'),
+        pick: () => this._downloadProposal(this.state.propPick.quotationId, t9.id),
+      })),
+      closePropPick: () => this.setState({ propPick: null }),
+      stopProp: (e9) => { if (e9 && e9.stopPropagation) e9.stopPropagation(); },
       quotesEmpty: quotes.length === 0,
       qtTabs,
       qtAwaiting: fmtCur(_qtSum(q9 => q9.status === 'sent' && _qtLive(q9))),
