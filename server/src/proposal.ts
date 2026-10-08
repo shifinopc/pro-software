@@ -25,6 +25,23 @@ export async function tokensIn(docx: Buffer): Promise<string[]> {
   return [...new Set(tags.map(t => t.name).filter(Boolean))].sort();
 }
 
+/**
+ * A template's own stored values, as the `param.*` tokens the document asks for.
+ *
+ * Merged over the quotation's data at render time rather than inside `proposalData`, because these
+ * belong to the TEMPLATE and `proposalData` is given a quotation. Values are stringified: a number
+ * typed into a form arrives as a string anyway, and a document prints text.
+ */
+export function paramTokens(params: unknown): Record<string, string> {
+  if (!params || typeof params !== "object" || Array.isArray(params)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params as Record<string, unknown>)) {
+    if (v === null || v === undefined) continue;
+    out[`param.${k}`] = String(v);
+  }
+  return out;
+}
+
 export async function renderDocx(docx: Buffer, data: Record<string, unknown>): Promise<Buffer> {
   return handler.process(docx, data as any);
 }

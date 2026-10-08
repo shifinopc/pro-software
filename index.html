@@ -8041,6 +8041,19 @@
                           <!-- What kind of work this proposal is for. Typed by the firm, because the
                                kinds of work it sells are not knowable in advance. -->
                           <input value="{{ t.appliesTo }}" onChange="{{ t.setAppliesTo }}" onBlur="{{ t.saveAppliesTo }}" placeholder="Used for… e.g. business setup, MISA, CR" style="margin-top:7px; width:100%; max-width:420px; border:1px solid #F0EDF6; border-radius:9px; padding:7px 10px; font-size:11.5px; background:#FBFAFD; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                          <!-- The template's OWN numbers. Shown only when the document asks for
+                               them, because a box for a value no document uses is a question
+                               nobody can answer. -->
+                          <sc-if value="{{ t.hasParams }}" hint-placeholder-val="{{ false }}">
+                            <div style="margin-top:9px; display:flex; flex-wrap:wrap; gap:7px;">
+                              <sc-for list="{{ t.params }}" as="pr" hint-placeholder-count="2">
+                                <div style="display:flex; align-items:center; gap:6px; background:#FBFAFD; border:1px solid #F0EDF6; border-radius:9px; padding:5px 9px;">
+                                  <span style="font-size:10.5px; color:#8C8899; white-space:nowrap;">{{ pr.label }}</span>
+                                  <input value="{{ pr.value }}" onChange="{{ pr.set }}" onBlur="{{ pr.save }}" placeholder="{{ pr.hint }}" style="width:76px; border:none; background:transparent; font-size:11.5px; font-weight:600; font-family:inherit; color:#1A1523; padding:1px 0;" style-focus="outline:none;">
+                                </div>
+                              </sc-for>
+                            </div>
+                          </sc-if>
                         </div>
                         <sc-if value="{{ t.canDefault }}" hint-placeholder-val="{{ true }}">
                           <span onClick="{{ t.makeDefault }}" title="Use this one when nothing matches" class="row-ic" style-hover="background:#F5EEFF; color:#7C00FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg></span>
@@ -28885,6 +28898,27 @@ class Component extends DCLogic {
           this._savePropTpl(t8.id, { appliesTo: v8 }, 'Saved what ' + t8.name + ' is used for');
         },
         makeDefault: () => this._savePropTpl(t8.id, { isDefault: true }, t8.name + ' is now the default'),
+        // Every param.* the DOCUMENT asks for, whether or not a value has been saved for it — the
+        // ones with nothing behind them are exactly the ones worth seeing, since they are what
+        // prints as a gap in a sentence.
+        hasParams: (t8.tokens || []).some(k8 => String(k8).startsWith('param.')),
+        params: (t8.tokens || []).filter(k8 => String(k8).startsWith('param.')).sort().map(k8 => {
+          const key8 = String(k8).slice(6);
+          const saved8 = (t8.params && typeof t8.params === 'object') ? t8.params[key8] : '';
+          const sk8 = 'tplP_' + t8.id + '_' + key8;
+          return {
+            // "extraVisaFee" reads as "extra visa fee" to everyone except the person who typed it.
+            label: key8.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, c8 => c8.toUpperCase()),
+            value: this.state[sk8] !== undefined ? this.state[sk8] : (saved8 == null ? '' : String(saved8)),
+            hint: 'not set',
+            set: (e8) => this.setState({ [sk8]: e8.target.value }),
+            save: () => {
+              const v8 = this.state[sk8];
+              if (v8 === undefined || String(v8) === String(saved8 == null ? '' : saved8)) return;
+              this._savePropTpl(t8.id, { params: { [key8]: v8 } }, 'Saved ' + key8);
+            },
+          };
+        }),
         // What it ASKS FOR, because a template whose tokens do not match the data is the one failure
         // mode here and it is invisible until somebody sends the document.
         meta: ((t8.tokens || []).length + ' field' + ((t8.tokens || []).length === 1 ? '' : 's')

@@ -79,7 +79,7 @@ import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
-import { tokensIn, renderDocx, proposalData, docxToPdf } from "./proposal.js";
+import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -6192,6 +6192,21 @@ app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRo
     data.name = name;
   }
   if (req.body?.appliesTo !== undefined) data.appliesTo = parseAppliesTo(req.body.appliesTo);
+  if (req.body?.params !== undefined) {
+    const v = req.body.params;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return res.status(400).json({ error: "params must be an object" });
+    // MERGED, not replaced: the screen saves one box at a time, and a whole-object write would
+    // clear every other value each time somebody edited a single number.
+    const was = (t.params && typeof t.params === "object" && !Array.isArray(t.params)) ? t.params as any : {};
+    const merged: any = { ...was };
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      const key = String(k).replace(/^param\./, "").trim();
+      if (!key) continue;
+      if (val === null || String(val) === "") delete merged[key];
+      else merged[key] = String(val).slice(0, 200);
+    }
+    data.params = merged;
+  }
   if (req.body?.isDefault === true) {
     // Exactly one default. Cleared across the board first, so two rows can never both claim it —
     // which would make which document goes out depend on row order.
@@ -6250,7 +6265,8 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     });
     if (!data) return res.status(404).json({ error: "Quotation not found" });
 
-    const docx = await renderDocx(fs.readFileSync(file), data);
+    // The template's own numbers last, so a document asking for {{param.extraVisaFee}} gets one.
+    const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
 
     // `?format=pdf` for the preview, and for anybody who would rather send something the client
     // cannot accidentally edit. Falls back to the .docx when LibreOffice is not installed rather
@@ -6345,7 +6361,7 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
 
     const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid });
     if (!data) return res.status(404).json({ error: "Quotation not found" });
-    const docx = await renderDocx(fs.readFileSync(file), data);
+    const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
     // PDF by default when the firm can make one: a client who receives a .docx can edit the offer,
     // and the copy they quote back at you later should be the one that was sent.
     const asDocx = String(req.body?.format ?? "").toLowerCase() === "docx";
