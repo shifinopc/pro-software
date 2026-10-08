@@ -3566,7 +3566,7 @@
                   </div>
 
                   <div style="flex:1; min-height:0; overflow:auto; padding:16px 22px 18px;">
-                    <sc-for list="{{ ppFacts }}" as="f" hint-placeholder-count="5">
+                    <sc-for list="{{ ppFacts }}" as="f" hint-placeholder-count="3">
                       <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid #FAF8FC;">
                         <span style="font-size:11px; color:#A9A6B4; flex-shrink:0;">{{ f.k }}</span>
                         <span style="font-size:12.5px; font-weight:650; color:{{ f.color }}; text-align:right;">{{ f.v }}</span>
@@ -3584,6 +3584,20 @@
                         </sc-for>
                       </div>
                     </sc-if>
+
+                    <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">ON THE DOCUMENT</div>
+                    <input value="{{ ppBy }}" onChange="{{ setPpBy }}" placeholder="Presented by" style="margin-top:7px; border:1px solid transparent; border-radius:10px; padding:9px 11px; font-size:12.5px; background:#F6F4FA; width:100%; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                    <div style="display:flex; gap:7px; margin-top:7px;">
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:10px; color:#A9A6B4; margin-bottom:3px;">Date</div>
+                        <input type="date" value="{{ ppDate }}" onChange="{{ setPpDate }}" style="border:1px solid transparent; border-radius:10px; padding:9px 11px; font-size:12.5px; background:#F6F4FA; width:100%; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                      </div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:10px; color:#A9A6B4; margin-bottom:3px;">Valid until</div>
+                        <input type="date" value="{{ ppValid }}" onChange="{{ setPpValid }}" style="border:1px solid transparent; border-radius:10px; padding:9px 11px; font-size:12.5px; background:#F6F4FA; width:100%; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                      </div>
+                    </div>
+                    <sc-if value="{{ ppDirty }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; font-size:10.5px; color:#8C8899; line-height:1.4;">The preview shows what will be sent. Emailing it saves these onto the quotation.</div></sc-if>
 
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:16px;">
                       <span style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL TO</span>
@@ -17728,6 +17742,11 @@ class Component extends DCLogic {
         // Prefilled from the client record, and editable: the person who should receive a proposal
         // is often not the address on file.
         to: (raw && raw.clientEmail) || '',
+        // Prefilled so the common case needs no typing: the quotation's own creator, or — for the
+        // older rows that never recorded one — whoever is signed in and about to send it.
+        presentedBy: (raw && raw.createdByName) || (this.state.meUser || {}).name || '',
+        docDate: (raw && raw.date) || new Date().toISOString().slice(0, 10),
+        docValid: (raw && raw.validUntil) || '',
         msg: '', err: '', busy: false,
         total: (raw && raw.total) || '', validUntil: (raw && raw.validUntil) || '',
         status: (raw && raw.status) || '',
@@ -17749,8 +17768,15 @@ class Component extends DCLogic {
       const tok = localStorage.getItem('stimespro:token');
       // Sequenced, so switching template twice quickly cannot leave the slower answer on screen.
       const seq = (this._ppSeq = (this._ppSeq || 0) + 1);
+      // The typed-in values ride along as query parameters. The route reads them and writes nothing,
+      // so the preview can follow the edits without every keystroke touching the record.
+      const ov = this.state.propPick || {};
+      const qs = ['presentedBy', 'date', 'validUntil']
+        .map((k, i) => [k, [ov.presentedBy, ov.docDate, ov.docValid][i]])
+        .filter(([, v]) => v)
+        .map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
-            + '/proposal?format=pdf&templateId=' + encodeURIComponent(templateId),
+            + '/proposal?format=pdf&templateId=' + encodeURIComponent(templateId) + qs,
         { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
         .then(r => {
           if (!r.ok) return r.json().catch(() => ({})).then(j => { throw new Error(j.error || 'It could not be built'); });
@@ -17768,6 +17794,17 @@ class Component extends DCLogic {
         })
         .then(b => { if (seq !== this._ppSeq) return; set({ previewBusy: false, previewUrl: URL.createObjectURL(b) }); })
         .catch(e => { if (seq !== this._ppSeq) return; set({ previewBusy: false, previewWhy: e.message || 'It could not be built' }); });
+    });
+
+    // Rebuilding on every keystroke would mean a LibreOffice run per letter typed — the conversion
+    // takes about six seconds on the live box. So the edit lands in the field at once and the
+    // document redraws once the typing stops.
+    this._ppTouch = this._ppTouch || (() => {
+      clearTimeout(this._ppTimer);
+      this._ppTimer = setTimeout(() => {
+        const P9 = this.state.propPick;
+        if (P9 && P9.templateId) this._buildPreview(P9.quotationId, P9.templateId);
+      }, 650);
     });
 
     this._downloadProposal = this._downloadProposal || ((quotationId, templateId) => {
@@ -37401,8 +37438,6 @@ class Component extends DCLogic {
             ['Client', P.client || q8.clientName || '—', !!(P.client || q8.clientName)],
             ['Lines', lines8 ? (lines8 + ' service' + (lines8 === 1 ? '' : 's')) : 'none yet', lines8 > 0],
             ['Total', cur8 + ' ' + tot8.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), tot8 > 0],
-            ['Valid until', q8.validUntil || 'not set', !!q8.validUntil],
-            ['Presented by', q8.createdByName || 'not recorded', !!q8.createdByName],
           ].map(([k, v, known]) => ({ k, v, color: known ? '#1A1523' : '#A9A6B4' })),
           ppPreviewReady: !!P.previewUrl,
           ppPreviewUrl: P.previewUrl || 'about:blank',
@@ -37418,6 +37453,20 @@ class Component extends DCLogic {
             bg: t9.id === tplId ? '#FBF7FF' : '#fff',
             pick: () => { set({ templateId: t9.id, err: '' }); this._buildPreview(P.quotationId, t9.id); },
           })),
+          // The three things the document says about itself. They were read-only facts, which was no
+          // help at all on the quotations that have no creator recorded and no validity date: the
+          // proposal printed "Presented by :" and then a blank, and the only way to change it was to
+          // go and edit the quotation. Typed here they take effect in the preview immediately, and
+          // are written back to the quotation only when it is actually sent.
+          ppBy: P.presentedBy || '',
+          setPpBy: (e9) => { set({ presentedBy: e9.target.value, err: '' }); this._ppTouch(); },
+          ppDate: P.docDate || '',
+          setPpDate: (e9) => { set({ docDate: e9.target.value, err: '' }); this._ppTouch(); },
+          ppValid: P.docValid || '',
+          setPpValid: (e9) => { set({ docValid: e9.target.value, err: '' }); this._ppTouch(); },
+          ppDirty: (P.presentedBy || '') !== (q8.createdByName || '')
+                || (P.docDate || '') !== (q8.date || '')
+                || (P.docValid || '') !== (q8.validUntil || ''),
           ppTo: P.to || '',
           setPpTo: (e9) => set({ to: e9.target.value, err: '' }),
           // Hidden until asked for. Most proposals go to one person, and a second always-visible
@@ -37444,7 +37493,8 @@ class Component extends DCLogic {
             const tok8 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + P.quotationId + '/proposal/email',
               { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok8 ? { Authorization: 'Bearer ' + tok8 } : {}) },
-                body: JSON.stringify({ templateId: t8, to: to8, cc: P.cc || '', message: P.msg || '' }) })
+                body: JSON.stringify({ templateId: t8, to: to8, cc: P.cc || '', message: P.msg || '',
+                                       presentedBy: P.presentedBy || '', date: P.docDate || '', validUntil: P.docValid || '' }) })
               .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
               .then(({ ok, j8 }) => {
                 if (!ok) return set({ busy: false, err: (j8 && j8.error) || 'It could not be sent.' });

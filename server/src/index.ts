@@ -6179,7 +6179,13 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     const file = path.join(TEMPLATE_DIR, tpl.file);
     if (!fs.existsSync(file)) return res.status(410).json({ error: "The template file is missing from the server" });
 
-    const data = await proposalData(q.id);
+    // Overrides from the dialog, so the preview shows what will be printed while somebody is still
+    // typing. Still a read: nothing here touches the quotation.
+    const data = await proposalData(q.id, {
+      presentedBy: String(req.query.presentedBy ?? "") || null,
+      date: String(req.query.date ?? "") || null,
+      validUntil: String(req.query.validUntil ?? "") || null,
+    });
     if (!data) return res.status(404).json({ error: "Quotation not found" });
 
     const docx = await renderDocx(fs.readFileSync(file), data);
@@ -6249,7 +6255,22 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     const badCc = cc.filter(a => !looksLikeEmail(a));
     if (badCc.length) return res.status(400).json({ error: `Not an email address: ${badCc.join(", ")}` });
 
-    const data = await proposalData(q.id);
+    // What the sender typed into the dialog, printed on the document now and written onto the
+    // quotation once it has actually gone — see the update below. A document in a client's inbox and
+    // the record behind it must not disagree, but neither should a send that failed leave the
+    // quotation carrying a date nobody has seen.
+    const presentedBy = String(req.body?.presentedBy ?? "").trim();
+    // undefined means it threw and the 400 has already gone out.
+    const wantDate = isoDateOr400(res, req.body?.date || undefined, "Date");
+    if (wantDate === undefined) return;
+    const wantValid = isoDateOr400(res, req.body?.validUntil || undefined, "Valid until");
+    if (wantValid === undefined) return;
+    const typed: any = {};
+    if (presentedBy && presentedBy !== q.createdByName) typed.createdByName = presentedBy;
+    if (wantDate && wantDate !== q.date) typed.date = wantDate;
+    if (wantValid && wantValid !== q.validUntil) typed.validUntil = wantValid;
+
+    const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid });
     if (!data) return res.status(404).json({ error: "Quotation not found" });
     const docx = await renderDocx(fs.readFileSync(file), data);
     // PDF by default when the firm can make one: a client who receives a .docx can edit the offer,
@@ -6301,10 +6322,13 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     // Released only once the mail is actually away. The other order would mark it sent and then
     // fail, leaving a client who has been told nothing looking at a record that says otherwise.
     let released = false;
+    const after: any = { ...typed };
     if (["draft", "approved"].includes(String(q.status ?? "").toLowerCase())) {
-      await prisma.quotation.update({ where: { id: q.id }, data: { status: "sent", sentAt: new Date().toISOString() } });
+      Object.assign(after, { status: "sent", sentAt: new Date().toISOString() });
       released = true;
     }
+    // One update, so the record cannot end up half-changed: the typed fields land with the release.
+    if (Object.keys(after).length) await prisma.quotation.update({ where: { id: q.id }, data: after });
     logActivity({ type: "client", message: `Proposal ${q.number ?? ""} emailed to ${q.clientName ?? to}`, user: who || undefined });
     await logAudit({ action: "proposal.emailed", actorId: (req as any).auth?.sub,
       target: `${q.number ?? ""} \u00b7 ${to}${cc.length ? ` (cc ${cc.join(", ")})` : ""}`,

@@ -162,9 +162,20 @@ const fmtLong = (iso?: string | null) => {
  * a token nobody uses is nothing, while the cost of missing one is a document that cannot be
  * produced until a developer adds a line here.
  */
-export async function proposalData(quotationId: string): Promise<Record<string, unknown> | null> {
+/**
+ * `overrides` are what the person typed in the proposal dialog but has not committed to the
+ * quotation yet. The preview has to show what WILL be printed while they are still editing, and
+ * writing to the record on every keystroke to achieve that would be the wrong trade.
+ */
+export async function proposalData(
+  quotationId: string,
+  overrides?: { presentedBy?: string | null; date?: string | null; validUntil?: string | null },
+): Promise<Record<string, unknown> | null> {
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return null;
+  const o = overrides ?? {};
+  const ovDate = o.date?.trim() || q.date;
+  const ovValid = o.validUntil?.trim() || q.validUntil;
 
   const co = q.companyId ? await prisma.company.findUnique({ where: { id: q.companyId } }) : null;
   const org = (await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any ?? {};
@@ -193,6 +204,9 @@ export async function proposalData(quotationId: string): Promise<Record<string, 
     ?? (q.createdByName ? { name: q.createdByName, email: "" } : null)
     ?? officer
     ?? ((org.legalName ?? org.orgName) ? { name: String(org.legalName ?? org.orgName), email: "" } : null);
+  // Typed in the dialog wins over all of it: the person sending it knows whose name belongs on
+  // the document better than any record does.
+  const presentedBy = o.presentedBy?.trim() || owner?.name || "";
 
   const rawItems: any[] = Array.isArray(q.items) ? (q.items as any[]) : [];
   const items = rawItems.map((it, i) => {
@@ -243,7 +257,7 @@ export async function proposalData(quotationId: string): Promise<Record<string, 
     "client.email": co?.email ?? "",
     "client.phone": co?.phone ?? "",
 
-    "owner.name": owner?.name ?? org.orgName ?? "",
+    "owner.name": presentedBy,
     "owner.email": owner?.email ?? "",
 
     "org.name": org.legalName ?? org.orgName ?? "",
@@ -252,10 +266,10 @@ export async function proposalData(quotationId: string): Promise<Record<string, 
     "org.phone": org.supportPhone ?? "",
 
     "proposal.ref": q.number ?? "",
-    "proposal.date": fmtDots(q.date),
-    "proposal.dateLong": fmtLong(q.date),
-    "proposal.validUntil": fmtLong(q.validUntil),
-    "proposal.validUntilShort": fmtDots(q.validUntil),
+    "proposal.date": fmtDots(ovDate),
+    "proposal.dateLong": fmtLong(ovDate),
+    "proposal.validUntil": fmtLong(ovValid),
+    "proposal.validUntilShort": fmtDots(ovValid),
     "proposal.subject": q.service ?? "",
     "proposal.notes": q.notes ?? "",
 
