@@ -52,19 +52,41 @@ export async function docxToPdf(docx: Buffer): Promise<Buffer | null> {
   const path = await import("node:path");
   const run = promisify(execFile);
 
+  // WHERE SOFFICE IS. On the deployed image it is on PATH; on a developer's Windows machine it is
+  // not, and `soffice` there is a silent ENOENT that looks exactly like "this server cannot convert"
+  // — which is what the console then tells somebody who has LibreOffice installed and can see it.
+  // SOFFICE_PATH wins, then PATH, then the two places the Windows installer actually uses.
+  const candidates = [
+    process.env.SOFFICE_PATH,
+    "soffice",
+    "C:\Program Files\LibreOffice\program\soffice.exe",
+    "C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+  ].filter(Boolean) as string[];
+
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "proposal-"));
   const src = path.join(dir, "in.docx");
   try {
     await fs.writeFile(src, docx);
-    await run("soffice", [
-      `-env:UserInstallation=file://${path.join(dir, "profile")}`,
-      "--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, src,
-    ], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
-    return await fs.readFile(path.join(dir, "in.pdf"));
-  } catch (e: any) {
-    // ENOENT is "not installed", which is a configuration fact rather than a fault; anything else is
-    // worth seeing in the log, because a conversion that fails silently looks like a slow preview.
-    if (e?.code !== "ENOENT") console.error("[proposal] could not convert to PDF:", e?.message ?? e);
+    let lastErr: any = null;
+    for (const bin of candidates) {
+      try {
+        await run(bin, [
+          `-env:UserInstallation=file://${path.join(dir, "profile")}`,
+          "--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, src,
+        ], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
+        return await fs.readFile(path.join(dir, "in.pdf"));
+      } catch (e: any) {
+        lastErr = e;
+        // ENOENT means "not at this path" — try the next one. Anything else is a real failure of a
+        // converter that IS there, so stop rather than hiding it behind three more attempts.
+        if (e?.code !== "ENOENT") break;
+      }
+    }
+    // A conversion that fails silently looks like a slow preview, so say so once — except for the
+    // ordinary case of nothing being installed, which is configuration rather than fault.
+    if (lastErr && lastErr.code !== "ENOENT") {
+      console.error("[proposal] could not convert to PDF:", lastErr?.message ?? lastErr);
+    }
     return null;
   } finally {
     await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
