@@ -15742,6 +15742,27 @@ class Component extends DCLogic {
       // listener watching only the token reads the previous person's name and the banner names the
       // wrong one. Watching both means the later write corrects it, and the flag carries no name of
       // its own — the banner reads the name when it draws.
+      // AND WHENEVER THE TAB IS LOOKED AT AGAIN.
+      //
+      // Two holes the storage event alone leaves. A background tab has its timers throttled by the
+      // browser — after five minutes hidden, a one-second interval fires about once a MINUTE — so a
+      // countdown started while hidden can still be running when somebody switches back to it. And
+      // a tab restored from the back/forward cache, or one that was asleep, may never have seen the
+      // event at all.
+      //
+      // Coming back to a tab is also the only moment the delay is worth anything: the five seconds
+      // exist so somebody mid-keystroke can read what happened, and nobody is mid-keystroke in a
+      // tab they have just returned to. So this reloads at once rather than resuming the count.
+      const _catchUp9 = () => {
+        if (document.visibilityState !== 'visible') return;
+        if (!window.__stimesTabMismatch()) return;
+        try { sessionStorage.removeItem(PIN_K); } catch (e8) {}
+        location.reload();
+      };
+      document.addEventListener('visibilitychange', _catchUp9);
+      window.addEventListener('focus', _catchUp9);
+      window.addEventListener('pageshow', _catchUp9);   // back/forward cache
+
       window.addEventListener('storage', (e9) => {
         if (e9.key && e9.key !== TOK_K && e9.key !== 'stimespro:user') return;
         if (window.__stimesTabMismatch()) {
