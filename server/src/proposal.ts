@@ -61,7 +61,6 @@ export async function renderDocx(docx: Buffer, data: Record<string, unknown>): P
  * Returns null rather than throwing when LibreOffice is absent: an installation without it should
  * still be able to download the .docx, which is what it did before this existed.
  */
-let warmProfile: string | null = null;   // the profile a resident LibreOffice is holding open
 let converting: Promise<unknown> = Promise.resolve();   // conversions run one at a time
 
 /** Where soffice is: the env override, then PATH, then where the Windows installer puts it. */
@@ -69,57 +68,15 @@ function sofficeCandidates(): string[] {
   return [
     process.env.SOFFICE_PATH,
     "soffice",
-    "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
-    "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
+    "C:\Program Files\LibreOffice\program\soffice.exe",
+    "C:\Program Files (x86)\LibreOffice\program\soffice.exe",
   ].filter(Boolean) as string[];
 }
 
-/**
- * Start a LibreOffice that stays running, and leave it running.
- *
- * MEASURED on the live box, converting the real 2.8 MB proposal: 5,961 ms with a brand-new profile,
- * 5,171 ms reusing one, and 3,634 ms when an instance was already up holding that profile. The same
- * conversion of a one-line text file took 1,598 ms, which is what starting LibreOffice costs before
- * it has looked at the document at all. Paying that on every preview, forever, is the waste.
- *
- * Spawned detached and unref'd: it is deliberately not a child whose life is tied to a request.
- * Failing to start is not an error — the conversion simply runs the way it always did, slower.
- */
-async function ensureWarm(dir: string): Promise<void> {
-  if (warmProfile === dir) return;
-  const { spawn } = await import("node:child_process");
-  const { pathToFileURL } = await import("node:url");
-  for (const bin of sofficeCandidates()) {
-    try {
-      const child = spawn(bin, [
-        `-env:UserInstallation=${pathToFileURL(dir).href}`,
-        "--headless", "--invisible", "--nologo", "--nodefault", "--norestore",
-        "--accept=socket,host=127.0.0.1,port=2002;urp;",
-      ], { detached: true, stdio: "ignore" });
-      child.unref();
-      // It needs a moment to be listening; a conversion fired at it before then just pays the
-      // ordinary startup instead, which is the behaviour we already had.
-      await new Promise(r => setTimeout(r, 2500));
-      warmProfile = dir;
-      return;
-    } catch (e: any) {
-      if (e?.code !== "ENOENT") break;   // it is there and refused: do not try the next path
-    }
-  }
-}
-
-/** Stop whatever LibreOffice we started, so the next attempt begins from nothing. */
-async function dropWarm(): Promise<void> {
-  warmProfile = null;
-  try {
-    const fs = await import("node:fs");
-    for (const d of fs.readdirSync("/proc")) {
-      if (!/^\d+$/.test(d)) continue;
-      let cmd = "";
-      try { cmd = fs.readFileSync(`/proc/${d}/cmdline`, "utf8"); } catch { continue; }
-      if (/soffice|oosplash/.test(cmd)) { try { process.kill(Number(d), "SIGKILL"); } catch { /* gone */ } }
-    }
-  } catch { /* not Linux, or no /proc — the stale instance will simply be reused or ignored */ }
+/** Throw away the shared profile, so the next conversion starts from a clean one. */
+async function resetProfile(dir: string): Promise<void> {
+  const fs = await import("node:fs/promises");
+  await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
 }
 
 /**
@@ -129,9 +86,20 @@ async function dropWarm(): Promise<void> {
  * the one thing this feature promised not to touch. It is driven as a command rather than a library
  * since there is no binding worth the dependency.
  *
- * ONE AT A TIME. Conversions are chained onto a single promise instead of running concurrently:
- * they share one LibreOffice now, and the box has two cores, so two renders at once would be slower
- * than two in a row as well as racing for the same profile.
+ * WHAT THE FOUR SECONDS ARE, measured on the live box with the real 2.8 MB proposal: 5,961 ms with
+ * a brand-new profile, 5,171 ms reusing one, and 1,598 ms of that is simply starting LibreOffice —
+ * a one-line text file costs the same to convert. The rest is the document, which is mostly
+ * oversized embedded images.
+ *
+ * Only the profile is recoverable here, and it is: one directory for the life of the process rather
+ * than a fresh one per request. (Leaving an instance RUNNING to skip the startup does not work —
+ * `soffice --convert-to` against a live instance shuts it down when it finishes, so the next
+ * conversion starts cold anyway, having paid for the spawn. Skipping the startup needs a UNO client
+ * that does not terminate the server, which is more machinery than this has earned.) The rest of
+ * the win is in not converting the same document twice — see the cache in the route.
+ *
+ * ONE AT A TIME. Conversions are chained onto a single promise: they share one profile now, and on
+ * two cores two renders at once would be slower than two in a row as well as racing for its lock.
  *
  * Returns null rather than throwing when LibreOffice is absent: an installation without it should
  * still be able to download the .docx, which is what it did before this existed.
@@ -157,7 +125,6 @@ async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | nu
   // does it without rebuilding the profile every time.
   const profile = path.join(os.tmpdir(), "stimes-lo-profile");
   await fs.mkdir(profile, { recursive: true }).catch(() => {});
-  await ensureWarm(profile);
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "proposal-"));
   const src = path.join(dir, "in.docx");
@@ -178,14 +145,14 @@ async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | nu
         if (e?.code !== "ENOENT") break;
       }
     }
-    // A RESIDENT INSTANCE CAN GO BAD — wedged, killed by the kernel for memory, left holding a lock
-    // after a crash — and every conversion after that would fail while the .docx itself is fine. So
-    // one failure throws the shared instance away and tries again from nothing, which is exactly
-    // the state this code was in before it had a warm instance at all.
+    // A SHARED PROFILE CAN GO BAD — a conversion killed half way through leaves a lock behind, and
+    // every conversion after it then fails while the .docx itself is perfectly fine. So one failure
+    // throws the profile away and tries again with a new one, which is the state this was in when
+    // it built a fresh profile every time.
     if (mayRetry && lastErr && lastErr.code !== "ENOENT") {
-      console.warn("[proposal] conversion failed, restarting LibreOffice and retrying once:", lastErr?.message ?? lastErr);
-      await dropWarm();
-      await fs.rm(profile, { recursive: true, force: true }).catch(() => {});
+      console.warn("[proposal] conversion failed; rebuilding the LibreOffice profile and retrying once:",
+                   lastErr?.message ?? lastErr);
+      await resetProfile(profile);
       return convertOnce(docx, false);
     }
     if (lastErr && lastErr.code !== "ENOENT") {
