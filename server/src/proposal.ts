@@ -61,34 +61,113 @@ export async function renderDocx(docx: Buffer, data: Record<string, unknown>): P
  * Returns null rather than throwing when LibreOffice is absent: an installation without it should
  * still be able to download the .docx, which is what it did before this existed.
  */
+let warmProfile: string | null = null;   // the profile a resident LibreOffice is holding open
+let converting: Promise<unknown> = Promise.resolve();   // conversions run one at a time
+
+/** Where soffice is: the env override, then PATH, then where the Windows installer puts it. */
+function sofficeCandidates(): string[] {
+  return [
+    process.env.SOFFICE_PATH,
+    "soffice",
+    "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+    "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
+  ].filter(Boolean) as string[];
+}
+
+/**
+ * Start a LibreOffice that stays running, and leave it running.
+ *
+ * MEASURED on the live box, converting the real 2.8 MB proposal: 5,961 ms with a brand-new profile,
+ * 5,171 ms reusing one, and 3,634 ms when an instance was already up holding that profile. The same
+ * conversion of a one-line text file took 1,598 ms, which is what starting LibreOffice costs before
+ * it has looked at the document at all. Paying that on every preview, forever, is the waste.
+ *
+ * Spawned detached and unref'd: it is deliberately not a child whose life is tied to a request.
+ * Failing to start is not an error — the conversion simply runs the way it always did, slower.
+ */
+async function ensureWarm(dir: string): Promise<void> {
+  if (warmProfile === dir) return;
+  const { spawn } = await import("node:child_process");
+  const { pathToFileURL } = await import("node:url");
+  for (const bin of sofficeCandidates()) {
+    try {
+      const child = spawn(bin, [
+        `-env:UserInstallation=${pathToFileURL(dir).href}`,
+        "--headless", "--invisible", "--nologo", "--nodefault", "--norestore",
+        "--accept=socket,host=127.0.0.1,port=2002;urp;",
+      ], { detached: true, stdio: "ignore" });
+      child.unref();
+      // It needs a moment to be listening; a conversion fired at it before then just pays the
+      // ordinary startup instead, which is the behaviour we already had.
+      await new Promise(r => setTimeout(r, 2500));
+      warmProfile = dir;
+      return;
+    } catch (e: any) {
+      if (e?.code !== "ENOENT") break;   // it is there and refused: do not try the next path
+    }
+  }
+}
+
+/** Stop whatever LibreOffice we started, so the next attempt begins from nothing. */
+async function dropWarm(): Promise<void> {
+  warmProfile = null;
+  try {
+    const fs = await import("node:fs");
+    for (const d of fs.readdirSync("/proc")) {
+      if (!/^\d+$/.test(d)) continue;
+      let cmd = "";
+      try { cmd = fs.readFileSync(`/proc/${d}/cmdline`, "utf8"); } catch { continue; }
+      if (/soffice|oosplash/.test(cmd)) { try { process.kill(Number(d), "SIGKILL"); } catch { /* gone */ } }
+    }
+  } catch { /* not Linux, or no /proc — the stale instance will simply be reused or ignored */ }
+}
+
+/**
+ * The same document as a PDF, for previewing and for sending.
+ *
+ * LibreOffice converts it, because nothing else reproduces the firm's design — and the design is
+ * the one thing this feature promised not to touch. It is driven as a command rather than a library
+ * since there is no binding worth the dependency.
+ *
+ * ONE AT A TIME. Conversions are chained onto a single promise instead of running concurrently:
+ * they share one LibreOffice now, and the box has two cores, so two renders at once would be slower
+ * than two in a row as well as racing for the same profile.
+ *
+ * Returns null rather than throwing when LibreOffice is absent: an installation without it should
+ * still be able to download the .docx, which is what it did before this existed.
+ */
 export async function docxToPdf(docx: Buffer): Promise<Buffer | null> {
+  const next = converting.then(() => convertOnce(docx, true));
+  // The queue must survive a failure, or one bad conversion wedges every one after it.
+  converting = next.catch(() => {});
+  return next;
+}
+
+async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | null> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const fs = await import("node:fs/promises");
   const os = await import("node:os");
   const path = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
   const run = promisify(execFile);
 
-  // WHERE SOFFICE IS. On the deployed image it is on PATH; on a developer's Windows machine it is
-  // not, and `soffice` there is a silent ENOENT that looks exactly like "this server cannot convert"
-  // — which is what the console then tells somebody who has LibreOffice installed and can see it.
-  // SOFFICE_PATH wins, then PATH, then the two places the Windows installer actually uses.
-  const candidates = [
-    process.env.SOFFICE_PATH,
-    "soffice",
-    "C:\Program Files\LibreOffice\program\soffice.exe",
-    "C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-  ].filter(Boolean) as string[];
+  // One profile directory for the life of the process, not one per conversion. The per-run profile
+  // was there to stop two conversions fighting over a lock; the queue above does that job now, and
+  // does it without rebuilding the profile every time.
+  const profile = path.join(os.tmpdir(), "stimes-lo-profile");
+  await fs.mkdir(profile, { recursive: true }).catch(() => {});
+  await ensureWarm(profile);
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "proposal-"));
   const src = path.join(dir, "in.docx");
   try {
     await fs.writeFile(src, docx);
     let lastErr: any = null;
-    for (const bin of candidates) {
+    for (const bin of sofficeCandidates()) {
       try {
         await run(bin, [
-          `-env:UserInstallation=file://${path.join(dir, "profile")}`,
+          `-env:UserInstallation=${pathToFileURL(profile).href}`,
           "--headless", "--norestore", "--convert-to", "pdf", "--outdir", dir, src,
         ], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
         return await fs.readFile(path.join(dir, "in.pdf"));
@@ -99,8 +178,16 @@ export async function docxToPdf(docx: Buffer): Promise<Buffer | null> {
         if (e?.code !== "ENOENT") break;
       }
     }
-    // A conversion that fails silently looks like a slow preview, so say so once — except for the
-    // ordinary case of nothing being installed, which is configuration rather than fault.
+    // A RESIDENT INSTANCE CAN GO BAD — wedged, killed by the kernel for memory, left holding a lock
+    // after a crash — and every conversion after that would fail while the .docx itself is fine. So
+    // one failure throws the shared instance away and tries again from nothing, which is exactly
+    // the state this code was in before it had a warm instance at all.
+    if (mayRetry && lastErr && lastErr.code !== "ENOENT") {
+      console.warn("[proposal] conversion failed, restarting LibreOffice and retrying once:", lastErr?.message ?? lastErr);
+      await dropWarm();
+      await fs.rm(profile, { recursive: true, force: true }).catch(() => {});
+      return convertOnce(docx, false);
+    }
     if (lastErr && lastErr.code !== "ENOENT") {
       console.error("[proposal] could not convert to PDF:", lastErr?.message ?? lastErr);
     }

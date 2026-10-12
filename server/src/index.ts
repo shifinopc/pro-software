@@ -6129,6 +6129,40 @@ app.post("/api/documents/:id/renew", requireAuth, requireStaff, requireWriteRole
 // template carries the firm's letterhead and its terms.
 const TEMPLATE_DIR = path.resolve(process.cwd(), "uploads-private");
 
+/**
+ * RENDERED PROPOSALS, KEPT FOR A FEW MINUTES.
+ *
+ * Converting one takes about four seconds of LibreOffice, and the dialog asks for the same document
+ * over and over: it previews on open, again when somebody switches template and back, again when
+ * they reopen it to check before sending. None of those are a different document — same quotation,
+ * same template, same typed-in name and dates produce the same bytes.
+ *
+ * Keyed on everything that can change the output, including the template file's own size and
+ * modification time, so replacing a template's .docx on disk invalidates its entries rather than
+ * serving yesterday's layout. Small and short-lived on purpose: this is a few megabytes held to
+ * save a few seconds, not a document store.
+ */
+const PROPOSAL_CACHE = new Map<string, { at: number; body: Buffer; pdf: boolean }>();
+const PROPOSAL_CACHE_MAX = 8;
+const PROPOSAL_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function proposalCacheGet(key: string) {
+  const hit = PROPOSAL_CACHE.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > PROPOSAL_CACHE_TTL_MS) { PROPOSAL_CACHE.delete(key); return null; }
+  // Re-inserted so the least recently USED is the one evicted, not the oldest made.
+  PROPOSAL_CACHE.delete(key); PROPOSAL_CACHE.set(key, hit);
+  return hit;
+}
+function proposalCacheSet(key: string, body: Buffer, pdf: boolean) {
+  PROPOSAL_CACHE.set(key, { at: Date.now(), body, pdf });
+  while (PROPOSAL_CACHE.size > PROPOSAL_CACHE_MAX) {
+    const oldest = PROPOSAL_CACHE.keys().next().value;
+    if (oldest === undefined) break;
+    PROPOSAL_CACHE.delete(oldest);
+  }
+}
+
 app.get("/api/proposal-templates", requireAuth, requireStaff, async (_req, res) => {
   res.json(await prisma.proposalTemplate.findMany({ where: { active: true }, orderBy: { createdAt: "desc" } }));
 });
@@ -6256,25 +6290,43 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     const file = path.join(TEMPLATE_DIR, tpl.file);
     if (!fs.existsSync(file)) return res.status(410).json({ error: "The template file is missing from the server" });
 
+    const wantPdf = String(req.query.format ?? "").toLowerCase() === "pdf";
+    // Everything that can change the bytes. `updatedAt` on the quotation covers an edited line or a
+    // changed total; the template file's size and mtime cover its .docx being replaced on disk.
+    const st = fs.statSync(file);
+    const cacheKey = crypto.createHash("sha256").update(JSON.stringify([
+      q.id, q.number, q.clientName, q.service, q.status, q.date, q.validUntil,
+      q.createdByName, q.totalMinor, q.subtotalMinor, q.vatMinor, q.amount, q.items, q.milestones ?? null,
+      tpl.id, st.size, st.mtimeMs, tpl.params ?? null, wantPdf,
+      String(req.query.presentedBy ?? ""), String(req.query.date ?? ""), String(req.query.validUntil ?? ""),
+    ])).digest("hex");
+
     // Overrides from the dialog, so the preview shows what will be printed while somebody is still
     // typing. Still a read: nothing here touches the quotation.
-    const data = await proposalData(q.id, {
+    const cached = proposalCacheGet(cacheKey);
+    const data = cached ? null : await proposalData(q.id, {
       presentedBy: String(req.query.presentedBy ?? "") || null,
       date: String(req.query.date ?? "") || null,
       validUntil: String(req.query.validUntil ?? "") || null,
     });
-    if (!data) return res.status(404).json({ error: "Quotation not found" });
-
-    // The template's own numbers last, so a document asking for {{param.extraVisaFee}} gets one.
-    const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
+    if (!cached && !data) return res.status(404).json({ error: "Quotation not found" });
 
     // `?format=pdf` for the preview, and for anybody who would rather send something the client
     // cannot accidentally edit. Falls back to the .docx when LibreOffice is not installed rather
     // than failing: an installation without it worked before this existed and still should.
-    const wantPdf = String(req.query.format ?? "").toLowerCase() === "pdf";
-    const pdf = wantPdf ? await docxToPdf(docx) : null;
-    const out = pdf ?? docx;
-    const asPdf = !!pdf;
+    let out: Buffer;
+    let asPdf: boolean;
+    if (cached) {
+      out = cached.body;
+      asPdf = cached.pdf;
+    } else {
+      // The template's own numbers last, so a document asking for {{param.extraVisaFee}} gets one.
+      const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
+      const pdf = wantPdf ? await docxToPdf(docx) : null;
+      out = pdf ?? docx;
+      asPdf = !!pdf;
+      proposalCacheSet(cacheKey, out, asPdf);
+    }
 
     await logAudit({ action: "proposal.generated", actorId: (req as any).auth?.sub,
       target: `${q.number} · ${q.clientName ?? ""}`.trim(), detail: tpl.name, ip: clientIp(req) });

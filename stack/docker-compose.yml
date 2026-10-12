@@ -80,6 +80,8 @@ services:
       OPENAI_COMPAT_TIMEOUT_MS: ${OPENAI_COMPAT_TIMEOUT_MS:-}
       # Built-in passport reader: OCR workers. Each adds ~130 MB; 2 reads a passport ~0.4 s faster.
       PASSPORT_OCR_WORKERS: ${PASSPORT_OCR_WORKERS:-1}
+      # Where LibreOffice is, for turning a proposal into a PDF. On this image it is on PATH.
+      SOFFICE_PATH: ${SOFFICE_PATH:-soffice}
       NODE_ENV: production
       PORT: 4100
     volumes:
@@ -106,7 +108,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          # 768M, up from 512M: a LibreOffice kept running between conversions idles at about
+          # 150 MiB, and a conversion peaks on top of that. The old ceiling left no room for both,
+          # and the kernel killing the converter mid-proposal would look like a broken preview.
+          memory: 768M
 
   web:
     build:
