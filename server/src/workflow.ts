@@ -2269,13 +2269,21 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   // Three rows reading "Create Employee Profile · 24h left · — · workflow" are indistinguishable, and
   // a compliance row beside them names its person because a document carries one. A run carries the
   // applicant in its variables and nothing was reading it.
-  const insts = await prisma.workflowInstance.findMany({ where: { id: { in: instIds } }, select: { id: true, title: true, clientName: true, variables: true } });
+  // `template` comes too, so a list of work can be narrowed to one WORKFLOW rather than one run.
+  // The run's own title is per client — "misa renewal" for this one, something else for the next —
+  // so grouping on it would make as many groups as there are cases, which is not a filter.
+  const insts = await prisma.workflowInstance.findMany({
+    where: { id: { in: instIds } },
+    select: { id: true, title: true, clientName: true, variables: true, templateId: true,
+              template: { select: { name: true } } },
+  });
   const imap = Object.fromEntries(insts.map(i => [i.id, i]));
   res.json(mine.map(t => {
     const inst = imap[t.instanceId] as any;
     const v = (inst?.variables && typeof inst.variables === "object") ? inst.variables : {};
     const subject = String(v.applicant ?? v.employee ?? v.person ?? "").trim() || null;
-    return { ...t, instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject } : undefined };
+    return { ...t, instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject,
+                                      templateId: inst.templateId, workflow: inst.template?.name ?? null } : undefined };
   }));
 });
 /**

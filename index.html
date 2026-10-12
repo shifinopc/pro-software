@@ -3070,6 +3070,16 @@
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:4px; background:#F3F1F7; border-radius:99px; padding:4px; align-self:flex-start;">
             <sc-for list="{{ mtTabs }}" as="t" hint-placeholder-count="2"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 17px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}</span></sc-for>
           </section>
+          <!-- One workflow at a time. The tabs above split pending from done; this splits the
+               pending pile by the workflow each step came from, which is how the work is actually
+               batched — all the MISA renewals in one sitting, not one of each. -->
+          <sc-if value="{{ mtWfShow }}" hint-placeholder-val="{{ false }}">
+            <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .06s both; display:flex; flex-wrap:wrap; gap:7px; align-items:center;">
+              <sc-for list="{{ mtWfChips }}" as="w" hint-placeholder-count="3">
+                <span onClick="{{ w.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; color:{{ w.color }}; background:{{ w.bg }}; border:1px solid {{ w.border }}; padding:5px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ w.label }}<span style="font-size:10.5px; color:#A9A6B4;">{{ w.count }}</span></span>
+              </sc-for>
+            </section>
+          </sc-if>
           <sc-if value="{{ mtPending }}" hint-placeholder-val="{{ true }}">
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;">
             <div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:16px; padding:15px 18px;"><div style="font-size:10.5px; font-weight:700; letter-spacing:.06em; color:#C0353A;">OVERDUE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; margin-top:6px; color:#C0353A;">{{ wkOverdue }}</div></div>
@@ -30730,6 +30740,9 @@ class Component extends DCLogic {
           roleId: t2.assigneeRole || null, assigneeName: t2.assignee || null,
           title: t2.title || 'Workflow step', client: (t2.instance && t2.instance.clientName) || '—',
           related: (t2.instance && t2.instance.title) || 'Workflow run',
+          // WHICH WORKFLOW, as opposed to which run of it. The run's title is per client; this is
+          // the thing somebody means when they say "show me only the MISA renewals".
+          workflow: (t2.instance && t2.instance.workflow) || null,
           role: t2.assigneeRole || (t2.assignee || 'Unassigned'), assignee: t2.assignee || null,
           priority: TASK_PRIO_CAP[String(t2.priority || 'medium').toLowerCase()] || 'Medium',
           slaHours: t2.slaHours || 0,
@@ -30816,6 +30829,7 @@ class Component extends DCLogic {
       const pr = prio[w.priority] || ['#F3F1F7', '#6F6C7A'];
       return {
         rowId: w.id, kind: w.kind, title: w.title, client: w.client,
+        workflow: w.workflow || null,
         related: w.related, relatedIcon: '⚙',
         bucket, sortKey: caseLate ? (kase.dueIn * 24) : (hasSla ? remH : 1e6),
         badge: caseLate ? _wkBadgeDays(kase.dueIn, false) : _wkBadgeHours(hasSla ? remH : null),
@@ -30868,15 +30882,33 @@ class Component extends DCLogic {
       ...r, kindLabel: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[0], kindColor: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[1], kindBg: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[2],
       badgeNum: r.badge[0], badgeUnit: r.badge[1], badgeBg: r.badge[2], badgeColor: r.badge[3],
     }));
+    // ── NARROW TO ONE WORKFLOW ──────────────────────────────────────────────────────────────────
+    //
+    // A PRO officer's queue mixes everything they are responsible for: plain tasks beside steps from
+    // every workflow running at once. Perfectly right for "what is late", useless for "let me do all
+    // the MISA renewals while I am at the ministry" — which is how the work is actually batched.
+    //
+    // Chips rather than a dropdown: there are rarely more than a handful of workflows in one
+    // person's queue, and the count on each is half the answer. Built from the rows themselves, so
+    // the list is what this person has in front of them and never an empty filter.
+    const _wfChipKey = (r9) => r9.workflow || (r9.kind === 'task' ? '(plain tasks)' : null);
+    const _wfCounts = {};
+    allWorkRows.forEach(r9 => { const k9 = _wfChipKey(r9); if (k9) _wfCounts[k9] = (_wfCounts[k9] || 0) + 1; });
+    const _wfKeys = Object.keys(_wfCounts).sort((x9, y9) =>
+      x9 === '(plain tasks)' ? 1 : y9 === '(plain tasks)' ? -1 : x9.localeCompare(y9));
+    // A filter naming a workflow that has since left the queue would hide everything and look broken.
+    const _wfPick = (this.state.mtWf && _wfCounts[this.state.mtWf]) ? this.state.mtWf : null;
+    const _wfRows = _wfPick ? allWorkRows.filter(r9 => _wfChipKey(r9) === _wfPick) : allWorkRows;
+
     const myWorkGroups = bucketOrder.map(b => {
-      const rows = allWorkRows.filter(r => r.bucket === b).sort((a, z) => a.sortKey - z.sortKey);
+      const rows = _wfRows.filter(r => r.bucket === b).sort((a, z) => a.sortKey - z.sortKey);
       const [color, bg] = bucketTone[b];
       return { title: b, count: rows.length, color, bg, rows, has: rows.length > 0 };
     }).filter(g => g.has);
-    const wkOverdue = allWorkRows.filter(r => r.bucket === 'Overdue').length;
-    const wkToday = allWorkRows.filter(r => r.bucket === 'Due today').length;
-    const wkWeek = allWorkRows.filter(r => r.bucket === 'This week').length;
-    const wkBlocked = allWorkRows.filter(r => r.bucket === 'Blocked').length;
+    const wkOverdue = _wfRows.filter(r => r.bucket === 'Overdue').length;
+    const wkToday = _wfRows.filter(r => r.bucket === 'Due today').length;
+    const wkWeek = _wfRows.filter(r => r.bucket === 'This week').length;
+    const wkBlocked = _wfRows.filter(r => r.bucket === 'Blocked').length;
 
     // ---- Drawer: selected work row ----
     // The ADDRESS decides which task is open when it names one; state is the fallback.
@@ -31547,6 +31579,24 @@ class Component extends DCLogic {
 
     const myWorkApi = {
       myWorkGroups, wkOverdue, wkToday, wkWeek, wkBlocked, myWorkEmpty: allWorkRows.length === 0,
+      // Shown only when there is a choice to make: one workflow and a filter is decoration.
+      mtWfShow: mtMode === 'pending' && _wfKeys.length > 1,
+      mtWfChips: [{ key: null, label: 'Everything', n: allWorkRows.length }]
+        .concat(_wfKeys.map(k9 => ({
+          key: k9,
+          label: k9 === '(plain tasks)' ? 'Tasks' : k9,
+          n: _wfCounts[k9],
+        })))
+        .map(c9 => {
+          const on9 = (c9.key || null) === _wfPick;
+          return {
+            label: c9.label, count: String(c9.n),
+            color: on9 ? '#7C00FF' : '#6F6C7A',
+            bg: on9 ? '#F5EEFF' : '#fff',
+            border: on9 ? '#D9C6F5' : '#EDEBF2',
+            pick: () => this.setState({ mtWf: on9 ? null : c9.key }),
+          };
+        }),
       mtPending: mtMode === 'pending',
       mtDone: mtMode === 'done',
       myDoneGroups, myDoneEmpty: mtMode === 'done' && _mtDoneRows.length === 0 && _mtDoneRaw !== null,
