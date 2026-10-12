@@ -15644,6 +15644,52 @@ class Component extends DCLogic {
      * nothing else worth saying, and rewriting it here is what stops every existing call site from
      * needing to learn about this.
      */
+    /**
+     * KEEP A SESSION ALIVE WHILE IT IS BEING USED.
+     *
+     * A token lasts twelve hours, and this console is the kind of screen somebody leaves open all
+     * day — so it expired under them mid-sentence, and the first they knew was a banner over stale
+     * data. Renewing it is the fix: every few minutes, if the token is within an hour of its end
+     * and there has been a click or a keypress recently, ask for a new one.
+     *
+     * RECENTLY ACTIVE is the condition that matters. Renewing on a timer alone would mean a tab
+     * forgotten on an unlocked machine in an office stays signed in indefinitely, which is the
+     * thing session expiry is for. A tab nobody has touched for half an hour is allowed to lapse.
+     *
+     * The expiry is read out of the token itself — a JWT's middle segment is base64 JSON, and `exp`
+     * is in it — so the page knows when it runs out without asking the server.
+     */
+    if (!window.__stimesSessionKeeper) {
+      window.__stimesSessionKeeper = true;
+      let lastSeen = Date.now();
+      const touch = () => { lastSeen = Date.now(); };
+      for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev, touch, { passive: true });
+
+      const expiryOf = (tok) => {
+        try {
+          const body = JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+          return Number(body.exp || 0) * 1000;
+        } catch (e9) { return 0; }
+      };
+
+      const tick = () => {
+        const tok = localStorage.getItem('stimespro:token');
+        if (!tok) return;
+        const exp = expiryOf(tok);
+        if (!exp) return;                                      // unreadable: leave it to the 401 path
+        const left = exp - Date.now();
+        const idle = Date.now() - lastSeen;
+        if (left > 60 * 60 * 1000) return;                     // plenty of time yet
+        if (idle > 30 * 60 * 1000) return;                     // nobody is here; let it lapse
+        fetch(API + '/api/auth/refresh', { method: 'POST', headers: { Authorization: 'Bearer ' + tok } })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(j9 => { if (j9 && j9.token) localStorage.setItem('stimespro:token', j9.token); })
+          .catch(() => {});                                    // offline: the next tick tries again
+      };
+      setInterval(tick, 5 * 60 * 1000);
+      tick();
+    }
+
     if (!window.__stimesAuthFetch) {
       window.__stimesAuthFetch = true;
       const _rawFetch = window.fetch.bind(window);
@@ -15654,7 +15700,30 @@ class Component extends DCLogic {
           ? hdrs.get('Authorization')
           : (hdrs.Authorization || hdrs.authorization);
         if (!auth) return res;
-        try { this.setState({ authExpired: true }); } catch (e9) {}
+        try {
+          this.setState({ authExpired: true });
+          // AND THEN TAKE THEM TO THE SIGN-IN SCREEN, which the banner alone never did: it said
+          // "sign in again to continue" and then waited to be clicked, so a screen left open
+          // overnight was still showing yesterday's numbers in the morning, with every button on it
+          // quietly doing nothing.
+          //
+          // Twelve seconds, not instantly: a person mid-keystroke gets to read what happened and
+          // why, and anything they were typing is still on the screen to copy. The countdown is
+          // started once — later 401s from the same dead session must not restart it.
+          if (!this._expiredTimer) {
+            this._expiredTimer = setInterval(() => {
+              const left9 = Math.max(0, 12 - Math.round((Date.now() - (this._expiredAt || Date.now())) / 1000));
+              this.setState({ authExpiredIn: left9 });
+              if (left9 <= 0) {
+                clearInterval(this._expiredTimer);
+                try { localStorage.removeItem('stimespro:token'); } catch (e8) {}
+                location.href = '/dashboard';
+              }
+            }, 1000);
+            this._expiredAt = Date.now();
+            this.setState({ authExpiredIn: 12 });
+          }
+        } catch (e9) {}
         return new Response(
           JSON.stringify({ error: 'Your session has expired — sign in again, then try once more.' }),
           { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
@@ -17499,9 +17568,10 @@ class Component extends DCLogic {
         : 'M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
       stateBannerTitle: _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
       stateBannerBody: _bannerKind === 'expired'
-        ? 'You are still seeing the last data loaded. Sign in again to continue.'
+        ? ('You are still seeing the last data loaded. Taking you to sign in'
+           + (this.state.authExpiredIn > 0 ? ' in ' + this.state.authExpiredIn + 's\u2026' : '\u2026'))
         : 'The last update did not come through, so what you see may be out of date.',
-      stateBannerCta: _bannerKind === 'expired' ? 'Sign in' : 'Retry',
+      stateBannerCta: _bannerKind === 'expired' ? 'Sign in now' : 'Retry',
       stateBannerAct: () => {
         if (_bannerKind === 'expired') {
           // Clear the dead token so the app lands on the sign-in screen rather than looping on 401s.

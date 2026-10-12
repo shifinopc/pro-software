@@ -3265,6 +3265,36 @@ class Component extends DCLogic {
      * Narrow on purpose: a 401 only counts when the request carried OUR Authorization header, so a
      * failed sign-in stays a wrong-password message.
      */
+    /**
+     * KEEP A SESSION ALIVE WHILE IT IS BEING USED — same rule as the staff console.
+     *
+     * A client reading through their documents for an afternoon should not be thrown out mid-page.
+     * Every few minutes, if the token is within an hour of expiring AND there has been a click or
+     * a keypress in the last half hour, it is renewed. A portal left open on an unattended screen
+     * is deliberately NOT renewed: that is what the expiry is for.
+     */
+    if (!window.__stimesSessionKeeper) {
+      window.__stimesSessionKeeper = true;
+      let lastSeen = Date.now();
+      const touch = () => { lastSeen = Date.now(); };
+      for (const ev of ['pointerdown', 'keydown', 'wheel']) window.addEventListener(ev, touch, { passive: true });
+      const tick = () => {
+        const tok = localStorage.getItem('stimespro:portalToken');
+        if (!tok) return;
+        let exp = 0;
+        try { exp = Number(JSON.parse(atob(String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0) * 1000; }
+        catch (e9) { return; }
+        if (!exp || exp - Date.now() > 60 * 60 * 1000) return;
+        if (Date.now() - lastSeen > 30 * 60 * 1000) return;
+        fetch(API + '/api/auth/refresh', { method: 'POST', headers: { Authorization: 'Bearer ' + tok } })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(j9 => { if (j9 && j9.token) localStorage.setItem('stimespro:portalToken', j9.token); })
+          .catch(() => {});
+      };
+      setInterval(tick, 5 * 60 * 1000);
+      tick();
+    }
+
     if (!window.__stimesAuthFetch) {
       window.__stimesAuthFetch = true;
       const _rawFetch = window.fetch.bind(window);

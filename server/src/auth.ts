@@ -46,8 +46,23 @@ export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
 
 // ── JWT (carries tokenVersion `tv` so a bump invalidates all issued tokens) ──
-export interface AuthPayload { sub: string; type: "staff" | "portal"; role?: string; companyId?: string; tv?: number; apiKey?: boolean; keyName?: string; scope?: string; }
-export const signToken = (payload: AuthPayload, ttlHours = 12) => jwt.sign(payload, JWT_SECRET, { expiresIn: `${ttlHours}h` });
+export interface AuthPayload {
+  sub: string; type: "staff" | "portal"; role?: string; companyId?: string; tv?: number;
+  apiKey?: boolean; keyName?: string; scope?: string;
+  /**
+   * When this SESSION began, as opposed to when this token was issued.
+   *
+   * A token is renewed while somebody is working, so `iat` moves and says nothing about how long
+   * they have been signed in. This does not move, and it is what caps the renewing: a session can
+   * be extended through a working week, not indefinitely, so a token that leaks still has an end.
+   */
+  iat0?: number;
+}
+export const signToken = (payload: AuthPayload, ttlHours = 12) =>
+  jwt.sign({ iat0: Math.floor(Date.now() / 1000), ...payload }, JWT_SECRET, { expiresIn: `${ttlHours}h` });
+
+/** How long a session may go on being renewed before the password is needed again. */
+export const SESSION_MAX_DAYS = 7;
 export const verifyToken = (token: string): AuthPayload => jwt.verify(token, JWT_SECRET) as AuthPayload;
 
 // ── Audit log helper ──

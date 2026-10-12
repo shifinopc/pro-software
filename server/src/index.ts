@@ -89,7 +89,7 @@ import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, in
 import { homeCountry, homeCurrency, homeMarket } from "./orgsettings.js";
 import { figuresFromAmount } from "./money.js";
 import {
-  hashPassword, verifyPassword, signToken, verifyToken,
+  hashPassword, verifyPassword, signToken, verifyToken, SESSION_MAX_DAYS,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
@@ -7329,6 +7329,31 @@ app.delete("/api/api-keys/:id", requireAuth, requireStaff, requireWriteRole, req
  * Deliberately NOT requireHuman, unlike logout-all: ending your own session must never be the thing
  * that is refused.
  */
+/**
+ * Renew a session that is still good, so a working day does not end in being logged out.
+ *
+ * The console calls this when the token it holds is near its end AND somebody is actually at the
+ * screen. It sits behind `requireAuth`, so it only ever extends a session that already passes every
+ * check: signature, account still active, token version not bumped. A revoked session cannot renew
+ * itself, which is the property that makes this safe to have at all.
+ *
+ * `iat0` is the cap. Renewal moves the expiry but never that, so a session lasts a week at most and
+ * then needs a password again — otherwise "it never logs me out" would also mean a leaked token is
+ * good forever.
+ */
+app.post("/api/auth/refresh", requireAuth, async (req, res) => {
+  const a = (req as any).auth as any;
+  if (a?.apiKey) return res.status(400).json({ error: "An API key does not expire and cannot be refreshed" });
+  const began = Number(a?.iat0 ?? 0);
+  if (began && (Date.now() / 1000 - began) / 86400 > SESSION_MAX_DAYS) {
+    return res.status(401).json({ error: "This session has run its course — please sign in again" });
+  }
+  res.json({ token: signToken({
+    sub: a.sub, type: a.type, role: a.role, companyId: a.companyId, tv: a.tv,
+    iat0: began || Math.floor(Date.now() / 1000),
+  }) });
+});
+
 app.post("/api/auth/logout", requireAuth, async (req, res) => {
   const a = (req as any).auth;
   // An API key has no session to end, and its `sub` is not a user id. Say so rather than reporting
