@@ -17839,7 +17839,14 @@ class Component extends DCLogic {
       if (!_myPerm) return null;
       const hide = new Set();
       Object.keys(_SCREEN_MODULE).forEach(scr => {
-        if (!_myPerm[_SCREEN_MODULE[scr] + '|View']) hide.add(scr);
+        const key9 = _SCREEN_MODULE[scr] + '|View';
+        // HIDE ONLY ON AN EXPLICIT NO. A module the server has never heard of answers `undefined`,
+        // and treating that as "forbidden" meant a browser holding yesterday's build lost whole
+        // screens the moment the server's module list changed — which is exactly what happened when
+        // Finance, Compliance and Settings were split: a cached page asked for "Settings|View",
+        // the server no longer had a module by that name, and the screen vanished for an admin who
+        // had every permission there is. A deploy must not be able to do that to somebody.
+        if (_myPerm[key9] === false) hide.add(scr);
       });
       return hide.size ? hide : null;
     })();
@@ -18192,7 +18199,13 @@ class Component extends DCLogic {
       // Until the grid lands, the old admin-only rule. Hiding every control for a second on each
       // load is worse than showing one a moment late, and this is the same trade the sidebar makes.
       if (!_myPerm) return _meRole === 'admin' || _meRole === 'super_admin' || _meRole === null;
-      return !!_myPerm[mod9 + '|' + act9];
+      // A module this build knows and the server does not — the two are a deploy apart — answers
+      // `undefined`, not false. Fall back to the role rather than silently withdrawing a control
+      // from somebody who is allowed to use it. The server refuses the request either way if it
+      // really is forbidden, so the worst case here is a button that reports a 403.
+      const v9 = _myPerm[mod9 + '|' + act9];
+      if (v9 === undefined) return _meRole === 'admin' || _meRole === 'super_admin' || _meRole === null;
+      return !!v9;
     };
     // Scoped to the screen somebody is looking at, which is what a control on that screen writes to.
     const _activeModule = _SCREEN_MODULE[this.state.active] || null;
