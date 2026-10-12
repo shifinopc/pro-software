@@ -24095,8 +24095,9 @@ class Component extends DCLogic {
         // the subject is added only when it does not, or it reads "— shifin — shifin".
         const named8 = (subject8 && run8.toLowerCase().indexOf(subject8.toLowerCase()) === -1)
           ? (run8 + ' — ' + subject8) : run8;
+        const rowId8 = 'WF-' + (w8.instanceId || w8.id);
         return {
-          id: 'WF-' + (w8.instanceId || w8.id), _id: null, _step: true, _stepId: w8.id,
+          id: rowId8, _id: null, _step: true, _stepId: w8.id, _wfId: w8.instanceId || null,
           title: named8,
           client: inst8.clientName || '—',
           assignee: w8.assignee || (w8.assigneeRole ? ('role: ' + w8.assigneeRole) : 'Unassigned'),
@@ -24108,6 +24109,12 @@ class Component extends DCLogic {
           dept: '⚙ ' + w8.title + (n8 > 1 ? ' (+' + (n8 - 1) + ' more open)' : ''),
           docType: '', wf: inst8.workflow || null, comp: null, employee: subject8 || null,
           archived: false,
+          // Read directly by the task drawer. `wfShow` is the one that matters: it is what decides
+          // whether the Process timeline is drawn at all, and without it the drawer opened on the
+          // run and then showed no process — the one thing somebody came to this row to see.
+          dueColor: (remH8 != null && remH8 < 0) ? '#C0353A' : '#8C8899',
+          docTypeShow: false, compShow: false, blockedShow: false, blocked: '',
+          wfShow: true, empShow: !!subject8,
           // OPENS THE RUN, NOT THE STEP'S FORM.
           //
           // Both exist. The step drawer is for doing the work — the checklist, the verdict, Complete
@@ -24122,10 +24129,15 @@ class Component extends DCLogic {
           // which only that helper fills — set workRow on its own and the timeline sits on
           // "Loading run steps…" for good, which is precisely what the comment above it warns
           // about and precisely what the first version of this did.
+          // ALWAYS THE RUN. Renewals the system starts on its own have no plain Task record behind
+          // them — only the ones somebody created by hand do — so falling back to the step dropped
+          // you into its completion form, which is the one view this list is not asking for. The
+          // case record is used when there is one, because it carries the human title and the
+          // stepper; otherwise the run row speaks for itself. Either way the process timeline is
+          // fetched, which is the whole point of landing here.
           openDrawer: () => {
             const kase8 = allTasks.find(t8 => t8._wfId && t8._wfId === w8.instanceId);
-            if (kase8) _openTaskDrawer(kase8.id, kase8._wfId);
-            else this.setState({ workRow: w8.id });
+            _openTaskDrawer(kase8 ? kase8.id : rowId8, w8.instanceId || (kase8 && kase8._wfId) || null);
           },
         };
       });
@@ -31047,7 +31059,9 @@ class Component extends DCLogic {
       const hit9 = allTasks.find(t9 => sl9(t9.id) === want9) || wfStepDefs.find(w9 => sl9(w9.id) === want9);
       return hit9 ? hit9.id : this.state.workRow;
     })();
-    const selPlain = allTasks.find(t => t.id === selId);
+    // Run rows live only on the Task List, not in allTasks, so the drawer has to be told where to
+    // look for them or clicking one opens nothing.
+    const selPlain = allTasks.find(t => t.id === selId) || _tlRuns.find(t => t.id === selId);
     const selStep = wfStepDefs.find(w => w.id === selId);
     let drawerApi = { showWorkDrawer: false };
     if (selStep) {
