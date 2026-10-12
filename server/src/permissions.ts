@@ -25,9 +25,28 @@
  */
 import { prisma } from "./db.js";
 
+/**
+ * ONE MODULE PER THING SOMEBODY OPENS, not one per department.
+ *
+ * "Finance" used to be a single permission covering invoices, receipts, the price list and the
+ * subscription plans — so an accountant who had to raise invoices was also handed the catalogue
+ * the prices come from, and there was no way to say otherwise. "Compliance" and "Settings" were
+ * the same shape: one answer to several different questions.
+ *
+ * The three have been split along the lines the work actually divides on. Nothing about the
+ * mechanism changed — a module is still a set of route prefixes, an action is still derived from
+ * the verb — there are simply more of them, and each one now matches a screen somebody can name.
+ */
 export const MODULES = [
-  "Dashboard", "Tasks", "Approvals", "SLA Monitor", "Activity Log", "Clients",
-  "Compliance", "Finance", "Sales", "Reports", "Workflow", "Settings",
+  "Dashboard", "Tasks", "Approvals", "SLA Monitor", "Activity Log",
+  "Clients",
+  // was "Compliance"
+  "Documents", "Appointments", "Courier", "Gov Centers", "Document Types",
+  // was "Finance", plus Quotations which used to sit inside Sales
+  "Invoices", "Payments", "Quotations", "Plan & Billing", "Service Catalog",
+  "Sales", "Reports", "Workflow",
+  // was "Settings"
+  "Users & Roles", "Organisation", "Email", "Integrations", "API Keys",
 ] as const;
 export type PermModule = (typeof MODULES)[number];
 
@@ -54,49 +73,137 @@ const PRESET: Record<string, number[]> = {
   "Client Admin": [1, 0, 0, 0, 0, 0],
 };
 
-/** Per-module departures from the preset above. */
+/**
+ * Per-module departures from the preset above.
+ *
+ * WRITTEN OUT IN FULL FOR THE SPLIT MODULES, deliberately, rather than generated from the old
+ * parent. A module nobody has configured falls back to the role preset, and for several roles that
+ * preset says Create — so leaving the new children unlisted would have quietly handed an accountant
+ * the power to edit document types the day this shipped. Every line below is what that role could
+ * do before the split, re-stated against the finer module.
+ */
 const TUNE: Record<string, Partial<Record<PermModule, number[]>>> = {
   "PRO Officer": {
-    Finance: [1, 0, 0, 0, 0, 0],
     Reports: [1, 0, 0, 0, 0, 1],
     Workflow: [1, 0, 0, 0, 0, 0],
-    Settings: [0, 0, 0, 0, 0, 0],
     // Front-line ops read the pipeline to know what work is coming; they do not sell.
     Sales: [1, 0, 0, 0, 0, 0],
+    // …and do not price. Quotations came out of Sales, where they were read-only for this role.
+    Quotations: [1, 0, 0, 0, 0, 0],
+    // Was one "Finance: view only".
+    Invoices: [1, 0, 0, 0, 0, 0],
+    Payments: [1, 0, 0, 0, 0, 0],
+    "Plan & Billing": [1, 0, 0, 0, 0, 0],
+    "Service Catalog": [1, 0, 0, 0, 0, 0],
+    // Was one "Compliance", on the role preset: the front line's own work, unchanged.
+    Documents: [1, 1, 1, 0, 0, 1],
+    Appointments: [1, 1, 1, 0, 0, 1],
+    Courier: [1, 1, 1, 0, 0, 1],
+    "Gov Centers": [1, 1, 1, 0, 0, 1],
+    "Document Types": [1, 1, 1, 0, 0, 1],
+    // Was one "Settings: nothing".
+    "Users & Roles": [0, 0, 0, 0, 0, 0],
+    Organisation: [0, 0, 0, 0, 0, 0],
+    Email: [0, 0, 0, 0, 0, 0],
+    Integrations: [0, 0, 0, 0, 0, 0],
+    "API Keys": [0, 0, 0, 0, 0, 0],
   },
   Accountant: {
     Tasks: [1, 0, 0, 0, 0, 0],
     Approvals: [1, 0, 0, 1, 0, 0],
     Clients: [1, 0, 0, 0, 0, 0],
-    Compliance: [1, 0, 0, 0, 0, 0],
     Workflow: [0, 0, 0, 0, 0, 0],
-    Settings: [0, 0, 0, 0, 0, 0],
     Sales: [1, 0, 0, 0, 0, 1],
+    // THE POINT OF THE SPLIT. Money in and out is theirs; the price list and the plans that
+    // generate the money are not, and before this there was no way to say so.
+    Invoices: [1, 1, 1, 0, 0, 1],
+    Payments: [1, 1, 1, 0, 0, 1],
+    Quotations: [1, 0, 0, 0, 0, 1],
+    "Plan & Billing": [1, 0, 0, 0, 0, 1],
+    "Service Catalog": [1, 0, 0, 0, 0, 1],
+    // Was one "Compliance: view only".
+    Documents: [1, 0, 0, 0, 0, 0],
+    Appointments: [1, 0, 0, 0, 0, 0],
+    Courier: [1, 0, 0, 0, 0, 0],
+    "Gov Centers": [1, 0, 0, 0, 0, 0],
+    "Document Types": [1, 0, 0, 0, 0, 0],
+    "Users & Roles": [0, 0, 0, 0, 0, 0],
+    Organisation: [0, 0, 0, 0, 0, 0],
+    Email: [0, 0, 0, 0, 0, 0],
+    Integrations: [0, 0, 0, 0, 0, 0],
+    "API Keys": [0, 0, 0, 0, 0, 0],
   },
   Sales: {
     Approvals: [0, 0, 0, 0, 0, 0],
     Workflow: [0, 0, 0, 0, 0, 0],
-    Settings: [0, 0, 0, 0, 0, 0],
     "Activity Log": [1, 0, 0, 0, 0, 0],
-    Finance: [1, 0, 0, 0, 0, 0],
     Tasks: [1, 0, 0, 0, 0, 0],
     "SLA Monitor": [1, 0, 0, 0, 0, 0],
     // The one module a salesperson actually works in. Read-only everywhere else, but they must be
     // able to log a call, move a deal and add a contact or the role cannot do its job — which is
     // exactly what the hardcoded admin-only gate did to it.
     Sales: [1, 1, 1, 0, 0, 1],
+    // Quotations came out of Sales and keeps what Sales had: writing the offer IS the job.
+    Quotations: [1, 1, 1, 0, 0, 1],
+    // Was one "Finance: view only".
+    Invoices: [1, 0, 0, 0, 0, 0],
+    Payments: [1, 0, 0, 0, 0, 0],
+    "Plan & Billing": [1, 0, 0, 0, 0, 0],
+    "Service Catalog": [1, 0, 0, 0, 0, 0],
+    // Was the role preset on "Compliance": view and export.
+    Documents: [1, 0, 0, 0, 0, 1],
+    Appointments: [1, 0, 0, 0, 0, 1],
+    Courier: [1, 0, 0, 0, 0, 1],
+    "Gov Centers": [1, 0, 0, 0, 0, 1],
+    "Document Types": [1, 0, 0, 0, 0, 1],
+    "Users & Roles": [0, 0, 0, 0, 0, 0],
+    Organisation: [0, 0, 0, 0, 0, 0],
+    Email: [0, 0, 0, 0, 0, 0],
+    Integrations: [0, 0, 0, 0, 0, 0],
+    "API Keys": [0, 0, 0, 0, 0, 0],
   },
   "Client Admin": {
     Tasks: [0, 0, 0, 0, 0, 0],
     Approvals: [0, 0, 0, 0, 0, 0],
     "SLA Monitor": [0, 0, 0, 0, 0, 0],
     "Activity Log": [0, 0, 0, 0, 0, 0],
-    Finance: [1, 0, 0, 0, 0, 1],
     Reports: [0, 0, 0, 0, 0, 0],
     Workflow: [0, 0, 0, 0, 0, 0],
-    Settings: [0, 0, 0, 0, 0, 0],
     Sales: [0, 0, 0, 0, 0, 0],
+    Quotations: [0, 0, 0, 0, 0, 0],
+    // Was one "Finance: see and export your own".
+    Invoices: [1, 0, 0, 0, 0, 1],
+    Payments: [1, 0, 0, 0, 0, 1],
+    "Plan & Billing": [1, 0, 0, 0, 0, 1],
+    "Service Catalog": [1, 0, 0, 0, 0, 1],
+    Documents: [1, 0, 0, 0, 0, 0],
+    Appointments: [1, 0, 0, 0, 0, 0],
+    Courier: [1, 0, 0, 0, 0, 0],
+    "Gov Centers": [1, 0, 0, 0, 0, 0],
+    "Document Types": [1, 0, 0, 0, 0, 0],
+    "Users & Roles": [0, 0, 0, 0, 0, 0],
+    Organisation: [0, 0, 0, 0, 0, 0],
+    Email: [0, 0, 0, 0, 0, 0],
+    Integrations: [0, 0, 0, 0, 0, 0],
+    "API Keys": [0, 0, 0, 0, 0, 0],
   },
+};
+
+/**
+ * Which module each split one came out of.
+ *
+ * Kept because the saved grid is keyed by module NAME: every tick an admin has made reads
+ * "Accountant|Finance|Create", and "Finance" no longer exists. `migrateSplitModules()` reads this
+ * to expand each saved parent tick onto its children, once, so nothing anybody configured is lost
+ * in the rename. It is also the honest record of what this split did, for whoever reads it next.
+ */
+export const SPLIT_PARENTS: Record<string, PermModule[]> = {
+  Finance: ["Invoices", "Payments", "Plan & Billing", "Service Catalog"],
+  Compliance: ["Documents", "Appointments", "Courier", "Gov Centers", "Document Types"],
+  Settings: ["Users & Roles", "Organisation", "Email", "Integrations", "API Keys"],
+  // Not a split: Quotations LEFT Sales, and Sales itself remains. A saved Sales tick has to reach
+  // Quotations too or a sales rep loses the quotation screen on the day this ships.
+  Sales: ["Quotations"],
 };
 
 /** No role may mutate the audit trail — it is append-only, and the screen locks these too. */
@@ -204,7 +311,7 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/workflow/tasks", "Tasks"],
   ["/api/workflow/my-work", "Tasks"],
   ["/api/workflow/instances", "Tasks"],
-  ["/api/proposal-templates", "Sales"],
+  ["/api/proposal-templates", "Quotations"],
   ["/api/workflow/templates", "Workflow"],
   ["/api/workflow/checklist-rules", "Workflow"],
   ["/api/workflow/field-sets", "Workflow"],
@@ -231,14 +338,14 @@ const MODULE_OF: Array<[string, PermModule]> = [
   // list and the reveal, requireWriteRole on the writes — which is what those routes always claimed
   // to do. The coverage report lists it as ungoverned, which is the honest answer: this grid is not
   // the whole story for the vault, deliberately.
-  ["/api/documents", "Compliance"],
-  ["/api/courier-shipments", "Compliance"],
-  ["/api/setup-check", "Compliance"],
-  ["/api/invoices", "Finance"],
-  ["/api/payments", "Finance"],
-  ["/api/packages", "Finance"],
-  ["/api/service-items", "Finance"],
-  ["/api/zatca-qr.svg", "Finance"],
+  ["/api/documents", "Documents"],
+  ["/api/courier-shipments", "Courier"],
+  ["/api/setup-check", "Organisation"],
+  ["/api/invoices", "Invoices"],
+  ["/api/payments", "Payments"],
+  ["/api/packages", "Plan & Billing"],
+  ["/api/service-items", "Service Catalog"],
+  ["/api/zatca-qr.svg", "Invoices"],
   // ── Sales: the module added because the matrix could not express CRM at all ──
   ["/api/pipeline", "Sales"],
   ["/api/pipeline-stages", "Sales"],
@@ -248,7 +355,7 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/contacts", "Sales"],
   ["/api/interactions", "Sales"],
   ["/api/follow-ups", "Sales"],
-  ["/api/quotations", "Sales"],
+  ["/api/quotations", "Quotations"],
   ["/api/crm-dashboard", "Sales"],
   ["/api/targets-forecast", "Sales"],
   ["/api/sales-targets", "Sales"],
@@ -262,26 +369,26 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/ops-report", "Reports"],
   ["/api/stage-analytics", "Reports"],
   ["/api/email-log", "Reports"],
-  ["/api/settings", "Settings"],
+  ["/api/settings", "Organisation"],
   // An admin diagnostic about the grid itself. /api/permissions stays UNMAPPED on purpose, a few
   // lines down: it is how a role discovers its own grid, and gating that behind a permission would
   // mean needing the permission to find out you lack it.
-  ["/api/permissions/coverage", "Settings"],
-  ["/api/users", "Settings"],
-  ["/api/api-keys", "Settings"],
-  ["/api/email-config", "Settings"],
-  ["/api/integrations", "Settings"],
-  ["/api/record-sequences", "Settings"],
-  ["/api/packs", "Settings"],
-  ["/api/countries", "Settings"],
+  ["/api/permissions/coverage", "Users & Roles"],
+  ["/api/users", "Users & Roles"],
+  ["/api/api-keys", "API Keys"],
+  ["/api/email-config", "Email"],
+  ["/api/integrations", "Integrations"],
+  ["/api/record-sequences", "Organisation"],
+  ["/api/packs", "Organisation"],
+  ["/api/countries", "Organisation"],
   ["/api/notifications", "Dashboard"],
-  ["/api/appointments", "Compliance"],
-  ["/api/gov-centers", "Compliance"],
-  ["/api/document-types", "Compliance"],
-  ["/api/workforce-bands", "Compliance"],
+  ["/api/appointments", "Appointments"],
+  ["/api/gov-centers", "Gov Centers"],
+  ["/api/document-types", "Document Types"],
+  ["/api/workforce-bands", "Clients"],
   ["/api/groups", "Clients"],
-  ["/api/subscriptions", "Finance"],
-  ["/api/custom-objects", "Settings"],
+  ["/api/subscriptions", "Plan & Billing"],
+  ["/api/custom-objects", "Organisation"],
 ];
 
 /**
@@ -344,18 +451,56 @@ export type Coverage = {
   total: number;
 };
 
+/**
+ * The mount path of a router, which Express keeps only as a compiled regexp.
+ *
+ * `app.use("/api/appointments", crud(...))` leaves no readable path anywhere on the layer — just
+ * `/^\/api\/appointments\/?(?=\/|$)/`. Unpicking it is the only way to know what was mounted
+ * where.
+ */
+function mountPathOf(layer: any): string {
+  if (layer?.regexp?.fast_slash) return "";
+  const src = String(layer?.regexp?.source ?? "");
+  if (!src) return "";
+  // Built with RegExp rather than literals: the pattern is itself full of escaped slashes, and a
+  // literal would need every one of them escaped again, which is unreadable and was wrong twice.
+  const TAIL = new RegExp("\\\\/\\?\\(\\?=\\\\/\\|\\$\\)\\$?$");
+  return src
+    .replace(/^\^/, "")
+    .replace(TAIL, "")
+    .replace(/\$$/, "")
+    .replace(new RegExp("\\\\/", "g"), "/");
+}
+
 export function coverageOf(stack: any[]): Coverage {
   const seen = new Set<string>();
   const paths: string[] = [];
-  for (const layer of stack ?? []) {
-    const p = layer?.route?.path;
-    if (typeof p !== "string" || !p.startsWith("/api")) continue;
-    // One entry per path: the same path registered for GET and PUT is one thing to govern, and
-    // counting it twice would overstate how much of the app each module covers.
-    if (seen.has(p)) continue;
-    seen.add(p);
-    paths.push(p);
-  }
+  // DESCENDS INTO MOUNTED ROUTERS, which it did not before.
+  //
+  // Every generic collection — appointments, document types, government centers, payments — is an
+  // `app.use("/api/<thing>", crud(...))`, and a mounted router has no `.route` of its own. So this
+  // walked straight past all of them and reported zero routes for each, while the matrix was in
+  // fact governing them perfectly well. Harmless-looking undercounting until the modules were
+  // split, at which point the panel started printing "Appointments 0" beside a permission that
+  // visibly works — a screen calling its own enforcement imaginary.
+  const walk = (layers: any[], prefix: string) => {
+    for (const layer of layers ?? []) {
+      const p = layer?.route?.path;
+      if (typeof p === "string") {
+        const full = (prefix + (p === "/" ? "" : p)) || p;
+        if (!full.startsWith("/api")) continue;
+        // One entry per path: the same path registered for GET and PUT is one thing to govern, and
+        // counting it twice would overstate how much of the app each module covers.
+        if (seen.has(full)) continue;
+        seen.add(full);
+        paths.push(full);
+        continue;
+      }
+      const child = layer?.handle?.stack;
+      if (Array.isArray(child)) walk(child, prefix + mountPathOf(layer));
+    }
+  };
+  walk(stack ?? [], "");
   const counts = new Map<PermModule, number>();
   const ungoverned: string[] = [];
   let exempt = 0;

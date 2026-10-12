@@ -4121,7 +4121,7 @@ app.post("/api/agents/bank-reconciliation/statements", requireAuth, requireStaff
 app.post("/api/agents/portal-reconciler/exports", requireAuth, requireStaff, async (req, res) => {
   try {
     const actor = await agentActor(req);
-    if (!(await can(actor.role, "Compliance", "Edit"))) return res.status(403).json({ error: "Your role cannot reconcile government exports." });
+    if (!(await can(actor.role, "Documents", "Edit"))) return res.status(403).json({ error: "Your role cannot reconcile government exports." });
     res.status(201).json(await importGovExport({ fileName: String(req.body?.fileName ?? "export.csv"), text: String(req.body?.text ?? ""), companyId: req.body?.companyId ? String(req.body.companyId) : null, actor }));
   } catch (e: any) {
     if (e instanceof GovExportError) return res.status(e.status).json({ error: e.message });

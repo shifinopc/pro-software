@@ -102,7 +102,7 @@ export function standardAct(key: string, opts: ActOpts) {
     }
 
     if (action === "invoice") {
-      await requirePerm(actor, "Finance", "Create", "raise invoices");
+      await requirePerm(actor, "Invoices", "Create", "raise invoices");
       const lines = (Array.isArray(o.lines) ? o.lines : []) as InvoiceLine[];
       const total = lines.reduce((s, l) => s + Number(l.price) * Number(l.units || 1), 0);
       if (!(total > 0)) throw new AgentActionError("There is nothing to invoice.");

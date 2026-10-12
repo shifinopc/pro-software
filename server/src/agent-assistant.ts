@@ -59,7 +59,7 @@ export async function ask(question: string, actor: AgentActor & { companyScope?:
       description: "List current (not superseded) compliance documents. Filter by client name, document type (Iqama, Passport, Work Permit, Health Insurance, Commercial Registration...), person name, expiry month (YYYY-MM), or expiring within N days (negative = already expired). Each result says whether a renewal is running.",
       input_schema: { type: "object", properties: { client: { type: "string" }, docType: { type: "string" }, person: { type: "string" }, expiryMonth: { type: "string", description: "YYYY-MM" }, expiringWithinDays: { type: "number" }, limit: { type: "number" } } },
       run: async (i) => {
-        await gate("Compliance");
+        await gate("Documents");
         const where: any = { supersededAt: null, ...(await clientWhere(i.client)) };
         if (i.docType) where.docType = { contains: String(i.docType) };
         if (i.person) where.person = { contains: String(i.person) };
@@ -76,7 +76,7 @@ export async function ask(question: string, actor: AgentActor & { companyScope?:
       description: "For one document (documentId from list_documents): the renewal run's current steps and what is blocking it — missing or rejected checklist items, block reasons recorded by officers, or unmet prerequisites that stopped the renewal starting.",
       input_schema: { type: "object", properties: { documentId: { type: "string" } }, required: ["documentId"] },
       run: async ({ documentId }) => {
-        await gate("Compliance");
+        await gate("Documents");
         const d = await prisma.document.findUnique({ where: { id: String(documentId) }, include: { company: { select: { name: true, ownerId: true } } } });
         if (!d || (actor.role === "sales" && d.company?.ownerId !== actor.id)) return { error: "Document not found" };
         if (!d.renewalRunId) {
@@ -108,7 +108,7 @@ export async function ask(question: string, actor: AgentActor & { companyScope?:
       description: "List invoices, optionally for one client and by status (overdue, unpaid, pending, paid, draft). Includes amount outstanding.",
       input_schema: { type: "object", properties: { client: { type: "string" }, status: { type: "string" }, limit: { type: "number" } } },
       run: async (i) => {
-        await gate("Finance");
+        await gate("Invoices");
         const where: any = { ...(await clientWhere(i.client)) };
         if (i.status) where.status = String(i.status);
         const rows = await prisma.invoice.findMany({ where, take: Math.min(Number(i.limit) || 30, 100), orderBy: { dueDate: "asc" } });

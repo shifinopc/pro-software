@@ -175,11 +175,11 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   if (!t || t.agent !== KEY) throw new AgentActionError("That finding no longer exists.", 404);
   if (t.status !== "review") throw new AgentActionError(`This finding is already ${t.status}.`, 409);
   if (action === "dismiss") {
-    await requirePerm(actor, "Finance", "Edit", "close billing findings");
+    await requirePerm(actor, "Invoices", "Edit", "close billing findings");
     return decide(t.id, "dismissed", actor, { reason: String(input?.reason ?? "") || "Covered by the client's agreement" });
   }
   if (action !== "invoice") throw new AgentActionError("Unknown action.");
-  await requirePerm(actor, "Finance", "Create", "raise invoices");
+  await requirePerm(actor, "Invoices", "Create", "raise invoices");
   const o = (t.output ?? {}) as any;
   const today = new Date().toISOString().slice(0, 10);
   const company = t.companyId ? await prisma.company.findUnique({ where: { id: t.companyId }, select: { name: true } }) : null;

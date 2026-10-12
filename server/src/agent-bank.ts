@@ -235,7 +235,7 @@ export async function runBank(onlyStatementId?: string) {
 }
 
 export async function importStatement(input: { fileName: string; text: string; actor: AgentActor }) {
-  await requirePerm(input.actor, "Finance", "Create", "import bank statements");
+  await requirePerm(input.actor, "Payments", "Create", "import bank statements");
   if (!input.text || input.text.length > 3_000_000) throw new StatementError("Upload a CSV bank statement under 3 MB.");
   const { lines, skipped } = parseStatement(input.text);
   if (!lines.length) throw new StatementError("No transactions were found under the headings.");
@@ -266,13 +266,13 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   if (t.status !== "review") throw new AgentActionError(`This item is already ${t.status}.`, 409);
   const o = (t.output ?? {}) as any;
   if (action === "dismiss") {
-    await requirePerm(actor, "Finance", "Edit", "set bank lines aside");
+    await requirePerm(actor, "Payments", "Edit", "set bank lines aside");
     const ids: string[] = o.lineIds ?? (o.lineId ? [o.lineId] : []);
     await prisma.bankLine.updateMany({ where: { id: { in: ids } }, data: { status: "ignored", decidedBy: actor.id, decidedAt: new Date().toISOString(), note: "Set aside — not a client payment" } });
     return decide(t.id, "dismissed", actor, { reason: String(input?.reason ?? "") || "Not a client payment" });
   }
   if (action !== "record") throw new AgentActionError("Unknown action.");
-  await requirePerm(actor, "Finance", "Create", "record payments");
+  await requirePerm(actor, "Payments", "Create", "record payments");
   const line = await prisma.bankLine.findUnique({ where: { id: o.lineId } });
   if (!line || !["proposed", "unmatched"].includes(line.status)) throw new AgentActionError("That bank line has already been dealt with.", 409);
   const recorded: string[] = [], paymentIds: string[] = [];

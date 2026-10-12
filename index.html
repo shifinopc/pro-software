@@ -17810,16 +17810,27 @@ class Component extends DCLogic {
       'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks',
       'Approvals': 'Approvals', 'SLA Monitor': 'SLA Monitor', 'Activity Timeline': 'Activity Log',
       'Clients': 'Clients', 'Employees': 'Clients', 'Requests Queue': 'Clients', 'Client Groups': 'Clients',
-      'Documents': 'Compliance', 'Government Centers': 'Compliance', 'Appointments': 'Compliance',
-      'Courier': 'Compliance', 'Document Types': 'Compliance', 'Compliance': 'Compliance', 'Agents': 'Compliance',
-      'Invoices': 'Finance', 'Payments': 'Finance', 'Receipts': 'Finance', 'Plan & Billing': 'Finance',
-      'Service Catalog': 'Finance', 'Quotations': 'Sales',
+      // Compliance split five ways: the officer who files documents is not necessarily the one
+      // booking appointments or running the courier.
+      'Documents': 'Documents', 'Compliance': 'Documents',
+      'Government Centers': 'Gov Centers', 'Appointments': 'Appointments', 'Courier': 'Courier',
+      'Document Types': 'Document Types',
+      // Finance split four ways, and Quotations came out of Sales to join them. The case this was
+      // built for: an accountant who raises invoices but must not edit the price list.
+      'Invoices': 'Invoices', 'Payments': 'Payments', 'Receipts': 'Payments',
+      'Plan & Billing': 'Plan & Billing', 'Service Catalog': 'Service Catalog',
+      'Quotations': 'Quotations', 'Proposal Templates': 'Quotations',
       'Pipeline': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Follow-ups': 'Sales', 'Inbox': 'Sales',
       'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Sales', 'Sales Settings': 'Sales',
       'Reports': 'Reports', 'Workflow Builder': 'Workflow', 'Checklist Rules': 'Workflow', 'Field Sets': 'Workflow',
-      'Settings': 'Settings', 'Profile Settings': 'Settings', 'Notifications': 'Settings',
-      'Problem Reports': 'Settings', 'Country Rules': 'Settings', 'Record Sequence': 'Settings',
-      'Form Builder': 'Settings', 'Print Layout': 'Settings', 'Proposal Templates': 'Settings', 'Setup Check': 'Settings',
+      // Settings split five ways, so an office manager can be given users without also being given
+      // the integrations and the API keys.
+      'Settings': 'Organisation', 'Profile Settings': 'Organisation', 'Notifications': 'Organisation',
+      'Problem Reports': 'Organisation', 'Country Rules': 'Organisation', 'Record Sequence': 'Organisation',
+      'Form Builder': 'Organisation', 'Print Layout': 'Organisation', 'Setup Check': 'Organisation',
+      // Agents was filed under Compliance, which gave every PRO officer the screen that configures
+      // the models. It is an administrator's screen and now reads as one.
+      'Agents': 'Organisation',
     };
     const _myPerm = (this.state.permsApi && this.state.permsApi.mine && this.state.permsApi.mine.grid) || null;
     const _navHidden = (() => {
@@ -18191,7 +18202,7 @@ class Component extends DCLogic {
     // ADDING A DOCUMENT IS COMPLIANCE, wherever the button sits. It appears on the Documents screen
     // and again inside the client drawer, and the client drawer is a Clients screen — so the
     // screen's own module is the wrong question to ask there.
-    const canWriteDocs = _mayDo('Compliance', 'Create');
+    const canWriteDocs = _mayDo('Documents', 'Create');
     const canWriteTasks = canWrite || _mayDo('Tasks', 'Create');
     const _openReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : (_authed ? 0 : 14);
     const _expDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'expiring').length : (_authed ? 0 : 26);
@@ -29515,15 +29526,34 @@ class Component extends DCLogic {
     // the shape used before the payload arrives, not a second opinion — once it lands, the screen
     // shows what the API will actually do.
     const _pmApi = this.state.permsApi || null;
-    const permModuleList = (_pmApi && _pmApi.modules) || ['Dashboard', 'Tasks', 'Approvals', 'SLA Monitor', 'Activity Log', 'Clients', 'Compliance', 'Finance', 'Sales', 'Reports', 'Workflow', 'Settings'];
+    const permModuleList = (_pmApi && _pmApi.modules) || ['Dashboard', 'Tasks', 'Approvals', 'SLA Monitor', 'Activity Log',
+      'Clients', 'Documents', 'Appointments', 'Courier', 'Gov Centers', 'Document Types',
+      'Invoices', 'Payments', 'Quotations', 'Plan & Billing', 'Service Catalog',
+      'Sales', 'Reports', 'Workflow', 'Users & Roles', 'Organisation', 'Email', 'Integrations', 'API Keys'];
     const permActions = (_pmApi && _pmApi.actions) || ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
-    // per-role, per-module tweaks so it's not uniform
+    // Per-role, per-module tweaks, mirroring the server's own TUNE. Only ever seen for the moment
+    // before /api/settings/perms answers — the server's resolved row replaces all of this — but it
+    // has to agree with it, or the grid shows one thing and then silently redraws as another.
+    const SPLIT_NONE = [0,0,0,0,0,0], SPLIT_VIEW = [1,0,0,0,0,0], SPLIT_VIEW_EXP = [1,0,0,0,0,1], SPLIT_WORK = [1,1,1,0,0,1];
+    const _fan = (mods, val) => Object.fromEntries(mods.map(m => [m, val]));
+    const COMPLIANCE_5 = ['Documents', 'Appointments', 'Courier', 'Gov Centers', 'Document Types'];
+    const FINANCE_4 = ['Invoices', 'Payments', 'Plan & Billing', 'Service Catalog'];
+    const SETTINGS_5 = ['Users & Roles', 'Organisation', 'Email', 'Integrations', 'API Keys'];
     const permTune = {
-      'PRO Officer': { Finance: [1,0,0,0,0,0], Reports: [1,0,0,0,0,1], Workflow: [1,0,0,0,0,0], Settings: [0,0,0,0,0,0] },
-      'Accountant': { Tasks: [1,0,0,0,0,0], Approvals: [1,0,0,1,0,0], Clients: [1,0,0,0,0,0], Compliance: [1,0,0,0,0,0], Workflow: [0,0,0,0,0,0], Settings: [0,0,0,0,0,0] },
-      'Client Admin': { Tasks:[0,0,0,0,0,0], Approvals:[0,0,0,0,0,0], 'SLA Monitor':[0,0,0,0,0,0], 'Activity Log':[0,0,0,0,0,0], Finance:[1,0,0,0,0,1], Reports:[0,0,0,0,0,0], Workflow:[0,0,0,0,0,0], Settings:[0,0,0,0,0,0] },
-      // Sales: read-only, row-scoped to their assigned clients (server enforces both).
-      'Sales': { Approvals:[0,0,0,0,0,0], Workflow:[0,0,0,0,0,0], Settings:[0,0,0,0,0,0], 'Activity Log':[1,0,0,0,0,0], Finance:[1,0,0,0,0,0], Tasks:[1,0,0,0,0,0], 'SLA Monitor':[1,0,0,0,0,0] },
+      'PRO Officer': { Reports: [1,0,0,0,0,1], Workflow: SPLIT_VIEW, Sales: SPLIT_VIEW, Quotations: SPLIT_VIEW,
+        ..._fan(FINANCE_4, SPLIT_VIEW), ..._fan(COMPLIANCE_5, SPLIT_WORK), ..._fan(SETTINGS_5, SPLIT_NONE) },
+      'Accountant': { Tasks: SPLIT_VIEW, Approvals: [1,0,0,1,0,0], Clients: SPLIT_VIEW, Workflow: SPLIT_NONE,
+        Sales: SPLIT_VIEW_EXP, Invoices: SPLIT_WORK, Payments: SPLIT_WORK, Quotations: SPLIT_VIEW_EXP,
+        'Plan & Billing': SPLIT_VIEW_EXP, 'Service Catalog': SPLIT_VIEW_EXP,
+        ..._fan(COMPLIANCE_5, SPLIT_VIEW), ..._fan(SETTINGS_5, SPLIT_NONE) },
+      'Client Admin': { Tasks: SPLIT_NONE, Approvals: SPLIT_NONE, 'SLA Monitor': SPLIT_NONE, 'Activity Log': SPLIT_NONE,
+        Reports: SPLIT_NONE, Workflow: SPLIT_NONE, Sales: SPLIT_NONE, Quotations: SPLIT_NONE,
+        ..._fan(FINANCE_4, SPLIT_VIEW_EXP), ..._fan(COMPLIANCE_5, SPLIT_VIEW), ..._fan(SETTINGS_5, SPLIT_NONE) },
+      // Sales: read-only, row-scoped to their assigned clients (server enforces both) — except the
+      // quotation, which is the thing they are employed to write.
+      'Sales': { Approvals: SPLIT_NONE, Workflow: SPLIT_NONE, 'Activity Log': SPLIT_VIEW, Tasks: SPLIT_VIEW,
+        'SLA Monitor': SPLIT_VIEW, Sales: SPLIT_WORK, Quotations: SPLIT_WORK,
+        ..._fan(FINANCE_4, SPLIT_VIEW), ..._fan(COMPLIANCE_5, SPLIT_VIEW_EXP), ..._fan(SETTINGS_5, SPLIT_NONE) },
     };
     const grid = this.state.permGrid || {};
     // The audit trail (Activity Log) is append-only by design — no role may Create/Edit/Approve/Delete
@@ -29552,6 +29582,13 @@ class Component extends DCLogic {
     // signed in with nowhere to be. It still belongs under Overview on this grid, though, and
     // filing it under "not on the menu" would be the screen telling an obvious untruth.
     (_modScreens.Dashboard = _modScreens.Dashboard || []).push('Dashboard', 'Notifications');
+    // The four that came out of Settings are TABS on the Settings screen, not sidebar items, so the
+    // hide map has nothing to say about them. Named here so the grid does not file them under "not
+    // on the menu", which would read as "this governs nothing" beside permissions that plainly do.
+    (_modScreens['Users & Roles'] = _modScreens['Users & Roles'] || []).push('Settings › Users', 'Settings › Permissions');
+    (_modScreens.Email = _modScreens.Email || []).push('Settings › Email');
+    (_modScreens.Integrations = _modScreens.Integrations || []).push('Settings › Integrations');
+    (_modScreens['API Keys'] = _modScreens['API Keys'] || []).push('Settings › Security');
     const _groupOfScreen = {};
     groupsAll.forEach(([gt9, , items9]) => (items9 || []).forEach(([lbl9]) => { _groupOfScreen[lbl9] = gt9; }));
     // A module's home is wherever most of its screens live. Several straddle two menus — Sales owns

@@ -200,8 +200,8 @@ export async function runDependentsWatch() {
   });
 }
 
-export const actRecon = standardAct(RECON, { module: "Compliance", what: "close reconciliation findings" });
-export const actLicences = standardAct(LICENCES, { module: "Compliance", what: "close licence warnings" });
-export const actIntegrity = standardAct(INTEGRITY, { module: "Compliance", what: "close document findings" });
-export const actFamily = standardAct(FAMILY, { module: "Compliance", what: "close dependent warnings" });
+export const actRecon = standardAct(RECON, { module: "Documents", what: "close reconciliation findings" });
+export const actLicences = standardAct(LICENCES, { module: "Documents", what: "close licence warnings" });
+export const actIntegrity = standardAct(INTEGRITY, { module: "Documents", what: "close document findings" });
+export const actFamily = standardAct(FAMILY, { module: "Documents", what: "close dependent warnings" });
 export { AgentActionError };

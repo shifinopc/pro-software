@@ -96,5 +96,5 @@ export async function runSubscriptionBilling() {
   });
 }
 
-export const actFees = standardAct(FEES, { module: "Finance", what: "close fee findings" });
-export const actSubs = standardAct(SUBS, { module: "Finance", what: "close billing findings" });
+export const actFees = standardAct(FEES, { module: "Plan & Billing", what: "close fee findings" });
+export const actSubs = standardAct(SUBS, { module: "Plan & Billing", what: "close billing findings" });

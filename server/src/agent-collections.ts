@@ -156,7 +156,7 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   if (action === "dismiss") return decide(t.id, "dismissed", actor, { reason: String(input?.reason ?? "") || null });
   if (action !== "record") throw new AgentActionError("Unknown action.");
 
-  await requirePerm(actor, "Finance", "Create", "record payments");
+  await requirePerm(actor, "Payments", "Create", "record payments");
   const o = (t.output ?? {}) as any;
   const allocations: Allocation[] = o.match?.allocations ?? [];
   if (!allocations.length) throw new AgentActionError("Nothing was matched. Record this payment by hand from Invoices.");
