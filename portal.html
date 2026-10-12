@@ -3273,6 +3273,38 @@ class Component extends DCLogic {
      * a keypress in the last half hour, it is renewed. A portal left open on an unattended screen
      * is deliberately NOT renewed: that is what the expiry is for.
      */
+    /**
+     * PIN THIS TAB TO THE ACCOUNT IT LOADED AS — the same guard as the staff console, for the same
+     * reason. The portal session is shared by every tab of this site, so a second sign-in replaces
+     * it while the first tab carries on showing the previous company's documents and invoices.
+     * Anything done from that screen would be done as the other account.
+     */
+    if (!window.__stimesTabPin) {
+      window.__stimesTabPin = true;
+      const TOK_K = 'stimespro:portalToken', PIN_K = 'stimespro:portalTabUser';
+      const subOf = (t) => {
+        try { return String(JSON.parse(atob(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''); }
+        catch (e9) { return ''; }
+      };
+      const setPin = (v) => { try { v ? sessionStorage.setItem(PIN_K, v) : sessionStorage.removeItem(PIN_K); } catch (e9) {} };
+      const getPin = () => { try { return sessionStorage.getItem(PIN_K) || ''; } catch (e9) { return ''; } };
+      const _set = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = (k, v) => { if (k === TOK_K) setPin(subOf(v)); return _set(k, v); };
+      const _del = localStorage.removeItem.bind(localStorage);
+      localStorage.removeItem = (k) => { if (k === TOK_K) setPin(''); return _del(k); };
+      if (!getPin()) setPin(subOf(localStorage.getItem(TOK_K)));
+      window.__stimesTabMismatch = () => {
+        const p9 = getPin();
+        if (!p9) return false;
+        const now9 = subOf(localStorage.getItem(TOK_K));
+        return !!now9 && now9 !== p9;
+      };
+      window.addEventListener('storage', (e9) => {
+        if (e9.key && e9.key !== TOK_K) return;
+        if (window.__stimesTabMismatch()) { try { this.setState({ sessionSwitched: true }); } catch (e8) {} }
+      });
+    }
+
     if (!window.__stimesSessionKeeper) {
       window.__stimesSessionKeeper = true;
       let lastSeen = Date.now();
@@ -3298,7 +3330,18 @@ class Component extends DCLogic {
     if (!window.__stimesAuthFetch) {
       window.__stimesAuthFetch = true;
       const _rawFetch = window.fetch.bind(window);
-      window.fetch = (input, init) => _rawFetch(input, init).then((res) => {
+      window.fetch = (input, init) => {
+        // Refused before it is sent: this tab is no longer the account in storage, and the request
+        // would otherwise be carried out and recorded as whoever is.
+        const h9 = (init && init.headers) || (input && input.headers) || {};
+        const a9 = typeof h9.get === 'function' ? h9.get('Authorization') : (h9.Authorization || h9.authorization);
+        if (a9 && window.__stimesTabMismatch && window.__stimesTabMismatch()) {
+          try { this.setState({ sessionSwitched: true }); } catch (e8) {}
+          return Promise.resolve(new Response(
+            JSON.stringify({ error: 'This tab is no longer signed in as you. Reload to continue.' }),
+            { status: 409, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return _rawFetch(input, init).then((res) => {
         if (res.status !== 401) return res;
         const hdrs = (init && init.headers) || (input && input.headers) || {};
         const auth = typeof hdrs.get === 'function'
@@ -3309,7 +3352,8 @@ class Component extends DCLogic {
         return new Response(
           JSON.stringify({ error: 'Your session has expired — sign in again, then try once more.' }),
           { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
-      });
+        });
+      };
     }
 
     /**
@@ -3543,23 +3587,31 @@ class Component extends DCLogic {
   renderVals() {
     // ── App-level state banner (session expired / server unreachable) ──
     // Expired beats offline: if the token is dead, reconnecting changes nothing until they sign in.
-    const _bannerKind = this.state.authExpired ? 'expired' : (this.state.apiOffline ? 'offline' : null);
+    const _bannerKind = this.state.sessionSwitched ? 'switched'
+      : this.state.authExpired ? 'expired'
+      : (this.state.apiOffline ? 'offline' : null);
     const stateBannerApi = {
       stateBannerShow: !!_bannerKind,
-      stateBannerBg: _bannerKind === 'expired' ? '#FEF4E2' : '#FEECEC',
-      stateBannerBorder: _bannerKind === 'expired' ? '#F5D9A8' : '#F7C9C9',
-      stateBannerDot: _bannerKind === 'expired' ? '#B8860B' : '#C0353A',
-      stateBannerFg: _bannerKind === 'expired' ? '#7A5A08' : '#8C2226',
-      stateBannerIcon: _bannerKind === 'expired'
+      stateBannerBg: _bannerKind === 'offline' ? '#FEECEC' : '#FEF4E2',
+      stateBannerBorder: _bannerKind === 'offline' ? '#F7C9C9' : '#F5D9A8',
+      stateBannerDot: _bannerKind === 'offline' ? '#C0353A' : '#B8860B',
+      stateBannerFg: _bannerKind === 'offline' ? '#8C2226' : '#7A5A08',
+      stateBannerIcon: _bannerKind !== 'offline'
         ? 'M12 8v5M12 17h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20'
         : 'M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
-      stateBannerTitle: _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
-      stateBannerBody: _bannerKind === 'expired'
+      stateBannerTitle: _bannerKind === 'switched' ? 'Another account signed in on this browser'
+        : _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
+      stateBannerBody: _bannerKind === 'switched'
+        ? 'This tab still shows the account it was opened with, and nothing on it will be sent. Reload to continue.'
+        : _bannerKind === 'expired'
         ? 'You are still seeing the last data loaded. Sign in again to continue.'
         : 'The last update did not come through, so what you see may be out of date.',
-      stateBannerCta: _bannerKind === 'expired' ? 'Sign in' : 'Retry',
+      stateBannerCta: _bannerKind === 'switched' ? 'Reload' : _bannerKind === 'expired' ? 'Sign in' : 'Retry',
       stateBannerAct: () => {
-        if (_bannerKind === 'expired') {
+        if (_bannerKind === 'switched') {
+          try { sessionStorage.removeItem('stimespro:portalTabUser'); } catch (e9) {}
+          location.reload();
+        } else if (_bannerKind === 'expired') {
           // Clear the dead token so the app lands on the sign-in screen rather than looping on 401s.
           try { localStorage.removeItem('stimespro:portalToken'); } catch (e9) {}
           location.href = '/portal/dashboard';

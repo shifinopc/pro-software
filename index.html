@@ -15659,6 +15659,70 @@ class Component extends DCLogic {
      * The expiry is read out of the token itself — a JWT's middle segment is base64 JSON, and `exp`
      * is in it — so the page knows when it runs out without asking the server.
      */
+    /**
+     * PIN EACH TAB TO THE ACCOUNT IT LOADED AS.
+     *
+     * The session lives in localStorage, which every tab of this site shares, so there is only ever
+     * one of them. Signing in as somebody else in a second tab replaces it — and the first tab goes
+     * on showing the previous person's name and screens, because nothing re-reads who you are until
+     * the page reloads. Three tabs then look like three people, and every one of them is acting as
+     * whoever signed in last.
+     *
+     * That is not cosmetic. The action is carried out, recorded and permission-checked as the other
+     * account: an officer's screen refused something the officer may do, or worse, a junior's screen
+     * holding a senior's rights — and an audit trail naming the wrong person.
+     *
+     * So each tab remembers, in sessionStorage, which is per tab and not shared, whose session it
+     * loaded with. The moment the shared token stops matching, this tab sends nothing and says so.
+     *
+     * THIS TAB'S OWN WRITES ARE NOT A MISMATCH. Signing in here, and the super-admin "act as" swap,
+     * both set the token from this tab, and the pin follows them instead of firing on them. That is
+     * what wrapping setItem buys: every one of those paths goes through it, including ones written
+     * later by somebody who never reads this comment.
+     */
+    if (!window.__stimesTabPin) {
+      window.__stimesTabPin = true;
+      const TOK_K = 'stimespro:token', PIN_K = 'stimespro:tabUser';
+      const subOf = (t) => {
+        try { return String(JSON.parse(atob(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''); }
+        catch (e9) { return ''; }
+      };
+      const setPin = (v) => { try { v ? sessionStorage.setItem(PIN_K, v) : sessionStorage.removeItem(PIN_K); } catch (e9) {} };
+      const getPin = () => { try { return sessionStorage.getItem(PIN_K) || ''; } catch (e9) { return ''; } };
+
+      const _set = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = (k, v) => { if (k === TOK_K) setPin(subOf(v)); return _set(k, v); };
+      const _del = localStorage.removeItem.bind(localStorage);
+      localStorage.removeItem = (k) => { if (k === TOK_K) setPin(''); return _del(k); };
+
+      if (!getPin()) setPin(subOf(localStorage.getItem(TOK_K)));
+
+      window.__stimesTabMismatch = () => {
+        const p9 = getPin();
+        if (!p9) return false;                      // never signed in here; nothing to contradict
+        const now9 = subOf(localStorage.getItem(TOK_K));
+        return !!now9 && now9 !== p9;
+      };
+      // Named, rather than "another account": somebody needs to know who they would be continuing
+      // as before they agree to it.
+      window.__stimesWhoNow = () => {
+        try { return (JSON.parse(localStorage.getItem('stimespro:user') || '{}') || {}).name || 'someone else'; }
+        catch (e9) { return 'someone else'; }
+      };
+      // `storage` fires in the OTHER tabs and never in the one that wrote — which is exactly the
+      // case this guards, and why noticing it needs no polling.
+      // BOTH KEYS. The other tab writes the token first and the user record a moment later, so a
+      // listener watching only the token reads the previous person's name and the banner names the
+      // wrong one. Watching both means the later write corrects it, and the flag carries no name of
+      // its own — the banner reads the name when it draws.
+      window.addEventListener('storage', (e9) => {
+        if (e9.key && e9.key !== TOK_K && e9.key !== 'stimespro:user') return;
+        if (window.__stimesTabMismatch()) {
+          try { this.setState({ sessionSwitched: true }); } catch (e8) {}
+        }
+      });
+    }
+
     if (!window.__stimesSessionKeeper) {
       window.__stimesSessionKeeper = true;
       let lastSeen = Date.now();
@@ -15693,7 +15757,19 @@ class Component extends DCLogic {
     if (!window.__stimesAuthFetch) {
       window.__stimesAuthFetch = true;
       const _rawFetch = window.fetch.bind(window);
-      window.fetch = (input, init) => _rawFetch(input, init).then((res) => {
+      window.fetch = (input, init) => {
+        // REFUSED BEFORE IT IS SENT, when this tab's account is no longer the one in storage. The
+        // request would otherwise be carried out, recorded and permission-checked as somebody else.
+        const h9 = (init && init.headers) || (input && input.headers) || {};
+        const a9 = typeof h9.get === 'function' ? h9.get('Authorization') : (h9.Authorization || h9.authorization);
+        if (a9 && window.__stimesTabMismatch && window.__stimesTabMismatch()) {
+          const who9 = window.__stimesWhoNow();
+          try { this.setState({ sessionSwitched: true }); } catch (e8) {}
+          return Promise.resolve(new Response(
+            JSON.stringify({ error: 'This tab is no longer signed in as you — ' + who9 + ' signed in elsewhere. Reload to continue.' }),
+            { status: 409, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return _rawFetch(input, init).then((res) => {
         if (res.status !== 401) return res;
         const hdrs = (init && init.headers) || (input && input.headers) || {};
         const auth = typeof hdrs.get === 'function'
@@ -15727,7 +15803,8 @@ class Component extends DCLogic {
         return new Response(
           JSON.stringify({ error: 'Your session has expired — sign in again, then try once more.' }),
           { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
-      });
+        });
+      };
     }
     // Load every backend-wired area with the current staff token. Called on mount AND right after a
     // successful login so the real data replaces the design's fallback samples without a page reload.
@@ -17556,24 +17633,41 @@ class Component extends DCLogic {
 
     // ── App-level state banner (session expired / server unreachable) ──
     // Expired beats offline: if the token is dead, reconnecting changes nothing until they sign in.
-    const _bannerKind = this.state.authExpired ? 'expired' : (this.state.apiOffline ? 'offline' : null);
+    // A SWITCHED SESSION OUTRANKS BOTH. Expired or offline, the worst case is stale data on screen;
+    // this one is the screen naming the wrong person, so it is the thing to say first.
+    const _switchedTo = (this.state.sessionSwitched && window.__stimesWhoNow)
+      ? window.__stimesWhoNow() : '';
+    const _bannerKind = this.state.sessionSwitched ? 'switched'
+      : this.state.authExpired ? 'expired'
+      : (this.state.apiOffline ? 'offline' : null);
     const stateBannerApi = {
       stateBannerShow: !!_bannerKind,
-      stateBannerBg: _bannerKind === 'expired' ? '#FEF4E2' : '#FEECEC',
-      stateBannerBorder: _bannerKind === 'expired' ? '#F5D9A8' : '#F7C9C9',
-      stateBannerDot: _bannerKind === 'expired' ? '#B8860B' : '#C0353A',
-      stateBannerFg: _bannerKind === 'expired' ? '#7A5A08' : '#8C2226',
-      stateBannerIcon: _bannerKind === 'expired'
+      stateBannerBg: _bannerKind === 'offline' ? '#FEECEC' : '#FEF4E2',
+      stateBannerBorder: _bannerKind === 'offline' ? '#F7C9C9' : '#F5D9A8',
+      stateBannerDot: _bannerKind === 'offline' ? '#C0353A' : '#B8860B',
+      stateBannerFg: _bannerKind === 'offline' ? '#8C2226' : '#7A5A08',
+      stateBannerIcon: _bannerKind !== 'offline'
         ? 'M12 8v5M12 17h.01M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20'
         : 'M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01',
-      stateBannerTitle: _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
-      stateBannerBody: _bannerKind === 'expired'
+      stateBannerTitle: _bannerKind === 'switched'
+        ? ('You are signed in as ' + _switchedTo + ' in another tab')
+        : _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
+      stateBannerBody: _bannerKind === 'switched'
+        ? ('This screen still shows the account it was opened with, and nothing on it will be sent: '
+           + 'anything done here would be recorded as ' + _switchedTo
+           + '. Reload to continue as them, or use a separate browser profile to work as both at once.')
+        : _bannerKind === 'expired'
         ? ('You are still seeing the last data loaded. Taking you to sign in'
            + (this.state.authExpiredIn > 0 ? ' in ' + this.state.authExpiredIn + 's\u2026' : '\u2026'))
         : 'The last update did not come through, so what you see may be out of date.',
-      stateBannerCta: _bannerKind === 'expired' ? 'Sign in now' : 'Retry',
+      stateBannerCta: _bannerKind === 'switched' ? ('Reload as ' + _switchedTo)
+        : _bannerKind === 'expired' ? 'Sign in now' : 'Retry',
       stateBannerAct: () => {
-        if (_bannerKind === 'expired') {
+        if (_bannerKind === 'switched') {
+          // Re-pin to whoever is actually in storage, then start the screen again as them.
+          try { sessionStorage.removeItem('stimespro:tabUser'); } catch (e9) {}
+          location.reload();
+        } else if (_bannerKind === 'expired') {
           // Clear the dead token so the app lands on the sign-in screen rather than looping on 401s.
           try { localStorage.removeItem('stimespro:token'); } catch (e9) {}
           location.href = '/dashboard';
