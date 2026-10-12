@@ -15697,6 +15697,28 @@ class Component extends DCLogic {
 
       if (!getPin()) setPin(subOf(localStorage.getItem(TOK_K)));
 
+      // AND THEN RELOAD, rather than waiting to be clicked. A notice nobody acts on leaves the tab
+      // sitting there looking usable and doing nothing, which is the state this whole guard exists
+      // to end. Five seconds, not instantly: somebody mid-keystroke gets to see what happened and
+      // copy anything they had typed, because it cannot be saved as them in any case.
+      //
+      // Started once — the fetch guard and the storage listener both land here, and a second call
+      // must not restart the count.
+      this._startSwitchReload = this._startSwitchReload || (() => {
+        if (this._switchTimer) return;
+        this._switchAt = Date.now();
+        this.setState({ switchIn: 5 });
+        this._switchTimer = setInterval(() => {
+          const left9 = Math.max(0, 5 - Math.round((Date.now() - this._switchAt) / 1000));
+          this.setState({ switchIn: left9 });
+          if (left9 <= 0) {
+            clearInterval(this._switchTimer);
+            try { sessionStorage.removeItem('stimespro:tabUser'); } catch (e8) {}
+            location.reload();
+          }
+        }, 1000);
+      });
+
       window.__stimesTabMismatch = () => {
         const p9 = getPin();
         if (!p9) return false;                      // never signed in here; nothing to contradict
@@ -15718,7 +15740,7 @@ class Component extends DCLogic {
       window.addEventListener('storage', (e9) => {
         if (e9.key && e9.key !== TOK_K && e9.key !== 'stimespro:user') return;
         if (window.__stimesTabMismatch()) {
-          try { this.setState({ sessionSwitched: true }); } catch (e8) {}
+          try { this.setState({ sessionSwitched: true }); this._startSwitchReload(); } catch (e8) {}
         }
       });
     }
@@ -15764,7 +15786,7 @@ class Component extends DCLogic {
         const a9 = typeof h9.get === 'function' ? h9.get('Authorization') : (h9.Authorization || h9.authorization);
         if (a9 && window.__stimesTabMismatch && window.__stimesTabMismatch()) {
           const who9 = window.__stimesWhoNow();
-          try { this.setState({ sessionSwitched: true }); } catch (e8) {}
+          try { this.setState({ sessionSwitched: true }); this._startSwitchReload(); } catch (e8) {}
           return Promise.resolve(new Response(
             JSON.stringify({ error: 'This tab is no longer signed in as you — ' + who9 + ' signed in elsewhere. Reload to continue.' }),
             { status: 409, headers: { 'Content-Type': 'application/json' } }));
@@ -17653,14 +17675,14 @@ class Component extends DCLogic {
         ? ('You are signed in as ' + _switchedTo + ' in another tab')
         : _bannerKind === 'expired' ? 'Your session has expired' : 'Cannot reach the server',
       stateBannerBody: _bannerKind === 'switched'
-        ? ('This screen still shows the account it was opened with, and nothing on it will be sent: '
-           + 'anything done here would be recorded as ' + _switchedTo
-           + '. Reload to continue as them, or use a separate browser profile to work as both at once.')
+        ? ('Nothing on this screen will be sent — it would be recorded as ' + _switchedTo + '. '
+           + 'Reloading as them' + (this.state.switchIn > 0 ? ' in ' + this.state.switchIn + 's…' : '…')
+           + ' Use a separate browser profile to work as both at once.')
         : _bannerKind === 'expired'
         ? ('You are still seeing the last data loaded. Taking you to sign in'
            + (this.state.authExpiredIn > 0 ? ' in ' + this.state.authExpiredIn + 's\u2026' : '\u2026'))
         : 'The last update did not come through, so what you see may be out of date.',
-      stateBannerCta: _bannerKind === 'switched' ? ('Reload as ' + _switchedTo)
+      stateBannerCta: _bannerKind === 'switched' ? 'Reload now'
         : _bannerKind === 'expired' ? 'Sign in now' : 'Retry',
       stateBannerAct: () => {
         if (_bannerKind === 'switched') {
