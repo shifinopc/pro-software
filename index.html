@@ -3067,19 +3067,21 @@
               <div style="font-size:12.5px; color:#8C8899; margin-top:4px;">Everything waiting on you — tasks &amp; workflow steps, triaged by deadline</div>
             </div><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openTaskModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:12.5px; font-weight:600; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New task</button></sc-if>
           </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:4px; background:#F3F1F7; border-radius:99px; padding:4px; align-self:flex-start;">
-            <sc-for list="{{ mtTabs }}" as="t" hint-placeholder-count="2"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 17px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}</span></sc-for>
+          <!-- One row: pending/done on the left, and the workflow each step came from beside it.
+               They answer the same question — which of this pile am I looking at — so splitting them
+               over two lines put a gap between a choice and its other half. -->
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <span style="display:flex; gap:4px; background:#F3F1F7; border-radius:99px; padding:4px; flex-shrink:0;">
+              <sc-for list="{{ mtTabs }}" as="t" hint-placeholder-count="2"><span onClick="{{ t.select }}" style="font-size:12px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 17px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}</span></sc-for>
+            </span>
+            <sc-if value="{{ mtWfShow }}" hint-placeholder-val="{{ false }}">
+              <span style="display:flex; flex-wrap:wrap; gap:7px; align-items:center;">
+                <sc-for list="{{ mtWfChips }}" as="w" hint-placeholder-count="3">
+                  <span onClick="{{ w.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; color:{{ w.color }}; background:{{ w.bg }}; border:1px solid {{ w.border }}; padding:5px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ w.label }}<span style="font-size:10.5px; color:#A9A6B4;">{{ w.count }}</span></span>
+                </sc-for>
+              </span>
+            </sc-if>
           </section>
-          <!-- One workflow at a time. The tabs above split pending from done; this splits the
-               pending pile by the workflow each step came from, which is how the work is actually
-               batched — all the MISA renewals in one sitting, not one of each. -->
-          <sc-if value="{{ mtWfShow }}" hint-placeholder-val="{{ false }}">
-            <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .06s both; display:flex; flex-wrap:wrap; gap:7px; align-items:center;">
-              <sc-for list="{{ mtWfChips }}" as="w" hint-placeholder-count="3">
-                <span onClick="{{ w.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:600; color:{{ w.color }}; background:{{ w.bg }}; border:1px solid {{ w.border }}; padding:5px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ w.label }}<span style="font-size:10.5px; color:#A9A6B4;">{{ w.count }}</span></span>
-              </sc-for>
-            </section>
-          </sc-if>
           <sc-if value="{{ mtPending }}" hint-placeholder-val="{{ true }}">
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px;">
             <div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:16px; padding:15px 18px;"><div style="font-size:10.5px; font-weight:700; letter-spacing:.06em; color:#C0353A;">OVERDUE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; margin-top:6px; color:#C0353A;">{{ wkOverdue }}</div></div>
@@ -7880,17 +7882,10 @@
                     </div>
                     <div style="font-size:11px; color:#8C8899; margin-top:12px; line-height:1.6;">A module exists because code binds routes to it, so there is no way to add one here &mdash; an invented module would govern nothing, and every box ticked under it would enforce nothing.</div>
 
-                    <sc-if value="{{ covHasGaps }}" hint-placeholder-val="{{ true }}">
-                      <div style="margin-top:13px; background:#FEF9EE; border:1px solid #F7E4C0; border-radius:12px; padding:12px 15px;">
-                        <div style="font-size:11.5px; font-weight:700; color:#B7791F;">{{ covGapCount }}</div>
-                        <div style="font-size:11px; color:#8C6A2F; margin-top:4px; line-height:1.6;">These keep the rule they always had &mdash; anyone signed in as staff may read them, and only an admin may change them. Nothing here is unguarded; the grid simply is not the whole story for these, and that is worth knowing before trusting a row of it.</div>
-                        <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:9px;">
-                          <sc-for list="{{ covUngoverned }}" as="u" hint-placeholder-count="8">
-                            <span style="font-family:ui-monospace,monospace; font-size:10px; color:#8C6A2F; background:#FDF3E2; padding:3px 8px; border-radius:7px;">{{ u.path }}</span>
-                          </sc-for>
-                        </div>
-                      </div>
-                    </sc-if>
+                    <!-- The forty-one routes the grid does not govern were listed here. True, and
+                         noise: paths nobody can act on from this screen, under a heading that reads
+                         like a warning. The count stays in the summary line above, which is the part
+                         that answers "is this grid the whole story". -->
                   </div>
                 </div>
               </div>
@@ -24059,7 +24054,57 @@ class Component extends DCLogic {
         openDrawer: () => _openTaskDrawer('TSK-' + (2100 + i), t._wfId),
       };
     });
-    const visibleTasks = allTasks.filter(t => t.archived === showArchived);
+    // ── WORKFLOW STEPS BELONG ON THIS LIST TOO ─────────────────────────────────────────────────
+    //
+    // Task List read plain Task records and nothing else, so an officer with sixty-four live
+    // workflow steps saw two rows here and sixty-four on My Tasks. The screen says "every officer's
+    // tasks across all clients" and was showing a fraction of the work, which makes it useless for
+    // the thing it is for: looking across the team.
+    //
+    // One row per STEP, named with the person it is about — "Prerequisite Check · Iqama renewal —
+    // MD MAHAMUD HASSAIN" — because that is the unit somebody picks up and does. The run itself is
+    // not a row: a case with four open steps would otherwise appear five times.
+    //
+    // Built here from the same payload My Tasks uses rather than from its row-builder, which is
+    // declared further down this function. Who is in that payload is the SERVER's decision — an
+    // admin gets every officer's steps, anyone else gets their own plus unclaimed work — so this
+    // list widens or narrows with the person reading it without asking a second question.
+    const _tlSteps = (!showArchived && Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [])
+      .filter(w8 => w8.status === 'active')
+      .map((w8, i8) => {
+        const inst8 = w8.instance || {};
+        // The SLA is in hours and these buckets are in days; a step with no SLA has no deadline to
+        // be late against and sorts to the end rather than pretending to be due today.
+        const elapsed8 = w8.createdAt ? Math.max(0, (Date.now() - new Date(w8.createdAt).getTime()) / 3600000) : 0;
+        const remH8 = Number(w8.slaHours) > 0 ? (w8.slaHours - elapsed8) : null;
+        const dueIn8 = remH8 == null ? 9999 : Math.floor(remH8 / 24);
+        const subject8 = inst8.subject || '';
+        return {
+          id: 'WF-' + (w8.id || i8), _id: null, _step: true, _stepId: w8.id,
+          title: w8.title || 'Workflow step',
+          client: inst8.clientName || '—',
+          assignee: w8.assignee || (w8.assigneeRole ? ('role: ' + w8.assigneeRole) : 'Unassigned'),
+          priority: TASK_PRIO_CAP[String(w8.priority || 'medium').toLowerCase()] || 'Medium',
+          // Every one of these is being worked right now, which is what `active` means.
+          status: 'In progress',
+          dueIn: dueIn8,
+          due: remH8 == null ? 'no SLA' : (remH8 < 0 ? Math.abs(Math.round(remH8)) + 'h over' : Math.round(remH8) + 'h left'),
+          // The run and the person it is about: without the subject, five identical "Prerequisite
+          // Check" rows are indistinguishable.
+          // The run title usually already names the person — "Health Insurance renewal — shifin" —
+          // so appending the subject again produced "— shifin — shifin". Added only when the title
+          // does not already say it.
+          dept: '⚙ ' + (() => {
+            const run8 = inst8.title || 'Workflow run';
+            return (subject8 && run8.toLowerCase().indexOf(subject8.toLowerCase()) === -1)
+              ? (run8 + ' — ' + subject8) : run8;
+          })(),
+          docType: '', wf: inst8.workflow || null, comp: null, employee: subject8 || null,
+          archived: false,
+          openDrawer: () => this.setState({ workRow: w8.id }),
+        };
+      });
+    const visibleTasks = [...allTasks.filter(t => t.archived === showArchived), ..._tlSteps];
     const tasks = visibleTasks.filter(t => tFilter === 'All' || t.status === tFilter);
     const taskTabs = ['All', 'To do', 'In progress', 'Blocked', 'Done'].map(k => ({
       label: k, select: () => this.setState({ taskFilter: k }),
@@ -24147,6 +24192,13 @@ class Component extends DCLogic {
     };
     const _taskRow = (t) => {
       const b = _taskBadge(t); const dd = _taskDays(t);
+      // A workflow step carries no status/priority chips of its own — those are built where plain
+      // tasks are made — so they are filled in here rather than rendering a row with blank pills.
+      if (t._step) {
+        const pr8 = prio[t.priority] || ['#F3F1F7', '#6F6C7A'];
+        t = { ...t, prBg: pr8[0], prColor: pr8[1], stBg: '#EFEBFF', stColor: '#4E3FA8',
+              inProg: true, archive: () => {} };
+      }
       const metaBits = [t.client, t.assignee && t.assignee !== 'Unassigned' ? t.assignee : null, (t.dept && t.dept !== '—') ? t.dept : (t.docType || null), t.due].filter(Boolean);
       const meet = _taskMeeting(t._id);
       return { ...t, badgeNum: b[0], badgeUnit: b[1], badgeBg: b[2], badgeColor: b[3],
