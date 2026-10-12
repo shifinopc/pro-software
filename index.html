@@ -24054,57 +24054,83 @@ class Component extends DCLogic {
         openDrawer: () => _openTaskDrawer('TSK-' + (2100 + i), t._wfId),
       };
     });
-    // ── WORKFLOW STEPS BELONG ON THIS LIST TOO ─────────────────────────────────────────────────
+    // ── ONE ROW PER RENEWAL, NOT PER STEP ──────────────────────────────────────────────────────
     //
     // Task List read plain Task records and nothing else, so an officer with sixty-four live
-    // workflow steps saw two rows here and sixty-four on My Tasks. The screen says "every officer's
-    // tasks across all clients" and was showing a fraction of the work, which makes it useless for
-    // the thing it is for: looking across the team.
+    // workflow steps saw two rows here. Listing the steps fixed that and overcorrected: twenty-eight
+    // rows all reading "Check Establishment and Employee", one per employee, is a list you have to
+    // decode rather than read.
     //
-    // One row per STEP, named with the person it is about — "Prerequisite Check · Iqama renewal —
-    // MD MAHAMUD HASSAIN" — because that is the unit somebody picks up and does. The run itself is
-    // not a row: a case with four open steps would otherwise appear five times.
+    // A run has one current step at a time, so the run IS the unit of work — "Iqama renewal — MD
+    // MAHAMUD HASSAIN", with the step it is sitting on as its subtitle. Opening it goes to that
+    // step, which is where the process timeline lives, so the detail is one click away rather than
+    // spread across the list.
     //
-    // Built here from the same payload My Tasks uses rather than from its row-builder, which is
-    // declared further down this function. Who is in that payload is the SERVER's decision — an
-    // admin gets every officer's steps, anyone else gets their own plus unclaimed work — so this
-    // list widens or narrows with the person reading it without asking a second question.
-    const _tlSteps = (!showArchived && Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [])
-      .filter(w8 => w8.status === 'active')
-      .map((w8, i8) => {
+    // Grouped from the same payload My Tasks uses. Who is in it is the SERVER's decision — an admin
+    // gets every officer's work, anyone else their own plus the unclaimed — so this list widens or
+    // narrows with the person reading it.
+    const _tlRuns = (() => {
+      if (showArchived) return [];
+      const live8 = (Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [])
+        .filter(w8 => w8.status === 'active');
+      const byRun8 = new Map();
+      for (const w8 of live8) {
         const inst8 = w8.instance || {};
-        // The SLA is in hours and these buckets are in days; a step with no SLA has no deadline to
-        // be late against and sorts to the end rather than pretending to be due today.
+        const key8 = w8.instanceId || inst8.id || ('step:' + w8.id);   // a step with no run stands alone
         const elapsed8 = w8.createdAt ? Math.max(0, (Date.now() - new Date(w8.createdAt).getTime()) / 3600000) : 0;
         const remH8 = Number(w8.slaHours) > 0 ? (w8.slaHours - elapsed8) : null;
-        const dueIn8 = remH8 == null ? 9999 : Math.floor(remH8 / 24);
+        const prev8 = byRun8.get(key8);
+        // THE MOST URGENT STEP SPEAKS FOR THE RUN. Parallel steps are the exception, but when there
+        // are two the later one must not hide that the other is a week overdue.
+        if (!prev8 || (remH8 != null && (prev8.remH == null || remH8 < prev8.remH))) {
+          byRun8.set(key8, { step: w8, inst: inst8, remH: remH8, n: (prev8 ? prev8.n : 0) + 1 });
+        } else {
+          prev8.n += 1;
+        }
+      }
+      return [...byRun8.values()].map(({ step: w8, inst: inst8, remH: remH8, n: n8 }) => {
         const subject8 = inst8.subject || '';
+        const run8 = inst8.title || w8.title || 'Workflow run';
+        // The run title usually already names the person — "Health Insurance renewal — shifin" — so
+        // the subject is added only when it does not, or it reads "— shifin — shifin".
+        const named8 = (subject8 && run8.toLowerCase().indexOf(subject8.toLowerCase()) === -1)
+          ? (run8 + ' — ' + subject8) : run8;
         return {
-          id: 'WF-' + (w8.id || i8), _id: null, _step: true, _stepId: w8.id,
-          title: w8.title || 'Workflow step',
+          id: 'WF-' + (w8.instanceId || w8.id), _id: null, _step: true, _stepId: w8.id,
+          title: named8,
           client: inst8.clientName || '—',
           assignee: w8.assignee || (w8.assigneeRole ? ('role: ' + w8.assigneeRole) : 'Unassigned'),
           priority: TASK_PRIO_CAP[String(w8.priority || 'medium').toLowerCase()] || 'Medium',
-          // Every one of these is being worked right now, which is what `active` means.
           status: 'In progress',
-          dueIn: dueIn8,
+          dueIn: remH8 == null ? 9999 : Math.floor(remH8 / 24),
           due: remH8 == null ? 'no SLA' : (remH8 < 0 ? Math.abs(Math.round(remH8)) + 'h over' : Math.round(remH8) + 'h left'),
-          // The run and the person it is about: without the subject, five identical "Prerequisite
-          // Check" rows are indistinguishable.
-          // The run title usually already names the person — "Health Insurance renewal — shifin" —
-          // so appending the subject again produced "— shifin — shifin". Added only when the title
-          // does not already say it.
-          dept: '⚙ ' + (() => {
-            const run8 = inst8.title || 'Workflow run';
-            return (subject8 && run8.toLowerCase().indexOf(subject8.toLowerCase()) === -1)
-              ? (run8 + ' — ' + subject8) : run8;
-          })(),
+          // What it is waiting on, which is the question a list of renewals is actually asked.
+          dept: '⚙ ' + w8.title + (n8 > 1 ? ' (+' + (n8 - 1) + ' more open)' : ''),
           docType: '', wf: inst8.workflow || null, comp: null, employee: subject8 || null,
           archived: false,
-          openDrawer: () => this.setState({ workRow: w8.id }),
+          // OPENS THE RUN, NOT THE STEP'S FORM.
+          //
+          // Both exist. The step drawer is for doing the work — the checklist, the verdict, Complete
+          // step — and it is the right place to land from My Tasks, where everything is yours to do.
+          // This list is the other question: where has this renewal got to. So it opens the case,
+          // which is the view with the process timeline on it — created, the step it is live on, and
+          // what is still upcoming — and the step's own form is one click further in.
+          //
+          // Falls back to the step when a run has no case record of its own, which is better than a
+          // row that does not open.
+          // Through _openTaskDrawer, NOT a bare setState. The process timeline reads wfRunDetail,
+          // which only that helper fills — set workRow on its own and the timeline sits on
+          // "Loading run steps…" for good, which is precisely what the comment above it warns
+          // about and precisely what the first version of this did.
+          openDrawer: () => {
+            const kase8 = allTasks.find(t8 => t8._wfId && t8._wfId === w8.instanceId);
+            if (kase8) _openTaskDrawer(kase8.id, kase8._wfId);
+            else this.setState({ workRow: w8.id });
+          },
         };
       });
-    const visibleTasks = [...allTasks.filter(t => t.archived === showArchived), ..._tlSteps];
+    })();
+    const visibleTasks = [...allTasks.filter(t => t.archived === showArchived), ..._tlRuns];
     const tasks = visibleTasks.filter(t => tFilter === 'All' || t.status === tFilter);
     const taskTabs = ['All', 'To do', 'In progress', 'Blocked', 'Done'].map(k => ({
       label: k, select: () => this.setState({ taskFilter: k }),
