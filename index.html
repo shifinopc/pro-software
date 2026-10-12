@@ -7826,12 +7826,16 @@
                 </div>
                 <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:22px 24px;">
                   <div style="display:flex; align-items:center; gap:10px;"><span style="font-family:'Space Grotesk',sans-serif; font-size:15.5px; font-weight:700;">Permissions matrix</span><span style="width:8px; height:8px; border-radius:99px; background:{{ roleDescColor }};"></span><span style="font-size:12px; font-weight:700; color:#4B4757;">{{ setRoleSel }}</span></div>
-                  <div style="font-size:12px; color:#8C8899; margin-top:3px;">{{ roleDesc0 }} · View drives which sidebar items appear</div>
-                  <div style="overflow-x:auto; margin-top:14px;"><div style="min-width:560px;">
-                    <div style="display:grid; grid-template-columns:1.4fr repeat(6,1fr); gap:6px; padding:0 4px 10px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #F0EDF6;"><span>Module</span><sc-for list="{{ permActions }}" as="a" hint-placeholder-count="6"><span style="text-align:center;">{{ a }}</span></sc-for></div>
-                    <sc-for list="{{ permMatrix }}" as="m" hint-placeholder-count="11">
-                      <div style="display:grid; grid-template-columns:1.4fr repeat(6,1fr); gap:6px; align-items:center; padding:9px 4px; border-bottom:1px solid #FAF8FC;">
-                        <span style="font-size:12.5px; font-weight:600;">{{ m.module }}</span>
+                  <div style="font-size:12px; color:#8C8899; margin-top:3px;">{{ roleDesc0 }} · grouped by menu, and View is what makes each screen appear</div>
+                  <div style="overflow-x:auto; margin-top:14px;"><div style="min-width:680px;">
+                    <div style="display:grid; grid-template-columns:2fr repeat(6,1fr); gap:6px; padding:0 4px 10px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid #F0EDF6;"><span>Module</span><sc-for list="{{ permActions }}" as="a" hint-placeholder-count="6"><span style="text-align:center;">{{ a }}</span></sc-for></div>
+                    <sc-for list="{{ permRows }}" as="m" hint-placeholder-count="14">
+                      <sc-if value="{{ m.isSection }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:16px 4px 6px; font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.08em; text-transform:uppercase;">{{ m.title }}</div>
+                      </sc-if>
+                      <sc-if value="{{ m.isModule }}" hint-placeholder-val="{{ true }}">
+                      <div title="{{ m.screensFull }}" style="display:grid; grid-template-columns:2fr repeat(6,1fr); gap:6px; align-items:center; padding:9px 4px; border-bottom:1px solid #FAF8FC;">
+                        <span style="min-width:0;"><span style="display:block; font-size:12.5px; font-weight:600;">{{ m.module }}</span><span style="display:block; font-size:10.5px; color:#A9A6B4; margin-top:2px; line-height:1.35;">{{ m.screens }}</span></span>
                         <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="6">
                           <div style="display:flex; justify-content:center;">
                             <div onClick="{{ c.toggle }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.cellBg }}; border:1.5px solid {{ c.cellBorder }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
@@ -7840,6 +7844,7 @@
                           </div>
                         </sc-for>
                       </div>
+                      </sc-if>
                     </sc-for>
                   </div></div>
 
@@ -29473,10 +29478,61 @@ class Component extends DCLogic {
     // The server's resolved row for the role being edited. Falls back to the local presets only
     // while the payload is in flight.
     const _pmRow = (_pmApi && _pmApi.roles && _pmApi.roles[setRoleSel]) || null;
+    // ── GROUPED BY THE MENU THE MODULE GOVERNS ──────────────────────────────────────────────────
+    //
+    // Twelve module names in a flat list ask somebody to already know what a module is. "Compliance"
+    // and "Clients" are not places in this product; Documents, Appointments and Courier are. So the
+    // grid is laid out the way the sidebar is, and every row says which screens it turns on.
+    //
+    // Built from the two maps this file already keeps — `_SCREEN_MODULE`, which decides what the
+    // sidebar hides, and `groupsAll`, which is the sidebar — rather than a third list to fall out of
+    // step with them. A module still governs ROUTES, not menus; this only changes how it is read.
+    const _modScreens = {};
+    Object.keys(_SCREEN_MODULE).forEach(scr9 => {
+      const m9 = _SCREEN_MODULE[scr9];
+      (_modScreens[m9] = _modScreens[m9] || []).push(scr9);
+    });
+    // FOR READING ONLY, not for hiding. `_SCREEN_MODULE` is the hide list, and the Dashboard is
+    // deliberately not in it — it is where every role lands, so hiding it would leave somebody
+    // signed in with nowhere to be. It still belongs under Overview on this grid, though, and
+    // filing it under "not on the menu" would be the screen telling an obvious untruth.
+    (_modScreens.Dashboard = _modScreens.Dashboard || []).push('Dashboard', 'Notifications');
+    const _groupOfScreen = {};
+    groupsAll.forEach(([gt9, , items9]) => (items9 || []).forEach(([lbl9]) => { _groupOfScreen[lbl9] = gt9; }));
+    // A module's home is wherever most of its screens live. Several straddle two menus — Sales owns
+    // Quotations over in Finance — and those are called out on the row rather than hidden, because
+    // "I ticked Finance and Quotations still will not open" is the question this grid kept causing.
+    const _homeGroup = (mod9) => {
+      const n9 = {};
+      (_modScreens[mod9] || []).forEach(s9 => { const g9 = _groupOfScreen[s9]; if (g9) n9[g9] = (n9[g9] || 0) + 1; });
+      let best9 = null, most9 = 0;
+      Object.keys(n9).forEach(g9 => { if (n9[g9] > most9) { best9 = g9; most9 = n9[g9]; } });
+      return best9;
+    };
+    // Four names and a count, not eleven names. The full list is on the row's tooltip: the point of
+    // the line is to recognise the module, and a paragraph of screen names under every row buries
+    // the checkboxes it is supposed to explain.
+    const _screenNames = (mod9) => {
+      const home9 = _homeGroup(mod9);
+      return (_modScreens[mod9] || []).slice().sort().map(s9 => {
+        const g9 = _groupOfScreen[s9];
+        return (g9 && g9 !== home9) ? (s9 + ' (' + g9 + ')') : s9;
+      });
+    };
+    const _screenLabel = (mod9) => {
+      const list9 = _screenNames(mod9);
+      if (!list9.length) return '';
+      return list9.length <= 4 ? list9.join(', ')
+        : list9.slice(0, 4).join(', ') + ' +' + (list9.length - 4) + ' more';
+    };
+
     const permMatrix = permModuleList.map(mod => {
       const preset = (permTune[setRoleSel] && permTune[setRoleSel][mod]) || permPreset[setRoleSel] || [1,0,0,0,0,0];
       return {
+        isSection: false, isModule: true, title: '',
         module: mod,
+        screens: _screenLabel(mod) || 'no menu item — governs routes only',
+        screensFull: _screenNames(mod).join(', ') || 'This module governs API routes that no sidebar item opens.',
         cells: permActions.map((act, ai) => {
           const key = setRoleSel + '|' + mod + '|' + act;
           const appendLocked = (APPEND_ONLY_LOCKED[mod] || []).includes(act);
@@ -29498,6 +29554,20 @@ class Component extends DCLogic {
         }),
       };
     });
+    // Laid out in sidebar order, with anything the menu does not reach last and said out loud.
+    const permRows = (() => {
+      const byMod9 = {};
+      permMatrix.forEach(r9 => { byMod9[r9.module] = r9; });
+      const out9 = [], done9 = {};
+      const push9 = (title9, mods9) => {
+        if (!mods9.length) return;
+        out9.push({ isSection: true, isModule: false, title: title9, module: '', screens: '', cells: [] });
+        mods9.forEach(m9 => { out9.push(byMod9[m9]); done9[m9] = 1; });
+      };
+      groupsAll.forEach(([gt9]) => push9(gt9, permModuleList.filter(m9 => !done9[m9] && _homeGroup(m9) === gt9)));
+      push9('Not on the menu', permModuleList.filter(m9 => !done9[m9]));
+      return out9;
+    })();
     // Create-role modal: name + description + colour + base role (copies its grid as the starting point).
     const CR_COLORS = ['#7C00FF', '#0284C7', '#0E9355', '#B8860B', '#6D5BD0', '#E5484D', '#F79009', '#0EA5E9'];
     const crColor = this.state.crColor || CR_COLORS[0];
@@ -30436,7 +30506,7 @@ class Component extends DCLogic {
       setTabAudit: setTab === 'Audit', setTabBilling: setTab === 'Billing', setTabAutomation: setTab === 'Automation',
       ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
-      permMatrix, permActions,
+      permMatrix, permRows, permActions,
       // What the grid covers, counted from the router. Drawn only when the answer arrived: a
       // diagnostic that could not run should say nothing rather than imply full coverage.
       covModules: _cov9 ? _cov9.modules.map(m => ({
