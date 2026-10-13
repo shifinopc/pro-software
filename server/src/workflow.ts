@@ -2007,6 +2007,48 @@ R.post("/templates", requireAuth, requireStaff, requireWriteRole, async (req, re
     res.status(201).json({ ...t, validation: validateGraph(t.graph, t) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+/**
+ * OPEN WORK THAT NO LONGER MATCHES THE TEMPLATE.
+ *
+ * A task snapshots its own fields and instructions when it is created, so that editing a template
+ * cannot rewrite work somebody is already holding. That default is right: a person halfway through a
+ * step should not have the questions change under them because somebody saved the builder.
+ *
+ * It is wrong when the edit is a CORRECTION. The Iqama renewal term changed from one-or-two years to
+ * 3/6/9/12 months, and two officers were still being asked to choose a term the firm no longer
+ * offers — with no way to tell from the screen that the template had moved on, and no way to act on
+ * it but to ask somebody with database access.
+ *
+ * So the builder is told, and the person decides. This only ever COMPARES; `repointOpenTasks` is
+ * what writes.
+ */
+function staleOpenTasks(graph: any, tasks: { id: string; nodeId: string; captures: any; instructions: string | null }[]) {
+  const nodes: any[] = (graph?.nodes ?? []);
+  const byId = new Map(nodes.map((n: any) => [String(n.id), n]));
+  const out = new Map<string, { nodeId: string; label: string; count: number; taskIds: string[] }>();
+  for (const t of tasks) {
+    const n = byId.get(String(t.nodeId));
+    if (!n) continue;                                    // step deleted — re-pointing would blank the task
+    const want = n.config?.captures ?? [];
+    if (!Array.isArray(want) || !want.length) continue;   // nothing to copy onto it
+    const capsDiffer = JSON.stringify(t.captures ?? []) !== JSON.stringify(want);
+    const instrDiffer = (t.instructions ?? "") !== String(n.config?.instructions ?? "");
+    if (!capsDiffer && !instrDiffer) continue;
+    const e = out.get(String(t.nodeId)) ?? { nodeId: String(t.nodeId), label: String(n.label || n.id), count: 0, taskIds: [] };
+    e.count++; e.taskIds.push(t.id);
+    out.set(String(t.nodeId), e);
+  }
+  return [...out.values()];
+}
+
+/** The open tasks of a template, in the only state where re-pointing is meaningful. */
+async function openTasksOf(templateId: string) {
+  return prisma.workflowTask.findMany({
+    where: { status: "active", instance: { templateId, status: "running" } },
+    select: { id: true, nodeId: true, captures: true, instructions: true },
+  });
+}
+
 R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
     const { name, description, trigger, triggerConfig, entityType, graph, active, version, country } = req.body ?? {};
@@ -2061,9 +2103,54 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     const t = await prisma.workflowTemplate.update({ where: { id: req.params.id }, data });
     // Told on the way out, every time, whatever changed. Never blocking: a half-built template is a
     // normal thing to leave the Builder holding. The point is that "saved" stops implying "will work".
-    res.json({ ...t, validation: [...validateGraph(t.graph, t), ...(await validateReferences(t.graph, t))] });
+    //
+    // staleTasks says which open tasks are still holding an older version of a step. It is reported,
+    // not acted on: whether work in flight should change under the person doing it is a judgement
+    // about that particular edit, and only the person making the edit can make it.
+    const stale = staleOpenTasks(t.graph, await openTasksOf(t.id));
+    res.json({ ...t, validation: [...validateGraph(t.graph, t), ...(await validateReferences(t.graph, t))],
+               staleTasks: stale.map(({ taskIds, ...rest }) => rest) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+/**
+ * Bring open tasks up to date with the step as it now reads.
+ *
+ * Copies the current fields and instructions onto tasks that are still ACTIVE on RUNNING instances —
+ * nothing else. Answers already recorded, checklist ticks, assignees, due dates and every completed
+ * task are left exactly as they are: a completed task must keep the questions it was actually
+ * answered against, because that is the record of what the person was asked.
+ *
+ * Takes the node ids to update, so "yes to this step" is possible without touching the rest.
+ */
+R.post("/templates/:id/repoint", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const t = await prisma.workflowTemplate.findUnique({ where: { id: req.params.id } });
+    if (!t) return res.status(404).json({ error: "Not found" });
+    const only: string[] | null = Array.isArray(req.body?.nodeIds) && req.body.nodeIds.length
+      ? req.body.nodeIds.map(String) : null;
+
+    const stale = staleOpenTasks(t.graph, await openTasksOf(t.id))
+      .filter(e => !only || only.includes(e.nodeId));
+    if (!stale.length) return res.json({ updated: 0, steps: [] });
+
+    const nodes: any[] = ((t.graph as any)?.nodes ?? []);
+    let updated = 0;
+    for (const e of stale) {
+      const n = nodes.find((x: any) => String(x.id) === e.nodeId);
+      if (!n) continue;
+      const r = await prisma.workflowTask.updateMany({
+        where: { id: { in: e.taskIds } },
+        data: { captures: n.config?.captures ?? [], instructions: n.config?.instructions ?? null },
+      });
+      updated += r.count;
+    }
+    await logAudit({ action: "workflow.repoint_open_tasks", actorId: (req as any).auth?.sub,
+      detail: `${t.name}: ${updated} open task(s) on ${stale.map(e => `"${e.label}"`).join(", ")}` });
+    logActivity({ type: "task", message: `${updated} open task(s) updated to the current version of ${t.name}` });
+    res.json({ updated, steps: stale.map(({ taskIds, ...rest }) => rest) });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 /**
  * Remove a template — but never its history.
  *

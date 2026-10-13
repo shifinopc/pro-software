@@ -807,9 +807,17 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         </div>
         <div style="font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:700; margin-top:16px; letter-spacing:-.01em;">Set a new password</div>
-        <div style="font-size:13px; color:#8C8899; margin-top:4px; line-height:1.5;">For security, you must replace the default password before entering the portal.</div>
+        <div style="font-size:13px; color:#8C8899; margin-top:4px; line-height:1.5;">Your password was set by someone else. Choose your own before you continue.</div>
         <sc-if value="{{ pError }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:16px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:10px 13px; font-size:12px; font-weight:600; color:#C0353A;">{{ pError }}</div>
+        </sc-if>
+        <!-- Only after a reload. Coming straight from the sign-in form we already have what they
+             typed, and asking again is a pointless keystroke; arriving here fresh the server still
+             needs it, so the field appears rather than the screen failing with "Current password is
+             incorrect" against an empty string. -->
+        <sc-if value="{{ cpAskCurrent }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">CURRENT PASSWORD</div>
+          <input value="{{ cpCurrent }}" onChange="{{ setCpCurrent }}" placeholder="The one you were given" type="password" style="margin-top:7px; width:100%; border:1px solid #DDD9E6; border-radius:12px; padding:11px 14px; font-size:13px;" style-focus="border-color:#7C00FF;">
         </sc-if>
         <div style="font-size:10.5px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:20px;">NEW PASSWORD</div>
         <div style="position:relative; margin-top:7px;">
@@ -827,7 +835,7 @@
           </div>
           <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:{{ ruleDefColor }};">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ ruleDefColor }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
-            Not the default password
+            Different from the one you were given
           </div>
           <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:{{ ruleMatchColor }};">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ ruleMatchColor }}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
@@ -7596,6 +7604,25 @@
             </sc-if>
             <sc-if value="{{ wfIssuesClean }}" hint-placeholder-val="{{ false }}">
               <div style="background:#F0FDF5; border:1px solid #A6E5C3; border-radius:14px; padding:11px 16px; margin-bottom:12px; font-size:11.5px; font-weight:600; color:#0E9355;">✓ The engine can run every step in this workflow.</div>
+            </sc-if>
+            <!-- WORK ALREADY IN SOMEBODY'S HANDS. A task keeps the fields it was created with, so an
+                 edit here reaches the next run, not the ones in flight. That is right by default and
+                 wrong when the edit is a correction, and only the person who made it knows which this
+                 was — so it is offered, never done automatically. -->
+            <sc-if value="{{ wfStaleShow }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FEF9EF; border:1px solid #F6E3BC; border-radius:14px; padding:13px 16px; margin-bottom:12px;">
+                <div style="font-size:12px; font-weight:700; color:#8A6D1F;">{{ wfStaleTitle }}</div>
+                <div style="font-size:11.5px; color:#6B5B2E; line-height:1.55; margin-top:6px;">{{ wfStaleBody }}</div>
+                <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px;">
+                  <sc-for list="{{ wfStaleSteps }}" as="t" hint-placeholder-count="2">
+                    <div style="font-size:11.5px; color:#4B4757;">· {{ t.line }}</div>
+                  </sc-for>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                  <button onClick="{{ wfStaleApply }}" style="background:#8A6D1F; color:#fff; border:none; font-size:12px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#6E5618;">{{ wfStaleBtn }}</button>
+                  <button onClick="{{ wfStaleDismiss }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:12px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="border-color:#8A6D1F;">Leave them as they are</button>
+                </div>
+              </div>
             </sc-if>
             <!-- horizontal graph -->
             <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:0; overflow:hidden;">
@@ -17450,7 +17477,13 @@ class Component extends DCLogic {
       fetch(API + '/api/auth/me', { headers: { Authorization: 'Bearer ' + localStorage.getItem('stimespro:token') } })
         // Only a REJECTED session signs you out. A busy server (429) or a failing one (5xx) says nothing about
         // the session, and clearing it there turned a rate limit into a forced logout.
-        .then(r => { if (r.ok || r.status === 429 || r.status >= 500) this.setState({ auth: 'in' }); else { localStorage.removeItem('stimespro:token'); this.setState({ auth: 'login' }); } })
+        .then(r => {
+          if (!(r.ok || r.status === 429 || r.status >= 500)) { localStorage.removeItem('stimespro:token'); return this.setState({ auth: 'login' }); }
+          // A reload must not be a way around the set-password screen. Only an OK response carries
+          // the flag; on 429/5xx we know nothing, so the session stands as before.
+          if (!r.ok) return this.setState({ auth: 'in' });
+          return r.json().then(j => this.setState({ auth: j && j.mustChangePassword ? 'change' : 'in' })).catch(() => this.setState({ auth: 'in' }));
+        })
         .catch(() => {});
     } else {
       this.setState({ auth: 'login' });
@@ -19279,6 +19312,14 @@ class Component extends DCLogic {
             if (!ok) return this.setState({ lError: j.error || 'Invalid credentials' });
             if (j.token) localStorage.setItem('stimespro:token', j.token);
             if (j.user) localStorage.setItem('stimespro:user', JSON.stringify(j.user));
+            // A PASSWORD SOMEBODY ELSE CHOSE IS NOT A PASSWORD. An admin resetting an account issues
+            // a temporary one and the server marks the account; until it is replaced the console
+            // goes no further. Kept in memory so the next screen can send it as the current password
+            // rather than asking for it twice.
+            if (j.mustChangePassword) {
+              this._tempPw = s.lPass;
+              return this.setState({ auth: 'change', lError: '', lPass: '', pError: '', nPass: '', cPass: '', cpCurrent: '' });
+            }
             this.setState({ auth: 'in', lError: '', lPass: '' });
             // Boot no longer stamps a path while signed out, so sign-in has to do it — otherwise the
             // address bar stays on `/` after landing on the dashboard. A deep link is left alone.
@@ -19304,13 +19345,51 @@ class Component extends DCLogic {
       ruleLenColor: s.nPass.length >= 8 ? '#12B76A' : '#C9C4D6',
       ruleDefColor: s.nPass && s.nPass !== 'client123' ? '#12B76A' : '#C9C4D6',
       ruleMatchColor: s.nPass && s.nPass === s.cPass ? '#12B76A' : '#C9C4D6',
+      // Whether we have to ask for the password being replaced. Held in memory only — writing a
+      // password to storage to save one field would be a poor trade.
+      cpAskCurrent: !this._tempPw,
+      cpCurrent: s.cpCurrent || '',
+      setCpCurrent: (e) => this.setState({ cpCurrent: e.target.value, pError: '' }),
+      /**
+       * SET THE PASSWORD. On the server, which it did not used to do.
+       *
+       * This screen says "you must replace the default password before entering" and called no API
+       * at all: it checked the length locally, refused the literal string 'client123' — a leftover
+       * from the demo data — and then sent the person in with the temporary password still live.
+       * The screen was the whole of the security, and the screen was a picture of it.
+       *
+       * The local checks stay, because catching a typo without a round trip is kind, but the server
+       * is the authority: it enforces the configured minimum length, refuses a new password equal
+       * to the old one, and bumps the token version so every other session opened with the
+       * temporary password ends. The fresh token it returns is what keeps THIS one alive.
+       */
       doChangePw: () => {
+        const cur9 = this._tempPw || s.cpCurrent || '';
+        if (!cur9) return this.setState({ pError: 'Enter the password you were given' });
         if (s.nPass.length < 8) return this.setState({ pError: 'Password must be at least 8 characters' });
-        if (s.nPass === 'client123') return this.setState({ pError: 'You cannot reuse the default password' });
         if (s.nPass !== s.cPass) return this.setState({ pError: 'Passwords do not match' });
-        this.setState({ auth: 'in', pError: '', nPass: '', cPass: '', welcomeToast: true });
-        clearTimeout(this._wt);
-        this._wt = setTimeout(() => this.setState({ welcomeToast: false }), 5000);
+        if (s.nPass === cur9) return this.setState({ pError: 'Choose a password different from the one you were given' });
+        if (s.cpBusy) return;
+        this.setState({ cpBusy: true, pError: '' });
+        const tok9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+          body: JSON.stringify({ currentPassword: cur9, newPassword: s.nPass }),
+        })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => {
+            if (!ok) return this.setState({ cpBusy: false, pError: (j9 && j9.error) || 'That could not be saved' });
+            // The old token died with the version bump; without this the next request 401s and
+            // somebody who has just set a password is thrown back to the sign-in screen.
+            if (j9 && j9.token) localStorage.setItem('stimespro:token', j9.token);
+            this._tempPw = null;
+            this.setState({ cpBusy: false, auth: 'in', pError: '', nPass: '', cPass: '', cpCurrent: '', welcomeToast: true });
+            this._hydrateAuthed && this._hydrateAuthed();
+            clearTimeout(this._wt);
+            this._wt = setTimeout(() => this.setState({ welcomeToast: false }), 5000);
+          })
+          .catch(() => this.setState({ cpBusy: false, pError: 'Server unreachable — nothing was changed' }));
       },
       showWelcome: !!this.state.welcomeToast,
       welcomeMsg: (new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening') + ', Ahmed — welcome back. Your portal is up to date.',
@@ -27722,14 +27801,30 @@ class Component extends DCLogic {
     // Save the edited graph back to its template. Edits happen on the FULL graph (nodes + edges),
     // so branches survive — no linearisation. Defaults to the template currently on the canvas.
     const wfSaveFlow = () => {
-      const tplId = this.state.wfSelectedId || (Array.isArray(wfTpls) && wfTpls[0] ? wfTpls[0].id : null);
-      if (!tplId) return this.toast('Select one of your workflows first', 'error');
+      // SAVE WHAT THE CANVAS SAYS YOU ARE EDITING — nothing else.
+      //
+      // This read `wfSelectedId || wfTpls[0].id` while the graph came from `_wfRouted`, and after a
+      // refresh wfSelectedId is empty: the address and the canvas said Employee Onboarding, and Save
+      // wrote those 60 steps over whichever workflow happened to sort first in the list. The
+      // overwritten one gave no sign at all — it is not on screen — so a workflow could be destroyed
+      // by pressing Save on a different one, and nothing would say so until somebody opened it.
+      //
+      // _wfCanvasTpl resolves exactly the way the canvas does, so the two cannot disagree. And when
+      // it resolves to nothing we stop, rather than falling back to "some workflow": guessing is the
+      // whole defect, and a refused save costs a click where a wrong one costs a workflow.
+      const tpl = _wfCanvasTpl;
+      const tplId = tpl && tpl.id;
+      if (!tplId) return this.toast('Open a workflow before saving', 'error');
       const g4 = this.state.wfFlowGraph || wfCanvasGraph;
       if (!g4 || !Array.isArray(g4.nodes) || !g4.nodes.length) return this.toast('Nothing to save yet');
       const API = this._apiBase || 'http://localhost:4100';
       const tok = localStorage.getItem('stimespro:token');
       fetch(API + '/api/workflow/templates/' + tplId, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ graph: g4 }) })
-        .then(r => { if (r.ok) { r.json().then(j => this.setState({ wfIssues: Array.isArray(j.validation) ? j.validation : [] })).catch(() => {}); this.toast('Workflow saved'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not save', 'error')).catch(() => this.toast('Could not save')); })
+        .then(r => { if (r.ok) { r.json().then(j => this.setState({ wfIssues: Array.isArray(j.validation) ? j.validation : [],
+            // Which open tasks are still on an older version of a step. Carried with the template id
+            // they belong to, so a banner left over from another workflow cannot act on this one.
+            wfStale: Array.isArray(j.staleTasks) && j.staleTasks.length ? { tplId, steps: j.staleTasks } : null,
+            wfStaleBusy: false })).catch(() => {}); this.toast('Workflow saved'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not save', 'error')).catch(() => this.toast('Could not save')); })
         .catch(() => this.toast('Server unreachable'));
     };
     // The graph shown on the canvas: the explicitly-selected template, else the first real template.
@@ -29084,6 +29179,40 @@ class Component extends DCLogic {
       })(),
       ...wfConnApi,
       wfNodes, wfToolbar, wfConnections, wfSaveFlow,
+      ...(() => {
+        const st = this.state.wfStale;
+        const steps = st && Array.isArray(st.steps) ? st.steps : [];
+        const total = steps.reduce((n, x) => n + (x.count || 0), 0);
+        return {
+          wfStaleShow: total > 0,
+          wfStaleTitle: total === 1
+            ? '1 task already open still shows the old version'
+            : total + ' tasks already open still show the old version',
+          // Says what the default DID, not just what the button will do. Somebody who reads only this
+          // line should come away knowing the edit has already taken effect for future runs.
+          wfStaleBody: 'Your change applies to every run started from now on. Work someone is already holding keeps the fields it was created with, so nobody has the questions change under them mid-step. If this edit was a correction, bring that work up to date too — answers already filled in and completed steps are not touched.',
+          wfStaleSteps: steps.map(x => ({ line: '"' + x.label + '" — ' + x.count + (x.count === 1 ? ' open task' : ' open tasks') })),
+          wfStaleBtn: this.state.wfStaleBusy ? 'Updating…' : (total === 1 ? 'Update that task too' : 'Update those ' + total + ' tasks too'),
+          wfStaleDismiss: () => this.setState({ wfStale: null }),
+          wfStaleApply: () => {
+            if (!st || !st.tplId || this.state.wfStaleBusy) return;
+            this.setState({ wfStaleBusy: true });
+            const tok7 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/templates/' + st.tplId + '/repoint', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(tok7 ? { Authorization: 'Bearer ' + tok7 } : {}) },
+              body: JSON.stringify({ nodeIds: steps.map(x => x.nodeId) }),
+            })
+              .then(r7 => r7.json().catch(() => ({})).then(j7 => ({ ok: r7.ok, j7 })))
+              .then(({ ok, j7 }) => {
+                if (!ok) return this.setState({ wfStaleBusy: false }, () => this.toast((j7 && j7.error) || 'Could not update the open tasks', 'error'));
+                this.setState({ wfStale: null, wfStaleBusy: false });
+                this.toast((j7.updated || 0) + ((j7.updated === 1) ? ' open task is' : ' open tasks are') + ' now on the current version');
+              })
+              .catch(() => this.setState({ wfStaleBusy: false }, () => this.toast('Server unreachable — nothing was changed', 'error')));
+          },
+        };
+      })(),
       // list view
       wfRows, wfHasRows, wfNoResults, wfEmpty, wfCountLabel,
       wfSearch: this.state.wfSearch || '',

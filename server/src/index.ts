@@ -830,7 +830,10 @@ async function doLogin(req: express.Request, res: express.Response, kind: "staff
   const token = signToken(kind === "staff"
     ? { sub: user!.id, type: "staff", role: user!.roleId, tv: user!.tokenVersion }
     : { sub: user!.id, type: "portal", companyId: user!.companyId!, tv: user!.tokenVersion }, sec.tokenTtlHours);
-  if (kind === "staff") return res.json({ token, user: { id: user!.id, name: user!.name, email: user!.email, role: user!.roleId } });
+  // mustChangePassword travels on BOTH kinds. The portal has always returned it and forces the
+  // screen; the console was not told, so a member of staff whose password an admin had just reset
+  // went straight in on the temporary one and the flag sat there doing nothing.
+  if (kind === "staff") return res.json({ token, user: { id: user!.id, name: user!.name, email: user!.email, role: user!.roleId }, mustChangePassword: !!user!.mustChangePassword });
   return res.json({ token, companyId: user!.companyId, name: user!.name, mustChangePassword: !!user!.mustChangePassword });
 }
 
@@ -842,7 +845,9 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: a.sub } });
   if (!user) return res.status(404).json({ error: "Not found" });
   // notifReadAt: the console bell compares each notification's createdAt against this watermark.
-  res.json({ id: user.id, name: user.name, email: user.email, role: user.roleId, type: user.type, companyId: user.companyId, phone: user.phone ?? null, notifReadAt: user.notifReadAt ?? null });
+  // mustChangePassword: a reload in the middle of setting a password must land back on that screen,
+  // not inside the app on a password somebody else chose.
+  res.json({ id: user.id, name: user.name, email: user.email, role: user.roleId, type: user.type, companyId: user.companyId, phone: user.phone ?? null, notifReadAt: user.notifReadAt ?? null, mustChangePassword: !!user.mustChangePassword });
 });
 
 // Change own password (staff OR portal). Bumps tokenVersion → all other sessions are logged out.
