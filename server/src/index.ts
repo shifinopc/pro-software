@@ -71,6 +71,7 @@ import compression from "compression";
 import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
+import { buildEmployeeWorkbook } from "./employee-export.js";
 import { toIsoDate, DateValueError } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
@@ -4960,6 +4961,29 @@ const employeeRemoval = async (id: string) => {
 
 /** What deleting this employee would remove, or why it cannot be. The console asks before offering
  *  Remove, so a row that cannot be deleted explains itself instead of failing on the click. */
+/**
+ * The employee compliance sheet, as a real workbook.
+ *
+ * Mounted ABOVE the generic /api/employees routes: that router matches "/export" as an :id and would
+ * answer 404 for a document that is not a person.
+ *
+ * Reading, not writing, so it sits behind requireStaff alone — taking a copy of a list you can
+ * already see on screen is not a change to it.
+ */
+app.get("/api/employees/export.xlsx", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const companyId = req.query.companyId ? String(req.query.companyId) : undefined;
+    const ids = String(req.query.ids ?? "").split(",").map(x => x.trim()).filter(Boolean);
+    const { wb, employees } = await buildEmployeeWorkbook(companyId, ids);
+    const co = companyId ? await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }) : null;
+    const slug = (co?.name ?? "all-clients").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="employees-${slug}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.setHeader("X-Employee-Count", String(employees));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e: any) { fail(res, 500, e, req.path); }
+});
 app.get("/api/employees/:id/removal", requireAuth, requireStaff, async (req, res) => {
   const r = await employeeRemoval(req.params.id);
   if (!r) return res.status(404).json({ error: "Employee not found" });
