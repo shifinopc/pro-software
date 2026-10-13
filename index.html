@@ -31615,7 +31615,26 @@ class Component extends DCLogic {
       const _ruleErr = (this.state.wfRuleErr && this.state.wfRuleErr.id === selStep.id) ? this.state.wfRuleErr : null;
       const _ruleFields = _ruleErr ? (_ruleErr.fields || []) : [];
       const _clearRule = () => { if (_ruleErr) this.setState({ wfRuleErr: null }); };
-      const caps = (selStep.captures || []).map(c => {
+      /**
+       * A FIELD THAT ONLY APPLIES SOMETIMES.
+       *
+       * "Was it paid?" and then, only if it was, the reference and the date. Without this the officer
+       * is asked for a payment reference on a fee nobody has paid, and the form says the step wants
+       * something it does not — so either the field is left blank and looks forgotten, or it is
+       * filled with something invented to get past it.
+       *
+       * `showIf: { var, equals }` on a capture. Absent, the field always shows, so every step that
+       * exists today is unaffected. A hidden field is not required and its value is not sent: it is
+       * not an unanswered question, it is one that was never asked.
+       */
+      const _capShown = (c) => {
+        const cond = c && c.showIf;
+        if (!cond || !cond.var) return true;
+        const want = String(cond.equals == null ? '' : cond.equals);
+        const got = String(cap[cond.var] == null ? '' : cap[cond.var]);
+        return want ? got === want : !!got;
+      };
+      const caps = (selStep.captures || []).filter(_capShown).map(c => {
         const val = cap[c.var] || '';
         return {
           var: c.var, label: c.label, type: c.type,
@@ -31748,7 +31767,11 @@ class Component extends DCLogic {
           if (!(selStep.kind === 'approval' || gateOk)) return;
           if (selStep._real) {
             const chkState = {}; Object.entries(chk).forEach(([k2, v2]) => { chkState[k2] = { received: !!v2.received, verified: !!v2.verified, note: v2.note || undefined, fileRef: v2.ref || undefined }; });
-            const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (v2 && String(v2).trim()) vars2[k2] = v2; });
+            // Only what the form actually asked. A value typed into a field that has since been
+            // hidden — "paid", reference entered, then switched back to unpaid — would otherwise be
+            // sent as the answer to a question no longer on screen.
+            const shown2 = new Set((selStep.captures || []).filter(_capShown).map(c2 => c2.var));
+            const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (shown2.has(k2) && v2 && String(v2).trim()) vars2[k2] = v2; });
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2 }) })
               .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => {

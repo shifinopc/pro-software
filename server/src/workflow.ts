@@ -591,7 +591,38 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           const leadDays = dtRow?.leadDays ?? 30;
           const authority = dtRow?.authority ?? null;
           const statusOf = (exp: string) => { const t = new Date(exp).getTime(); if (isNaN(t)) return { daysLeft: 0, status: "valid" }; const dl = Math.round((t - Date.now()) / 86400000); return { daysLeft: dl, status: dl < 0 ? "overdue" : dl <= leadDays ? "expiring" : "valid" }; };
-          const documentId = vars.documentId ? String(vars.documentId) : "";
+          /**
+           * WHICH DOCUMENT THIS STEP IS RENEWING.
+           *
+           * This read one run variable, `documentId`. That is right while a run renews a single
+           * document and WRONG the moment it renews two — and an Iqama renewal renews two, because a
+           * Saudi work permit is renewed with the Iqama and carries the same expiry. With both steps
+           * reading the same variable, the second would stamp the first one's row a second time: the
+           * permit would never be renewed, and the Iqama could end up wearing the permit's number.
+           *
+           * So a step may name its own variable, and may say "find the one this subject already
+           * holds". Both are opt-in: every existing step keeps `documentId` and the behaviour it has.
+           */
+          const idVar = String(c.documentIdVar || "documentId");
+          let documentId = vars[idVar] ? String(vars[idVar]) : "";
+          if (!documentId && c.renewExisting) {
+            // The subject's newest live document of this type. Superseded ones are history, and a
+            // run must never reopen them.
+            const subjKind = String(vars.subjectKind || dtRow?.subjectKind || "employee").toLowerCase();
+            const who = subjKind === "company"
+              ? { companyId: inst.companyId ?? undefined, employeeId: null }
+              : { employeeId: vars.employeeId ? String(vars.employeeId) : undefined };
+            if (who.employeeId || who.companyId) {
+              const found = await prisma.document.findFirst({
+                where: { docType, supersededAt: null, ...(who.employeeId ? { employeeId: who.employeeId } : { companyId: who.companyId, employeeId: null }) },
+                orderBy: { expiryDate: "desc" },
+              });
+              if (found) {
+                documentId = found.id;
+                await log("issue_document.matched", nodeId, `${docType}: renewing the one already on file`);
+              }
+            }
+          }
           if (documentId) {
             const existing = await prisma.document.findUnique({ where: { id: documentId } });
             if (existing) {
@@ -1463,10 +1494,28 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     //
     // A capture counts as required unless it says otherwise: these are the fields a step exists to
     // collect, so opting out should be the deliberate act.
+    /**
+     * A FIELD THAT ONLY APPLIES SOMETIMES IS NOT REQUIRED WHEN IT DOES NOT APPLY.
+     *
+     * `showIf: { var, equals }` — a payment reference is asked for only once the fee is marked paid.
+     * The form hides it; this must agree, or a step the officer can see no way to complete is
+     * refused by the server for a field that was never on screen. Judged against THIS submission,
+     * for the same reason the required check below is: the answer that decides it is being given now.
+     *
+     * Absent, a capture always applies, so every step that exists today is unaffected.
+     */
+    const applies = (cap: any) => {
+      const cond = cap?.showIf;
+      if (!cond || !cond.var) return true;
+      const got = String(supplied[cond.var] ?? vars[cond.var] ?? "");
+      const want = String(cond.equals ?? "");
+      return want ? got === want : !!got;
+    };
     const missing: string[] = [];
     for (const cap of caps0) {
       if (!cap || !cap.var) continue;
       if (cap.required === false || cap.optional === true) continue;
+      if (!applies(cap)) continue;
       // CHECKED AGAINST THIS SUBMISSION, not against the run.
       //
       // Accepting an existing value was meant to spare a step re-entered after a loop from asking
