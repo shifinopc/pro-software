@@ -13939,6 +13939,13 @@
                its container closes where it should, so the action can sit in a bar pinned to the
                bottom of it — the same shape the dialogs use — with the deadline beside it rather
                than scrolling away above it. -->
+          <sc-if value="{{ wdNavShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:9px; margin-top:16px;">
+              <span onClick="{{ wdGoPrev }}" style="opacity:{{ wdPrevDim }}; font-size:12px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">← Previous</span>
+              <span style="flex:1; text-align:center; font-size:11px; color:#A9A6B4;">{{ wdNavLabel }}</span>
+              <span onClick="{{ wdGoNext }}" style="opacity:{{ wdNextDim }}; font-size:12px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ wdNextLabel }}</span>
+            </div>
+          </sc-if>
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:22px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 4px;">
               <div style="font-size:11px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
@@ -31432,6 +31439,36 @@ class Component extends DCLogic {
     const wfChk = this.state.wfChk || {};
     const wfCap = this.state.wfCap || {};
     // WIRED: real active workflow steps from /api/workflow/my-work (design samples when unauthenticated).
+    /**
+     * WHERE TO GO ONCE A STEP IS DONE.
+     *
+     * Closing the drawer was the old answer, and it threw away the one thing the officer had: their
+     * place. A renewal is five steps against one employee, so that meant finding the same person in
+     * a list of a hundred, five times over.
+     *
+     * The engine raises the next step a moment after the completion returns, so this re-reads the
+     * queue and opens whatever appeared for the same run. Nothing appeared — the run finished, or
+     * the next step belongs to somebody else — and it closes, which is the honest answer rather
+     * than sitting on a task that is no longer there.
+     */
+    this._afterStepDone = (instanceId9, doneId9) => {
+      const close9 = () => { this._goRecord(this.state.active, null); this.setState({ workRow: null, routeRecord: null }); };
+      this.setState({ workRow: null });
+      if (!instanceId9) { this._opReload('workflow/my-work', 'myWorkData'); return close9(); }
+      let tries9 = 0;
+      const look9 = () => {
+        this._opReload('workflow/my-work', 'myWorkData');
+        setTimeout(() => {
+          const rows9 = Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [];
+          const next9 = rows9.find(t9 => t9.status === 'active' && t9.id !== doneId9
+            && (t9.instanceId || (t9.instance && t9.instance.id)) === instanceId9);
+          if (next9) return _openTaskDrawer(next9.id, instanceId9);
+          if (++tries9 < 3) return look9();
+          close9();
+        }, 800);
+      };
+      look9();
+    };
     const wfStepDefs = (Array.isArray(this.state.myWorkData)
       ? this.state.myWorkData.filter(t2 => t2.status === 'active').map(t2 => ({
           id: t2.id, _real: true, kind: t2.nodeType === 'approval' ? 'approval' : 'workflow',
@@ -31451,7 +31488,7 @@ class Component extends DCLogic {
           requireVerification: !!t2.requireVerification,
           instructions: t2.instructions || '',
           checklist: Array.isArray(t2.checklist) ? t2.checklist.map(it2 => ({ key: it2.key || it2.label, label: it2.label || it2.key, required: !!it2.required })) : [],
-          captures: Array.isArray(t2.captures) ? t2.captures.map(c2 => ({ var: c2.var, label: c2.label || c2.var, type: c2.options ? 'select' : (c2.type || 'text'), options: c2.options || undefined })) : [],
+          captures: Array.isArray(t2.captures) ? t2.captures.map(c2 => ({ ...c2, label: c2.label || c2.var, type: c2.options ? 'select' : (c2.type || 'text'), options: c2.options || undefined })) : [],
           onApprove: t2.nodeType === 'approval' ? 'Approve' : undefined, onReject: t2.nodeType === 'approval' ? 'Reject' : undefined,
         }))
       : (_authed ? [] : [
@@ -31821,6 +31858,40 @@ class Component extends DCLogic {
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
+        ...(() => {
+          /**
+           * MOVING THROUGH THE QUEUE WITHOUT LEAVING IT.
+           *
+           * Every completed step raises a different task, so working one renewal meant closing the
+           * drawer, finding the next row among a hundred, and opening it again — five times for one
+           * employee. The order here is the order on screen, so Next means what the eye means.
+           *
+           * The run's OWN next step wins when there is one: finish Issue Work Permit and Next is
+           * Payment for Jawazat, not whatever happens to sit below it in the list.
+           */
+          const order9 = (myStepRows.length
+            ? myStepRows.slice().sort((x9, y9) => (x9.sortKey ?? 0) - (y9.sortKey ?? 0)).map(r9 => r9.rowId)
+            : wfStepDefs.map(r9 => r9.id));
+          const at9 = order9.indexOf(selStep.id);
+          const sameRun9 = order9.filter(id9 => {
+            if (id9 === selStep.id || !selStep.instanceId) return false;
+            const d9 = wfStepDefs.find(w9 => w9.id === id9);
+            return d9 && d9.instanceId === selStep.instanceId;
+          });
+          const prev9 = at9 > 0 ? order9[at9 - 1] : null;
+          const next9 = sameRun9[0] || (at9 >= 0 && at9 < order9.length - 1 ? order9[at9 + 1] : null);
+          // Through the opener, not a bare setState: the Process timeline is fetched there, and a
+          // drawer opened without it sits on "Loading run steps…" for ever.
+          const go9 = (id9) => { if (!id9) return; const d9 = wfStepDefs.find(w9 => w9.id === id9); _openTaskDrawer(id9, d9 ? d9.instanceId : null); };
+          return {
+            wdNavShow: order9.length > 1 && at9 >= 0,
+            wdNavLabel: at9 >= 0 ? (at9 + 1) + ' of ' + order9.length : '',
+            wdPrevDim: prev9 ? '1' : '.35', wdNextDim: next9 ? '1' : '.35',
+            wdNextLabel: sameRun9[0] ? 'Next step →' : 'Next →',
+            wdGoPrev: () => go9(prev9),
+            wdGoNext: () => go9(next9),
+          };
+        })(),
         wdRuleErrShow: !!_ruleErr,
         wdRuleMsgs: _ruleErr ? (_ruleErr.rules || []).map(r => ({ text: r.message })) : [],
         // A workflow step has its own next step — the graph decides it — so there is nothing to
@@ -31846,7 +31917,7 @@ class Component extends DCLogic {
             const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (shown2.has(k2) && v2 && String(v2).trim()) vars2[k2] = v2; });
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2 }) })
-              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => {
+              .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), this._afterStepDone(selStep.instanceId, selStep.id)) : r2.json().then(j2 => {
                 // A cross-field refusal is held on the form, against the fields it names. Everything
                 // else stays a toast, because there is nothing on screen to point at.
                 if (j2 && Array.isArray(j2.fields) && j2.fields.length) {
