@@ -11565,6 +11565,12 @@
             <sc-if value="{{ dtnCardShow }}" hint-placeholder-val="{{ false }}">
               <div onClick="{{ toggleDtnCard }}" title="The short checklist with the progress bar on a person's profile. Everything filed against them stays in their folder either way — this is only what they are measured against." style="display:flex; align-items:center; gap:9px; margin-top:9px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><div style="flex:1; min-width:0;"><span style="font-size:12px; font-weight:600; color:#4B4757;">Track this on the employee&rsquo;s document card</span><div style="font-size:11px; color:#A9A6B4; margin-top:2px; line-height:1.45;">The short checklist with the progress bar on a person&rsquo;s profile. Leave it off for one-time papers like an entry visa, which is spent once the Iqama is issued and would mark everybody incomplete for ever. Nothing is hidden either way — their folder still holds every document.</div></div><sc-if value="{{ dtnCardOn }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnCardOff }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
             </sc-if>
+            <sc-if value="{{ dtnCardPosShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:9px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; display:flex; align-items:center; gap:12px;">
+                <div style="flex:1; min-width:0;"><span style="font-size:12px; font-weight:600; color:#4B4757;">Position on the card</span><div style="font-size:11px; color:#A9A6B4; margin-top:2px; line-height:1.45;">Lowest first. Leave it empty and this one sits at the end.</div></div>
+                <input value="{{ dtnCardPos }}" onChange="{{ setDtnCardPos }}" type="number" min="1" placeholder="—" style="width:74px; border:1px solid #DDD9E6; border-radius:10px; padding:8px 10px; font-size:13px; color:#1A1523; background:#fff; text-align:center; flex-shrink:0;">
+              </div>
+            </sc-if>
             <sc-if value="{{ dtnPortalShow }}" hint-placeholder-val="{{ false }}">
               <div onClick="{{ toggleDtnPortal }}" title="The client's licence to use a government portal — the thing that expires and stops the login working. Ties this type to the matching login in the credential vault, so an officer is warned before starting work against a lapsed licence." style="display:flex; align-items:center; gap:9px; margin-top:9px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><div style="flex:1; min-width:0;"><span style="font-size:12px; font-weight:600; color:#4B4757;">This is the client's licence to use the {{ dtnAuthorityLabel }} portal</span><div style="font-size:11px; color:#A9A6B4; margin-top:2px; line-height:1.45;">The client&rsquo;s right to use the portal &mdash; the thing that lapses and stops the login working. Each client&rsquo;s own licence, with its expiry, is filed against them as a document of this type.</div></div><sc-if value="{{ dtnPortalOn }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnPortalOff }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
               <sc-if value="{{ dtnPortalWarn }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FFF9EE; border:1px solid #F4DDB0; border-radius:10px; padding:8px 11px; font-size:11.5px; color:#7A5A12; line-height:1.5;">Name the authority above — it is what links this licence to the matching login in the vault. Without it the licence is tracked but nothing points at it.</div></sc-if>
@@ -23346,7 +23352,17 @@ class Component extends DCLogic {
     // arbitrary rows is poor, and an empty card with "0/0 documents" is worse.
     const _edEmpTypes = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
       .filter(t7 => (t7.subjectKind || 'employee') === 'employee');
-    const _edPicked = _edEmpTypes.filter(t7 => t7.onEmployeeCard).map(t7 => t7.name).sort();
+    // In the order the firm arranged, not alphabetical — which put the Iqama ahead of the Work
+    // Permit that has to be issued before it. A type with no position given sorts to the end by name,
+    // so ticking a new one appends rather than landing in the middle of somebody's sequence.
+    const _edPicked = _edEmpTypes.filter(t7 => t7.onEmployeeCard)
+      .slice()
+      .sort((a7, b7) => {
+        const oa = a7.cardOrder == null ? Infinity : a7.cardOrder;
+        const ob = b7.cardOrder == null ? Infinity : b7.cardOrder;
+        return oa !== ob ? oa - ob : String(a7.name).localeCompare(String(b7.name));
+      })
+      .map(t7 => t7.name);
     const _edTypes = _edPicked.length ? _edPicked : _edEmpTypes.map(t7 => t7.name).slice(0, 5);
     const _edTypeList = _edTypes.length ? _edTypes : ['Passport', 'Visa', 'Emirates ID', 'Labour Card', 'Medical Certificate'];
     const employeeDocs = (_edEmps.length ? _edEmps : (_authed ? [] : edDefs.map(([name, role]) => ({ name, role })))).map((e7, i) => {
@@ -27258,7 +27274,7 @@ class Component extends DCLogic {
           // Appended rather than inserted: everything above reads this tuple by position.
           d.statutoryDays == null ? '' : String(d.statutoryDays), d.statutoryFrom || '', d.statutoryBasis || '', d.neverExpires === true,
           d.portalLicence === true,
-          d.onEmployeeCard === true,
+          d.onEmployeeCard === true, d.cardOrder == null ? '' : String(d.cardOrder),
         ])
       : ((dtReal || _authed) ? [] : docTypeDefs));
     // Opening a type now loads it into the SAME editor used to create one — the old read-only
@@ -27269,7 +27285,7 @@ class Component extends DCLogic {
         dtNewOpen: true, dtEditId: row9[9], dtnName: row9[0], dtnSubject: row9[1],
         dtnAuthority: row9[2] === '—' ? '' : row9[2], dtnLead: String(row9[3]),
         dtnStatDays: row9[10] || '', dtnStatFrom: row9[11] || '', dtnStatBasis: row9[12] || '', dtnNever: row9[13] === true,
-        dtnPortal: row9[14] === true, dtnCard: row9[15] === true,
+        dtnPortal: row9[14] === true, dtnCard: row9[15] === true, dtnCardPos: row9[16] || '',
         dtnFee: String(row9[4]).replace(/[^0-9]/g, ''), dtnApproval: !!row9[5], dtnAssignee: row9[6],
         // Fifth element = the field's existing id, carried so submit can reuse it.
         dtnFields: (row9[7] || []).map(f9 => [f9[0], f9[1], f9[2], f9[3] || '', f9[4] || '']).concat((row9[7] || []).length ? [] : [['', 'text', true, '', '']]),
@@ -27471,6 +27487,10 @@ class Component extends DCLogic {
       // this one only on an employee type.
       dtnCardShow: (this.state.dtnSubject || 'Employee') !== 'Company',
       dtnCardOn: this.state.dtnCard === true,
+      // Only asked once the type is actually on the card — a position for something that is not
+      // shown is a number with nothing to mean.
+      dtnCardPosShow: (this.state.dtnSubject || 'Employee') !== 'Company' && this.state.dtnCard === true,
+      dtnCardPos: this.state.dtnCardPos == null ? '' : String(this.state.dtnCardPos),
       dtnCardOff: this.state.dtnCard !== true,
       dtnPortalShow: (this.state.dtnSubject || 'Employee') === 'Company',
       dtnPortalOn: this.state.dtnPortal === true,
@@ -27481,7 +27501,7 @@ class Component extends DCLogic {
       ...mkDd('ddDtnSubject', ['Employee', 'Company'], this.state.dtnSubject || 'Employee', (v) => this.setState({ dtnSubject: v })),
       ...mkDd('ddDtnAssignee', ['PRO Officer', 'Accountant', 'Admin'], this.state.dtnAssignee || 'PRO Officer', (v) => this.setState({ dtnAssignee: v })),
       dtnSubjectVal: this.state.dtnSubject || 'Employee', dtnAssigneeVal: this.state.dtnAssignee || 'PRO Officer',
-      openDtNew: () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnCard: true, dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' }),
+      openDtNew: () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnCard: true, dtnCardPos: '', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' }),
       closeDtNew: () => this.setState({ dtNewOpen: false, dtEditId: null }),
       setDtnName: (e) => this.setState({ dtnName: e.target.value, dtnErr: '' }),
       setDtnAuthority: (e) => this.setState({ dtnAuthority: e.target.value }),
@@ -27493,6 +27513,7 @@ class Component extends DCLogic {
       toggleDtnApproval: () => this.setState({ dtnApproval: this.state.dtnApproval === false }),
       toggleDtnNeverExpires: () => this.setState({ dtnNever: this.state.dtnNever !== true }),
       toggleDtnCard: () => this.setState({ dtnCard: this.state.dtnCard !== true }),
+      setDtnCardPos: (e) => this.setState({ dtnCardPos: e.target.value }),
       toggleDtnPortal: () => this.setState({ dtnPortal: this.state.dtnPortal !== true }),
       addDtnField: () => this.setState({ dtnFields: [...(this.state.dtnFields || []), ['', 'text', false, '', '']] }),
       // WIRED: creates a real DocumentType (name unique; fields with generated ids).
@@ -27526,6 +27547,8 @@ class Component extends DCLogic {
           // Only meaningful on an employee type — a company's trade licence is not something a
           // person is measured against.
           onEmployeeCard: (st.dtnSubject || 'Employee') !== 'Company' && st.dtnCard === true,
+          // null, not 0 — "no position given" and "first" are different answers.
+          cardOrder: String(st.dtnCardPos ?? '').trim() === '' ? null : (parseInt(st.dtnCardPos, 10) || null),
           fields,
           // A half-filled row (added, then never given a document type) must not be saved: the gate
           // matches on the type name, so a blank one would park renewals against nothing and could
