@@ -13949,7 +13949,18 @@
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:22px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 4px;">
               <div style="font-size:11px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
-              <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:{{ wdCompleteBg }}; color:#fff; border:none; font-size:13px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">Complete step</button>
+              <!-- TWO BUTTONS UNDER sc-if, not one with a bound colour. A mostly-static style
+                   attribute is hoisted into a generated class and stops re-evaluating, so the
+                   background froze at whatever it was on first render — grey for ever, however much
+                   of the form got filled in. The comment on the capture fields above says exactly
+                   this; I bound a colour anyway. An element that appears and disappears cannot
+                   freeze. -->
+              <sc-if value="{{ wdCompleteReady }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:#7C00FF; color:#fff; border:none; font-size:13px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">Complete step</button>
+              </sc-if>
+              <sc-if value="{{ wdCompleteHeld }}" hint-placeholder-val="{{ false }}">
+                <button title="{{ wdHeldWhy }}" style="width:100%; margin-top:10px; background:#D8D3E3; color:#fff; border:none; font-size:13px; font-weight:700; padding:12px 0; border-radius:12px; cursor:not-allowed;">Complete step</button>
+              </sc-if>
             </div>
           </sc-if>
         </div>
@@ -31566,9 +31577,12 @@ class Component extends DCLogic {
         : remH < 0 ? ['#C0353A', '#FEECEC', Math.abs(Math.round(remH)) + 'h over'] : remH <= w.slaHours * 0.25 ? ['#B8860B', '#FEF4E2', Math.round(remH) + 'h left'] : ['#0E9355', '#E7F8EF', Math.round(remH) + 'h left'];
       const pr = prio[w.priority] || ['#F3F1F7', '#6F6C7A'];
       return {
-        rowId: w.id, kind: w.kind, title: w.title, client: w.client,
+        // NAMED FOR THE JOB, NOT THE STEP. A hundred and two rows all reading "Issue Work Permit"
+        // cannot be told apart, and the one thing that distinguishes them — whose renewal it is — was
+        // in the grey line underneath. The run leads; the step it is sitting on follows it.
+        rowId: w.id, kind: w.kind, title: w.related || w.title, client: w.client,
         workflow: w.workflow || null,
-        related: w.related, relatedIcon: '⚙',
+        related: w.title, relatedIcon: '⚙',
         bucket, sortKey: caseLate ? (kase.dueIn * 24) : (hasSla ? remH : 1e6),
         badge: caseLate ? _wkBadgeDays(kase.dueIn, false) : _wkBadgeHours(hasSla ? remH : null),
         // Named so the officer knows WHICH clock is red — the step's own SLA, or the case behind it.
@@ -31743,6 +31757,12 @@ class Component extends DCLogic {
         const got = String(cap[cond.var] == null ? '' : cap[cond.var]);
         return want ? got === want : !!got;
       };
+      // Which questions are still unanswered, counting only the ones on screen.
+      const _capsMissing = (selStep.captures || []).filter(_capShown)
+        .filter(c => !(c.required === false || c.optional === true))
+        .filter(c => !String(cap[c.var] == null ? '' : cap[c.var]).trim())
+        .map(c => c.label || c.var);
+      const _capsOk = _capsMissing.length === 0;
       const caps = (selStep.captures || []).filter(_capShown).map(c => {
         const val = cap[c.var] || '';
         return {
@@ -31842,12 +31862,19 @@ class Component extends DCLogic {
         // open it and there was literally nothing there, and no way to move the workflow on.
         // Approvals are excluded because they finish through Approve / Reject instead.
         wdCanCompleteStep: selStep.kind !== 'approval',
+        // Every question the form is actually asking has an answer. The server has always refused an
+        // incomplete step; the button did not, so the officer filled what they could, pressed it, and
+        // was told no. Hidden fields are not counted — they were never asked.
+        wdFormOk: _capsOk,
+        wdCompleteReady: gateOk && _capsOk,
+        wdCompleteHeld: !(gateOk && _capsOk),
+        wdHeldWhy: !_capsOk ? ('Still needed: ' + _capsMissing.join(', ')) : 'The required documents are not ready',
         wdCounters: notReceived + ' not received · ' + notVerified + ' awaiting verify',
         wdAllDone: gateOk,
         // Purple when it can be pressed, grey when the document gate holds it — the same signal as
         // before, in the colour every other primary action in this app uses. Green made the drawer
         // look like it came from a different product, which is the thing being fixed here.
-        wdCompleteBg: gateOk ? '#7C00FF' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : (() => {
+        wdCompleteBg: (gateOk && _capsOk) ? '#7C00FF' : '#D8D3E3', wdGateNote: gateOk ? 'All required documents ready' : (() => {
           // Name the actual blocker. A rejected document is not a missing one, and sending someone
           // to look for a file they already turned down wastes the trip.
           // The document gate first: it is the reason the officer cannot proceed, and pointing them
@@ -31901,13 +31928,17 @@ class Component extends DCLogic {
         // The gate note describes the CHECKLIST gate, so it is only meaningful when there is one —
         // on a step without a checklist it would claim "All required documents ready" about a step
         // that never asked for any.
-        wdFootNote: (remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA')
+        wdFootNote: (!_capsOk
+          ? (_capsMissing.length === 1 ? 'Still needed: ' + _capsMissing[0] : 'Still needed: ' + _capsMissing.join(', '))
+          : '')
+          || (remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA')
           + ((selStep.checklist || []).length ? ' · ' + (gateOk ? 'All required documents ready' : 'Complete blocked — required docs not ready') : ''),
-        wdSlaColor: remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
+        wdSlaColor: !_capsOk ? '#B8860B' : remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
         closeWorkDrawer: () => (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })),
         // WIRED: real steps complete through the engine (checklist state + captured variables included).
         completeStep: () => {
           if (!(selStep.kind === 'approval' || gateOk)) return;
+          if (!_capsOk) return;
           if (selStep._real) {
             const chkState = {}; Object.entries(chk).forEach(([k2, v2]) => { chkState[k2] = { received: !!v2.received, verified: !!v2.verified, note: v2.note || undefined, fileRef: v2.ref || undefined }; });
             // Only what the form actually asked. A value typed into a field that has since been
