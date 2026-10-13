@@ -10770,6 +10770,23 @@
             <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">ISSUE DATE</div><input value="{{ arIssue }}" onChange="{{ setArIssue }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
             <div><div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">{{ arExpiryLabel }}</div><input value="{{ arExpiry }}" onChange="{{ setArExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;"></div>
           </div>
+          <!-- WHATEVER ELSE THIS TYPE ASKS FOR. The same fields as the Upload dialog, from the same
+               definitions, so a document filed through either route carries the same answers. -->
+          <sc-for list="{{ arExtras }}" as="x" hint-placeholder-count="0">
+            <div style="margin-top:12px;">
+              <div style="font-size:10.5px; font-weight:700; color:#8C8899; letter-spacing:.06em;">{{ x.label }}</div>
+              <sc-if value="{{ x.isPick }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:7px; margin-top:7px; flex-wrap:wrap;">
+                  <sc-for list="{{ x.choices }}" as="c" hint-placeholder-count="2">
+                    <span onClick="{{ c.pick }}" style="font-size:12px; font-weight:600; padding:7px 15px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }};">{{ c.label }}</span>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ x.isPlain }}" hint-placeholder-val="{{ true }}">
+                <input value="{{ x.value }}" onChange="{{ x.set }}" type="{{ x.inputType }}" placeholder="{{ x.ph }}" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:13px; color:#1A1523; background:#FCFBFE;" style-focus="background:#fff; border-color:#7C00FF;">
+              </sc-if>
+            </div>
+          </sc-for>
 
           <!-- The scan itself. Optional, because the details are often typed from a certificate that is
                still being couriered — but offering it here is the only moment anyone actually has the
@@ -11287,8 +11304,31 @@
         </sc-if>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
           <div><div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">{{ udNumberLabel }}</div><input value="{{ udNumber }}" onChange="{{ setUdNumber }}" placeholder="{{ udNumberPh }}" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
-          <div><div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">EXPIRY DATE *</div><input value="{{ udExpiry }}" onChange="{{ setUdExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
+          <div><div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">{{ udExpiryLabel }}</div><input value="{{ udExpiry }}" onChange="{{ setUdExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
         </div>
+        <!-- ISSUE DATE. The column has always existed and the scan flow has always filled it; typing
+             a document in by hand was the one route that could not, so a manually filed passport had
+             an expiry and no issue date and nothing said why. -->
+        <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-top:14px;">ISSUE DATE</div>
+        <input value="{{ udIssue }}" onChange="{{ setUdIssue }}" type="date" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+        <!-- WHATEVER ELSE THIS TYPE ASKS FOR. Document types have carried custom field definitions
+             all along and this dialog ignored every one of them, so a field somebody configured on
+             the Document Types screen simply never appeared anywhere and was never captured. -->
+        <sc-for list="{{ udExtras }}" as="x" hint-placeholder-count="0">
+          <div style="margin-top:14px;">
+            <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em;">{{ x.label }}</div>
+            <sc-if value="{{ x.isPick }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:7px; margin-top:7px; flex-wrap:wrap;">
+                <sc-for list="{{ x.choices }}" as="c" hint-placeholder-count="2">
+                  <span onClick="{{ c.pick }}" style="font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }};">{{ c.label }}</span>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ x.isPlain }}" hint-placeholder-val="{{ true }}">
+              <input value="{{ x.value }}" onChange="{{ x.set }}" type="{{ x.inputType }}" placeholder="{{ x.ph }}" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;">
+            </sc-if>
+          </div>
+        </sc-for>
         <div style="font-size:11px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-top:14px;">FILE *</div>
         <label style="margin-top:6px; display:flex; align-items:center; gap:11px; border:1.5px dashed {{ udFileBorder }}; border-radius:11px; background:{{ udFileBg }}; padding:12px 14px; cursor:pointer;" style-hover="background:#F5EEFF;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ udFileColor }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
@@ -11613,6 +11653,11 @@
                   <div onClick="{{ f.toggleReq }}" title="Required / optional" style="width:34px; flex-shrink:0; text-align:center; font-size:10px; font-weight:700; color:{{ f.reqColor }}; cursor:pointer;">{{ f.reqLabel }}</div>
                   <div onClick="{{ f.remove }}" title="Remove field" style="width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
+                <!-- A "dropdown" field had nowhere to say what it offers, so configuring one
+                     produced a picker with nothing in it. -->
+                <sc-if value="{{ f.isPick }}" hint-placeholder-val="{{ false }}">
+                  <input value="{{ f.options }}" onChange="{{ f.setOptions }}" placeholder="Choices, comma separated — Single, Multiple" style="width:100%; box-sizing:border-box; margin-top:6px; border:1px solid #DDD9E6; border-radius:11px; padding:8px 12px; font-size:12px; color:#1A1523; background:#FBFAFE;" style-focus="background:#fff; border-color:#7C00FF;">
+                </sc-if>
               </sc-for>
             </div>
           </div>
@@ -21584,6 +21629,23 @@ class Component extends DCLogic {
       }
       return this.state.clientSel;
     })();
+    /**
+     * THE FIELDS A DOCUMENT TYPE ASKS FOR, BEYOND THE COLUMNS EVERY DOCUMENT HAS.
+     *
+     * Document types have carried custom field definitions since they were built, and neither dialog
+     * that files a document rendered any of them — so a field configured on the Document Types screen
+     * appeared nowhere and was never captured. Somebody could add "Single or Multiple" to the Exit
+     * Re-entry Visa, watch it save, and still have no way to record the answer.
+     *
+     * Fields whose purpose is already a column are left out: number, expiry and issue date have their
+     * own inputs, and asking twice is how one document ends up with two answers that disagree.
+     *
+     * Pack-installed types key their fields `key`; ones edited in the builder key them `id`. Both
+     * shapes are in the live database, so read whichever is there rather than assuming one.
+     */
+    const _docExtraKey = (f8) => String(f8.id || f8.key || f8.label || '');
+    const _arExtraDefs = (typeRow8) => ((typeRow8 && Array.isArray(typeRow8.fields)) ? typeRow8.fields : [])
+      .filter(f8 => f8 && f8.type !== 'file' && !['number', 'expiry', 'issue'].includes(String(f8.purpose || '')));
     // WHICH DOCUMENTS A PERSON IS MEASURED AGAINST — defined once, read by both the employee card
     // and the compliance badge on the client's Employees tab. Two copies of this would drift, and a
     // badge that disagrees with the card it describes is worse than no badge.
@@ -23469,6 +23531,9 @@ class Component extends DCLogic {
     // Subject scope comes from the type's own subjectKind — the authoritative field — rather than a
     // hardcoded list of four company documents that knew nothing about types added since.
     const _udTypeRow = _udRealTypes.find(t8 => t8.name === udType);
+    // Same definitions as the Add-document dialog — see _arExtraDefs.
+    const _udExtraKey = _docExtraKey;
+    const _udExtraDefs = _arExtraDefs(_udTypeRow);
     const udIsEmployee = _udTypeRow ? (_udTypeRow.subjectKind || 'employee') !== 'company' : companyTypes.indexOf(udType) < 0;
     const udFileName = this.state.udFile || '';
     const _udNumLabel = (numberLabels[udType] || ['DOCUMENT NUMBER *', ''])[0];
@@ -23494,7 +23559,7 @@ class Component extends DCLogic {
       // than silently reusing whoever was picked last.
       // Nothing pre-selected: a default type and a default person were how a passport got filed as
       // "Health Insurance — Maria Fernandes" by someone who only chose the file.
-      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udClient: null, udEst: null, udType: '', udEmployee: '' }),
+      openUpload: () => this.setState({ udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '', udIssue: '', udExtra: {}, udClient: null, udEst: null, udType: '', udEmployee: '' }),
       docScanDoc: () => {
         const nm9 = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : '';
         const co9 = nm9 ? (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.name === nm9) : null;
@@ -23524,10 +23589,40 @@ class Component extends DCLogic {
       udFileColor: udFileName ? '#0E9355' : '#7C00FF',
       udFileBg: udFileName ? '#F0FDF5' : '#FAF5FF',
       udFileBorder: udFileName ? '#A6E5C3' : '#C9A2FF',
-      ...mkDd('ddUdType', udTypeOptions, udType, (v) => this.setState({ udType: v, udNumber: '', udError: '' })),
+      ...mkDd('ddUdType', udTypeOptions, udType, (v) => this.setState({ udType: v, udNumber: '', udExtra: {}, udError: '' })),
       ...mkDd('ddUdEmp', (_udEmpNames.length ? _udEmpNames : ['No employees for this client']), this.state.udEmployee || _udEmpNames[0] || '', (v) => this.setState({ udEmployee: v })),
       setUdNumber: (e) => this.setState({ udNumber: e.target.value, udError: '' }),
       setUdExpiry: (e) => this.setState({ udExpiry: e.target.value, udError: '' }),
+      // See arExpiryLabel — same rule, same reason.
+      udExpiryLabel: (() => {
+        const own8 = ((_udTypeRow && Array.isArray(_udTypeRow.fields)) ? _udTypeRow.fields : []).find(f8 => String(f8.purpose || '') === 'expiry' && String(f8.label || '').trim());
+        return (own8 ? String(own8.label).toUpperCase() : 'EXPIRY DATE') + ' *';
+      })(),
+      udIssue: this.state.udIssue || '',
+      setUdIssue: (e) => this.setState({ udIssue: e.target.value, udError: '' }),
+      udExtras: _udExtraDefs.map(f8 => {
+        const key8 = _udExtraKey(f8);
+        const val8 = (this.state.udExtra || {})[key8] || '';
+        const put8 = (v8) => this.setState({ udExtra: { ...(this.state.udExtra || {}), [key8]: v8 }, udError: '' });
+        const choices8 = f8.type === 'dropdown' ? String(f8.options || '').split(',').map(c8 => c8.trim()).filter(Boolean) : [];
+        return {
+          label: String(f8.label || key8).toUpperCase() + (f8.required ? ' *' : ''),
+          // A dropdown with no choices configured would be an empty picker, so it falls back to a
+          // plain box rather than a control that cannot be used.
+          isPick: f8.type === 'dropdown' && choices8.length > 0,
+          isPlain: !(f8.type === 'dropdown' && choices8.length > 0),
+          inputType: f8.type === 'date' ? 'date' : f8.type === 'number' ? 'number' : 'text',
+          ph: f8.type === 'date' ? '' : 'Optional',
+          value: val8,
+          set: (e8) => put8(e8.target.value),
+          choices: choices8.map(c8 => ({
+            label: c8,
+            pick: () => put8(val8 === c8 ? '' : c8),   // tapping the chosen one clears it
+            bg: val8 === c8 ? '#7C00FF' : '#fff', color: val8 === c8 ? '#fff' : '#4B4757',
+            border: val8 === c8 ? '#7C00FF' : '#DDD9E6',
+          })),
+        };
+      }),
       setUdFile: (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) this.setState({ udFile: f.name, udFileObj: f, udError: '' }); },
       // WIRED: uploads the file to /api/upload, then creates a real Document (POST /api/documents).
       submitUpload: () => {
@@ -23538,6 +23633,8 @@ class Component extends DCLogic {
         if (!udType) return this.setState({ udError: 'Choose the document type' });
         if (/\*\s*$/.test(_udNumLabel) && !(st.udNumber || '').trim()) return this.setState({ udError: 'Document number is required' });
         if (!st.udExpiry) return this.setState({ udError: 'Expiry date is required' });
+        const missing8 = _udExtraDefs.filter(f8 => f8.required && !String((st.udExtra || {})[_udExtraKey(f8)] || '').trim());
+        if (missing8.length) return this.setState({ udError: missing8[0].label + ' is required' });
         if (!st.udFile) return this.setState({ udError: 'Attach the document file' });
         if (!_udCo) return this.setState({ udError: 'Choose the client this document belongs to' });
         // Resolved from the LABEL the officer picked, which carries the code — never from the bare
@@ -23550,8 +23647,15 @@ class Component extends DCLogic {
         const tok = localStorage.getItem('stimespro:token');
         const H8 = { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) };
         const createDoc = (filePath) => {
-          const body = { companyId: _udCo.id, person: udIsEmployee ? emp8.name : _udCo.name, employeeId: emp8 ? emp8.id : null, establishmentId: udIsEmployee ? null : this._crValid(_udCo.id, st.udEst), docType: udType, docNumber: st.udNumber || null, expiryDate: st.udExpiry, status: status8, daysLeft: isNaN(days8) ? 0 : days8 };
-          if (filePath) body.customData = { file: filePath };
+          const body = { companyId: _udCo.id, person: udIsEmployee ? emp8.name : _udCo.name, employeeId: emp8 ? emp8.id : null, establishmentId: udIsEmployee ? null : this._crValid(_udCo.id, st.udEst), docType: udType, docNumber: st.udNumber || null, expiryDate: st.udExpiry, issueDate: st.udIssue || null, status: status8, daysLeft: isNaN(days8) ? 0 : days8 };
+          // The file path and the type's own answers share customData, so build it once rather than
+          // letting the second write replace the first.
+          const extra8 = {};
+          for (const f8 of _udExtraDefs) {
+            const v8 = String((st.udExtra || {})[_udExtraKey(f8)] || '').trim();
+            if (v8) extra8[_udExtraKey(f8)] = v8;
+          }
+          if (filePath || Object.keys(extra8).length) body.customData = { ...(filePath ? { file: filePath } : {}), ...extra8 };
           fetch(API + '/api/documents', { method: 'POST', headers: H8, body: JSON.stringify(body) })
             .then(r => { if (r.status === 401) { this.toast('Sign in first', 'error'); return null; } if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
             .then(v => { if (!v) return; this.setState({ udModal: false, udFile: '', udFileObj: null }); this.toast('Document uploaded to ' + _udCo.name); this._afterDocumentChange(); })
@@ -25745,7 +25849,7 @@ class Component extends DCLogic {
       //
       // Opened from inside a client, it is for THAT client and says so in the title. It used to find the
       // client from the address only, so a client opened another way fell back to the first in the list.
-      openAddRecord: () => this.setState({ addRecord: true, arDoc: '', arType: '', arWho: null, arEmp: null, arIssue: '', arReplace: true, arNewCr: null, arEst: null, arEstPicked: false,
+      openAddRecord: () => this.setState({ addRecord: true, arDoc: '', arType: '', arWho: null, arEmp: null, arIssue: '', arExtra: {}, arReplace: true, arNewCr: null, arEst: null, arEstPicked: false,
         arClientLocked: !!(this.state.active === 'Clients' && clRow),
         arClient: (this.state.active === 'Clients' && clRow && clRow.name)
           || (this.state.active === 'Clients' && this.state.clientSlug
@@ -25870,9 +25974,32 @@ class Component extends DCLogic {
             };
           })(),
           arDoc: st9.arDoc || '', arAuthority: st9.arAuthority || '', arIssue: st9.arIssue || '', arExpiry: st9.arExpiry || '', arErr: st9.arErr || false,
+          arExtras: _arExtraDefs(dt9).map(f9 => {
+            const k9 = String(f9.id || f9.key || f9.label || '');
+            const v9 = (st9.arExtra || {})[k9] || '';
+            const put9 = (nv9) => this.setState({ arExtra: { ...(this.state.arExtra || {}), [k9]: nv9 }, arErr: '' });
+            const ch9 = f9.type === 'dropdown' ? String(f9.options || '').split(',').map(c9 => c9.trim()).filter(Boolean) : [];
+            return {
+              label: String(f9.label || k9).toUpperCase() + (f9.required ? ' *' : ''),
+              isPick: f9.type === 'dropdown' && ch9.length > 0,
+              isPlain: !(f9.type === 'dropdown' && ch9.length > 0),
+              inputType: f9.type === 'date' ? 'date' : f9.type === 'number' ? 'number' : 'text',
+              ph: f9.type === 'date' ? '' : 'Optional',
+              value: v9, set: (e9) => put9(e9.target.value),
+              choices: ch9.map(c9 => ({ label: c9, pick: () => put9(v9 === c9 ? '' : c9),
+                bg: v9 === c9 ? '#7C00FF' : '#fff', color: v9 === c9 ? '#fff' : '#4B4757', border: v9 === c9 ? '#7C00FF' : '#DDD9E6' })),
+            };
+          }),
           arAuthorityPh: (dt9 && dt9.authority) || 'e.g. Ministry of Commerce',
           arNumberPh: dt9 && dt9.subjectKind === 'company' ? 'e.g. 7038415670' : 'as printed on the document',
-          arExpiryLabel: dt9 && dt9.neverExpires ? 'EXPIRY DATE' : 'EXPIRY DATE *',
+          // A type that gives its expiry field a name of its own is asked in its own words: an exit
+          // visa's deadline is "return before", and labelling it EXPIRY DATE describes the mechanism
+          // instead of the thing the officer is being asked for.
+          arExpiryLabel: (() => {
+            const own9 = ((dt9 && Array.isArray(dt9.fields)) ? dt9.fields : []).find(f9 => String(f9.purpose || '') === 'expiry' && String(f9.label || '').trim());
+            const base9 = own9 ? String(own9.label).toUpperCase() : 'EXPIRY DATE';
+            return dt9 && dt9.neverExpires ? base9 : base9 + ' *';
+          })(),
           arSaveLabel: st9.arBusy ? 'Saving…' : 'Add document',
           setArDocNo: (e) => {
             const v9 = e.target.value;
@@ -25918,6 +26045,9 @@ class Component extends DCLogic {
                 establishmentId: emp9 ? null : this._crValid(co9.id, st9.arEst),
                 expiryDate: st9.arExpiry || null, issueDate: st9.arIssue || null,
                 docNumber: String(st9.arDoc || '').trim() || null, issuingAuthority: String(st9.arAuthority || '').trim() || null,
+                ...(() => { const ex9 = {}; for (const f9 of _arExtraDefs(dt9)) { const k9 = String(f9.id || f9.key || f9.label || '');
+                  const v9 = String((st9.arExtra || {})[k9] || '').trim(); if (v9) ex9[k9] = v9; }
+                  return Object.keys(ex9).length ? { customData: ex9 } : {}; })(),
                 status: days9 == null ? 'valid' : days9 < 0 ? 'overdue' : days9 <= (dt9.leadDays || 30) ? 'expiring' : 'valid', daysLeft: days9 == null ? 0 : days9 }) })
               .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
               .then(({ ok, j9 }) => {
@@ -27306,7 +27436,7 @@ class Component extends DCLogic {
           // ('f' + Date.now()), and Document.customData is keyed by that id — so renaming one
           // unrelated field made every previously captured value on every document of this type stop
           // matching. Nothing deleted, nothing reported: just unreadable.
-          (d.fields || []).map(f => [f.label, f.type, f.required, f.purpose || '', f.id || '']),
+          (d.fields || []).map(f => [f.label, f.type, f.required, f.purpose || '', f.id || f.key || '', f.options || '']),
           // Round-trips both kinds. An attribute rule loaded as a document rule would lose its
           // operator and silently become a requirement for a document type called "age".
           (d.prereqs || []).map(p => (String(p.kind || '') === 'attribute'
@@ -27330,7 +27460,7 @@ class Component extends DCLogic {
         dtnPortal: row9[14] === true, dtnCard: row9[15] === true, dtnCardPos: row9[16] || '',
         dtnFee: String(row9[4]).replace(/[^0-9]/g, ''), dtnApproval: !!row9[5], dtnAssignee: row9[6],
         // Fifth element = the field's existing id, carried so submit can reuse it.
-        dtnFields: (row9[7] || []).map(f9 => [f9[0], f9[1], f9[2], f9[3] || '', f9[4] || '']).concat((row9[7] || []).length ? [] : [['', 'text', true, '', '']]),
+        dtnFields: (row9[7] || []).map(f9 => [f9[0], f9[1], f9[2], f9[3] || '', f9[4] || '', f9[5] || '']).concat((row9[7] || []).length ? [] : [['', 'text', true, '', '', '']]),
         dtnPrereqs: row9[8] || [], dtnErr: '',
       });
     };
@@ -27394,21 +27524,24 @@ class Component extends DCLogic {
       ['Receipt no.', 'receipt'],
     ];
     const _dtPurposeLabel = (v) => (DT_PURPOSES.find(p => p[1] === (v || '')) || DT_PURPOSES[0])[0];
-    const _dtRow = () => [...(this.state.dtnFields || [['', 'text', true, '']])];
+    const _dtRow = () => [...(this.state.dtnFields || [['', 'text', true, '', '', '']])];
     const dtnFields = (this.state.dtnFields || [['', 'text', true, '']]).map((f, i) => {
-      const dd = mkDd('ddDtnF' + i, ['text', 'number', 'date', 'dropdown', 'file'], f[1], (v) => { const a = _dtRow(); a[i] = [a[i][0], v, a[i][2], a[i][3] || '', a[i][4] || '']; this.setState({ dtnFields: a }); });
+      const dd = mkDd('ddDtnF' + i, ['text', 'number', 'date', 'dropdown', 'file'], f[1], (v) => { const a = _dtRow(); a[i] = [a[i][0], v, a[i][2], a[i][3] || '', a[i][4] || '', a[i][5] || '']; this.setState({ dtnFields: a }); });
       const ddp = mkDd('ddDtnP_' + i, DT_PURPOSES.map(p => p[0]), _dtPurposeLabel(f[3]),
-        (v) => { const a = _dtRow(); a[i] = [a[i][0], a[i][1], a[i][2], (DT_PURPOSES.find(p => p[0] === v) || ['', ''])[1], a[i][4] || '']; this.setState({ dtnFields: a }); });
+        (v) => { const a = _dtRow(); a[i] = [a[i][0], a[i][1], a[i][2], (DT_PURPOSES.find(p => p[0] === v) || ['', ''])[1], a[i][4] || '', a[i][5] || '']; this.setState({ dtnFields: a }); });
       return {
         label: f[0], type: f[1], reqOn: f[2],
         purposeLabel: _dtPurposeLabel(f[3]),
         // A file has nowhere to go in the run's data, so it can carry no purpose.
         purposeShow: f[1] !== 'file',
         reqLabel: f[2] ? 'REQ' : 'OPT', reqColor: f[2] ? '#C0353A' : '#A9A6B4',
-        setLabel: (e) => { const a = _dtRow(); a[i] = [e.target.value, a[i][1], a[i][2], a[i][3] || '', a[i][4] || '']; this.setState({ dtnFields: a }); },
+        setLabel: (e) => { const a = _dtRow(); a[i] = [e.target.value, a[i][1], a[i][2], a[i][3] || '', a[i][4] || '', a[i][5] || '']; this.setState({ dtnFields: a }); },
+        isPick: f[1] === 'dropdown',
+        options: f[5] || '',
+        setOptions: (e) => { const a = _dtRow(); a[i] = [a[i][0], a[i][1], a[i][2], a[i][3] || '', a[i][4] || '', e.target.value]; this.setState({ dtnFields: a }); },
         ddToggle: dd['ddDtnF' + i + 'Toggle'], ddOpen: dd['ddDtnF' + i + 'Open'], ddOptions: dd['ddDtnF' + i + 'Options'],
         ddpToggle: ddp['ddDtnP_' + i + 'Toggle'], ddpOpen: ddp['ddDtnP_' + i + 'Open'], ddpOptions: ddp['ddDtnP_' + i + 'Options'],
-        toggleReq: () => { const a = _dtRow(); a[i] = [a[i][0], a[i][1], !a[i][2], a[i][3] || '', a[i][4] || '']; this.setState({ dtnFields: a }); },
+        toggleReq: () => { const a = _dtRow(); a[i] = [a[i][0], a[i][1], !a[i][2], a[i][3] || '', a[i][4] || '', a[i][5] || '']; this.setState({ dtnFields: a }); },
         remove: () => this.setState({ dtnFields: (this.state.dtnFields || []).filter((_, j) => j !== i) }),
       };
     });
@@ -27568,7 +27701,7 @@ class Component extends DCLogic {
         // fields added inside the same millisecond used to collide.
         const _usedIds = new Set((st.dtnFields || []).map(f => f[4]).filter(Boolean));
         const _mintId = () => { let id2; do { id2 = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); } while (_usedIds.has(id2)); _usedIds.add(id2); return id2; };
-        const fields = (st.dtnFields || []).filter(f => f[0].trim()).map((f, i2) => ({ id: f[4] || _mintId(), label: f[0].trim(), type: f[1] || 'text', required: !!f[2], purpose: (f[1] === 'file' ? '' : (f[3] || '')) }));
+        const fields = (st.dtnFields || []).filter(f => f[0].trim()).map((f, i2) => ({ id: f[4] || _mintId(), label: f[0].trim(), type: f[1] || 'text', required: !!f[2], purpose: (f[1] === 'file' ? '' : (f[3] || '')), options: f[1] === 'dropdown' ? String(f[5] || '').trim() : '' }));
         const ROLE_BACK = { 'Super Admin': 'super_admin', 'Admin': 'admin', 'PRO Officer': 'pro_officer', 'Accountant': 'accountant' };
         const body = {
           name, subjectKind: (st.dtnSubject || 'Employee') === 'Company' ? 'company' : 'employee',
