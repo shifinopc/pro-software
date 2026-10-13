@@ -1507,7 +1507,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
     const applies = (cap: any) => {
       const cond = cap?.showIf;
       if (!cond || !cond.var) return true;
-      const got = String(supplied[cond.var] ?? vars[cond.var] ?? "");
+      const got = String(supplied[cond.var] ?? "");
       const want = String(cond.equals ?? "");
       return want ? got === want : !!got;
     };
