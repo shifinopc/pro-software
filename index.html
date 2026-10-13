@@ -2548,6 +2548,8 @@
                   <sc-if value="{{ e.hasCr }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; font-weight:600; color:#5B21B6; background:#F5EEFF; padding:2px 9px; border-radius:99px; white-space:nowrap;">{{ e.crTag }}</span></sc-if>
                   <div style="text-align:right;">
                     <span style="font-size:10.5px; font-weight:700; color:{{ e.stColor }}; background:{{ e.stBg }}; padding:3px 10px; border-radius:99px;">{{ e.status }}</span>
+                    <sc-if value="{{ e.compBad }}" hint-placeholder-val="{{ false }}"><span title="{{ e.compWhy }}" style="font-size:10.5px; font-weight:700; color:#C0353A; background:#FEECEC; padding:3px 10px; border-radius:99px; margin-left:6px; white-space:nowrap;">Non-compliant</span></sc-if>
+                    <sc-if value="{{ e.compSoon }}" hint-placeholder-val="{{ false }}"><span title="{{ e.compWhy }}" style="font-size:10.5px; font-weight:700; color:#B8860B; background:#FEF4E2; padding:3px 10px; border-radius:99px; margin-left:6px; white-space:nowrap;">Expiring</span></sc-if>
                     <sc-if value="{{ e.exiting }}" hint-placeholder-val="{{ false }}"><div style="font-size:9.5px; color:#A9A6B4; margin-top:3px;">{{ e.exitHint }}</div></sc-if>
                   </div>
                   <sc-if value="{{ e.exitAccept }}" hint-placeholder-val="{{ false }}">
@@ -21582,6 +21584,49 @@ class Component extends DCLogic {
       }
       return this.state.clientSel;
     })();
+    // WHICH DOCUMENTS A PERSON IS MEASURED AGAINST — defined once, read by both the employee card
+    // and the compliance badge on the client's Employees tab. Two copies of this would drift, and a
+    // badge that disagrees with the card it describes is worse than no badge.
+    //
+    // In the firm's own order, with anything they have not positioned last by name.
+    const _empCardTypes = (() => {
+      const all9 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
+        .filter(t9 => (t9.subjectKind || 'employee') === 'employee');
+      const picked9 = all9.filter(t9 => t9.onEmployeeCard).slice().sort((x9, y9) => {
+        const ox = x9.cardOrder == null ? Infinity : x9.cardOrder;
+        const oy = y9.cardOrder == null ? Infinity : y9.cardOrder;
+        return ox !== oy ? ox - oy : String(x9.name).localeCompare(String(y9.name));
+      }).map(t9 => t9.name);
+      // Nothing ticked yet: the old five, so a fresh install shows a card rather than an empty one.
+      return picked9.length ? picked9 : all9.map(t9 => t9.name).slice(0, 5);
+    })();
+    /**
+     * IS THIS PERSON'S PAPERWORK IN ORDER?
+     *
+     * Answers for ONE employee against the types above, and only those: a document the firm does not
+     * track is not a gap. Returns the reasons, so the badge can say what is actually wrong instead of
+     * leaving somebody to open five records to find out.
+     *
+     * An expiry that was never recorded counts as a problem, not as valid. The card already refuses
+     * to show those as a green tick for the same reason — reporting an undated permit as compliant
+     * is a false assurance, and this badge is read faster and trusted harder than the card is.
+     */
+    const _empCompliance = (emp9, allDocs9) => {
+      const mine9 = (allDocs9 || []).filter(d9 =>
+        (d9.employeeId && emp9.id && d9.employeeId === emp9.id) || (!d9.employeeId && d9.person === emp9.name));
+      const missing9 = [], bad9 = [], soon9 = [];
+      for (const tn9 of _empCardTypes) {
+        const d9 = mine9.find(x9 => x9.docType === tn9);
+        if (!d9) { missing9.push(tn9); continue; }
+        const st9 = String(d9.status || 'valid').toLowerCase();
+        if (st9 === 'overdue' || st9 === 'expired') bad9.push(tn9);
+        else if (st9 === 'unknown') bad9.push(tn9 + ' (no expiry recorded)');
+        else if (st9 === 'expiring') soon9.push(tn9);
+      }
+      const hard9 = [...missing9.map(n9 => n9 + ' missing'), ...bad9.map(n9 => n9 + ' expired')];
+      return { bad: hard9.length > 0, soon: hard9.length === 0 && soon9.length > 0,
+               why: hard9.length ? hard9.join(', ') : soon9.map(n9 => n9 + ' expiring').join(', ') };
+    };
     const clRow = clSel != null ? allClients[clSel] : null;
     const clTab = this.state.clientTab || 'Overview';
     const clDetailApi = { showClientDetail: !!clRow };
@@ -22582,7 +22627,16 @@ class Component extends DCLogic {
         const t = empTone[status] || empTone.Active;
         const name = e9.name || '—', role = e9.role || '—';
         const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+        // Said on the row, because this list is where somebody looks to find out who needs chasing,
+        // and until now it answered only "are they still employed". Nothing is shown when the
+        // paperwork is in order — a badge on all 48 people is a badge that stops being read.
+        //
+        // A former employee gets none of this: we have deliberately stopped renewing for them, so
+        // marking them non-compliant would be the system complaining about its own decision.
+        const comp9 = former ? { bad: false, soon: false, why: '' }
+          : _empCompliance(e9, Array.isArray(this.state.documentsData) ? this.state.documentsData : []);
         return { name, role, status, stBg: t[0], stColor: t[1], initials,
+          compBad: comp9.bad, compSoon: comp9.soon, compWhy: comp9.why,
           hasCr: _crIsMulti, crTag: _crIsMulti ? this._crLabel(this._crOf(clRow.realId, e9.establishmentId)) : '',
           former: canWrite && former, formerRow: former, rowOpacity: former ? .6 : 1,
           avBg: former ? '#F3F1F7' : '#EFEBFF', avColor: former ? '#8C8899' : '#6D5BD0',
@@ -23350,21 +23404,9 @@ class Component extends DCLogic {
     // It now reads the types ticked for the card, in name order so the list is stable. The old
     // behaviour is kept as the fallback for an install where nothing has been ticked yet: five
     // arbitrary rows is poor, and an empty card with "0/0 documents" is worse.
-    const _edEmpTypes = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
-      .filter(t7 => (t7.subjectKind || 'employee') === 'employee');
-    // In the order the firm arranged, not alphabetical — which put the Iqama ahead of the Work
-    // Permit that has to be issued before it. A type with no position given sorts to the end by name,
-    // so ticking a new one appends rather than landing in the middle of somebody's sequence.
-    const _edPicked = _edEmpTypes.filter(t7 => t7.onEmployeeCard)
-      .slice()
-      .sort((a7, b7) => {
-        const oa = a7.cardOrder == null ? Infinity : a7.cardOrder;
-        const ob = b7.cardOrder == null ? Infinity : b7.cardOrder;
-        return oa !== ob ? oa - ob : String(a7.name).localeCompare(String(b7.name));
-      })
-      .map(t7 => t7.name);
-    const _edTypes = _edPicked.length ? _edPicked : _edEmpTypes.map(t7 => t7.name).slice(0, 5);
-    const _edTypeList = _edTypes.length ? _edTypes : ['Passport', 'Visa', 'Emirates ID', 'Labour Card', 'Medical Certificate'];
+    // The one list, shared with the compliance badge on the client's Employees tab — see
+    // _empCardTypes. The last fallback is for a database with no employee document types at all.
+    const _edTypeList = _empCardTypes.length ? _empCardTypes : ['Passport', 'Visa', 'Emirates ID', 'Labour Card', 'Medical Certificate'];
     const employeeDocs = (_edEmps.length ? _edEmps : (_authed ? [] : edDefs.map(([name, role]) => ({ name, role })))).map((e7, i) => {
       const p = avPals[i % avPals.length];
       const mine = _edAllDocs.filter(d7 => (d7.employeeId && e7.id && d7.employeeId === e7.id) || (!d7.employeeId && d7.person === e7.name));
