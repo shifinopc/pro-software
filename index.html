@@ -31750,13 +31750,34 @@ class Component extends DCLogic {
        * exists today is unaffected. A hidden field is not required and its value is not sent: it is
        * not an unanswered question, it is one that was never asked.
        */
-      const _capShown = (c) => {
-        const cond = c && c.showIf;
-        if (!cond || !cond.var) return true;
-        const want = String(cond.equals == null ? '' : cond.equals);
-        const got = String(cap[cond.var] == null ? '' : cap[cond.var]);
-        return want ? got === want : !!got;
-      };
+      /**
+       * A HIDDEN FIELD HAS NO ANSWER, as far as any other field is concerned.
+       *
+       * This read the raw value, which breaks the moment somebody changes their mind. Say yes to a
+       * late payment, mark it paid, then switch to no: the amount and paid/unpaid hide, but "paid"
+       * is still sitting in the form state, so the reference and date — which depend on it — stay on
+       * screen and stay required. The step cannot be completed and nothing on it explains why.
+       *
+       * Resolved in declaration order, each field's value counting only while the field itself is
+       * shown. A question that was never asked contributes nothing to the ones after it.
+       */
+      const _capVis = (() => {
+        const shown = {}, eff = {};
+        for (const c of (selStep.captures || [])) {
+          if (!c || !c.var) continue;
+          const cond = c.showIf;
+          let vis = true;
+          if (cond && cond.var) {
+            const want = String(cond.equals == null ? '' : cond.equals);
+            const got = String(eff[cond.var] == null ? '' : eff[cond.var]);
+            vis = want ? got === want : !!got;
+          }
+          shown[c.var] = vis;
+          eff[c.var] = vis ? (cap[c.var] == null ? '' : cap[c.var]) : '';
+        }
+        return shown;
+      })();
+      const _capShown = (c) => (!c || !c.var) ? true : _capVis[c.var] !== false;
       // Which questions are still unanswered, counting only the ones on screen.
       const _capsMissing = (selStep.captures || []).filter(_capShown)
         .filter(c => !(c.required === false || c.optional === true))

@@ -1562,13 +1562,23 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
      *
      * Absent, a capture always applies, so every step that exists today is unaffected.
      */
-    const applies = (cap: any) => {
-      const cond = cap?.showIf;
-      if (!cond || !cond.var) return true;
-      const got = String(supplied[cond.var] ?? "");
-      const want = String(cond.equals ?? "");
-      return want ? got === want : !!got;
-    };
+    const appliesMap: Record<string, boolean> = {};
+    {
+      const eff: Record<string, string> = {};
+      for (const cap of caps0) {
+        if (!cap?.var) continue;
+        const cond = cap.showIf;
+        let vis = true;
+        if (cond?.var) {
+          const want = String(cond.equals ?? "");
+          const got = String(eff[cond.var] ?? "");
+          vis = want ? got === want : !!got;
+        }
+        appliesMap[String(cap.var)] = vis;
+        eff[String(cap.var)] = vis ? String(supplied[cap.var] ?? "") : "";
+      }
+    }
+    const applies = (cap: any) => (cap?.var ? appliesMap[String(cap.var)] !== false : true);
     const missing: string[] = [];
     for (const cap of caps0) {
       if (!cap || !cap.var) continue;
