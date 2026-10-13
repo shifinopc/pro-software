@@ -50,7 +50,7 @@ const nodes = [
     config: { docType: "Iqama" } },
   { id: "fix_ins", type: "task", label: "Update the Insurance Before Renewing",
     config: { assigneeRole: "pro_officer", slaHours: 168,
-      instructions: "For this Iqama renewal the insurance does not meet the minimum validity period. {prereqUnmet} File the valid document against this employee, then complete this step — the check runs again by itself.",
+      instructions: "This Iqama renewal is waiting on a document that does not meet its minimum validity period. {prereqUnmet} File the valid document against this employee, then complete this step — the check runs again by itself.",
       captures: [{ var: "insuranceFixed", type: "text", label: "What was done", required: true }] } },
 
   { id: "permit", type: "task", label: "Issue Work Permit",

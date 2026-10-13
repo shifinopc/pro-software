@@ -65,7 +65,7 @@ const main = async () => {
 
     const res = await fetch(API + "/api/workflow/instances", {
       method: "POST", headers: H,
-      body: JSON.stringify({ templateId: tpl.id, title: t.instance.title, companyId: t.instance.companyId, variables: carried }),
+      body: JSON.stringify({ templateId: tpl.id, title: t.instance.title, companyId: t.instance.companyId, clientName: t.instance.clientName, variables: carried }),
     });
     const fresh: any = await res.json().catch(() => ({}));
     console.log(`restarted: ${t.instance.title}  ${t.instance.id} -> ${res.status === 201 ? fresh.id : "FAILED " + res.status + " " + (fresh.error ?? "")}`);
