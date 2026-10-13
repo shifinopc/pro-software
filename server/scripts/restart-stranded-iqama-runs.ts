@@ -29,7 +29,9 @@ const KEEP = ["employeeId", "documentId", "person", "applicant", "docType", "sub
 const main = async () => {
   const tpl = await prisma.workflowTemplate.findFirst({ where: { name: "Iqama Renewal" } });
   if (!tpl) throw new Error("Iqama Renewal template not found");
-  const ids = new Set(((tpl.graph as any)?.nodes ?? []).map((n: any) => String(n.id)));
+  const nodes: any[] = ((tpl.graph as any)?.nodes ?? []);
+  const RAISES_WORK = new Set(["task", "approval"]);
+  const ids = new Set(nodes.filter(n => RAISES_WORK.has(String(n.type))).map((n: any) => String(n.id)));
 
   const live = await prisma.workflowTask.findMany({
     where: { status: "active", instance: { templateId: tpl.id, status: "running" } },

@@ -8,7 +8,7 @@
  *
  * Ten steps become five:
  *
- *   1  Check Insurance is Valid        the gate; nothing starts until the cover is good
+ *   1  Insurance & Prerequisite Check  evaluated by the engine; seen only when it fails
  *   2  Issue Work Permit               term, amount, paid/unpaid, reference and date when paid
  *   3  Payment for Jawazat             the same, plus a late payment when one applies
  *   4  Traffic / Other Violations      blocks the renewal until an outstanding fine is settled
@@ -41,18 +41,16 @@ const money = (p: string, label: string) => [
 const nodes = [
   { id: "start", type: "start", label: "Renewal Created", config: {} },
 
-  { id: "prereq", type: "task", label: "Check Insurance is Valid",
-    config: { assigneeRole: "pro_officer", slaHours: 24,
-      instructions: "The employee's health insurance must be valid before anything is paid — it is the Iqama's own prerequisite. If it is not valid, the renewal waits while it is put right.",
-      captures: [
-        { var: "insuranceValid", type: "select", label: "Insurance valid?", options: "valid,not_valid", required: true },
-        { var: "insuranceNote", type: "text", label: "What is wrong with it", required: true, showIf: { var: "insuranceValid", equals: "not_valid" } },
-      ] } },
-  { id: "d_ins", type: "decision", label: "Insurance valid?",
-    config: { branches: [{ var: "insuranceValid", op: "eq", value: "valid", key: "valid" }] } },
-  { id: "fix_ins", type: "task", label: "Update the Insurance",
+  // NOT A QUESTION. The Iqama type already carries its prerequisites — health insurance valid for at
+  // least a month, a passport for at least six — and the engine can read them. Asking an officer
+  // "insurance valid?" queued 76 people to re-type an answer the database held, and nothing stopped
+  // a wrong one. Met, and nobody ever sees this step. Not met, and the reason is written onto the
+  // work that is raised.
+  { id: "prereq", type: "prereq_gate", label: "Insurance & Prerequisite Check",
+    config: { docType: "Iqama" } },
+  { id: "fix_ins", type: "task", label: "Update the Insurance Before Renewing",
     config: { assigneeRole: "pro_officer", slaHours: 168,
-      instructions: "File the valid health insurance against this employee, then this returns to the check.",
+      instructions: "For this Iqama renewal the insurance does not meet the minimum validity period. {prereqUnmet} File the valid document against this employee, then complete this step — the check runs again by itself.",
       captures: [{ var: "insuranceFixed", type: "text", label: "What was done", required: true }] } },
 
   { id: "permit", type: "task", label: "Issue Work Permit",
@@ -117,9 +115,8 @@ const nodes = [
 
 const edges = [
   { from: "start", to: "prereq", condition: "" },
-  { from: "prereq", to: "d_ins", condition: "" },
-  { from: "d_ins", to: "permit", condition: "valid" },
-  { from: "d_ins", to: "fix_ins", condition: "else" },
+  { from: "prereq", to: "permit", condition: "pass" },
+  { from: "prereq", to: "fix_ins", condition: "fail" },
   { from: "fix_ins", to: "prereq", condition: "" },
   { from: "permit", to: "jawazat", condition: "" },
   { from: "jawazat", to: "violations", condition: "" },

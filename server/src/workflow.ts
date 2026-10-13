@@ -12,6 +12,7 @@ import { notifyDocumentRenewed, notifyRequestCompleted, notifyRequestRejected } 
 import { validateGraph, stepsMissingRole, type GraphIssue } from "./workflow-validate.js";
 import { evaluateRule } from "./dealchecklist.js";
 import { figuresForFee } from "./money.js";
+import { unmetPrereqs } from "./jobs.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
 const nowISO = () => new Date().toISOString();
@@ -835,6 +836,55 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         break;
       }
 
+      /**
+       * A CHECK THE SYSTEM ALREADY KNOWS THE ANSWER TO.
+       *
+       * The Iqama document type carries its own prerequisites — health insurance valid for at least
+       * N months, a passport valid for at least N — and the renewal engine has been able to evaluate
+       * them all along. Asking an officer "insurance valid?" put 76 people in a queue to re-type an
+       * answer the database already held, and invited a wrong one: nothing stopped somebody ticking
+       * Valid on an employee whose cover lapsed last month.
+       *
+       * So this step is not a question. It evaluates, and routes. When everything is met, nobody ever
+       * sees it — the run walks straight past and the log says so. When something is not, the reason
+       * goes into the run and the "fail" branch raises work with that reason written on it, so the
+       * officer is told which document and how short it is rather than being asked to go and look.
+       *
+       * Re-entered after the fix, it evaluates again. There is no way to answer it by hand, which is
+       * the point: a derived fact with a manual override is just a manual fact wearing a uniform.
+       */
+      case "prereq_gate": {
+        const c = node.config ?? {};
+        const docType = String(c.docType || vars.docType || "");
+        const dt = docType ? await prisma.documentType.findFirst({ where: { name: docType } }) : null;
+        if (!dt) {
+          // Nothing to check against is not the same as everything being in order, and silently
+          // passing would make the gate decorative. Said out loud, then passed, because blocking a
+          // whole workflow on a missing configuration row helps nobody.
+          await log("prereq.skipped", nodeId, `${docType || "(no document type)"}: no such type — nothing to check`);
+          queue.push(...nextTargets(g, nodeId, "pass"));
+          break;
+        }
+        const unmet = await unmetPrereqs(dt, {
+          companyId: inst.companyId,
+          employeeId: vars.employeeId ? String(vars.employeeId) : null,
+          person: String(vars.applicant || vars.person || ""),
+        });
+        if (!unmet.length) {
+          vars.prereqUnmet = "";
+          await log("prereq.pass", nodeId, `${dt.name}: every prerequisite is met — no one was asked`);
+          queue.push(...nextTargets(g, nodeId, "pass"));
+        } else {
+          // The sentence the officer will read, built from the rules the firm wrote down.
+          vars.prereqUnmet = unmet
+            .map(u => `${u.need} ${u.why}${u.months ? ` (at least ${u.months} month${u.months === 1 ? "" : "s"} of validity is required)` : ""}`)
+            .join("; ") + ".";
+          await log("prereq.blocked", nodeId, `${dt.name}: ${vars.prereqUnmet}`);
+          queue.push(...nextTargets(g, nodeId, "fail"));
+        }
+        break;
+      }
+
       case "task":
       case "approval": {
         // Idempotency: don't spawn a second live task for the same node.
@@ -952,7 +1002,15 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             slaState: typeof c.slaHours === "number" && c.slaHours > 0 ? "on_track" : null,
             // Snapshotted, not read live from the template — a step someone is mid-way through must
             // keep the brief it was given.
-            instructions: (typeof c.instructions === "string" && c.instructions.trim()) ? c.instructions.trim() : null,
+            // {curly} names a run variable, so a step raised because something failed can say what
+            // failed. Without it the officer reads "update the insurance" and still has to go and
+            // find out which document and by how much.
+            instructions: (typeof c.instructions === "string" && c.instructions.trim())
+              ? c.instructions.trim().replace(/\{([a-zA-Z_][\w.]*)\}/g, (m0: string, k0: string) => {
+                  const v0 = vars[k0];
+                  return v0 === undefined || v0 === null || String(v0) === "" ? m0 : String(v0);
+                })
+              : null,
             // The authority this step is done at, snapshotted for the same reason. This is what the
             // Government Centers queue groups by, so a step that names one appears in that portal's
             // list of work the moment it becomes active.
