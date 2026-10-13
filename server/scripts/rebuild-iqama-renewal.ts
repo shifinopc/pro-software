@@ -67,10 +67,11 @@ const nodes = [
       captures: [
         { var: "jawazatTerm", type: "select", label: "Jawazat term", options: TERMS, required: true },
         ...money("jawazat", "Jawazat fee"),
-        // Not required: an empty amount IS the answer "there was no late payment". The paid/unpaid
-        // question appears only once an amount is entered, which is what "if applicable" means.
-        { var: "lateAmount", type: "number", label: "Late payment amount (SAR), if any", required: false },
-        { var: "latePaid", type: "select", label: "Late payment — paid?", options: "paid,unpaid", required: true, showIf: { var: "lateAmount" } },
+        // Asked outright, because an empty box is not an answer: "there was no late charge" and
+        // "nobody has filled this in" looked identical, and only one of them means the step is done.
+        { var: "lateApplies", type: "select", label: "Late payment charged?", options: "yes,no", required: true },
+        { var: "lateAmount", type: "number", label: "Late payment amount (SAR)", required: true, showIf: { var: "lateApplies", equals: "yes" } },
+        { var: "latePaid", type: "select", label: "Late payment — paid?", options: "paid,unpaid", required: true, showIf: { var: "lateApplies", equals: "yes" } },
         { var: "lateRef", type: "text", label: "Late payment reference", required: true, showIf: { var: "latePaid", equals: "paid" } },
         { var: "latePaidOn", type: "date", label: "Late payment date", required: true, showIf: { var: "latePaid", equals: "paid" } },
       ] } },
