@@ -13939,13 +13939,6 @@
                its container closes where it should, so the action can sit in a bar pinned to the
                bottom of it — the same shape the dialogs use — with the deadline beside it rather
                than scrolling away above it. -->
-          <sc-if value="{{ wdNavShow }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex; align-items:center; gap:9px; margin-top:16px;">
-              <span onClick="{{ wdGoPrev }}" style="opacity:{{ wdPrevDim }}; font-size:12px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">← Previous</span>
-              <span style="flex:1; text-align:center; font-size:11px; color:#A9A6B4;">{{ wdNavLabel }}</span>
-              <span onClick="{{ wdGoNext }}" style="opacity:{{ wdNextDim }}; font-size:12px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:8px 15px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ wdNextLabel }}</span>
-            </div>
-          </sc-if>
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:22px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 4px;">
               <div style="font-size:11px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
@@ -31906,40 +31899,6 @@ class Component extends DCLogic {
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
         wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
-        ...(() => {
-          /**
-           * MOVING THROUGH THE QUEUE WITHOUT LEAVING IT.
-           *
-           * Every completed step raises a different task, so working one renewal meant closing the
-           * drawer, finding the next row among a hundred, and opening it again — five times for one
-           * employee. The order here is the order on screen, so Next means what the eye means.
-           *
-           * The run's OWN next step wins when there is one: finish Issue Work Permit and Next is
-           * Payment for Jawazat, not whatever happens to sit below it in the list.
-           */
-          const order9 = (myStepRows.length
-            ? myStepRows.slice().sort((x9, y9) => (x9.sortKey ?? 0) - (y9.sortKey ?? 0)).map(r9 => r9.rowId)
-            : wfStepDefs.map(r9 => r9.id));
-          const at9 = order9.indexOf(selStep.id);
-          const sameRun9 = order9.filter(id9 => {
-            if (id9 === selStep.id || !selStep.instanceId) return false;
-            const d9 = wfStepDefs.find(w9 => w9.id === id9);
-            return d9 && d9.instanceId === selStep.instanceId;
-          });
-          const prev9 = at9 > 0 ? order9[at9 - 1] : null;
-          const next9 = sameRun9[0] || (at9 >= 0 && at9 < order9.length - 1 ? order9[at9 + 1] : null);
-          // Through the opener, not a bare setState: the Process timeline is fetched there, and a
-          // drawer opened without it sits on "Loading run steps…" for ever.
-          const go9 = (id9) => { if (!id9) return; const d9 = wfStepDefs.find(w9 => w9.id === id9); _openTaskDrawer(id9, d9 ? d9.instanceId : null); };
-          return {
-            wdNavShow: order9.length > 1 && at9 >= 0,
-            wdNavLabel: at9 >= 0 ? (at9 + 1) + ' of ' + order9.length : '',
-            wdPrevDim: prev9 ? '1' : '.35', wdNextDim: next9 ? '1' : '.35',
-            wdNextLabel: sameRun9[0] ? 'Next step →' : 'Next →',
-            wdGoPrev: () => go9(prev9),
-            wdGoNext: () => go9(next9),
-          };
-        })(),
         wdRuleErrShow: !!_ruleErr,
         wdRuleMsgs: _ruleErr ? (_ruleErr.rules || []).map(r => ({ text: r.message })) : [],
         // A workflow step has its own next step — the graph decides it — so there is nothing to
