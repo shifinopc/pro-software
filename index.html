@@ -17848,8 +17848,22 @@ class Component extends DCLogic {
       'Invoices': 'Invoices', 'Payments': 'Payments', 'Receipts': 'Payments',
       'Plan & Billing': 'Plan & Billing', 'Service Catalog': 'Service Catalog',
       'Quotations': 'Quotations', 'Proposal Templates': 'Quotations',
-      'Pipeline': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Follow-ups': 'Sales', 'Inbox': 'Sales',
-      'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Sales', 'Sales Settings': 'Sales',
+      // Sales split five ways. One module covered nine screens, so the only way to let the front line
+      // look up a client's phone number was to hand them the whole deal pipeline.
+      //
+      // Sales Dashboard and Activities were in NO module at all — in the menu, missing from this map,
+      // so no permission could ever hide them and they showed for every role. They are picked up here.
+      'Sales Dashboard': 'Pipeline', 'Pipeline': 'Pipeline',
+      // Stage setup reads and writes the same route the board draws from, so it cannot live anywhere
+      // else without leaving somebody a pipeline that will not render.
+      'Sales Settings': 'Pipeline',
+      'Leads': 'Leads', 'Inbox': 'Leads',
+      'Contacts': 'Contacts', 'Follow-ups': 'Contacts', 'Activities': 'Contacts',
+      'Targets & Forecast': 'Sales Targets',
+      // Both team screens are one API route and therefore one module — PRO Teams lives in the
+      // Operations menu but has always been governed here, which is why the matrix is told below
+      // where this module belongs rather than letting a 1–1 tie decide.
+      'Sales Teams': 'Teams & Routing', 'PRO Teams': 'Teams & Routing',
       'Reports': 'Reports', 'Workflow Builder': 'Workflow', 'Checklist Rules': 'Workflow', 'Field Sets': 'Workflow',
       // Settings split five ways, so an office manager can be given users without also being given
       // the integrations and the API keys.
@@ -29826,7 +29840,12 @@ class Component extends DCLogic {
     // A module's home is wherever most of its screens live. Several straddle two menus — Sales owns
     // Quotations over in Finance — and those are called out on the row rather than hidden, because
     // "I ticked Finance and Quotations still will not open" is the question this grid kept causing.
+    // A module whose screens sit in different menus has no majority to find, and the winner of a tie
+    // is whichever key happened to be counted first — not something a permissions screen should leave
+    // to chance. Named here instead.
+    const _MOD_HOME = { 'Teams & Routing': 'Sales' };
     const _homeGroup = (mod9) => {
+      if (_MOD_HOME[mod9]) return _MOD_HOME[mod9];
       const n9 = {};
       (_modScreens[mod9] || []).forEach(s9 => { const g9 = _groupOfScreen[s9]; if (g9) n9[g9] = (n9[g9] || 0) + 1; });
       let best9 = null, most9 = 0;

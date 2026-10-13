@@ -194,7 +194,7 @@ export async function runCrmDuplicates() {
   });
 }
 
-export const actLeads = standardAct(LEADS, { module: "Sales", what: "close sales follow-ups" });
-export const actQuotes = standardAct(QUOTES, { module: "Sales", what: "close quotation follow-ups" });
-export const actWon = standardAct(WON, { module: "Sales", what: "close onboarding items" });
+export const actLeads = standardAct(LEADS, { module: "Leads", what: "close sales follow-ups" });
+export const actQuotes = standardAct(QUOTES, { module: "Quotations", what: "close quotation follow-ups" });
+export const actWon = standardAct(WON, { module: "Pipeline", what: "close onboarding items" });
 export const actDupes = standardAct(DUPES, { module: "Clients", what: "close duplicate findings" });

@@ -44,7 +44,10 @@ export const MODULES = [
   "Documents", "Appointments", "Courier", "Gov Centers", "Document Types",
   // was "Finance", plus Quotations which used to sit inside Sales
   "Invoices", "Payments", "Quotations", "Plan & Billing", "Service Catalog",
-  "Sales", "Reports", "Workflow",
+  // was "Sales" — one module over nine screens, so the only way to give the front line a client's
+  // phone number was to hand them the whole deal pipeline
+  "Pipeline", "Leads", "Contacts", "Sales Targets", "Teams & Routing",
+  "Reports", "Workflow",
   // was "Settings"
   "Users & Roles", "Organisation", "Email", "Integrations", "API Keys",
 ] as const;
@@ -86,8 +89,14 @@ const TUNE: Record<string, Partial<Record<PermModule, number[]>>> = {
   "PRO Officer": {
     Reports: [1, 0, 0, 0, 0, 1],
     Workflow: [1, 0, 0, 0, 0, 0],
-    // Front-line ops read the pipeline to know what work is coming; they do not sell.
-    Sales: [1, 0, 0, 0, 0, 0],
+    // Front-line ops read the pipeline to know what work is coming; they do not sell. Was one
+    // "Sales: view only" — restated unchanged, so nobody gains or loses anything on the day of the
+    // split. Untick Pipeline and Sales Targets here if the front line should not see deal values.
+    Pipeline: [1, 0, 0, 0, 0, 0],
+    Leads: [1, 0, 0, 0, 0, 0],
+    Contacts: [1, 0, 0, 0, 0, 0],
+    "Sales Targets": [1, 0, 0, 0, 0, 0],
+    "Teams & Routing": [1, 0, 0, 0, 0, 0],
     // …and do not price. Quotations came out of Sales, where they were read-only for this role.
     Quotations: [1, 0, 0, 0, 0, 0],
     // Was one "Finance: view only".
@@ -113,7 +122,12 @@ const TUNE: Record<string, Partial<Record<PermModule, number[]>>> = {
     Approvals: [1, 0, 0, 1, 0, 0],
     Clients: [1, 0, 0, 0, 0, 0],
     Workflow: [0, 0, 0, 0, 0, 0],
-    Sales: [1, 0, 0, 0, 0, 1],
+    // Was one "Sales: view and export", restated five ways, unchanged.
+    Pipeline: [1, 0, 0, 0, 0, 1],
+    Leads: [1, 0, 0, 0, 0, 1],
+    Contacts: [1, 0, 0, 0, 0, 1],
+    "Sales Targets": [1, 0, 0, 0, 0, 1],
+    "Teams & Routing": [1, 0, 0, 0, 0, 1],
     // THE POINT OF THE SPLIT. Money in and out is theirs; the price list and the plans that
     // generate the money are not, and before this there was no way to say so.
     Invoices: [1, 1, 1, 0, 0, 1],
@@ -142,7 +156,14 @@ const TUNE: Record<string, Partial<Record<PermModule, number[]>>> = {
     // The one module a salesperson actually works in. Read-only everywhere else, but they must be
     // able to log a call, move a deal and add a contact or the role cannot do its job — which is
     // exactly what the hardcoded admin-only gate did to it.
-    Sales: [1, 1, 1, 0, 0, 1],
+    // Working the pipeline IS the job, so all four selling modules keep what Sales had. Routing is
+    // the exception worth making by hand: letting a rep edit the rules that decide who gets which
+    // lead is letting them assign themselves the good ones. Left as it was — untick it to close that.
+    Pipeline: [1, 1, 1, 0, 0, 1],
+    Leads: [1, 1, 1, 0, 0, 1],
+    Contacts: [1, 1, 1, 0, 0, 1],
+    "Sales Targets": [1, 1, 1, 0, 0, 1],
+    "Teams & Routing": [1, 1, 1, 0, 0, 1],
     // Quotations came out of Sales and keeps what Sales had: writing the offer IS the job.
     Quotations: [1, 1, 1, 0, 0, 1],
     // Was one "Finance: view only".
@@ -169,7 +190,12 @@ const TUNE: Record<string, Partial<Record<PermModule, number[]>>> = {
     "Activity Log": [0, 0, 0, 0, 0, 0],
     Reports: [0, 0, 0, 0, 0, 0],
     Workflow: [0, 0, 0, 0, 0, 0],
-    Sales: [0, 0, 0, 0, 0, 0],
+    // A client sees none of the firm's selling, as before.
+    Pipeline: [0, 0, 0, 0, 0, 0],
+    Leads: [0, 0, 0, 0, 0, 0],
+    Contacts: [0, 0, 0, 0, 0, 0],
+    "Sales Targets": [0, 0, 0, 0, 0, 0],
+    "Teams & Routing": [0, 0, 0, 0, 0, 0],
     Quotations: [0, 0, 0, 0, 0, 0],
     // Was one "Finance: see and export your own".
     Invoices: [1, 0, 0, 0, 0, 1],
@@ -201,9 +227,10 @@ export const SPLIT_PARENTS: Record<string, PermModule[]> = {
   Finance: ["Invoices", "Payments", "Plan & Billing", "Service Catalog"],
   Compliance: ["Documents", "Appointments", "Courier", "Gov Centers", "Document Types"],
   Settings: ["Users & Roles", "Organisation", "Email", "Integrations", "API Keys"],
-  // Not a split: Quotations LEFT Sales, and Sales itself remains. A saved Sales tick has to reach
-  // Quotations too or a sales rep loses the quotation screen on the day this ships.
-  Sales: ["Quotations"],
+  // Quotations left Sales first; now Sales itself is gone. A saved Sales tick has to reach all six
+  // or a sales rep loses the pipeline on the day this ships. Listing Quotations again is harmless:
+  // the carry-across never overwrites a child that already has its own tick.
+  Sales: ["Quotations", "Pipeline", "Leads", "Contacts", "Sales Targets", "Teams & Routing"],
 };
 
 /** No role may mutate the audit trail — it is append-only, and the screen locks these too. */
@@ -346,25 +373,33 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/packages", "Plan & Billing"],
   ["/api/service-items", "Service Catalog"],
   ["/api/zatca-qr.svg", "Invoices"],
-  // ── Sales: the module added because the matrix could not express CRM at all ──
-  ["/api/pipeline", "Sales"],
-  ["/api/pipeline-stages", "Sales"],
-  ["/api/opportunities", "Sales"],
-  ["/api/leads", "Sales"],
-  ["/api/lead-scores", "Sales"],
-  ["/api/contacts", "Sales"],
-  ["/api/interactions", "Sales"],
-  ["/api/follow-ups", "Sales"],
+  // ── Sales, split five ways ──
+  // One "Sales" could not say any of the things a PRO firm actually needs to say: that the front
+  // line may look up a client's number but not the deal pipeline, that a junior may triage web
+  // enquiries without seeing deal values, that a salesperson works the pipeline but must not edit
+  // the routing rules that decide who gets which lead.
+  ["/api/pipeline", "Pipeline"],
+  // Configuration AND the board's columns come from here, so it travels with Pipeline rather than
+  // with the setup screen — gating it elsewhere would leave a salesperson a board that cannot draw.
+  ["/api/pipeline-stages", "Pipeline"],
+  ["/api/opportunities", "Pipeline"],
+  ["/api/crm-dashboard", "Pipeline"],
+  ["/api/leads", "Leads"],
+  ["/api/lead-scores", "Leads"],      // scores OF open leads, not the scoring rules
+  ["/api/inbox", "Leads"],
+  ["/api/mailbox", "Leads"],
+  ["/api/contacts", "Contacts"],
+  ["/api/interactions", "Contacts"],
+  ["/api/follow-ups", "Contacts"],
+  ["/api/booking-links", "Contacts"],
+  ["/api/targets-forecast", "Sales Targets"],
+  ["/api/sales-targets", "Sales Targets"],
+  // Sales Teams and PRO Teams are one route and therefore one module. Saying otherwise in the
+  // matrix would be a promise the server cannot keep.
+  ["/api/teams", "Teams & Routing"],
+  ["/api/assignable-owners", "Teams & Routing"],
+  ["/api/owner-rotation", "Teams & Routing"],
   ["/api/quotations", "Quotations"],
-  ["/api/crm-dashboard", "Sales"],
-  ["/api/targets-forecast", "Sales"],
-  ["/api/sales-targets", "Sales"],
-  ["/api/inbox", "Sales"],
-  ["/api/mailbox", "Sales"],
-  ["/api/teams", "Sales"],
-  ["/api/assignable-owners", "Sales"],
-  ["/api/owner-rotation", "Sales"],
-  ["/api/booking-links", "Sales"],
   ["/api/sales-report", "Reports"],
   ["/api/ops-report", "Reports"],
   ["/api/stage-analytics", "Reports"],

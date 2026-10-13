@@ -205,7 +205,7 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   }
 
   if (action === "quote") {
-    await requirePerm(actor, "Sales", "Create", "create quotations");
+    await requirePerm(actor, "Quotations", "Create", "create quotations");
     const svc = o.service;
     if (!svc?.id) throw new AgentActionError("No service was identified to quote.");
     const price = Number(svc.govFee || 0) + Number(svc.serviceFee || 0);
