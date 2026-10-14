@@ -71,6 +71,32 @@ const RULE_DEFAULTS: Record<RuleKey, boolean> = {
   "Client documents needed": true,
 };
 
+/**
+ * THE TRAINING BRAKE: hold every automated email addressed to a client.
+ *
+ * While an office is learning the product it does real work on real records, and every one of
+ * those keystrokes can reach a customer — a renewal notice, an invoice, a status change. One
+ * switch holds all of it, so the firm can rehearse on live data without a client ever knowing.
+ *
+ * THE IN-APP NOTIFICATION IS STILL WRITTEN. This suppresses the EMAIL, not the event: the bell,
+ * the portal and every list behave exactly as they will on the day it is lifted, which is the
+ * only way training rehearses the real thing.
+ *
+ * Held sends are recorded in the mail log as `skipped`, with the reason. A brake nobody can see
+ * is indistinguishable from mail that is quietly failing, and the second one is an emergency.
+ *
+ * Covers the fourteen automated client notifications that pass through here. It does NOT cover
+ * the portal invitation, the password reset, or a Notify step in a workflow pointed at a client
+ * address — those do not come through `run()`, and two of them are how somebody signs in.
+ */
+export const HOLD_CLIENT_EMAIL_KEY = "__holdClientEmail";
+export async function clientEmailHeld(): Promise<boolean> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: "notifRules" } });
+    return ((row?.value ?? {}) as Record<string, unknown>)[HOLD_CLIENT_EMAIL_KEY] === true;
+  } catch { return false; }
+}
+
 async function ruleOn(key: RuleKey): Promise<boolean> {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: "notifRules" } });
@@ -198,6 +224,20 @@ async function run(args: NotifyArgs) {
     : owner ? owner.to
     : await clientRecipients(args.companyId);
   if (!to.length) return;
+
+  // Held, not lost: the in-app row above has already been written, so the office and the
+  // portal see the event exactly as they will when this is lifted.
+  if (args.audience === "client" && await clientEmailHeld()) {
+    for (const addr of [...new Set(to)]) {
+      await prisma.mailLog.create({ data: {
+        to: addr.slice(0, 191), subject: args.subject.slice(0, 2000),
+        status: "skipped", kind: `notify:${args.rule}`,
+        error: "Client email is on hold (Settings → Notifications)",
+        at: new Date().toISOString(),
+      } }).catch(() => {});
+    }
+    return;
+  }
 
   // ── digest mode ────────────────────────────────────────────────────────────────────────────
   // Only owner-addressed mail is ever held. A client waiting on an answer, and an admin being told

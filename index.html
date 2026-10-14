@@ -8326,6 +8326,21 @@
                   </sc-if>
                 </div>
 
+                <!-- THE TRAINING BRAKE. Above the rules because it overrides every one of them,
+                     and it changes colour when it is on: a hold nobody notices is the same thing
+                     as mail quietly failing, and the second one is an emergency. -->
+                <div style="display:flex; align-items:center; gap:12px; background:{{ nhBg }}; border:1px solid {{ nhBorder }}; border-radius:12px; padding:12px 14px; margin-top:10px;">
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:700; color:{{ nhColor }};">{{ nhLabel }}</div>
+                    <div style="font-size:10px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ nhSub }}</div>
+                  </div>
+                  <sc-if value="{{ nhOff }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ nhToggle }}" style="font-size:11px; font-weight:700; color:#8A6D1F; background:#FFF4DE; border:1px solid #F4DDB0; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="filter:brightness(.97);">Hold client email</span>
+                  </sc-if>
+                  <sc-if value="{{ nhOn }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ nhToggle }}" style="font-size:11px; font-weight:700; color:#fff; background:#0E9355; padding:7px 14px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="filter:brightness(.96);">Resume sending</span>
+                  </sc-if>
+                </div>
                 <div style="display:flex; flex-direction:column; margin-top:10px;">
                   <sc-for list="{{ setNotifRules }}" as="n" hint-placeholder-count="6">
                     <div style="display:flex; align-items:center; gap:10px; padding:13px 4px; border-bottom:1px solid #F5F3F9;">
@@ -30703,6 +30718,22 @@ class Component extends DCLogic {
     // used to be decorative: one row promised SMS (which does not exist) and another said "In-app"
     // for a rule that has always emailed. Every rule here writes the in-app row regardless of the
     // toggle; the toggle governs the email only, so no event is ever lost by switching one off.
+    // THE TRAINING BRAKE, at the top of the list because it overrides every row under it.
+    // Stored in the same map as the rules under a key that is not a rule name, so it rides the
+    // existing save path; `ruleOn` only ever looks up known rule names and ignores it.
+    const _holdKey = '__holdClientEmail';
+    const _holdOn = nrState[_holdKey] === true;
+    const notifHoldApi = {
+      nhOn: _holdOn, nhOff: !_holdOn,
+      nhLabel: _holdOn ? 'Client email is ON HOLD' : 'Client email is being sent',
+      nhSub: _holdOn
+        ? 'Automated email to clients is held. Everything still appears in the app and the portal, and staff email is unaffected. Invitations and password resets still send.'
+        : 'Automated email reaches clients normally. Switch this on to rehearse on real records without a client hearing about it.',
+      nhBg: _holdOn ? '#FFF9EF' : '#fff', nhBorder: _holdOn ? '#FBE2B8' : '#EDEBF2',
+      nhColor: _holdOn ? '#8A6D1F' : '#6F6C7A',
+      nhToggle: () => { const ng = { ...nrState, [_holdKey]: !_holdOn };
+        this.setState({ notifRulesState: ng }); this._saveNotifRules && this._saveNotifRules(ng); },
+    };
     const setNotifRules = [
       ['Approval requested', 'Admins', 'Email · In-app', true],
       ['Renewal due ≤ 30 days', 'The client', 'Email · In-app', true],
@@ -31610,7 +31641,7 @@ class Component extends DCLogic {
       covHasGaps: !!(_cov9 && _cov9.ungoverned.length),
       covGapCount: _cov9 ? (_cov9.ungoverned.length + ' route' + (_cov9.ungoverned.length === 1 ? '' : 's') + ' no module governs') : '',
       covUngoverned: _cov9 ? _cov9.ungoverned.map(p => ({ path: p })) : [],
-      ...dialogApi, ...stateBannerApi, setNotifRules, ...notifDigestApi, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, ...mailLogApi, ...autoRulesApi, auditLog, auditFilters, auditExport, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
+      ...dialogApi, ...stateBannerApi, setNotifRules, ...notifDigestApi, ...notifHoldApi, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, ...mailLogApi, ...autoRulesApi, auditLog, auditFilters, auditExport, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 
     // SLA Monitor
