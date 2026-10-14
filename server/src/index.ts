@@ -260,7 +260,7 @@ app.use(compression({
   },
 }));
 
-app.use(express.json({ limit: '6mb' })); // raised for base64 logo/file uploads
+app.use(express.json({ limit: '36mb' })); // base64 is ~4/3 of the file; the route caps the real sizes
 // Mounted here so it sees every /api route, including the generic CRUD registered much further down.
 // `/api/health` is left out: a monitor polling it must never be the thing that trips the limit.
 app.use("/api", (req, res, next) => (req.path === "/health" ? next() : apiLimiter(req, res, next)));
@@ -5811,6 +5811,7 @@ const entities: [string, string][] = [
   ["activities", "activity"],
   ["notifications", "notification"],
   ["document-types", "documentType"],
+  ["collateral", "collateral"],
   ["custom-objects", "customObject"],
   ["gov-centers", "govCenter"],
   ["appointments", "appointment"],
@@ -6482,13 +6483,46 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     ].filter(Boolean).join("\n");
 
     const filename = `${q.number ?? "proposal"}.${pdf ? "pdf" : "docx"}`;
+
+    /**
+     * WHATEVER ELSE GOES WITH THE PROPOSAL.
+     *
+     * The firm sends its company profile with a quotation, and sometimes on its own once a lead
+     * is created. The sender's choice wins; absent a choice, the items marked "send with every
+     * proposal" go, which is what makes it automatic rather than something to remember.
+     *
+     * A file missing from disk is skipped rather than fatal: a profile somebody deleted must not
+     * stop a quotation reaching a client.
+     */
+    const picked: string[] | null = Array.isArray(req.body?.collateralIds) ? req.body.collateralIds.map(String) : null;
+    const extras = await prisma.collateral.findMany({
+      where: picked ? { id: { in: picked }, active: true } : { withProposal: true, active: true },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+    });
+    const extraAtt: { filename: string; content: Buffer }[] = [];
+    const skipped: string[] = [];
+    for (const c of extras) {
+      const onDisk = path.join(FILES_DIR, path.basename(c.path));
+      if (!fs.existsSync(onDisk)) { skipped.push(c.name); continue; }
+      extraAtt.push({ filename: c.fileName || path.basename(c.path), content: fs.readFileSync(onDisk) });
+    }
     try {
       const r = await sendMail({ to, cc: cc.length ? cc : undefined, subject, html, kind: "proposal",
-                                 attachments: [{ filename, content: out }] });
+                                 attachments: [{ filename, content: out }, ...extraAtt] });
       if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
     } catch (e: any) {
-      return res.status(502).json({ error: `The mail server refused it: ${e?.message ?? e}` });
+      // Size is the usual cause once a company profile rides along, and "refused" on its own
+      // sends somebody hunting through the proposal for a fault that is not there.
+      const mb = Math.round((out.length + extraAtt.reduce((n, x) => n + x.content.length, 0)) / 1024 / 1024);
+      const hint = extraAtt.length
+        ? ` It carried ${extraAtt.length} extra file${extraAtt.length === 1 ? "" : "s"} and came to about ${mb} MB — many mail servers refuse anything over 10 MB.`
+        : "";
+      return res.status(502).json({ error: `The mail server refused it: ${e?.message ?? e}.${hint}` });
+
     }
+    if (skipped.length) await logAudit({
+      action: "proposal.collateral_missing", actorId: (req as any).auth?.sub,
+      detail: `${q.number ?? q.id}: ${skipped.join(", ")} — file not on disk, sent without` });
 
     // Released only once the mail is actually away. The other order would mark it sent and then
     // fail, leaving a client who has been told nothing looking at a record that says otherwise.
@@ -7258,7 +7292,13 @@ app.post("/api/upload", requireAuth, async (req, res) => {
   const extMatch = named ? named.match(/\.(png|jpe?g|svg|webp|pdf)$/i) : null;
   if (named && !extMatch) return res.status(400).json({ error: "Only PNG, JPG, SVG, WEBP or PDF files can be uploaded" });
   const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
-  if (!buf.length || buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "File must be under 4 MB" });
+  // 4 MB is the right cap for a client sending a passport scan. It is the wrong one for the firm's
+  // own company profile, which is a designed document and runs to tens of megabytes — and which
+  // staff upload, once, deliberately. Still capped, because an unbounded upload is a way to fill a
+  // disk, and because anything past this will be refused by the recipient's mail server anyway.
+  const isSendOut = a?.type === "staff" && String(kind || "") === "collateral";
+  const cap = isSendOut ? 25 * 1024 * 1024 : 4 * 1024 * 1024;
+  if (!buf.length || buf.length > cap) return res.status(400).json({ error: `File must be under ${Math.round(cap / 1024 / 1024)} MB` });
   // The name got a vote; the bytes get the decision.
   const sniffed = sniffFileType(buf);
   if (!sniffed) return res.status(400).json({ error: "That file is not a PNG, JPG, WEBP, PDF or SVG — check you picked the right one" });

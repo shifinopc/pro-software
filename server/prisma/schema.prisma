@@ -522,6 +522,33 @@ model DocumentType {
 }
 
 // Admin-defined custom object/record type (Object Builder) or standalone form (Form Builder), distinguished by `kind`.
+/// Things the firm SENDS OUT, as opposed to things it holds for a client.
+///
+/// A company profile, a service brochure, a price list: uploaded once and sent to prospects, either
+/// on their own after a lead is created or alongside a quotation. They are not client documents —
+/// nothing expires, nobody is non-compliant for one — and filing them with passports and Iqamas
+/// would put marketing material into the compliance engine.
+///
+/// The file itself lives where every other upload lives; this is the shelf it sits on, so the profile
+/// is replaced in one place rather than re-attached to every email by hand.
+model Collateral {
+  id           String  @id @default(cuid())
+  name         String
+  fileName     String
+  /// Public /files/<name> path, as returned by the upload route.
+  path         String
+  sizeBytes    Int     @default(0)
+  /// Goes with every proposal email unless the sender unticks it. The "sometimes with the
+  /// quotation" half of how these actually get sent.
+  withProposal Boolean @default(false)
+  /// Retired rather than deleted: an email already sent names what went with it, and deleting the
+  /// row would make that record a lie.
+  active       Boolean @default(true)
+  position     Int?
+  note         String? @db.Text
+  updatedAt    String?
+}
+
 model CustomObject {
   id        String  @id @default(cuid())
   name      String
