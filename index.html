@@ -5611,18 +5611,11 @@
           <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
             <div>
               <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; letter-spacing:-.01em;">Needs a look</div>
-              <div style="font-size:10px; color:#B4AFC4; margin-top:3px;">Ranked worst first &middot; tap a state to filter</div>
+              <div style="font-size:10px; color:#B4AFC4; margin-top:3px;">Ranked worst first</div>
             </div>
             <span onClick="{{ cdGoPipeline }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">Open pipeline &rarr;</span>
           </div>
-          <!-- Chips filter the list BELOW them, and both come from the same set. A count that
-               cannot be pressed through to its rows is the fastest way to lose trust in one. -->
-          <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-            <sc-for list="{{ cdLookChips }}" as="h" hint-placeholder-count="6">
-              <span onClick="{{ h.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:10px; font-weight:700; color:{{ h.chipColor }}; background:{{ h.chipBg }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ h.label }}<span style="opacity:.75;">{{ h.count }}</span></span>
-            </sc-for>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">
             <sc-for list="{{ cdLookRows }}" as="d" hint-placeholder-count="3">
               <div onClick="{{ d.go }}" style="position:relative; overflow:hidden; background:#FCFBFE; border-radius:16px; padding:8px 11px 9px 12px; cursor:pointer; transition:background .12s;" style-hover="background:#F7F3FD;">
                 <div style="display:flex; align-items:center; gap:12px;">
@@ -34017,7 +34010,7 @@ class Component extends DCLogic {
           cdHasTarget: false, cdTargetPct: 0, cdTargetLabel: '', cdTargetLine: '',
           cdFunnel: [], cdFunnelEmpty: false, cdFunnelSub: '', cdFunnelNote: '',
           cdAttention: [], cdAttentionEmpty: false, cdGoPipeline: () => {},
-          cdLookChips: [], cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
+          cdLookRows: [], cdLookEmpty: false, cdLookEmptyNote: '',
           cdSrcRows: [], cdSrcEmpty: false, cdStageRows: [], cdStageEmpty: false,
           cdLcRows: [], cdFunnelStats: [], cdOutcomeBar: [], cdHasOutcomes: false, cdOutcomesEmpty: false,
           cdLostRows: [],
@@ -34345,25 +34338,24 @@ class Component extends DCLogic {
               ? D.funnel.lostUnattributed + (D.funnel.lostUnattributed === 1 ? ' lost deal is' : ' lost deals are') + ' not shown against a step — only a deal’s current stage is stored, so where it dropped out is not recorded.'
               : 'Nothing has been lost yet.'),
 
-          // Used by "Needs a look", whose chips replaced the Deal health card.
+          // "Needs a look" shows the top of the book; this is the way through to all of it.
           cdGoPipeline: goTo('Pipeline', 'Sales'),
 
           cdAttentionEmpty: D.needsAttention.length === 0,
           /**
-           * NEEDS A LOOK — the design's filterable list.
+           * NEEDS A LOOK — the worst open deals, worst first.
            *
-           * The chips and the rows are built from ONE array. The old split (counts from `health`,
-           * rows from a severity-filtered list) meant a chip could report a state the list had no
-           * rows for; pressing Healthy emptied a card that had just said there was one.
+           * It had a row of six state chips that filtered it. They are gone: five of the six
+           * habitually read zero, which is six controls to find the one that does anything, and
+           * the card is three rows deep — you can see every state in it without filtering. The
+           * states still read on the rows themselves, and the pipeline board is one click away
+           * for anyone who wants to slice the whole book rather than the top of it.
            *
-           * `All` is the default and shows everything the server sent, worst first — the order is
-           * already correct on arrival, so no re-sorting here to disagree with it.
+           * Order comes from the server already correct, so there is no re-sorting here to
+           * disagree with it.
            */
           ...(() => {
-            const rows9 = Array.isArray(D.needsAttention) ? D.needsAttention : [];
-            const sel9 = this.state.cdLookState || 'all';
-            const states9 = ['stalled', 'overdue', 'at-risk', 'quiet', 'healthy'];
-            const shown9 = sel9 === 'all' ? rows9 : rows9.filter(r => r.state === sel9);
+            const shown9 = Array.isArray(D.needsAttention) ? D.needsAttention : [];
             // THREE AT A TIME. This is a card beside another card, not a list screen: seven deals
             // pushed everything under it off the fold, and the thing it is for — the worst one,
             // first — is answered by the top of the list anyway. The rest are a page away rather
@@ -34384,19 +34376,6 @@ class Component extends DCLogic {
               cdLookNextDim: page9 < pages9 - 1 ? '1' : '.35',
               cdLookPrev: () => { if (page9 > 0) this.setState({ cdLookPage: page9 - 1 }); },
               cdLookNext: () => { if (page9 < pages9 - 1) this.setState({ cdLookPage: page9 + 1 }); },
-              cdLookChips: [{ key: 'all', label: 'All', count: rows9.length }]
-                .concat(states9.map(st => ({ key: st, label: st === 'at-risk' ? 'At risk' : st[0].toUpperCase() + st.slice(1), count: rows9.filter(r => r.state === st).length })))
-                .map(c => ({
-                  label: c.label, count: String(c.count),
-                  // Six chips in six tints, five of them usually reading zero, put more colour in
-                  // the header than in the rows underneath — and the colour was decoration, since
-                  // each chip says its own state in words. Unselected chips are plain; the one in
-                  // force goes dark. Which state you are looking at is read from the label, and the
-                  // state colours still mean what they always did on the rows themselves.
-                  chipColor: sel9 === c.key ? '#fff' : '#6F6C7A',
-                  chipBg: sel9 === c.key ? '#1A1523' : '#F3F1F7',
-                  pick: () => this.setState({ cdLookState: c.key, cdLookPage: 0 }),
-                })),
               cdLookRows: paged9.map(a => {
                 const lim9 = Number(a.stageLimit) || 0;
                 const day9 = a.daysInStage == null ? null : Number(a.daysInStage);
@@ -34417,9 +34396,7 @@ class Component extends DCLogic {
                 };
               }),
               cdLookEmpty: shown9.length === 0,
-              cdLookEmptyNote: rows9.length === 0
-                ? 'No open deals yet.'
-                : 'Nothing is ' + (sel9 === 'at-risk' ? 'at risk' : sel9) + ' right now.',
+              cdLookEmptyNote: 'No open deals yet.',
             };
           })(),
           /**
