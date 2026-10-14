@@ -18450,11 +18450,16 @@ class Component extends DCLogic {
     });
     this._downloadProposal = this._downloadProposal || ((quotationId, templateId, format9) => {
       const t9 = localStorage.getItem('stimespro:token');
-      this.setState({ propPick: null, propBusy: true });
       const wantPdf9 = String(format9 || '').toLowerCase() === 'pdf';
+      // READ BEFORE CLOSING. `propPick` IS the dialog: the line below clears it to dismiss the
+      // dialog, and it holds the typed-in presenter, date and valid-until. Building the query
+      // string after that read an empty object and sent nothing, so the file fell back to the
+      // lead's owner while the preview beside it showed the name that had been chosen.
+      const qs9 = this._ppOverrideQs();
+      this.setState({ propPick: null, propBusy: true });
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
             + '/proposal?templateId=' + encodeURIComponent(templateId)
-            + (wantPdf9 ? '&format=pdf' : '') + this._ppOverrideQs(),
+            + (wantPdf9 ? '&format=pdf' : '') + qs9,
         { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
         .then(r9 => {
           if (!r9.ok) return r9.json().catch(() => ({})).then(j9 => { throw new Error(j9.error || 'Could not produce the proposal'); });
