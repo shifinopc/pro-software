@@ -5652,6 +5652,13 @@
                 </sc-if>
               </div>
             </sc-for>
+            <sc-if value="{{ cdLookPageShow }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:9px; margin-top:12px;">
+                <span onClick="{{ cdLookPrev }}" style="opacity:{{ cdLookPrevDim }}; font-size:11.5px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">← Previous</span>
+                <span style="flex:1; text-align:center; font-size:11px; color:#A9A6B4;">{{ cdLookPageLabel }}</span>
+                <span onClick="{{ cdLookNext }}" style="opacity:{{ cdLookNextDim }}; font-size:11.5px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Next →</span>
+              </div>
+            </sc-if>
             <sc-if value="{{ cdLookEmpty }}" hint-placeholder-val="{{ false }}">
               <div style="padding:26px; text-align:center; font-size:12px; color:#B4AFC4;">{{ cdLookEmptyNote }}</div>
             </sc-if>
@@ -34271,8 +34278,26 @@ class Component extends DCLogic {
             const tone9 = { stalled: ['#C0353A', '#FEECEC'], overdue: ['#E5484D', '#FEECEC'], 'at-risk': ['#B8860B', '#FEF4E2'], quiet: ['#6D5BD0', '#EFEBFF'], healthy: ['#0E9355', '#E7F8EF'] };
             const states9 = ['stalled', 'overdue', 'at-risk', 'quiet', 'healthy'];
             const shown9 = sel9 === 'all' ? rows9 : rows9.filter(r => r.state === sel9);
+            // THREE AT A TIME. This is a card beside another card, not a list screen: seven deals
+            // pushed everything under it off the fold, and the thing it is for — the worst one,
+            // first — is answered by the top of the list anyway. The rest are a page away rather
+            // than a scroll away.
+            const PER9 = 3;
+            const pages9 = Math.max(1, Math.ceil(shown9.length / PER9));
+            // Clamped, because the page survives a filter change that shortens the list — picking
+            // a state with two deals while on page 3 would otherwise show an empty card.
+            const page9 = Math.min(Math.max(0, Number(this.state.cdLookPage) || 0), pages9 - 1);
+            const paged9 = shown9.slice(page9 * PER9, page9 * PER9 + PER9);
             const initials9 = (n) => String(n || '?').replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
             return {
+              cdLookPageShow: shown9.length > PER9,
+              cdLookPageLabel: shown9.length
+                ? (page9 * PER9 + 1) + '–' + Math.min(shown9.length, page9 * PER9 + PER9) + ' of ' + shown9.length
+                : '',
+              cdLookPrevDim: page9 > 0 ? '1' : '.35',
+              cdLookNextDim: page9 < pages9 - 1 ? '1' : '.35',
+              cdLookPrev: () => { if (page9 > 0) this.setState({ cdLookPage: page9 - 1 }); },
+              cdLookNext: () => { if (page9 < pages9 - 1) this.setState({ cdLookPage: page9 + 1 }); },
               cdLookChips: [{ key: 'all', label: 'All', count: rows9.length }]
                 .concat(states9.map(st => ({ key: st, label: st === 'at-risk' ? 'At risk' : st[0].toUpperCase() + st.slice(1), count: rows9.filter(r => r.state === st).length })))
                 .map(c => ({
@@ -34281,9 +34306,9 @@ class Component extends DCLogic {
                   // chip in solid colour would compete with the row stripes for the same meaning.
                   chipColor: sel9 === c.key ? '#fff' : (c.key === 'all' ? '#4B4757' : (tone9[c.key] || ['#6F6C7A'])[0]),
                   chipBg: sel9 === c.key ? (c.key === 'all' ? '#1A1523' : (tone9[c.key] || ['', '#F3F1F7'])[0]) : (c.key === 'all' ? '#F3F1F7' : (tone9[c.key] || ['', '#F3F1F7'])[1]),
-                  pick: () => this.setState({ cdLookState: c.key }),
+                  pick: () => this.setState({ cdLookState: c.key, cdLookPage: 0 }),
                 })),
-              cdLookRows: shown9.map(a => {
+              cdLookRows: paged9.map(a => {
                 const lim9 = Number(a.stageLimit) || 0;
                 const day9 = a.daysInStage == null ? null : Number(a.daysInStage);
                 return {
