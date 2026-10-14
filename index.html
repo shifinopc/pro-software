@@ -12784,11 +12784,7 @@
           <!-- The greeting and the sign-off are the server's, shown as plain text above and below
                the box so this reads as the email it will send rather than as a form. -->
           <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">MESSAGE</div>
-          <div style="margin-top:7px; font-size:11px; color:#8C8899;">{{ spcGreet }}</div>
-          <textarea onChange="{{ setSpcMsg }}" rows="4" placeholder="What you want to say" value="{{ spcMsg }}" style="margin-top:7px; width:100%; border:1px solid transparent; border-radius:11px; padding:10px 13px; font-size:11px; background:#F6F4FA; resize:vertical; font-family:inherit; line-height:1.5;" style-focus="background:#fff; border-color:#7C00FF;"></textarea>
-          <sc-if value="{{ spcSignShown }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:7px; font-size:11px; color:#8C8899;">{{ spcSign }}</div>
-          </sc-if>
+          <textarea onChange="{{ setSpcMsg }}" rows="8" placeholder="The whole message, greeting included" value="{{ spcMsg }}" style="margin-top:7px; width:100%; border:1px solid transparent; border-radius:11px; padding:10px 13px; font-size:11px; background:#F6F4FA; resize:vertical; font-family:inherit; line-height:1.5;" style-focus="background:#fff; border-color:#7C00FF;"></textarea>
 
           <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:16px;">ATTACHED</div>
           <div style="display:flex; flex-direction:column; gap:6px; margin-top:7px;">
@@ -33078,20 +33074,25 @@ class Component extends DCLogic {
      * Everything in it is filled in before it opens — who it goes to, what it says, what rides
      * along — so the common case is read it and press Send.
      *
-     * The greeting and the sign-off are NOT editable and are not part of the draft: the server
-     * writes both, and showing them here as plain text is how the composer stays honest about
-     * what will actually leave. `l.contact || l.name` is the server's own rule for the greeting,
-     * repeated rather than guessed — if it ever diverges, the preview is the thing that lies.
+     * The whole letter is in one box, greeting and sign-off included, because every part of it
+     * is something somebody wants to change: "Dear Sir" when the contact name is a initial, a
+     * different sign-off when the officer is writing in their own name. It opens with the letter
+     * the firm would have sent anyway — `l.contact || l.name` and the default sentence are the
+     * server's own rules, repeated here — so the common case is still read it and press Send.
+     *
+     * What is in the box IS what leaves: the server stopped wrapping anything around it.
      */
     const _spcDraft9 = (l, primary, lib) => ({
       id: l.id,
       company: l.name,
-      greet: 'Dear ' + (l.contact || l.name) + ',',
       to: (primary && primary.email) || l.email || '',
       cc: '', ccOpen: false,
       subject: '',
-      // The server's own default sentence, so the box shows what would have been sent anyway.
-      msg: 'Please find ' + (lib.length === 1 ? 'our company profile' : 'the attached') + ' enclosed.',
+      msg: [
+        'Dear ' + (l.contact || l.name) + ',',
+        'Please find ' + (lib.length === 1 ? 'our company profile' : 'the attached') + ' enclosed.',
+        (this.state.orgSet && (this.state.orgSet.legalName || this.state.orgSet.orgName)) || '',
+      ].filter(Boolean).join('\n\n'),
       ids: lib.map(c7 => c7.id),
       busy: false, err: '',
     });
@@ -37637,13 +37638,8 @@ class Component extends DCLogic {
           // a different one, and an untouched box sends what the firm always sends.
           spcSubjectHint: firm7 ? firm7 + ' — company profile' : 'Company profile',
           setSpcSubject: (e7) => set7({ subject: e7.target.value }),
-          spcGreet: (d7 && d7.greet) || '',
           spcMsg: (d7 && d7.msg) || '',
           setSpcMsg: (e7) => set7({ msg: e7.target.value }),
-          // Shown only when the firm has a name to sign off with. Settings — General still being
-          // empty is a real state here, and an empty grey line under the box looks like a bug.
-          spcSignShown: !!firm7,
-          spcSign: firm7,
           spcFiles: lib7.map(c7 => {
             const on7 = ids7.indexOf(c7.id) >= 0;
             return {

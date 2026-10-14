@@ -3699,12 +3699,20 @@ app.post("/api/companies/:id/send-profile", requireAuth, requireStaff, requireWr
     const firm = String(org.legalName ?? org.orgName ?? "").trim();
     const note = String(req.body?.message ?? "").trim();
     const esc = (v: string) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const html = [
-      `<p>Dear ${esc(co.contact || co.name)},</p>`,
-      note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>`
-           : `<p>Please find ${items.length === 1 ? "our company profile" : "the attached"} enclosed.</p>`,
-      firm ? `<p>${esc(firm)}</p>` : "",
-    ].filter(Boolean).join("\n");
+    // A supplied message IS the whole letter — greeting and sign-off included — because the
+    // composer now lets somebody edit every line of it. Wrapping our own greeting around it
+    // would have produced two. Blank lines become paragraphs; single newlines stay as breaks,
+    // so an address block typed one line per line arrives looking like one.
+    //
+    // Nothing supplied still gets the standard letter built here, for any caller that is not
+    // the composer.
+    const html = note
+      ? esc(note).split(/\n{2,}/).map(par => `<p>${par.replace(/\n/g, "<br>")}</p>`).join("\n")
+      : [
+          `<p>Dear ${esc(co.contact || co.name)},</p>`,
+          `<p>Please find ${items.length === 1 ? "our company profile" : "the attached"} enclosed.</p>`,
+          firm ? `<p>${esc(firm)}</p>` : "",
+        ].filter(Boolean).join("\n");
 
     const cc = String(req.body?.cc ?? "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
     // The composer sends a subject; anything else gets the standard one. Trimmed to empty
