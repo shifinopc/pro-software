@@ -2035,6 +2035,56 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
       },
     });
 
+    /**
+     * A RENAMED CUSTOMER REACHES THE DOCUMENTS THAT HAVE NOT LEFT THE BUILDING.
+     *
+     * `Quotation.clientName` and `.service` are TEXT, copied when the quotation was created — it
+     * stores a companyId but never looks the name up. That is RIGHT for anything the client has
+     * already seen: they hold a document bearing that name, and rewriting ours afterwards would
+     * make the two copies disagree about what was issued. It is WRONG for a draft, which has
+     * been seen by nobody outside the firm, and which is what somebody is looking at when they
+     * correct the customer's name and expect the correction to take.
+     *
+     * So: unsent follows the company, sent is frozen. The cut is `status`, and `sent` is the
+     * first state the client can see — see the comment on the Quotation model.
+     *
+     * The DEAL TITLE is only touched where it is still the sentence the system generated. Once
+     * somebody has typed "Q3 expansion" over it, it is their words and not ours to rewrite —
+     * and a deal is an internal record, so there is no issued-document reason to freeze it.
+     *
+     * Invoices are deliberately NOT here. An invoice is a tax document; what it was raised
+     * under is what it stays under.
+     */
+    if (name !== existing.name) {
+      const was = existing.name;
+      const OPEN = ["draft", "approved"];
+      const autoTitle = (n: string) => `New business — ${n}`;
+      const [renamedClient, renamedService, renamedDeals] = await Promise.all([
+        prisma.quotation.updateMany({
+          where: { companyId: existing.id, status: { in: OPEN } },
+          data: { clientName: name },
+        }),
+        // `service` carries the deal's title, so it inherits the same rule: generated, rename it;
+        // written by a person, leave it.
+        prisma.quotation.updateMany({
+          where: { companyId: existing.id, status: { in: OPEN }, service: autoTitle(was) },
+          data: { service: autoTitle(name) },
+        }),
+        prisma.opportunity.updateMany({
+          where: { companyId: existing.id, title: autoTitle(was) },
+          data: { title: autoTitle(name) },
+        }),
+      ]);
+      const touched = renamedClient.count + renamedService.count + renamedDeals.count;
+      if (touched) {
+        await logAudit({
+          action: "company.renamed", actorId: a?.sub, target: existing.id,
+          detail: `${was} — ${name}: ${renamedClient.count} unsent quotation${renamedClient.count === 1 ? "" : "s"} re-addressed`
+            + `, ${renamedService.count} retitled, ${renamedDeals.count} deal${renamedDeals.count === 1 ? "" : "s"} retitled`,
+        });
+      }
+    }
+
     // A person changed it, so no reason is invented: the method IS the explanation. recordAssignment
     // skips a no-op, so saving this form without touching the owner writes nothing.
     if ("ownerId" in b) {
