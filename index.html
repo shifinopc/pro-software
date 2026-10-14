@@ -3592,6 +3592,22 @@
                 </div>
               </sc-for>
             </div></div>
+            <!-- Where you are in the list on the left, because that answers a question people
+                 have BEFORE they reach for a page number: is this all of it? -->
+            <sc-if value="{{ qtPageShown }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 17px; border-top:1px solid #F0EDF6;">
+                <span style="font-size:10px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ qtPageLabel }}</span>
+                <sc-if value="{{ qtPagerShown }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span onClick="{{ qtPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ qtPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                    <sc-for list="{{ qtPages }}" as="pg" hint-placeholder-count="2">
+                      <span onClick="{{ pg.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ pg.bd }}; background:{{ pg.bg }}; color:{{ pg.color }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;">{{ pg.n }}</span>
+                    </sc-for>
+                    <span onClick="{{ qtNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ qtNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
           </section>
           <sc-if value="{{ showPropPick }}" hint-placeholder-val="{{ false }}">
             <div onClick="{{ closePropPick }}" style="position:fixed; inset:0; background:rgba(26,21,35,.5); backdrop-filter:blur(3px); z-index:120; display:flex; align-items:center; justify-content:center; padding:18px;">
@@ -38732,8 +38748,15 @@ class Component extends DCLogic {
       }
       return lines;
     };
+    const _qtSeq9 = (n9) => {
+      const m9 = /(\d+)(?:\D+(\d+))?\s*$/.exec(String(n9 || ''));
+      return m9 ? Number(m9[1]) * 1000 + Number(m9[2] || 0) : -1;
+    };
+    const _qtNewestFirst9 = (rows9) => [...rows9].sort((a9, b9) =>
+      String(b9.date || '').localeCompare(String(a9.date || ''))
+      || _qtSeq9(b9.number) - _qtSeq9(a9.number));
     const quoteDefs = (Array.isArray(qtData)
-      ? qtData.map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + q2.date) : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
+      ? _qtNewestFirst9(qtData).map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + q2.date) : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
       : (_authed ? [] : [
         ['QT-338', 'Labour card renewal × 3', 'Sent 15 Jul · expires 22 Jul', [['MOHRE fees × 3', 'AED 1,800']], 'AED 2,000', null, 'Pending', 'sent'],
         ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted', 'approved'],
@@ -39036,7 +39059,7 @@ class Component extends DCLogic {
     const _qtCount = (lbl9) => quotes.filter(q9 => q9.status === lbl9).length;
     const qtTabs = ['All', 'Draft', 'Approved', 'Sent', 'Accepted', 'Rejected', 'Invoiced'].map(k => ({
       label: k, count: k === 'All' ? quotes.length : _qtCount(k),
-      select: () => this.setState({ qtFilter: k }),
+      select: () => this.setState({ qtFilter: k, qtPage: 1 }),
       color: qtFilter === k ? '#7C00FF' : '#8C8899', bg: qtFilter === k ? '#fff' : 'transparent',
       shadow: qtFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
@@ -39059,7 +39082,35 @@ class Component extends DCLogic {
         qvSend: () => { this.setState({ qtView: null }); qtViewRow.send(); },
         qvInvoice: () => { this.setState({ qtView: null }); qtViewRow.convert(); },
       } : {}),
-      quotes: quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter),
+      ...(() => {
+        const shown9 = quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter);
+        const PER9 = 9;
+        const pages9 = Math.max(1, Math.ceil(shown9.length / PER9));
+        // Clamped rather than remembered blindly: switching to a tab with two quotations while
+        // sitting on page three would otherwise show an empty table, and the way out of it —
+        // press back to page one — is off the bottom of a table with no rows.
+        const page9 = Math.min(Math.max(1, this.state.qtPage || 1), pages9);
+        const from9 = (page9 - 1) * PER9;
+        return {
+          quotes: shown9.slice(from9, from9 + PER9),
+          qtPageShown: shown9.length > 0,
+          qtPagerShown: pages9 > 1,
+          qtPageLabel: shown9.length
+            ? (from9 + 1) + '\u2013' + Math.min(shown9.length, from9 + PER9) + ' of ' + shown9.length
+            : '',
+          qtPrevOp: page9 > 1 ? '1' : '.35',
+          qtNextOp: page9 < pages9 ? '1' : '.35',
+          qtPrev: () => { if (page9 > 1) this.setState({ qtPage: page9 - 1 }); },
+          qtNext: () => { if (page9 < pages9) this.setState({ qtPage: page9 + 1 }); },
+          qtPages: Array.from({ length: pages9 }, (_9, i9) => i9 + 1).map(n9 => ({
+            n: String(n9),
+            bd: n9 === page9 ? '#7C00FF' : '#EDEBF2',
+            bg: n9 === page9 ? '#7C00FF' : '#fff',
+            color: n9 === page9 ? '#fff' : '#6F6C7A',
+            pick: () => this.setState({ qtPage: n9 }),
+          })),
+        };
+      })(),
       // ── The proposal dialog ──
       ...(() => {
         /**
