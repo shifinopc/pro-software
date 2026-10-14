@@ -5625,9 +5625,8 @@
           <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
             <sc-for list="{{ cdLookRows }}" as="d" hint-placeholder-count="3">
               <div onClick="{{ d.go }}" style="position:relative; overflow:hidden; background:#FCFBFE; border-radius:16px; padding:10px 11px 13px 12px; cursor:pointer; transition:background .12s;" style-hover="background:#F7F3FD;">
-                <span style="position:absolute; left:0; top:0; bottom:0; width:4px; background:{{ d.stateColor }};"></span>
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <span style="width:36px; height:36px; border-radius:12px; background:{{ d.stateBg }}; color:{{ d.stateColor }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
+                  <span style="width:36px; height:36px; border-radius:12px; background:#F3F1F7; color:#8C8899; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
                   <div style="flex:1; min-width:0;">
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
@@ -5645,7 +5644,7 @@
                 <sc-if value="{{ d.hasMeter }}" hint-placeholder-val="{{ true }}">
                   <div style="display:flex; align-items:center; gap:9px; margin-top:11px;">
                     <div style="flex:1; height:4px; background:#EFECF5; border-radius:99px; overflow:hidden;">
-                      <div style="height:100%; width:{{ d.meterW }}%; background:{{ d.meterColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div>
+                      <div style="height:100%; width:{{ d.meterW }}%; background:#C2BED0; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div>
                     </div>
                     <span style="font-size:9px; font-weight:600; color:#B4AFC4; flex-shrink:0;">{{ d.meterLabel }}</span>
                   </div>
@@ -34363,7 +34362,6 @@ class Component extends DCLogic {
           ...(() => {
             const rows9 = Array.isArray(D.needsAttention) ? D.needsAttention : [];
             const sel9 = this.state.cdLookState || 'all';
-            const tone9 = { stalled: ['#C0353A', '#FEECEC'], overdue: ['#E5484D', '#FEECEC'], 'at-risk': ['#B8860B', '#FEF4E2'], quiet: ['#6D5BD0', '#EFEBFF'], healthy: ['#0E9355', '#E7F8EF'] };
             const states9 = ['stalled', 'overdue', 'at-risk', 'quiet', 'healthy'];
             const shown9 = sel9 === 'all' ? rows9 : rows9.filter(r => r.state === sel9);
             // THREE AT A TIME. This is a card beside another card, not a list screen: seven deals
@@ -34390,10 +34388,13 @@ class Component extends DCLogic {
                 .concat(states9.map(st => ({ key: st, label: st === 'at-risk' ? 'At risk' : st[0].toUpperCase() + st.slice(1), count: rows9.filter(r => r.state === st).length })))
                 .map(c => ({
                   label: c.label, count: String(c.count),
-                  // The selected chip inverts; the rest wear their own state's tint. An unselected
-                  // chip in solid colour would compete with the row stripes for the same meaning.
-                  chipColor: sel9 === c.key ? '#fff' : (c.key === 'all' ? '#4B4757' : (tone9[c.key] || ['#6F6C7A'])[0]),
-                  chipBg: sel9 === c.key ? (c.key === 'all' ? '#1A1523' : (tone9[c.key] || ['', '#F3F1F7'])[0]) : (c.key === 'all' ? '#F3F1F7' : (tone9[c.key] || ['', '#F3F1F7'])[1]),
+                  // Six chips in six tints, five of them usually reading zero, put more colour in
+                  // the header than in the rows underneath — and the colour was decoration, since
+                  // each chip says its own state in words. Unselected chips are plain; the one in
+                  // force goes dark. Which state you are looking at is read from the label, and the
+                  // state colours still mean what they always did on the rows themselves.
+                  chipColor: sel9 === c.key ? '#fff' : '#6F6C7A',
+                  chipBg: sel9 === c.key ? '#1A1523' : '#F3F1F7',
                   pick: () => this.setState({ cdLookState: c.key, cdLookPage: 0 }),
                 })),
               cdLookRows: paged9.map(a => {
@@ -34411,7 +34412,6 @@ class Component extends DCLogic {
                   // ceiling is a picture of a number nobody measured.
                   hasMeter: day9 != null && lim9 > 0,
                   meterW: day9 != null && lim9 > 0 ? Math.max(3, Math.min(100, Math.round((day9 / lim9) * 100))) : 0,
-                  meterColor: a.color,
                   meterLabel: day9 != null && lim9 > 0 ? day9 + ' / ' + lim9 + 'd in stage' : '',
                   go: goTo('Pipeline', 'Sales'),
                 };
