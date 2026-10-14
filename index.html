@@ -3731,7 +3731,9 @@
                   </div>
 
                   <div style="padding:10px 14px 12px; border-top:1px solid #F3F1F7; display:flex; align-items:center; gap:8px;">
-                    <button onClick="{{ ppDownload }}" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:650; padding:11px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ ppDownloadLabel }}</button>
+                    <button onClick="{{ ppDownload }}" title="Download the editable Word document" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:650; padding:11px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ ppDownloadLabel }}</button>
+                    <!-- PDF is the one that goes to a client; Word is the one you edit first. -->
+                    <button onClick="{{ ppDownloadPdf }}" title="Download as PDF" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:650; padding:11px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">{{ ppPdfLabel }}</button>
                     <button onClick="{{ ppEmail }}" style="flex:1.5; background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:11px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 10px rgba(124,0,255,.28);" style-hover="background:#6900D6;">{{ ppEmailLabel }}</button>
                   </div>
                 </div>
@@ -18373,11 +18375,7 @@ class Component extends DCLogic {
       const seq = (this._ppSeq = (this._ppSeq || 0) + 1);
       // The typed-in values ride along as query parameters. The route reads them and writes nothing,
       // so the preview can follow the edits without every keystroke touching the record.
-      const ov = this.state.propPick || {};
-      const qs = ['presentedBy', 'date', 'validUntil']
-        .map((k, i) => [k, [ov.presentedBy, ov.docDate, ov.docValid][i]])
-        .filter(([, v]) => v)
-        .map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('');
+      const qs = this._ppOverrideQs();
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
             + '/proposal?format=pdf&templateId=' + encodeURIComponent(templateId) + qs,
         { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
@@ -18410,18 +18408,33 @@ class Component extends DCLogic {
       }, 650);
     });
 
-    this._downloadProposal = this._downloadProposal || ((quotationId, templateId) => {
+    /**
+     * What the person typed into the dialog, as query parameters.
+     *
+     * The route reads these and writes nothing, so the preview can follow the edits without
+     * every keystroke touching the record — and the download can produce the same document the
+     * preview is showing, which is the whole point of them being in one place.
+     */
+    this._ppOverrideQs = this._ppOverrideQs || (() => {
+      const ov = this.state.propPick || {};
+      return [['presentedBy', ov.presentedBy], ['date', ov.docDate], ['validUntil', ov.docValid]]
+        .filter(([, v]) => v)
+        .map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('');
+    });
+    this._downloadProposal = this._downloadProposal || ((quotationId, templateId, format9) => {
       const t9 = localStorage.getItem('stimespro:token');
       this.setState({ propPick: null, propBusy: true });
+      const wantPdf9 = String(format9 || '').toLowerCase() === 'pdf';
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + quotationId
-            + '/proposal?templateId=' + encodeURIComponent(templateId),
+            + '/proposal?templateId=' + encodeURIComponent(templateId)
+            + (wantPdf9 ? '&format=pdf' : '') + this._ppOverrideQs(),
         { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
         .then(r9 => {
           if (!r9.ok) return r9.json().catch(() => ({})).then(j9 => { throw new Error(j9.error || 'Could not produce the proposal'); });
           // The server names the file; fall back to the quotation number if the header is stripped.
           const cd9 = r9.headers.get('Content-Disposition') || '';
           const m9 = /filename="?([^"]+)"?/.exec(cd9);
-          return r9.blob().then(b9 => ({ blob: b9, name: (m9 && m9[1]) || 'proposal.docx' }));
+          return r9.blob().then(b9 => ({ blob: b9, name: (m9 && m9[1]) || ('proposal.' + (wantPdf9 ? 'pdf' : 'docx')) }));
         })
         .then(({ blob, name }) => {
           const url9 = URL.createObjectURL(blob);
@@ -18431,7 +18444,7 @@ class Component extends DCLogic {
           // Revoked on the next tick: released immediately, Safari cancels the download it just started.
           setTimeout(() => URL.revokeObjectURL(url9), 10000);
           this.setState({ propBusy: false });
-          this.toast('Proposal downloaded');
+          this.toast(/\.pdf$/i.test(name) ? 'Proposal downloaded as PDF' : 'Proposal downloaded as Word');
         })
         .catch(e9 => { this.setState({ propBusy: false }); this.toast(e9.message || 'Server unreachable', 'error'); });
     });
@@ -39259,9 +39272,11 @@ class Component extends DCLogic {
           // Said before they press it, not after: emailing an offer releases it, and somebody who
           // meant only to send a copy should know that first.
           ppWillRelease: ['draft', 'approved'].includes(String(q8.status || '').toLowerCase()),
-          ppDownloadLabel: P.busy ? 'Working\u2026' : 'Download',
+          ppDownloadLabel: P.busy ? 'Working\u2026' : 'Word',
           ppEmailLabel: P.busy ? 'Sending\u2026' : 'Email to client',
-          ppDownload: () => { const t8 = needTpl(); if (t8) this._downloadProposal(P.quotationId, t8); },
+          ppDownload: () => { const t8 = needTpl(); if (t8) this._downloadProposal(P.quotationId, t8, 'docx'); },
+          ppDownloadPdf: () => { const t8 = needTpl(); if (t8) this._downloadProposal(P.quotationId, t8, 'pdf'); },
+          ppPdfLabel: P.busy ? 'Working\u2026' : 'PDF',
           ppEmail: () => {
             const t8 = needTpl(); if (!t8) return;
             const to8 = String(P.to || '').trim();
