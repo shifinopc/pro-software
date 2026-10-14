@@ -4069,6 +4069,20 @@
               </div>
             </sc-if>
           </div></div>
+          <sc-if value="{{ invPageShown }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 17px; border-top:1px solid #F0EDF6;">
+              <span style="font-size:10px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ invPageLabel }}</span>
+              <sc-if value="{{ invPagerShown }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span onClick="{{ invPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ invPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                  <sc-for list="{{ invPages }}" as="ip" hint-placeholder-count="2">
+                    <span onClick="{{ ip.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ ip.bd }}; background:{{ ip.bg }}; color:{{ ip.color }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;">{{ ip.n }}</span>
+                  </sc-for>
+                  <span onClick="{{ invNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ invNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
         </section>
       </div></sc-if>
       <sc-if value="{{ showPayments }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:12px;" data-screen-label="Receipts">
@@ -18016,6 +18030,19 @@ class Component extends DCLogic {
     // totals for the same invoice. The minor units are the figure of record; `amount` survives only as
     // the fallback for rows issued before those columns existed.
     const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
+    // The trailing number of a document reference, as a NUMBER: "INV-10" sorts below "INV-9" as
+    // text. The second group catches a revision suffix (QT-005-R1) and keeps it just above the
+    // original it replaces.
+    const _docSeq9 = (ref9) => {
+      const m9 = /(\d+)(?:\D+(\d+))?\s*$/.exec(String(ref9 || ''));
+      return m9 ? Number(m9[1]) * 1000 + Number(m9[2] || 0) : -1;
+    };
+    // Newest first. Neither model has a createdAt, so it goes on the issue date — ISO, so it
+    // compares as text — with the reference breaking the ties, which are common because several
+    // documents a day is normal.
+    const _newestFirst9 = (rows9) => [...rows9].sort((a9, b9) =>
+      String(b9.date || '').localeCompare(String(a9.date || ''))
+      || _docSeq9(b9.number) - _docSeq9(a9.number));
     // Initials from a display name — strips parentheticals (e.g. "Omar (PRO Officer)") and keeps only
     // letter/number-initial tokens, so avatars never read "O(".
     // THE initials helper. Three private copies had grown beside it — two of mine — each
@@ -19884,7 +19911,7 @@ class Component extends DCLogic {
       return ref8 && !isNaN(+ref8) && ref8 < new Date(new Date().toDateString()) ? 'Overdue' : st8;
     };
     const invBase = (Array.isArray(invData) && invData.length
-      ? invData.map(v => [v.number || '—', fmtInvDate(v.date), v.clientName || v.client || '—', v.services || (Array.isArray(v.items) && v.items[0] ? v.items[0].name : '') || '—', _docTotal(v), _invEffStatus(v), v.id, v.currency || null])
+      ? _newestFirst9(invData).map(v => [v.number || '—', fmtInvDate(v.date), v.clientName || v.client || '—', v.services || (Array.isArray(v.items) && v.items[0] ? v.items[0].name : '') || '—', _docTotal(v), _invEffStatus(v), v.id, v.currency || null])
       : ((invData || _authed) ? [] : [
         ['INV-1187', '16 Jul', 'Falcon Technologies', 'Employment visa — M. Fernandes', 2300, 'Unpaid', null],
         ['INV-1173', '28 Jun', 'Falcon Trading', 'Trade license amendment', 5400, 'Paid', null],
@@ -20017,7 +20044,15 @@ class Component extends DCLogic {
       return spans8.length ? spans8.reduce((a8, b8) => a8 + b8, 0) / spans8.length : null;
     })();
     const invFilter = this.state.invFilter || 'All';
-    const invRows = invoicesFull.filter(v => invFilter === 'All' || v.status === invFilter);
+    const _invShown9 = invoicesFull.filter(v => invFilter === 'All' || v.status === invFilter);
+    const INV_PER9 = 8;
+    const _invPages9 = Math.max(1, Math.ceil(_invShown9.length / INV_PER9));
+    // Clamped, because the page survives a filter change that shortens the list — picking a tab
+    // with two invoices while on page three would otherwise show an empty table whose only way
+    // out has scrolled off the bottom of it.
+    const _invPage9 = Math.min(Math.max(1, this.state.invPage || 1), _invPages9);
+    const _invFrom9 = (_invPage9 - 1) * INV_PER9;
+    const invRows = _invShown9.slice(_invFrom9, _invFrom9 + INV_PER9);
     const invCount = (s2) => invoicesFull.filter(v => v.status === s2).length;
     // No "Pending" tab: INV_STATUS_MAP renders the stored `pending` status as "Unpaid", so that tab
     // could only ever count zero.
@@ -20027,7 +20062,7 @@ class Component extends DCLogic {
     // only way to find a void was to read the whole All list looking for the grey pill.
     const invTabs = ['All', 'Draft', 'Unpaid', 'Part paid', 'Overdue', 'Paid', 'Void'].map(k => ({
       label: k, count: k === 'All' ? invoicesFull.length : invCount(k),
-      select: () => this.setState({ invFilter: k }),
+      select: () => this.setState({ invFilter: k, invPage: 1 }),
       color: invFilter === k ? '#7C00FF' : '#8C8899', bg: invFilter === k ? '#fff' : 'transparent',
       shadow: invFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
@@ -20092,6 +20127,22 @@ class Component extends DCLogic {
     const invDetailRow = _invNo ? invoicesFull.find(v => v.no === _invNo) : null;
     const financeApi = {
       invoicesFull: invRows, invTabs, invChart,
+      invPageShown: _invShown9.length > 0,
+      invPagerShown: _invPages9 > 1,
+      invPageLabel: _invShown9.length
+        ? (_invFrom9 + 1) + '\u2013' + Math.min(_invShown9.length, _invFrom9 + INV_PER9) + ' of ' + _invShown9.length
+        : '',
+      invPrevOp: _invPage9 > 1 ? '1' : '.35',
+      invNextOp: _invPage9 < _invPages9 ? '1' : '.35',
+      invPrev: () => { if (_invPage9 > 1) this.setState({ invPage: _invPage9 - 1 }); },
+      invNext: () => { if (_invPage9 < _invPages9) this.setState({ invPage: _invPage9 + 1 }); },
+      invPages: Array.from({ length: _invPages9 }, (_9, i9) => i9 + 1).map(n9 => ({
+        n: String(n9),
+        bd: n9 === _invPage9 ? '#7C00FF' : '#EDEBF2',
+        bg: n9 === _invPage9 ? '#7C00FF' : '#fff',
+        color: n9 === _invPage9 ? '#fff' : '#6F6C7A',
+        pick: () => this.setState({ invPage: n9 }),
+      })),
       invOutstanding: fmtCur(invOutstanding),
       invPaidYtd: fmtCur(invPaidYtd),
       invOutCount: invoicesFull.filter(v => v.payable).length,
@@ -38761,15 +38812,8 @@ class Component extends DCLogic {
       }
       return lines;
     };
-    const _qtSeq9 = (n9) => {
-      const m9 = /(\d+)(?:\D+(\d+))?\s*$/.exec(String(n9 || ''));
-      return m9 ? Number(m9[1]) * 1000 + Number(m9[2] || 0) : -1;
-    };
-    const _qtNewestFirst9 = (rows9) => [...rows9].sort((a9, b9) =>
-      String(b9.date || '').localeCompare(String(a9.date || ''))
-      || _qtSeq9(b9.number) - _qtSeq9(a9.number));
     const quoteDefs = (Array.isArray(qtData)
-      ? _qtNewestFirst9(qtData).map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + q2.date) : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
+      ? _newestFirst9(qtData).map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + q2.date) : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
       : (_authed ? [] : [
         ['QT-338', 'Labour card renewal × 3', 'Sent 15 Jul · expires 22 Jul', [['MOHRE fees × 3', 'AED 1,800']], 'AED 2,000', null, 'Pending', 'sent'],
         ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted', 'approved'],
