@@ -6736,6 +6736,27 @@ app.get("/api/service-items/:id/usage", requireAuth, requireStaff, async (req, r
 // teams API in teams.ts where the membership is actually written. Deleting them here without
 // carrying them there is how a rule quietly stops being enforced.
 
+/**
+ * WHO WROTE THE QUOTATION, stamped on the way in.
+ *
+ * `createdById` is what the proposal prints as "Presented by", and nothing was setting it —
+ * every quotation on live carries null, so each one fell through the whole fallback chain. The
+ * console does not send it and should not have to: the server knows who is calling, and a
+ * browser-supplied author on a document somebody signs is worth nothing.
+ *
+ * Only the id. The NAME is resolved from it at print time, so the document follows the person
+ * if they are ever renamed instead of freezing a copy of what they were called today.
+ *
+ * Registered before the generic CRUD below, and only fills a gap — an explicit author in the
+ * body still wins, which is how an import can carry its own.
+ */
+app.use("/api/quotations", requireAuth, requireStaff, (req: any, _res, next) => {
+  if (req.method === "POST" && req.body && typeof req.body === "object" && !req.body.createdById) {
+    req.body.createdById = req.auth?.sub ?? null;
+  }
+  next();
+});
+
 for (const [path, modelName] of entities) {
   const guards: any[] = [requireAuth, requireStaff];
   if (readRole[path]) guards.push(requireReadRole(...readRole[path]));

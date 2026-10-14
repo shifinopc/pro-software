@@ -268,11 +268,23 @@ export async function proposalData(
   const officer = !creator && ownerId
     ? await prisma.user.findUnique({ where: { id: ownerId }, select: { name: true, email: true } })
     : null;
+  // WHOEVER OWNS THE LEAD, which is the salesperson — and "whoever is selling" is exactly what
+  // this field is for. It was missing from the chain entirely: the chain asked for the client's
+  // PRO officer, who handles their government work, and never for the person whose name is on
+  // the lead. Every quotation on live reached the end of the chain and printed nothing, on
+  // records that all had an owner sitting one column away.
+  //
+  // Above the officer, below the creator: the person who wrote it beats the person who owns the
+  // relationship, and both beat the officer who was never involved in the sale.
+  const salesOwner = !creator && !q.createdByName && co?.ownerId
+    ? await prisma.user.findUnique({ where: { id: co.ownerId }, select: { name: true, email: true } })
+    : null;
   // …and the firm itself at the end of the chain. A quotation written before the creator was
   // recorded, for a client with no officer named, printed "Presented by :" and then nothing — which
   // on a document somebody signs looks like a fault rather than a gap in old data.
   const owner = creator
     ?? (q.createdByName ? { name: q.createdByName, email: "" } : null)
+    ?? salesOwner
     ?? officer
     ?? ((org.legalName ?? org.orgName) ? { name: String(org.legalName ?? org.orgName), email: "" } : null);
   // Typed in the dialog wins over all of it: the person sending it knows whose name belongs on
