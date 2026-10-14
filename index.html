@@ -38948,7 +38948,7 @@ class Component extends DCLogic {
     const qcCur = sysCurCode; // system setting, like the invoice
     const _qcEditing = !!this.state.qcEditId;
     const openCreateQuote = () => {
-      this.setState({ createQuote: true, qcEditId: null, qcEditNo: null, qcClient: qcDefaultClient, qcLines: [['', '1', '']],
+      this.setState({ createQuote: true, qcEditId: null, qcEditNo: null, qcClient: qcDefaultClient, qcClientId: null, qcLines: [['', '1', '']],
         qcValid: '', qcSubject: '', qcNotes: '', qcErr: '', qcIssued: new Date().toISOString().slice(0, 10),
         qcCur: sysCurCode, qcVat: null, qcNextNo: null });
       const t9 = localStorage.getItem('stimespro:token');
@@ -38982,6 +38982,13 @@ class Component extends DCLogic {
     const openEditQuote = (raw9) => this.setState({
       createQuote: true, qcEditId: raw9.id, qcEditNo: raw9.number,
       qcClient: raw9.clientName || QC_PICK,
+      // THE LINK IT ALREADY HAS, carried through the dialog untouched.
+      //
+      // Without this the save re-derived the company by matching the displayed NAME against
+      // the client list, and wrote null when it missed — so editing a quotation whose customer
+      // had since been renamed silently detached it from that customer. Nothing said so; the
+      // row simply stopped belonging to anybody, and every count by company quietly lost it.
+      qcClientId: raw9.companyId || null,
       qcLines: (Array.isArray(raw9.items) && raw9.items.length ? raw9.items : [{ name: '', units: 1, price: '' }])
         .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price)]),
       qcValid: raw9.validUntil || '', qcSubject: raw9.service || '', qcNotes: raw9.notes || '', qcErr: '',
@@ -39011,11 +39018,15 @@ class Component extends DCLogic {
       const qTotalMinor = qSubtotalMinor + qVatMinor;
       const total = Math.round(qTotalMinor / 100);   // whole units, for the lists that read `amount`
       const service = st.qcSubject || (valid[0][0] + (valid.length > 1 ? ' +' + (valid.length - 1) : ''));
+      // Prefer the id the dialog is holding. Matching by name is kept only as a fallback for a
+      // dialog opened before this change, and — crucially — a miss no longer clears a link that
+      // is already there: `qcClientId` carries it through an edit the name cannot survive.
       const co5 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c5 => c5.name.toLowerCase() === String(client).trim().toLowerCase());
+      const companyId5 = this.state.qcClientId || (co5 ? co5.id : null);
       const t5 = localStorage.getItem('stimespro:token');
       const body9 = {
         number: _qcEditing ? (st.qcEditNo || qcAutoNo) : qcAutoNo,
-        companyId: co5 ? co5.id : null, clientName: client, service, amount: total,
+        companyId: companyId5, clientName: client, service, amount: total,
         subtotalMinor: qSubtotalMinor, vatMinor: qVatMinor, totalMinor: qTotalMinor, vatRateBp: qVatRateBp,
         status: status9, date: st.qcIssued || new Date().toISOString().slice(0, 10),
         validUntil: st.qcValid || null, notes: st.qcNotes || null,
@@ -39307,7 +39318,14 @@ class Component extends DCLogic {
       openCreateQuote,
       qtNew: openCreateQuote, // toolbar button alias
       closeCreateQuote: () => this.setState({ createQuote: false }),
-      ...mkDdSearch('ddQcClient', [QC_PICK, ...(realClientNames || [])], this.state.qcClient || qcDefaultClient, (v) => this.setState({ qcClient: v, qcErr: '' }), 'Search clients…'),
+      // The id travels with the name. The dropdown is built from names — that is what a person
+      // reads — but what gets stored is the record they pointed at, resolved HERE, while the
+      // thing they picked is still in hand.
+      ...mkDdSearch('ddQcClient', [QC_PICK, ...(realClientNames || [])], this.state.qcClient || qcDefaultClient, (v) => {
+        const hit9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+          .find(c9 => c9.name === v);
+        this.setState({ qcClient: v, qcClientId: hit9 ? hit9.id : null, qcErr: '' });
+      }, 'Search clients…'),
       qcClientVal: this.state.qcClient || qcDefaultClient,
       ...mkDd('ddQcVat', QC_VAT_OPTS, qcVatSel, (v) => this.setState({ qcVat: v })),
       ddQcVatVal: qcVatSel,
