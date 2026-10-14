@@ -34461,7 +34461,15 @@ class Component extends DCLogic {
               },
             ];
             return {
-              cdQueue: groups9.map(g => ({ ...g, count: String(g.count), empty: g.rows.length === 0 })),
+              // TWO A QUEUE. Three queues at five rows each is fifteen rows in a column beside a
+              // card holding three, and the point of this one is what to do NEXT -- which is
+              // answered by the top of each queue. The pill still carries the true total and every
+              // queue has its own "All", so two of four is a summary rather than a half-truth.
+              //
+              // `empty` is tested on the unsliced rows: a queue with rows is not empty just
+              // because none of them survived the slice, and "Nothing due" under a pill reading 4
+              // would be a straight contradiction.
+              cdQueue: groups9.map(g => ({ ...g, rows: g.rows.slice(0, 2), count: String(g.count), empty: g.rows.length === 0 })),
               cdUndatedShown: (c9.undated || 0) > 0,
               cdUndatedNote: (c9.undated || 0) + ((c9.undated || 0) === 1 ? ' appointment has' : ' appointments have')
                 + ' a date nobody can read \u2014 it is not counted above, and it will not appear in any diary until it is fixed.',
