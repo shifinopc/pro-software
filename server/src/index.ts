@@ -3655,6 +3655,84 @@ const LEAD_DELETE_BLOCKERS: { label: (n: number) => string; count: (id: string) 
  * preview is therefore the floor — the score can only go up once somebody works it — and never
  * flatters a lead by assuming activity that has not happened.
  */
+/**
+ * SEND THE FIRM'S PROFILE TO A LEAD.
+ *
+ * The other half of how this material actually goes out: with a quotation, and — earlier, while
+ * the lead is still being worked — on its own. Without this it lives in somebody's sent folder,
+ * and nobody else can tell whether the prospect has seen it.
+ *
+ * Recorded as an interaction against the company, so the lead's own timeline answers "have we
+ * sent them anything yet?" without asking the person who sent it.
+ */
+app.post("/api/companies/:id/send-profile", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+
+    // Addressed to whoever was asked for, else the contact already on the lead. A send with no
+    // address is refused here rather than failing in the mail server with a worse message.
+    let to = String(req.body?.to ?? "").trim();
+    if (!to) {
+      const c = await prisma.contact.findFirst({ where: { companyId: co.id, email: { not: null } }, orderBy: { isPrimary: "desc" } });
+      to = String(c?.email ?? co.email ?? "").trim();
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: "No email address for this lead — add one, or type where it should go." });
+
+    const picked: string[] | null = Array.isArray(req.body?.collateralIds) ? req.body.collateralIds.map(String) : null;
+    const items = await prisma.collateral.findMany({
+      where: picked && picked.length ? { id: { in: picked }, active: true } : { withProposal: true, active: true },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+    });
+    if (!items.length) return res.status(400).json({ error: "Nothing to send — upload a profile under Configure \u2192 Proposal Templates first." });
+
+    const attachments: { filename: string; content: Buffer }[] = [];
+    const missing: string[] = [];
+    for (const c of items) {
+      const onDisk = path.join(FILES_DIR, path.basename(c.path));
+      if (!fs.existsSync(onDisk)) { missing.push(c.name); continue; }
+      attachments.push({ filename: c.fileName || path.basename(c.path), content: fs.readFileSync(onDisk) });
+    }
+    if (!attachments.length) return res.status(410).json({ error: "The file is no longer on the server. Upload it again." });
+
+    const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
+    const firm = String(org.legalName ?? org.orgName ?? "").trim();
+    const note = String(req.body?.message ?? "").trim();
+    const esc = (v: string) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = [
+      `<p>Dear ${esc(co.contact || co.name)},</p>`,
+      note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>`
+           : `<p>Please find ${items.length === 1 ? "our company profile" : "the attached"} enclosed.</p>`,
+      firm ? `<p>${esc(firm)}</p>` : "",
+    ].filter(Boolean).join("\n");
+
+    const cc = String(req.body?.cc ?? "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    try {
+      const r = await sendMail({ to, cc: cc.length ? cc : undefined, kind: "profile",
+                                 subject: firm ? `${firm} — company profile` : "Company profile",
+                                 html, attachments });
+      if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
+    } catch (e: any) {
+      const mb = Math.round(attachments.reduce((n, x) => n + x.content.length, 0) / 1024 / 1024);
+      return res.status(502).json({ error: `The mail server refused it: ${e?.message ?? e}. The attachments came to about ${mb} MB — many servers stop at 10 MB.` });
+    }
+
+    // Written only once the mail is away, for the same reason the proposal is: a timeline saying
+    // it was sent, when it was not, is worse than no timeline.
+    await prisma.interaction.create({
+      data: {
+        companyId: co.id, kind: "email", at: new Date().toISOString(),
+        summary: `Company profile sent to ${to} — ${items.map(i => i.name).join(", ")}`,
+        outcome: "sent",
+      },
+    }).catch(() => {});
+    logActivity({ type: "client", message: `Company profile sent to ${co.name}` });
+    await logAudit({ action: "collateral.sent", actorId: (req as any).auth?.sub, target: co.id,
+      detail: `${to} — ${items.map(i => i.name).join(", ")}${missing.length ? ` (missing: ${missing.join(", ")})` : ""}` });
+    res.json({ ok: true, to, sent: items.map(i => i.name), missing });
+  } catch (e: any) { fail(res, 400, e, req.path); }
+});
+
 app.post("/api/leads/score-preview", requireAuth, requireStaff, async (req, res) => {
   const b = req.body ?? {};
   const str = (v: unknown) => String(v ?? "").trim() || null;

@@ -12631,6 +12631,9 @@
                 <sc-if value="{{ ldpReopenShow }}" hint-placeholder-val="{{ false }}">
                   <span onClick="{{ ldpReopen }}" style="font-size:12px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #E4D3FB; padding:8px 15px; border-radius:99px; cursor:pointer;" style-hover="background:#F7F3FD;">Reopen as a lead</span>
                 </sc-if>
+                <sc-if value="{{ ldpProfileShow }}" hint-placeholder-val="{{ false }}">
+                  <span onClick="{{ ldpSendProfile }}" title="{{ ldpProfileTitle }}" style="font-size:12px; font-weight:700; color:#4E3FA8; background:#EFEBFF; border:1px solid #D8CFFB; padding:6px 13px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);">{{ ldpProfileLabel }}</span>
+                </sc-if>
               </div>
             </sc-if>
           </sc-if>
@@ -37722,6 +37725,52 @@ class Component extends DCLogic {
           ],
 
           // ── tabs ──
+          ...(() => {
+            /**
+             * SEND THE FIRM'S PROFILE, FROM THE LEAD.
+             *
+             * The firm sends it once a lead is created and again with the quotation. The
+             * quotation half is handled on the proposal dialog; this is the earlier half, which
+             * otherwise lives in somebody's sent folder where nobody else can see it.
+             *
+             * Sends what is marked "with every proposal" — the firm's standard pack — and records
+             * it on the lead's own timeline, so "have we sent them anything yet?" is answerable
+             * without asking the person who sent it.
+             */
+            const lib8 = (Array.isArray(this.state.collateralData) ? this.state.collateralData : [])
+              .filter(c8 => c8.active !== false && c8.withProposal);
+            const busy8 = !!lp && this.state.ldpProfileBusy === lp.id;
+            return {
+              ldpProfileShow: canWrite && !!lp && lib8.length > 0,
+              ldpProfileLabel: busy8 ? 'Sending…' : 'Send profile',
+              ldpProfileTitle: 'Emails ' + lib8.map(c8 => c8.name).join(', ') + ' to this lead and notes it on the timeline',
+              ldpSendProfile: () => {
+                if (busy8 || !lp) return;
+                this._confirm('Send the profile to this lead?', {
+                  body: 'Emails ' + lib8.map(c8 => c8.name).join(', ') + ' to the contact on this lead, and records it on the timeline.',
+                  okLabel: 'Send it',
+                }).then(ok8 => {
+                  if (!ok8) return;
+                  this.setState({ ldpProfileBusy: lp.id });
+                  const t8 = localStorage.getItem('stimespro:token');
+                  fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + lp.id + '/send-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(t8 ? { Authorization: 'Bearer ' + t8 } : {}) },
+                    body: JSON.stringify({ collateralIds: lib8.map(c8 => c8.id) }),
+                  })
+                    .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
+                    .then(({ ok, j8 }) => {
+                      this.setState({ ldpProfileBusy: null });
+                      if (!ok) return this.toast((j8 && j8.error) || 'It could not be sent', 'error');
+                      this.toast('Sent to ' + j8.to);
+                      // The timeline is the point of recording it, so show the new entry at once.
+                      this._loadInteractions && this._loadInteractions();
+                    })
+                    .catch(() => this.setState({ ldpProfileBusy: null }, () => this.toast('Server unreachable', 'error')));
+                });
+              },
+            };
+          })(),
           ldpTabs: ['Timeline', 'Deals', 'People', 'Details'].map(t => ({
             label: t + (t === 'Timeline' && acts.length ? '  ' + acts.length : t === 'Deals' && deals.length ? '  ' + deals.length : t === 'People' && mine.length ? '  ' + mine.length : ''),
             active: tab === t,
