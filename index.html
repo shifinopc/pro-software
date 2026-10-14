@@ -7922,13 +7922,6 @@
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px 10px;"><div><span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Team Members</span><div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ setUsersActive }} active · staff sign in to the console, portal users to their company</div></div><button style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;" onClick="{{ openCuNew }}">+ Create user</button></div>
                 <div style="overflow-x:auto;"><div style="min-width:820px;">
                   <div style="display:grid; grid-template-columns:1.7fr 1fr 84px 100px 110px 130px; gap:10px; padding:8px 15px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>User</span><span>Role</span><span>Type</span><span>Status</span><span>Last active</span><span></span></div>
-                  <!-- TEN ROWS, THEN THE LIST SCROLLS ITSELF.
-                       A row measures 59px, so ten is 590. `max-height` rather than `height`:
-                       a firm with four people gets a card four rows tall, not six rows of
-                       blank paper. Past ten it scrolls here instead of growing the page, so
-                       the heading, the tabs and the security note underneath all stay put.
-                       The column header is deliberately OUTSIDE this box and does not move. -->
-                  <div style="max-height:590px; overflow-y:auto;">
                   <sc-for list="{{ setUsers }}" as="u" hint-placeholder-count="7">
                     <div style="display:grid; grid-template-columns:1.7fr 1fr 84px 100px 110px 130px; gap:10px; align-items:center; padding:12px 15px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
                       <div style="display:flex; align-items:center; gap:11px; min-width:0;"><div style="width:34px; height:34px; border-radius:99px; background:{{ u.avBg }}; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ u.initials }}</div><div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.name }}</div><div style="font-size:10px; color:#A9A6B4;">{{ u.email }}</div></div></div>
@@ -7939,8 +7932,21 @@
                       <div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;"><sc-if value="{{ u.canEdit }}" hint-placeholder-val="{{ true }}"><div onClick="{{ u.edit }}" title="Edit user" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#6F6C7A;" style-hover="background:#F3EFFA; color:#7C00FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"></path></svg></div></sc-if><sc-if value="{{ u.canLoginAs }}" hint-placeholder-val="{{ true }}"><div onClick="{{ u.loginAs }}" title="Login as this user" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#7C00FF;" style-hover="background:#F3E8FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"></path></svg></div></sc-if><sc-if value="{{ u.canAct }}" hint-placeholder-val="{{ true }}"><div onClick="{{ u.toggleStatus }}" title="{{ u.statusActionLabel }}" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:{{ u.statusActionColor }};" style-hover="background:#F7F3FD;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path data-dcattr-d="{{ u.statusIcon }}"></path></svg></div></sc-if><sc-if value="{{ u.canAct }}" hint-placeholder-val="{{ true }}"><div onClick="{{ u.del }}" title="Delete user" style="width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#C0353A;" style-hover="background:#FEECEC;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6"></path></svg></div></sc-if></div>
                     </div>
                   </sc-for>
-                  </div>
                 </div></div>
+                <sc-if value="{{ usrPageShown }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:11px 15px; border-top:1px solid #F0EDF6;">
+                    <span style="font-size:10px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ usrPageLabel }}</span>
+                    <sc-if value="{{ usrPagerShown }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span onClick="{{ usrPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ usrPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                        <sc-for list="{{ usrPages }}" as="up" hint-placeholder-count="2">
+                          <span onClick="{{ up.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ up.bd }}; background:{{ up.bg }}; color:{{ up.color }}; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;">{{ up.n }}</span>
+                        </sc-for>
+                        <span onClick="{{ usrNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ usrNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
                 <div style="padding:13px 15px; font-size:10px; color:#A9A6B4; border-top:1px solid #F5F3F9;">Security: repeated failed logins auto-lock an account; "Reset" forces a password change; deactivating instantly ends all sessions.</div>
               </div>
             </sc-if>
@@ -30267,6 +30273,23 @@ class Component extends DCLogic {
       };
     });
     const setUsersActive = setUsersAll.filter(u => u.status === 'Active').length;
+    /**
+     * TEN A PAGE.
+     *
+     * It scrolled inside its own box for about an hour; paging is better here because the row
+     * carries controls — edit, impersonate, suspend, delete — and a control you have to hold a
+     * scroll position to reach is harder to use than one on a numbered page you can return to.
+     *
+     * The count above the table stays the count of EVERYONE active, not of this page: "20 active"
+     * is a fact about the firm, and making it count the ten in front of you would be a quieter
+     * kind of wrong.
+     */
+    const USR_PER9 = 10;
+    const _usrPages9 = Math.max(1, Math.ceil(setUsersAll.length / USR_PER9));
+    // Clamped: deleting the last user on page three has to land somewhere that exists.
+    const _usrPage9 = Math.min(Math.max(1, this.state.usrPage || 1), _usrPages9);
+    const _usrFrom9 = (_usrPage9 - 1) * USR_PER9;
+    const _usrPaged9 = setUsersAll.slice(_usrFrom9, _usrFrom9 + USR_PER9);
     // Create user modal
     const cuRole = this.state.cuRole || 'PRO Officer';
     const cuNewApi = {
@@ -31552,7 +31575,23 @@ class Component extends DCLogic {
         };
       }),
       setTabAudit: setTab === 'Audit', setTabBilling: setTab === 'Billing', setTabAutomation: setTab === 'Automation',
-      ...genOrgApi, genSave, setUsers: setUsersAll, setUsersActive, setRoles, setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
+      ...genOrgApi, genSave, setUsers: _usrPaged9, setUsersActive, setRoles,
+      usrPageShown: setUsersAll.length > 0,
+      usrPagerShown: _usrPages9 > 1,
+      usrPageLabel: setUsersAll.length
+        ? (_usrFrom9 + 1) + '\u2013' + Math.min(setUsersAll.length, _usrFrom9 + USR_PER9) + ' of ' + setUsersAll.length
+        : '',
+      usrPrevOp: _usrPage9 > 1 ? '1' : '.35',
+      usrNextOp: _usrPage9 < _usrPages9 ? '1' : '.35',
+      usrPrev: () => { if (_usrPage9 > 1) this.setState({ usrPage: _usrPage9 - 1 }); },
+      usrNext: () => { if (_usrPage9 < _usrPages9) this.setState({ usrPage: _usrPage9 + 1 }); },
+      usrPages: Array.from({ length: _usrPages9 }, (_9, i9) => i9 + 1).map(n9 => ({
+        n: String(n9),
+        bd: n9 === _usrPage9 ? '#7C00FF' : '#EDEBF2',
+        bg: n9 === _usrPage9 ? '#7C00FF' : '#fff',
+        color: n9 === _usrPage9 ? '#fff' : '#6F6C7A',
+        pick: () => this.setState({ usrPage: n9 }),
+      })), setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
       permMatrix, permRows, permActions,
       // What the grid covers, counted from the router. Drawn only when the answer arrived: a
