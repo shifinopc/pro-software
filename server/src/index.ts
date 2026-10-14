@@ -3707,10 +3707,13 @@ app.post("/api/companies/:id/send-profile", requireAuth, requireStaff, requireWr
     ].filter(Boolean).join("\n");
 
     const cc = String(req.body?.cc ?? "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    // The composer sends a subject; anything else gets the standard one. Trimmed to empty
+    // falls back rather than sending a blank subject line, which reads as spam.
+    const subject = String(req.body?.subject ?? "").trim()
+      || (firm ? `${firm} — company profile` : "Company profile");
     try {
       const r = await sendMail({ to, cc: cc.length ? cc : undefined, kind: "profile",
-                                 subject: firm ? `${firm} — company profile` : "Company profile",
-                                 html, attachments });
+                                 subject, html, attachments });
       if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
     } catch (e: any) {
       const mb = Math.round(attachments.reduce((n, x) => n + x.content.length, 0) / 1024 / 1024);
