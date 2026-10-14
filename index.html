@@ -28917,7 +28917,6 @@ class Component extends DCLogic {
             { label: 'PRO Officer', value: 'pro_officer', desc: 'Front-line ops — the usual owner for government steps' },
             { label: 'Accountant', value: 'accountant', desc: 'Finance — fees, payments and invoices' },
             { label: 'Admin', value: 'admin', desc: 'Full operational access — approvals and oversight' },
-            { label: 'Super Admin', value: 'super_admin', desc: 'Full access including security controls' },
             { label: 'Sales', value: 'sales', desc: 'Own assigned clients only' },
             ...((this.state.customRoles || []).map(c3 => ({ label: c3.label, value: c3.id, desc: c3.desc || 'Custom role' }))),
             { label: 'Leave unassigned', value: '', desc: 'No role — the step waits for someone to claim it' },
@@ -29409,7 +29408,7 @@ class Component extends DCLogic {
 
     const _wsRoles = [
       { value: 'pro_officer', label: 'PRO Officer' }, { value: 'accountant', label: 'Accountant' },
-      { value: 'admin', label: 'Admin' }, { value: 'super_admin', label: 'Super Admin' },
+      { value: 'admin', label: 'Admin' },
       { value: 'sales', label: 'Sales' },
       ...((this.state.customRoles || []).map(c => ({ value: c.id, label: c.label }))),
     ];
@@ -30242,8 +30241,13 @@ class Component extends DCLogic {
         // Impersonation isn't offered for Super Admins (or your own row).
         canLoginAs: u.role !== 'Super Admin' && !!u.id && !isSelf,
         loginAs: () => this._loginAs && this._loginAs(u.id),
-        canAct: !!u.id && !isSelf,
-        canEdit: !!u.id,
+        // THE ROOT ACCOUNT IS READ-ONLY HERE. Shown, so the team list still answers "who is
+        // root?", but every control that writes to it is withheld — edit, suspend, delete and
+        // reset-password alike. The server refuses all four regardless; this is so nobody is
+        // offered a button that can only fail.
+        isRoot: u.role === 'Super Admin',
+        canAct: !!u.id && !isSelf && u.role !== 'Super Admin',
+        canEdit: !!u.id && u.role !== 'Super Admin',
         edit: () => {
           this.setState({ euOpen: true, euId: u.id, euName: u.name, euEmail: u.email, euRole: u.role, euType: u.type === 'Portal' ? 'Portal (client)' : 'Staff', euStatus: (u.status === 'Active') ? 'Active' : 'Inactive', euErr: '' });
         },
@@ -30262,7 +30266,10 @@ class Component extends DCLogic {
       cuName: this.state.cuName || '', cuEmail: this.state.cuEmail || '', cuErr: this.state.cuErr || false,
       cuMustChange: this.state.cuMustChange !== false,
       cuMustChangeOff: this.state.cuMustChange === false,
-      ...mkDd('ddCuRole', ['Super Admin', 'Admin', 'PRO Officer', 'Accountant', 'Sales', 'Client Admin', ...((this.state.customRoles || []).map(c => c.label))], cuRole, (v) => this.setState({ cuRole: v })),
+      // Super Admin is NOT here. It is the root account, it is not grantable, and the server
+      // refuses it whatever the browser sends — see the guard on /api/users. The label map above
+      // keeps its entry so an existing root account still reads correctly in the list.
+      ...mkDd('ddCuRole', ['Admin', 'PRO Officer', 'Accountant', 'Sales', 'Client Admin', ...((this.state.customRoles || []).map(c => c.label))], cuRole, (v) => this.setState({ cuRole: v })),
       ...mkDd('ddCuType', ['Staff', 'Portal (client)'], this.state.cuType || 'Staff', (v) => this.setState({ cuType: v })),
       cuRoleVal: cuRole, cuTypeVal: this.state.cuType || 'Staff',
       openCuNew: () => this.setState({ cuOpen: true, cuName: '', cuEmail: '', cuRole: 'PRO Officer', cuType: 'Staff', cuMustChange: true, cuErr: '' }),
@@ -30351,7 +30358,7 @@ class Component extends DCLogic {
       showEditUser: !!this.state.euOpen,
       euName: this.state.euName || '', euEmail: this.state.euEmail || '', euErr: this.state.euErr || false,
       euRoleVal: euRole, euTypeVal: this.state.euType || 'Staff', euStatusVal: this.state.euStatus || 'Active',
-      ...mkDd('ddEuRole', ['Super Admin', 'Admin', 'PRO Officer', 'Accountant', 'Sales', 'Client Admin', ...((this.state.customRoles || []).map(c => c.label))], euRole, (v) => this.setState({ euRole: v })),
+      ...mkDd('ddEuRole', ['Admin', 'PRO Officer', 'Accountant', 'Sales', 'Client Admin', ...((this.state.customRoles || []).map(c => c.label))], euRole, (v) => this.setState({ euRole: v })),
       ...mkDd('ddEuType', ['Staff', 'Portal (client)'], this.state.euType || 'Staff', (v) => this.setState({ euType: v })),
       ...mkDd('ddEuStatus', ['Active', 'Inactive'], this.state.euStatus || 'Active', (v) => this.setState({ euStatus: v })),
       closeEditUser: () => this.setState({ euOpen: false }),
@@ -30424,8 +30431,14 @@ class Component extends DCLogic {
 
     const setRoleSel = this.state.setRole || 'PRO Officer';
     // Built-in roles (fixed) + admin-defined custom roles (AppSetting "roles" → state.customRoles).
+    // SUPER ADMIN IS NOT LISTED. It is the root account: it cannot be granted, its holder cannot
+    // be edited, and its permissions were already locked here — so the row was a read-only entry
+    // for a role nobody on this screen can do anything with. The server enforces all of that; see
+    // the guard on /api/users.
+    //
+    // `setRole` defaults to 'PRO Officer', so removing the row cannot leave the screen selecting
+    // something that is no longer there.
     const builtInRoles = [
-      ['Super Admin', 'Full access incl. security & tenant controls', '#7C00FF', true, 'super_admin'],
       ['Admin', 'Full operational access; manages users & settings', '#0284C7', true, 'admin'],
       ['PRO Officer', 'Front-line ops — tasks, clients, compliance', '#0E9355', true, 'pro_officer'],
       ['Accountant', 'Finance — invoices & reports', '#B8860B', true, 'accountant'],

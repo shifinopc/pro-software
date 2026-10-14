@@ -1168,6 +1168,52 @@ app.post("/api/notifications/read", requireAuth, requireStaff, async (req, res) 
 });
 
 // Staff: reset a client's portal login password (resets to the default and forces a change on next login).
+/**
+ * SUPER ADMIN IS THE ROOT ACCOUNT. It is not an option on a form.
+ *
+ * Two rules, both absolute, both enforced HERE rather than by hiding a dropdown entry: the
+ * console is one client, and a role that can only be withheld by the browser is not withheld.
+ * Until this existed, `POST /api/users` took `roleId` straight from the body and the generic
+ * CRUD route accepted a PUT — so any account that could edit a teammate could make itself root.
+ *
+ *   1. NOBODY GRANTS IT. No create or update may set roleId to super_admin, whoever is asking.
+ *   2. NOBODY EDITS ONE. No write of any kind may target an account that already holds it:
+ *      not a rename, not a role change, not suspend, not delete, not a password reset.
+ *
+ * Rule 2 covers a super admin editing another super admin, and editing THEMSELVES, on purpose.
+ * An account that can rewrite itself through an API is not a root account. Changing your own
+ * password still works — that is /api/auth/change-password, which asks for the current one and
+ * is not a user-administration route.
+ *
+ * The way back is the database, deliberately: making root unreachable from the application is
+ * the entire point, and it means a stolen admin session cannot reach it either.
+ *
+ * Registered before every /api/users route, including the generic CRUD mounted later, because
+ * Express runs middleware in the order it was added.
+ */
+const ROOT_ROLE = "super_admin";
+app.use("/api/users", requireAuth, requireStaff, async (req: any, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+  try {
+    if (String(req.body?.roleId ?? "") === ROOT_ROLE) {
+      await logAudit({ action: "role.root.refused", actorId: req.auth?.sub, target: String(req.body?.email ?? req.path),
+                       detail: "attempt to grant super_admin", ip: clientIp(req) });
+      return res.status(403).json({ error: "Super Admin is the root account and cannot be granted." });
+    }
+    // `req.path` is relative to the mount, so "/<id>" or "/<id>/status"; a bare POST gives "/".
+    const id = String(req.path || "/").split("/")[1] || "";
+    if (id) {
+      const target = await prisma.user.findUnique({ where: { id }, select: { roleId: true, email: true } });
+      if (target?.roleId === ROOT_ROLE) {
+        await logAudit({ action: "role.root.refused", actorId: req.auth?.sub, target: `${target.email} (${id})`,
+                         detail: `${req.method} ${req.path} on a root account`, ip: clientIp(req) });
+        return res.status(403).json({ error: "This is the root account. It cannot be edited from the application." });
+      }
+    }
+    next();
+  } catch (e: any) { fail(res, 400, e, req.path); }
+});
+
 // Super Admin: log in as another user (impersonation) — no credentials. Audited. Only super_admin.
 app.post("/api/users/:id/login-as", requireAuth, requireStaff, requireHuman, async (req, res) => {
   const a = (req as any).auth;
