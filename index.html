@@ -5607,13 +5607,17 @@
         </div>
       </section>
 
-      <!-- Needs a look / Needs chasing, at the design's 1.45fr / 1fr. The wider card is the one
-           you read; the narrower one is the one you act from. Equal halves made the reading card
-           cramped while the queue ran out of things to say.
+      <!-- THE WORKING ROW: what is going wrong, what to do about it today, and where the whole
+           book is leaking — read left to right.
 
-           Softer and deeper than the app's usual hairline box: no border, and a long low shadow
-           that lifts this pair off the page because it is the pair somebody actually works from. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1.45fr 1fr; gap:13px; align-items:stretch;" class="cd-two">
+           The funnel joins them because two cards left the row half empty: "Needs a look" holds
+           three deals and "Needs chasing" three short queues, and stretching them to fill a
+           screen's width gave both of them dead space to fill. Three columns put a third thing
+           worth reading in that space instead.
+
+           Widths are not equal on purpose: the deals column is read line by line and needs the
+           room, the queue is scanned, and the funnel is three bars and four figures. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .155s both; display:grid; grid-template-columns:1.25fr 1fr 1.15fr; gap:13px; align-items:stretch;" class="cd-three">
 
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px; display:flex; flex-direction:column;">
           <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
@@ -5700,18 +5704,11 @@
           </sc-if>
           <div style="flex:1;"></div>
         </div>
-      </section>
-
-      <!-- Conversion funnel / Deal outcomes + Why deals were lost, at the design's 1.35fr / 1fr.
-           This funnel is the RELATIONSHIP one — lead to prospect to client — not the pipeline
-           funnel further down. Different question: that one asks how far deals get through the
-           stages, this asks how far companies get through the relationship. -->
-      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .13s both; display:grid; grid-template-columns:1.35fr 1fr; gap:13px; align-items:stretch;" class="cd-two">
 
         <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px;">
           <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
             <div class="cd-hd">Conversion funnel</div>
-            <span class="cd-note">lead &rarr; prospect &rarr; client</span>
+            <span class="cd-note" title="Companies through the relationship, not deals through the pipeline stages">lead &rarr; prospect &rarr; client</span>
           </div>
           <div style="display:flex; flex-direction:column; gap:13px; margin-top:13px;">
             <sc-for list="{{ cdLcRows }}" as="c" hint-placeholder-count="3">
@@ -5740,51 +5737,54 @@
           </div>
           <div style="font-size:10px; color:#B4AFC4; margin-top:11px; border-top:1px solid #F5F3F9; padding-top:11px;">Each hop shows average time and its sample size &mdash; small samples are anecdotes, not averages.</div>
         </div>
+      </section>
 
-        <div style="display:flex; flex-direction:column; gap:13px;">
-          <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px;">
-            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-              <div class="cd-hd">Deal outcomes</div>
-              <span class="cd-note">{{ cdOutcomeScope }}</span>
-            </div>
-            <!-- One bar, two shares. Won and lost are the same denominator, so two separate
-                 figures make the reader do the division the bar can just show. -->
-            <sc-if value="{{ cdHasOutcomes }}" hint-placeholder-val="{{ true }}">
-              <div style="display:flex; height:28px; border-radius:9px; overflow:hidden; margin-top:11px;">
-                <sc-for list="{{ cdOutcomeBar }}" as="o" hint-placeholder-count="2">
-                  <div style="width:{{ o.w }}%; background:{{ o.color }}; display:flex; align-items:center; justify-content:center; gap:5px;">
-                    <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; color:#fff;">{{ o.n }}</span>
-                    <span style="font-size:10px; font-weight:600; color:#fff; opacity:.9;">{{ o.label }}</span>
-                  </div>
-                </sc-for>
-              </div>
-            </sc-if>
-            <sc-if value="{{ cdOutcomesEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="padding:12px; text-align:center; font-size:11px; color:#B4AFC4;">Nothing decided this period.</div>
-            </sc-if>
+      <!-- How it ended, and why. Both halves answer the same question looking backwards, so they
+           are the same size — neither is the headline. -->
+      <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .13s both; display:grid; grid-template-columns:1fr 1fr; gap:13px; align-items:stretch;" class="cd-two">
+
+        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div class="cd-hd">Deal outcomes</div>
+            <span class="cd-note">{{ cdOutcomeScope }}</span>
           </div>
-
-          <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px; flex:1;">
-            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-              <div class="cd-hd">Why deals were lost</div>
-              <span class="cd-note">ranked</span>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:10px; margin-top:11px;">
-              <sc-for list="{{ cdLostRows }}" as="r" hint-placeholder-count="3">
-                <div>
-                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
-                    <span style="font-size:11px; font-weight:600; color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.reason }}</span>
-                    <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:11px; color:{{ r.color }}; flex-shrink:0;">{{ r.count }}</span>
-                  </div>
-                  <div style="height:5px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:7px;">
-                    <div style="height:100%; width:{{ r.w }}%; background:{{ r.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
-                  </div>
+          <!-- One bar, two shares. Won and lost are the same denominator, so two separate
+               figures make the reader do the division the bar can just show. -->
+          <sc-if value="{{ cdHasOutcomes }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; height:28px; border-radius:9px; overflow:hidden; margin-top:11px;">
+              <sc-for list="{{ cdOutcomeBar }}" as="o" hint-placeholder-count="2">
+                <div style="width:{{ o.w }}%; background:{{ o.color }}; display:flex; align-items:center; justify-content:center; gap:5px;">
+                  <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; color:#fff;">{{ o.n }}</span>
+                  <span style="font-size:10px; font-weight:600; color:#fff; opacity:.9;">{{ o.label }}</span>
                 </div>
               </sc-for>
-              <sc-if value="{{ cdLostEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:12px; text-align:center; font-size:11px; color:#B4AFC4;">{{ cdLostEmptyNote }}</div>
-              </sc-if>
             </div>
+          </sc-if>
+          <sc-if value="{{ cdOutcomesEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:12px; text-align:center; font-size:11px; color:#B4AFC4;">Nothing decided this period.</div>
+          </sc-if>
+        </div>
+
+        <div style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:14px 16px; flex:1;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <div class="cd-hd">Why deals were lost</div>
+            <span class="cd-note">ranked</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px; margin-top:11px;">
+            <sc-for list="{{ cdLostRows }}" as="r" hint-placeholder-count="3">
+              <div>
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+                  <span style="font-size:11px; font-weight:600; color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.reason }}</span>
+                  <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:11px; color:{{ r.color }}; flex-shrink:0;">{{ r.count }}</span>
+                </div>
+                <div style="height:5px; background:#F3F1F7; border-radius:99px; overflow:hidden; margin-top:7px;">
+                  <div style="height:100%; width:{{ r.w }}%; background:{{ r.color }}; border-radius:99px; animation:slideRight .9s cubic-bezier(.16,1,.3,1) both;"></div>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ cdLostEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:12px; text-align:center; font-size:11px; color:#B4AFC4;">{{ cdLostEmptyNote }}</div>
+            </sc-if>
           </div>
         </div>
       </section>
