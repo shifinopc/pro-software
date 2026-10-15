@@ -68,6 +68,28 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # ── Salesperson mailbox (Sales -> Inbox) ────────────────────────────────────────────────
+      #
+      # OAuth client credentials for reading a rep's OWN mailbox. Empty = the feature is simply
+      # off: the Inbox still shows whatever was synced before, and the Connect button is replaced
+      # by the server's own explanation of what is missing. It never half-works.
+      #
+      # These had to be added here, not just to .env. Every variable this service sees is
+      # enumerated in this block — compose does not pass the host environment through — so setting
+      # them in .env alone did exactly nothing, which is a very quiet way to fail.
+      #
+      # The secrets live HERE and never in the database: an OAuth client secret in a table is one
+      # compromised admin account away from being somebody else's.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
+      MS_TENANT_ID: ${MS_TENANT_ID:-}
+      # Where the provider sends somebody back after they approve. It must match the redirect URI
+      # registered with Google/Microsoft CHARACTER FOR CHARACTER or the sign-in is refused with an
+      # error that names nothing useful. Defaulted rather than required, for the same reason
+      # CONSOLE_URL above is: this stack knows its own public address.
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-https://proapi.ionob.in/api/mailbox/callback}
       # Connects the agents to Claude. Empty = no model: agents that need one stay off, the rest
       # work from templates and database checks. Lives only here — never in the database.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
