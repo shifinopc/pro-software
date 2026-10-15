@@ -33190,7 +33190,19 @@ class Component extends DCLogic {
       ? [..._ldFiltered9].sort((a, b) => ((_scoreBy9.get(b.id) || {}).score ?? -1) - ((_scoreBy9.get(a.id) || {}).score ?? -1) || String(a.name).localeCompare(String(b.name)))
       : _ldGroup9
       ? [..._ldFiltered9].sort((a, b) => _ldKey9(a).localeCompare(_ldKey9(b)) || String(a.name).localeCompare(String(b.name)))
-      : _ldFiltered9;
+      // NEWEST FIRST when nothing is grouped. /api/companies is the generic CRUD route and
+      // carries no `orderBy`, so the list arrived in whatever order the database handed the rows
+      // back — undefined rather than merely oldest-first, and a lead added this morning could
+      // appear anywhere in it.
+      //
+      // Sorted on `arrivedAt`, which is the date the ROW ITSELF shows as "added today" — so the
+      // order matches the words the reader can see. `createdAt` backs it up for anything that
+      // predates the history table, and a row with neither sorts last by name rather than
+      // jumping to the top on a date of zero.
+      : [..._ldFiltered9].sort((a, b) => {
+        const t9 = (x9) => Date.parse(String(x9.arrivedAt ?? x9.createdAt ?? '')) || 0;
+        return t9(b) - t9(a) || String(a.name).localeCompare(String(b.name));
+      });
     /**
      * ONE PAGE AT A TIME, as the design shows: "1–7 of 9", with the pages beside it.
      *
