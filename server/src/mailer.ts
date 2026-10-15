@@ -113,6 +113,16 @@ async function record(entry: { to: string; subject: string; status: "sent" | "fa
  * every attachment is a file store nobody is pruning.
  */
 export async function sendMail(opts: { to: string; cc?: string[]; subject: string; html: string; text?: string; kind?: string;
+                                       /**
+                                        * Overrides the configured reply-to for THIS message.
+                                        *
+                                        * Needed the moment a human sends something: a prospect
+                                        * replying to a company profile is answering the
+                                        * salesperson, not the system, and routing that to a
+                                        * shared no-reply is how an enquiry is lost. Everything
+                                        * automated leaves this alone and keeps the configured one.
+                                        */
+                                       replyTo?: string;
                                        attachments?: { filename: string; content: Buffer }[] }) {
   const cfg = await getEmailConfig();
   if (!cfg.enabled) {
@@ -126,7 +136,7 @@ export async function sendMail(opts: { to: string; cc?: string[]; subject: strin
     await transportFor(cfg).sendMail({
       from: cfg.from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text,
       ...(opts.cc && opts.cc.length ? { cc: opts.cc } : {}),
-      ...(cfg.replyTo ? { replyTo: cfg.replyTo } : {}),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : cfg.replyTo ? { replyTo: cfg.replyTo } : {}),
       ...(opts.attachments && opts.attachments.length ? { attachments: opts.attachments } : {}),
     });
   } catch (e: any) {

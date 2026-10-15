@@ -3807,30 +3807,57 @@ app.post("/api/companies/:id/send-profile", requireAuth, requireStaff, requireWr
     const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
     const firm = String(org.legalName ?? org.orgName ?? "").trim();
     const note = String(req.body?.message ?? "").trim();
-    const esc = (v: string) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // WHO IS ACTUALLY WRITING. A company profile is a letter from a salesperson to a prospect, and
+    // the single worst thing it can do is arrive from an address that ignores the answer. The
+    // reply-to is set to the sender, so a prospect who hits Reply reaches the person who sent it
+    // — and, because that is their own connected mailbox, the reply lands back on this lead's
+    // timeline by itself. Automated mail is untouched and keeps the configured reply-to.
+    const sender = (req as any).auth?.sub
+      ? await prisma.user.findUnique({ where: { id: String((req as any).auth.sub) }, select: { name: true, email: true } })
+      : null;
+    const senderMail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(sender?.email ?? "")) ? String(sender!.email) : null;
+
     // A supplied message IS the whole letter — greeting and sign-off included — because the
-    // composer now lets somebody edit every line of it. Wrapping our own greeting around it
-    // would have produced two. Blank lines become paragraphs; single newlines stay as breaks,
-    // so an address block typed one line per line arrives looking like one.
+    // composer lets somebody edit every line of it. Wrapping our own greeting around it would
+    // have produced two. Blank lines become paragraphs; single newlines stay as breaks, so an
+    // address block typed one line per line arrives looking like one.
     //
     // Nothing supplied still gets the standard letter built here, for any caller that is not
     // the composer.
-    const html = note
-      ? esc(note).split(/\n{2,}/).map(par => `<p>${par.replace(/\n/g, "<br>")}</p>`).join("\n")
+    const lines = note
+      ? escEmail(note).split(/\n{2,}/).map(par => par.replace(/\n/g, "<br>"))
       : [
-          `<p>Dear ${esc(co.contact || co.name)},</p>`,
-          `<p>Please find ${items.length === 1 ? "our company profile" : "the attached"} enclosed.</p>`,
-          firm ? `<p>${esc(firm)}</p>` : "",
-        ].filter(Boolean).join("\n");
+          `Dear ${escEmail(co.contact || co.name)},`,
+          `Please find ${items.length === 1 ? "our company profile" : "the attached"} enclosed — `
+            + `I would be glad to talk through anything in it.`,
+          firm ? escEmail(firm) : "",
+        ].filter(Boolean);
 
     const cc = String(req.body?.cc ?? "").split(/[,;]/).map(x => x.trim()).filter(Boolean);
     // The composer sends a subject; anything else gets the standard one. Trimmed to empty
     // falls back rather than sending a blank subject line, which reads as spam.
     const subject = String(req.body?.subject ?? "").trim()
       || (firm ? `${firm} — company profile` : "Company profile");
+
+    // THE HOUSE LETTERHEAD, which this route was the last one not to use. It sent three bare <p>
+    // tags, so the first thing a prospect ever saw of this firm was an unstyled wall of text
+    // beside an 11 MB attachment — which is also roughly what a phishing mail looks like.
+    const kb = (n: number) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+    const { html, text } = renderEmail(
+      { org: firm || await orgName(), repliesTo: senderMail },
+      {
+        heading: items.length === 1 ? "Company profile" : "Company profile and documents",
+        lines,
+        enclosures: attachments.map(a => ({ name: a.filename, size: kb(a.content.length) })),
+        preheader: `From ${firm || "us"}${sender?.name ? ` — ${sender.name}` : ""}`,
+      },
+    );
+
     try {
       const r = await sendMail({ to, cc: cc.length ? cc : undefined, kind: "profile",
-                                 subject, html, attachments });
+                                 subject, html, text, ...(senderMail ? { replyTo: senderMail } : {}),
+                                 attachments });
       if (!r.sent) return res.status(409).json({ error: "Email is switched off in Settings \u2192 Email, so nothing was sent." });
     } catch (e: any) {
       const mb = Math.round(attachments.reduce((n, x) => n + x.content.length, 0) / 1024 / 1024);

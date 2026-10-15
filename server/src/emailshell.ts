@@ -48,6 +48,15 @@ export interface EmailOptions {
   cta?: { label: string; url: string };
   /** Small print directly above the footer rule, e.g. why this address is being written to. */
   note?: string;
+  /**
+   * What is attached, named in the body of the letter.
+   *
+   * Mail clients show their own attachment strip, so this looks redundant — it is not. A
+   * forwarded message often loses it, a phone client buries it under the fold, and a prospect
+   * scanning on a train sees a wall of text with no sign that the profile they asked for is
+   * actually there. Naming it in the letter is what a person would do.
+   */
+  enclosures?: { name: string; size?: string }[];
   /** The grey line shown after the subject in most inboxes. Falls back to the first body line. */
   preheader?: string;
 }
@@ -62,6 +71,13 @@ export async function orgName(): Promise<string> {
     return "STIMES PRO";
   }
 }
+
+/** The badge on an enclosure tile. Four characters is all that fits, and all anybody needs. */
+const ext = (name: string) => {
+  const m = /\.([A-Za-z0-9]{1,4})$/.exec(String(name ?? ""));
+  return m ? m[1].toUpperCase() : "FILE";
+};
+const ARROW_DOT = "\u00b7";
 
 const stripTags = (s: string) =>
   s.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")
@@ -102,6 +118,7 @@ export function renderEmail(ctx: EmailContext, o: EmailOptions): { html: string;
     : `Sent by ${esc(org)}. This is an automated message — replies to it are not monitored.`;
   const lines = (o.lines ?? []).filter(Boolean);
   const facts = (o.facts ?? []).filter(f => f && f.value);
+  const encl = (o.enclosures ?? []).filter(f => f && f.name);
 
   // Inboxes show this after the subject. Padding it with zero-width spaces stops the client
   // pulling the letterhead in after it, which is what produces "STIMES PRO STIMES PRO STIMES…".
@@ -141,6 +158,26 @@ export function renderEmail(ctx: EmailContext, o: EmailOptions): { html: string;
               <a href="${esc(o.cta.url)}" style="display:inline-block;padding:12px 24px;font:600 14px/1 ${FONT};color:#FFFFFF;text-decoration:none;">${esc(o.cta.label)}</a>
             </td></tr>
           </table>` : ""}
+          ${encl.length ? `
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${lines.length || facts.length ? "18px" : "0"} 0 0;">
+            <tr><td style="padding:0 0 7px;font:400 10px/1 ${FONT};color:${MUTED};text-transform:uppercase;letter-spacing:.09em;">${encl.length === 1 ? "Enclosed" : `Enclosed ${ARROW_DOT} ${encl.length} files`}</td></tr>
+            ${encl.map(f => `
+            <tr><td style="padding:0 0 7px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FBFAFE;border:1px solid ${HAIRLINE};border-radius:10px;">
+                <tr>
+                  <td width="38" style="padding:11px 0 11px 12px;vertical-align:middle;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td bgcolor="${ACCENT}" width="30" height="30" align="center" style="background:${ACCENT};border-radius:8px;font:700 9px/1 ${FONT};color:#FFFFFF;letter-spacing:.04em;">${esc(ext(f.name))}</td>
+                    </tr></table>
+                  </td>
+                  <td style="padding:11px 12px 11px 10px;vertical-align:middle;">
+                    <div style="font:600 13px/1.4 ${FONT};color:${INK};word-break:break-word;">${esc(f.name)}</div>
+                    ${f.size ? `<div style="font:400 11px/1.4 ${FONT};color:${MUTED};padding-top:2px;">${esc(f.size)}</div>` : ""}
+                  </td>
+                </tr>
+              </table>
+            </td></tr>`).join("")}
+          </table>` : ""}
           ${o.note ? `<p style="margin:20px 0 0;font:400 12px/1.6 ${FONT};color:${MUTED};">${o.note}</p>` : ""}
         </td></tr>
 
@@ -161,6 +198,8 @@ export function renderEmail(ctx: EmailContext, o: EmailOptions): { html: string;
     "",
     ...lines.map(stripTags),
     ...(facts.length ? ["", ...facts.map(f => `${f.label}: ${stripTags(f.value)}`)] : []),
+    ...(encl.length ? ["", "Enclosed:",
+                       ...encl.map(f => `  ${f.name}${f.size ? ` (${f.size})` : ""}`)] : []),
     ...(o.cta ? ["", `${o.cta.label}: ${o.cta.url}`] : []),
     ...(o.note ? ["", stripTags(o.note)] : []),
     "",
