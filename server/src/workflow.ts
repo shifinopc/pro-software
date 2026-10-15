@@ -32,6 +32,28 @@ function normalizeItems(raw: any): ChecklistItem[] {
 // "tasks created so far" would inflate progress, because steps are only materialised as the token
 // reaches them (a 5-step run with 1 created step would read 0/1 = 0%, then 1/1 = 100%).
 // Falls back to the created-task count when the graph is unavailable.
+/**
+ * Is this address one the training brake should withhold?
+ *
+ * True when client email is on hold AND the address is not an active staff mailbox. The test is
+ * on the RECIPIENT rather than the step, because a Notify step is whatever somebody configured
+ * it to be: the same node emails a client on one template and an officer on another.
+ *
+ * A lookup failure answers false — a database hiccup must not silently swallow a notification
+ * that was meant to go out.
+ */
+async function heldFromClient(to: string): Promise<boolean> {
+  try {
+    const { clientEmailHeld } = await import("./notify.js");
+    if (!(await clientEmailHeld())) return false;
+    const staff = await prisma.user.findFirst({
+      where: { email: to.trim().toLowerCase(), type: "staff", status: "active" },
+      select: { id: true },
+    });
+    return !staff;
+  } catch { return false; }
+}
+
 export function runProgress(graph: any, tasks: { status: string }[]): { done: number; total: number; pct: number } {
   const total = (graph?.nodes || []).filter((n: any) => n.type === "task" || n.type === "approval").length || tasks.length;
   const done = tasks.filter(t => t.status !== "active").length;
@@ -507,6 +529,23 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           // The case that was invisible: configured to email somebody, and the run holds no address.
           await log("notify.no_recipient", nodeId, `${node.label ?? "Notify"} · nothing was sent — "${String(c.to ?? "")}" resolved to no address on this run`);
           logActivity({ type: "alert", message: `⚠ "${node.label ?? "Notify"}" could not be sent — no email address on ${inst.title}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+        } else if (await heldFromClient(to)) {
+          // THE TRAINING BRAKE reaches here too. A Notify step emails whatever address it
+          // resolves to, and eight of the shipped templates resolve it to {{ clientEmail }} — so
+          // without this the hold would stop every notification the product raises and let the
+          // workflows walk straight past it.
+          //
+          // STAFF STILL GET THEIRS. The rule is the recipient, not the step: a mailbox that
+          // belongs to an active staff account is a person being trained, and a step telling
+          // them the government work is done is part of what they are rehearsing. Everything
+          // else — the client, their employee, an address typed into the step — is held.
+          await prisma.mailLog.create({ data: {
+            to: to.slice(0, 191), subject: subject.slice(0, 2000),
+            status: "skipped", kind: "workflow",
+            error: "Client email is on hold (Settings → Notifications)",
+            at: new Date().toISOString(),
+          } }).catch(() => {});
+          await log("notify.held", nodeId, `${node.label ?? "Notify"} · held — client email is paused; nothing was emailed to ${to}`);
         } else {
           try {
             const { sendMail } = await import("./mailer.js");
