@@ -5306,6 +5306,79 @@
           </section>
         </sc-if>
 
+        <!-- ── Suggested leads ──────────────────────────────────────────────────────────────
+             THE ANSWER TO "why is my whole inbox in here". It is not: the list below holds only
+             mail that matched a client. This card is the other half — people who have written to
+             this rep and are NOT in the system, scored, so a real enquiry does not sit unanswered
+             in a personal mailbox because nobody thought to type it in.
+
+             IT READS NOTHING UNTIL ASKED. There is no automatic pass and no stored result: the
+             scan happens when somebody presses the button, the scores come back in that response,
+             and closing this screen forgets them. That is deliberate, not an optimisation — a
+             background sweep of everyone a rep has ever mailed is a different product.
+
+             Three affordances and no more: add, dismiss, or leave it. Everything else about a lead
+             belongs on the lead screen, which is where Add puts it. -->
+        <sc-if value="{{ lscShown }}" hint-placeholder-val="{{ true }}">
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 14px; border-bottom:1px solid #F3F1F7;">
+              <div style="flex:1; min-width:190px;">
+                <div style="font-size:12px; font-weight:700;">Suggested leads</div>
+                <div style="font-size:10px; color:#8C8899; margin-top:2px; line-height:1.55;">{{ lscNote }}</div>
+              </div>
+              <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-shrink:0;">
+                <sc-for list="{{ lscWindows }}" as="w" hint-placeholder-count="3">
+                  <span onClick="{{ w.pick }}" style="font-size:10px; font-weight:{{ w.weight }}; color:{{ w.color }}; background:{{ w.bg }}; box-shadow:{{ w.shadow }}; padding:5px 9px; border-radius:99px; cursor:pointer;">{{ w.label }}</span>
+                </sc-for>
+              </div>
+              <button onClick="{{ lscScan }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:700; padding:8px 12px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#2B2438;">{{ lscScanLabel }}</button>
+            </div>
+
+            <sc-for list="{{ lscRows }}" as="sg" hint-placeholder-count="2">
+              <div style="display:flex; align-items:flex-start; gap:10px; padding:11px 14px; border-bottom:1px solid #F7F5FB;">
+                <span style="width:36px; height:36px; border-radius:12px; background:#F3F1F7; color:#6F6C7A; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ sg.initials }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:12px; font-weight:700;">{{ sg.who }}</span>
+                    <!-- The band as three fixed pills rather than one with a bound colour: a
+                         near-static style attribute gets folded into a shared class by this
+                         runtime, and the colour then freezes on whichever row rendered first. -->
+                    <sc-if value="{{ sg.isHigh }}" hint-placeholder-val="{{ true }}">
+                      <span title="{{ sg.scoreTitle }}" style="font-size:9px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:2px 9px; border-radius:99px; flex-shrink:0;">worth a look</span>
+                    </sc-if>
+                    <sc-if value="{{ sg.isMed }}" hint-placeholder-val="{{ false }}">
+                      <span title="{{ sg.scoreTitle }}" style="font-size:9px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:2px 9px; border-radius:99px; flex-shrink:0;">maybe</span>
+                    </sc-if>
+                    <sc-if value="{{ sg.isLow }}" hint-placeholder-val="{{ false }}">
+                      <span title="{{ sg.scoreTitle }}" style="font-size:9px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 9px; border-radius:99px; flex-shrink:0;">long shot</span>
+                    </sc-if>
+                    <span style="font-size:10px; color:#B4AFC4; flex-shrink:0;">{{ sg.when }}</span>
+                  </div>
+                  <!-- Only when the line above is a NAME. Microsoft's API carries no display
+                       name at all, so half these rows would otherwise print the address twice. -->
+                  <sc-if value="{{ sg.hasName }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:11px; color:#6F6C7A; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sg.address }}</div>
+                  </sc-if>
+                  <sc-if value="{{ sg.hasSubject }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:11px; color:#8C8899; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ sg.subject }}</div>
+                  </sc-if>
+                  <!-- WHY it is being suggested, in the rep's own terms. A score with no reasons is
+                       a number to be argued with; the reasons are what make it checkable. -->
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:4px; line-height:1.5;">{{ sg.reasons }}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-shrink:0; padding-top:2px;">
+                  <button onClick="{{ sg.add }}" style="background:#7C00FF; color:#fff; border:none; font-size:10px; font-weight:700; padding:7px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Add as lead</button>
+                  <span onClick="{{ sg.skip }}" title="Never suggest this address again" style="font-size:10px; font-weight:600; color:#8C8899; cursor:pointer;" style-hover="color:#C0353A;">Not a lead</span>
+                </div>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ lscEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:20px 15px; text-align:center; font-size:11px; color:#A9A6B4; line-height:1.7; max-width:440px; margin:0 auto;">{{ lscEmptyNote }}</div>
+            </sc-if>
+          </section>
+        </sc-if>
+
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
           <sc-for list="{{ inboxTabs }}" as="t" hint-placeholder-count="3">
             <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 10px; border-radius:99px; cursor:pointer;">
@@ -36243,6 +36316,146 @@ class Component extends DCLogic {
                     .catch(() => this.toast('Server unreachable', 'error'));
                 });
               },
+            };
+          })(),
+          // ── Suggested leads ──────────────────────────────────────────────────────────────
+          //
+          // The scan result lives in component state and NOWHERE else. It is not cached, not
+          // written and not re-fetched on render: `lscData` is null until somebody presses Scan,
+          // and a reload puts it back to null. That mirrors the server, which stores nothing.
+          ...(() => {
+            // `M9`/`_api9`/`_hdr9` belong to the connection block's own scope, so they are taken
+            // again here rather than reached for. `ago9` and `ini9` are this screen's and shared.
+            const M9 = this.state.mboxData || null;
+            const _api9 = () => this._apiBase || 'http://localhost:4100';
+            const _hdr9 = () => {
+              const t9 = localStorage.getItem('stimespro:token');
+              return { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) };
+            };
+            const R9 = this.state.lscData;              // null = never scanned this session
+            const busy9 = !!this.state.lscBusy;
+            const days9 = this.state.lscDays || 30;
+            // Locally hidden rows, so Add and Not-a-lead both take effect at once instead of
+            // waiting for a re-scan the rep did not ask for.
+            const gone9 = this.state.lscGone || {};
+            const rows9 = ((R9 && R9.suggestions) || []).filter(x9 => !gone9[x9.address]);
+
+            const scan9 = () => {
+              if (busy9) return;
+              this.setState({ lscBusy: true });
+              fetch(_api9() + '/api/mailbox/lead-scan?days=' + days9, { headers: _hdr9() })
+                .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                .then(({ ok, j }) => {
+                  this.setState({ lscBusy: false, lscData: ok ? j : null, lscGone: {} });
+                  if (!ok) return this.toast((j && j.error) || 'That scan did not run', 'error');
+                  if (j && j.error) return this.toast(j.error, 'error');
+                  const n9 = ((j && j.suggestions) || []).length;
+                  this.toast(n9 === 0
+                    ? 'Nobody new in the last ' + days9 + ' days'
+                    : n9 + ' possible lead' + (n9 === 1 ? '' : 's') + ' found');
+                })
+                .catch(() => { this.setState({ lscBusy: false }); this.toast('Server unreachable', 'error'); });
+            };
+
+            // "alnoor-contracting.sa" reads as "Alnoor Contracting". A guess, offered for editing
+            // rather than saved: the domain is the only thing a header actually tells us about a
+            // company's name, and a lead filed as "alnoor-contracting.sa" is a lead nobody finds.
+            const guess9 = (dom9) => String(dom9 || '').split('.')[0]
+              .replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+              .replace(/\b\w/g, c9 => c9.toUpperCase());
+
+            const hide9 = (addr9) => this.setState({ lscGone: { ...gone9, [addr9]: true } });
+
+            return {
+              lscShown: !!(M9 && M9.connected),
+              lscNote: busy9 ? 'Reading the last ' + days9 + ' days\u2026'
+                : !R9 ? 'People who have written to you and are not in the system yet. Nothing is read until you press Scan, and nothing is stored afterwards.'
+                : 'Scanned ' + (R9.scanned || 0) + ' message' + ((R9.scanned === 1) ? '' : 's')
+                  + ' from the last ' + (R9.days || days9) + ' days. Nothing was stored.',
+              lscWindows: [7, 30, 90].map(d9 => ({
+                label: d9 + 'd',
+                weight: d9 === days9 ? '700' : '600',
+                color: d9 === days9 ? '#1A1523' : '#8C8899',
+                bg: d9 === days9 ? '#fff' : 'transparent',
+                shadow: d9 === days9 ? '0 1px 3px rgba(26,21,35,.12)' : 'none',
+                // Picking a window does NOT scan. Changing the number of days somebody's mail is
+                // read over should take a deliberate second press.
+                pick: () => this.setState({ lscDays: d9 }),
+              })),
+              lscScanLabel: busy9 ? 'Scanning\u2026' : (R9 ? 'Scan again' : 'Scan my inbox'),
+              lscScan: scan9,
+              lscRows: rows9.map(x9 => {
+                const who9 = x9.name || x9.address;
+                return {
+                  who: who9,
+                  initials: ini9(who9),
+                  address: x9.address,
+                  hasName: !!x9.name,
+                  subject: x9.subject || '',
+                  hasSubject: !!x9.subject,
+                  reasons: (x9.reasons || []).join(' \u00b7 '),
+                  when: ago9(x9.lastAt),
+                  isHigh: x9.band === 'high',
+                  isMed: x9.band === 'medium',
+                  isLow: x9.band === 'low',
+                  scoreTitle: 'Confidence ' + x9.score + ' out of 100',
+                  // ADD GOES THROUGH THE ORDINARY LEAD ROUTE. A second creation path would drift
+                  // from the form's: owner routing, validation and the sales rules all live there.
+                  add: () => {
+                    this._prompt('Company name for this lead:', guess9(x9.domain), {
+                      required: true, requiredNote: 'A lead needs a company name',
+                      okLabel: 'Add lead', placeholder: 'e.g. Al Noor Contracting',
+                    }).then(nm9 => {
+                      if (!nm9) return;
+                      fetch(_api9() + '/api/companies', {
+                        method: 'POST', headers: { ..._hdr9(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          name: String(nm9).trim(), email: x9.address, lifecycle: 'lead',
+                          source: 'Email', sourceDetail: 'Wrote to ' + ((M9 && M9.address) || 'a team mailbox'),
+                          contacts: [{ name: x9.name || x9.address, email: x9.address, isPrimary: true }],
+                        }),
+                      })
+                        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                        .then(({ ok, j }) => {
+                          if (!ok) return this.toast((j && j.error) || 'Could not add that lead', 'error');
+                          hide9(x9.address);
+                          this.toast(String(nm9).trim() + ' added as a lead');
+                          // Their next sync now matches this address, so the thread lands on the
+                          // new record by itself. Reloaded so the list below shows it.
+                          if (this._loadLeads) this._loadLeads();
+                          if (this._loadInbox) this._loadInbox();
+                        })
+                        .catch(() => this.toast('Server unreachable', 'error'));
+                    });
+                  },
+                  skip: () => {
+                    this._confirm('Never suggest ' + x9.address + ' again?', {
+                      body: 'The address itself is not kept \u2014 only a one-way digest of it, so this list '
+                        + 'cannot be read back as a record of who you write to. It applies for everybody, '
+                        + 'which is the point for suppliers and newsletters.',
+                      okLabel: 'Not a lead',
+                    }).then(ok9 => {
+                      if (!ok9) return;
+                      hide9(x9.address);
+                      fetch(_api9() + '/api/mailbox/lead-dismiss', {
+                        method: 'POST', headers: { ..._hdr9(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address: x9.address }),
+                      }).catch(() => this.toast('Server unreachable \u2014 it may be suggested again', 'error'));
+                    });
+                  },
+                };
+              }),
+              lscEmpty: !busy9 && rows9.length === 0,
+              // THREE different nothings, said differently. "Never scanned", "scanned and found
+              // nobody" and "scanned, found people, you dealt with them all" look identical on a
+              // screen that only knows how to show an empty list.
+              lscEmptyNote: !R9
+                ? 'Press Scan to look through the last ' + days9 + ' days for people who are not in the system yet.'
+                : R9.scanned === 0
+                  ? 'No mail at all in the last ' + (R9.days || days9) + ' days.'
+                  : ((R9.suggestions || []).length > 0
+                    ? 'That is everybody \u2014 nothing left from this scan.'
+                    : 'Everybody who wrote in the last ' + (R9.days || days9) + ' days is already on a client record.'),
             };
           })(),
           inboxConnected: !!(D9 && D9.connected),

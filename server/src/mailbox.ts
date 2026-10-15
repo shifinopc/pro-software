@@ -25,6 +25,7 @@
  */
 import { prisma } from "./db.js";
 import { encrypt, decrypt } from "./auth.js";
+import crypto from "node:crypto";
 
 /** The separator in a logged mail summary. */
 const EMDASH = "—";
@@ -53,6 +54,15 @@ export interface MailboxProvider {
   refresh(refreshToken: string): Promise<{ accessToken: string; expiresAt: string }>;
   /** Messages since `cursor` (or a recent window when null). */
   fetchSince(accessToken: string, cursor: string | null): Promise<FetchResult>;
+  /**
+   * The last `days` of mail, newest first, ignoring any cursor.
+   *
+   * A SYNC and a SCAN want different things and the difference is not cosmetic. A sync asks
+   * "what is new since I last looked" and must never re-read; a scan asks "who has been in
+   * touch lately" and must not disturb the cursor, or pressing the button would make the next
+   * sync skip everything the scan happened to see.
+   */
+  fetchRecent(accessToken: string, days: number): Promise<RawMessage[]>;
 }
 
 const norm = (a: unknown) => String(a ?? "").trim().toLowerCase();
@@ -205,6 +215,246 @@ export async function ingest(userId: string, mine: string, messages: RawMessage[
     }
   }
   return { stored, skipped };
+}
+
+/**
+ * LEAD SUGGESTIONS, COMPUTED AND THROWN AWAY.
+ *
+ * `ingest` keeps only what matches a client and discards the rest, which is what makes reading a
+ * rep's mailbox defensible at all. But a lead who has never written before is BY DEFINITION in the
+ * part that gets discarded — so finding one means looking at mail from people the CRM does not know.
+ *
+ * The compromise that keeps the promise: this is a SCAN, not a sync. Nothing it reads is written.
+ * The scores below are computed in memory and returned in the response; close the screen and they
+ * are gone. The only thing that outlives the call is a DISMISSAL, and only as a keyed digest.
+ *
+ * It is on demand rather than hourly for the same reason. A background pass over everyone a rep has
+ * ever mailed, running quietly whether or not anybody wants it, is a different product from a
+ * button somebody presses when they are looking for new business.
+ */
+
+/**
+ * Addresses that send to everybody and converse with nobody.
+ *
+ * Two patterns, because they are two different things. A ROLE account is the whole local part
+ * (`info@`, `billing@`); a no-reply marker can be buried anywhere in it, and the first version of
+ * this anchored it to the front — which let `google-noreply@google.com` through as a medium-
+ * confidence lead on the very first real scan.
+ */
+const ROLE_ACCOUNT = /^(noreply|bounce|mailer|postmaster|notifications?|alerts?|news|newsletter|updates?|team|hello|contact|careers|jobs|hr|accounts?|billing|invoices?|receipts?|statements?|security|verify|unsubscribe|marketing|promo(tions)?|offers?|deals?|insider|member(ship)?s?|digest|feedback|survey|webmaster|abuse|help(desk)?)@/i;
+const NO_REPLY_ANYWHERE = /^[^@]*(no[-_.]?reply|do[-_.]?not[-_.]?reply|donotreply|mailer[-_.]?daemon|bounce[sd]?|auto[-_.]?(reply|mail)|notification|no[-_.]?answer)[^@]*@/i;
+/** A mail provider, not a company domain: still a lead, just a weaker signal. */
+const FREE_MAIL = /@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|aol|icloud|me|mac|proton|protonmail|gmx|yandex|mail|zoho|rediffmail)\./i;
+/**
+ * A subject that announces a machine wrote it.
+ *
+ * Grown from what the first scans actually turned up rather than imagined in advance: the terms-of-
+ * service notice and the long-weekend sale are both here because both were offered as leads once.
+ */
+const ROBOT_SUBJECT = /(security alert|verification|verify your|one[- ]time|\botp\b|password|was recovered|sign[- ]?in|signed in|unsubscribe|newsletter|receipt for|invoice #|statement|do not reply|automated|no[- ]reply|delivery status|undeliverable|out of office|auto[- ]?reply|your order|has shipped|subscription|terms of service|terms of use|privacy polic|policy update|\bterms\b.*(updat|chang)|(updat|chang).*\bterms\b)/i;
+/**
+ * A subject that is selling to us, which is the exact opposite of a lead.
+ *
+ * Kept apart from ROBOT_SUBJECT because a human really does send these, so "a person wrote it" is
+ * no defence — and because a sales blast is the single most common thing in any real inbox.
+ */
+const BULK_SUBJECT = /(\bsale\b|\boffers?\b|\bdeals?\b|% off|\d+% |discount|coupon|promo|festive|flash sale|limited time|last chance|book now|save up to|free trial|webinar|register now|don't miss|dont miss|exclusive|black friday|cyber monday|cashback|lowest price|best price|hurry)/i;
+/** A subject that sounds like somebody asking for work. */
+const ENQUIRY_SUBJECT = /(enquir|inquir|quot(e|ation)|proposal|pricing|price list|your price|interested in|requirement|\brfp\b|\brfq\b|tender|visa|iqama|licen[cs]e|renewal|registration|company formation|establishment|pro service|saudization|nitaqat|need help|looking for|looking to|partnership|can you help|request for (quot|propos|inform|price))/i;
+
+export interface LeadSuggestion {
+  address: string;
+  name: string | null;
+  domain: string;
+  subject: string | null;
+  lastAt: string;
+  messages: number;
+  /** True when this rep wrote back in the thread — the strongest signal there is. */
+  replied: boolean;
+  score: number;
+  band: "high" | "medium" | "low";
+  /** Why it scored what it did, in the words a person would use. Shown on the card. */
+  reasons: string[];
+}
+
+/**
+ * Score one unknown correspondent.
+ *
+ * Deliberately a handful of readable rules rather than a model: a suggestion a salesperson cannot
+ * argue with is one they stop trusting, so every point this awards is explainable on the card.
+ *
+ * `null` means DISQUALIFIED, not "scored low". A newsletter offered at 12% still costs somebody a
+ * glance, and a list that needs skimming is a list that gets ignored.
+ */
+export function scoreLead(a: {
+  address: string; name: string | null; subjects: string[]; messages: number; replied: boolean;
+}): { score: number; reasons: string[] } | null {
+  const addr = a.address.toLowerCase();
+  if (!addr.includes("@")) return null;
+  if (ROLE_ACCOUNT.test(addr) || NO_REPLY_ANYWHERE.test(addr)) return null;
+
+  const subjectText = a.subjects.join(" ");
+  // A machine-looking subject only disqualifies if the rep never answered it. If they did, their
+  // judgement beats this regex — people really do reply to "Your invoice" from a genuine new client.
+  if ((ROBOT_SUBJECT.test(subjectText) || BULK_SUBJECT.test(subjectText)) && !a.replied) return null;
+
+  // ONE MESSAGE, NEVER ANSWERED, NOTHING IN THE SUBJECT: that is not a lead, that is post.
+  //
+  // This single rule removed more false positives than every regex above put together. A stranger
+  // who wrote once, got no reply, and said nothing that reads like an enquiry is overwhelmingly a
+  // mailing list that slipped the other tests — and a list with two plausible rows is read, where
+  // a list with twenty is dismissed. Deliberately conservative: the cost of missing a lead is that
+  // the rep finds it in their inbox the way they do today, and the cost of crying wolf is the
+  // whole feature.
+  if (!a.replied && a.messages < 2 && !ENQUIRY_SUBJECT.test(subjectText)) return null;
+
+  let score = 35;
+  const reasons: string[] = [];
+
+  // THE STRONGEST SIGNAL BY FAR: a rep who wrote back has already decided this person is worth
+  // their time. The system is only noticing what they did.
+  if (a.replied) { score += 30; reasons.push("you replied to them"); }
+  if (a.messages > 1) { score += 10; reasons.push(a.messages + " emails from them"); }
+  if (a.messages > 3) { score += 5; }
+
+  if (!FREE_MAIL.test(addr)) { score += 15; reasons.push("writes from a company domain"); }
+  else { reasons.push("personal email address"); }
+
+  if (a.name && /\s/.test(a.name.trim()) && a.name.trim().length < 48) {
+    score += 10; reasons.push("a person's name, not a brand");
+  }
+  if (ENQUIRY_SUBJECT.test(subjectText)) { score += 15; reasons.push("the subject reads like an enquiry"); }
+
+  return { score: Math.max(0, Math.min(100, score)), reasons };
+}
+
+/**
+ * Everyone in the window who is NOT already a client, scored.
+ *
+ * Takes messages the caller already fetched so a scan and a sync can share one pull, and the same
+ * match index a sync uses — somebody the CRM already knows is not a suggestion, just mail.
+ */
+export function suggestLeads(
+  messages: RawMessage[], mine: string, index: MatchIndex, dismissed: Set<string>,
+  digestOf: (addr: string) => string,
+): LeadSuggestion[] {
+  const me = norm(mine);
+
+  // Domains we already do business with, so a new face at an existing client is not offered as a
+  // new lead. Free-mail domains are excluded from this test on purpose: one contact on gmail would
+  // otherwise silence every gmail sender for the whole firm.
+  const knownDomains = new Set<string>();
+  for (const a of [...index.byContact.keys(), ...index.byCompany.keys()]) {
+    const d = a.split("@")[1];
+    if (d && !FREE_MAIL.test("@" + d + ".")) knownDomains.add(d);
+  }
+
+  // Threads this rep has written in — read once, so `replied` costs nothing per message.
+  const repliedThreads = new Set(
+    messages.filter((m) => addressOf(m.from) === me).map((m) => m.threadId),
+  );
+
+  const byAddr = new Map<string, {
+    name: string | null; subjects: string[]; lastAt: string; messages: number; replied: boolean;
+  }>();
+
+  for (const m of messages) {
+    const from = addressOf(m.from);
+    if (!from || from === me) continue;                 // our own mail is not a lead
+    if (index.byContact.has(from)) continue;            // already a contact
+    if (index.byCompany.has(from)) continue;            // already a company
+    const domain = from.split("@")[1] ?? "";
+    if (knownDomains.has(domain)) continue;             // a colleague at a client, not a lead
+    if (dismissed.has(digestOf(from))) continue;        // somebody already said no
+
+    // `"Fahad Al-Otaibi" <fahad@alnoor.sa>` — the display name, when the header carried one.
+    const nameMatch = /^\s*"?([^"<]+?)"?\s*</.exec(String(m.from ?? ""));
+    const name = nameMatch ? nameMatch[1].trim() || null : null;
+
+    const prev = byAddr.get(from);
+    if (!prev) {
+      byAddr.set(from, {
+        name, subjects: m.subject ? [m.subject] : [], lastAt: m.sentAt, messages: 1,
+        replied: repliedThreads.has(m.threadId),
+      });
+    } else {
+      // One person who wrote four times is one suggestion, not four.
+      prev.messages += 1;
+      if (m.subject) prev.subjects.push(m.subject);
+      if (m.sentAt > prev.lastAt) prev.lastAt = m.sentAt;
+      if (!prev.name && name) prev.name = name;
+      if (repliedThreads.has(m.threadId)) prev.replied = true;
+    }
+  }
+
+  const out: LeadSuggestion[] = [];
+  for (const [addr, v] of byAddr) {
+    const scored = scoreLead({
+      address: addr, name: v.name, subjects: v.subjects, messages: v.messages, replied: v.replied,
+    });
+    if (!scored) continue;
+    out.push({
+      address: addr, name: v.name, domain: addr.split("@")[1] ?? "",
+      subject: v.subjects[0] ?? null, lastAt: v.lastAt, messages: v.messages, replied: v.replied,
+      score: scored.score, reasons: scored.reasons,
+      // Recalibrated after the first real scans. The disqualifiers above are strict enough that
+      // everything surviving them scored 75+, so three bands existed and only one was ever used —
+      // which makes the pill decoration rather than information.
+      band: scored.score >= 85 ? "high" : scored.score >= 65 ? "medium" : "low",
+    });
+  }
+  // Worth answering first at the top.
+  return out.sort((x, y) => y.score - x.score || y.lastAt.localeCompare(x.lastAt));
+}
+
+/**
+ * A DISMISSAL, WITHOUT KEEPING THE ADDRESS.
+ *
+ * "Not a lead" has to be remembered or the same stranger is offered every week. But remembering it
+ * as plain text would quietly build the very list this file exists to avoid: a table of people a
+ * rep corresponds with who are not clients.
+ *
+ * So the digest is keyed. An email address is far too low-entropy for a plain hash — a dictionary
+ * of likely addresses would undo it in seconds — so the server secret is what makes this one-way.
+ * Rotating that secret forgets every dismissal, which is the harmless failure (suggestions come
+ * back) rather than the harmful one.
+ */
+export function dismissalDigest(address: string): string {
+  const key = process.env.CRED_KEY || process.env.JWT_SECRET || "dev-lead-dismissal-key";
+  return crypto.createHmac("sha256", key).update(norm(address)).digest("hex");
+}
+
+/**
+ * ONE MAILBOX, SCANNED FOR PEOPLE THE CRM DOES NOT KNOW.
+ *
+ * Reads nothing into the database and — deliberately — does not touch the sync cursor. Pressing
+ * Scan must never make the next sync skip a client's reply it happened to walk past.
+ *
+ * A failure is returned, not recorded against the connection. A sync that fails means mail is
+ * being missed and the person has to be told to reconnect; a scan that fails means a button did
+ * not work. Marking the mailbox broken because somebody pressed Scan would raise a false alarm.
+ */
+export async function scanLeads(userId: string, provider: MailboxProvider, days = 30): Promise<{
+  suggestions: LeadSuggestion[]; scanned: number; address?: string; error?: string;
+}> {
+  const conn = await prisma.mailboxConnection.findUnique({ where: { userId } });
+  if (!conn || conn.status === "disconnected") {
+    return { suggestions: [], scanned: 0, error: "No mailbox is connected." };
+  }
+  try {
+    const token = await accessTokenFor(conn, provider);
+    const messages = await provider.fetchRecent(token, days);
+    const index = await buildMatchIndex();
+    const dismissed = new Set(
+      (await prisma.leadDismissal.findMany({ select: { digest: true } })).map((d) => d.digest),
+    );
+    const suggestions = suggestLeads(messages, conn.address, index, dismissed, dismissalDigest);
+    // `scanned` is the honest denominator: "nothing found" and "nothing to look at" are different
+    // answers and the screen says which one it is.
+    return { suggestions, scanned: messages.length, address: conn.address };
+  } catch (e: any) {
+    return { suggestions: [], scanned: 0, error: String(e?.message ?? e).slice(0, 400) };
+  }
 }
 
 /**

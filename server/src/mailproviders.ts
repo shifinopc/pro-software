@@ -98,60 +98,90 @@ async function refreshToken(provider: "google" | "microsoft", refresh: string) {
 const header = (headers: any[], name: string) =>
   headers?.find((h: any) => String(h.name).toLowerCase() === name)?.value ?? null;
 
+/**
+ * One Gmail query, hydrated to metadata.
+ *
+ * Shared by the sync and the scan because they differ only in the `q` — every other line, down to
+ * `format=metadata` being physically unable to return a body, must stay identical between them.
+ */
+async function gmailSearch(accessToken: string, q: string, cap: number): Promise<RawMessage[]> {
+  const list: any = await (await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${cap}&q=${encodeURIComponent(q)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } })).json();
+  if (list.error) throw new Error(list.error.message ?? "Gmail rejected the request");
+
+  const messages: RawMessage[] = [];
+  for (const stub of (list.messages ?? [])) {
+    // METADATA ONLY. This format cannot return a body even if something later asked it to.
+    const m: any = await (await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${stub.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+      { headers: { Authorization: `Bearer ${accessToken}` } })).json();
+    if (m.error) continue;
+    const h = m.payload?.headers ?? [];
+    messages.push({
+      externalId: m.id, threadId: m.threadId,
+      from: header(h, "from") ?? "",
+      to: String(header(h, "to") ?? "").split(",").map(s => s.trim()).filter(Boolean),
+      subject: header(h, "subject"),
+      sentAt: new Date(Number(m.internalDate) || Date.now()).toISOString(),
+    });
+  }
+  return messages;
+}
+
 export const googleProvider: MailboxProvider = {
   name: "google",
   refresh: (t) => refreshToken("google", t),
+  // `in:anywhere` so a lead sitting in Spam or an archived thread still counts — the whole point of
+  // a scan is to find the enquiry nobody filed.
+  fetchRecent: (t, days) => gmailSearch(t, `newer_than:${Math.max(1, Math.round(days))}d in:anywhere`, 200),
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // `q=newer_than` rather than a stored historyId for the first pass: a history cursor that has
     // expired (Gmail drops them after about a week) returns 404, and starting from a date is a
     // recovery that needs no special case.
     const q = cursor ? `after:${cursor}` : "newer_than:14d";
-    const list: any = await (await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=100&q=${encodeURIComponent(q)}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } })).json();
-    if (list.error) throw new Error(list.error.message ?? "Gmail rejected the request");
-
-    const messages: RawMessage[] = [];
-    for (const stub of (list.messages ?? [])) {
-      // METADATA ONLY. This format cannot return a body even if something later asked it to.
-      const m: any = await (await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${stub.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
-        { headers: { Authorization: `Bearer ${accessToken}` } })).json();
-      if (m.error) continue;
-      const h = m.payload?.headers ?? [];
-      messages.push({
-        externalId: m.id, threadId: m.threadId,
-        from: header(h, "from") ?? "",
-        to: String(header(h, "to") ?? "").split(",").map(s => s.trim()).filter(Boolean),
-        subject: header(h, "subject"),
-        sentAt: new Date(Number(m.internalDate) || Date.now()).toISOString(),
-      });
-    }
+    const messages = await gmailSearch(accessToken, q, 100);
     return { messages, cursor: String(Math.floor(Date.now() / 1000)) };
   },
 };
 
+const GRAPH_FIELDS = "id,conversationId,from,toRecipients,subject,sentDateTime";
+
+/** Graph gives a bare address with no display name, so a scan here scores on the other signals. */
+const graphMessage = (m: any): RawMessage => ({
+  externalId: m.id,
+  threadId: m.conversationId ?? m.id,
+  from: m.from?.emailAddress?.address ?? "",
+  to: (m.toRecipients ?? []).map((t: any) => t.emailAddress?.address).filter(Boolean),
+  subject: m.subject ?? null,
+  sentAt: new Date(m.sentDateTime).toISOString(),
+});
+
 export const microsoftProvider: MailboxProvider = {
   name: "microsoft",
   refresh: (t) => refreshToken("microsoft", t),
+  // NOT the delta endpoint. A delta with no token starts at the OLDEST message, so a scan built on
+  // it would score the mail of years ago and miss this week entirely.
+  async fetchRecent(accessToken, days): Promise<RawMessage[]> {
+    const since = new Date(Date.now() - Math.max(1, days) * 864e5).toISOString();
+    const url = `https://graph.microsoft.com/v1.0/me/messages?$select=${GRAPH_FIELDS}`
+      + `&$filter=sentDateTime ge ${since}&$orderby=sentDateTime desc&$top=200`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const j: any = await r.json();
+    if (!r.ok) throw new Error(j.error?.message ?? `Microsoft Graph rejected the request (${r.status})`);
+    return (j.value ?? []).filter((m: any) => m.id && m.sentDateTime).map(graphMessage);
+  },
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // Graph's delta link IS the cursor, and it already carries its own paging state — so when we
     // have one it is used verbatim rather than rebuilt from parts.
-    const url = cursor || `https://graph.microsoft.com/v1.0/me/messages/delta?$select=id,conversationId,from,toRecipients,subject,sentDateTime&$top=100`;
+    const url = cursor || `https://graph.microsoft.com/v1.0/me/messages/delta?$select=${GRAPH_FIELDS}&$top=100`;
     const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const j: any = await r.json();
     if (!r.ok) throw new Error(j.error?.message ?? `Microsoft Graph rejected the request (${r.status})`);
 
     const messages: RawMessage[] = (j.value ?? [])
       .filter((m: any) => m.id && m.sentDateTime)
-      .map((m: any) => ({
-        externalId: m.id,
-        threadId: m.conversationId ?? m.id,
-        from: m.from?.emailAddress?.address ?? "",
-        to: (m.toRecipients ?? []).map((t: any) => t.emailAddress?.address).filter(Boolean),
-        subject: m.subject ?? null,
-        sentAt: new Date(m.sentDateTime).toISOString(),
-      }));
+      .map(graphMessage);
     return { messages, cursor: j["@odata.deltaLink"] ?? cursor };
   },
 };

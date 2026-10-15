@@ -29,7 +29,7 @@ import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
 import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
-import { syncMailbox, saveConnection } from "./mailbox.js";
+import { syncMailbox, saveConnection, scanLeads, dismissalDigest } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
@@ -7050,6 +7050,74 @@ app.post("/api/mailbox/sync", requireAuth, requireStaff, async (req, res) => {
   const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
   if (!conn) return res.status(400).json({ error: "No mailbox is connected." });
   res.json(await syncMailbox(a.sub, providerFor(conn.provider)));
+});
+
+/**
+ * WHO HAS WRITTEN TO ME THAT WE DO NOT KNOW?
+ *
+ * The answer to "why is my whole inbox in here" — it is not, and this is the part that is supposed
+ * to be. A sync stores only mail that matches a client; this reads the mail that does NOT match,
+ * scores the senders, hands back the few worth a look and forgets the rest before it answers.
+ *
+ * NOTHING IS WRITTEN. No row, no cursor move, no record that the scan happened beyond the audit
+ * line. Press it twice and the second answer is as fresh as the first.
+ *
+ * The person's OWN mailbox, always. There is no userId parameter and no admin override: an admin
+ * who could scan a colleague's mail for leads would be reading that colleague's mail, which is
+ * the one thing this whole feature is built not to do.
+ */
+app.get("/api/mailbox/lead-scan", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  if (!conn) return res.status(400).json({ error: "No mailbox is connected." });
+  // 7, 30 or 90 days. Clamped rather than trusted: the window decides how much mail is read, and
+  // "365" in a query string should not become a year-long sweep of somebody's correspondence.
+  const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  const out = await scanLeads(a.sub, providerFor(conn.provider), days);
+  await logAudit({ action: "mailbox.lead_scan", actorId: a.sub, target: conn.address,
+                   detail: `${days}d, ${out.scanned} read, ${out.suggestions.length} suggested` });
+  res.json({ ...out, days });
+});
+
+/**
+ * "NOT A LEAD" — REMEMBERED WITHOUT KEEPING THE ADDRESS.
+ *
+ * Only the keyed digest is stored, so this table cannot be read back into a list of who a rep
+ * corresponds with. See `dismissalDigest` for why a plain hash would not do.
+ *
+ * FIRM-WIDE, not per person: the dismissals that matter are suppliers, portals and newsletters
+ * that would otherwise be offered to every salesperson in turn, and one person deciding the
+ * printer-cartridge spammer is not a lead settles it for everybody. `byId` records who said so.
+ */
+app.post("/api/mailbox/lead-dismiss", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const address = String(req.body?.address ?? "").trim().toLowerCase();
+  if (!address.includes("@")) return res.status(400).json({ error: "An email address is needed." });
+  const digest = dismissalDigest(address);
+  await prisma.leadDismissal.upsert({
+    where: { digest },
+    update: {},          // already dismissed: saying so again is not a change
+    create: { digest, byId: a.sub, at: new Date().toISOString() },
+  });
+  // The address is NOT in the audit line either. A dismissal that is one-way in the table and
+  // plain text in the audit log is not one-way.
+  await logAudit({ action: "mailbox.lead_dismissed", actorId: a.sub, detail: "suggestion dismissed" });
+  res.json({ ok: true });
+});
+
+/**
+ * Undo the last dismissal — by digest, which is the only handle there is.
+ *
+ * Needed because the mistake is easy and otherwise permanent: one wrong click and that person can
+ * never be suggested again, with nothing in the system a human could search to find out why.
+ */
+app.post("/api/mailbox/lead-undismiss", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const address = String(req.body?.address ?? "").trim().toLowerCase();
+  if (!address.includes("@")) return res.status(400).json({ error: "An email address is needed." });
+  await prisma.leadDismissal.deleteMany({ where: { digest: dismissalDigest(address) } });
+  await logAudit({ action: "mailbox.lead_undismissed", actorId: a.sub, detail: "dismissal reversed" });
+  res.json({ ok: true });
 });
 
 // ── Booking links ───────────────────────────────────────────────────────────────────────────

@@ -2412,6 +2412,26 @@ model BookingLink {
 ///
 /// ONE ROW PER PERSON. Nobody connects two mailboxes: two would mean deciding which one a reply
 /// belongs to, and there is no honest answer to that.
+/// A SENDER SOMEBODY SAID WAS NOT A LEAD.
+///
+/// Lead suggestions are computed live and never stored: the scan reads the mailbox, scores what it
+/// finds and returns it in the response. The one thing that MUST outlive the response is a refusal,
+/// or the same person is suggested again every time somebody scans.
+///
+/// So only a digest is kept — an HMAC of the lowercased address under the server secret. It can be
+/// matched against an address the scan is already looking at, and it cannot be read back or turned
+/// into a list: an email address is far too low-entropy for a plain hash, which a dictionary would
+/// undo in seconds, so the key is what makes this one-way.
+///
+/// The result is that a person your staff rejected leaves no readable trace anywhere in the system.
+model LeadDismissal {
+  id     String @id @default(cuid())
+  digest String @unique
+  /// Who pressed it, for the audit trail. Never the address.
+  byId   String?
+  at     String
+}
+
 model MailboxConnection {
   id       String @id @default(cuid())
   userId   String @unique
