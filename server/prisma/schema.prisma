@@ -2434,7 +2434,32 @@ model LeadDismissal {
 
 model MailboxConnection {
   id       String @id @default(cuid())
-  userId   String @unique
+  /// Whose grant this is.
+  ///
+  /// For a PERSONAL mailbox that is its owner. For a SHARED one it is whoever connected it on the
+  /// firm's behalf — the OAuth grant always belongs to a human, because somebody had to sign in to
+  /// info@ and approve it, and their refresh token is what keeps it alive. It is NOT a statement
+  /// about who may read a shared mailbox; see `kind`.
+  ///
+  /// No longer unique. It was, which encoded "one mailbox per person and no others" in the
+  /// database — true for a rep's own mail and wrong for a firm whose enquiries land on info@.
+  userId   String
+  /// personal | shared
+  ///
+  /// THE DIFFERENCE IS WHO MAY READ IT, and it is the only privacy decision in this file.
+  ///
+  /// A PERSONAL mailbox is read by its owner alone. The Inbox shows everybody the metadata of
+  /// matched mail, because that is a client's conversation with the firm, but the MESSAGE TEXT is
+  /// fetched with the viewer's own token and nobody else's — an admin cannot read a colleague's
+  /// mail through this system, by construction rather than by policy.
+  ///
+  /// A SHARED mailbox is the firm's. info@ exists precisely so that a team answers it, so anybody
+  /// who can see the Inbox can read it. That is a real widening and it is deliberate: a shared
+  /// mailbox nobody but its connector could read would be a worse version of a personal one.
+  kind     String @default("personal")
+  /// What to call a shared mailbox on screen — "Enquiries", "Sales". Null for personal, where the
+  /// address is the name people know it by.
+  label    String?
   /// google | microsoft — which adapter reads it. See mailbox.ts for why this is a thin seam.
   provider String
   /// The address that was actually connected, shown so somebody can tell which account they granted.
@@ -2458,6 +2483,15 @@ model MailboxConnection {
 
   createdAt String?
   updatedAt String?
+
+  /// ONE CONNECTION PER MAILBOX, whatever kind it is.
+  ///
+  /// Connecting the same address twice would sync it twice, and because the two rows carry
+  /// separate cursors the Inbox would slowly fill with every conversation in duplicate. Enforced
+  /// here rather than in a route, because it is exactly the kind of rule a second route forgets.
+  @@unique([address])
+  @@index([userId])
+  @@index([kind])
 }
 
 /// ONE EMAIL, ATTACHED TO THE RECORD IT IS ABOUT.
@@ -2475,6 +2509,16 @@ model EmailMessage {
   /// Whose mailbox it came from. A message can legitimately exist twice — two reps on one thread —
   /// and the pair below is what keeps those distinct instead of one overwriting the other.
   userId     String
+  /// WHICH mailbox, not just whose.
+  ///
+  /// `userId` alone cannot answer it. Whoever connects info@ also has their own mailbox, so both
+  /// produce rows carrying their id, and "may this viewer read the text?" has opposite answers for
+  /// the two. Without this column a shared mailbox would either leak that person's private mail to
+  /// the team or hide the team's own enquiries from it.
+  ///
+  /// Nullable for rows written before shared mailboxes existed — those are personal by definition,
+  /// since nothing else could have written them.
+  connectionId String?
   /// The provider's own id for the message.
   externalId String
   /// The provider's thread/conversation id — what makes a reply a reply.
@@ -2494,6 +2538,7 @@ model EmailMessage {
   @@unique([userId, externalId])
   @@index([companyId, sentAt])
   @@index([threadId])
+  @@index([connectionId])
 }
 
 // WHAT THE DOCUMENT INTAKE AGENT READ, BEFORE A PERSON HAS SAID IT IS RIGHT.

@@ -219,13 +219,15 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
   const mailbox = await safely("mailbox-sync", async () => {
     const { buildMatchIndex, syncMailbox } = await import("./mailbox.js");
     const { providerFor } = await import("./mailproviders.js");
-    const conns = await prisma.mailboxConnection.findMany({ where: { status: { not: "disconnected" } }, select: { userId: true, provider: true } });
+    // The whole row: syncMailbox takes the mailbox now rather than looking one up from a user,
+     // because a user can have none, one, or — counting the firm's shared ones — several.
+    const conns = await prisma.mailboxConnection.findMany({ where: { status: { not: "disconnected" } } });
     if (!conns.length) return { mailboxes: 0, stored: 0, failed: 0, details: [] as string[] };
     const index = await buildMatchIndex();
     let stored = 0, failed = 0;
     const details: string[] = [];
     for (const c of conns) {
-      const out = await syncMailbox(c.userId, providerFor(c.provider), index);
+      const out = await syncMailbox(c, providerFor(c.provider), index);
       stored += out.stored;
       if (out.error) { failed++; details.push(out.error.slice(0, 120)); }
     }

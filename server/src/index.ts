@@ -29,7 +29,8 @@ import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
 import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
-import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor } from "./mailbox.js";
+import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor,
+         personalMailbox, sharedMailboxes, readableMailboxes, mailboxName, buildMatchIndex } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
@@ -50,12 +51,20 @@ import { aiConnection, testConnection, AiError } from "./ai.js";
  * read it through the CRM. Signed with the same JWT secret and short-lived, because the round trip
  * to a provider and back is measured in seconds.
  */
-function signState(payload: { sub: string; provider: "google" | "microsoft" }): string {
+interface OAuthState { sub: string; provider: "google" | "microsoft"; kind?: string; label?: string | null }
+/**
+ * `kind` is SIGNED, and that is the point of signing at all here.
+ *
+ * It decides whether the mailbox being attached is private to one person or readable by the whole
+ * office. Carried in an unsigned query parameter, anybody who could reach the callback could attach
+ * their own mail as "shared" — or, worse, flip somebody else's.
+ */
+function signState(payload: OAuthState): string {
   const body = Buffer.from(JSON.stringify({ ...payload, t: Date.now() })).toString("base64url");
   const sig = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev").update(body).digest("base64url");
   return `${body}.${sig}`;
 }
-function verifyState(raw: string): { sub: string; provider: "google" | "microsoft" } | null {
+function verifyState(raw: string): OAuthState | null {
   const [body, sig] = String(raw).split(".");
   if (!body || !sig) return null;
   const want = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev").update(body).digest("base64url");
@@ -64,7 +73,11 @@ function verifyState(raw: string): { sub: string; provider: "google" | "microsof
   try {
     const j = JSON.parse(Buffer.from(body, "base64url").toString());
     if (!j.sub || (Date.now() - Number(j.t)) > 10 * 60 * 1000) return null;
-    return { sub: String(j.sub), provider: j.provider === "microsoft" ? "microsoft" : "google" };
+    return {
+      sub: String(j.sub), provider: j.provider === "microsoft" ? "microsoft" : "google",
+      kind: j.kind === "shared" ? "shared" : "personal",
+      label: j.label ? String(j.label).slice(0, 60) : null,
+    };
   } catch { return null; }
 }
 import compression from "compression";
@@ -92,6 +105,7 @@ import { figuresFromAmount } from "./money.js";
 import {
   hashPassword, verifyPassword, signToken, verifyToken, SESSION_MAX_DAYS,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
+  resolveEffectiveRole,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
 
@@ -7050,26 +7064,40 @@ app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRol
     contactId ? prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, name: true, email: true, jobTitle: true } }) : null,
   ]);
 
-  // The same thread can be stored twice when two reps are on it. Only the viewer's own copies can
-  // be opened, because only their token can open them.
-  const mine = rows.filter(r => r.userId === a.sub);
-  const conn = mine.length ? await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } }) : null;
+  // WHICH MESSAGES MAY THIS PERSON READ?
+  //
+  // Their own mailbox, and the firm's shared ones — info@ exists so that a team answers it, and a
+  // shared mailbox only its connector could read would be a worse personal one. Everything else
+  // stays shut: an admin cannot read a colleague's private mail through this screen, because the
+  // fetch below uses a token they do not have.
+  //
+  // `readableMailboxes` is the only place that rule is written down.
+  const boxes = await readableMailboxes(a.sub);
+  const byId = new Map(boxes.map(b => [b.id, b]));
+  const personal = boxes.find(b => b.kind !== "shared" && b.userId === a.sub) ?? null;
+  // Rows written before shared mailboxes existed carry no connection id. They can only have come
+  // from the syncing user's own mailbox, so that is who may read them.
+  const boxFor = (m: { connectionId: string | null; userId: string }) =>
+    m.connectionId ? (byId.get(m.connectionId) ?? null) : (m.userId === a.sub ? personal : null);
+
+  const readable = rows.filter(m => !!boxFor(m));
 
   const bodies = new Map<string, { text: string; attachments: { name: string; size: number }[] }>();
   let bodyError: string | null = null;
-  if (conn && conn.status !== "disconnected") {
+  // Newest first and capped. A sixty-message thread is three hundred provider calls nobody asked
+  // for, and the end of a conversation is the part somebody opened it to read. Grouped by mailbox
+  // so each access token is minted once however many of its messages are in the thread.
+  const want = [...readable].reverse().slice(0, 20);
+  const tokens = new Map<string, string>();
+  for (const m of want) {
+    const box = boxFor(m)!;
     try {
-      const provider = providerFor(conn.provider);
-      const token = await accessTokenFor(conn, provider);
-      // Newest first and capped. A sixty-message thread is three hundred provider calls nobody
-      // asked for, and the end of a conversation is the part somebody opened it to read.
-      for (const m of [...mine].reverse().slice(0, 20)) {
-        const b = await provider.fetchBody(token, m.externalId);
-        if (b) bodies.set(m.id, b);
-      }
+      if (!tokens.has(box.id)) tokens.set(box.id, await accessTokenFor(box, providerFor(box.provider)));
+      const b = await providerFor(box.provider).fetchBody(tokens.get(box.id)!, m.externalId);
+      if (b) bodies.set(m.id, b);
     } catch (e: any) {
       // Reported, not swallowed: a drawer of empty messages looks like a thread of empty messages.
-      bodyError = String(e?.message ?? e).slice(0, 300);
+      bodyError = `${mailboxName(box)}: ${String(e?.message ?? e)}`.slice(0, 300);
     }
   }
 
@@ -7079,7 +7107,7 @@ app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRol
     contact: ct ? { id: ct.id, name: ct.name, email: ct.email, jobTitle: ct.jobTitle } : null,
     counterparty: rows[rows.length - 1].counterparty,
     subject: rows.find(r => r.subject)?.subject ?? null,
-    mailbox: conn ? conn.address : null,
+    mailboxes: boxes.map(b => ({ id: b.id, name: mailboxName(b), shared: b.kind === "shared" })),
     bodyError,
     messages: rows.map(m => {
       const b = bodies.get(m.id);
@@ -7089,7 +7117,10 @@ app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRol
         counterparty: m.counterparty,
         subject: m.subject,
         sentAt: m.sentAt,
-        mine: m.userId === a.sub,
+        // Not "is it yours" any more — a shared mailbox is nobody's and readable by everybody.
+        readable: !!boxFor(m),
+        mailbox: boxFor(m) ? mailboxName(boxFor(m)!) : null,
+        shared: boxFor(m)?.kind === "shared",
         // null means "not read", for one of three reasons the screen distinguishes: it is not your
         // mailbox, the fetch failed, or the message genuinely had no text in it.
         body: b ? b.text : null,
@@ -7101,10 +7132,16 @@ app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRol
 
 app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  const conn = await personalMailbox(a.sub);
+  const shared = await sharedMailboxes();
   const google = providerConfigured("google");
   const microsoft = providerConfigured("microsoft");
+  // Decided here, not in the browser. Custom roles resolve to a base role, and a screen that
+  // works that out for itself will disagree with the route the first time somebody adds one.
+  const eff = await resolveEffectiveRole(a?.role).catch(() => undefined);
+  const canManageShared = eff === "super_admin" || eff === "admin";
   res.json({
+    canManageShared,
     // Never the tokens. Not redacted, not partially — they are simply not in the shape.
     connected: !!conn && conn.status !== "disconnected",
     provider: conn?.provider ?? null,
@@ -7112,6 +7149,12 @@ app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
     status: conn?.status ?? null,
     lastSyncAt: conn?.lastSyncAt ?? null,
     lastError: conn?.lastError ?? null,
+    // THE FIRM'S MAILBOXES, listed for everybody rather than only for the admin who attached them.
+    // A rep needs to know that info@ is being read, or they will keep watching it themselves.
+    shared: shared.map(m => ({
+      id: m.id, label: m.label, address: m.address, provider: m.provider,
+      status: m.status, lastSyncAt: m.lastSyncAt, lastError: m.lastError,
+    })),
     available: { google, microsoft },
     // Said plainly rather than left for somebody to infer from two false flags.
     setupNote: google || microsoft ? null
@@ -7124,7 +7167,26 @@ app.get("/api/mailbox/connect", requireAuth, requireStaff, async (req, res) => {
   if (!providerConfigured(provider)) return res.status(400).json({ error: `${provider === "google" ? "Google" : "Microsoft"} is not configured on this server yet.` });
   // The state carries WHO is connecting, signed, so the callback cannot be replayed to attach
   // somebody else's mailbox to this account.
-  const state = signState({ sub: (req as any).auth.sub, provider });
+  const state = signState({ sub: (req as any).auth.sub, provider, kind: "personal" });
+  res.json({ url: authorizeUrl(provider, state) });
+});
+
+/**
+ * THE FIRM'S OWN MAILBOX — info@, sales@, the address on the website.
+ *
+ * Admin only, because attaching one makes its contents readable by everybody who can see the
+ * Inbox. That is the entire point of a shared mailbox and it is still a decision somebody with
+ * authority should be making, not an invitation anyone can accept on the firm's behalf.
+ *
+ * The grant itself is still a person's: somebody has to sign in to info@ and approve it, and their
+ * refresh token is what keeps it alive. If they leave and the password changes, it needs
+ * reconnecting — which the Inbox will say, rather than going quiet.
+ */
+app.get("/api/mailbox/shared/connect", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const provider = String(req.query.provider ?? "google") === "microsoft" ? "microsoft" : "google";
+  if (!providerConfigured(provider)) return res.status(400).json({ error: `${provider === "google" ? "Google" : "Microsoft"} is not configured on this server yet.` });
+  const label = String(req.query.label ?? "").trim().slice(0, 60) || null;
+  const state = signState({ sub: (req as any).auth.sub, provider, kind: "shared", label });
   res.json({ url: authorizeUrl(provider, state) });
 });
 
@@ -7135,9 +7197,11 @@ app.get("/api/mailbox/callback", async (req, res) => {
   if (!code || !parsed) return res.status(400).type("html").send("<p>That sign-in link is no longer valid. Please start again from Settings.</p>");
   try {
     const t = await exchangeCode(parsed.provider, code);
-    await saveConnection(parsed.sub, parsed.provider, t.address, t);
-    await logAudit({ action: "mailbox.connected", actorId: parsed.sub, target: t.address, detail: parsed.provider });
-    res.type("html").send(`<p>Mailbox <b>${t.address.replace(/[<>&]/g, "")}</b> connected. You can close this tab.</p>`);
+    const shared = parsed.kind === "shared";
+    await saveConnection(parsed.sub, parsed.provider, t.address, t, { kind: parsed.kind, label: parsed.label });
+    await logAudit({ action: shared ? "mailbox.shared_connected" : "mailbox.connected", actorId: parsed.sub,
+                     target: t.address, detail: `${parsed.provider}${shared ? ` — shared${parsed.label ? ` (${parsed.label})` : ""}` : ""}` });
+    res.type("html").send(`<p>Mailbox <b>${t.address.replace(/[<>&]/g, "")}</b> connected${shared ? " <b>for the whole office</b>" : ""}. You can close this tab.</p>`);
   } catch (e: any) {
     res.status(400).type("html").send(`<p>Could not connect that mailbox: ${String(e?.message ?? e).replace(/[<>&]/g, "")}</p>`);
   }
@@ -7145,21 +7209,46 @@ app.get("/api/mailbox/callback", async (req, res) => {
 
 app.post("/api/mailbox/disconnect", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
+  const conn = await personalMailbox(a.sub);
   if (!conn) return res.json({ ok: true });
   // The row goes entirely, tokens with it. Marking it "disconnected" and keeping the tokens would
   // leave a live grant sitting in the database belonging to somebody who believes they revoked it.
-  await prisma.mailboxConnection.delete({ where: { userId: a.sub } });
+  await prisma.mailboxConnection.delete({ where: { id: conn.id } });
   await logAudit({ action: "mailbox.disconnected", actorId: a.sub, target: conn.address, detail: "tokens deleted" });
   res.json({ ok: true });
 });
 
-/** Sync my own mailbox now. The hourly tick does this too; this is for "did it work?". */
+/** Detach one of the firm's mailboxes. Admin only, like attaching it. */
+app.post("/api/mailbox/shared/:id/disconnect", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (req, res) => {
+  const a = (req as any).auth;
+  const conn = await prisma.mailboxConnection.findUnique({ where: { id: String(req.params.id) } });
+  // Only a shared one, by id. Routing a personal disconnect through here would let an admin cut a
+  // colleague off from their own mailbox from a screen that says nothing of the sort.
+  if (!conn || conn.kind !== "shared") return res.status(404).json({ error: "No such shared mailbox." });
+  await prisma.mailboxConnection.delete({ where: { id: conn.id } });
+  await logAudit({ action: "mailbox.shared_disconnected", actorId: a.sub, target: conn.address, detail: "tokens deleted" });
+  res.json({ ok: true });
+});
+
+/**
+ * Sync what this person can see — their own mailbox and the firm's. The hourly tick does this for
+ * everybody; this is the "did it work?" button.
+ */
 app.post("/api/mailbox/sync", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
-  if (!conn) return res.status(400).json({ error: "No mailbox is connected." });
-  res.json(await syncMailbox(a.sub, providerFor(conn.provider)));
+  const boxes = await readableMailboxes(a.sub);
+  if (!boxes.length) return res.status(400).json({ error: "No mailbox is connected." });
+  // One index for the whole pass: the contact list does not change between two syncs a second
+  // apart, and rebuilding it per mailbox makes the cost scale with the number of mailboxes.
+  const index = await buildMatchIndex();
+  let stored = 0, skipped = 0;
+  const errors: string[] = [];
+  for (const b of boxes) {
+    const out = await syncMailbox(b, providerFor(b.provider), index);
+    stored += out.stored; skipped += out.skipped;
+    if (out.error) errors.push(`${mailboxName(b)}: ${out.error}`);
+  }
+  res.json({ stored, skipped, mailboxes: boxes.length, error: errors.join(" \u00b7 ") || undefined });
 });
 
 /**
@@ -7178,15 +7267,39 @@ app.post("/api/mailbox/sync", requireAuth, requireStaff, async (req, res) => {
  */
 app.get("/api/mailbox/lead-scan", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } });
-  if (!conn) return res.status(400).json({ error: "No mailbox is connected." });
+  const boxes = await readableMailboxes(a.sub);
+  if (!boxes.length) return res.status(400).json({ error: "No mailbox is connected." });
   // 7, 30 or 90 days. Clamped rather than trusted: the window decides how much mail is read, and
   // "365" in a query string should not become a year-long sweep of somebody's correspondence.
   const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
-  const out = await scanLeads(a.sub, providerFor(conn.provider), days);
-  await logAudit({ action: "mailbox.lead_scan", actorId: a.sub, target: conn.address,
-                   detail: `${days}d, ${out.scanned} read, ${out.suggestions.length} suggested` });
-  res.json({ ...out, days });
+  // Read once for the whole scan rather than once per mailbox.
+  const dismissed = new Set(
+    (await prisma.leadDismissal.findMany({ select: { digest: true } })).map(d => d.digest),
+  );
+
+  let scanned = 0;
+  const errors: string[] = [];
+  // THE SHARED MAILBOX IS WHERE THE LEADS ACTUALLY ARE, so it is scanned alongside the personal
+  // one rather than instead of it. One enquiry sent to both info@ and a rep is ONE suggestion:
+  // merged on the address, keeping the better score and remembering where it came from.
+  const merged = new Map<string, any>();
+  for (const b of boxes) {
+    const out = await scanLeads(b, providerFor(b.provider), days, dismissed);
+    scanned += out.scanned;
+    if (out.error) { errors.push(`${mailboxName(b)}: ${out.error}`); continue; }
+    for (const sug of out.suggestions) {
+      const prev = merged.get(sug.address);
+      if (!prev) { merged.set(sug.address, { ...sug, mailbox: mailboxName(b), shared: b.kind === "shared" }); continue; }
+      // Replied-to in ANY mailbox beats not replied to in another.
+      if (sug.score > prev.score) merged.set(sug.address, { ...sug, mailbox: mailboxName(b), shared: b.kind === "shared" });
+      else prev.messages += sug.messages;
+    }
+  }
+  const suggestions = [...merged.values()].sort((x, y) => y.score - x.score || String(y.lastAt).localeCompare(String(x.lastAt)));
+
+  await logAudit({ action: "mailbox.lead_scan", actorId: a.sub, target: boxes.map(b => b.address).join(", ").slice(0, 190),
+                   detail: `${days}d, ${boxes.length} mailbox(es), ${scanned} read, ${suggestions.length} suggested` });
+  res.json({ suggestions, scanned, days, mailboxes: boxes.length, error: errors.join(" \u00b7 ") || undefined });
 });
 
 /**

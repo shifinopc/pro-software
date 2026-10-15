@@ -5379,6 +5379,53 @@
           </section>
         </sc-if>
 
+        <!-- ── The office mailboxes ─────────────────────────────────────────────────────────────
+             info@ IS WHERE THE ENQUIRIES ARE. A rep's own mailbox catches the conversations they
+             already own; the first message from a stranger almost always goes to the address on
+             the website, which belonged to nobody in this system until now.
+
+             Listed for EVERYBODY, not only the admin who attached it. A salesperson who cannot see
+             that info@ is being watched will keep watching it themselves, which is the duplicated
+             work this is supposed to remove. Only an admin can attach or detach one, because doing
+             so makes its contents readable by the whole office. -->
+        <sc-if value="{{ shdShown }}" hint-placeholder-val="{{ true }}">
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .04s both; padding:11px 12px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div style="flex:1; min-width:190px;">
+                <div style="font-size:12px; font-weight:700;">Office mailboxes</div>
+                <div style="font-size:10px; color:#8C8899; margin-top:2px; line-height:1.55;">{{ shdNote }}</div>
+              </div>
+              <!-- Check for new mail lives here as well, because somebody whose only mailbox is
+                   the office one had no button at all: the personal card it used to sit on is not
+                   drawn for them. -->
+              <sc-if value="{{ shdHasAny }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ mbSync }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; flex-shrink:0;" style-hover="text-decoration:underline;">{{ mbSyncLabel }}</span>
+              </sc-if>
+              <sc-if value="{{ shdCanManage }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ shdProviders }}" as="sp" hint-placeholder-count="1">
+                  <button onClick="{{ sp.go }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:700; padding:8px 12px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#2B2438;">{{ sp.label }}</button>
+                </sc-for>
+              </sc-if>
+            </div>
+
+            <sc-for list="{{ shdRows }}" as="sm" hint-placeholder-count="1">
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; padding-top:10px; border-top:1px solid #F3F1F7;">
+                <span style="width:9px; height:9px; border-radius:99px; background:{{ sm.dot }}; flex-shrink:0;"></span>
+                <div style="flex:1; min-width:170px;">
+                  <div style="font-size:12px; font-weight:700;">{{ sm.name }}</div>
+                  <div style="font-size:10px; color:#8C8899; margin-top:1px;">{{ sm.meta }}</div>
+                </div>
+                <sc-if value="{{ shdCanManage }}" hint-placeholder-val="{{ true }}">
+                  <span onClick="{{ sm.off }}" style="font-size:11px; font-weight:600; color:#8C8899; cursor:pointer; flex-shrink:0;" style-hover="color:#C0353A;">Disconnect</span>
+                </sc-if>
+              </div>
+              <sc-if value="{{ sm.hasError }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#FEECEC; border:1px solid #F5C9C9; border-radius:10px; padding:8px 10px; font-size:10px; color:#C0353A; line-height:1.5; margin-top:7px;">{{ sm.error }}</div>
+              </sc-if>
+            </sc-for>
+          </section>
+        </sc-if>
+
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
           <sc-for list="{{ inboxTabs }}" as="t" hint-placeholder-count="3">
             <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 10px; border-radius:99px; cursor:pointer;">
@@ -13942,6 +13989,9 @@
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <span style="font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:{{ m.tagColor }};">{{ m.tag }}</span>
                 <span style="font-size:11px; color:#6F6C7A; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.who }}</span>
+                <sc-if value="{{ m.viaShown }}" hint-placeholder-val="{{ false }}">
+                  <span title="The mailbox this copy came from" style="font-size:9px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:2px 8px; border-radius:99px; flex-shrink:0;">{{ m.via }}</span>
+                </sc-if>
                 <div style="flex:1;"></div>
                 <span style="font-size:10px; color:#B4AFC4; flex-shrink:0;">{{ m.when }}</span>
               </div>
@@ -13975,7 +14025,7 @@
           <!-- Said once at the bottom rather than on every message. It is the promise this screen
                is keeping, and a promise repeated six times reads as nervousness. -->
           <sc-if value="{{ thrShowNote }}" hint-placeholder-val="{{ true }}">
-            <div style="margin-top:4px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:10px; color:#B4AFC4; line-height:1.65;">Read from your mailbox just now and not saved here. STIMES PRO stores who wrote, when, and the subject — never the message itself.</div>
+            <div style="margin-top:4px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:10px; color:#B4AFC4; line-height:1.65;">{{ thrReadNote }}</div>
           </sc-if>
         </div>
       </div>
@@ -36337,6 +36387,7 @@ class Component extends DCLogic {
             const provs9 = [['google', 'Google Workspace'], ['microsoft', 'Microsoft 365']]
               .filter(([id]) => av9[id])
               .map(([id, label]) => ({
+                id,
                 label: 'Connect ' + label,
                 go: () => {
                   fetch(_api9() + '/api/mailbox/connect?provider=' + id, { headers: _hdr9() })
@@ -36387,6 +36438,76 @@ class Component extends DCLogic {
                   .catch(() => { this.setState({ mboxBusy: false }); this.toast('Server unreachable', 'error'); });
               },
               mbRefresh: () => { if (this._loadMailbox) this._loadMailbox(); if (this._loadInbox) this._loadInbox(); },
+
+              // ── the office's own mailboxes ────────────────────────────────────────────────
+              ...(() => {
+                const list9 = (M9 && Array.isArray(M9.shared)) ? M9.shared : [];
+                const can9 = !!(M9 && M9.canManageShared);
+                return {
+                  // Hidden entirely from somebody who can neither see one nor add one — an empty
+                  // card explaining a feature they cannot use is just furniture.
+                  shdShown: list9.length > 0 || (can9 && provs9.length > 0),
+                  shdHasAny: list9.length > 0,
+                  shdCanManage: can9,
+                  shdNote: list9.length
+                    ? 'Read by everyone who can see this screen. Mail that matches a client lands on the client record; the rest is not stored.'
+                    : 'info@ or sales@ \u2014 the address on your website, where a first enquiry usually arrives. Connect one and the whole office can work it.',
+                  shdRows: list9.map(m9 => ({
+                    name: m9.label || m9.address,
+                    meta: (m9.label ? m9.address + ' \u00b7 ' : '')
+                      + (m9.provider === 'microsoft' ? 'Microsoft 365' : 'Google Workspace')
+                      + ' \u00b7 Last checked ' + ago9(m9.lastSyncAt),
+                    dot: m9.status === 'active' ? '#12B76A' : '#E8A33D',
+                    hasError: !!m9.lastError,
+                    error: 'Last sync failed \u2014 ' + (m9.lastError || ''),
+                    off: () => {
+                      this._confirm('Disconnect ' + (m9.label || m9.address) + '?', {
+                        body: 'The stored tokens are deleted, not just marked inactive. Mail already folded '
+                          + 'into client records stays; nothing new arrives from this mailbox again.',
+                        okLabel: 'Disconnect', danger: true,
+                      }).then(ok9 => {
+                        if (!ok9) return;
+                        fetch(_api9() + '/api/mailbox/shared/' + encodeURIComponent(m9.id) + '/disconnect',
+                              { method: 'POST', headers: _hdr9() })
+                          .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                          .then(({ ok: k9, j }) => {
+                            if (!k9) return this.toast((j && j.error) || 'Could not disconnect', 'error');
+                            this.toast('Mailbox disconnected');
+                            if (this._loadMailbox) this._loadMailbox();
+                            if (this._loadInbox) this._loadInbox();
+                          })
+                          .catch(() => this.toast('Server unreachable', 'error'));
+                      });
+                    },
+                  })),
+                  // Same providers the personal button offers, because the same server config
+                  // decides both. Asked for a NAME first: "Enquiries" is what people call it, and
+                  // a list of raw addresses is unreadable the moment there are two.
+                  shdProviders: provs9.map(p9 => ({
+                    label: list9.length ? '+ Another' : '+ Connect a shared mailbox',
+                    go: () => {
+                      this._prompt('What is this mailbox called?', 'Enquiries', {
+                        required: true, requiredNote: 'Give it a name people will recognise',
+                        okLabel: 'Continue', placeholder: 'e.g. Enquiries, Sales, Support',
+                      }).then(nm9 => {
+                        if (!nm9) return;
+                        fetch(_api9() + '/api/mailbox/shared/connect?provider=' + p9.id
+                              + '&label=' + encodeURIComponent(String(nm9).trim()), { headers: _hdr9() })
+                          .then(r => r.json())
+                          .then(j => {
+                            if (!j || !j.url) return this.toast((j && j.error) || 'Could not start that sign-in', 'error');
+                            // Sign in AS the shared mailbox, not as yourself. Said out loud because
+                            // signing in with a personal account here is the obvious mistake, and it
+                            // would attach the wrong mail to the whole office.
+                            this.toast('Sign in as the shared mailbox itself, then press Refresh');
+                            window.open(j.url, '_blank', 'noopener');
+                          })
+                          .catch(() => this.toast('Server unreachable', 'error'));
+                      });
+                    },
+                  })),
+                };
+              })(),
               mbDisconnect: () => {
                 this._confirm('Disconnect ' + ((M9 && M9.address) || 'this mailbox') + '?', {
                   body: 'The stored tokens are deleted, not just marked inactive. Mail already folded into '
@@ -36460,7 +36581,10 @@ class Component extends DCLogic {
             const hide9 = (addr9) => this.setState({ lscGone: { ...gone9, [addr9]: true } });
 
             return {
-              lscShown: !!(M9 && M9.connected),
+              // Any mailbox this person can scan, not specifically their own. Somebody who has
+              // not connected their personal mail can still work the office inbox — and the office
+              // inbox is where the leads are, so hiding it from them was exactly backwards.
+              lscShown: !!(M9 && (M9.connected || ((M9.shared || []).length > 0))),
               lscNote: busy9 ? 'Reading the last ' + days9 + ' days\u2026'
                 : !R9 ? 'People who have written to you and are not in the system yet. Nothing is read until you press Scan, and nothing is stored afterwards.'
                 : 'Scanned ' + (R9.scanned || 0) + ' message' + ((R9.scanned === 1) ? '' : 's')
@@ -36486,7 +36610,7 @@ class Component extends DCLogic {
                   hasName: !!x9.name,
                   subject: x9.subject || '',
                   hasSubject: !!x9.subject,
-                  reasons: (x9.reasons || []).join(' \u00b7 '),
+                  reasons: ((x9.shared && x9.mailbox) ? [x9.mailbox] : []).concat(x9.reasons || []).join(' \u00b7 '),
                   when: ago9(x9.lastAt),
                   isHigh: x9.band === 'high',
                   isMed: x9.band === 'medium',
@@ -36586,7 +36710,11 @@ class Component extends DCLogic {
               : n > 0 ? Math.max(1, Math.round(n / 1024)) + ' KB' : '';
 
             const msgs9 = (T9 && Array.isArray(T9.messages)) ? T9.messages : [];
-            const mine9 = msgs9.some(m => m.mine);
+            const read9 = msgs9.some(m => m.readable);
+            // Which mailbox a copy came through only matters when more than one is in play — a
+            // conversation that reached info@ AND a rep's own mail is worth labelling; one that
+            // arrived in a single place is not.
+            const multi9 = new Set(msgs9.filter(m => m.mailbox).map(m => m.mailbox)).size > 1;
 
             return {
               thrOpen: open9,
@@ -36615,6 +36743,8 @@ class Component extends DCLogic {
                 const body = String(m.body == null ? '' : m.body).trim();
                 return {
                   tag: inbound ? 'Received' : 'Sent',
+                  viaShown: multi9 && !!m.mailbox,
+                  via: m.mailbox || '',
                   tagColor: inbound ? '#7C00FF' : '#0E9355',
                   border: inbound ? '#EDEBF2' : '#E4F3EA',
                   bg: inbound ? '#fff' : '#FBFEFC',
@@ -36623,8 +36753,10 @@ class Component extends DCLogic {
                   body,
                   hasBody: !!body,
                   noBody: !body,
-                  noBodyNote: !m.mine
-                    ? 'This copy is in a colleague\u2019s mailbox, so the text cannot be read from here.'
+                  // Three different silences. The first is worth saying carefully: it is not a
+                  // failure, it is the system declining to read somebody else's private mail.
+                  noBodyNote: !m.readable
+                    ? 'This copy is in a colleague\u2019s own mailbox. Only they can read it \u2014 mail to a shared mailbox is readable here.'
                     : (T9 && T9.bodyError) ? 'Not read \u2014 see above.'
                     : 'Nothing readable in this message.',
                   files: (m.attachments || []).map(f => ({ name: f.name, size: kb9(f.size || 0) })),
@@ -36634,7 +36766,11 @@ class Component extends DCLogic {
               thrEmpty: !busy9 && !!T9 && msgs9.length === 0,
               thrEmptyNote: 'Nothing is stored for this conversation.',
               // Only claim the text was read live when some of it actually was.
-              thrShowNote: !busy9 && !!T9 && mine9,
+              thrShowNote: !busy9 && !!T9 && read9,
+              thrReadNote: (msgs9.some(m => m.readable && m.shared)
+                  ? 'Read from the office mailbox just now'
+                  : 'Read from your mailbox just now')
+                + ' and not saved here. STIMES PRO stores who wrote, when, and the subject \u2014 never the message itself.',
             };
           })(),
           inboxConnected: !!(D9 && D9.connected),

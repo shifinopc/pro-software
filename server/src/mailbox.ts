@@ -98,6 +98,56 @@ export function addressOf(raw: unknown): string {
   return norm(m ? m[1] : s);
 }
 
+/**
+ * THE FIRM'S MAILBOX, NOT A PERSON'S.
+ *
+ * Everything below used to take a `userId` and look the mailbox up from it, which quietly assumed
+ * one mailbox per person. In a PRO firm the enquiries land on info@, so the assumption was wrong
+ * about the single most valuable mailbox there is.
+ *
+ * So the CONNECTION is the unit of work now. Callers load the row and hand it over; nothing here
+ * guesses which mailbox somebody meant.
+ */
+export interface Mailbox {
+  id: string;
+  userId: string;
+  kind: string;
+  label: string | null;
+  provider: string;
+  address: string;
+  accessTokenEnc: string;
+  refreshTokenEnc: string | null;
+  expiresAt: string | null;
+  cursor: string | null;
+  status: string;
+}
+
+export const SHARED = "shared";
+export const isShared = (m: { kind?: string | null }) => m.kind === SHARED;
+/** What to call it on screen: a shared mailbox has a name, a personal one has an address. */
+export const mailboxName = (m: { kind?: string | null; label?: string | null; address: string }) =>
+  (isShared(m) && m.label) ? m.label : m.address;
+
+/** The one mailbox a person reads as themselves. At most one; see `saveConnection`. */
+export const personalMailbox = (userId: string) =>
+  prisma.mailboxConnection.findFirst({ where: { userId, kind: "personal" } });
+
+/** Every mailbox the firm shares. Order is stable so two screens list them the same way. */
+export const sharedMailboxes = () =>
+  prisma.mailboxConnection.findMany({ where: { kind: SHARED }, orderBy: [{ label: "asc" }, { address: "asc" }] });
+
+/**
+ * Every mailbox THIS VIEWER may read the contents of: their own, plus the firm's shared ones.
+ *
+ * The single place that decision is made, so a new screen cannot accidentally widen it.
+ */
+export async function readableMailboxes(userId: string): Promise<Mailbox[]> {
+  const rows = await prisma.mailboxConnection.findMany({
+    where: { OR: [{ userId, kind: "personal" }, { kind: SHARED }], status: { not: "disconnected" } },
+  });
+  return rows as Mailbox[];
+}
+
 export interface MatchIndex {
   byContact: Map<string, { contactId: string; companyId: string }>;
   byCompany: Map<string, string>;
@@ -169,7 +219,9 @@ export function matchMessage(msg: RawMessage, mine: string, index: MatchIndex): 
  * rewinds after an error, must not double-count a conversation. `skipDuplicates` makes a retry
  * cheap rather than dangerous.
  */
-export async function ingest(userId: string, mine: string, messages: RawMessage[], index: MatchIndex): Promise<{ stored: number; skipped: number }> {
+export async function ingest(box: Mailbox, messages: RawMessage[], index: MatchIndex): Promise<{ stored: number; skipped: number }> {
+  const userId = box.userId;
+  const mine = box.address;
   let stored = 0, skipped = 0;
   const now = new Date().toISOString();
 
@@ -179,7 +231,7 @@ export async function ingest(userId: string, mine: string, messages: RawMessage[
     try {
       await prisma.emailMessage.create({
         data: {
-          userId, externalId: m.externalId, threadId: m.threadId,
+          userId, connectionId: box.id, externalId: m.externalId, threadId: m.threadId,
           companyId: hit.companyId, contactId: hit.contactId,
           direction: hit.direction, subject: m.subject ?? null,
           counterparty: hit.counterparty, sentAt: m.sentAt, createdAt: now,
@@ -478,10 +530,9 @@ export function htmlToText(html: string): string {
  * being missed and the person has to be told to reconnect; a scan that fails means a button did
  * not work. Marking the mailbox broken because somebody pressed Scan would raise a false alarm.
  */
-export async function scanLeads(userId: string, provider: MailboxProvider, days = 30): Promise<{
+export async function scanLeads(conn: Mailbox, provider: MailboxProvider, days = 30, dismissed?: Set<string>): Promise<{
   suggestions: LeadSuggestion[]; scanned: number; address?: string; error?: string;
 }> {
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId } });
   if (!conn || conn.status === "disconnected") {
     return { suggestions: [], scanned: 0, error: "No mailbox is connected." };
   }
@@ -489,10 +540,12 @@ export async function scanLeads(userId: string, provider: MailboxProvider, days 
     const token = await accessTokenFor(conn, provider);
     const messages = await provider.fetchRecent(token, days);
     const index = await buildMatchIndex();
-    const dismissed = new Set(
+    // Passed in when several mailboxes are scanned together, so one read of the dismissal list
+    // serves all of them rather than one read per mailbox.
+    const no = dismissed ?? new Set(
       (await prisma.leadDismissal.findMany({ select: { digest: true } })).map((d) => d.digest),
     );
-    const suggestions = suggestLeads(messages, conn.address, index, dismissed, dismissalDigest);
+    const suggestions = suggestLeads(messages, conn.address, index, no, dismissalDigest);
     // `scanned` is the honest denominator: "nothing found" and "nothing to look at" are different
     // answers and the screen says which one it is.
     return { suggestions, scanned: messages.length, address: conn.address };
@@ -541,19 +594,47 @@ export async function replyTimes(companyId?: string | null): Promise<{ threads: 
   };
 }
 
-/** Store a freshly granted grant. Tokens are encrypted here so no caller has to remember to. */
-export async function saveConnection(userId: string, provider: "google" | "microsoft", address: string, tokens: { accessToken: string; refreshToken?: string | null; expiresAt?: string | null }) {
+/**
+ * Store a freshly granted grant. Tokens are encrypted here so no caller has to remember to.
+ *
+ * Keyed on the ADDRESS, not the person. Reconnecting the same mailbox — after the weekly expiry
+ * Google imposes while an app is in Testing, say — must refresh the row it already has rather than
+ * create a second one with its own cursor; the duplicate would re-read the mailbox from scratch and
+ * fill the Inbox with every conversation twice.
+ *
+ * One PERSONAL mailbox per person is enforced here rather than by the database: the constraint
+ * that used to say so made shared mailboxes impossible to express at all.
+ */
+export async function saveConnection(
+  userId: string, provider: "google" | "microsoft", address: string,
+  tokens: { accessToken: string; refreshToken?: string | null; expiresAt?: string | null },
+  opts?: { kind?: string; label?: string | null },
+) {
   const now = new Date().toISOString();
+  const kind = opts?.kind === SHARED ? SHARED : "personal";
+  const addr = norm(address);
   const data = {
-    provider, address: norm(address),
+    userId, kind, label: kind === SHARED ? (opts?.label || null) : null,
+    provider, address: addr,
     accessTokenEnc: encrypt(tokens.accessToken),
     refreshTokenEnc: tokens.refreshToken ? encrypt(tokens.refreshToken) : null,
     expiresAt: tokens.expiresAt ?? null,
     status: "active", lastError: null, updatedAt: now,
   };
+
+  // Somebody connecting a DIFFERENT personal address replaces the one they had. Two personal
+  // mailboxes for one person would leave every `personalMailbox` lookup picking one arbitrarily,
+  // which is the kind of bug that shows up as "my Inbox is empty" on alternate Tuesdays.
+  if (kind === "personal") {
+    const existing = await personalMailbox(userId);
+    if (existing && existing.address !== addr) {
+      await prisma.mailboxConnection.delete({ where: { id: existing.id } });
+    }
+  }
+
   return prisma.mailboxConnection.upsert({
-    where: { userId },
-    create: { userId, cursor: null, createdAt: now, ...data },
+    where: { address: addr },
+    create: { cursor: null, createdAt: now, ...data },
     update: data,
   });
 }
@@ -582,15 +663,14 @@ export async function accessTokenFor(conn: { id: string; accessTokenEnc: string;
  * never read would lose them permanently and silently, which is worse than syncing them twice —
  * the ingest is idempotent precisely so that re-reading is the safe direction.
  */
-export async function syncMailbox(userId: string, provider: MailboxProvider, index?: MatchIndex): Promise<{ stored: number; skipped: number; error?: string }> {
-  const conn = await prisma.mailboxConnection.findUnique({ where: { userId } });
+export async function syncMailbox(conn: Mailbox, provider: MailboxProvider, index?: MatchIndex): Promise<{ stored: number; skipped: number; error?: string }> {
   if (!conn || conn.status === "disconnected") return { stored: 0, skipped: 0 };
 
   try {
     const token = await accessTokenFor(conn, provider);
     const { messages, cursor } = await provider.fetchSince(token, conn.cursor);
     const idx = index ?? await buildMatchIndex();
-    const out = await ingest(userId, conn.address, messages, idx);
+    const out = await ingest(conn, messages, idx);
     await prisma.mailboxConnection.update({
       where: { id: conn.id },
       data: { cursor, lastSyncAt: new Date().toISOString(), lastError: null, status: "active" },
