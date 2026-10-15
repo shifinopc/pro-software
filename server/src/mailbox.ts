@@ -26,6 +26,9 @@
 import { prisma } from "./db.js";
 import { encrypt, decrypt } from "./auth.js";
 
+/** The separator in a logged mail summary. */
+const EMDASH = "—";
+
 /** One message, as any provider can describe it. The whole contract between adapters and this file. */
 export interface RawMessage {
   externalId: string;
@@ -153,6 +156,48 @@ export async function ingest(userId: string, mine: string, messages: RawMessage[
         },
       });
       stored++;
+
+      /**
+       * AND ON THE CLIENT'S OWN RECORD.
+       *
+       * The header above this file has always said a reply lands on the client's record without
+       * anybody copying it there. It did not: the row above was the only thing written, and the
+       * only reader of that table is the Inbox. So the feature answered "what is waiting on a
+       * reply across my book" and not "what has this client said to us", which is the question
+       * somebody opening a client record is asking.
+       *
+       * It also made "this lead has gone quiet" a lie: `lastContactAt` is the newest Interaction,
+       * so a client could email every week and still be chased as silent.
+       *
+       * AFTER the message row, inside the same try, so the unique (userId, externalId) collision
+       * above skips this too — a re-sync over the same window cannot log the mail twice.
+       *
+       * `auto: true` because a person did not write it: the timeline marks those, and a log full
+       * of automatic notes read as effort would flatter everybody.
+       *
+       * The summary carries the subject and the address, both already stored on the row above.
+       * No body is read here and none could be — the fetch asks for metadata only.
+       *
+       * Its own catch: a timeline write that fails must not un-store a message that is already
+       * in, nor count it as skipped, or the next sync would try the whole window again.
+       */
+      try {
+        await prisma.interaction.create({
+          data: {
+            companyId: hit.companyId,
+            contactId: hit.contactId,
+            kind: "email",
+            at: m.sentAt,
+            summary: `${hit.direction === "in" ? "Received from" : "Sent to"} ${hit.counterparty}`
+                     + (m.subject ? ` ${EMDASH} ${m.subject}` : ""),
+            outcome: hit.direction === "in" ? "received" : "sent",
+            auto: true,
+            createdAt: now,
+          },
+        });
+      } catch (e: any) {
+        console.error(`[mailbox] stored ${m.externalId} but could not log it on the timeline: ${e?.message ?? e}`);
+      }
     } catch {
       // Unique (userId, externalId) — already have it. Counted as skipped, not as a failure.
       skipped++;
