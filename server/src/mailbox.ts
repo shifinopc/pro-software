@@ -76,13 +76,26 @@ export interface MailboxProvider {
    * input in this whole system, and the safe answer is to not have markup at all.
    */
   fetchBody(accessToken: string, externalId: string): Promise<MessageBody | null>;
+  /**
+   * The BYTES of one attachment, fetched when somebody asks to keep it.
+   *
+   * Separate from `fetchBody` on purpose. Opening a conversation should not pull a 10 MB passport
+   * scan down the wire on the chance that somebody wants it — the drawer lists what is attached,
+   * and only a deliberate click fetches anything.
+   */
+  fetchAttachment(accessToken: string, externalId: string, attachmentId: string): Promise<Buffer | null>;
 }
 
 export interface MessageBody {
   /** The message, as text. Empty string when the provider returned nothing readable. */
   text: string;
-  /** Names and sizes only. Nothing is downloaded, and nothing is offered for download. */
-  attachments: { name: string; size: number }[];
+  /**
+   * What is attached, named but NOT fetched.
+   *
+   * The id is the provider's own handle for it, needed to ask for the bytes later. Carrying it is
+   * not the same as having downloaded anything: nothing leaves the mailbox until a person says so.
+   */
+  attachments: { id: string; name: string; size: number }[];
 }
 
 const norm = (a: unknown) => String(a ?? "").trim().toLowerCase();

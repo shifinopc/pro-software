@@ -7130,6 +7130,93 @@ app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRol
   });
 });
 
+/**
+ * KEEP AN ATTACHMENT, AGAINST THE CLIENT IT BELONGS TO.
+ *
+ * This is where the mailbox stops being a window and starts being part of the system. An enquiry
+ * arrives at info@ with three passport scans; today somebody downloads them from Gmail and uploads
+ * them again on the client screen, renaming them on the way. One click should do it.
+ *
+ * YES, THIS STORES CONTENT — and that is not a contradiction of the promise elsewhere in this
+ * feature. The promise is that nothing is swept up automatically: the sync stores no bodies, the
+ * scan stores nothing at all, and the drawer forgets what it showed. A person choosing one file and
+ * saying "keep this against this client" is the opposite of a sweep. It is a deliberate act, by a
+ * named person, on one file, and it is written to the audit log and the client's timeline as such.
+ *
+ * READABLE MAILBOXES ONLY, by exactly the same rule as the message text: the bytes are fetched with
+ * this viewer's own token, so there is no path here to a colleague's private attachments.
+ *
+ * The file goes where every other client document goes — the private folder, addressed by id
+ * through /api/files/:id, which checks who is asking. Same sniffing, same SVG rule, same cap. A
+ * second storage path for "files that came from email" would be a second set of rules to keep in
+ * step with the first.
+ */
+app.post("/api/inbox/message/:id/save-attachment", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const msg = await prisma.emailMessage.findUnique({ where: { id: String(req.params.id) } });
+  if (!msg) return res.status(404).json({ error: "No such message." });
+  if (!msg.companyId) return res.status(400).json({ error: "This message is not attached to a client yet." });
+
+  // The same gate the drawer uses for message text. Not a second implementation of it: both ask
+  // readableMailboxes, and a message whose mailbox is not in that list cannot be reached from here.
+  const boxes = await readableMailboxes(a.sub);
+  const box = msg.connectionId
+    ? boxes.find(b => b.id === msg.connectionId)
+    : boxes.find(b => b.kind !== "shared" && b.userId === a.sub && msg.userId === a.sub);
+  if (!box) return res.status(403).json({ error: "That message is in a mailbox you cannot read." });
+
+  const attachmentId = String(req.body?.attachmentId ?? "");
+  if (!attachmentId) return res.status(400).json({ error: "attachmentId is required" });
+
+  let buf: Buffer | null = null;
+  try {
+    const provider = providerFor(box.provider);
+    const token = await accessTokenFor(box, provider);
+    buf = await provider.fetchAttachment(token, msg.externalId, attachmentId);
+  } catch (e: any) {
+    return res.status(502).json({ error: `The mailbox would not hand that over: ${String(e?.message ?? e).slice(0, 200)}` });
+  }
+  if (!buf || !buf.length) return res.status(404).json({ error: "That attachment is no longer on the message." });
+  if (buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "That file is over 4 MB. Save it from your mail app and upload it on the client's Documents tab." });
+
+  // The sender named it; the bytes decide what it is. An email attachment is the least trustworthy
+  // file in this system — it was chosen by somebody outside the firm — so it goes through exactly
+  // the same checks as an upload, including the SVG scripting rule.
+  const sniffed = sniffFileType(buf);
+  if (!sniffed) return res.status(415).json({ error: "Only PNG, JPG, WEBP, PDF or SVG attachments can be filed. Save it from your mail app for anything else." });
+  if (sniffed === ".svg" && svgCarriesScript(buf)) {
+    return res.status(415).json({ error: "That SVG contains scripting and cannot be stored." });
+  }
+
+  const named = String(req.body?.name ?? "").trim().replace(/[\\/:*?"<>|]/g, "-").slice(0, 120) || `attachment${sniffed}`;
+  const asset = await prisma.fileAsset.create({
+    data: {
+      kind: "attachment", name: named, path: "",
+      size: buf.length, uploadedBy: a.sub,
+      // The client this conversation is already filed against. Not asked for and not guessed: the
+      // message knows, which is the whole reason this is worth one click rather than a form.
+      companyId: msg.companyId, private: true,
+      at: new Date().toISOString(),
+    },
+  });
+  fs.writeFileSync(path.join(PRIVATE_FILES_DIR, asset.id + sniffed), buf);
+  await prisma.fileAsset.update({ where: { id: asset.id }, data: { path: "/api/files/" + asset.id } });
+
+  // ON THE TIMELINE, because a document appearing on a client record with no account of where it
+  // came from is how a file nobody recognises ends up being trusted.
+  await prisma.interaction.create({
+    data: {
+      companyId: msg.companyId, kind: "email", at: new Date().toISOString(),
+      summary: `Saved ${named} from an email ${msg.direction === "in" ? "from" : "to"} ${msg.counterparty}`,
+      outcome: "sent", auto: false, createdAt: new Date().toISOString(),
+    },
+  }).catch(() => {});
+  await logAudit({ action: "mailbox.attachment_saved", actorId: a.sub, target: msg.companyId,
+                   detail: `${named} \u00b7 ${buf.length}b \u00b7 ${mailboxName(box)}`, ip: clientIp(req) });
+
+  res.status(201).json({ id: asset.id, path: "/api/files/" + asset.id, name: named, size: buf.length });
+});
+
 app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
   const conn = await personalMailbox(a.sub);

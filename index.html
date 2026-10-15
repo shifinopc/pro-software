@@ -14008,9 +14008,12 @@
               <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}">
                 <div style="margin-top:9px; padding-top:9px; border-top:1px solid #F1EEF7; display:flex; flex-wrap:wrap; gap:6px;">
                   <sc-for list="{{ m.files }}" as="f" hint-placeholder-count="1">
-                    <span title="Attached to this email — open it in your mail app to download" style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; color:#6F6C7A; background:#fff; border:1px solid #EDEBF2; padding:4px 9px; border-radius:99px;">
+                    <!-- A CONTROL, not a label. One click files the scan against the client this
+                         conversation already belongs to, instead of somebody fetching it from Gmail
+                         and uploading it again under a different name. -->
+                    <span onClick="{{ f.save }}" title="{{ f.title }}" style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; color:#6F6C7A; background:#fff; border:1px solid #EDEBF2; padding:4px 9px; border-radius:99px; cursor:{{ f.cursor }};" style-hover="border-color:#D9CCF5;">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B4AFC4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                      {{ f.name }}<span style="color:#B4AFC4; font-weight:500;">{{ f.size }}</span>
+                      {{ f.name }}<span style="color:#B4AFC4; font-weight:500;">{{ f.size }}</span><span style="color:#0E9355; font-weight:700;">{{ f.suffix }}</span>
                     </span>
                   </sc-for>
                 </div>
@@ -36759,7 +36762,40 @@ class Component extends DCLogic {
                     ? 'This copy is in a colleague\u2019s own mailbox. Only they can read it \u2014 mail to a shared mailbox is readable here.'
                     : (T9 && T9.bodyError) ? 'Not read \u2014 see above.'
                     : 'Nothing readable in this message.',
-                  files: (m.attachments || []).map(f => ({ name: f.name, size: kb9(f.size || 0) })),
+                  files: (m.attachments || []).map(f => {
+                    const key9 = m.id + ':' + f.id;
+                    const done9 = !!(this.state.thrSaved || {})[key9];
+                    const busyF9 = (this.state.thrSaving || '') === key9;
+                    // Only offerable when there IS a client to file it against. An unattached
+                    // conversation has nowhere to put it, and a button that explains itself is
+                    // better than one that fails after the click.
+                    const can9 = !!(T9 && T9.company) && m.readable && !done9 && !busyF9;
+                    return {
+                      name: f.name, size: kb9(f.size || 0),
+                      suffix: done9 ? ' \u00b7 saved' : busyF9 ? ' \u00b7 saving\u2026' : '',
+                      cursor: can9 ? 'pointer' : 'default',
+                      title: done9 ? 'Saved to ' + ((T9.company && T9.company.name) || 'the client') + '\u2019s files'
+                        : !(T9 && T9.company) ? 'This conversation is not attached to a client yet'
+                        : !m.readable ? 'This copy is in a colleague\u2019s own mailbox'
+                        : 'Save to ' + ((T9.company && T9.company.name) || 'the client') + '\u2019s files',
+                      save: () => {
+                        if (!can9) return;
+                        this.setState({ thrSaving: key9 });
+                        fetch(_api() + '/api/inbox/message/' + encodeURIComponent(m.id) + '/save-attachment', {
+                          method: 'POST', headers: _h(),
+                          body: JSON.stringify({ attachmentId: f.id, name: f.name }),
+                        })
+                          .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                          .then(({ ok, j }) => {
+                            this.setState({ thrSaving: '' });
+                            if (!ok) return this.toast((j && j.error) || 'Could not save that file', 'error');
+                            this.setState({ thrSaved: { ...(this.state.thrSaved || {}), [key9]: true } });
+                            this.toast(f.name + ' saved to ' + ((T9.company && T9.company.name) || 'the client'));
+                          })
+                          .catch(() => { this.setState({ thrSaving: '' }); this.toast('Server unreachable', 'error'); });
+                      },
+                    };
+                  }),
                   hasFiles: (m.attachments || []).length > 0,
                 };
               }),

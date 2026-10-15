@@ -165,8 +165,15 @@ export const googleProvider: MailboxProvider = {
       text,
       attachments: parts
         .filter(p => p.filename && p.body?.attachmentId)
-        .map(p => ({ name: String(p.filename), size: Number(p.body.size ?? 0) })),
+        .map(p => ({ id: String(p.body.attachmentId), name: String(p.filename), size: Number(p.body.size ?? 0) })),
     };
+  },
+  async fetchAttachment(accessToken, externalId, attachmentId): Promise<Buffer | null> {
+    const r: any = await (await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(externalId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } })).json();
+    if (!r || r.error || !r.data) return null;
+    return Buffer.from(String(r.data).replace(/-/g, "+").replace(/_/g, "/"), "base64");
   },
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // `q=newer_than` rather than a stored historyId for the first pass: a history cursor that has
@@ -214,9 +221,19 @@ export const microsoftProvider: MailboxProvider = {
     return {
       text: String(j.body?.contentType ?? "").toLowerCase() === "html"
         ? htmlToText(raw) : (raw || String(j.bodyPreview ?? "")),
-      attachments: (j.attachments ?? []).filter((a: any) => a?.name)
-        .map((a: any) => ({ name: String(a.name), size: Number(a.size ?? 0) })),
+      attachments: (j.attachments ?? []).filter((a: any) => a?.name && a?.id)
+        .map((a: any) => ({ id: String(a.id), name: String(a.name), size: Number(a.size ?? 0) })),
     };
+  },
+  async fetchAttachment(accessToken, externalId, attachmentId): Promise<Buffer | null> {
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(externalId)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } });
+    const j: any = await r.json();
+    // Only a real file. An attached CALENDAR ITEM or a forwarded message are also "attachments" to
+    // Graph, and neither is a document anybody wants filed against a client.
+    if (!r.ok || !j?.contentBytes) return null;
+    return Buffer.from(String(j.contentBytes), "base64");
   },
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // Graph's delta link IS the cursor, and it already carries its own paging state — so when we
