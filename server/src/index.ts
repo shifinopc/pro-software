@@ -78,7 +78,7 @@ import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
+import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
@@ -895,7 +895,20 @@ app.post("/api/auth/forgot-password", resetLimiter, async (req, res) => {
       cta: { label: "Reset your password", url: link },
       note: "If you didn't ask for this, no action is needed — your password has not changed, and this link can only be used once.",
     });
-    await sendMail({ to: user.email, subject: `Reset your ${orgReset} password`, text, html });
+    // Held during training for a CLIENT only. Staff reset their own passwords throughout — they
+    // are the people being trained. The response below is unchanged either way, deliberately:
+    // it already answers the same for an address that does not exist, so that a stranger cannot
+    // use this route to discover who banks here.
+    if (user.type === "portal" && await clientEmailHeld()) {
+      await prisma.mailLog.create({ data: {
+        to: user.email.slice(0, 191), subject: `Reset your ${orgReset} password`.slice(0, 2000),
+        status: "skipped", kind: "password.reset",
+        error: "Client email is on hold (Settings → Notifications)",
+        at: new Date().toISOString(),
+      } }).catch(() => {});
+    } else {
+      await sendMail({ to: user.email, subject: `Reset your ${orgReset} password`, text, html });
+    }
   }
   res.json({ ok: true });
 });

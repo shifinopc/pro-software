@@ -29,6 +29,7 @@
  * the permanent secret. Resending is a first-class action for the same reason.
  */
 import crypto from "node:crypto";
+import { clientEmailHeld } from "./notify.js";
 import { prisma } from "./db.js";
 import { sendMail } from "./mailer.js";
 import { renderEmail, emailContext, esc } from "./emailshell.js";
@@ -119,6 +120,26 @@ export async function sendInvitation(
       ],
       note: `If the button doesn't work, copy this address into your browser:<br><span style="word-break:break-all;">${esc(link)}</span>`,
     });
+    // HELD DURING TRAINING, for a CLIENT only. A portal invitation is an email to a customer,
+    // and the whole point of the hold is that no customer hears from a system being rehearsed
+    // on. Staff invitations are unaffected — the people being trained still need their logins.
+    //
+    // The link still comes back, and `emailed: false` is what the caller already understands:
+    // the console shows the operator the link to hand over by other means. It is reported, not
+    // swallowed — an invitation that silently reaches nobody is how a trainee waits a week for
+    // an email that was never going to arrive.
+    if (isPortal && await clientEmailHeld()) {
+      await prisma.mailLog.create({ data: {
+        to: user.email.slice(0, 191),
+        subject: (opts.resend ? `Your ${org} sign-in link` : `Set up your ${org} account`).slice(0, 2000),
+        status: "skipped", kind: "invitation",
+        error: "Client email is on hold (Settings → Notifications)",
+        at: new Date().toISOString(),
+      } }).catch(() => {});
+      return { email: user.email, link, emailed: false, expiresAt,
+               error: "Client email is on hold for the training period — give them this link yourself, or resume sending in Settings → Notifications." };
+    }
+
     const r = await sendMail({
       to: user.email,
       subject: opts.resend ? `Your ${org} sign-in link` : `Set up your ${org} account`,
