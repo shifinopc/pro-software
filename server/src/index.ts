@@ -29,7 +29,7 @@ import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
 import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
-import { syncMailbox, saveConnection, scanLeads, dismissalDigest } from "./mailbox.js";
+import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
@@ -7013,6 +7013,89 @@ app.get("/api/inbox", requireAuth, requireStaff, requireReadRole("super_admin", 
           owner: co && co.ownerId ? (userById.get(co.ownerId) ?? null) : null,
         };
       }),
+  });
+});
+
+/**
+ * ONE CONVERSATION, OPENED.
+ *
+ * The list answers "who is waiting"; this answers "what did they actually say", which is the
+ * question somebody has to leave for Gmail to answer today — and the moment they do, the thread
+ * goes back to living in a personal mailbox.
+ *
+ * THE BODIES ARE NOT IN THE DATABASE AND DO NOT GO INTO IT. The sync stores participants, subject
+ * and timing, deliberately, and that is what makes reading a rep's mailbox defensible at all. So
+ * this route fetches each message from the provider AT THE MOMENT IT IS ASKED FOR, returns it in
+ * the response, and writes nothing. Close the drawer and the text is gone from this system again.
+ *
+ * ONLY FROM YOUR OWN MAILBOX. A body is fetched with the viewer's OWN token, so a colleague
+ * opening the same thread sees the metadata and is told plainly that the text sits in somebody
+ * else's mailbox. That is not a limitation to work around — "any admin can read any rep's mail"
+ * is the exact product this was built not to be.
+ */
+app.get("/api/inbox/thread/:threadId", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  const a = (req as any).auth;
+  const scoped = await salesCompanyIds(req as any);
+  const rows = await prisma.emailMessage.findMany({
+    where: { threadId: String(req.params.threadId), ...(scoped ? { companyId: { in: scoped } } : {}) },
+    orderBy: { sentAt: "asc" },
+    take: 60,
+  });
+  if (!rows.length) return res.status(404).json({ error: "That conversation is not on any client record." });
+
+  const companyId = rows.find(r => r.companyId)?.companyId ?? null;
+  const contactId = rows.find(r => r.contactId)?.contactId ?? null;
+  const [co, ct] = await Promise.all([
+    companyId ? prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, lifecycle: true, ownerId: true } }) : null,
+    contactId ? prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, name: true, email: true, jobTitle: true } }) : null,
+  ]);
+
+  // The same thread can be stored twice when two reps are on it. Only the viewer's own copies can
+  // be opened, because only their token can open them.
+  const mine = rows.filter(r => r.userId === a.sub);
+  const conn = mine.length ? await prisma.mailboxConnection.findUnique({ where: { userId: a.sub } }) : null;
+
+  const bodies = new Map<string, { text: string; attachments: { name: string; size: number }[] }>();
+  let bodyError: string | null = null;
+  if (conn && conn.status !== "disconnected") {
+    try {
+      const provider = providerFor(conn.provider);
+      const token = await accessTokenFor(conn, provider);
+      // Newest first and capped. A sixty-message thread is three hundred provider calls nobody
+      // asked for, and the end of a conversation is the part somebody opened it to read.
+      for (const m of [...mine].reverse().slice(0, 20)) {
+        const b = await provider.fetchBody(token, m.externalId);
+        if (b) bodies.set(m.id, b);
+      }
+    } catch (e: any) {
+      // Reported, not swallowed: a drawer of empty messages looks like a thread of empty messages.
+      bodyError = String(e?.message ?? e).slice(0, 300);
+    }
+  }
+
+  res.json({
+    threadId: String(req.params.threadId),
+    company: co ? { id: co.id, name: co.name, lifecycle: co.lifecycle } : null,
+    contact: ct ? { id: ct.id, name: ct.name, email: ct.email, jobTitle: ct.jobTitle } : null,
+    counterparty: rows[rows.length - 1].counterparty,
+    subject: rows.find(r => r.subject)?.subject ?? null,
+    mailbox: conn ? conn.address : null,
+    bodyError,
+    messages: rows.map(m => {
+      const b = bodies.get(m.id);
+      return {
+        id: m.id,
+        direction: m.direction,
+        counterparty: m.counterparty,
+        subject: m.subject,
+        sentAt: m.sentAt,
+        mine: m.userId === a.sub,
+        // null means "not read", for one of three reasons the screen distinguishes: it is not your
+        // mailbox, the fetch failed, or the message genuinely had no text in it.
+        body: b ? b.text : null,
+        attachments: b ? b.attachments : [],
+      };
+    }),
   });
 });
 

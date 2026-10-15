@@ -63,6 +63,26 @@ export interface MailboxProvider {
    * sync skip everything the scan happened to see.
    */
   fetchRecent(accessToken: string, days: number): Promise<RawMessage[]>;
+  /**
+   * ONE message, read in full, RIGHT NOW — and never written down.
+   *
+   * The sync deliberately stores no bodies: that is what makes reading somebody's mailbox
+   * defensible, and it is not up for renegotiation because a screen would like some text on it.
+   * So the drawer does what a person would do — it opens the message at the source, on demand,
+   * for the one person whose mailbox it is, and keeps nothing afterwards.
+   *
+   * Returns PLAIN TEXT, converted here when the message was HTML. The console must never be
+   * handed a stranger's markup to render: a lead's email is the most obviously attacker-shaped
+   * input in this whole system, and the safe answer is to not have markup at all.
+   */
+  fetchBody(accessToken: string, externalId: string): Promise<MessageBody | null>;
+}
+
+export interface MessageBody {
+  /** The message, as text. Empty string when the provider returned nothing readable. */
+  text: string;
+  /** Names and sizes only. Nothing is downloaded, and nothing is offered for download. */
+  attachments: { name: string; size: number }[];
 }
 
 const norm = (a: unknown) => String(a ?? "").trim().toLowerCase();
@@ -422,6 +442,30 @@ export function suggestLeads(
 export function dismissalDigest(address: string): string {
   const key = process.env.CRED_KEY || process.env.JWT_SECRET || "dev-lead-dismissal-key";
   return crypto.createHmac("sha256", key).update(norm(address)).digest("hex");
+}
+
+/**
+ * HTML to something a person can read.
+ *
+ * Not a sanitiser — a sanitiser implies the markup survives, and none of it does. Scripts, styles
+ * and comments go with their contents, every remaining tag is dropped, the handful of entities that
+ * actually appear in mail are decoded, and the runs of blank lines that quoted replies leave behind
+ * are collapsed. What comes out is text, which is the only thing this feature promises to show.
+ */
+export function htmlToText(html: string): string {
+  return String(html ?? "")
+    .replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/[ \t\u00a0]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n").map(l => l.trim()).join("\n")
+    .trim();
 }
 
 /**

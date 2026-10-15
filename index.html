@@ -13890,6 +13890,98 @@
     </div>
   </sc-if>
 
+  <!-- ── Conversation drawer ──────────────────────────────────────────────────────────────────
+       WHAT THEY ACTUALLY SAID. The list answers "who is waiting"; without this, answering "what
+       did they ask for" means leaving for Gmail — and the moment somebody does that, the thread is
+       back to living in a personal mailbox, which is the thing this whole feature exists to stop.
+
+       THE TEXT IS NOT IN OUR DATABASE. The sync stores participants, subject and timing and no
+       bodies, deliberately. So opening this fetches each message from the provider on demand, shows
+       it, and keeps nothing — close the drawer and the words are gone from this system again.
+
+       And only from YOUR OWN mailbox: a body is read with the viewer's own token, so a colleague
+       sees who wrote and when, and is told plainly that the text sits in somebody else's mail. -->
+  <sc-if value="{{ thrOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ thrClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="width:100%; max-width:560px; height:100%; background:#fff; border-left:1px solid #ECE8F3; box-shadow:-40px 0 90px rgba(30,10,60,.22); display:flex; flex-direction:column; overflow:hidden; animation:sheetIn .42s cubic-bezier(.32,.72,0,1) both;">
+
+        <div style="position:sticky; top:0; background:rgba(255,255,255,.9); backdrop-filter:blur(18px) saturate(1.4); border-bottom:1px solid #F1EEF7; padding:11px 18px 13px; z-index:2;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div onClick="{{ thrClose }}" title="Close" style="width:30px; height:30px; margin-left:-6px; border-radius:99px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:background .18s, transform .18s;" style-hover="background:#F5F1FB; transform:translateX(-2px);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#57525F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></div>
+            <span style="font-size:9px; font-weight:800; letter-spacing:.14em; color:#7C00FF; text-transform:uppercase;">Conversation</span>
+            <div style="flex:1;"></div>
+            <sc-if value="{{ thrHasClient }}" hint-placeholder-val="{{ true }}">
+              <span onClick="{{ thrOpenClient }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Open client</span>
+            </sc-if>
+            <sc-if value="{{ thrCanMail }}" hint-placeholder-val="{{ true }}">
+              <a href="{{ thrMailto }}" title="Reply in your mail app" style="font-size:11px; font-weight:700; color:#6F6C7A; text-decoration:none;" style-hover="color:#7C00FF;">Reply</a>
+            </sc-if>
+          </div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; letter-spacing:-.02em; line-height:1.25; color:#15111D; margin-top:9px; text-wrap:pretty;">{{ thrSubject }}</div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:11px; color:#8C8899; margin-top:7px; flex-wrap:wrap;">
+            <span style="font-weight:650; color:#3E3949;">{{ thrClient }}</span>
+            <span style="width:3px; height:3px; border-radius:99px; background:#D6D1E0;"></span>
+            <span>{{ thrWho }}</span>
+          </div>
+        </div>
+
+        <div style="padding:14px 18px 20px; flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:11px;">
+
+          <sc-if value="{{ thrBusy }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:34px 10px; text-align:center; font-size:11px; color:#A9A6B4;">Fetching the messages from your mailbox{{ thrDots }}</div>
+          </sc-if>
+
+          <!-- The transport's own words. A drawer of empty messages and a mailbox that stopped
+               answering look identical, and only one of them is somebody's problem to fix. -->
+          <sc-if value="{{ thrHasError }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FEECEC; border:1px solid #F5C9C9; border-radius:11px; padding:10px 11px; font-size:11px; color:#C0353A; line-height:1.55;">The mailbox would not hand these over — {{ thrError }}</div>
+          </sc-if>
+
+          <sc-for list="{{ thrMsgs }}" as="m" hint-placeholder-count="2">
+            <div style="border:1px solid {{ m.border }}; background:{{ m.bg }}; border-radius:14px; padding:11px 13px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:{{ m.tagColor }};">{{ m.tag }}</span>
+                <span style="font-size:11px; color:#6F6C7A; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.who }}</span>
+                <div style="flex:1;"></div>
+                <span style="font-size:10px; color:#B4AFC4; flex-shrink:0;">{{ m.when }}</span>
+              </div>
+              <!-- pre-wrap, because an email is written in lines and a quoted reply that has been
+                   reflowed into one paragraph is unreadable. -->
+              <sc-if value="{{ m.hasBody }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:12px; line-height:1.65; color:#3B3547; margin-top:8px; white-space:pre-wrap; word-break:break-word;">{{ m.body }}</div>
+              </sc-if>
+              <!-- Three different silences, said differently: not your mailbox, nothing readable
+                   in it, or we never got that far. -->
+              <sc-if value="{{ m.noBody }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11px; color:#A9A6B4; margin-top:8px; line-height:1.6; font-style:italic;">{{ m.noBodyNote }}</div>
+              </sc-if>
+              <sc-if value="{{ m.hasFiles }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:9px; padding-top:9px; border-top:1px solid #F1EEF7; display:flex; flex-wrap:wrap; gap:6px;">
+                  <sc-for list="{{ m.files }}" as="f" hint-placeholder-count="1">
+                    <span title="Attached to this email — open it in your mail app to download" style="display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; color:#6F6C7A; background:#fff; border:1px solid #EDEBF2; padding:4px 9px; border-radius:99px;">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B4AFC4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                      {{ f.name }}<span style="color:#B4AFC4; font-weight:500;">{{ f.size }}</span>
+                    </span>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ thrEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:30px 10px; text-align:center; font-size:11px; color:#A9A6B4; line-height:1.7;">{{ thrEmptyNote }}</div>
+          </sc-if>
+
+          <!-- Said once at the bottom rather than on every message. It is the promise this screen
+               is keeping, and a promise repeated six times reads as nervousness. -->
+          <sc-if value="{{ thrShowNote }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:4px; padding-top:11px; border-top:1px solid #F5F3F9; font-size:10px; color:#B4AFC4; line-height:1.65;">Read from your mailbox just now and not saved here. STIMES PRO stores who wrote, when, and the subject — never the message itself.</div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- My Tasks detail drawer -->
   <sc-if value="{{ showWorkDrawer }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
@@ -36208,9 +36300,10 @@ class Component extends DCLogic {
             ownerInitials: ini9(t.owner),
             hasOwner: !!t.owner,
             unmatched: !t.companyId,
-            open: t.companyId
-              ? () => this.setState({ active: 'Clients', activeGroup: 'Clients & Compliance', clientOpen: t.companyId })
-              : () => {},
+            // OPENS THE CONVERSATION, not the client. Going straight to the client record was the
+            // wrong destination: somebody clicking a subject line wants to read the email, and
+            // the client is one link away inside. Unmatched rows used to do nothing at all.
+            open: () => this._openThread9 && this._openThread9(t.threadId),
           })),
           inboxEmpty: rows9.length === 0,
           // Three different nothings, and they need three different sentences: no mailbox, a
@@ -36456,6 +36549,92 @@ class Component extends DCLogic {
                   : ((R9.suggestions || []).length > 0
                     ? 'That is everybody \u2014 nothing left from this scan.'
                     : 'Everybody who wrote in the last ' + (R9.days || days9) + ' days is already on a client record.'),
+            };
+          })(),
+          // ── the conversation drawer ──────────────────────────────────────────────────────
+          ...(() => {
+            const T9 = this.state.thrData || null;
+            const open9 = !!this.state.thrId;
+            const busy9 = !!this.state.thrBusy;
+            const _api = () => this._apiBase || 'http://localhost:4100';
+            const _h = () => {
+              const t = localStorage.getItem('stimespro:token');
+              return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
+            };
+
+            // Fetched once per open, from the row's click. NOT from here: a binder that fetches on
+            // render fetches again on every keystroke anywhere in the app.
+            this._openThread9 = (id9) => {
+              this.setState({ thrId: id9, thrData: null, thrBusy: true });
+              fetch(_api() + '/api/inbox/thread/' + encodeURIComponent(id9), { headers: _h() })
+                .then(r => r.json().then(j => ({ ok: r.ok, j })))
+                .then(({ ok, j }) => {
+                  this.setState({ thrBusy: false, thrData: ok ? j : null });
+                  if (!ok) this.toast((j && j.error) || 'Could not open that conversation', 'error');
+                })
+                .catch(() => { this.setState({ thrBusy: false }); this.toast('Server unreachable', 'error'); });
+            };
+
+            const when9 = (iso) => {
+              const d = new Date(String(iso || ''));
+              if (isNaN(d.getTime())) return '';
+              const sameYear = d.getFullYear() === new Date().getFullYear();
+              return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) })
+                + ', ' + d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+            };
+            const kb9 = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB'
+              : n > 0 ? Math.max(1, Math.round(n / 1024)) + ' KB' : '';
+
+            const msgs9 = (T9 && Array.isArray(T9.messages)) ? T9.messages : [];
+            const mine9 = msgs9.some(m => m.mine);
+
+            return {
+              thrOpen: open9,
+              thrBusy: busy9,
+              thrDots: '\u2026',
+              thrClose: () => this.setState({ thrId: null, thrData: null, thrBusy: false }),
+              thrSubject: (T9 && T9.subject) || '(no subject)',
+              thrClient: (T9 && T9.company && T9.company.name) || 'Not on a client record',
+              thrWho: T9 ? ((T9.contact && T9.contact.name ? T9.contact.name + ' \u00b7 ' : '') + (T9.counterparty || '')) : '',
+              thrHasClient: !!(T9 && T9.company),
+              thrOpenClient: () => {
+                const id = T9 && T9.company && T9.company.id;
+                if (!id) return;
+                this.setState({ thrId: null, thrData: null, active: 'Clients', activeGroup: 'Clients & Compliance', clientOpen: id });
+              },
+              // A real mailto, not a compose box this system does not have. Honest about what it
+              // is: the reply goes out of their own mail app, from their own address, and comes
+              // back through the sync like any other message.
+              thrCanMail: !!(T9 && T9.counterparty),
+              thrMailto: T9 ? 'mailto:' + encodeURIComponent(T9.counterparty || '')
+                + '?subject=' + encodeURIComponent(/^re:/i.test(String(T9.subject || '')) ? String(T9.subject) : 'Re: ' + String(T9.subject || '')) : '#',
+              thrHasError: !!(T9 && T9.bodyError),
+              thrError: (T9 && T9.bodyError) || '',
+              thrMsgs: msgs9.map(m => {
+                const inbound = m.direction === 'in';
+                const body = String(m.body == null ? '' : m.body).trim();
+                return {
+                  tag: inbound ? 'Received' : 'Sent',
+                  tagColor: inbound ? '#7C00FF' : '#0E9355',
+                  border: inbound ? '#EDEBF2' : '#E4F3EA',
+                  bg: inbound ? '#fff' : '#FBFEFC',
+                  who: (inbound ? 'from ' : 'to ') + (m.counterparty || ''),
+                  when: when9(m.sentAt),
+                  body,
+                  hasBody: !!body,
+                  noBody: !body,
+                  noBodyNote: !m.mine
+                    ? 'This copy is in a colleague\u2019s mailbox, so the text cannot be read from here.'
+                    : (T9 && T9.bodyError) ? 'Not read \u2014 see above.'
+                    : 'Nothing readable in this message.',
+                  files: (m.attachments || []).map(f => ({ name: f.name, size: kb9(f.size || 0) })),
+                  hasFiles: (m.attachments || []).length > 0,
+                };
+              }),
+              thrEmpty: !busy9 && !!T9 && msgs9.length === 0,
+              thrEmptyNote: 'Nothing is stored for this conversation.',
+              // Only claim the text was read live when some of it actually was.
+              thrShowNote: !busy9 && !!T9 && mine9,
             };
           })(),
           inboxConnected: !!(D9 && D9.connected),

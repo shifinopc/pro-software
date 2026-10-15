@@ -15,7 +15,8 @@
  * metadata endpoints return. A scope is a promise to the person granting it, and asking for more
  * than the feature uses makes every later reassurance about privacy unbelievable.
  */
-import type { MailboxProvider, FetchResult, RawMessage } from "./mailbox.js";
+import type { MailboxProvider, FetchResult, RawMessage, MessageBody } from "./mailbox.js";
+import { htmlToText } from "./mailbox.js";
 
 const env = (k: string) => String(process.env[k] ?? "").trim();
 
@@ -129,12 +130,44 @@ async function gmailSearch(accessToken: string, q: string, cap: number): Promise
   return messages;
 }
 
+/** Gmail nests parts inside parts; the readable one can be at any depth. */
+function gmailParts(node: any, out: any[] = []): any[] {
+  if (!node) return out;
+  out.push(node);
+  for (const p of node.parts ?? []) gmailParts(p, out);
+  return out;
+}
+const b64url = (d: string) => Buffer.from(String(d ?? "").replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+
 export const googleProvider: MailboxProvider = {
   name: "google",
   refresh: (t) => refreshToken("google", t),
   // `in:anywhere` so a lead sitting in Spam or an archived thread still counts — the whole point of
   // a scan is to find the enquiry nobody filed.
   fetchRecent: (t, days) => gmailSearch(t, `newer_than:${Math.max(1, Math.round(days))}d in:anywhere`, 200),
+  async fetchBody(accessToken, externalId): Promise<MessageBody | null> {
+    const m: any = await (await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(externalId)}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } })).json();
+    if (!m || m.error) return null;
+
+    const parts = gmailParts(m.payload);
+    // text/plain first. The HTML alternative of the same message says the same thing wrapped in
+    // a table layout, and converting that back to text is strictly worse than the text the
+    // sender's own client already wrote.
+    const plain = parts.find(p => p.mimeType === "text/plain" && p.body?.data);
+    const rich = parts.find(p => p.mimeType === "text/html" && p.body?.data);
+    const text = plain ? b64url(plain.body.data)
+      : rich ? htmlToText(b64url(rich.body.data))
+      : String(m.snippet ?? "");
+
+    return {
+      text,
+      attachments: parts
+        .filter(p => p.filename && p.body?.attachmentId)
+        .map(p => ({ name: String(p.filename), size: Number(p.body.size ?? 0) })),
+    };
+  },
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // `q=newer_than` rather than a stored historyId for the first pass: a history cursor that has
     // expired (Gmail drops them after about a week) returns 404, and starting from a date is a
@@ -170,6 +203,20 @@ export const microsoftProvider: MailboxProvider = {
     const j: any = await r.json();
     if (!r.ok) throw new Error(j.error?.message ?? `Microsoft Graph rejected the request (${r.status})`);
     return (j.value ?? []).filter((m: any) => m.id && m.sentDateTime).map(graphMessage);
+  },
+  async fetchBody(accessToken, externalId): Promise<MessageBody | null> {
+    const url = `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(externalId)}`
+      + `?$select=body,bodyPreview&$expand=attachments($select=name,size)`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const j: any = await r.json();
+    if (!r.ok) return null;
+    const raw = String(j.body?.content ?? "");
+    return {
+      text: String(j.body?.contentType ?? "").toLowerCase() === "html"
+        ? htmlToText(raw) : (raw || String(j.bodyPreview ?? "")),
+      attachments: (j.attachments ?? []).filter((a: any) => a?.name)
+        .map((a: any) => ({ name: String(a.name), size: Number(a.size ?? 0) })),
+    };
   },
   async fetchSince(accessToken, cursor): Promise<FetchResult> {
     // Graph's delta link IS the cursor, and it already carries its own paging state — so when we
