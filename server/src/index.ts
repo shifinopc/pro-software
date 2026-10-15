@@ -30,7 +30,8 @@ import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
 import { itemsForStage, effectiveItems, blockersFor, summaryFor, evaluateRule, DEAL_FACTS, customFacts, customFieldClashes } from "./dealchecklist.js";
 import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor,
-         personalMailbox, sharedMailboxes, readableMailboxes, mailboxName, buildMatchIndex } from "./mailbox.js";
+         personalMailbox, sharedMailboxes, readableMailboxes, mailboxName, buildMatchIndex,
+         replyTimes } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
@@ -7009,6 +7010,18 @@ app.get("/api/inbox", requireAuth, requireStaff, requireReadRole("super_admin", 
     // Said by the route rather than inferred from an empty list: a connected mailbox with nothing
     // in it and no mailbox at all are the same picture and completely different problems.
     connected: (await prisma.mailboxConnection.count()) > 0,
+    /**
+     * HOW LONG AN ENQUIRY WAITS BEFORE SOMEBODY ANSWERS IT.
+     *
+     * Computed by replyTimes, which existed for weeks with exactly one reference in the codebase
+     * — its own definition. It is the most useful number this feature produces and it was being
+     * thrown away on every call.
+     *
+     * Here rather than on the sales dashboard because this is the screen somebody is ON when they
+     * can do something about it: the figure sits beside the tab that counts what is waiting.
+     * Scoped exactly like the thread list above, so a salesperson sees their own book.
+     */
+    replies: await replyTimes(scoped).catch(() => null),
     threads: list
       .sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)))
       .map(t => {

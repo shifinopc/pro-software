@@ -5426,6 +5426,41 @@
           </section>
         </sc-if>
 
+        <!-- ── How fast enquiries get answered ──────────────────────────────────────────────────
+             The one number this whole feature produces that somebody can act on, and it was being
+             computed and discarded on every call — replyTimes had a single reference in the entire
+             codebase, its own definition.
+
+             OUR SPEED FIRST, because it is the half the firm controls. How quickly a client writes
+             back is interesting; how long their enquiry sat before anybody answered is the thing
+             that loses work, and the thing somebody can fix this morning.
+
+             Measured per thread and on the FIRST reply only: a long conversation is one fact about
+             responsiveness, not twenty. A thread nobody has answered stays out of the median and is
+             counted as waiting instead — folding silence in as a slow reply would quietly improve
+             the average every time somebody was ignored. -->
+        <sc-if value="{{ rsShown }}" hint-placeholder-val="{{ true }}">
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .045s both; padding:11px 13px; display:flex; align-items:center; gap:22px; flex-wrap:wrap;">
+            <div>
+              <div style="font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:#A9A6B4;">We reply in</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:700; margin-top:4px; color:{{ rsOursColor }};">{{ rsOurs }}</div>
+              <div style="font-size:10px; color:#8C8899; margin-top:2px;">{{ rsOursSub }}</div>
+            </div>
+            <div style="width:1px; align-self:stretch; background:#F0EDF6;"></div>
+            <div>
+              <div style="font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:#A9A6B4;">Waiting on us</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:700; margin-top:4px; color:{{ rsWaitColor }};">{{ rsWaiting }}</div>
+              <div style="font-size:10px; color:#8C8899; margin-top:2px;">{{ rsWaitingSub }}</div>
+            </div>
+            <div style="width:1px; align-self:stretch; background:#F0EDF6;"></div>
+            <div>
+              <div style="font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:#A9A6B4;">They reply in</div>
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:19px; font-weight:700; margin-top:4px; color:#4B4757;">{{ rsTheirs }}</div>
+              <div style="font-size:10px; color:#8C8899; margin-top:2px;">{{ rsTheirsSub }}</div>
+            </div>
+          </section>
+        </sc-if>
+
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content; flex-wrap:wrap;">
           <sc-for list="{{ inboxTabs }}" as="t" hint-placeholder-count="3">
             <span onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 10px; border-radius:99px; cursor:pointer;">
@@ -36358,6 +36393,36 @@ class Component extends DCLogic {
             // the client is one link away inside. Unmatched rows used to do nothing at all.
             open: () => this._openThread9 && this._openThread9(t.threadId),
           })),
+          // ── reply speed ────────────────────────────────────────────────────────────────────
+          ...(() => {
+            const R = (D9 && D9.replies) || null;
+            const ours = R && R.ours, theirs = R && R.theirs;
+            // Hours below a day, days above it. "73.4 h" is a number somebody has to divide.
+            const dur = (h) => h == null ? '\u2014'
+              : h < 1 ? Math.max(1, Math.round(h * 60)) + ' min'
+              : h < 48 ? (Math.round(h * 10) / 10) + ' h'
+              : Math.round(h / 24) + ' days';
+            const n = (x) => Number(x || 0);
+            return {
+              // Only once there is mail to measure. A card of three dashes teaches nobody anything.
+              rsShown: !!(R && (n(ours && ours.threads) || n(theirs && theirs.threads))),
+              rsOurs: dur(ours && ours.medianHours),
+              // Red only past a working day. A median under 24 h is not a problem to colour.
+              rsOursColor: (ours && ours.medianHours != null && ours.medianHours > 24) ? '#C0353A' : '#0E9355',
+              rsOursSub: !ours || !ours.answered
+                ? (n(ours && ours.threads) ? 'nothing answered yet' : 'no enquiries yet')
+                : 'median across ' + ours.answered + (ours.answered === 1 ? ' answered thread' : ' answered threads'),
+              rsWaiting: String(n(ours && ours.waiting)),
+              rsWaitColor: n(ours && ours.waiting) ? '#B7791F' : '#0E9355',
+              rsWaitingSub: n(ours && ours.waiting)
+                ? (n(ours && ours.waiting) === 1 ? 'thread nobody has answered' : 'threads nobody has answered')
+                : 'everything has been answered',
+              rsTheirs: dur(theirs && theirs.medianHours),
+              rsTheirsSub: !theirs || !theirs.answered
+                ? (n(theirs && theirs.threads) ? 'no answers back yet' : 'nothing sent out yet')
+                : 'median across ' + theirs.answered + (theirs.answered === 1 ? ' answered thread' : ' answered threads'),
+            };
+          })(),
           inboxEmpty: rows9.length === 0,
           // Three different nothings, and they need three different sentences: no mailbox, a
           // mailbox with nothing in it, and a filter that matched none of what is there.

@@ -568,42 +568,90 @@ export async function scanLeads(conn: Mailbox, provider: MailboxProvider, days =
 }
 
 /**
- * TIME TO FIRST REPLY, per thread, in hours.
+ * TIME TO FIRST REPLY, both directions, in hours.
  *
- * The single most useful number this feature produces: it predicts a won deal better than how many
- * emails somebody sent. Measured from OUR first outbound in a thread to THEIR first inbound after
- * it — a reply that arrived before we wrote is a different conversation, not a fast response.
+ * The most useful pair of numbers this feature produces, and it was computed and thrown away: this
+ * function existed for weeks with exactly one reference in the codebase — its own definition.
  *
- * Returns null for a thread nobody has answered, and the caller keeps that as null. Treating an
- * unanswered thread as a slow reply would flatter nothing and mislead everybody: the median would
- * quietly improve every time somebody was ignored.
+ * IT USED TO MEASURE ONLY ONE DIRECTION, and the less actionable one. It timed our outbound to
+ * their inbound, which is how fast the CLIENT answers US — a signal of their interest, but nothing
+ * the firm can do anything about. The number a PRO firm can act on is the other way round: an
+ * enquiry lands, and how long it sits before somebody answers is the single thing most within
+ * their control and most predictive of whether the work is won. Both are returned now, named so
+ * they cannot be mistaken for one another on a screen.
+ *
+ * MEASURED PER THREAD, FIRST REPLY ONLY. A long conversation is not twenty data points about
+ * responsiveness; it is one, about how quickly it started.
+ *
+ * An unanswered thread stays NULL and is counted separately rather than folded in as a slow reply.
+ * Treating silence as slowness would quietly improve the median every time somebody was ignored,
+ * which is precisely backwards.
  */
-export async function replyTimes(companyId?: string | null): Promise<{ threads: number; answered: number; medianHours: number | null }> {
+export interface ReplySpeed {
+  /** Threads where the first move was theirs (ours), i.e. where a reply was owed. */
+  threads: number;
+  /** How many of those were answered. */
+  answered: number;
+  /** Median hours to that first answer, or null when nothing has been answered. */
+  medianHours: number | null;
+  /** Threads still waiting, which is the number somebody can actually do something about. */
+  waiting: number;
+}
+
+export async function replyTimes(scope?: string | string[] | null): Promise<{
+  /** How fast WE answer THEM. The service number. */
+  ours: ReplySpeed;
+  /** How fast THEY answer US. The interest number. */
+  theirs: ReplySpeed;
+}> {
   const msgs = await prisma.emailMessage.findMany({
-    where: companyId ? { companyId } : {},
+    // One client, a salesperson's whole book, or the firm. An empty ARRAY means "scoped to
+    // nothing", which is not the same as unscoped: it must return nothing, not everything.
+    where: Array.isArray(scope) ? { companyId: { in: scope } } : scope ? { companyId: scope } : {},
     select: { threadId: true, direction: true, sentAt: true },
     orderBy: { sentAt: "asc" },
   });
-  const byThread = new Map<string, { out: string | null; replyH: number | null }>();
+
+  // Per thread: the first message each way, and the first reply that FOLLOWED one. A message that
+  // arrived before the other side wrote is the start of a conversation, not an answer to it.
+  const threads = new Map<string, { firstIn: string | null; firstOut: string | null; weH: number | null; theyH: number | null }>();
   for (const m of msgs) {
-    const t = byThread.get(m.threadId) ?? { out: null, replyH: null };
-    if (m.direction === "out" && !t.out) t.out = m.sentAt;
-    else if (m.direction === "in" && t.out && t.replyH === null) {
-      const h = (Date.parse(m.sentAt) - Date.parse(t.out)) / 3_600_000;
-      if (Number.isFinite(h) && h >= 0) t.replyH = h;
+    const t = threads.get(m.threadId) ?? { firstIn: null, firstOut: null, weH: null, theyH: null };
+    const hoursSince = (from: string) => {
+      const h = (Date.parse(m.sentAt) - Date.parse(from)) / 3_600_000;
+      return Number.isFinite(h) && h >= 0 ? h : null;
+    };
+    if (m.direction === "in") {
+      if (!t.firstIn) t.firstIn = m.sentAt;
+      // Their answer to us, but only if we wrote first and they have not answered yet.
+      if (t.firstOut && t.theyH === null) t.theyH = hoursSince(t.firstOut);
+    } else {
+      if (!t.firstOut) t.firstOut = m.sentAt;
+      // Our answer to them, on the same rule.
+      if (t.firstIn && t.weH === null) t.weH = hoursSince(t.firstIn);
     }
-    byThread.set(m.threadId, t);
+    threads.set(m.threadId, t);
   }
-  const ours = [...byThread.values()].filter(t => t.out);
-  const answered = ours.map(t => t.replyH).filter((h): h is number => h !== null).sort((a, b) => a - b);
-  const median = answered.length
-    ? (answered.length % 2 ? answered[(answered.length - 1) / 2]
-      : (answered[answered.length / 2 - 1] + answered[answered.length / 2]) / 2)
-    : null;
+
+  const all = [...threads.values()];
+  const speed = (owed: typeof all, pick: (t: typeof all[number]) => number | null): ReplySpeed => {
+    const answered = owed.map(pick).filter((h): h is number => h !== null).sort((a, b) => a - b);
+    const median = answered.length
+      ? (answered.length % 2 ? answered[(answered.length - 1) / 2]
+        : (answered[answered.length / 2 - 1] + answered[answered.length / 2]) / 2)
+      : null;
+    return {
+      threads: owed.length,
+      answered: answered.length,
+      waiting: owed.length - answered.length,
+      medianHours: median === null ? null : Math.round(median * 10) / 10,
+    };
+  };
+
   return {
-    threads: ours.length,
-    answered: answered.length,
-    medianHours: median === null ? null : Math.round(median * 10) / 10,
+    // A reply is only owed by us on threads THEY started, and vice versa.
+    ours: speed(all.filter(t => t.firstIn), t => t.weH),
+    theirs: speed(all.filter(t => t.firstOut), t => t.theyH),
   };
 }
 
