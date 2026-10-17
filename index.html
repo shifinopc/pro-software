@@ -7381,6 +7381,12 @@
                  a separate sort dropdown beside a group dropdown would ask people to hold two ideas
                  that produce one outcome. "Hottest first" is one of its options, which is what the
                  design shows this control set to. -->
+            <!-- Board or list. Two shapes of one list, so a segmented control rather than two
+                 screens: the filters, the search and the grouping above apply to both. -->
+            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; flex-shrink:0;">
+              <span onClick="{{ ldViewList }}" title="One row per lead" style="font-size:10px; font-weight:700; color:{{ ldListColor }}; background:{{ ldListBg }}; box-shadow:{{ ldListShadow }}; padding:5px 11px; border-radius:99px; cursor:pointer;">List</span>
+              <span onClick="{{ ldViewBoard }}" title="A column per status, all of them at once" style="font-size:10px; font-weight:700; color:{{ ldBoardColor }}; background:{{ ldBoardBg }}; box-shadow:{{ ldBoardShadow }}; padding:5px 11px; border-radius:99px; cursor:pointer;">Board</span>
+            </div>
             <div class="pill-selwrap">
               <div data-dd data-open="{{ ddLdGroupOpen }}" onClick="{{ ddLdGroupToggle }}" class="pill-sel">
                 <span>{{ ddLdGroupLabel }}</span>
@@ -7426,6 +7432,7 @@
           </section>
         </sc-if>
 
+        <sc-if value="{{ ldListOn }}" hint-placeholder-val="{{ true }}">
         <section class="pg-card tbl-scroll" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
           <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) 104px minmax(0,1.1fr) 116px 104px 206px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Contact</span><span>Source</span><span>Need</span><span>Score</span><span>Stage</span><span></span></div>
           <sc-for list="{{ ldRows }}" as="l" hint-placeholder-count="4">
@@ -7548,6 +7555,77 @@
             </div>
           </sc-if>
         </section>
+        </sc-if>
+        <!-- ── The board ────────────────────────────────────────────────────────────────────────
+             EVERY STATUS AT ONCE. The table answers "work the next lead"; this answers "where does
+             the book stand", which the chips could only say as nine numbers and the table could
+             only show one status at a time.
+
+             NO CLIENT COLUMN, deliberately. This screen loads lead, prospect, lost and churned — a
+             lead that converts becomes a client and leaves it entirely. A Client column here would
+             be permanently empty and read as a bug.
+
+             NOT PAGINATED. Paging a board defeats it: the point is seeing the whole shape. Columns
+             cap at 40 cards and say how many more there are, because a thousand-card column is a
+             scroll nobody finishes, not information.
+
+             NO DRAGGING YET. Moving a lead between states is not a write to one column — promoting
+             captures qualification fields and offers to open a deal. A drag that skipped that would
+             quietly produce prospects with none of it. The arrow on the card opens the existing
+             flow; dragging can come once it goes through the same door. -->
+        <sc-if value="{{ ldBoardOn }}" hint-placeholder-val="{{ false }}">
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; gap:12px; align-items:flex-start; overflow-x:auto; padding-bottom:6px;">
+            <sc-for list="{{ ldBoardCols }}" as="col" hint-placeholder-count="4">
+              <div style="flex:0 0 272px; width:272px; background:#FBFAFE; border:1px solid #F0EDF6; border-radius:14px; padding:10px;">
+                <div style="display:flex; align-items:center; gap:8px; padding:2px 4px 10px;">
+                  <span style="width:7px; height:7px; border-radius:99px; background:{{ col.color }};"></span>
+                  <span style="font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#6F6C7A;">{{ col.label }}</span>
+                  <span style="font-size:10px; font-weight:700; color:{{ col.color }}; background:{{ col.bg }}; padding:2px 8px; border-radius:99px;">{{ col.count }}</span>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                    <div onClick="{{ c.open }}" style="background:#fff; border:1px solid #EDEBF2; border-radius:12px; padding:10px 11px; cursor:pointer;" style-hover="border-color:#D9CCF5; box-shadow:0 6px 18px -8px rgba(38,7,77,.25);">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="width:26px; height:26px; border-radius:9px; background:{{ c.avBg }}; color:{{ c.avColor }}; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</span>
+                        <span style="font-size:12px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.name }}</span>
+                        <div style="flex:1;"></div>
+                        <sc-if value="{{ c.hasScore }}" hint-placeholder-val="{{ true }}">
+                          <span title="{{ c.scoreTitle }}" style="font-size:10px; font-weight:700; color:{{ c.scoreFg }}; flex-shrink:0;">{{ c.score }}</span>
+                        </sc-if>
+                      </div>
+
+                      <!-- What they asked for, which is the one line that decides whether somebody
+                           picks this card up. Falls back to the industry/city line when absent. -->
+                      <div style="font-size:11px; color:#6F6C7A; margin-top:7px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ c.cardLine }}</div>
+
+                      <div style="display:flex; align-items:center; gap:7px; margin-top:9px; flex-wrap:wrap;">
+                        <span style="font-size:10px; color:#A9A6B4; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.owner }}</span>
+                        <div style="flex:1;"></div>
+                        <sc-if value="{{ c.isIdle }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:9px; font-weight:700; color:{{ c.idleColor }}; background:{{ c.idleBg }}; padding:2px 7px; border-radius:99px; flex-shrink:0;">{{ c.idleLabel }}</span>
+                        </sc-if>
+                        <sc-if value="{{ c.arrivedShown }}" hint-placeholder-val="{{ true }}">
+                          <span style="font-size:9px; color:#B4AFC4; flex-shrink:0;">{{ c.arrivedAgo }}</span>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:16px 8px; text-align:center; font-size:10px; color:#B4AFC4; line-height:1.6;">{{ col.emptyNote }}</div>
+                  </sc-if>
+                  <!-- Said rather than silently truncated: a column that stops at forty with no note
+                       is a column somebody believes they have read to the bottom of. -->
+                  <sc-if value="{{ col.moreShown }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:7px; text-align:center; font-size:10px; font-weight:700; color:#8C8899;">{{ col.more }}</div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </section>
+        </sc-if>
+
       </div></sc-if>
 
       <!-- ── Contacts ───────────────────────────────────────────────────────────────────────────
@@ -33452,6 +33530,24 @@ class Component extends DCLogic {
     };
     const _ldTest9 = _ldTabTest9[_ldFilter] || _ldTabTest9.All;
     const _ldFiltered9 = _leadRows.filter(_ldTest9).filter(_ldMatch9);
+    /**
+     * THE BOARD COUNTS FROM A WIDER SET, and it has to.
+     *
+     * The list's "All" deliberately means all WORKING leads — `_ldLive9` drops lost and churned,
+     * because a queue you are meant to work through should not be padded with dead records. On a
+     * board that same rule is a lie: the Lost and Churned columns would read 0 for ever, under a
+     * tab called All, next to a chip that says Lost 1.
+     *
+     * So the tabs that are facts about a PERSON or a DATE keep their meaning and lose the
+     * live-only restriction; the four tabs that are facts about STATUS still narrow, because
+     * clicking Lost and seeing only the Lost column is exactly what somebody meant by it.
+     */
+    const _ldBoardTest9 = {
+      All: () => true,
+      Mine: (l) => l.ownerId === _meId9,
+      Unassigned: (l) => !l.ownerId,
+      New: (l) => !!l.arrivedAt && l.arrivedAt >= _ldWeekAgo9,
+    }[_ldFilter] || _ldTest9;
     // Grouping is a SORT, not a nesting: the rows stay one flat list a person can scan and select
     // across, and collapsible sections would hide exactly the rows a bulk action is meant to catch.
     const _ldGroup9 = this.state.ldGroupBy || '';
@@ -33493,6 +33589,12 @@ class Component extends DCLogic {
      * fix — press back to page one — is not one people find, because the pagination is off the
      * bottom of an empty table.
      */
+    // Hottest first, always. A board is read for "what should I pick up", and the grouping control
+    // beside it reorders ROWS — there is nothing for it to do once the rows are columns.
+    const _ldBoardSet9 = _leadRows.filter(_ldBoardTest9).filter(_ldMatch9)
+      .sort((a, b) => ((_scoreBy9.get(b.id) || {}).score ?? -1) - ((_scoreBy9.get(a.id) || {}).score ?? -1)
+        || String(a.name).localeCompare(String(b.name)));
+
     const LD_PER_PAGE = 8;
     const _ldPageCount9 = Math.max(1, Math.ceil(_ldVisible.length / LD_PER_PAGE));
     const _ldPage9 = Math.min(Math.max(1, this.state.ldPage || 1), _ldPageCount9);
@@ -38534,7 +38636,19 @@ class Component extends DCLogic {
           },
         };
       })(),
-      ldRows: _ldPaged9.map(l => {
+      /**
+       * ONE ROW BUILDER, used by the table AND the board below.
+       *
+       * The board is the same leads in a different shape, so a second builder would be two
+       * descriptions of one record — and the first time somebody adds a field to a row and not
+       * to a card, the two views start disagreeing about the same lead. Everything a card shows
+       * is a subset of what a row shows; nothing in here is board-specific.
+       *
+       * Hung on `this` rather than returned, because the board's own block is a later property
+       * of this same object literal and cannot see a local of this one.
+       */
+      ...(() => {
+        const _ldRow9 = (l) => {
         const tone = _LC_TONE[l.lifecycle] || _LC_TONE.lead;
         const mine = _contactRows.filter(c => c.companyId === l.id);
         const primary = mine.find(c => c.isPrimary) || mine[0] || null;
@@ -38714,7 +38828,69 @@ class Component extends DCLogic {
           // that nothing renders is the kind of thing that gets "fixed" back into the template
           // later, and then the two disagree about who may do what.
         };
-      }),
+        };
+        this._mkLeadCard9 = _ldRow9;
+        return { ldRows: _ldPaged9.map(_ldRow9) };
+      })(),
+      // ══ The board ═══════════════════════════════════════════════════════════════════════════
+      //
+      // Every status side by side. The chips above could only say this as nine numbers and the
+      // table could only ever show one status at a time.
+      ...(() => {
+        const board9 = this.state.ldView === 'board';
+        // Built by the SAME function the table rows use, so a card cannot describe a lead
+        // differently from its row. Guarded only because binder order is a thing somebody could
+        // change later without noticing this depends on it.
+        const mk9 = this._mkLeadCard9 || ((l) => ({ name: l.name }));
+        // Forty, then a count. A column holding every lead the firm ever lost is a scroll nobody
+        // finishes, and the number is the part that was worth seeing.
+        const CAP9 = 40;
+        // No `client`: this screen loads lead, prospect, lost and churned, so a Client column
+        // would be permanently empty and read as a bug rather than as a fact.
+        const STATES9 = ['lead', 'prospect', 'lost', 'churned'];
+        const EMPTY9 = {
+          lead: 'No new leads here.',
+          prospect: 'Nothing qualified yet. Promote a lead when it is worth a quotation.',
+          lost: 'Nothing lost. Long may it last.',
+          churned: 'No client has left.',
+        };
+        return {
+          ldBoardOn: board9,
+          ldListOn: !board9,
+          ldViewList: () => this.setState({ ldView: 'list' }),
+          ldViewBoard: () => this.setState({ ldView: 'board' }),
+          ldListColor: board9 ? '#6F6C7A' : '#1A1523',
+          ldListBg: board9 ? 'transparent' : '#fff',
+          ldListShadow: board9 ? 'none' : '0 1px 3px rgba(26,21,35,.12)',
+          ldBoardColor: board9 ? '#1A1523' : '#6F6C7A',
+          ldBoardBg: board9 ? '#fff' : 'transparent',
+          ldBoardShadow: board9 ? '0 1px 3px rgba(26,21,35,.12)' : 'none',
+          // The whole set, NOT the page: paging a board defeats the point of it. Search and the
+          // person/date chips still apply; see `_ldBoardTest9` for why the status chips are the
+          // only ones that narrow it.
+          ldBoardCols: STATES9.map(k9 => {
+            const tone9 = _LC_TONE[k9] || _LC_TONE.lead;
+            const all9 = _ldBoardSet9.filter(l9 => String(l9.lifecycle || '') === k9);
+            return {
+              label: tone9.label, color: tone9.color, bg: tone9.bg,
+              count: String(all9.length),
+              cards: all9.slice(0, CAP9).map(l9 => {
+                const c9 = mk9(l9);
+                return {
+                  ...c9,
+                  // The need first, because it is what decides whether somebody picks the card up;
+                  // the industry/city line only when there is no need recorded.
+                  cardLine: c9.need || c9.meta || '',
+                };
+              }),
+              empty: all9.length === 0,
+              emptyNote: EMPTY9[k9] || 'Nothing here.',
+              moreShown: all9.length > CAP9,
+              more: '+' + (all9.length - CAP9) + ' more',
+            };
+          }),
+        };
+      })(),
       // ══ Lead detail panel ═══════════════════════════════════════════════════════════════════
       //
       // A slide-over on the record, so the list keeps its place behind it. Every card below is
