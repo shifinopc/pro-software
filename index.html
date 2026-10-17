@@ -7338,7 +7338,14 @@
              The tabs sit in one shared track rather than as nine separate outlined pills. Nine
              bordered chips in a row read as nine buttons of equal weight; a track with one raised
              chip in it reads as what it is, which is a single control currently set to All. -->
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <!-- z-index BECAUSE OF THE ANIMATION, which is not obvious and cost an afternoon.
+             `fadeUp` animates transform and opacity, and an element with such an animation
+             creates its own STACKING CONTEXT. So the grouping dropdown inside this section is
+             sealed in with it, and its own z-index:40 counts for nothing outside — the table
+             below, which animates too and comes later in the document, painted straight over
+             the open menu. 30 rather than the 20 its neighbours carry, because the bulk-action
+             bar sits between this and the table at 20 and an open menu belongs above both. -->
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; position:relative; z-index:30; display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
           <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center; background:#F3EFFA; border-radius:99px; padding:3px;">
             <sc-for list="{{ ldFilters }}" as="f" hint-placeholder-count="9">
               <span onClick="{{ f.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer; background:{{ f.bg }}; color:{{ f.fg }}; box-shadow:{{ f.shadow }};">
