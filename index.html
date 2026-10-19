@@ -14175,9 +14175,14 @@
 
   <!-- My Tasks detail drawer -->
   <sc-if value="{{ showWorkDrawer }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-wd="true" data-hidescroll="true" style="width:100%; max-width:520px; height:100%; background:#fff; border-left:1px solid #ECE8F3; box-shadow:-40px 0 90px rgba(30,10,60,.22); display:flex; flex-direction:column; overflow:hidden; animation:sheetIn .42s cubic-bezier(.32,.72,0,1) both;">
-        <div style="position:sticky; top:0; background:rgba(255,255,255,.9); backdrop-filter:blur(18px) saturate(1.4); border-bottom:1px solid #F1EEF7; padding:11px 18px 12px; z-index:2;">
+    <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-wd="true" data-hidescroll="true" class="fm-modal fm-rise" style="width:100%; max-width:560px; background:#fff; border-radius:20px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+        <!-- How far through the step you are. The run-level bar that used to sit here measures a
+             different thing — this one is the form in front of you. -->
+        <sc-if value="{{ wdPagerShown }}" hint-placeholder-val="{{ true }}">
+          <div style="height:3px; background:#F0EDF6; flex-shrink:0; border-radius:20px 20px 0 0; overflow:hidden;"><div style="height:3px; width:{{ wdProgPct }}; background:#7C00FF; transition:width .3s cubic-bezier(.22,1,.36,1);"></div></div>
+        </sc-if>
+        <div style="border-bottom:1px solid #F0EDF6; padding:12px 17px 12px; flex-shrink:0;">
           <!-- The toolbar the handoff specifies. The back chevron closes the sheet, which is what it
                means here; the link button copies this task's own URL, which the drawer already has
                because it puts the task id in the address. The ellipsis is NOT drawn: there is no
@@ -14211,7 +14216,7 @@
              container, and the action bar is sticky to ITS bottom — so a bottom padding here is not
              a gap under the last row, it is dead space UNDER THE PINNED BAR, stacked on top of the
              bar's own 20px. Two paddings, one visible gap, twice the size it should be. -->
-        <div style="padding:13px 18px 0; display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto;">
+        <div class="fm-body" data-hidescroll="true" style="display:flex; flex-direction:column;">
           <!-- Plain task detail -->
           <sc-if value="{{ wdIsPlain }}" hint-placeholder-val="{{ false }}">
             <!-- flex-shrink:0, or the drawer body — a flex column with more content than height —
@@ -14337,6 +14342,7 @@
           <!-- Workflow step detail -->
           <!-- What the person is meant to do. Snapshotted onto the step when it was created, so it is
                the brief they were actually given, not whatever the template says today. -->
+          <sc-if value="{{ wdPgDo }}" hint-placeholder-val="{{ true }}">
           <sc-if value="{{ wdHasInstructions }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHAT TO DO</div>
             <div style="margin-top:7px; margin-bottom:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:12px; padding:12px 10px; font-size:11px; color:#4B4757; line-height:1.6; white-space:pre-line;">{{ wdInstructions }}</div>
@@ -14399,6 +14405,8 @@
               </sc-if>
             </div>
           </sc-if>
+          </sc-if>
+          <sc-if value="{{ wdPgList }}" hint-placeholder-val="{{ false }}">
           <sc-if value="{{ wdHasChecklist }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex; align-items:center; justify-content:space-between;">
               <span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">REQUIRED DOCUMENTS</span>
@@ -14424,6 +14432,8 @@
               </sc-for>
             </div>
           </sc-if>
+          </sc-if>
+          <sc-if value="{{ wdPgRec }}" hint-placeholder-val="{{ false }}">
           <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:13px;">RECORD</div>
             <sc-if value="{{ wdRuleErrShow }}" hint-placeholder-val="{{ false }}">
@@ -14460,10 +14470,12 @@
               <button onClick="{{ approveStep }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:11px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Approve</button>
             </div>
           </sc-if>
+          </sc-if>
           <!-- A FOOTER, not a button floating over the fields. The body scrolls properly now that
                its container closes where it should, so the action can sit in a bar pinned to the
                bottom of it — the same shape the dialogs use — with the deadline beside it rather
                than scrolling away above it. -->
+          <sc-if value="{{ wdPgDone }}" hint-placeholder-val="{{ false }}">
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:14px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 4px;">
               <div style="font-size:10px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
@@ -14481,7 +14493,24 @@
               </sc-if>
             </div>
           </sc-if>
+          </sc-if>
         </div>
+        <!-- ONE STEP AT A TIME. The sheet asked for everything at once — instructions, the
+             client login, a checklist and the fields, stacked in one scroll — so the two inputs
+             that actually complete the step sat below the fold on a laptop. Complete stays on the
+             last page with its own blocked/held wording; this bar only moves between pages. -->
+        <sc-if value="{{ wdPagerShown }}" hint-placeholder-val="{{ true }}">
+          <div class="fm-foot">
+            <span style="font-size:11px; font-weight:600; color:#8C8899;">{{ wdStepLabel }}</span>
+            <div style="flex:1;"></div>
+            <sc-if value="{{ wdBackShown }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ wdBack }}" style="background:#fff; color:#4B4757; border:1px solid #E4E0EC; font-size:11px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">Back</button>
+            </sc-if>
+            <sc-if value="{{ wdNextShown }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ wdNext }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:700; padding:8px 16px; border-radius:99px; cursor:pointer;" style-hover="background:#2B2438;">Next</button>
+            </sc-if>
+          </div>
+        </sc-if>
       </div>
     </div>
   </sc-if>
@@ -33021,6 +33050,58 @@ class Component extends DCLogic {
           }
           close9();
         },
+      };
+    }
+
+    /**
+     * ONE STEP AT A TIME.
+     *
+     * The sheet asked for everything at once — what to do, the client's login for the authority,
+     * a checklist and then the fields that actually complete the step, stacked in a single scroll.
+     * On a laptop the two inputs that finish the job sat below the fold, under material the officer
+     * had already read.
+     *
+     * PAGES ARE BUILT FROM WHAT THE STEP HAS, never from a fixed list of four. A step with no
+     * checklist does not get an empty Checklist page — an empty page is worse than no page, because
+     * it reads as something that failed to load.
+     *
+     * A PLAIN TASK IS NOT PAGED. It has no step structure to page through, so `wdIsPlain` keeps
+     * every gate open and the footer hidden.
+     *
+     * The page is remembered against the task it belongs to. Without that key, opening a second
+     * task from the list would land on page 3 of a form the reader has not seen.
+     */
+    if (drawerApi.showWorkDrawer) {
+      const plain9 = !!drawerApi.wdIsPlain;
+      const PAGES9 = plain9 ? [] : [
+        { key: 'do', label: 'What to do', has: !!(drawerApi.wdHasInstructions || drawerApi.wdVerifyShow || drawerApi.wdCredShow) },
+        { key: 'list', label: 'Checklist', has: !!drawerApi.wdHasChecklist },
+        { key: 'rec', label: 'Record', has: !!(drawerApi.wdHasCaptures || drawerApi.wdIsApproval) },
+        { key: 'done', label: 'Finish', has: !!drawerApi.wdCanCompleteStep },
+      ].filter(p9 => p9.has);
+
+      const key9 = String(this.state.workRow || '');
+      const want9 = (this.state.wdPageFor === key9) ? (this.state.wdPage || 0) : 0;
+      const at9 = Math.min(Math.max(0, want9), Math.max(0, PAGES9.length - 1));
+      const cur9 = (PAGES9[at9] || {}).key || '';
+      const go9 = (n9) => this.setState({ wdPage: n9, wdPageFor: key9 });
+
+      drawerApi = {
+        ...drawerApi,
+        // One page open at a time; everything open when there is nothing to page.
+        wdPgDo: !PAGES9.length || cur9 === 'do',
+        wdPgList: !PAGES9.length || cur9 === 'list',
+        wdPgRec: !PAGES9.length || cur9 === 'rec',
+        wdPgDone: !PAGES9.length || cur9 === 'done',
+        // A single page is not a sequence, so it gets no bar and no footer — a "Step 1 of 1" is
+        // a control that can never be used.
+        wdPagerShown: PAGES9.length > 1,
+        wdStepLabel: PAGES9.length > 1 ? 'Step ' + (at9 + 1) + ' of ' + PAGES9.length + ' \u00b7 ' + PAGES9[at9].label : '',
+        wdProgPct: PAGES9.length ? Math.round(((at9 + 1) / PAGES9.length) * 100) + '%' : '0%',
+        wdBackShown: at9 > 0,
+        wdNextShown: at9 < PAGES9.length - 1,
+        wdBack: () => go9(Math.max(0, at9 - 1)),
+        wdNext: () => go9(at9 + 1),
       };
     }
     // ---- Pending / Completed ----
