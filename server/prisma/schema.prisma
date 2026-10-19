@@ -60,6 +60,15 @@ model Company {
   /// blank: the `sales` role sees exactly the clients whose ownerId is theirs, so an unowned client
   /// is invisible to every salesperson until somebody claims it.
   ownerId       String?
+  /// WHICH SERVICE THEY CAME FOR — Company Formation, PRO, VAT, Auditing.
+  ///
+  /// Nullable and free text, holding a name from the Product list rather than an id: the list is a
+  /// set of suggestions people may type past, and a foreign key would make the one lead that wants
+  /// something not yet on the list impossible to save.
+  ///
+  /// The lead ROUTER has always been able to route on this — `nextOwnerFor` takes a `service` fact
+  /// — and nothing ever sent it one, because no screen asked. Now one does.
+  service       String?
   /// Where it came from — referral, website, walk-in, campaign. `sourceDetail` holds the specifics
   /// ("referred by Al Rajhi HR"), because a source you cannot ask a follow-up question about is
   /// worth very little when deciding where the next riyal of marketing goes.
@@ -1552,6 +1561,50 @@ model CancelReason {
 /// What a company does — suggest-don't-constrain, same contract as every list here. A master
 /// rather than hardcoded values because "which industries exist" is a fact about the market the
 /// installation serves, and it ships in a country pack like the rest.
+/// WHAT THE FIRM SELLS, offered when a lead is taken.
+///
+/// A suggestion, never a constraint, like every other picklist here: a lead recorded before this
+/// list existed, or one wanting something nobody has added yet, must still be savable. The value
+/// is what makes "which service wins most" answerable, and it is already a fact the lead ROUTER
+/// understands — `nextOwnerFor` has always accepted a service and the form never sent one.
+model Product {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
+/// WHAT A QUOTATION LINE IS FOR — professional fees, government fees, and the rest.
+///
+/// Separate from Product on purpose, and not a subset of it. What the client is BUYING and what a
+/// line on the invoice is CHARGING for are different questions: one company-formation sale carries
+/// a professional fee and a government fee, and a report that cannot tell them apart cannot say
+/// what the firm actually earned as against what it merely collected and passed on.
+model ChargeType {
+  id           String  @id @default(cuid())
+  country      String?
+  name         String
+  color        String?
+  bg           String?
+  sort         Int     @default(0)
+  retired      Boolean @default(false)
+  packKey      String?
+  packVersion  String?
+  packModified Boolean @default(false)
+
+  @@index([packKey])
+  @@index([country])
+}
+
 model Industry {
   id           String  @id @default(cuid())
   country      String?

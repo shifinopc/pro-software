@@ -62,7 +62,15 @@ export async function routeFor(scope: "lead" | "task", facts: RoutingFacts): Pro
     if (r.whenCity) checks.push([r.whenCity, facts.city]);
     if (r.whenCountry) checks.push([r.whenCountry, facts.country]);
     if (r.whenGovCenter) checks.push([r.whenGovCenter, facts.govCenter]);
-    if (r.whenService) checks.push([r.whenService, facts.service]);
+    // SERVICE IS A SET, not a value. A lead wanting company formation usually wants the PRO work
+    // that follows it, so the field holds "Company Formation, PRO" and an exact comparison would
+    // match neither. A rule naming one service matches a lead that asked for it among others,
+    // which is what somebody writing "PRO goes to Omar" means.
+    if (r.whenService) {
+      const wanted = String(r.whenService).trim().toLowerCase();
+      const has = String(facts.service ?? "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+      if (!has.includes(wanted)) continue;
+    }
     if (!checks.every(([a, b]) => same(a, b))) continue;
 
     // Naming a person is the more specific instruction, so it wins when a rule carries both.

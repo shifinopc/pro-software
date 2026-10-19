@@ -1822,6 +1822,9 @@ app.delete("/api/contacts/:id", requireAuth, requireStaff, requireWriteRole, asy
 const PICKLISTS = {
   "lead-sources": "leadSource", "lost-reasons": "lostReason", "competitors": "competitor",
   "industries": "industry", "campaigns": "campaign", "cancel-reasons": "cancelReason",
+  // What the firm sells, and what a quotation line charges for. Two lists, because one sale
+  // carries several kinds of charge — see the models for why they are not the same question.
+  "products": "product", "charge-types": "chargeType",
   "courier-job-types": "courierJobType", "appointment-types": "appointmentType",
   "courier-statuses": "courierStatus", "appointment-statuses": "appointmentStatus",
 } as const;

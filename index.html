@@ -10837,6 +10837,17 @@
                   <input value="{{ l.price }}" onChange="{{ l.setPrice }}" type="number" min="0" max="10000000" step="0.01" placeholder="Price" style="width:72px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
                   <div onClick="{{ l.remove }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
+                  <!-- The usual lines, one press each. Chips rather than a datalist: this
+                       runtime renders a whitelist of attributes and drops the element, so
+                       `list=` and <datalist> both disappear before they reach the page. The box
+                       above stays a text box — a charge nobody has named yet must be writable. -->
+                  <sc-if value="{{ l.hasChips }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; gap:5px; flex-wrap:wrap; margin:-2px 0 2px;">
+                      <sc-for list="{{ l.chips }}" as="ct" hint-placeholder-count="4">
+                        <span onClick="{{ ct.pick }}" style="font-size:10px; font-weight:600; color:{{ ct.fg }}; background:{{ ct.bg }}; border:1px solid {{ ct.bd }}; padding:3px 9px; border-radius:99px; cursor:pointer;">{{ ct.label }}</span>
+                      </sc-for>
+                    </div>
+                  </sc-if>
               </sc-for>
             </div>
             <div style="margin-top:10px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea value="{{ qcNotes }}" onChange="{{ setQcNotes }}" placeholder="Printed on the quotation. Terms &amp; footer come from Print Layout." rows="2" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
@@ -13191,6 +13202,23 @@
             <div>
               <label class="fm-lab">City</label>
               <input value="{{ ldfCity }}" onInput="{{ setLdfCity }}" class="fm-inp">
+            </div>
+            <div>
+              <!-- WHICH SERVICE THEY CAME FOR. Above Industry because it is the question the
+                   salesperson is actually holding: what the client wants from us, as against
+                   what the client does for a living. -->
+              <label class="fm-lab">Product</label>
+              <input value="{{ ldfService }}" onInput="{{ setLdfService }}" placeholder="What are they asking for?" class="fm-inp">
+              <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
+              </sc-if>
+              <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
+                  <sc-for list="{{ ldfServiceChips }}" as="c" hint-placeholder-count="4">
+                    <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
+                  </sc-for>
+                </div>
+              </sc-if>
             </div>
             <div>
               <label class="fm-lab">Industry</label>
@@ -16709,6 +16737,11 @@ class Component extends DCLogic {
           .then(v => { if (Array.isArray(v)) this.setState({ competitorsData: v }); }).catch(() => {});
         fetch(API + '/api/industries', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ industriesData: v }); }).catch(() => {});
+        // What the firm sells, and what a quotation line charges for.
+        fetch(API + '/api/products', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+          .then(v => { if (Array.isArray(v)) this.setState({ productsData: v }); }).catch(() => {});
+        fetch(API + '/api/charge-types', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+          .then(v => { if (Array.isArray(v)) this.setState({ chargeTypesData: v }); }).catch(() => {});
         fetch(API + '/api/campaigns', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ campaignsData: v }); }).catch(() => {});
         fetch(API + '/api/cancel-reasons', { headers: hdr }).then(r => (r.ok ? r.json() : null))
@@ -34130,6 +34163,8 @@ class Component extends DCLogic {
     const _compList = Array.isArray(this.state.competitorsData) ? this.state.competitorsData : [];
     const _cancelReasonList = Array.isArray(this.state.cancelReasonsData) ? this.state.cancelReasonsData : [];
     const _industryList = Array.isArray(this.state.industriesData) ? this.state.industriesData : [];
+    const _productList = Array.isArray(this.state.productsData) ? this.state.productsData : [];
+    const _chargeList = Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : [];
     const _campaignList = Array.isArray(this.state.campaignsData) ? this.state.campaignsData : [];
     /**
      * Which option in the "Where from" dropdown represents the value that will actually be saved.
@@ -34161,6 +34196,39 @@ class Component extends DCLogic {
       if (picked !== '__other') return { ...(form || {}), source: picked, sourceOther: false };
       const already = _sourceIsOther9((form || {}).source, (form || {}).sourceOther);
       return already ? { ...(form || {}), sourceOther: true } : { ...(form || {}), source: '', sourceOther: true };
+    };
+
+    /**
+     * MULTI-SELECT CHIPS, for a field that can hold more than one answer.
+     *
+     * A lead asking for company formation usually wants the PRO work that follows it, so Product is
+     * not one choice — it is a set. Stored as a comma-separated string in the one `service` column
+     * rather than as a JSON array, for one reason: the box underneath stays a TEXT box. The list is
+     * a set of suggestions people must be able to type past, and "PRO, VAT, something we have not
+     * named yet" has to be writable. The cost is honest and worth stating — anything that reports on
+     * this field has to split it, and the sales router now does exactly that.
+     */
+    const _parts9 = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+    const _chipsMulti9 = (list, current, apply) => {
+      const on9 = _parts9(current).map(x => x.toLowerCase());
+      return list.map(o => {
+        const picked = on9.includes(String(o.name).trim().toLowerCase());
+        return {
+          label: o.name,
+          bd: picked ? (o.color || '#7C00FF') : '#E4E0EC',
+          bg: picked ? (o.bg || '#F5EEFF') : '#fff',
+          fg: picked ? (o.color || '#7C00FF') : '#6F6C7A',
+          // Pressing one you are already on removes it, so a wrong press is one press to undo.
+          // Order is preserved on the way out: the list reads as the person built it.
+          pick: () => {
+            const cur = _parts9(current);
+            const next = picked
+              ? cur.filter(x => x.trim().toLowerCase() !== String(o.name).trim().toLowerCase())
+              : [...cur, o.name];
+            apply(next.join(', '));
+          },
+        };
+      });
     };
 
     const _chips9 = (list, current, apply) => list.map(o => {
@@ -38460,6 +38528,22 @@ class Component extends DCLogic {
           hint: 'These fill the "Up against" box on a deal in one press. Anything else can still be typed.',
         },
         {
+          key: 'product', path: 'products', draftKey: 'ssProdDraft', errKey: 'ssProdErr',
+          title: 'Products', sub: 'What the firm sells',
+          placeholder: 'e.g. Company Formation', live: _productList,
+          starter: ['Company Formation', 'PRO', 'VAT', 'Auditing'],
+          emptyNote: 'No products set up. The Product box on a lead is then a free text box, and "which service converts best" splits one answer across every spelling of it.',
+          hint: 'These fill the Product box on a lead in one press, and the sales router can route on it. Anything else can still be typed.',
+        },
+        {
+          key: 'charge', path: 'charge-types', draftKey: 'ssChgDraft', errKey: 'ssChgErr',
+          title: 'Quotation line items', sub: 'What a line charges for',
+          placeholder: 'e.g. Professional Fees', live: _chargeList,
+          starter: ['Professional Fees', 'Company Acquisition', 'Company Formation', 'Government Fees'],
+          emptyNote: 'No line items set up. Every quotation line is then typed from scratch, and professional fees cannot be told apart from money merely collected and passed on.',
+          hint: 'These are offered under the Description box on a quotation line. It stays a text box \u2014 a line nobody has a name for must still be writable.',
+        },
+        {
           key: 'industry', path: 'industries', draftKey: 'ssIndDraft', errKey: 'ssIndErr',
           title: 'Industries', sub: 'What client companies do',
           placeholder: 'e.g. Trading', live: _industryList,
@@ -39262,6 +39346,14 @@ class Component extends DCLogic {
       ldfName: (_ldf && _ldf.name) || '', ldfContact: (_ldf && _ldf.contact) || '', ldfTitle: (_ldf && _ldf.title) || '',
       ldfEmail: (_ldf && _ldf.email) || '', ldfPhone: (_ldf && _ldf.phone) || '', ldfSource: (_ldf && _ldf.source) || '',
       ldfCity: (_ldf && _ldf.city) || '', ldfNote: (_ldf && _ldf.note) || '', ldfErr: this.state.ldfErr || '',
+      // WHICH SERVICE THEY CAME FOR. Same shape as Industry — a text box with the configured list
+      // offered as chips — because it is the same kind of fact: a short set of usual answers that
+      // somebody must still be able to type past. It also feeds the lead ROUTER, which has always
+      // accepted a `service` and never been sent one, because no screen asked.
+      ldfService: (_ldf && _ldf.service) || '',
+      setLdfService: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), service: e.target.value }, ldfErr: '' }),
+      ldfServiceChips: _chipsMulti9(_productList, _ldf && _ldf.service, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), service: v }, ldfErr: '' })),
+      hasServiceChips: _productList.length > 0,
       ldfIndustry: (_ldf && _ldf.industry) || '',
       setLdfIndustry: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: e.target.value }, ldfErr: '' }),
       ldfIndustryChips: _chips9(_industryList, _ldf && _ldf.industry, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: v }, ldfErr: '' })),
@@ -39344,6 +39436,7 @@ class Component extends DCLogic {
               name: String(f.name).trim(),
               city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
+            service: f.service || null,
               ownerId: f.owner || null,
               contact: {
                 name: String(f.contact || '').trim() || null,
@@ -39364,6 +39457,7 @@ class Component extends DCLogic {
             name: String(f.name).trim(), lifecycle: 'lead',
             city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
+            service: f.service || null,
             ownerId: f.owner || null,
             // Sent as contacts, not as the three flat columns: the server writes those from the
             // primary contact, and handing it both would be two answers to the same question.
@@ -40422,6 +40516,22 @@ class Component extends DCLogic {
         desc: l[0], units: l[1], price: l[2],
         lineTotal: fmtCur((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)),
         setDesc: (e) => { const a = qcLines.map(x => [...x]); a[i][0] = e.target.value; this.setState({ qcLines: a }); },
+        // Built per row rather than once, because a chip has to know WHICH line it fills. That is
+        // also why this is not one of the named dropdown helpers: those take a binding name, and a
+        // repeating row has no name of its own to give.
+        hasChips: _chargeList.length > 0,
+        chips: _chargeList.map(o => {
+          const on = String(l[0] || '').trim().toLowerCase() === String(o.name).trim().toLowerCase();
+          return {
+            label: o.name,
+            bd: on ? (o.color || '#7C00FF') : '#E4E0EC',
+            bg: on ? (o.bg || '#F5EEFF') : '#fff',
+            fg: on ? (o.color || '#7C00FF') : '#6F6C7A',
+            // One line is one charge, so this replaces rather than appends; pressing the one you
+            // are on clears it, which is how every other chip in this app behaves.
+            pick: () => { const a = qcLines.map(x => [...x]); a[i][0] = on ? '' : o.name; this.setState({ qcLines: a }); },
+          };
+        }),
         setUnits: (e) => { const a = qcLines.map(x => [...x]); a[i][1] = e.target.value; this.setState({ qcLines: a }); },
         setPrice: (e) => { const a = qcLines.map(x => [...x]); a[i][2] = e.target.value; this.setState({ qcLines: a }); },
         remove: () => this.setState({ qcLines: qcLines.length > 1 ? qcLines.filter((_, j) => j !== i) : qcLines }),
