@@ -466,6 +466,9 @@
      `min-width:100%` ties it to the trigger and `width:max-content` lets it grow past it for a
      long option, which is the thing a fixed width was there to solve. `max-width` keeps one very
      long option from stretching the menu across the table. */
+  /* A line's own menu. Matches the field rather than hugging its content: it belongs to the box
+     above it, and a menu narrower than its input reads as a different control. */
+  .qc-dd{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid #E4E0EC;border-radius:12px;box-shadow:0 10px 28px rgba(38,7,77,.16);padding:5px;max-height:190px;overflow-y:auto;overscroll-behavior:contain;}
   .pill-dd{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:100%;width:max-content;max-width:280px;background:#fff;border:1px solid #E4E0EC;border-radius:12px;box-shadow:0 10px 28px rgba(38,7,77,.16);padding:5px;max-height:260px;overflow-y:auto;overscroll-behavior:contain;}
   /* Both spellings: some callers pass the flag as a boolean, which renders as "true", and a
      picker that does not light up when open reads as a dead control. */
@@ -10842,22 +10845,34 @@
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
               <sc-for list="{{ qcLineRows }}" as="l" hint-placeholder-count="1">
                 <div style="display:flex; gap:6px; align-items:center;">
-                  <input value="{{ l.desc }}" onChange="{{ l.setDesc }}" maxlength="120" placeholder="Description" style="flex:1.8; min-width:0; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;">
+                  <!-- TYPE OR PICK. Chips under every row meant four extra shapes per line, and a
+                       quotation with five lines carried twenty of them — the suggestions were louder
+                       than the quotation. A menu on the field costs nothing until it is opened.
+                  
+                       `data-dd` is the app's own contract: an outside mousedown closes whatever is in
+                       `openDd`, and _placeDropdowns flips the panel above the field when the dialog has
+                       no room below. Both come free by using the convention rather than a new one. -->
+                  <div data-dd style="position:relative; flex:1.8; min-width:0;">
+                    <input value="{{ l.desc }}" onChange="{{ l.setDesc }}" maxlength="120" placeholder="Description" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 26px 8px 10px; font-size:11px; background:#FCFBFE;">
+                    <span onClick="{{ l.ddToggle }}" title="Pick a usual line" style="position:absolute; right:7px; top:50%; transform:translateY(-50%); width:16px; height:16px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </span>
+                    <sc-if value="{{ l.ddOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd class="qc-dd">
+                        <sc-for list="{{ l.ddOptions }}" as="o" hint-placeholder-count="4">
+                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span>{{ o.label }}</span></div>
+                        </sc-for>
+                        <!-- Typing something the list has never heard of is allowed and is not an error. -->
+                        <sc-if value="{{ l.ddNone }}" hint-placeholder-val="{{ false }}">
+                          <div style="padding:8px 11px; font-size:10px; color:#A9A6B4; line-height:1.5;">{{ l.ddNoneNote }}</div>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                  </div>
                   <input value="{{ l.units }}" onChange="{{ l.setUnits }}" type="number" min="1" max="9999" step="1" placeholder="Qty" style="width:46px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
                   <input value="{{ l.price }}" onChange="{{ l.setPrice }}" type="number" min="0" max="10000000" step="0.01" placeholder="Price" style="width:72px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
                   <div onClick="{{ l.remove }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
-                  <!-- The usual lines, one press each. Chips rather than a datalist: this
-                       runtime renders a whitelist of attributes and drops the element, so
-                       `list=` and <datalist> both disappear before they reach the page. The box
-                       above stays a text box — a charge nobody has named yet must be writable. -->
-                  <sc-if value="{{ l.hasChips }}" hint-placeholder-val="{{ false }}">
-                    <div style="display:flex; gap:5px; flex-wrap:wrap; margin:-2px 0 2px;">
-                      <sc-for list="{{ l.chips }}" as="ct" hint-placeholder-count="4">
-                        <span onClick="{{ ct.pick }}" style="font-size:10px; font-weight:600; color:{{ ct.fg }}; background:{{ ct.bg }}; border:1px solid {{ ct.bd }}; padding:3px 9px; border-radius:99px; cursor:pointer;">{{ ct.label }}</span>
-                      </sc-for>
-                    </div>
-                  </sc-if>
               </sc-for>
             </div>
             <div style="margin-top:10px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea value="{{ qcNotes }}" onChange="{{ setQcNotes }}" placeholder="Printed on the quotation. Terms &amp; footer come from Print Layout." rows="2" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
@@ -40539,19 +40554,39 @@ class Component extends DCLogic {
         // Built per row rather than once, because a chip has to know WHICH line it fills. That is
         // also why this is not one of the named dropdown helpers: those take a binding name, and a
         // repeating row has no name of its own to give.
-        hasChips: _chargeList.length > 0,
-        chips: _chargeList.map(o => {
-          const on = String(l[0] || '').trim().toLowerCase() === String(o.name).trim().toLowerCase();
+        // ── type or pick ──────────────────────────────────────────────────────────────────
+        //
+        // Built per row because the menu has to know WHICH line it fills, which is also why this
+        // is not one of the named dropdown helpers: those take a binding name and a repeating row
+        // has none to give. It rides `openDd` so the app's own outside-click handler closes it.
+        ...(() => {
+          const id9 = 'qcline-' + i;
+          const open9 = this.state.openDd === id9;
+          const typed9 = String(l[0] || '').trim().toLowerCase();
+          // Filtered by what is already in the box, so a half-typed line narrows the menu instead
+          // of offering four things that do not match it. An exact match filters to nothing, which
+          // would read as broken, so that case shows the whole list.
+          const hits9 = _chargeList.filter(o => !typed9 || String(o.name).toLowerCase().includes(typed9));
+          const list9 = hits9.length ? hits9 : _chargeList;
           return {
-            label: o.name,
-            bd: on ? (o.color || '#7C00FF') : '#E4E0EC',
-            bg: on ? (o.bg || '#F5EEFF') : '#fff',
-            fg: on ? (o.color || '#7C00FF') : '#6F6C7A',
-            // One line is one charge, so this replaces rather than appends; pressing the one you
-            // are on clears it, which is how every other chip in this app behaves.
-            pick: () => { const a = qcLines.map(x => [...x]); a[i][0] = on ? '' : o.name; this.setState({ qcLines: a }); },
+            ddOpen: open9,
+            ddToggle: () => this.setState({ openDd: open9 ? null : id9 }),
+            ddOptions: list9.map(o => {
+              const on = String(o.name).trim().toLowerCase() === typed9;
+              return {
+                label: o.name,
+                weight: on ? '700' : '500',
+                color: on ? '#7C00FF' : '#1A1523',
+                // One line is one charge, so picking replaces whatever was there.
+                pick: () => { const a = qcLines.map(x => [...x]); a[i][0] = o.name; this.setState({ qcLines: a, openDd: null }); },
+              };
+            }),
+            ddNone: !_chargeList.length || !hits9.length,
+            ddNoneNote: !_chargeList.length
+              ? 'No line items set up yet \u2014 add them under Sales Settings, or just type.'
+              : 'Nothing matches \u201c' + String(l[0] || '').trim() + '\u201d. It will be saved exactly as typed.',
           };
-        }),
+        })(),
         setUnits: (e) => { const a = qcLines.map(x => [...x]); a[i][1] = e.target.value; this.setState({ qcLines: a }); },
         setPrice: (e) => { const a = qcLines.map(x => [...x]); a[i][2] = e.target.value; this.setState({ qcLines: a }); },
         remove: () => this.setState({ qcLines: qcLines.length > 1 ? qcLines.filter((_, j) => j !== i) : qcLines }),
