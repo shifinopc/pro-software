@@ -13242,17 +13242,28 @@
                      salesperson is actually holding: what the client wants from us, as against
                      what the client does for a living. -->
                 <label class="fm-lab">Product</label>
-                <input value="{{ ldfService }}" onInput="{{ setLdfService }}" placeholder="What are they asking for?" class="fm-inp">
-                <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
-                  <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
-                </sc-if>
-                <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                    <sc-for list="{{ ldfServiceChips }}" as="c" hint-placeholder-count="4">
-                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                    </sc-for>
-                  </div>
-                </sc-if>
+                <div data-dd style="position:relative;">
+                  <input value="{{ ldfService }}" onInput="{{ setLdfService }}" placeholder="What are they asking for?" class="fm-inp" style="padding-right:30px;">
+                  <span onClick="{{ ldfSvcToggle }}" title="Pick the services they want" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); width:18px; height:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                  </span>
+                  <sc-if value="{{ ldfSvcOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="qc-dd">
+                      <sc-for list="{{ ldfSvcOptions }}" as="o" hint-placeholder-count="4">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};">
+                          <!-- A box rather than a tick alone: an unticked row has to look like something
+                               you can tick, or a multi-select reads as a list that ignores your clicks. -->
+                          <span style="width:15px; height:15px; flex:0 0 auto; border-radius:4px; border:1.5px solid {{ o.boxBd }}; background:{{ o.boxBg }}; color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center;">{{ o.mark }}</span>
+                          <span>{{ o.label }}</span>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ ldfSvcEmpty }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:8px 11px; font-size:10px; color:#A9A6B4; line-height:1.5;">No products set up yet — add them under Sales Settings, or just type.</div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
               </div>
               <div>
                 <label class="fm-lab">Industry</label>
@@ -34234,37 +34245,15 @@ class Component extends DCLogic {
     };
 
     /**
-     * MULTI-SELECT CHIPS, for a field that can hold more than one answer.
+     * A field that holds more than one answer, as a comma-separated string.
      *
-     * A lead asking for company formation usually wants the PRO work that follows it, so Product is
-     * not one choice — it is a set. Stored as a comma-separated string in the one `service` column
-     * rather than as a JSON array, for one reason: the box underneath stays a TEXT box. The list is
-     * a set of suggestions people must be able to type past, and "PRO, VAT, something we have not
-     * named yet" has to be writable. The cost is honest and worth stating — anything that reports on
-     * this field has to split it, and the sales router now does exactly that.
+     * Product is not one choice but a set — a lead asking for company formation usually wants
+     * the PRO work that follows it. Stored in the one `service` column rather than as a JSON
+     * array for one reason: the box stays a TEXT box, and "PRO, VAT, something we have not
+     * named yet" has to be writable. The cost is honest — anything reporting on this field has
+     * to split it, and the sales router does exactly that.
      */
     const _parts9 = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
-    const _chipsMulti9 = (list, current, apply) => {
-      const on9 = _parts9(current).map(x => x.toLowerCase());
-      return list.map(o => {
-        const picked = on9.includes(String(o.name).trim().toLowerCase());
-        return {
-          label: o.name,
-          bd: picked ? (o.color || '#7C00FF') : '#E4E0EC',
-          bg: picked ? (o.bg || '#F5EEFF') : '#fff',
-          fg: picked ? (o.color || '#7C00FF') : '#6F6C7A',
-          // Pressing one you are already on removes it, so a wrong press is one press to undo.
-          // Order is preserved on the way out: the list reads as the person built it.
-          pick: () => {
-            const cur = _parts9(current);
-            const next = picked
-              ? cur.filter(x => x.trim().toLowerCase() !== String(o.name).trim().toLowerCase())
-              : [...cur, o.name];
-            apply(next.join(', '));
-          },
-        };
-      });
-    };
 
     const _chips9 = (list, current, apply) => list.map(o => {
       const on = String(current || '').trim().toLowerCase() === String(o.name).trim().toLowerCase();
@@ -39387,8 +39376,44 @@ class Component extends DCLogic {
       // accepted a `service` and never been sent one, because no screen asked.
       ldfService: (_ldf && _ldf.service) || '',
       setLdfService: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), service: e.target.value }, ldfErr: '' }),
-      ldfServiceChips: _chipsMulti9(_productList, _ldf && _ldf.service, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), service: v }, ldfErr: '' })),
-      hasServiceChips: _productList.length > 0,
+      // ── Product: a multi-select menu on the field ────────────────────────────────────────
+      //
+      // Chips under the box worked but spent a row of the form on four shapes that are only
+      // interesting while somebody is choosing. A menu costs nothing until it is opened.
+      //
+      // THE LIST IS NEVER FILTERED BY THE BOX, unlike the quotation line's menu. This box holds
+      // the SELECTION \u2014 "PRO, VAT" \u2014 not a search term, so filtering on it would match nothing
+      // the moment a second service was picked.
+      //
+      // Picking does NOT close it: the whole point is choosing several, and a menu that shuts
+      // after each tick makes picking three services three journeys. An outside click closes it,
+      // through the app's own `openDd` handler.
+      ...(() => {
+        const open9 = this.state.openDd === 'ldf-service';
+        const cur9 = _parts9(_ldf && _ldf.service);
+        const on9 = cur9.map(x => x.toLowerCase());
+        const apply9 = (v) => this.setState({ ldForm: { ...(this.state.ldForm || {}), service: v }, ldfErr: '' });
+        return {
+          ldfSvcOpen: open9,
+          ldfSvcToggle: () => this.setState({ openDd: open9 ? null : 'ldf-service' }),
+          ldfSvcEmpty: _productList.length === 0,
+          ldfSvcOptions: _productList.map(o => {
+            const picked = on9.includes(String(o.name).trim().toLowerCase());
+            return {
+              label: o.name,
+              mark: picked ? '\u2713' : '',
+              boxBd: picked ? '#7C00FF' : '#D8D5E0',
+              boxBg: picked ? '#7C00FF' : '#fff',
+              weight: picked ? '700' : '500',
+              color: picked ? '#7C00FF' : '#1A1523',
+              // Order is preserved on the way out, so the box reads as the person built it.
+              pick: () => apply9((picked
+                ? cur9.filter(x => x.trim().toLowerCase() !== String(o.name).trim().toLowerCase())
+                : [...cur9, o.name]).join(', ')),
+            };
+          }),
+        };
+      })(),
       ldfIndustry: (_ldf && _ldf.industry) || '',
       setLdfIndustry: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: e.target.value }, ldfErr: '' }),
       ldfIndustryChips: _chips9(_industryList, _ldf && _ldf.industry, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: v }, ldfErr: '' })),
