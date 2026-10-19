@@ -411,6 +411,16 @@
   .fm-sec-h{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#26074D;}
   .fm-sec-s{font-size:10px;color:#A9A6B4;margin-top:2px;}
   .fm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 10px;margin-top:10px;}
+  /* The lead form, landscape. Each column is its own one-field-wide stack rather than a share of
+     one grid: a two-column grid inside a two-column layout gives four narrow boxes, and a phone
+     number does not need to be 180px wide to be read. `align-content:start` so a short column
+     does not stretch its fields to match the tall one beside it. */
+  .ldf-land{display:flex;gap:18px;align-items:flex-start;margin-top:10px;}
+  .ldf-col{flex:1 1 0;min-width:0;display:grid;gap:11px;align-content:start;}
+  .ldf-cap{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7C00FF;}
+  .ldf-cap span{font-size:10px;font-weight:500;letter-spacing:0;text-transform:none;color:#A9A6B4;}
+  /* Below this the two columns are narrower than the fields want to be, so it goes back to one. */
+  @media (max-width:860px){.ldf-land{flex-direction:column;gap:12px;}}
   .fm-wide{grid-column:1 / -1;}
   @media (max-width:640px){.fm-grid{grid-template-columns:minmax(0,1fr);}}
 
@@ -13140,7 +13150,7 @@
   </sc-if>
   <sc-if value="{{ ldFormOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ ldFormClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:560px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:940px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
         <div class="fm-head">
           <div style="min-width:0;">
             <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ldfHeading }}</div>
@@ -13149,129 +13159,158 @@
           <div onClick="{{ ldFormClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
         <div class="fm-body">
-          <div class="fm-grid">
-            <div class="fm-wide">
-              <label class="fm-lab">Company name <span class="fm-req">*</span></label>
-              <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
-              <sc-if value="{{ ldfNameErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfNameErr }}</div></sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Contact person</label>
-              <input value="{{ ldfContact }}" onInput="{{ setLdfContact }}" placeholder="Who you spoke to" class="fm-inp">
-              <sc-if value="{{ ldfContactErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfContactErr }}</div></sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Job title</label>
-              <input value="{{ ldfTitle }}" onInput="{{ setLdfTitle }}" placeholder="e.g. HR Manager" class="fm-inp">
-            </div>
-            <div>
-              <label class="fm-lab">Email</label>
-              <input value="{{ ldfEmail }}" onInput="{{ setLdfEmail }}" placeholder="name@company.com" class="fm-inp">
-              <sc-if value="{{ ldfEmailErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfEmailErr }}</div></sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Phone</label>
-              <input value="{{ ldfPhone }}" onInput="{{ setLdfPhone }}" placeholder="+966 5X XXX XXXX" class="fm-inp">
-              <sc-if value="{{ ldfPhoneErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfPhoneErr }}</div></sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Where from</label>
-              <!-- A dropdown over the configured list, with a way out of it. The escape hatch is not
-                   decoration: the list is per-country configuration, and a form that can only offer
-                   what somebody set up last month is a form people work around by typing a wrong
-                   answer into a field that will accept one. -->
-              <sc-if value="{{ hasSourceChips }}" hint-placeholder-val="{{ true }}">
-                <div class="fm-selwrap">
-                  <div data-dd data-open="{{ ddLdfSrcOpen }}" onClick="{{ ddLdfSrcToggle }}" class="fm-inp fm-sel">
-                    <span>{{ ddLdfSrcLabel }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
-                  </div>
-                  <sc-if value="{{ ddLdfSrcOpen }}" hint-placeholder-val="{{ false }}">
-                    <div data-dd data-hidescroll="true" class="fm-dd">
-                      <sc-for list="{{ ddLdfSrcOptions }}" as="o" hint-placeholder-count="4">
-                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                      </sc-for>
+            <!-- LANDSCAPE. Twelve fields in one column ran past the fold on a laptop, so the
+                 score panel that is meant to reward filling them in was the thing you could not
+                 see. Two columns, split by the question each answers: who they are on the left,
+                 what they want on the right. It stacks back to one column under 820px. -->
+            <div class="ldf-land">
+            <div class="ldf-col">
+              <div class="ldf-cap">The company<span>who you are talking to</span></div>
+              <div class="fm-wide">
+                <label class="fm-lab">Company name <span class="fm-req">*</span></label>
+                <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
+                <sc-if value="{{ ldfNameErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfNameErr }}</div></sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">Contact person</label>
+                <input value="{{ ldfContact }}" onInput="{{ setLdfContact }}" placeholder="Who you spoke to" class="fm-inp">
+                <sc-if value="{{ ldfContactErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfContactErr }}</div></sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">Job title</label>
+                <input value="{{ ldfTitle }}" onInput="{{ setLdfTitle }}" placeholder="e.g. HR Manager" class="fm-inp">
+              </div>
+              <div>
+                <label class="fm-lab">Email</label>
+                <input value="{{ ldfEmail }}" onInput="{{ setLdfEmail }}" placeholder="name@company.com" class="fm-inp">
+                <sc-if value="{{ ldfEmailErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfEmailErr }}</div></sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">Phone</label>
+                <input value="{{ ldfPhone }}" onInput="{{ setLdfPhone }}" placeholder="+966 5X XXX XXXX" class="fm-inp">
+                <sc-if value="{{ ldfPhoneErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfPhoneErr }}</div></sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">Where from</label>
+                <!-- A dropdown over the configured list, with a way out of it. The escape hatch is not
+                     decoration: the list is per-country configuration, and a form that can only offer
+                     what somebody set up last month is a form people work around by typing a wrong
+                     answer into a field that will accept one. -->
+                <sc-if value="{{ hasSourceChips }}" hint-placeholder-val="{{ true }}">
+                  <div class="fm-selwrap">
+                    <div data-dd data-open="{{ ddLdfSrcOpen }}" onClick="{{ ddLdfSrcToggle }}" class="fm-inp fm-sel">
+                      <span>{{ ddLdfSrcLabel }}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg>
                     </div>
-                  </sc-if>
-                </div>
-              </sc-if>
-              <sc-if value="{{ ldfSourceOther }}" hint-placeholder-val="{{ false }}">
-                <input value="{{ ldfSource }}" onInput="{{ setLdfSource }}" placeholder="{{ sourceOtherHint }}" class="fm-inp" style="margin-top:7px;">
-              </sc-if>
+                    <sc-if value="{{ ddLdfSrcOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="fm-dd">
+                        <sc-for list="{{ ddLdfSrcOptions }}" as="o" hint-placeholder-count="4">
+                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ldfSourceOther }}" hint-placeholder-val="{{ false }}">
+                  <input value="{{ ldfSource }}" onInput="{{ setLdfSource }}" placeholder="{{ sourceOtherHint }}" class="fm-inp" style="margin-top:7px;">
+                </sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">City</label>
+                <input value="{{ ldfCity }}" onInput="{{ setLdfCity }}" class="fm-inp">
+              </div>
             </div>
-            <div>
-              <label class="fm-lab">City</label>
-              <input value="{{ ldfCity }}" onInput="{{ setLdfCity }}" class="fm-inp">
-            </div>
-            <div>
-              <!-- WHICH SERVICE THEY CAME FOR. Above Industry because it is the question the
-                   salesperson is actually holding: what the client wants from us, as against
-                   what the client does for a living. -->
-              <label class="fm-lab">Product</label>
-              <input value="{{ ldfService }}" onInput="{{ setLdfService }}" placeholder="What are they asking for?" class="fm-inp">
-              <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
-                <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
-              </sc-if>
-              <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                  <sc-for list="{{ ldfServiceChips }}" as="c" hint-placeholder-count="4">
-                    <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                  </sc-for>
-                </div>
-              </sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Industry</label>
-              <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp">
-              <sc-if value="{{ hasIndustryChips }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                  <sc-for list="{{ ldfIndustryChips }}" as="c" hint-placeholder-count="5">
-                    <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                  </sc-for>
-                </div>
-              </sc-if>
-            </div>
-            <div>
-              <label class="fm-lab">Campaign</label>
-              <!-- Optional always: SOURCE says where it came from; this says which marketing effort
-                   made that happen, and most leads are not the fruit of one. -->
-              <input value="{{ ldfCampaign }}" onInput="{{ setLdfCampaign }}" placeholder="Which marketing push, if any?" class="fm-inp">
-              <sc-if value="{{ hasCampaignChips }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                  <sc-for list="{{ ldfCampaignChips }}" as="c" hint-placeholder-count="3">
-                    <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                  </sc-for>
-                </div>
-              </sc-if>
-            </div>
-            <div class="fm-wide">
-              <label class="fm-lab">Managed by</label>
-              <!-- The FIELD is the search box. One control: it shows the answer when closed and
-                   takes the search when open, rather than a box showing a name above a second box
-                   for finding one. -->
-              <div class="fm-selwrap">
-                <div class="fm-combo">
-                  <input data-dd data-open="{{ ddLdfOwnerOpen }}" onClick="{{ ddLdfOwnerOpenList }}" onInput="{{ ddLdfOwnerSetQuery }}" onKeyDown="{{ ddLdfOwnerKey }}" value="{{ ddLdfOwnerValue }}" placeholder="{{ ddLdfOwnerPlaceholder }}" autocomplete="off" class="fm-inp">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
-                </div>
-                <sc-if value="{{ ddLdfOwnerOpen }}" hint-placeholder-val="{{ false }}">
-                  <div data-dd data-hidescroll="true" class="fm-dd">
-                    <sc-if value="{{ ddLdfOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">Nobody in your team matches that</div></sc-if>
-                    <sc-for list="{{ ddLdfOwnerRows }}" as="o" hint-placeholder-count="4">
-                      <!-- sc-if has no else, so the row carries both flags. -->
-                      <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
-                      <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+            <div class="ldf-col">
+              <div class="ldf-cap">The opportunity<span>what they came for</span></div>
+              <div>
+                <!-- WHICH SERVICE THEY CAME FOR. Above Industry because it is the question the
+                     salesperson is actually holding: what the client wants from us, as against
+                     what the client does for a living. -->
+                <label class="fm-lab">Product</label>
+                <input value="{{ ldfService }}" onInput="{{ setLdfService }}" placeholder="What are they asking for?" class="fm-inp">
+                <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
+                </sc-if>
+                <sc-if value="{{ hasServiceChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
+                    <sc-for list="{{ ldfServiceChips }}" as="c" hint-placeholder-count="4">
+                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
                     </sc-for>
                   </div>
                 </sc-if>
               </div>
-              <sc-if value="{{ ldfOwnerWarn }}" hint-placeholder-val="{{ true }}"><div class="fm-hint" style="color:#B8860B;">Nobody owns this yet — an unowned lead does not appear for any sales user.</div></sc-if>
+              <div>
+                <label class="fm-lab">Industry</label>
+                <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp">
+                <sc-if value="{{ hasIndustryChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
+                    <sc-for list="{{ ldfIndustryChips }}" as="c" hint-placeholder-count="5">
+                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">Campaign</label>
+                <!-- Optional always: SOURCE says where it came from; this says which marketing effort
+                     made that happen, and most leads are not the fruit of one. -->
+                <input value="{{ ldfCampaign }}" onInput="{{ setLdfCampaign }}" placeholder="Which marketing push, if any?" class="fm-inp">
+                <sc-if value="{{ hasCampaignChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
+                    <sc-for list="{{ ldfCampaignChips }}" as="c" hint-placeholder-count="3">
+                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div class="fm-wide">
+                <label class="fm-lab">Managed by</label>
+                <!-- The FIELD is the search box. One control: it shows the answer when closed and
+                     takes the search when open, rather than a box showing a name above a second box
+                     for finding one. -->
+                <div class="fm-selwrap">
+                  <div class="fm-combo">
+                    <input data-dd data-open="{{ ddLdfOwnerOpen }}" onClick="{{ ddLdfOwnerOpenList }}" onInput="{{ ddLdfOwnerSetQuery }}" onKeyDown="{{ ddLdfOwnerKey }}" value="{{ ddLdfOwnerValue }}" placeholder="{{ ddLdfOwnerPlaceholder }}" autocomplete="off" class="fm-inp">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" class="fm-combo-caret"><path d="M6 9l6 6 6-6"></path></svg>
+                  </div>
+                  <sc-if value="{{ ddLdfOwnerOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" class="fm-dd">
+                      <sc-if value="{{ ddLdfOwnerNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">Nobody in your team matches that</div></sc-if>
+                      <sc-for list="{{ ddLdfOwnerRows }}" as="o" hint-placeholder-count="4">
+                        <!-- sc-if has no else, so the row carries both flags. -->
+                        <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
+                        <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div></sc-if>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ ldfOwnerWarn }}" hint-placeholder-val="{{ true }}"><div class="fm-hint" style="color:#B8860B;">Nobody owns this yet — an unowned lead does not appear for any sales user.</div></sc-if>
+              </div>
+              <div class="fm-wide">
+                <label class="fm-lab">Notes</label>
+                <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:60px; padding:9px 13px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
+              </div>
+            <!-- AUTO LEAD SCORE, from the design. Live as the form is typed, so somebody can see that
+                 naming the source or adding a number is worth something — rather than finding out
+                 after they have saved. Scored by the SAME function the Leads list uses; a preview
+                 worked out in the browser would be a second copy of the model, and the number here
+                 would start disagreeing with the number on the row. -->
+            <sc-if value="{{ ldfScoreShown }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:12px 11px;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+                  <span style="font-size:9px; font-weight:700; color:#7C00FF; letter-spacing:.08em;">AUTO LEAD SCORE</span>
+                  <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
+                </div>
+                <div style="height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;">
+                  <div style="height:100%; width:{{ ldfScore }}%; min-width:{{ ldfScoreMin }}; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
+                </div>
+                <div style="font-size:10px; color:#4B4757; margin-top:8px; font-weight:600;">{{ ldfScoreBand }}</div>
+                <!-- What moved it, in the model's own words, so the number is never just a number. -->
+                <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ ldfScoreWhy }}</div>
+              </div>
+            </sc-if>
             </div>
-            <div class="fm-wide">
-              <label class="fm-lab">Notes</label>
-              <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:60px; padding:9px 13px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
             </div>
-          </div>
           <!-- Possible duplicates. A warning, never a block: two real companies can share a name,
                and a form that refuses the save teaches people to type a wrong one instead. -->
           <sc-if value="{{ ldDupOpen }}" hint-placeholder-val="{{ false }}">
@@ -13291,25 +13330,6 @@
                 </sc-for>
               </div>
               <div style="font-size:10px; color:#8C6B1F; margin-top:10px; line-height:1.5;">If this really is a different company, carry on — saving is not blocked.</div>
-            </div>
-          </sc-if>
-          <!-- AUTO LEAD SCORE, from the design. Live as the form is typed, so somebody can see that
-               naming the source or adding a number is worth something — rather than finding out
-               after they have saved. Scored by the SAME function the Leads list uses; a preview
-               worked out in the browser would be a second copy of the model, and the number here
-               would start disagreeing with the number on the row. -->
-          <sc-if value="{{ ldfScoreShown }}" hint-placeholder-val="{{ true }}">
-            <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:12px 11px;">
-              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-                <span style="font-size:9px; font-weight:700; color:#7C00FF; letter-spacing:.08em;">AUTO LEAD SCORE</span>
-                <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
-              </div>
-              <div style="height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;">
-                <div style="height:100%; width:{{ ldfScore }}%; min-width:{{ ldfScoreMin }}; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
-              </div>
-              <div style="font-size:10px; color:#4B4757; margin-top:8px; font-weight:600;">{{ ldfScoreBand }}</div>
-              <!-- What moved it, in the model's own words, so the number is never just a number. -->
-              <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ ldfScoreWhy }}</div>
             </div>
           </sc-if>
           <sc-if value="{{ ldfGeneralErr }}" hint-placeholder-val="{{ false }}">
