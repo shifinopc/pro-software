@@ -469,6 +469,15 @@
   /* A line's own menu. Matches the field rather than hugging its content: it belongs to the box
      above it, and a menu narrower than its input reads as a different control. */
   .qc-dd{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid #E4E0EC;border-radius:12px;box-shadow:0 10px 28px rgba(38,7,77,.16);padding:5px;max-height:190px;overflow-y:auto;overscroll-behavior:contain;}
+  /* A pipeline column scrolls its OWN cards. Everything else in this app hides its scrollbar, but a
+     column that can hold thirty deals must say so — with nothing visible, the deals below the fold
+     simply are not there as far as anyone can tell. Thin and in the board's own lilac, so it reads
+     as part of the column rather than as the browser's. */
+  .pip-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#D9CBF2 transparent;padding-right:3px;margin-right:-3px;}
+  .pip-list::-webkit-scrollbar{width:6px;}
+  .pip-list::-webkit-scrollbar-track{background:transparent;}
+  .pip-list::-webkit-scrollbar-thumb{background:#DDD3EE;border-radius:99px;}
+  .pip-list:hover::-webkit-scrollbar-thumb{background:#C9B8E6;}
   .pill-dd{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:100%;width:max-content;max-width:280px;background:#fff;border:1px solid #E4E0EC;border-radius:12px;box-shadow:0 10px 28px rgba(38,7,77,.16);padding:5px;max-height:260px;overflow-y:auto;overscroll-behavior:contain;}
   /* Both spellings: some callers pass the flag as a boolean, which renders as "true", and a
      picker that does not light up when open reads as a dead control. */
@@ -5145,14 +5154,24 @@
                1498px inside 1318px of it. At 200 the six share a laptop's width and still hold the
                value and its badge on one line. Past that it scrolls, which is the honest answer: a
                firm that configures ten stages cannot have all ten legible at once. -->
+          <!-- THE BOARD HAS A BOTTOM. It used to grow with its tallest column, so a stage holding
+               thirty deals pushed the page itself to several screens: the column headings scrolled
+               away, the other five columns became a stripe of white, and comparing two stages — the
+               only reason to look at a board rather than the table — stopped being possible.
+
+               THE CAP IS ON THE CARD LIST, NOT ON THE BOARD. Giving the section a height instead was
+               tried and is worse: every column then stands full height whatever is in it, so a board
+               with one deal per stage is six tall empty boxes. Capping each list leaves a short
+               column short and lets only a long one scroll, which is the shape the board had before
+               — it simply stops growing past the window. -->
           <section data-hidescroll="true" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px,1fr); gap:10px; align-items:start; overflow-x:auto; padding-bottom:6px;">
             <sc-for list="{{ pipColumns }}" as="col" hint-placeholder-count="4">
-              <div data-pip-stage="{{ col.dropId }}" data-pip-tone="{{ col.color }}" style="background:#F8F5FD; border:1.5px solid #EDEBF2; border-radius:16px; padding:12px; min-height:120px; transition:background .15s, border-color .15s;">
+              <div data-pip-stage="{{ col.dropId }}" data-pip-tone="{{ col.color }}" style="background:#F8F5FD; border:1.5px solid #EDEBF2; border-radius:16px; padding:12px; display:flex; flex-direction:column; min-height:120px; transition:background .15s, border-color .15s;">
                 <!-- Header: a dot for the stage, the name, the count as a tinted pill, and the money
                      pushed to the far edge — one line where there used to be three. A column heading
                      is not the content, it is the label on the content, and it was taking four lines
                      of vertical space on every column before the first card. -->
-                <div style="padding:2px 4px 10px;">
+                <div style="padding:2px 4px 10px; flex-shrink:0;">
                   <div style="display:flex; align-items:center; gap:8px;">
                     <span style="width:8px; height:8px; border-radius:99px; background:{{ col.color }}; flex-shrink:0;"></span>
                     <span style="font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ col.name }}</span>
@@ -5162,7 +5181,11 @@
                   <div style="font-size:9px; color:#B4AFC4; margin-top:4px; padding-left:11px;">{{ col.sub }}</div>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:9px;">
+                <!-- 187px of header, tabs and figures sit above the board, and the column's own
+                     heading takes another ~52 — both measured — so this ends at the foot of the
+                     window. The floor keeps a couple of cards visible on a very short one, where the
+                     page scrolls as it always did. -->
+                <div class="pip-list" style="display:flex; flex-direction:column; gap:7px; max-height:calc(100vh - 274px); min-height:120px;">
                   <!-- Starting a deal, from the board. ABOVE the cards, not below them: a column
                        with twenty deals in it puts its own foot off the bottom of the screen, and a
                        create button you have to scroll a list to reach is one people stop finding.
@@ -5173,53 +5196,75 @@
                        a new deal always lands in the first stage, and a button under Negotiation
                        implying otherwise is the kind of control people trust once. -->
                   <sc-if value="{{ col.canAdd }}" hint-placeholder-val="{{ false }}">
-                    <div onClick="{{ pipAdd }}" title="New deals start in {{ col.name }}" style="border:1px dashed #D9CBF2; border-radius:13px; padding:10px; text-align:center; font-size:10px; font-weight:700; color:#8C7BA6; cursor:pointer;" style-hover="background:#F3E8FF; color:#7C00FF; border-color:#C9A2FF;">＋ New deal</div>
+                    <div onClick="{{ pipAdd }}" title="New deals start in {{ col.name }}" style="border:1px dashed #D9CBF2; border-radius:10px; padding:6px; text-align:center; font-size:9.5px; font-weight:700; color:#8C7BA6; cursor:pointer; flex-shrink:0;" style-hover="background:#F3E8FF; color:#7C00FF; border-color:#C9A2FF;">＋ New deal</div>
                   </sc-if>
                   <sc-for list="{{ col.deals }}" as="d" hint-placeholder-count="2">
-                    <div data-pip-deal="{{ d.dragId }}" onClick="{{ d.openCard }}" title="Open this deal" style="background:#fff; border:1px solid #EDEBF2; border-left:3px solid {{ d.cardEdge }}; border-radius:13px; padding:13px 10px; cursor:{{ d.dragCursor }}; transition:transform .15s, box-shadow .15s, border-color .15s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 20px rgba(124,0,255,.08);">
-                      <!-- Who, first. The deal's own title goes underneath: a board is scanned for the
-                           client, and half of these deals are called "annual renewal". -->
-                      <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="width:26px; height:26px; border-radius:8px; background:#F3E8FF; color:#7C00FF; font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span>
+                    <!-- -- THE CARD, cut back to what a board is scanned for -------------------
+                         Eight stacked rows became four. What went, and why:
+
+                         * The 26px initials tile. The client's name is on the line beside it, in
+                           bold, and a square of letters repeating its first two says nothing a
+                           reader did not already have.
+                         * "OPP-0001 . closes 12 Oct". The reference was ALREADY in the top right of
+                           the same card -- it was printed twice, four lines apart. The close date
+                           joins the value line, where the money it relates to is.
+                         * The owner's avatar circle, and the source repeated beside it. The source
+                           chip is on the value line; the owner is a name, and a name reads faster
+                           than a name plus a disc of initials.
+                         * The divider above the actions, and most of the padding: 13px to 9px, the
+                           gaps from 8px to 5px. A column is read down its length, and whitespace
+                           between rows of one card is whitespace the next card is pushed out by.
+
+                         What stayed is what the board is FOR: who, how much, how likely, what is
+                         wrong with it, and the one click that moves it on. Measured: 215px down to
+                         131, or 161 with a risk chip on it -- so half again as many deals are on
+                         screen before anyone scrolls, and the column scrolls rather than the page. -->
+                    <div data-pip-deal="{{ d.dragId }}" onClick="{{ d.openCard }}" title="Open this deal" style="background:#fff; border:1px solid #EDEBF2; border-left:3px solid {{ d.cardEdge }}; border-radius:10px; padding:9px 10px; cursor:{{ d.dragCursor }}; transition:box-shadow .15s, border-color .15s;" style-hover="box-shadow:0 4px 12px rgba(124,0,255,.09);">
+                      <!-- Who, and its reference. One line. -->
+                      <div style="display:flex; align-items:center; gap:6px;">
                         <span title="{{ d.company }}" style="flex:1; min-width:0; font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.company }}</span>
                         <sc-if value="{{ d.atRisk }}" hint-placeholder-val="{{ false }}">
-                          <span title="{{ d.hlWhy }}" style="font-size:9px; flex-shrink:0;">🔥</span>
+                          <span title="{{ d.hlWhy }}" style="font-size:9px; flex-shrink:0;">&#128293;</span>
                         </sc-if>
-                        <span style="font-size:9px; font-weight:700; color:#A9A6B4; flex-shrink:0;">{{ d.ref }}</span>
+                        <span style="font-size:8.5px; font-weight:700; color:#B4AFC4; flex-shrink:0;">{{ d.ref }}</span>
                       </div>
-                      <div style="font-size:10px; color:#8C8899; margin-top:5px; line-height:1.4;">{{ d.title }}</div>
-                      <div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
-                        <span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">{{ d.value }}</span>
-                        <span style="font-size:8.5px; font-weight:700; color:{{ d.srcColor }}; background:{{ d.srcBg }}; padding:2px 7px; border-radius:99px;">{{ d.srcLabel }}</span>
-                      </div>
-                      <sc-if value="{{ d.hasClose }}" hint-placeholder-val="{{ true }}">
-                        <div style="font-size:9px; color:#B4AFC4; margin-top:4px;">{{ d.ref }} · closes {{ d.closesLabel }}</div>
+                      <!-- What it is for -- only when that is not the client name again. One line,
+                           clipped; the full text is in the deal itself. -->
+                      <sc-if value="{{ d.hasTitle }}" hint-placeholder-val="{{ false }}">
+                        <div title="{{ d.title }}" style="font-size:9.5px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.title }}</div>
                       </sc-if>
+                      <!-- The money, where the figure came from, and when it is expected to land. -->
+                      <div style="display:flex; align-items:baseline; gap:6px; margin-top:5px;">
+                        <span style="font-family:'Space Grotesk',sans-serif; font-size:12.5px; font-weight:700;">{{ d.value }}</span>
+                        <span style="font-size:8px; font-weight:700; color:{{ d.srcColor }}; background:{{ d.srcBg }}; padding:1px 6px; border-radius:99px; flex-shrink:0;">{{ d.srcLabel }}</span>
+                        <sc-if value="{{ d.hasClose }}" hint-placeholder-val="{{ true }}">
+                          <span style="margin-left:auto; font-size:8.5px; color:#B4AFC4; white-space:nowrap;">{{ d.closesLabel }}</span>
+                        </sc-if>
+                      </div>
                       <!-- The odds, drawn rather than written. Five cards reading "40%" is a column
                            nobody reads twice; five bars of different lengths is read at a glance.
                            Grey and empty when a deal carries no odds, which is its own answer. -->
-                      <div title="{{ d.odds }}" style="height:4px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:8px;"><div style="height:100%; width:{{ d.probW }}; background:{{ d.probColor }}; border-radius:99px;"></div></div>
-                      <div style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;">
-                        <sc-if value="{{ d.hasRiskChip }}" hint-placeholder-val="{{ false }}">
-                          <span title="{{ d.hlWhy }}" style="font-size:9px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:1px 7px; border-radius:99px;">{{ d.riskChip }}</span>
-                        </sc-if>
+                      <div title="{{ d.odds }}" style="height:3px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:6px;"><div style="height:100%; width:{{ d.probW }}; background:{{ d.probColor }}; border-radius:99px;"></div></div>
+                      <!-- What is wrong with it, if anything. Drawn only when there is something. -->
+                      <sc-if value="{{ d.hasRiskChip }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:5px;"><span title="{{ d.hlWhy }}" style="font-size:8.5px; font-weight:700; color:{{ d.hlColor }}; background:{{ d.hlBg }}; padding:1px 6px; border-radius:99px;">{{ d.riskChip }}</span></div>
+                      </sc-if>
+                      <!-- Owner, and the checklist if it has one, sharing the line. -->
+                      <div style="display:flex; align-items:center; gap:6px; margin-top:5px;">
+                        <span title="{{ d.owner }} &#183; {{ d.sourceLabel }}" style="flex:1; min-width:0; font-size:8.5px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.owner }}</span>
                         <sc-if value="{{ d.hasChecklist }}" hint-placeholder-val="{{ false }}">
-                          <span onClick="{{ d.openChecklist }}" style="font-size:9px; font-weight:700; color:{{ d.clkColor }}; background:{{ d.clkBg }}; padding:1px 7px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.96);">☑ {{ d.clkLabel }}</span>
+                          <span onClick="{{ d.openChecklist }}" style="font-size:8.5px; font-weight:700; color:{{ d.clkColor }}; background:{{ d.clkBg }}; padding:1px 6px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="filter:brightness(.96);">&#9745; {{ d.clkLabel }}</span>
                         </sc-if>
-                      </div>
-                      <div style="display:flex; align-items:center; gap:7px; margin-top:8px;">
-                        <span style="width:19px; height:19px; border-radius:99px; background:#26074D; color:#fff; font-size:7px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.ownerInitials }}</span>
-                        <span style="font-size:9px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.owner }} · {{ d.sourceLabel }}</span>
                       </div>
                       <sc-if value="{{ d.canAct }}" hint-placeholder-val="{{ true }}">
-                        <div data-pip-actions="1" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; border-top:1px solid #F5F3F9; padding-top:9px;">
-                          <span onClick="{{ d.open }}" style="font-size:9px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EBDBFF;">Open</span>
-                          <span onClick="{{ d.log }}" style="font-size:9px; font-weight:700; color:#4B4757; background:#F3F1F7; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EAE7F0;">Log</span>
+                        <div data-pip-actions="1" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:7px;">
+                          <span onClick="{{ d.open }}" style="font-size:8.5px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EBDBFF;">Open</span>
+                          <span onClick="{{ d.log }}" style="font-size:8.5px; font-weight:700; color:#4B4757; background:#F3F1F7; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#EAE7F0;">Log</span>
                           <sc-if value="{{ d.canMove }}" hint-placeholder-val="{{ true }}">
-                            <span onClick="{{ d.next }}" style="font-size:9px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
+                            <span onClick="{{ d.next }}" style="font-size:8.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
                           </sc-if>
                           <sc-if value="{{ d.canQuote }}" hint-placeholder-val="{{ true }}">
-                            <span onClick="{{ d.quote }}" style="font-size:9px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:5px 9px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D2ECFB;">Quote</span>
+                            <span onClick="{{ d.quote }}" style="font-size:8.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D2ECFB;">Quote</span>
                           </sc-if>
                         </div>
                       </sc-if>
@@ -33981,9 +34026,24 @@ class Component extends DCLogic {
     const _shapeDeal9 = (d, col) => {
             const nextOpen = _openCols.map(c => c.stage).filter(s => s.sort > col.stage.sort)[0] || null;
             const lostStage = (_pipeCols.find(c => c.stage.isLost) || {}).stage || null;
+            const coName9 = (d.company && d.company.name) || '—';
+            // IS THE TITLE WORTH A LINE? Most deals are created as "New business — <client>", so on
+            // a board the title line repeated the client name printed directly above it, in a card
+            // where every line costs a card below it. Shown when it says something the client name
+            // does not: a renewal, a named tender, a second deal for the same firm.
+            const titleAdds9 = (() => {
+              const t9 = String(d.title || '').trim();
+              if (!t9) return false;
+              const bare9 = (x) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const co9 = bare9(coName9);
+              // Strip the lead-in the create form supplies, then see what is left of it.
+              const rest9 = bare9(t9.replace(/^new business\s*[—\-·:]\s*/i, ''));
+              return !!rest9 && rest9 !== co9;
+            })();
             return {
               title: d.title,
-              company: (d.company && d.company.name) || '—',
+              hasTitle: titleAdds9,
+              company: coName9,
               value: _money9(d.valueMinor, d.currency),
               // HEALTH, from the server. The same verdict the dashboard and the hourly job read —
               // computing it here would put a third opinion on the screen.
