@@ -2730,12 +2730,24 @@
                 </div>
               </sc-if>
               <sc-if value="{{ cdDocsHas }}" hint-placeholder-val="{{ true }}">
-                <!-- Only drawn when there is more than one type to choose between. -->
+                <!-- One control rather than a chip each: nine types already wrap onto a second row and
+                     a firm adds types over time. Same menu as the quotation line, so `openDd` closes it
+                     on an outside click and _placeDropdowns flips it when there is no room below. -->
                 <sc-if value="{{ cdTypeFilterShow }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; gap:6px; flex-wrap:wrap; padding:0 15px 11px; border-top:1px solid #F0EDF6; padding-top:11px;">
-                    <sc-for list="{{ cdTypeChips }}" as="t" hint-placeholder-count="4">
-                      <span onClick="{{ t.pick }}" style="font-size:10px; font-weight:600; color:{{ t.fg }}; background:{{ t.bg }}; border:1px solid {{ t.bd }}; padding:4px 11px; border-radius:99px; white-space:nowrap; cursor:pointer;">{{ t.label }}</span>
-                    </sc-for>
+                  <div style="padding:11px 15px; border-top:1px solid #F0EDF6;">
+                    <div data-dd style="position:relative; display:inline-block; min-width:230px;">
+                      <div onClick="{{ cdTypeToggle }}" class="pill-sel" style="justify-content:space-between;">
+                        <span>{{ cdTypeLabel }}</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                      </div>
+                      <sc-if value="{{ cdTypeOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd class="qc-dd">
+                          <sc-for list="{{ cdTypeOptions }}" as="t" hint-placeholder-count="5">
+                            <div onClick="{{ t.pick }}" class="fm-opt" style="font-weight:{{ t.weight }}; color:{{ t.color }};"><span>{{ t.label }}</span></div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
                   </div>
                 </sc-if>
               <div style="overflow-x:auto;"><div style="min-width:640px;">
@@ -23386,15 +23398,19 @@ class Component extends DCLogic {
       const _cdTypeNames = Object.keys(_cdTypeCount).sort();
       const _cdDocsF = _cdType ? _cdDocs.filter(d7 => d7.docType === _cdType) : _cdDocs;
       clDetailApi.cdTypeFilterShow = _cdTypeNames.length > 1;
-      clDetailApi.cdTypeChips = [['', 'All', _cdDocs.length]]
+      const _cdDdOpen = this.state.openDd === 'cd-doctype';
+      clDetailApi.cdTypeOpen = _cdDdOpen;
+      clDetailApi.cdTypeToggle = () => this.setState({ openDd: _cdDdOpen ? null : 'cd-doctype' });
+      clDetailApi.cdTypeLabel = (_cdType || 'All types') + ' \u00b7 '
+        + (_cdType ? (_cdTypeCount[_cdType] || 0) : _cdDocs.length);
+      clDetailApi.cdTypeOptions = [['', 'All types', _cdDocs.length]]
         .concat(_cdTypeNames.map(n7 => [n7, n7, _cdTypeCount[n7]]))
         .map(([val, label, n7]) => {
           const on = _cdType === val;
           return {
             label: label + ' \u00b7 ' + n7,
-            fg: on ? '#fff' : '#5B21B6', bg: on ? '#7C00FF' : '#F8F2FF', bd: on ? '#7C00FF' : '#EDE1FC',
-            // Pressing the one you are on clears it, like every other chip here.
-            pick: () => this.setState({ cdDocType: on ? '' : val }),
+            weight: on ? '700' : '500', color: on ? '#7C00FF' : '#1A1523',
+            pick: () => this.setState({ cdDocType: val, openDd: null }),
           };
         });
       clDetailApi.cdTypeNone = _cdDocsF.length === 0 && _cdDocs.length > 0;
