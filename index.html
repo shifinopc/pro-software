@@ -2720,6 +2720,21 @@
                     </sc-if>
                   </div>
                 </sc-if>
+                <sc-if value="{{ cdStatFilterShow }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd style="position:relative; min-width:170px;">
+                    <div onClick="{{ cdStatToggle }}" class="pill-sel" style="justify-content:space-between;">
+                      <span>{{ cdStatLabel }}</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ cdStatOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd class="qc-dd">
+                        <sc-for list="{{ cdStatOptions }}" as="t" hint-placeholder-count="5">
+                          <div onClick="{{ t.pick }}" class="fm-opt" style="font-weight:{{ t.weight }}; color:{{ t.color }};"><span>{{ t.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ canWriteDocs }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:10px;"><button onClick="{{ cdScanDoc }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="background:#F5EEFF; border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>Scan document</button><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add document</button></div></sc-if>
               </div>
               </div>
@@ -23396,7 +23411,33 @@ class Component extends DCLogic {
       const _cdTypeCount = {};
       _cdDocs.forEach(d7 => { _cdTypeCount[d7.docType] = (_cdTypeCount[d7.docType] || 0) + 1; });
       const _cdTypeNames = Object.keys(_cdTypeCount).sort();
-      const _cdDocsF = _cdType ? _cdDocs.filter(d7 => d7.docType === _cdType) : _cdDocs;
+      // Status, from the same function the row badge uses \u2014 a filter that disagreed with the
+      // badge beside it would be worse than no filter. Counts are of what the TYPE filter leaves,
+      // so the two read as one narrowing rather than two independent ones.
+      const _cdStat = this.state.cdDocStatus || '';
+      const _cdByType7 = _cdType ? _cdDocs.filter(d7 => d7.docType === _cdType) : _cdDocs;
+      const _cdStatCount = {};
+      _cdByType7.forEach(d7 => { const k7 = _cdDocStatus(d7); _cdStatCount[k7] = (_cdStatCount[k7] || 0) + 1; });
+      // Worst first: the reason anybody opens this tab is the expired ones.
+      const _cdStatOrder = ['Expired', 'Expiring soon', 'No expiry date', 'Processing', 'Valid'];
+      const _cdStatNames = _cdStatOrder.filter(n7 => _cdStatCount[n7]);
+      const _cdDocsF = _cdStat ? _cdByType7.filter(d7 => _cdDocStatus(d7) === _cdStat) : _cdByType7;
+      clDetailApi.cdStatFilterShow = _cdStatNames.length > 1;
+      const _cdStatOpen = this.state.openDd === 'cd-docstatus';
+      clDetailApi.cdStatOpen = _cdStatOpen;
+      clDetailApi.cdStatToggle = () => this.setState({ openDd: _cdStatOpen ? null : 'cd-docstatus' });
+      clDetailApi.cdStatLabel = (_cdStat || 'Any status') + ' \u00b7 '
+        + (_cdStat ? (_cdStatCount[_cdStat] || 0) : _cdByType7.length);
+      clDetailApi.cdStatOptions = [['', 'Any status', _cdByType7.length]]
+        .concat(_cdStatNames.map(n7 => [n7, n7, _cdStatCount[n7]]))
+        .map(([val, label, n7]) => {
+          const on = _cdStat === val;
+          return {
+            label: label + ' \u00b7 ' + n7,
+            weight: on ? '700' : '500', color: on ? '#7C00FF' : '#1A1523',
+            pick: () => this.setState({ cdDocStatus: val, openDd: null }),
+          };
+        });
       clDetailApi.cdTypeFilterShow = _cdTypeNames.length > 1;
       const _cdDdOpen = this.state.openDd === 'cd-doctype';
       clDetailApi.cdTypeOpen = _cdDdOpen;
@@ -23414,7 +23455,8 @@ class Component extends DCLogic {
           };
         });
       clDetailApi.cdTypeNone = _cdDocsF.length === 0 && _cdDocs.length > 0;
-      clDetailApi.cdTypeNoneText = 'No ' + _cdType + ' on file for this client.';
+      clDetailApi.cdTypeNoneText = 'Nothing matches '
+        + [_cdType, _cdStat && _cdStat.toLowerCase()].filter(Boolean).join(' \u00b7 ') + '.';
       clDetailApi.cdDocs = _cdDocsF.map(d7 => {
         const status = d7.supersededAt ? 'Replaced' : _cdDocStatus(d7);
         const t = docStatusTone[status] || docStatusTone.Valid;
