@@ -2702,7 +2702,27 @@
           </sc-if>
           <sc-if value="{{ cdTabDocuments }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .5s ease both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-              <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px 10px;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Documents</div><div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ cdOverdue }} overdue · {{ cdExpiring }} expiring · flows into Compliance</div></div><sc-if value="{{ canWriteDocs }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:10px;"><button onClick="{{ cdScanDoc }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="background:#F5EEFF; border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>Scan document</button><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add document</button></div></sc-if></div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px 10px;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Documents</div><div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ cdOverdue }} overdue · {{ cdExpiring }} expiring · flows into Compliance</div></div><div style="display:flex; align-items:center; gap:10px;">
+                <!-- With the actions, not above the table: it is a control on this card, and a strip of
+                     its own cost a row that said nothing when there was nothing to filter. -->
+                <sc-if value="{{ cdTypeFilterShow }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd style="position:relative; min-width:210px;">
+                    <div onClick="{{ cdTypeToggle }}" class="pill-sel" style="justify-content:space-between;">
+                      <span>{{ cdTypeLabel }}</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ cdTypeOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd class="qc-dd">
+                        <sc-for list="{{ cdTypeOptions }}" as="t" hint-placeholder-count="5">
+                          <div onClick="{{ t.pick }}" class="fm-opt" style="font-weight:{{ t.weight }}; color:{{ t.color }};"><span>{{ t.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ canWriteDocs }}" hint-placeholder-val="{{ true }}"><div style="display:flex; align-items:center; gap:10px;"><button onClick="{{ cdScanDoc }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="background:#F5EEFF; border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"></path></svg>Scan document</button><button onClick="{{ openAddRecord }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add document</button></div></sc-if>
+              </div>
+              </div>
               <sc-if value="{{ cdDocsEmpty }}" hint-placeholder-val="{{ false }}">
                 <div style="border-top:1px solid #F0EDF6; padding:28px 15px 31px; text-align:center;">
                   <div style="position:relative; width:64px; height:64px; margin:0 auto;">
@@ -2730,26 +2750,6 @@
                 </div>
               </sc-if>
               <sc-if value="{{ cdDocsHas }}" hint-placeholder-val="{{ true }}">
-                <!-- One control rather than a chip each: nine types already wrap onto a second row and
-                     a firm adds types over time. Same menu as the quotation line, so `openDd` closes it
-                     on an outside click and _placeDropdowns flips it when there is no room below. -->
-                <sc-if value="{{ cdTypeFilterShow }}" hint-placeholder-val="{{ false }}">
-                  <div style="padding:11px 15px; border-top:1px solid #F0EDF6;">
-                    <div data-dd style="position:relative; display:inline-block; min-width:230px;">
-                      <div onClick="{{ cdTypeToggle }}" class="pill-sel" style="justify-content:space-between;">
-                        <span>{{ cdTypeLabel }}</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
-                      </div>
-                      <sc-if value="{{ cdTypeOpen }}" hint-placeholder-val="{{ false }}">
-                        <div data-dd class="qc-dd">
-                          <sc-for list="{{ cdTypeOptions }}" as="t" hint-placeholder-count="5">
-                            <div onClick="{{ t.pick }}" class="fm-opt" style="font-weight:{{ t.weight }}; color:{{ t.color }};"><span>{{ t.label }}</span></div>
-                          </sc-for>
-                        </div>
-                      </sc-if>
-                    </div>
-                  </div>
-                </sc-if>
               <div style="overflow-x:auto;"><div style="min-width:640px;">
                 <div style="display:grid; grid-template-columns:2fr 92px 1.1fr 118px 120px 88px; gap:10px; padding:10px 15px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Document</span><span>Subject</span><span>Authority</span><span>Expiry</span><span>Status</span><span></span></div>
                 <sc-for list="{{ cdDocs }}" as="d" hint-placeholder-count="6">
