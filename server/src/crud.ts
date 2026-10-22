@@ -274,9 +274,14 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       const retiredFilter = (!wantRetired && RETIREABLE.includes(modelName)) ? { retired: false } : {};
       const merged = { ...(w ?? {}), ...retiredFilter };
       const where = Object.keys(merged).length ? { where: merged } : {};
+      // PAGING NEEDS AN ORDER. Without one MySQL makes no promise at all about which rows come back,
+      // so page 1 and page 2 could both contain the same employee while another was in neither — and
+      // above the cap below, the screen showed an arbitrary 500 that could differ between two loads.
+      // `id` because every model has one and cuids sort roughly newest-last, so it is stable without
+      // needing a per-model choice. A caller wanting a different order can still sort client-side.
       const [total, rows] = await Promise.all([
         model.count({ ...where }),
-        model.findMany({ ...where, ...(include ? { include } : {}), skip, take }),
+        model.findMany({ ...where, ...(include ? { include } : {}), orderBy: { id: "asc" }, skip, take }),
       ]);
       res.setHeader("X-Total-Count", String(total));
       res.setHeader("X-Page-Size", String(take));
@@ -353,6 +358,10 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         data.workCountry = co?.country ?? await homeCountry();
       }
       if (modelName === "document" && (data as any)?.docNumber) {
+        // Trimmed on the way in, so what is stored is the number and nothing else. The clash lookup
+        // is an indexed `=` now (see docnumber.ts), and MySQL's collation ignores case and trailing
+        // space but not a leading one — so the cleaning belongs here, at the write, once.
+        (data as any).docNumber = String((data as any).docNumber).trim();
         const clash = await numberHeldByAnother(String((data as any).docType), (data as any).docNumber, (data as any).person);
         if (clash) return res.status(409).json({ error: clashMessage(clash), clash });
       }
@@ -493,6 +502,7 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
 
       if (modelName === "document" && req.body?.docNumber !== undefined) {
+        if (req.body.docNumber != null) req.body.docNumber = String(req.body.docNumber).trim();
         const clash = await numberHeldByAnother(
           String(req.body.docType ?? (before as any).docType),
           req.body.docNumber,

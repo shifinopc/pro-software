@@ -3677,6 +3677,9 @@ class Component extends DCLogic {
     // The stored minor units are the figure of record; `amount` is only the fallback for rows issued
     // before those columns existed. Mirrors _docTotal in the console — the two must agree.
     const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
+    // The same for a payment: `amount` is a whole-riyal copy, so a receipt for SAR 287.50 printed as
+    // 288. Null on rows banked before `amountMinor` existed, hence the fallback.
+    const _payTotal = (p) => (p && p.amountMinor != null) ? Number(p.amountMinor) / 100 : (Number(p && p.amount) || 0);
     // WIRED: compliance score from real documents — (total − overdue − expiring) / total.
     const score = (() => { const d = this.state.docItems || []; if (!d.length) return null; const bad = d.filter((x) => x.status === 'overdue' || x.status === 'expiring').length; return Math.max(0, Math.round(((d.length - bad) / d.length) * 100)); })();
     const status = this.props.companyStatus ?? 'Active';
@@ -4422,13 +4425,13 @@ class Component extends DCLogic {
       ? _payReal.map(p => {
           const inv = (this.state.invItems || []).find(v => v.id === p.invoiceId || v.number === p.invoiceNumber) || null;
           const paidAmt = _payReal.filter(x => (p.invoiceId && x.invoiceId === p.invoiceId) || (!p.invoiceId && p.invoiceNumber && x.invoiceNumber === p.invoiceNumber))
-            .reduce((s, x) => s + (Number(x.amount) || 0), 0);
+            .reduce((s, x) => s + _payTotal(x), 0);
           const owed = inv ? Math.max(0, _docTotal(inv) - paidAmt) : 0;
           return {
             date: invFmtDate(p.date),
             ref: (p.invoiceNumber || p.reference || '—') + (inv && inv.services ? ' · ' + inv.services : ''),
             method: p.method || 'Payment',
-            amount: _money(p.amount, inv && inv.currency),
+            amount: _money(_payTotal(p), inv && inv.currency),
             status: 'Completed',
             printReceipt: () => this._printReceipt(p, inv, paidAmt, owed),
           };
@@ -4907,9 +4910,9 @@ class Component extends DCLogic {
         + (rows ? '<table><thead><tr><th>DETAILS</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' : '')
         + '<div class="tot">'
         + (inv ? '<div><span>Invoice total</span><span>' + money(_docTotal(inv)) + '</span></div>' : '')
-        + (inv && paidAmt > Number(pay.amount || 0) ? '<div><span>Received to date</span><span>' + money(paidAmt) + '</span></div>' : '')
+        + (inv && paidAmt > _payTotal(pay) ? '<div><span>Received to date</span><span>' + money(paidAmt) + '</span></div>' : '')
         + (inv && owed > 0 ? '<div><span>Balance due</span><span>' + money(owed) + '</span></div>' : '')
-        + '<div class="g"><span>RECEIVED</span><span>' + money(pay.amount) + '</span></div></div>'
+        + '<div class="g"><span>RECEIVED</span><span>' + money(_payTotal(pay)) + '</span></div></div>'
         + '<div style="margin-top:13px;font-size:9px;color:#888;">Thank you. This receipt confirms payment received; the tax invoice remains the tax document for this supply.</div>');
       document.body.appendChild(host);
       this._runPrint();
@@ -5536,7 +5539,7 @@ class Component extends DCLogic {
       // HONEST: no payment provider is connected, so the portal cannot take money and must never
       // mark an invoice paid. It reports the transfer; staff verify the funds and settle it.
       confirmPay: () => {
-        const amt = Math.round(Number(String(this.state.payAmount || '').replace(/[^0-9.]/g, '')));
+        const amt = Number(String(this.state.payAmount || '').replace(/[^0-9.]/g, ''));
         if (!Number.isFinite(amt) || amt <= 0) return this.setState({ payErr: 'Enter the amount you sent' });
         const sel = _paySel === null ? _openInv.map(x => x.number || '—') : _paySel;
         const tok = localStorage.getItem('stimespro:portalToken') || localStorage.getItem('stimespro:token');

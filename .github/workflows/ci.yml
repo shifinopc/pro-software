@@ -109,6 +109,22 @@ jobs:
       # deletes everything it made — so they can run in any order against an empty database.
       # The pack-dependent ones (upgrade, uninstall, statutory clocks) need a country pack installed
       # first and are deliberately left out until that is scripted.
+      # Money and permissions go first. They are the two places a mistake is most expensive — every
+      # invoice depends on the arithmetic, and one middleware applies the matrix to every staff route
+      # — and until now neither had a single check. Both are fast: the money probe is pure functions
+      # and the permissions probe only writes the two settings rows, which it puts back.
+      - name: Business dates
+        working-directory: server
+        run: npx tsx scripts/probe-dates.ts
+      - name: Invoice arithmetic
+        working-directory: server
+        run: npx tsx scripts/probe-money.ts
+      - name: Permission matrix
+        working-directory: server
+        run: npx tsx scripts/probe-permissions.ts
+      - name: Compliance recompute
+        working-directory: server
+        run: npx tsx scripts/probe-compliance.ts
       - name: Band schemes
         working-directory: server
         run: npx tsx scripts/probe-band-schemes.ts

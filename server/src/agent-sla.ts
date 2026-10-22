@@ -21,6 +21,7 @@ import { prisma } from "./db.js";
 import { upsertFinding, closeMissing, decide, isAdmin, AgentActionError, parseDay, DAY, type AgentActor } from "./agent-core.js";
 import { notifyTaskAssigned } from "./notify.js";
 import { logActivity, logAudit } from "./auth.js";
+import { businessToday, dayStart } from "./dates.js";
 
 export const KEY = "sla-rescue";
 const HOUR = 3_600_000;
@@ -152,7 +153,7 @@ export async function runSlaRescue(now = Date.now()) {
   }
 
   // 4. Ordinary tasks past due, grouped by who holds them.
-  const today = Date.parse(new Date(now).toISOString().slice(0, 10) + "T00:00:00Z");
+  const today = dayStart(businessToday(now));
   const tasks = await prisma.task.findMany({ where: { archived: false, workflowInstanceId: null, NOT: { status: { in: ["done", "cancelled"] } } }, select: { id: true, ref: true, title: true, dueDate: true, assignee: true, assigneeId: true, clientName: true } });
   const lateBy = new Map<string, typeof tasks>();
   for (const t of tasks) {

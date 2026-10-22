@@ -18560,6 +18560,10 @@ class Component extends DCLogic {
     // totals for the same invoice. The minor units are the figure of record; `amount` survives only as
     // the fallback for rows issued before those columns existed.
     const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
+    // The same thing for a payment. `amount` is a whole-riyal copy, so a receipt for SAR 287.50 read
+    // as 288 and an invoice could look overpaid by half a riyal; `amountMinor` is what was received.
+    // Null for rows banked before that column existed, which is what the fallback is for.
+    const _payTotal = (p) => (p && p.amountMinor != null) ? Number(p.amountMinor) / 100 : (Number(p && p.amount) || 0);
     // The trailing number of a document reference, as a NUMBER: "INV-10" sorts below "INV-9" as
     // text. The second group catches a revision suffix (QT-005-R1) and keeps it just above the
     // original it replaces.
@@ -19839,7 +19843,7 @@ class Component extends DCLogic {
       const invs9 = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
       const inv9 = invs9.find(v9 => v9.id === p2.invoiceId) || invs9.find(v9 => v9.number === p2.invoiceNumber) || null;
       const paid9 = payData.filter(x9 => (p2.invoiceId && x9.invoiceId === p2.invoiceId) || (!p2.invoiceId && p2.invoiceNumber && x9.invoiceNumber === p2.invoiceNumber))
-        .reduce((a9, x9) => a9 + (Number(x9.amount) || 0), 0);
+        .reduce((a9, x9) => a9 + _payTotal(x9), 0);
       const owed9 = inv9 ? Math.max(0, _docTotal(inv9) - paid9) : 0;
       return {
         // Payments carry no number of their own, so the receipt reference is derived from the record
@@ -19858,7 +19862,7 @@ class Component extends DCLogic {
       };
     };
     const payments = (Array.isArray(payData)
-      ? payData.map(p2 => [p2.date || '—', [p2.invoiceNumber || p2.reference || '—', p2.method || ''].filter(Boolean).join(' · '), p2.clientName || '—', fmtCur(p2.amount), 'Completed', p2])
+      ? payData.map(p2 => [p2.date || '—', [p2.invoiceNumber || p2.reference || '—', p2.method || ''].filter(Boolean).join(' · '), p2.clientName || '—', fmtCur(_payTotal(p2)), 'Completed', p2])
       : (_authed ? [] : [
         ['28 Jun', 'INV-1173 · Trade license amendment', 'Falcon Trading', 'AED 5,400', 'Completed', null],
         ['15 Jun', 'INV-1168 · Monthly PRO plan', 'Falcon Technologies', 'AED 1,450', 'Completed', null],
@@ -20434,7 +20438,7 @@ class Component extends DCLogic {
     const _payRows = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : [];
     const _paidFor = (invId, invNo) => _payRows
       .filter(p9 => (invId && p9.invoiceId === invId) || (!p9.invoiceId && invNo && p9.invoiceNumber === invNo))
-      .reduce((s9, p9) => s9 + (Number(p9.amount) || 0), 0);
+      .reduce((s9, p9) => s9 + _payTotal(p9), 0);
     const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid', void: 'Void' };
     const invData = this.state.invoicesData;
     const fmtInvDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(+dt) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
@@ -20458,7 +20462,9 @@ class Component extends DCLogic {
       // Settlement is decided from the PAYMENTS, exactly as the server does it — never from the
       // status column alone, which only flips once an invoice is fully covered.
       const paidNum = _paidFor(id, no);
-      const outstandingNum = Math.max(0, amount - paidNum);
+      // Rounded to the halala: both sides come from dividing minor units by 100, so a fully settled
+      // invoice could otherwise be left owing 0.0000000001 and read as "Part paid" forever.
+      const outstandingNum = Math.max(0, Math.round((amount - paidNum) * 100) / 100);
       if (status !== 'Draft' && status !== 'Paid' && paidNum > 0 && outstandingNum > 0) status = 'Part paid';
       const t = invStatusTone[status] || invStatusTone.Unpaid;
       return { no, date, client, desc, amount: fmtCurAs(cur, amount), amountNum: amount, status, id, cur: cur || sysCurCode,
@@ -20568,7 +20574,7 @@ class Component extends DCLogic {
     const invPaidYtd = invoicesFull.filter(v => v.status === 'Paid').reduce((s2, v) => s2 + v.amountNum, 0);
     // Payments page stats — computed from real payment rows; design figures only when unauthenticated.
     const _payReal = Array.isArray(payData) ? payData : null;
-    const _paySum = (rows) => rows.reduce((s8, p8) => s8 + (Number(p8.amount) || 0), 0);
+    const _paySum = (rows) => rows.reduce((s8, p8) => s8 + _payTotal(p8), 0);
     const _nowP = new Date();
     const _payThisMonth = _payReal ? _payReal.filter(p8 => { const d8 = new Date(p8.date); return !isNaN(+d8) && d8.getMonth() === _nowP.getMonth() && d8.getFullYear() === _nowP.getFullYear(); }) : null;
     const _payThisYear = _payReal ? _payReal.filter(p8 => { const d8 = new Date(p8.date); return !isNaN(+d8) && d8.getFullYear() === _nowP.getFullYear(); }) : null;
@@ -21088,7 +21094,9 @@ class Component extends DCLogic {
         // ONE atomic call: the server writes the payment and settles the invoice together, and
         // decides settlement from the SUM of payments (so two part payments do close it).
         fetch((this._apiBase || 'http://localhost:4100') + '/api/payments/record', { method: 'POST', headers: H9,
-          body: JSON.stringify({ invoiceId: inv9.id, amount: Math.round(amt9),
+          // NOT rounded on the way out. A total carries halalas (SAR 250 + 15% VAT is 287.50), and
+          // rounding here meant the figure recorded was never the figure received.
+          body: JSON.stringify({ invoiceId: inv9.id, amount: amt9,
             method: st9.rpMethod || 'Bank transfer', reference: (st9.rpRef || '').trim() || null, date: st9.rpDate || null }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
@@ -27413,7 +27421,7 @@ class Component extends DCLogic {
     const _rReq = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : [];
     const _coName = (id) => (_rCo.find(c9 => c9.id === id) || {}).name || '—';
     const _daysOver = (d9) => { const t9 = d9 ? new Date(d9).getTime() : NaN; return Number.isFinite(t9) ? Math.round((Date.now() - t9) / 86400000) : null; };
-    const _owed = (v9) => Math.max(0, (Number(v9.amount) || 0) - _paidFor(v9.id, v9.number));
+    const _owed = (v9) => Math.max(0, _docTotal(v9) - _paidFor(v9.id, v9.number));
     const _band = (d9) => d9 == null ? 'No due date' : d9 <= 0 ? 'Not yet due' : d9 <= 30 ? '1–30 days' : d9 <= 60 ? '31–60 days' : d9 <= 90 ? '61–90 days' : '90+ days';
 
     const REPORTS = [
@@ -33471,7 +33479,7 @@ class Component extends DCLogic {
     (_revPays || []).forEach(p2 => {
       const d2 = new Date(p2.date); if (isNaN(+d2)) return;
       const idx2 = 11 - ((_revNow.getFullYear() - d2.getFullYear()) * 12 + (_revNow.getMonth() - d2.getMonth()));
-      if (idx2 >= 0 && idx2 <= 11) _revMonths[idx2].total += Number(p2.amount) || 0;
+      if (idx2 >= 0 && idx2 <= 11) _revMonths[idx2].total += _payTotal(p2);
     });
     const _revMax = Math.max(1, ..._revMonths.map(m2 => m2.total));
     // A month with nothing collected keeps a 2% stub so the bar row still reads as a 12-month axis

@@ -26,6 +26,7 @@ import { prisma } from "./db.js";
 import { sameCountry, countryName } from "./countries.js";
 import { ACTIVE_CLIENT } from "./validate.js";
 import { normalizeRules, weighFor, weightWord, type CountingRule } from "./counting.js";
+import { businessToday } from "./dates.js";
 
 export type Workforce = {
   companyId: string;
@@ -351,7 +352,7 @@ export async function workforceAll(): Promise<Workforce[]> {
  */
 export interface SnapshotResult { day: string; written: number; skipped: number }
 
-export async function captureWorkforceSnapshots(day = new Date().toISOString().slice(0, 10)): Promise<SnapshotResult> {
+export async function captureWorkforceSnapshots(day = businessToday()): Promise<SnapshotResult> {
   const out: SnapshotResult = { day, written: 0, skipped: 0 };
   const rows = await workforceAll();
   for (const w of rows) {

@@ -15,6 +15,7 @@ import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals
 } from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
 import { captureWorkforceSnapshots } from "./workforce.js";
+import { businessToday } from "./dates.js";
 
 const DAY = 86400000;
 
@@ -42,7 +43,13 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
   // nothing about as compliant. They are now marked "unknown" so a human is asked for the date.
   // Superseded rows keep their old status as history; recomputing them would resurrect an expired
   // passport into the overdue counters after it had already been replaced.
-  const docs = await prisma.document.findMany({ where: { supersededAt: null } });
+  // SELECTED, not the whole row. Without this every document arrived carrying its `history` and
+  // `customData` JSON — the bulk of each record and none of it used here — so the hourly pass pulled
+  // tens of megabytes it immediately threw away.
+  const docs = await prisma.document.findMany({
+    where: { supersededAt: null },
+    select: { id: true, docType: true, person: true, status: true, daysLeft: true, expiryDate: true },
+  });
   // Types that have no expiry at all, so a missing date on one of their documents is the answer
   // rather than a gap. Without this, "nobody has entered the expiry yet" and "this record does not
   // have one" were the same null and both came out as "unknown".
@@ -50,6 +57,28 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
 
   const now = Date.now();
   const out: RecomputeResult = { scanned: 0, changed: 0, skippedInProgress: 0, undated: 0, transitions: [] };
+
+  // ── Writes, grouped ──
+  //
+  // This used to issue one UPDATE per document, awaited in turn. `daysLeft` moves for every dated
+  // document once a day, so the first pass after midnight meant one round trip per record — tens of
+  // thousands of them, sequentially, holding the connection pool while staff were trying to work.
+  // Documents sharing a new (status, daysLeft) go in one statement instead, which turns that into a
+  // few dozen. Chunked so the IN list never grows without limit.
+  const pending = new Map<string, { data: Record<string, unknown>; ids: string[] }>();
+  const queue = (key: string, data: Record<string, unknown>, id: string) => {
+    const slot = pending.get(key) ?? { data, ids: [] };
+    slot.ids.push(id);
+    pending.set(key, slot);
+  };
+  const flush = async () => {
+    for (const { data, ids } of pending.values()) {
+      for (let i = 0; i < ids.length; i += 500) {
+        await prisma.document.updateMany({ where: { id: { in: ids.slice(i, i + 500) } }, data: data as any });
+      }
+    }
+    pending.clear();
+  };
 
   for (const d of docs) {
     const t = d.expiryDate ? new Date(d.expiryDate).getTime() : NaN;
@@ -59,7 +88,7 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
     // Monitor at "0d left" with an Escalate button beside them.
     if (permanent.has(d.docType)) {
       if (d.status !== "valid" || d.daysLeft !== 0 || d.expiryDate != null) {
-        await prisma.document.update({ where: { id: d.id }, data: { status: "valid", daysLeft: 0, expiryDate: null } });
+        queue("permanent", { status: "valid", daysLeft: 0, expiryDate: null }, d.id);
         out.changed++;
         out.transitions.push({ docType: d.docType, person: d.person, from: d.status, to: "valid", daysLeft: 0 });
       }
@@ -74,10 +103,8 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
       const inFlight = d.status === "in_progress";
       const needsFix = !inFlight && (d.status !== "unknown" || (d.expiryDate != null && isNaN(t)));
       if (needsFix) {
-        await prisma.document.update({
-          where: { id: d.id },
-          data: { status: "unknown", daysLeft: 0, ...(d.expiryDate != null ? { expiryDate: null } : {}) },
-        });
+        const clearDate = d.expiryDate != null;
+        queue(`unknown|${clearDate}`, { status: "unknown", daysLeft: 0, ...(clearDate ? { expiryDate: null } : {}) }, d.id);
         out.changed++;
         out.transitions.push({ docType: d.docType, person: d.person, from: d.status, to: "unknown", daysLeft: 0 });
       }
@@ -98,13 +125,11 @@ export async function recomputeCompliance(): Promise<RecomputeResult> {
     const statusSame = renewalInFlight || d.status === status;
     if (daysSame && statusSame) continue;
 
-    await prisma.document.update({
-      where: { id: d.id },
-      data: { daysLeft, ...(renewalInFlight ? {} : { status }) },
-    });
+    queue(`days|${daysLeft}|${renewalInFlight ? "-" : status}`, { daysLeft, ...(renewalInFlight ? {} : { status }) }, d.id);
     out.changed++;
     if (!statusSame) out.transitions.push({ docType: d.docType, person: d.person, from: d.status, to: status, daysLeft });
   }
+  await flush();
   return out;
 }
 
@@ -119,7 +144,29 @@ async function safely<T>(name: string, fn: () => Promise<T>): Promise<T | { erro
  * Order is deliberate: recompute first so everything downstream reads fresh daysLeft, then trigger
  * renewals (which may create the very steps the SLA job then evaluates), then escalate, then bill.
  */
-export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
+/**
+ * ONE PASS AT A TIME.
+ *
+ * The hourly timer, the boot pass and POST /api/cron/tick all call this, and nothing stopped two of
+ * them running at once. That is not a tidiness problem: the jobs guard against repeating themselves
+ * by reading a marker before they write it — `renewSubscriptions` checks `lastBilledFor` against a
+ * list of subscriptions it loaded at the start — so two overlapping passes both read the old value,
+ * both decide the period is unbilled, and the client gets two invoices for the same month under two
+ * different numbers, which no unique index catches.
+ *
+ * A second caller gets the run already in progress rather than a refusal, so /api/cron/tick still
+ * answers with a real result and the caller cannot tell the difference except in `source`.
+ */
+let tickInFlight: Promise<TickResult> | null = null;
+export type TickResult = Awaited<ReturnType<typeof tickOnce>>;
+
+export function runTick(source: "boot" | "timer" | "manual" = "timer"): Promise<TickResult> {
+  if (tickInFlight) return tickInFlight;
+  tickInFlight = tickOnce(source).finally(() => { tickInFlight = null; });
+  return tickInFlight;
+}
+
+async function tickOnce(source: "boot" | "timer" | "manual" = "timer") {
   const started = Date.now();
   const compliance = await recomputeCompliance();
   // Only audit when something actually moved — a recurring "nothing changed" line is just noise.
@@ -345,7 +392,7 @@ export async function runTick(source: "boot" | "timer" | "manual" = "timer") {
    */
   const mail = await safely("mail-health", () => mailHealth(1));
   if ("failed" in mail && mail.failed > 0) {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = businessToday();
     const first = await prisma.notification.create({
       data: {
         type: "system", time: "Just now", createdAt: new Date().toISOString(), read: false,

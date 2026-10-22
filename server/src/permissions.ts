@@ -295,8 +295,13 @@ export async function labelForRole(roleId: string | undefined): Promise<string |
  */
 export async function can(roleId: string | undefined, mod: PermModule, act: PermAction): Promise<boolean> {
   if (!roleId) return false;
-  if (roleId === "super_admin") return true;                       // rule 1
+  // APPEND-ONLY FIRST, AND THAT ORDER IS THE POINT. These two were the other way round, so the root
+  // account was handed every action before the lock was consulted — a super admin could delete
+  // activity-log entries. `gridFor` below already draws that cell as locked for Super Admin, so the
+  // screen said one thing and the server did another, and the whole value of an append-only audit
+  // trail is that the most powerful account cannot edit it either.
   if ((APPEND_ONLY[mod] ?? []).includes(act)) return false;        // rule 4
+  if (roleId === "super_admin") return true;                       // rule 1
   const { grid, labels, bases } = await load();
   const label = labels[roleId];
   if (!label) return false;

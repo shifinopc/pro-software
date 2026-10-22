@@ -17,6 +17,7 @@ import { can, type PermModule } from "./permissions.js";
 import { claimTask, finishTask, usableModel, AgentActionError, daysFromToday, type AgentActor } from "./agent-core.js";
 import { unmetPrereqs } from "./jobs.js";
 import { workforceFor } from "./workforce.js";
+import { businessToday } from "./dates.js";
 
 export const KEY = "console-assistant";
 
@@ -164,7 +165,7 @@ export async function ask(question: string, actor: AgentActor & { companyScope?:
 
   const task = await claimTask(KEY, `q:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`, { kind: "question", title: q.slice(0, 200), createdBy: actor.id, model });
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessToday();
     const res = await askWithTools({
       model, question: q, tools,
       system: `You answer questions from staff of a PRO (government relations) firm in Saudi Arabia, using the lookup tools on its operations system. Today is ${today}.

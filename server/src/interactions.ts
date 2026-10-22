@@ -25,7 +25,8 @@ export const KIND_LABEL: Record<string, string> = {
 
 /** The day part of an ISO string, which is the granularity a follow-up is actually set at. */
 export const dayOf = (iso: string | null | undefined) => String(iso ?? "").slice(0, 10);
-export const today = () => new Date().toISOString().slice(0, 10);
+import { businessToday as today } from "./dates.js";
+export { today };
 
 /**
  * Everything still owed.

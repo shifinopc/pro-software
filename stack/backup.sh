@@ -15,6 +15,17 @@
 # permanently unreadable. A database backup that does not travel with the key is not a backup of
 # the credentials — it is a backup of some ciphertext nobody can open.
 #
+# WHICH IS WHY THE KEY IS NO LONGER IN THE SET.
+#
+# It used to be written into the same directory as the database dump, so one stolen backup carried
+# both the encrypted vault and the key that opens it — which is the whole protection, undone by a
+# copy. The key now goes to backups/secrets/, beside the sets rather than inside them, so the
+# nightly set (and whatever OFFSITE_CMD sends away) is ciphertext on its own.
+#
+# THE KEY STILL HAS TO LIVE SOMEWHERE ELSE TOO. It changes approximately never, so it does not need
+# a nightly rotation — it needs to exist in one other place, once: put it in the firm's password
+# manager. backups/secrets/ is on the same disk as everything else and is not a second copy.
+#
 # Install:
 #   ~/stimespro/app/stack/backup.sh --install     # writes the crontab entry, then runs once
 #   ~/stimespro/app/stack/backup.sh               # run by hand any time; safe to repeat
@@ -103,11 +114,28 @@ done
 # Written as root by the container above; make them readable to whoever runs the restore.
 sudo -n chown "$(id -u):$(id -g)" "$SET_DIR"/*.tgz 2>/dev/null || chmod u+r "$SET_DIR"/*.tgz 2>/dev/null || true
 
-# ── 3. Secrets ────────────────────────────────────────────────────────────────
-# 0600 because this file is the credential vault's key. It is in the backup set deliberately: see the
-# note at the top about what a database restore is worth without it.
-install -m 600 "$STACK_DIR/.env" "$SET_DIR/env.txt"
-log "  env.txt       (CRED_KEY + JWT_SECRET — keep this set off the box)"
+# ── 3. Secrets — BESIDE the set, never inside it ──────────────────────────────
+# See the note at the top. 0600, and 0700 on the directory, because this file is the credential
+# vault's key. Kept out of SET_DIR so it is not in the manifest, not in the tarball the offsite
+# command sends, and not in whatever anybody copies to look at a backup.
+SECRET_DIR="$OUT_DIR/secrets"
+mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
+install -m 600 "$STACK_DIR/.env" "$SECRET_DIR/env-$STAMP.txt"
+# Three is enough to recover from a key that was rotated by mistake; more copies of a key is more
+# places to steal it from.
+while [ "$(find "$SECRET_DIR" -maxdepth 1 -name 'env-*.txt' | wc -l)" -gt 3 ]; do
+  rm -f "$(find "$SECRET_DIR" -maxdepth 1 -name 'env-*.txt' | sort | head -1)"
+done
+log "  secrets/env-$STAMP.txt   (CRED_KEY + JWT_SECRET — NOT in the set; keep a copy off this box)"
+# Said in the set itself, because the person restoring from it six months from now will not have
+# read this script.
+cat > "$SET_DIR/SECRETS.txt" <<'NOTE'
+The credential vault in db.sql.gz is encrypted. The key (CRED_KEY, in .env) is deliberately NOT in
+this directory — a backup that carries its own key protects nothing.
+
+To restore the vault you also need the .env from the same era: look in backups/secrets/ on the
+server, or in the firm's password manager. Everything else in this set restores without it.
+NOTE
 
 # ── 4. Manifest ───────────────────────────────────────────────────────────────
 {

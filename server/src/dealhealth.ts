@@ -24,7 +24,7 @@
 import type { Opportunity, PipelineStage } from "@prisma/client";
 
 const DAY = 86_400_000;
-const today = () => new Date().toISOString().slice(0, 10);
+import { businessToday as today } from "./dates.js";
 
 /** Whole days between two ISO days/instants, or null when the input is not a date. */
 export function daysBetween(fromIso: string | null | undefined, on: string): number | null {

@@ -9,6 +9,7 @@
 import { prisma } from "./db.js";
 import { isAvailableModel, isKnownModelId } from "./ai.js";
 import { can, type PermModule, type PermAction } from "./permissions.js";
+import { businessToday, dayStart } from "./dates.js";
 
 export type ModelUse = "required" | "optional" | "none";
 export type AgentActor = { id: string | null; name: string; role: string | undefined; email?: string | null };
@@ -154,7 +155,7 @@ export function parseDay(v: unknown): number | null {
 export const daysFromToday = (v: unknown) => {
   const t = parseDay(v);
   if (t === null) return null;
-  const today = Date.parse(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
+  const today = dayStart(businessToday());
   return Math.round((t - today) / DAY);
 };
 export const normName = (s: string) => String(s ?? "").toUpperCase().replace(/[^A-Z\s]/g, " ").split(/\s+/).filter(t => t.length > 1);

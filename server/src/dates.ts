@@ -20,6 +20,57 @@
 /** `YYYY-MM-DD`, optionally with a time part we keep for the timestamp-ish columns. */
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/;
 
+// ── WHAT DAY IT IS WHERE THE FIRM IS ─────────────────────────────────────────────────────────────
+//
+// Every business date in the product came from `new Date().toISOString().slice(0, 10)`, which is the
+// date in UTC. The container sets no TZ, so it runs in UTC, and Riyadh is UTC+3 — meaning between
+// midnight and 03:00 local the server's idea of "today" was still YESTERDAY. A payment recorded at
+// 01:30 on the 1st was dated the last day of the previous month, and therefore the previous VAT
+// return. The same three hours shifted invoice dates and every "is this due today" comparison.
+//
+// The firm's zone was already a setting (`orgTimezone()` in orgsettings.ts) and simply was not used
+// here. It is held in a module variable rather than read per call because most callers are
+// synchronous — `setBusinessZone` is called once at boot and again whenever the setting is saved, so
+// a change takes effect without a restart.
+let _zone = "UTC";
+let _fmt: Intl.DateTimeFormat | null = null;
+
+/** Point the date helpers at the firm's zone. Called from boot and from PUT /api/settings/org. */
+export function setBusinessZone(zone: string): void {
+  const next = zone || "UTC";
+  if (next === _zone && _fmt) return;
+  try {
+    _fmt = new Intl.DateTimeFormat("en-GB", { timeZone: next, year: "numeric", month: "2-digit", day: "2-digit" });
+    _zone = next;
+  } catch {
+    // An unusable zone must not break every date in the product. orgTimezone() already verifies the
+    // name, so reaching this means something stranger — keep whatever was working.
+  }
+}
+
+/** The zone the helpers below are using, for anything that needs to state it. */
+export const businessZone = (): string => _zone;
+
+/**
+ * Today's date in the firm's zone, as `YYYY-MM-DD`.
+ *
+ * Built from parts rather than from a locale's own ordering, so the output cannot change because of
+ * how a locale happens to format. Takes an instant so callers that already hold one can pass it.
+ */
+export function businessToday(at: Date | number = Date.now()): string {
+  if (!_fmt) setBusinessZone(_zone);
+  const parts = _fmt!.formatToParts(at instanceof Date ? at : new Date(at));
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Midnight at the start of a `YYYY-MM-DD`, as a timestamp. The one way to turn a day into a number. */
+export const dayStart = (iso: string): number => Date.parse(iso.slice(0, 10) + "T00:00:00Z");
+
+/** `iso` moved by whole days, still `YYYY-MM-DD`. Day arithmetic stays in UTC so it cannot drift. */
+export const addDays = (iso: string, n: number): string =>
+  new Date(dayStart(iso) + n * 86_400_000).toISOString().slice(0, 10);
+
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
   jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,

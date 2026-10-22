@@ -26,6 +26,7 @@ import { publish } from "./realtime.js";
 import { nextNumber } from "./sequence.js";
 import { figuresFromAmount } from "./money.js";
 import { orgName } from "./emailshell.js";
+import { businessToday } from "./dates.js";
 
 export const KEY = "request-triage";
 /** Requests other agents or flows own. */
@@ -213,7 +214,7 @@ export async function act(taskId: string, action: string, input: any, actor: Age
     const q = await prisma.quotation.create({
       data: {
         number: await nextNumber("quotation"), companyId: rq.companyId, clientName: rq.clientName, service: svc.name,
-        ...figures, items: [{ name: svc.name, units: 1, price }] as any, status: "draft", date: new Date().toISOString().slice(0, 10),
+        ...figures, items: [{ name: svc.name, units: 1, price }] as any, status: "draft", date: businessToday(),
         notes: `Drafted from request ${rq.number ?? ""} by the request triage agent.`.trim(),
       } as any,
     });

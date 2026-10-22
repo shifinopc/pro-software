@@ -2075,7 +2075,19 @@ model Payment {
   invoiceNumber String?
   companyId     String?
   clientName    String?
+  // Whole currency units. DERIVED from amountMinor, and kept because the reports, the client portal
+  // and the receipt print all read it — same arrangement as Invoice.amount.
   amount        Int
+  /// WHAT WAS ACTUALLY RECEIVED, in halala.
+  ///
+  /// Settlement used to compare the sum of `amount` (whole riyals) against `Invoice.amount` (also
+  /// rounded to whole riyals), and a fee of SAR 250 plus 15% VAT is SAR 287.50. So the invoice the
+  /// client holds said 287.50 while `amount` said 288: recording the 287.50 they paid stored 288 and
+  /// over-booked fifty halala, and recording 287 left `287 >= 288` false — the invoice could never
+  /// close and the dunning job chased a phantom riyal forever.
+  ///
+  /// Nullable for the rows written before this existed; readers fall back to `amount * 100`.
+  amountMinor   Int?
   method        String? // bank transfer / card / cash
   reference     String?
   date          String?

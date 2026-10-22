@@ -26,6 +26,7 @@ import { figuresFromAmount } from "./money.js";
 import { homeCurrency } from "./orgsettings.js";
 import { logActivity, logAudit } from "./auth.js";
 import { ACTIVE_CLIENT } from "./validate.js";
+import { businessToday } from "./dates.js";
 
 export const KEY = "unbilled-work";
 const LOOKBACK_DAYS = 180;
@@ -181,7 +182,7 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   if (action !== "invoice") throw new AgentActionError("Unknown action.");
   await requirePerm(actor, "Invoices", "Create", "raise invoices");
   const o = (t.output ?? {}) as any;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessToday();
   const company = t.companyId ? await prisma.company.findUnique({ where: { id: t.companyId }, select: { name: true } }) : null;
   let invoice;
 

@@ -32,8 +32,13 @@ export async function numberHeldByAnother(
   const num = String(docNumber ?? "").trim();
   if (!num || !docType) return null;
 
+  // ASK THE DATABASE ABOUT THE NUMBER. This used to read every live document of the type and compare
+  // in JavaScript, so saving one Iqama read all 3,000 of them. The comparison below needs case and
+  // surrounding space ignored — which is exactly what MySQL's utf8mb4_unicode_ci already does for `=`
+  // (it also ignores trailing spaces), so the filter and the loop agree. The loop stays because the
+  // "is it the same person" half of the rule is not something a single column can answer.
   const rows = await prisma.document.findMany({
-    where: { docType, supersededAt: null, ...(opts.ignoreDocumentId ? { NOT: { id: opts.ignoreDocumentId } } : {}) },
+    where: { docType, docNumber: num, supersededAt: null, ...(opts.ignoreDocumentId ? { NOT: { id: opts.ignoreDocumentId } } : {}) },
     select: { id: true, docNumber: true, person: true, employeeId: true },
   });
 

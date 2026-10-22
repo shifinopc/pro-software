@@ -91,3 +91,17 @@ export async function figuresForFee(amount: number, includesVat: boolean): Promi
   const rateBp = await currentVatRateBp();
   return includesVat ? figuresFromGross(minor, rateBp) : figuresFromNet(minor, rateBp);
 }
+
+/**
+ * The total an invoice actually carries, in minor units.
+ *
+ * `amount` is a whole-riyal copy, so comparing a payment against it is wrong the moment a total has
+ * halalas — SAR 250 plus 15% VAT is 287.50 and `amount` says 288, which is how an invoice came to be
+ * impossible to settle. Falls back for rows written before `totalMinor` existed.
+ */
+export const dueMinor = (inv: { totalMinor?: number | null; amount: number }): number =>
+  inv.totalMinor ?? inv.amount * 100;
+
+/** What has been received against it, in minor units. Same fallback, for payments banked earlier. */
+export const paidMinor = (rows: { amountMinor?: number | null; amount: number }[]): number =>
+  rows.reduce((n, p) => n + (p.amountMinor ?? p.amount * 100), 0);

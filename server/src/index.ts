@@ -86,7 +86,7 @@ import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
-import { toIsoDate, DateValueError } from "./dates.js";
+import { toIsoDate, DateValueError, businessToday, setBusinessZone } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
@@ -101,10 +101,10 @@ import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
 import { COUNTRIES, countryName, countryCurrency } from "./countries.js";
 import { workforceAll, workforceFor, recordBand, workforceHistory } from "./workforce.js";
 import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
-import { homeCountry, homeCurrency, homeMarket } from "./orgsettings.js";
-import { figuresFromAmount } from "./money.js";
+import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
+import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
 import {
-  hashPassword, verifyPassword, signToken, verifyToken, SESSION_MAX_DAYS,
+  hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
   resolveEffectiveRole,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
@@ -275,10 +275,34 @@ app.use(compression({
   },
 }));
 
-app.use(express.json({ limit: '36mb' })); // base64 is ~4/3 of the file; the route caps the real sizes
+// COUNTED BEFORE IT IS READ. This used to sit below the body parser, and Express runs middleware in
+// the order it was added — so a 36 MB body was read off the socket and JSON.parsed before anything
+// decided whether the caller was allowed to send it. That is unauthenticated work, it blocks the one
+// event loop while it parses, and the parsed string plus its decoded buffer live in a 768 MB
+// container. Limiting first makes the cost bounded.
 // Mounted here so it sees every /api route, including the generic CRUD registered much further down.
 // `/api/health` is left out: a monitor polling it must never be the thing that trips the limit.
 app.use("/api", (req, res, next) => (req.path === "/health" ? next() : apiLimiter(req, res, next)));
+
+// ── How big a body may be, by route ──
+//
+// A FILE-SIZED BODY ONLY WHERE A FILE IS EXPECTED. One global 36 MB limit meant every route in the
+// product — including ones that take a few fields — would accept and parse a 36 MB document. These
+// are the routes that genuinely carry one: an upload is base64, which is ~4/3 of the file, and the
+// handlers cap the real sizes themselves (see /api/upload).
+const BIG_BODY = [
+  /^\/api\/upload$/,
+  /^\/api\/packs\//,                                             // country pack JSON
+  /^\/api\/proposal-templates(\/[^/]+)?$/,                       // .docx template
+  /^\/api\/documents\/[^/]+\/file$/,
+  /^\/api\/companies\/[^/]+\/employees\/import$/,                // spreadsheet
+  /^\/api\/portal\/service-requests\/[^/]+\/attachments$/,
+];
+const bigJson = express.json({ limit: "36mb" });
+// 2 MB, not 1: a workflow template is a graph, and a print layout carries every field on the
+// document. Both are comfortably inside this, and neither is a lever for filling memory.
+const normalJson = express.json({ limit: "2mb" });
+app.use((req, res, next) => (BIG_BODY.some(re => re.test(req.path)) ? bigJson : normalJson)(req, res, next));
 
 // ── Public ──
 // Opening the API's own port in a browser is a thing people do when something is not working, and
@@ -566,7 +590,7 @@ app.put("/api/workforce/:companyId/band", requireAuth, requireStaff, requireWrit
     const band = String(req.body?.band ?? "").trim();
     // Dated by the reader, not by the clock: a band read on the portal last Tuesday is a fact about
     // last Tuesday, and stamping it "now" would overstate how fresh it is.
-    const at = String(req.body?.at ?? "").trim() || new Date().toISOString().slice(0, 10);
+    const at = String(req.body?.at ?? "").trim() || businessToday();
     const out = await recordBand(String(req.params.companyId), band, at, req.body?.note ?? null);
     await logAudit({
       action: band ? "workforce.band_recorded" : "workforce.band_cleared",
@@ -648,7 +672,7 @@ app.put("/api/workforce/:companyId/scheme", requireAuth, requireStaff, requireWr
     // rather than left for the scheduler, because the person who just made the change is looking at
     // the screen now.
     if (after) {
-      const day = new Date().toISOString().slice(0, 10);
+      const day = businessToday();
       await prisma.workforceSnapshot.updateMany({
         where: { companyId, day },
         data: { bandName: after.computedBand?.name ?? null, bandSetId: after.bandSet?.id ?? null },
@@ -787,21 +811,34 @@ async function doLogin(req: express.Request, res: express.Response, kind: "staff
   const sec = await getSecurity();
   const user = await prisma.user.findUnique({ where: { email: String(email || "").toLowerCase() } });
 
-  // Account lockout check
-  if (user?.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-    await logAudit({ action: "login.locked", actorId: user.id, actorEmail: user.email, ip });
+  // THE PASSWORD IS CHECKED BEFORE ANYTHING IS REVEALED.
+  //
+  // The lockout and inactive-account gates used to sit above this and answer 429 and 403, each with
+  // its own wording — so three different replies described three different facts about an address,
+  // and a suspended or locked account could be identified with any password at all. For a firm whose
+  // client list is not public that is worth knowing: the portal login would confirm who is a client.
+  //
+  // A wrong password now gets one answer whatever the state of the account. The real reason is given
+  // only to somebody who has already proved they own it, which is who needs it. An address with no
+  // account is still compared against a hash (see NO_SUCH_USER_HASH) so it costs the same time.
+  const ok = !!user && user.type === kind && !!user.passwordHash
+    && await verifyPassword(String(password || ""), user.passwordHash)
+    && (kind !== "portal" || !!user.companyId);
+  if (!user) await verifyPassword(String(password || ""), NO_SUCH_USER_HASH);
+  const locked = !!user?.lockedUntil && new Date(user.lockedUntil!) > new Date();
+
+  if (ok && locked) {
+    await logAudit({ action: "login.locked", actorId: user!.id, actorEmail: user!.email, ip });
     return res.status(429).json({ error: "Account temporarily locked after too many failed attempts. Try again later." });
   }
-
   // Deactivated / suspended accounts cannot sign in (staff console OR client portal) until re-activated.
-  if (user && user.status && user.status !== "active" && user.status !== "invited") {
-    await logAudit({ action: "login.blocked", actorId: user.id, actorEmail: user.email, ip, detail: `status=${user.status}` });
+  if (ok && user!.status && user!.status !== "active" && user!.status !== "invited") {
+    await logAudit({ action: "login.blocked", actorId: user!.id, actorEmail: user!.email, ip, detail: `status=${user!.status}` });
     return res.status(403).json({ error: "This account is inactive. Contact your administrator." });
   }
 
-  const ok = !!user && user.type === kind && !!user.passwordHash && await verifyPassword(String(password || ""), user.passwordHash) && (kind !== "portal" || !!user.companyId);
   if (!ok) {
-    if (user) {
+    if (user && !locked) {
       const failed = (user.failedLogins ?? 0) + 1;
       const lockedUntil = failed >= sec.lockThreshold ? new Date(Date.now() + sec.lockMinutes * 60000).toISOString() : null;
       await prisma.user.update({ where: { id: user.id }, data: { failedLogins: lockedUntil ? 0 : failed, lockedUntil } });
@@ -1613,7 +1650,7 @@ app.post("/api/portal/service-requests", requireAuth, requirePortal, requireNotS
     // Stamp lastClientMsgAt on creation so a brand-new request counts as unread for staff — the
     // opening message is a client message, even though it predates the thread.
     const created = await prisma.serviceRequest.create({
-      data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
+      data: { number: await nextNumber("request"), companyId: target, clientName: co?.name ?? clientName ?? null, type: type ?? null, message: message ?? null, status: "open", date: businessToday(), lastClientMsgAt: new Date().toISOString() },
     });
     // Attach the uploaded files to the request, AGAINST the document each one is meant to be.
     // The client sends file ids, never paths: an id is checked against what this account actually
@@ -1726,7 +1763,7 @@ app.post("/api/companies/:id/restore", requireAuth, requireStaff, requireWriteRo
  * available truth rather than a guess.
  */
 function asAtFor(period?: string): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessToday();
   if (!period) return today;
   const r = periodRange(period);
   if (!r) return today;
@@ -3643,7 +3680,7 @@ app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWrite
       service: opp.title, items,
       amount: Math.round(figures.totalMinor / 100),
       subtotalMinor: figures.subtotalMinor, vatMinor: figures.vatMinor, totalMinor: figures.totalMinor, vatRateBp: figures.vatRateBp,
-      status: "draft", date: new Date().toISOString().slice(0, 10),
+      status: "draft", date: businessToday(),
       validUntil: b.validUntil || null, notes: b.notes || null,
     },
   });
@@ -4783,7 +4820,7 @@ app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRo
   }
   const number = `${root}-R${next}`;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessToday();
   const created = await prisma.$transaction(async (tx) => {
     const rev = await tx.quotation.create({
       data: {
@@ -4836,7 +4873,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
 
   const number = await nextInvoiceNumber();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessToday();
   const [invoice] = await prisma.$transaction([
     prisma.invoice.create({
       data: {
@@ -5021,13 +5058,17 @@ app.get("/api/zatca-qr.svg", requireAuth, requireStaff, async (req, res) => {
 app.post("/api/portal/payment-notice", requireAuth, requirePortal, async (req, res) => {
   const a = (req as any).auth;
   const { amount, method, reference, paidOn, invoiceNumbers, notes } = req.body ?? {};
-  const amt = Math.round(Number(amount));
+  // To the halala. This is the figure staff reconcile against the bank, and rounding it to whole
+  // riyals meant a client who transferred SAR 287.50 reported 288 — a mismatch somebody then has to
+  // explain. Nothing here is a money column; it is text on a request, so the decimals cost nothing.
+  const amt = Math.round(Number(amount) * 100) / 100;
   if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: "A positive amount is required" });
+  const amtText = amt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const company = await prisma.company.findUnique({ where: { id: a.companyId }, select: { name: true } });
   const refs: string[] = Array.isArray(invoiceNumbers) ? invoiceNumbers.map(String).filter(Boolean) : [];
   const message = [
-    `Client reports a payment of ${amt.toLocaleString()}`,
+    `Client reports a payment of ${amtText}`,
     `Method: ${method ? String(method) : "not stated"}`,
     reference ? `Reference: ${String(reference)}` : null,
     paidOn ? `Paid on: ${String(paidOn)}` : null,
@@ -5039,11 +5080,11 @@ app.post("/api/portal/payment-notice", requireAuth, requirePortal, async (req, r
   try {
     const created = await prisma.serviceRequest.create({
       data: { number: await nextNumber("request"), companyId: a.companyId, clientName: company?.name ?? null, type: "Payment notification",
-        message, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
+        message, status: "open", date: businessToday(), lastClientMsgAt: new Date().toISOString() },
     });
-    logActivity({ type: "client", message: `Payment reported by ${company?.name ?? "a client"}: ${amt.toLocaleString()}`, user: company?.name ?? "Client" });
+    logActivity({ type: "client", message: `Payment reported by ${company?.name ?? "a client"}: ${amtText}`, user: company?.name ?? "Client" });
     notify({ rule: "Approval requested", audience: "staff",
-      inApp: { type: "task", title: `Payment reported — ${company?.name ?? "client"}`, message: `${amt.toLocaleString()} · ${method ?? "method not stated"}${reference ? ` · ${reference}` : ""}` },
+      inApp: { type: "task", title: `Payment reported — ${company?.name ?? "client"}`, message: `${amtText} · ${method ?? "method not stated"}${reference ? ` · ${reference}` : ""}` },
       subject: `Payment reported by ${company?.name ?? "a client"}`,
       heading: "A client says they have paid",
       lines: [`Amount: <b>${amt.toLocaleString()}</b>`, `Method: ${method ?? "not stated"}`, reference ? `Reference: ${reference}` : "", "Verify the funds have landed, then record the payment against the invoice to settle it."],
@@ -5104,7 +5145,7 @@ app.post("/api/portal/employees/:id/exit-request", requireAuth, requirePortal, r
     const [request] = await prisma.$transaction([
       prisma.serviceRequest.create({
         data: { number: exitReqNo, companyId: a.companyId, clientName: emp.company?.name ?? null, type: "Employee exit",
-          message, status: "open", date: new Date().toISOString().slice(0, 10), lastClientMsgAt: new Date().toISOString() },
+          message, status: "open", date: businessToday(), lastClientMsgAt: new Date().toISOString() },
       }),
       prisma.employee.update({
         where: { id: emp.id },
@@ -5221,7 +5262,7 @@ app.get("/api/employees/export.xlsx", requireAuth, requireStaff, async (req, res
     const co = companyId ? await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }) : null;
     const slug = (co?.name ?? "all-clients").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="employees-${slug}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.setHeader("Content-Disposition", `attachment; filename="employees-${slug}-${businessToday()}.xlsx"`);
     res.setHeader("X-Employee-Count", String(employees));
     await wb.xlsx.write(res);
     res.end();
@@ -5516,7 +5557,7 @@ app.post("/api/portal/addon-requests", requireAuth, requirePortal, requireNotSus
       data: {
         companyId: a.companyId!, clientName: company?.name ?? "", kind: "addon",
         serviceId: svc.id, serviceName: svc.name, note: note ?? null,
-        status: "pending", date: new Date().toISOString().slice(0, 10),
+        status: "pending", date: businessToday(),
       },
     });
     // Put it on the pipeline. A client asking to buy something is the strongest buying signal this
@@ -5573,7 +5614,7 @@ app.post("/api/upgrade-requests/:id/approve-addon", requireAuth, requireStaff, r
   }
 
   const number = await nextInvoiceNumber();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessToday();
   const label = `${reqRow.serviceName ?? "Service"} — plan add-on`;
 
   // Order matters: the invoice must be first so the destructure below picks it up. A zero-priced
@@ -5982,17 +6023,23 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
   const inv = invoiceId ? await prisma.invoice.findUnique({ where: { id: String(invoiceId) } }) : null;
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
-  const paidBefore = await prisma.payment.aggregate({ where: { invoiceId: inv.id }, _sum: { amount: true } });
-  const already = paidBefore._sum.amount ?? 0;
+  // MINOR UNITS, BECAUSE A TOTAL IS NOT A WHOLE NUMBER OF RIYALS. This compared the sum of payments
+  // (whole riyals) against `inv.amount` (the total rounded to whole riyals), and SAR 250 + 15% VAT is
+  // SAR 287.50. The invoice said 287.50 and `amount` said 288, so recording the 287.50 the client
+  // paid stored 288 and over-booked fifty halala, while recording 287 left `287 >= 288` false and the
+  // invoice could never close. Both sides are now the figures the document actually carries.
+  const prior = await prisma.payment.findMany({ where: { invoiceId: inv.id }, select: { amount: true, amountMinor: true } });
+  const alreadyMinor = paidMinor(prior);
+  const owedMinor = dueMinor(inv);
   // `settle: true` means "close the balance" (the Mark-paid button). The remaining amount is worked
   // out here rather than in the browser, so marking an invoice paid after a part payment records only
   // what is actually still owed instead of a second full-amount row.
-  const amt = settle ? inv.amount - already : Math.round(Number(amount));
-  if (!Number.isFinite(amt) || amt <= 0)
+  const amtMinor = settle ? owedMinor - alreadyMinor : Math.round(Number(amount) * 100);
+  if (!Number.isFinite(amtMinor) || amtMinor <= 0)
     return res.status(400).json(settle
       ? { error: "This invoice is already settled" }
       : { error: "A positive amount is required" });
-  const settled = already + amt >= inv.amount;
+  const settled = alreadyMinor + amtMinor >= owedMinor;
 
   // Outside the transaction: it reads the payments table, and deriving it inside would be reading
   // the same rows the transaction is about to write to.
@@ -6003,8 +6050,11 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
         data: {
           number: receiptNo,
           invoiceId: inv.id, invoiceNumber: inv.number, companyId: inv.companyId, clientName: inv.clientName,
-          amount: amt, method: method ? String(method) : null, reference: reference ? String(reference) : null,
-          date: date ? String(date) : new Date().toISOString().slice(0, 10), notes: notes ? String(notes) : null,
+          // `amount` stays the rounded whole-riyal copy every report and list already reads, derived
+          // from the exact figure beside it — the same arrangement Invoice.amount has.
+          amountMinor: amtMinor, amount: Math.round(amtMinor / 100),
+          method: method ? String(method) : null, reference: reference ? String(reference) : null,
+          date: date ? String(date) : businessToday(), notes: notes ? String(notes) : null,
         },
       }),
       // Only flip the invoice when the payments actually cover it.
@@ -6016,7 +6066,7 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
       logActivity({ type: "finance", message: `Invoice ${inv.number} settled${inv.clientName ? ` — ${inv.clientName}` : ""}` });
       logNotification({ type: "payment", title: `Payment received: ${inv.number}`, message: inv.clientName ?? undefined });
     }
-    await logAudit({ action: "payment.record", actorId: (req as any).auth?.sub, target: `${inv.number} (${payment.id})`, detail: `amount=${amt} settled=${settled}`, ip: clientIp(req) });
+    await logAudit({ action: "payment.record", actorId: (req as any).auth?.sub, target: `${inv.number} (${payment.id})`, detail: `amount=${(amtMinor / 100).toFixed(2)} settled=${settled}`, ip: clientIp(req) });
     res.status(201).json({ payment, settled });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
@@ -6077,10 +6127,26 @@ const readRole: Record<string, string[]> = {
 //
 // Reads the owner column on the client, so this and the list route above answer "whose client is
 // this?" the same way. They used to share a JSON array, which is how a scope and a list drift apart.
+/**
+ * Which clients belong to this salesperson, cached for 30 seconds.
+ *
+ * This ran as a query per request per scoped collection, and one console load fires about ninety
+ * requests — so a sales user paid ninety extra lookups to draw one screen. Ownership changes when a
+ * client is reassigned, which is rare, and half a minute of staleness on that is invisible. Same
+ * window and same reasoning as the custom-role cache in auth.ts.
+ */
+const _ownedCache = new Map<string, { at: number; ids: string[] }>();
+async function companiesOwnedBy(userId: string): Promise<string[]> {
+  const hit = _ownedCache.get(userId);
+  if (hit && Date.now() - hit.at < 30_000) return hit.ids;
+  const mine = await prisma.company.findMany({ where: { ownerId: userId }, select: { id: true } });
+  const ids = mine.map(c => c.id);
+  _ownedCache.set(userId, { at: Date.now(), ids });
+  return ids;
+}
 const salesScope = (field: "id" | "companyId"): ScopeFn => async (req: any) => {
   if (req.auth?.role !== "sales") return null; // every other role is gated by readRole above
-  const mine = await prisma.company.findMany({ where: { ownerId: req.auth.sub }, select: { id: true } });
-  return { [field]: { in: mine.map(c => c.id) } };
+  return { [field]: { in: await companiesOwnedBy(req.auth.sub) } };
 };
 const scopes: Record<string, ScopeFn> = {
   companies:     salesScope("id"),
@@ -7789,6 +7855,10 @@ app.put("/api/settings/:key", requireAuth, requireStaff, requireWriteRole, async
     // The matrix and the role list are read on every request through a cache; saving must drop it
     // or an admin watches their own change do nothing for half a minute and concludes it is broken.
     if (req.params.key === "perms" || req.params.key === "roles") invalidatePermissions();
+    // The zone every business date is stamped in lives in this row. Re-read it here or the change
+    // only takes effect on the next restart, which is the sort of thing that gets reported as "the
+    // timezone setting does nothing".
+    if (req.params.key === "org") setBusinessZone(await orgTimezone().catch(() => "UTC"));
     await logAudit({ action: "settings.update", actorId: (req as any).auth?.sub, target: req.params.key, detail: JSON.stringify(value).slice(0, 400) });
     res.json(row.value);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
@@ -7819,6 +7889,26 @@ if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 // NOT served by express.static — reachable only through GET /api/files/:id, which checks the caller.
 const PRIVATE_FILES_DIR = path.resolve(process.cwd(), "uploads-private");
 if (!fs.existsSync(PRIVATE_FILES_DIR)) fs.mkdirSync(PRIVATE_FILES_DIR, { recursive: true });
+
+/**
+ * The on-disk name of a private file, from its asset id.
+ *
+ * A private file is written as `<asset id><extension>` and the extension is not in the database, so
+ * this used to be `readdirSync(DIR).find(f => f.startsWith(id))` — a SYNCHRONOUS listing of the
+ * whole identity-document archive, on the one event loop, once per request. A client's documents
+ * page with twenty thumbnails did it twenty times, and the folder only grows.
+ *
+ * `sniffFileType` can return exactly five extensions, so five `existsSync` calls answer it. The
+ * listing stays as a fallback for anything written before that was true (see
+ * scripts/migrate-private-files.ts), where it runs once for a file that is not found, not always.
+ */
+const PRIVATE_EXTS = [".pdf", ".png", ".jpg", ".webp", ".svg"];
+function privateFileName(assetId: string): string | null {
+  for (const ext of PRIVATE_EXTS) {
+    if (fs.existsSync(path.join(PRIVATE_FILES_DIR, assetId + ext))) return assetId + ext;
+  }
+  return fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(assetId)) ?? null;
+}
 // Kinds that carry a person's identity papers. Everything else (logos, print headers) stays public
 // because an <img> tag cannot send a token.
 const PRIVATE_KINDS = new Set(["document", "attachment"]);
@@ -7967,7 +8057,7 @@ app.get("/api/files/:id", requireAuth, async (req, res) => {
     const hit = a?.companyId ? await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM Document WHERE companyId = ${a.companyId} AND (JSON_UNQUOTE(JSON_EXTRACT(customData, '$.file')) = ${path} OR JSON_UNQUOTE(JSON_EXTRACT(customData, '$.filePath')) = ${path}) LIMIT 1` : [];
     if (!hit.length) return res.status(404).json({ error: "Not found" });
   }
-  const onDisk = fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(asset.id));
+  const onDisk = privateFileName(asset.id);
   if (!onDisk) return res.status(404).json({ error: "The file is no longer on the server" });
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
@@ -8008,7 +8098,7 @@ app.delete("/api/files/:id", requireAuth, requireStaff, requireWriteRole, async 
   await prisma.fileAsset.delete({ where: { id: asset.id } });
   try {
     if (asset.private) {
-      const onDisk = fs.readdirSync(PRIVATE_FILES_DIR).find(f => f.startsWith(asset.id));
+      const onDisk = privateFileName(asset.id);
       if (onDisk) fs.unlinkSync(path.join(PRIVATE_FILES_DIR, onDisk));
     } else if (asset.path?.startsWith("/files/")) {
       // basename only — never let a stored path walk out of the uploads folder.
@@ -8191,8 +8281,12 @@ process.on("uncaughtException", (err: any) => {
   console.error("[uncaughtException]", err?.stack ?? err);
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`STIMES PRO API (auth enabled) → http://localhost:${port}`);
+  // BEFORE ANYTHING DATES A RECORD. `today()` answers from the firm's own zone, and it has to be
+  // told which one before the first job or request uses it — otherwise the boot tick runs in UTC and
+  // dates three hours of the day wrong. Re-primed whenever Settings → General is saved.
+  setBusinessZone(await orgTimezone().catch(() => "UTC"));
   // The heartbeat. Single-instance only: if this is ever scaled out, disable it and drive
   // /api/cron/tick from one external scheduler instead, or every instance will tick.
   startScheduler();

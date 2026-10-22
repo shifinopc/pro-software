@@ -19,7 +19,9 @@ import { prisma } from "./db.js";
 export type TeamKind = "sales" | "pro";
 export const TEAM_KINDS: TeamKind[] = ["sales", "pro"];
 
-export const todayDay = () => new Date().toISOString().slice(0, 10);
+import { businessToday } from "./dates.js";
+/** Its own name here because `on` parameters all over this file default to it. */
+export const todayDay = businessToday;
 /** A stored value may be a bare day or a full instant; both compare correctly once cut to 10. */
 export const dayOf = (v: unknown) => String(v ?? "").slice(0, 10);
 

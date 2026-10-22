@@ -45,6 +45,15 @@ export const generateTempPassword = () => crypto.randomBytes(9).toString("base64
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
 
+/**
+ * A real hash that nothing can match, compared against when no account was found.
+ *
+ * Without it an unknown address skipped bcrypt entirely and came back in a millisecond while a real
+ * one took ~80 ms — so the response time alone said whether an address was on file. The content is
+ * random, generated once at boot, so no password can ever match it.
+ */
+export const NO_SUCH_USER_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString("hex"), 10);
+
 // ── JWT (carries tokenVersion `tv` so a bump invalidates all issued tokens) ──
 export interface AuthPayload {
   sub: string; type: "staff" | "portal"; role?: string; companyId?: string; tv?: number;

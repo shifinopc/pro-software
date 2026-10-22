@@ -157,9 +157,11 @@ for v in uploads uploads_private packs; do
   docker run --rm -v "stimespro_$v":/data -v "$PWD/$SET":/in alpine     sh -c "rm -rf /data/* && tar xzf /in/$v.tgz -C /data"
 done
 
-# 4. Secrets — compare before overwriting; a CRED_KEY that does not match the dump
-#    makes every stored credential unreadable.
-diff "$SET/env.txt" .env
+# 4. Secrets — NOT in the set (see SECRETS.txt inside it). The key lives beside the sets,
+#    so one stolen backup does not carry the key that opens its own vault.
+#    Compare before overwriting: a CRED_KEY that does not match the dump makes every
+#    stored credential unreadable.
+diff "$(ls -1 backups/secrets/env-*.txt | tail -1)" .env
 
 docker compose -p stimespro restart api
 ```

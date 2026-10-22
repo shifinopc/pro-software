@@ -27,8 +27,11 @@ export type TaskLine = { title: string; dueDate?: string | null; assigneeId?: st
 export type InvoiceLine = { name: string; units: number; price: number };
 
 export const LIST_MAX = 60;
-export const today = () => new Date().toISOString().slice(0, 10);
-export const addDays = (iso: string, n: number) => new Date(Date.parse(iso.slice(0, 10) + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+// The firm's own day, and plain day arithmetic, from the one place that defines them. There were
+// four copies of `today()` across this server and all four answered in UTC — see dates.ts. Still
+// exported under these names so every agent keeps importing them from this kit.
+import { businessToday as today, addDays } from "./dates.js";
+export { today, addDays };
 export const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 export const money = (n: number) => Math.round(n).toLocaleString("en-US");
 

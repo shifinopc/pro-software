@@ -29,6 +29,7 @@ import { openFollowUps, lastContactMap } from "./interactions.js";
 import { idleDaysOf } from "./lifecycle.js";
 import { healthOf } from "./dealhealth.js";
 import { stagesFor, recordTransition } from "./pipeline.js";
+import { businessToday } from "./dates.js";
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -744,7 +745,7 @@ export async function renewSubscriptions(): Promise<BillingResult> {
               // country's — changing what an existing client is billed in is a decision for a human,
               // not a side effect of this cleanup.
               ...(await figuresFromAmount(s.price)), currency: await homeCurrency(), status: "draft", // DRAFT: a human releases it
-              date: new Date().toISOString().slice(0, 10),
+              date: businessToday(),
               dueDate: new Date(next).toISOString().slice(0, 10),
               services: `${s.package.name} — ${s.package.billingCycle} subscription (${fmtDisplay(end)} → ${fmtDisplay(next)})`,
               items: [{ name: `${s.package.name} subscription · ${s.package.billingCycle}`, units: 1, price: s.price }],
@@ -1256,7 +1257,7 @@ export interface FollowUpResult {
 export async function checkFollowUps(): Promise<FollowUpResult> {
   const rules = await jobRules();
   const out: FollowUpResult = { due: 0, overdue: 0, stale: 0, details: [] };
-  const on = new Date().toISOString().slice(0, 10);
+  const on = businessToday();
 
   // ── commitments that have come due ──
   const owed = await openFollowUps({ on });
@@ -1301,7 +1302,7 @@ export async function checkFollowUps(): Promise<FollowUpResult> {
   if (live.length) {
     const contacted = await lastContactMap(live.map(d => d.companyId));
     const owedCompanies = new Set(owed.map(f => f.companyId));
-    const on = new Date().toISOString().slice(0, 10);
+    const on = businessToday();
     for (const d of live) {
       if (owedCompanies.has(d.companyId)) continue; // already being chased
       const health = healthOf({
@@ -1575,7 +1576,7 @@ export async function checkIdleLeads(): Promise<IdleLeadResult> {
 
     // Keyed on the WEEK, so a lead that stays idle is mentioned once a week rather than once ever —
     // saying it a single time and never again is how something quietly stays forgotten.
-    const week = new Date().toISOString().slice(0, 10);
+    const week = businessToday();
     if (await notifyOnce(`idle-lead:${lead.id}:${week}`, {
       type: "system",
       title: `Nothing happening: ${lead.name}`,

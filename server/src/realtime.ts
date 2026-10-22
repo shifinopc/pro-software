@@ -16,7 +16,10 @@ export type Audience =
   | { kind: "staff"; userId: string }
   | { kind: "portal"; userId: string; companyId: string };
 
-type Client = { id: string; res: Response; who: Audience };
+// `close` is the connection's own teardown — clear its keepalive, drop it from the map, end the
+// response. Kept on the record so the per-user cap in addClient can retire a stale stream the same
+// way a closing socket would, instead of ending the response and hoping the close handler notices.
+type Client = { id: string; res: Response; who: Audience; close: () => void };
 
 const clients = new Map<string, Client>();
 
@@ -48,7 +51,21 @@ setInterval(() => {
 }, 60_000).unref?.();
 
 // ── Connections ──────────────────────────────────────────────
+/**
+ * How many streams one account may hold open.
+ *
+ * Each connection is a socket plus a keepalive timer held for as long as it stays open, and nothing
+ * capped how many one person could start — the request limiter allows thousands per quarter hour, so
+ * a single signed-in account could fill the process with its own connections. Four covers somebody
+ * with the console open in several tabs; past that the oldest is closed rather than the new one
+ * refused, so a browser reconnecting after a dropped socket is never locked out by its own ghost.
+ */
+const MAX_PER_USER = 4;
+
 export function addClient(req: Request, res: Response, who: Audience): void {
+  const mine = [...clients.values()].filter(c => c.who.userId === who.userId);
+  // Map iteration is insertion order, so this retires the oldest first.
+  for (const old of mine.slice(0, Math.max(0, mine.length - (MAX_PER_USER - 1)))) old.close();
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -58,7 +75,6 @@ export function addClient(req: Request, res: Response, who: Audience): void {
   res.write(`retry: 3000\n\n`);
 
   const id = crypto.randomUUID();
-  clients.set(id, { id, res, who });
   res.write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
   // Keepalive comment — proxies drop idle connections, and it also detects a dead socket.
@@ -68,6 +84,7 @@ export function addClient(req: Request, res: Response, who: Audience): void {
   beat.unref?.();
 
   const cleanup = () => { clearInterval(beat); clients.delete(id); };
+  clients.set(id, { id, res, who, close: () => { cleanup(); try { res.end(); } catch { /* already gone */ } } });
   req.on("close", cleanup);
   req.on("error", cleanup);
 }

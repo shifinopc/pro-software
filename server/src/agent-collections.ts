@@ -21,6 +21,7 @@ import { prisma } from "./db.js";
 import { claimTask, finishTask, agentSetting, decide, requirePerm, AgentActionError, parseDay, DAY, type AgentActor } from "./agent-core.js";
 import { logActivity, logAudit, logNotification } from "./auth.js";
 import { nextNumber } from "./sequence.js";
+import { businessToday } from "./dates.js";
 
 export const KEY = "collections";
 const OPEN = ["pending", "unpaid", "sent", "overdue"];
@@ -175,7 +176,7 @@ export async function act(taskId: string, action: string, input: any, actor: Age
       prisma.payment.create({ data: {
         number, invoiceId: inv.id, invoiceNumber: inv.number, companyId: inv.companyId, clientName: inv.clientName, amount: amt,
         method: o.notice?.method ?? null, reference: o.notice?.reference ?? null,
-        date: /^\d{4}-\d{2}-\d{2}$/.test(String(o.notice?.paidOn ?? "")) ? o.notice.paidOn : new Date().toISOString().slice(0, 10),
+        date: /^\d{4}-\d{2}-\d{2}$/.test(String(o.notice?.paidOn ?? "")) ? o.notice.paidOn : businessToday(),
         notes: `Confirmed by ${actor.name} from the client's payment notice (collections agent match).`,
       } }),
       ...(settled && inv.status !== "paid" ? [prisma.invoice.update({ where: { id: inv.id }, data: { status: "paid" } })] : []),
