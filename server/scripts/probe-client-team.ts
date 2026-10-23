@@ -1,26 +1,32 @@
 /**
- * Prove that naming an officer on a client actually changes who gets the work — and, just as
- * important, that it can never be the reason a step ends up with nobody.
+ * Prove that naming an officer on a client actually changes who gets the work -- and that a step
+ * nobody is named for is left in the open rather than pushed onto whoever happens to be free.
  *
- * The default is a load balancer: whoever holds the role and is carrying least. It is the right
- * default and the wrong only answer, because an officer who knows a client's file is worth more than
- * an officer who is free this minute. What this walks:
+ * THIS PROBE USED TO ASSERT A LOAD BALANCER. pickAssignee had one: with no officer named it handed
+ * the step to whoever held the role and was carrying least. That was removed deliberately -- see the
+ * comment in workflow.ts, which records what it cost: fifty-nine steps sitting with one officer for
+ * clients he had no relationship to, while the client screen said "Whoever is free" the whole time,
+ * truthfully. Being free is not a reason to be given somebody else's client.
  *
- *   1. With no officer named, the balancer decides — and it really is the least-loaded person, not
- *      just the first one alphabetically.
- *   2. Naming one sends the work there instead, and says why.
- *   3. Naming somebody who has LEFT, been deactivated, or moved to another role is ignored: the
- *      balancer takes over. A client team is a preference; an unassigned task is a failure, and the
- *      preference must never be able to cause one.
- *   4. A routing rule naming a PERSON still wins. It is about a kind of work rather than a client,
+ * The probe was not updated with it, so it failed four assertions for weeks against code that was
+ * doing the right thing. What it walks now is the contract as it stands:
+ *
+ *   1. With no officer named, the answer is NOBODY -- and that is the point. A step with no owner
+ *      stays in the role's queue instead of being pushed onto a stranger's desk.
+ *   2. ...which is safe only because any holder of the role may act on it. That is the one claim the
+ *      whole design rests on, so it is asserted here rather than believed.
+ *   3. Naming an officer sends the work there instead, and says why.
+ *   4. Naming somebody who has LEFT, been deactivated, or moved to another role is ignored -- never
+ *      assigned to. The step waits in the role's queue, as if nobody had been named.
+ *   5. A routing rule naming a PERSON still wins. It is about a kind of work rather than a client,
  *      which is narrower, and somebody wrote it on purpose.
- *   5. The job that re-tries orphaned steps honours the officer too — it takes no routing facts, so
- *      it was the easy place to quietly hand a client's backlog to the wrong desk.
+ *   6. The job that re-tries orphaned steps honours the officer, and invents nobody when there is
+ *      none -- it takes no routing facts, so it was the easy place to quietly hand a client's
+ *      backlog to the wrong desk.
  *
  * Own client, own staff, own rules. Deletes everything it makes.
- */
-import { prisma } from "../src/db.js";
-import { pickAssignee } from "../src/workflow.js";
+ */import { prisma } from "../src/db.js";
+import { pickAssignee, mayActOnTask } from "../src/workflow.js";
 import bcrypt from "bcryptjs";
 
 const TAG = "ZS team probe";
@@ -79,36 +85,55 @@ async function main() {
     } as any });
   }
 
-  // ── 1. the balancer, with nobody named ─────────────────────────────────────────────────────
+  // ── 1. nobody named means NOBODY, not whoever is free ──────────────────────────────────────
   const a = await pickAssignee(ROLE, { companyId: co.id });
-  console.log(`nobody named:            ${a?.name}${a?.why ? ` (${a.why})` : " (least loaded)"}`);
-  if (a?.id !== omar.id) fail(`the balancer should have picked the idle officer, got ${a?.name}`);
+  console.log(`nobody named:             ${a?.name ?? "nobody — stays in the role queue"}`);
+  if (a) fail(`a client with no named officer was given one anyway: ${a.name}`);
 
-  // ── 2. naming one overrides it, and says why ───────────────────────────────────────────────
+  // ── 2. ...and that is only safe because the role can still act on it ───────────────────────
+  //
+  // An unowned step is not a lost step: it carries the ROLE, and every holder of that role may act
+  // on it. Without this rung in mayActOnTask, "nobody named" would mean work nobody can touch, and
+  // the design above would be a bug rather than a decision.
+  const unowned = { assigneeRole: ROLE, assignee: null, assigneeId: null };
+  const omarMay = await mayActOnTask({ sub: omar.id, role: ROLE }, { name: omar.name }, unowned);
+  const saraMay = await mayActOnTask({ sub: sara.id, role: ROLE }, { name: sara.name }, unowned);
+  console.log(`an unowned step:          both role holders may act: ${omarMay && saraMay}`);
+  if (!omarMay || !saraMay) fail("an unowned step cannot be acted on by the role it is waiting for — it IS lost work");
+  // ...but not by somebody outside the role, or it is not waiting for a role at all.
+  const outsider = await mayActOnTask({ sub: "someone-else", role: "zs_probe_other" }, { name: "Outsider" }, unowned);
+  if (outsider) fail("a step waiting for one role could be acted on by another");
+
+  // ── 3. naming one sends the work there, and says why ───────────────────────────────────────
   await prisma.company.update({ where: { id: co.id }, data: { roleOwners: { [ROLE]: sara.id } as any } });
   const b = await pickAssignee(ROLE, { companyId: co.id });
   console.log(`Sara named on the client: ${b?.name} (${b?.why})`);
   if (b?.id !== sara.id) fail(`the client's named officer was ignored — got ${b?.name}`);
   if (!b?.why) fail("the assignment gave no reason, so nobody can tell why it landed there");
 
-  // The client is what makes the difference: the same role, asked without a client, still balances.
+  // The client is what makes the difference: the same role asked WITHOUT a client has no officer to
+  // read, so it must come back empty rather than borrowing this one's.
   const noClient = await pickAssignee(ROLE, { companyId: null });
-  if (noClient?.id !== omar.id) fail("a client's officer leaked into an assignment that named no client");
+  if (noClient) fail(`a client's officer leaked into an assignment that named no client: ${noClient.name}`);
 
-  // ── 3. a named officer who cannot take it is ignored, never assigned to ────────────────────
+  // ── 4. a named officer who cannot take it is ignored, never assigned to ────────────────────
+  //
+  // The step then waits in the role's queue exactly as if nobody had been named — which rung 2
+  // above has just shown is workable. The failure this guards against is the opposite one: handing
+  // a government filing to somebody who left the firm last month.
   for (const [what, patch] of [
     ["has left", { status: "inactive" }],
     ["moved to another role", { status: "active", roleId: "zs_probe_other" }],
   ] as [string, any][]) {
     await prisma.user.update({ where: { id: sara.id }, data: patch });
     const c = await pickAssignee(ROLE, { companyId: co.id });
-    console.log(`Sara ${what}:${" ".repeat(Math.max(1, 16 - what.length))}${c?.name ?? "NOBODY"}`);
-    if (!c) fail(`naming someone who ${what} left the step with nobody — a preference must never stall work`);
-    else if (c.id !== omar.id) fail(`expected the balancer to take over, got ${c.name}`);
+    console.log(`Sara ${what}:${" ".repeat(Math.max(1, 17 - what.length))}${c?.name ?? "nobody — back to the role queue"}`);
+    if (c?.id === sara.id) fail(`a step was assigned to somebody who ${what}`);
+    else if (c) fail(`naming an officer who ${what} handed the client to ${c.name} instead`);
   }
   await prisma.user.update({ where: { id: sara.id }, data: { status: "active", roleId: ROLE } });
 
-  // ── 4. a rule naming a person is narrower and still wins ───────────────────────────────────
+  // ── 5. a rule naming a person is narrower and still wins ───────────────────────────────────
   const noura = await staff("noura", "ZS Noura (specialist)");
   await prisma.assignmentRule.create({ data: {
     label: `${TAG} GOSI`, scope: "task", active: true, position: 1,
@@ -123,7 +148,7 @@ async function main() {
   console.log(`a Qiwa step, Sara named:  ${e?.name} (${e?.why})`);
   if (e?.id !== sara.id) fail("the rule leaked beyond the authority it names");
 
-  // ── 5. the orphan retry honours it too ─────────────────────────────────────────────────────
+  // ── 6. the orphan retry honours it too ─────────────────────────────────────────────────────
   const orphan = await prisma.workflowTask.create({ data: {
     instanceId: run.id, nodeId: "orphan", nodeType: "task", title: `${TAG} orphan`,
     status: "active", assignee: null, assigneeId: null, assigneeRole: ROLE,
@@ -134,6 +159,18 @@ async function main() {
   console.log("");
   console.log(`an orphaned step retried:  ${after?.assignee}`);
   if (after?.assignee !== sara.name) fail(`the orphan job ignored the client's officer and picked ${after?.assignee}`);
+
+  // ...and invents nobody when the client has no officer. This job runs hourly over every unowned
+  // step in the system, so a balancer hiding in here would undo the decision above on its own.
+  await prisma.company.update({ where: { id: co.id }, data: { roleOwners: {} as any } });
+  const orphan2 = await prisma.workflowTask.create({ data: {
+    instanceId: run.id, nodeId: "orphan2", nodeType: "task", title: `${TAG} orphan unowned`,
+    status: "active", assignee: null, assigneeId: null, assigneeRole: ROLE,
+  } as any });
+  await assignOrphanTasks();
+  const after2 = await prisma.workflowTask.findUnique({ where: { id: orphan2.id }, select: { assignee: true } });
+  console.log(`an orphan with no officer: ${after2?.assignee ?? "left alone"}`);
+  if (after2?.assignee) fail(`the orphan job handed an unowned step to ${after2.assignee}`);
 
   await sweep();
   console.log(bad === 0 ? "\nall good" : `\n${bad} problem(s)`);

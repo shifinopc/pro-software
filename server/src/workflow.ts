@@ -2641,7 +2641,11 @@ R.get("/tasks", requireAuth, requireStaff, async (req, res) => {
  * reach a step assigned to a person in another team, and it grants nothing at all on their own
  * steps, where they already stood or did not on the rungs above.
  */
-async function mayActOnTask(
+// Exported for the client-team probe. `pickAssignee` returns null for a client with no named
+// officer, and the reason that is safe rather than lost work is THIS function's second rung: every
+// holder of the step's role may act on it. That claim is load-bearing, so it is asserted rather
+// than believed.
+export async function mayActOnTask(
   a: { sub?: string; role?: string },
   me: { name?: string | null } | null,
   task: { assigneeRole: string | null; assignee: string | null; assigneeId: string | null },
