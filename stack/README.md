@@ -139,6 +139,22 @@ sensitive as the vault itself.
 deploy or a dropped table and not from losing the server, since they sit on the disk they came from.
 Set it in `~/stimespro/.env` and the script runs it with the set directory as `$1`.
 
+### Where the second copy is
+
+Set directories are pushed nightly to **ionob-srv (95.217.194.2)** at `/root/stimespro-backups/`,
+one dated directory per night, by `OFFSITE_CMD` in `~/stimespro/.env`. Written here as well as
+there because a box that has just died cannot tell you where its own backups went.
+
+The key that opens it is NOT in those sets — see `SECRETS.txt` inside any of them. It is in
+`~/stimespro/backups/secrets/` on the live box, and it needs to be in the firm's password manager
+too: both boxes are Hetzner Finland, so this arrangement survives a disk, a bad deploy and a
+dropped table, and does not survive losing the account.
+
+The push uses a key that can do nothing else. Its entry in ionob-srv's `authorized_keys` carries
+`restrict` (no pty, no forwarding) and `command="/usr/bin/rrsync -wo /root/stimespro-backups"`, so
+even with the private key in hand you can only WRITE into that one directory — not read the
+backups back, and not get a shell.
+
 ### Restoring from a backup
 
 ```bash
