@@ -39,11 +39,23 @@ OUT_DIR="${OUT_DIR:-$STACK_DIR/backups}"
 PROJECT="${PROJECT:-stimespro}"
 LOG="$OUT_DIR/backup.log"
 
-# How long to keep things. The whole set is ~4 MB a night, so these are generous rather than tight —
+# How long to keep things. The whole set is ~37 MB a night, so these are generous rather than tight —
 # but the box was at 87% full when this was written, hence the free-space check below rather than
 # trusting the arithmetic.
-KEEP_DAILY="${KEEP_DAILY:-14}"      # every night
-KEEP_MONTHLY="${KEEP_MONTHLY:-6}"   # the 1st of each month, kept much longer
+#
+# BY AGE, NOT BY COUNT, and that is the fix rather than a preference. These used to mean "keep the
+# newest 14 directories". Every run makes a directory — including the manual ones before a deploy,
+# or a test, or somebody being careful — and each one evicted a set from the far end. An afternoon
+# of them cut the real cover to four nights while the setting still read 14, silently, in the
+# direction that matters. Age cannot be eaten that way: a set is kept for the day it covers, not for
+# how many other sets happen to exist beside it.
+KEEP_DAILY_DAYS="${KEEP_DAILY_DAYS:-14}"
+KEEP_MONTHLY_DAYS="${KEEP_MONTHLY_DAYS:-190}"   # ~6 months, which is what "keep 6 monthly" meant
+# A FLOOR, because pruning by age has a failure mode that counting did not: if the cron stops for a
+# month, every set on disk is "too old" and the next run would delete all of them — turning a
+# scheduling fault into having no backups at all. Below this many, nothing is pruned whatever the
+# dates say.
+MIN_SETS="${MIN_SETS:-3}"
 MIN_FREE_MB="${MIN_FREE_MB:-1024}"
 
 STAMP="$(date +%F-%H%M)"
@@ -153,17 +165,34 @@ NOTE
 # `find`, not a glob: an empty directory makes `ls dir/*/` exit 2, and under `pipefail` that status
 # reaches the assignment and `set -e` kills the whole run — after the backup is safely written, which
 # is the most misleading moment possible for the script to report failure.
+# Keep every set newer than `days`, plus the newest MIN_SETS whatever their age.
+#
+# The date comes from the set's own NAME (YYYY-MM-DD-HHMM), not from its mtime. The name is what the
+# set claims to cover and it survives being copied, rsynced or restored; an mtime does not, and a
+# restore that touched these would otherwise make every set look new.
 prune() {
-  local dir="$1" keep="$2" sets=() i
+  local dir="$1" days="$2" sets=() i name day cutoff
+  [ -d "$dir" ] || return 0
   while IFS= read -r d; do sets+=("$d"); done     < <(find "$dir" -mindepth 1 -maxdepth 1 -type d | sort)
   local n=${#sets[@]}
-  [ "$n" -gt "$keep" ] || return 0
-  for (( i = 0; i < n - keep; i++ )); do
-    rm -rf "${sets[i]}"; log "  pruned $(basename "${sets[i]}")"
+  # Guarded: this runs AFTER the backup is safely written, and `set -e` on a failed `date` here
+  # would report the whole run as failed at the most misleading moment possible.
+  cutoff="$(date -d "$days days ago" +%F 2>/dev/null)" || {
+    log "  (could not work out a cutoff date — nothing pruned)"; return 0; }
+  # `sort` leaves these oldest-first, so stopping MIN_SETS short of the end IS the floor.
+  for (( i = 0; i < n - MIN_SETS; i++ )); do
+    name="$(basename "${sets[i]}")"
+    day="${name:0:10}"
+    # A string comparison, which is exactly right for YYYY-MM-DD — and anything NOT shaped like a
+    # date sorts above it and is therefore kept, which is the safe direction for a stray directory.
+    if [[ "$day" < "$cutoff" ]]; then
+      rm -rf "${sets[i]}"
+      log "  pruned $name (covers $day, past $days days)"
+    fi
   done
 }
-prune "$OUT_DIR/daily"   "$KEEP_DAILY"
-prune "$OUT_DIR/monthly" "$KEEP_MONTHLY"
+prune "$OUT_DIR/daily"   "$KEEP_DAILY_DAYS"
+prune "$OUT_DIR/monthly" "$KEEP_MONTHLY_DAYS"
 
 log "done — $(du -sh "$SET_DIR" | cut -f1) in $SET_DIR; $(du -sh "$OUT_DIR" | cut -f1) total"
 
