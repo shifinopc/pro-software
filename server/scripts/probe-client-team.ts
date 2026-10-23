@@ -24,7 +24,9 @@
  *      none -- it takes no routing facts, so it was the easy place to quietly hand a client's
  *      backlog to the wrong desk.
  *
- * Own client, own staff, own rules. Deletes everything it makes.
+ * Own client, own staff, own rules. Deletes everything it makes. One caveat: point 6 calls
+ * assignOrphanTasks, which sweeps the WHOLE database rather than this probe's fixture, so the probe
+ * checks what that sweep touched and fails if it moved anything that is not its own.
  */import { prisma } from "../src/db.js";
 import { pickAssignee, mayActOnTask } from "../src/workflow.js";
 import bcrypt from "bcryptjs";
@@ -153,8 +155,16 @@ async function main() {
     instanceId: run.id, nodeId: "orphan", nodeType: "task", title: `${TAG} orphan`,
     status: "active", assignee: null, assigneeId: null, assigneeRole: ROLE,
   } as any });
+  // THIS CALLS A SYSTEM-WIDE JOB. assignOrphanTasks sweeps every unowned step in the database, not
+  // just the one below — so against a database whose work is real it can hand somebody's backlog to
+  // a desk and notify them, and the probe would report PASS while it did. The scratch-database guard
+  // in _scratch-guard.ts is the wrong tool (it exits 2 on any database not named *scratch*, which
+  // includes CI's), so the probe is made to NOTICE instead: anything it assigned that is not its own
+  // fixture is a failure, and names what it touched.
   const { assignOrphanTasks } = await import("../src/jobs.js");
-  await assignOrphanTasks();
+  const swept = await assignOrphanTasks();
+  const notMine = swept.details.filter(d => !d.startsWith(TAG));
+  if (notMine.length) fail(`this probe assigned ${notMine.length} step(s) belonging to somebody else: ${notMine.join("; ")} — run it against a scratch database`);
   const after = await prisma.workflowTask.findUnique({ where: { id: orphan.id }, select: { assignee: true } });
   console.log("");
   console.log(`an orphaned step retried:  ${after?.assignee}`);
