@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Exercise backup.sh's prune() against fixtures.
+# Exercise backup.sh's prune() and log() against fixtures.
 #
 # This function DELETES BACKUPS, which is the one thing in this repository that cannot be undone by
 # re-running anything — so it does not get to be the code nobody checks. The function is EXTRACTED
@@ -11,7 +11,7 @@
 # cover to four days. Three is the failure that pruning by age introduces in its place: if the cron
 # stops for a month, every set on disk is "too old" — without a floor the next run deletes the lot.
 #
-#   bash stack/prune-test.sh
+#   bash stack/backup-test.sh
 set -uo pipefail
 
 SRC="$(dirname "$0")/backup.sh"
@@ -20,6 +20,10 @@ trap 'rm -rf "$WORK"' EXIT
 
 sed -n '/^prune() {/,/^}/p' "$SRC" > "$WORK/prune.sh"
 grep -q "MIN_SETS" "$WORK/prune.sh" || { echo "FAILED to extract prune()"; exit 1; }
+sed -n '/^log() {/,/^}/p' "$SRC" > "$WORK/log.sh"
+# Checks the EXTRACTION worked, not that the fix is present — a guard that asserts the fix makes
+# the case below unreachable the moment anybody breaks it, which is the one time it should run.
+grep -q 'LOG' "$WORK/log.sh" || { echo "FAILED to extract log()"; exit 1; }
 log() { echo "    $*"; }
 # shellcheck disable=SC1090
 . "$WORK/prune.sh"
@@ -104,6 +108,44 @@ prune "$WORK/f" 190 >/dev/null
 has_day "$WORK/f" 400 && no "a 13-month-old monthly set survived" || ok "400 days old: pruned"
 has_day "$WORK/f" 250 && no "an 8-month-old monthly set survived" || ok "250 days old: pruned"
 has_day "$WORK/f" 180 && ok "6 months old: kept" || no "a 180-day-old monthly set was pruned"
+
+echo
+echo "8. the log is written once under cron, and still shown to a person"
+# THE BUG: log() teed to the file AND stderr, while the cron entry redirects stderr into that same
+# file — so every scheduled line was stored twice.
+cat > "$WORK/logcase.sh" <<EOS
+set -euo pipefail
+LOG="$WORK/out.log"
+$(cat "$WORK/log.sh")
+log "hello from a run"
+EOS
+# Cron: stderr is a FILE, not a terminal.
+: > "$WORK/out.log"
+bash "$WORK/logcase.sh" >> "$WORK/out.log" 2>&1
+n=$(grep -c "hello from a run" "$WORK/out.log")
+[ "$n" = "1" ] && ok "cron-style run: recorded once" || no "cron-style run: recorded $n times (expected 1)"
+
+# A person at a terminal must still see it. Needs a pty, so this one is skipped where there is no
+# python to make one rather than quietly passing.
+PY=$(command -v python3 || command -v python || true)
+# `pty` is a Unix-only module, so this case is genuinely unavailable on Windows rather than failing
+# there. Checked explicitly: a harness that cannot run must say so, not report the code as broken.
+if [ -n "$PY" ] && "$PY" -c "import pty" >/dev/null 2>&1; then
+  : > "$WORK/out.log"
+  seen=$("$PY" -c "
+import pty, sys, os
+out = []
+def rd(fd):
+    d = os.read(fd, 1024); out.append(d); return d
+pty.spawn(['bash', r'''$WORK/logcase.sh'''], rd)
+sys.stdout.write(b''.join(out).decode('utf-8', 'replace'))
+" 2>/dev/null | grep -c "hello from a run" || true)
+  n=$(grep -c "hello from a run" "$WORK/out.log")
+  [ "$seen" -ge 1 ] && ok "at a terminal: shown to the person" || no "at a terminal: nothing was printed"
+  [ "$n" = "1" ] && ok "at a terminal: still recorded once in the file" || no "at a terminal: recorded $n times"
+else
+  echo "  --   no pty available here (Windows): the terminal case was not exercised"
+fi
 
 echo
 [ "$bad" = 0 ] && echo "all good" || echo "$bad problem(s)"

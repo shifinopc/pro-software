@@ -65,7 +65,20 @@ SET_DIR="$OUT_DIR/$TAG/$STAMP"
 
 mkdir -p "$OUT_DIR/daily" "$OUT_DIR/monthly"
 
-log() { printf '%s  %s\n' "$(date +'%F %T')" "$*" | tee -a "$LOG" >&2; }
+# WRITTEN TO THE FILE ONCE. This used to `tee -a "$LOG" >&2` — the log file AND stderr — while the
+# cron entry redirects stderr into that same file, so every scheduled run was recorded twice. Not
+# harmful, but it doubled the one file anybody reads to confirm a backup ran, and a log that says
+# everything twice is a log people stop reading carefully.
+#
+# Printing to stderr only when stderr is a TERMINAL keeps the running commentary for somebody
+# watching it by hand and drops the duplicate under cron. The cron redirect stays as it is: it is
+# what captures stderr from docker, mysqldump and tar, which is exactly the output that matters on
+# the night one of them fails.
+log() {
+  local line="$(date +'%F %T')  $*"
+  printf '%s\n' "$line" >> "$LOG"
+  if [ -t 2 ]; then printf '%s\n' "$line" >&2; fi
+}
 die() { log "FAILED — $*"; exit 1; }
 
 # ── Install mode ──────────────────────────────────────────────────────────────

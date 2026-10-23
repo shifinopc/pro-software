@@ -62,10 +62,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      # The only code in this repository that deletes backups. It needs no database and no Node, so
-      # it rides along here rather than in the probes job.
-      - name: Backup retention
-        run: bash stack/prune-test.sh
+      # The only code in this repository that deletes backups, plus the logging around it. Needs no
+      # database and no Node, so it rides along here rather than in the probes job. The Linux runner
+      # also exercises the one case a Windows workstation cannot: that a person at a terminal still
+      # sees the running commentary.
+      - name: Backup retention and logging
+        run: bash stack/backup-test.sh
 
       # SCA. Fails on high or critical only: moderates that need a major upgrade should not block a
       # bug fix, and a gate that cries wolf is a gate people learn to force past.
