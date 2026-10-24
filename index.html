@@ -32409,6 +32409,35 @@ class Component extends DCLogic {
      * than sitting on a task that is no longer there.
      */
     /**
+     * DOES ANYTHING FOLLOW THIS STEP? Walked on the TEMPLATE GRAPH, never on the task rows.
+     *
+     * The rows cannot answer it: the engine creates a step when the one before it finishes, so
+     * exactly one is open almost all of the time and "only one left" is true on nearly every step
+     * of every run. Asking the rows made an Iqama renewal say "Complete task" on its first step.
+     *
+     * Unknown — no graph loaded, no node id — answers TRUE, so a caller under-claims rather than
+     * promising to finish a run whose end it cannot see. A branch that will not be taken also
+     * counts as ahead, for the same reason: saying "step" when it turned out to be the last is a
+     * small let-down, saying "task" and then opening another is what makes a button untrustworthy.
+     */
+    this._moreStepsAhead = (graph9, nodeId9) => {
+      const nodes9 = (graph9 && Array.isArray(graph9.nodes)) ? graph9.nodes : [];
+      const edges9 = (graph9 && Array.isArray(graph9.edges)) ? graph9.edges : [];
+      if (!nodeId9 || !nodes9.length) return true;
+      const adj9 = {}; edges9.forEach(e9 => { (adj9[e9.from] = adj9[e9.from] || []).push(e9.to); });
+      const seen9 = {}; const queue9 = (adj9[nodeId9] || []).slice();
+      while (queue9.length) {
+        const id9 = queue9.shift();
+        if (!id9 || seen9[id9]) continue;
+        seen9[id9] = true;
+        const n9 = nodes9.find(x9 => x9.id === id9);
+        if (n9 && (n9.type === 'task' || n9.type === 'approval')) return true;
+        (adj9[id9] || []).forEach(t9 => queue9.push(t9));
+      }
+      return false;
+    };
+
+    /**
      * THE SHEET STAYS OPEN BETWEEN STEPS.
      *
      * This used to clear `workRow` first and then look for the next step, so the modal unmounted,
@@ -32426,9 +32455,12 @@ class Component extends DCLogic {
       // itself "Complete task". Asked again here because the overlay must not promise a next step
       // that does not exist — it sat there saying "Opening the next step" for 2.7 seconds at the
       // end of every run before giving up, which is a spinner telling the officer a lie.
+      // The same question the button just answered, asked the same way — of the graph, for the step
+      // that has just been finished. `my-work` has not reloaded yet, so its row is still here.
       const runNow9 = (this.state.wfRunFor === String(doneId9)) ? this.state.wfRunDetail : null;
-      const othersOpen9 = (runNow9 && Array.isArray(runNow9.tasks) ? runNow9.tasks : [])
-        .filter(t9 => t9.id !== doneId9 && !['done', 'approved', 'rejected', 'cancelled'].includes(String(t9.status || ''))).length;
+      const doneRow9 = (Array.isArray(this.state.myWorkData) ? this.state.myWorkData : []).find(t9 => t9.id === doneId9);
+      const othersOpen9 = this._moreStepsAhead((runNow9 && runNow9.template && runNow9.template.graph) || null,
+                                               doneRow9 && doneRow9.nodeId) ? 1 : 0;
       // Held open on the finished step, with the body showing what is happening. The step itself is
       // done server-side, so nothing here can be acted on twice.
       this.setState({ wdAdvancing: true, wdAdvancingLast: othersOpen9 === 0 });
@@ -32452,6 +32484,10 @@ class Component extends DCLogic {
     const wfStepDefs = (Array.isArray(this.state.myWorkData)
       ? this.state.myWorkData.filter(t2 => t2.status === 'active').map(t2 => ({
           id: t2.id, _real: true, kind: t2.nodeType === 'approval' ? 'approval' : 'workflow',
+          // WHICH NODE OF THE TEMPLATE this step came from. Needed to ask the graph whether
+          // anything follows it — the rows alone cannot answer that, because the step after
+          // this one does not exist until this one is finished.
+          nodeId: t2.nodeId || null,
           // Needed to find the CASE behind the step: with the case row no longer listed separately,
           // its deadline has to travel with the step or it disappears from the queue entirely.
           instanceId: t2.instanceId || (t2.instance && t2.instance.id) || null,
@@ -33318,12 +33354,24 @@ class Component extends DCLogic {
      * All that is left of the pager is the one thing it genuinely carried: which button this is.
      */
     if (drawerApi.showWorkDrawer) {
-      // THE LAST OPEN STEP FINISHES THE TASK, so the button should not keep saying "step".
-      // shortcut: a branch can still open a further step after this one, in which case the modal
-      // shows it and the label was merely optimistic. Upgrade when a step knows its own successors.
+      /**
+       * IS ANYTHING COMING AFTER THIS ONE? Asked of the TEMPLATE GRAPH, never of the rows.
+       *
+       * The first version counted open WorkflowTask rows and said "Complete task" when only one was
+       * left. That is wrong on nearly every step of every run: the engine creates a step when the
+       * one before it finishes, so exactly one is open almost all of the time. An Iqama renewal said
+       * "Complete task" on its first step. The fixture that was supposed to catch this created both
+       * of its steps up front, which is not what a real run looks like — the test agreed with the
+       * bug because it shared the mistaken assumption.
+       *
+       * Walking forward from this step's own node answers it properly: if any node reachable from
+       * here is a task or an approval, there is more to do. Unknown — no graph yet, no node id —
+       * reads as "more ahead", so the label under-claims rather than promising to finish a run it
+       * cannot see the end of.
+       */
       const run9 = (this.state.wfRunFor === String(this.state.workRow || '')) ? this.state.wfRunDetail : null;
-      const openLeft9 = (run9 && Array.isArray(run9.tasks) ? run9.tasks : [])
-        .filter(t9 => !['done', 'approved', 'rejected', 'cancelled'].includes(String(t9.status || '')));
+      const graph9 = (run9 && run9.template && run9.template.graph) || null;
+      const moreAhead9 = this._moreStepsAhead(graph9, selStep && selStep.nodeId);
       // The brief collapses only when there is something else to act on; a step whose entire
       // content is its instructions would otherwise open showing one clipped line and nothing else.
       const hasWork9 = !!(drawerApi.wdHasChecklist || drawerApi.wdHasCaptures || drawerApi.wdIsApproval);
@@ -33332,7 +33380,7 @@ class Component extends DCLogic {
       const firstLine9 = (String(drawerApi.wdInstructions || '').match(/[^\r\n]+/) || [''])[0].trim();
       drawerApi = {
         ...drawerApi,
-        wdCompleteLabel: openLeft9.length === 1 ? 'Complete task' : 'Complete step',
+        wdCompleteLabel: moreAhead9 ? 'Complete step' : 'Complete task',
         wdAdvancing: !!this.state.wdAdvancing,
         wdAdvancingTitle: this.state.wdAdvancingLast ? 'Task complete' : 'Step completed',
         wdAdvancingNote: this.state.wdAdvancingLast ? 'Every step of this run is done.' : 'Opening the next step of this run…',

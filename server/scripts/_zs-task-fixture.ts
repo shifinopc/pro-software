@@ -31,9 +31,28 @@ async function create() {
   const co = await prisma.company.findFirst({ where: { lifecycle: "client" }, select: { id: true, name: true } });
   if (!co) throw new Error("no client to hang it on");
 
+  // A REAL GRAPH, and that detail is the point of this fixture rather than a nicety.
+  //
+  // The first version used `{ nodes: [], edges: [] }` and pre-created both steps, and it passed a
+  // change that was wrong on live: the Complete button decided "last step" by counting open task
+  // rows, which is true on nearly every step of a real run because the engine creates each step
+  // only when the one before it finishes. The fixture shared the mistaken assumption, so it agreed.
+  // With the flow written down, step one can see step two ahead of it and step two cannot.
   const tpl = await prisma.workflowTemplate.create({ data: {
     name: `${TAG} template`, country: "SA", entityType: "company", active: false,
-    graph: { nodes: [], edges: [] } as any,
+    graph: {
+      nodes: [
+        { id: "start", type: "start", label: "Start" },
+        { id: "zs1", type: "task", label: "Check Establishment and Employee" },
+        { id: "zs2", type: "task", label: "Pay the renewal fee" },
+        { id: "end", type: "end", label: "Done" },
+      ],
+      edges: [
+        { from: "start", to: "zs1" },
+        { from: "zs1", to: "zs2" },
+        { from: "zs2", to: "end" },
+      ],
+    } as any,
   } as any });
 
   const run = await prisma.workflowInstance.create({ data: {
@@ -60,14 +79,14 @@ async function create() {
       { var: "refNo", label: "Qiwa reference", type: "text" },
     ] as any,
   });
-  const two = await step("zs2", "Pay the renewal fee", {
-    instructions: "Pay from the client's wallet and record the receipt number.",
-    captures: [{ var: "receipt", label: "Receipt number", type: "text" }] as any,
-  });
-
+  // ONLY STEP ONE IS CREATED. The engine makes the next step when this one is completed, and that
+  // is the whole shape the earlier version of this fixture got wrong: with both rows sitting there
+  // from the start, "how many steps are still open" answered 2, and the bug — a Complete button
+  // that called the first step of a run the last — could not reproduce. One row open is what a
+  // real run looks like at every moment of its life.
   console.log(`run   ${run.id}`);
   console.log(`step1 ${one.id}  ${one.title}`);
-  console.log(`step2 ${two.id}  ${two.title}`);
+  console.log(`step2 — not created; the engine should make it when step1 completes`);
   console.log(`client ${co.name}`);
 }
 
