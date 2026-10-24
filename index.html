@@ -11515,7 +11515,6 @@
           <div class="fm-head">
             <div style="min-width:0;">
               <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Add client</div>
-              <div style="font-size:11px; color:#8C8899; margin-top:2px;">One save creates the client, their portal login and their subscription</div>
             </div>
             <div onClick="{{ closeAddClient }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
           </div>
@@ -11527,7 +11526,7 @@
               <div><label class="fm-lab">COMPANY NAME <span class="fm-req">*</span></label><input value="{{ acCName }}" onChange="{{ setAcCName }}" placeholder="e.g. Skyline Interiors LLC" class="fm-inp"></div>
               <div><div style="display:flex; align-items:center; gap:8px;"><label class="fm-lab">COMPANY NAME (ARABIC)</label><span style="font-size:9px; color:#B4AFC4;">{{ acArHint }}</span></div><input value="{{ acNameAr }}" onChange="{{ setAcNameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp"></div>
               <div><label class="fm-lab">CLIENT GROUP</label><div style="position:relative;"><div data-dd onClick="{{ ddAcGroupToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acGroupVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcGroupOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcGroupOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-              <div><label class="fm-lab">CR NUMBER</label><input value="{{ acCr }}" onChange="{{ setAcCr }}" placeholder="1010123456" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">CR NUMBER <span class="fm-req">*</span></label><input value="{{ acCr }}" onChange="{{ setAcCr }}" placeholder="1010123456" inputmode="numeric" class="fm-inp"></div>
               <div><label class="fm-lab">MAIN ACTIVITY</label><input value="{{ acActivity }}" onChange="{{ setAcActivity }}" placeholder="e.g. Building contracting" class="fm-inp"></div>
               <div><label class="fm-lab">TYPE OF COMPANY</label><div style="position:relative;"><div data-dd onClick="{{ ddAcTypeToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcTypeOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <sc-if value="{{ acIsForeign }}" hint-placeholder-val="{{ false }}">
@@ -11559,7 +11558,110 @@
           </div>
           <div class="fm-foot" style="justify-content:flex-end;">
             <button onClick="{{ closeAddClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
-            <button onClick="{{ submitAddClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Create client</button>
+            <span style="font-size:10px; color:#A9A6B4; margin-right:auto;">Step 1 of 2 · The client</span>
+            <button onClick="{{ acGoDocs }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Next →</button>
+          </div>
+        </sc-if>
+        <!-- ── STEP 2 · COMPANY DOCUMENTS ───────────────────────────────────────────────────
+             The papers are what the client IS to an authority, and they were being collected after
+             the fact — the client was created, then somebody went back through a folder of PDFs.
+             Asked here, while the folder is open.
+
+             A DOCUMENT NEEDS A CLIENT TO BELONG TO, so nothing is uploaded yet: each one is held in
+             the form and written after the company exists. That also makes Back free — leaving this
+             step costs nothing because nothing has happened.
+
+             The TYPE decides the fields. Every one of them lives in the document-type master with
+             its own field list, so this step renders what the chosen type asks for rather than
+             carrying its own idea of what a Commercial Registration needs. -->
+        <sc-if value="{{ acDocsStep }}" hint-placeholder-val="{{ false }}">
+          <div class="fm-head">
+            <div style="min-width:0;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Company documents</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ acDocsSub }}</div>
+            </div>
+            <div onClick="{{ closeAddClient }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+          </div>
+          <div class="fm-body">
+            <sc-if value="{{ acDocErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ acDocErr }}</div></sc-if>
+            <div class="ldf-land ac-land">
+              <div class="ldf-col">
+                <div class="ldf-cap">The file<span>drag one in, or click</span></div>
+                <!-- data-acdrop, not onDrop: the runtime renders a whitelist of attributes and drops
+                     the ones it does not know, which is why the board's drag is wired by hand too.
+                     One listener on the document finds this by its marker. -->
+                <div data-acdrop="1" onClick="{{ acPickFile }}" style="border:1.5px dashed {{ acDropBorder }}; background:{{ acDropBg }}; border-radius:14px; padding:22px 14px; text-align:center; cursor:pointer; transition:background .15s, border-color .15s;">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:7px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                  <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:3px;">{{ acDropNote }}</div>
+                </div>
+                <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:10px; padding:8px 10px;">
+                    <span style="flex:1; min-width:0; font-size:10px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acFileName }}</span>
+                    <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
+                  </div>
+                </sc-if>
+                <div class="ldf-cap">Added<span>{{ acDocsCount }}</span></div>
+                <sc-if value="{{ acDocsNone }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:10px; color:#B4AFC4; line-height:1.6;">Nothing yet. A client can be created without any — these can be added from the client at any time.</div>
+                </sc-if>
+                <sc-for list="{{ acDocsList }}" as="d" hint-placeholder-count="0">
+                  <div style="display:flex; align-items:center; gap:8px; border:1px solid #F0EDF6; border-radius:10px; padding:8px 10px;">
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.type }}</div>
+                      <div style="font-size:9px; color:#A9A6B4; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.meta }}</div>
+                    </div>
+                    <span onClick="{{ d.remove }}" title="Remove" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">&times;</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div class="ldf-col" style="flex:1.6 1 0;">
+                <div class="ldf-cap">This document</div>
+                <div>
+                  <label class="fm-lab">DOCUMENT TYPE</label>
+                  <div style="position:relative;">
+                    <div data-dd onClick="{{ ddAcDtToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ acDtColor }};">{{ acDtVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                    <sc-if value="{{ ddAcDtOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
+                        <sc-for list="{{ ddAcDtOptions }}" as="o" hint-placeholder-count="5">
+                          <div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div>
+                        </sc-for>
+                        <!-- A type nobody has defined yet is added to the MASTER, not to this form,
+                             so the next client gets it too. Opens the same builder Settings uses. -->
+                        <div onClick="{{ acNewDocType }}" style="margin-top:4px; padding:8px 11px; border-top:1px solid #F3F1F7; border-radius:8px; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="background:#F7F3FD;">+ New document type…</div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                  <div><label class="fm-lab">DOCUMENT / CERTIFICATE NUMBER</label><input value="{{ acDocNo }}" onChange="{{ setAcDocNo }}" class="fm-inp"></div>
+                  <div><label class="fm-lab">AUTHORITY</label><input value="{{ acDocAuth }}" onChange="{{ setAcDocAuth }}" placeholder="e.g. Ministry of Commerce" class="fm-inp"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                  <div><label class="fm-lab">ISSUE DATE</label><input value="{{ acDocIssue }}" onChange="{{ setAcDocIssue }}" type="date" class="fm-inp"></div>
+                  <div><label class="fm-lab">EXPIRY DATE</label><input value="{{ acDocExpiry }}" onChange="{{ setAcDocExpiry }}" type="date" class="fm-inp"></div>
+                </div>
+                <!-- Whatever else this type asks for. Defined on the type, so a Baladiya licence can
+                     want a shop name without this form knowing what a Baladiya licence is. -->
+                <sc-for list="{{ acDocExtras }}" as="x" hint-placeholder-count="0">
+                  <div><label class="fm-lab">{{ x.label }}</label><input value="{{ x.value }}" onChange="{{ x.set }}" class="fm-inp"></div>
+                </sc-for>
+                <div>
+                  <sc-if value="{{ acCanAddDoc }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ acAddDoc }}" style="width:100%; background:#F5EEFF; color:#7C00FF; border:1px dashed #C9A2FF; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#EBDBFF;">+ Add this document</button>
+                  </sc-if>
+                  <sc-if value="{{ acCantAddDoc }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ acAddDocHeld }}" style="width:100%; background:#F3F1F7; color:#8C8899; border:1px dashed #D8D3E3; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="border-color:#C0353A; color:#C0353A;">{{ acAddDocWhy }}</button>
+                  </sc-if>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="fm-foot">
+            <button onClick="{{ acBackToForm }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">← Back</button>
+            <span style="font-size:10px; color:#A9A6B4;">Step 2 of 2 · Documents</span>
+            <div style="flex:1;"></div>
+            <button onClick="{{ submitAddClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ acCreateLabel }}</button>
           </div>
         </sc-if>
         <sc-if value="{{ acDoneStep }}" hint-placeholder-val="{{ false }}">
@@ -17938,6 +18040,95 @@ class Component extends DCLogic {
     // with the server, which already counts live only. The few screens that show history on purpose
     // read documentsAllData.
     this._docsState = (v) => ({ documentsData: (Array.isArray(v) ? v : []).filter(d => !d.supersededAt), documentsAllData: Array.isArray(v) ? v : [] });
+    // On `this`, not only in the render values: the Add-client form opens the type builder too.
+    this._openDtNew = () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnCard: true, dtnCardPos: '', dtnScope: 'all', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' });
+
+    /**
+     * A FILE, FROM A CLICK OR A DROP.
+     *
+     * The input is made here rather than put in the markup: the template runtime renders a
+     * whitelist of attributes and quietly drops the rest, which is the same reason the board's drag
+     * is wired by hand. One hidden input per click, used once, thrown away.
+     *
+     * 4 MB because that is what the upload route accepts for anything that is not the firm's own
+     * company profile — refusing it here says so while the file is still in front of the person,
+     * rather than after a round trip.
+     */
+    this._acTakeFile = (f9) => {
+      if (!f9) return;
+      if (f9.size > 4 * 1024 * 1024) return this.setState({ acDocErr: f9.name + ' is ' + Math.round(f9.size / 1048576) + ' MB — the limit is 4 MB.' });
+      if (!/\.(pdf|jpe?g|png|webp)$/i.test(f9.name)) return this.setState({ acDocErr: 'Only PDF, JPG, PNG or WEBP can be attached.' });
+      const r9 = new FileReader();
+      r9.onload = () => this.setState({ acDocFile: { name: f9.name, size: f9.size, data: String(r9.result || '') }, acDocErr: '' });
+      r9.onerror = () => this.setState({ acDocErr: 'That file could not be read.' });
+      r9.readAsDataURL(f9);
+    };
+    /**
+     * File the documents collected on step 2 against the client that has just been created.
+     *
+     * One at a time and deliberately not in a transaction: these are independent records, and a
+     * scan that will not upload should not take the other four with it. Whatever fails is named.
+     */
+    this._acFileDocs = async (companyId9, companyName9) => {
+      const docs9 = Array.isArray(this.state.acDocs) ? this.state.acDocs : [];
+      if (!companyId9 || !docs9.length) return;
+      const tok9 = localStorage.getItem('stimespro:token');
+      const H9 = { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) };
+      const api9 = this._apiBase || 'http://localhost:4100';
+      const failed9 = [];
+      for (const d9 of docs9) {
+        try {
+          let filePath9 = null;
+          if (d9.file && d9.file.data) {
+            const up9 = await fetch(api9 + '/api/upload', { method: 'POST', headers: H9,
+              body: JSON.stringify({ name: d9.file.name, kind: 'document', data: d9.file.data }) }).then(r9 => r9.json());
+            if (up9 && up9.path) filePath9 = up9.path; else throw new Error((up9 && up9.error) || 'upload refused');
+          }
+          const body9 = {
+            docType: d9.typeName, companyId: companyId9, person: companyName9 || '', employeeId: null,
+            docNumber: d9.docNumber || null, issuingAuthority: d9.issuingAuthority || null,
+            issueDate: d9.issueDate || null, expiryDate: d9.expiryDate || null,
+            ...((filePath9 || Object.keys(d9.extra || {}).length)
+              ? { customData: { ...(filePath9 ? { file: filePath9 } : {}), ...(d9.extra || {}) } } : {}),
+          };
+          const r9 = await fetch(api9 + '/api/documents', { method: 'POST', headers: H9, body: JSON.stringify(body9) });
+          if (!r9.ok) throw new Error(((await r9.json().catch(() => null)) || {}).error || 'refused');
+        } catch (e9) {
+          failed9.push(d9.typeName + (e9 && e9.message ? ' (' + e9.message + ')' : ''));
+        }
+      }
+      this._opReload('documents', 'documentsData');
+      if (failed9.length) this.toast('Client created, but these were not filed: ' + failed9.join(', '), 'error');
+      else this.toast(docs9.length + ' document' + (docs9.length === 1 ? '' : 's') + ' filed');
+    };
+
+    this._acPickFile = () => {
+      const i9 = document.createElement('input');
+      i9.type = 'file';
+      i9.accept = '.pdf,.jpg,.jpeg,.png,.webp';
+      i9.onchange = () => this._acTakeFile(i9.files && i9.files[0]);
+      i9.click();
+    };
+    // Dropping anywhere else on the page must not make the browser navigate to the file, which is
+    // what it does by default and looks exactly like the app crashing.
+    if (!this._acDropBound) {
+      this._acDropBound = true;
+      const zone9 = (e9) => e9.target && e9.target.closest && e9.target.closest('[data-acdrop]');
+      window.addEventListener('dragover', (e9) => {
+        if (!document.querySelector('[data-acdrop]')) return;
+        e9.preventDefault();
+        const over9 = !!zone9(e9);
+        if (!!this.state.acDropOver !== over9) this.setState({ acDropOver: over9 });
+      });
+      window.addEventListener('dragleave', (e9) => { if (!e9.relatedTarget && this.state.acDropOver) this.setState({ acDropOver: false }); });
+      window.addEventListener('drop', (e9) => {
+        if (!document.querySelector('[data-acdrop]')) return;
+        e9.preventDefault();
+        if (this.state.acDropOver) this.setState({ acDropOver: false });
+        if (zone9(e9)) this._acTakeFile(e9.dataTransfer && e9.dataTransfer.files && e9.dataTransfer.files[0]);
+      });
+    }
+
     this._opReload = (pathE, key, after) => {
       const t2 = localStorage.getItem('stimespro:token');
       fetch(API + '/api/' + pathE, { headers: t2 ? { Authorization: 'Bearer ' + t2 } : {} })
@@ -24386,12 +24577,114 @@ class Component extends DCLogic {
       })(),
       // add client
       showAddClient: !!this.state.addClient,
-      acFormStep: acStep === 'form', acDoneStep: acStep === 'done',
+      acFormStep: acStep === 'form', acDocsStep: acStep === 'docs', acDoneStep: acStep === 'done',
       openAddClient: () => this.setState({ addClient: true, acStep: 'form', acCName: '', acNameAr: '', acArTouched: false, acCr: '', acEmail: '', acPhone: '', acContact: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPro: 'Whoever is free', acPkg: 'Prospect / unassigned', acErr2: '',
-        acType: 'Saudi Company', acActivity: '', acVat: '', acGosi: '', acMol: '', acChamber: '', acShortAddr: '', acBuilding: '', acStreet: '', acSecondary: '', acDistrict: '', acPostal: '', acCity: '', acMisa: '', acDesignation: '' }),
+        acType: 'Saudi Company', acDocs: [], acDocType: '', acDocNo: '', acDocAuth: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '', acDropOver: false, acActivity: '', acVat: '', acGosi: '', acMol: '', acChamber: '', acShortAddr: '', acBuilding: '', acStreet: '', acSecondary: '', acDistrict: '', acPostal: '', acCity: '', acMisa: '', acDesignation: '' }),
       closeAddClient: () => this.setState({ addClient: false }),
       acCName: this.state.acCName || '', acCr: this.state.acCr || '', acEmail: this.state.acEmail || '', acPhone: this.state.acPhone || '', acContact: this.state.acContact || '',
       acNameAr: this.state.acNameAr || '',
+      // ── STEP 2 · COMPANY DOCUMENTS ──────────────────────────────────────────────────────────
+      ...(() => {
+        const docs9 = Array.isArray(this.state.acDocs) ? this.state.acDocs : [];
+        // Company types only. An Iqama belongs to a person, and offering it here would invite a
+        // document filed against a company that can never hold one.
+        const types9 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
+          .filter(t9 => (t9.subjectKind || 'employee') === 'company' && !t9.retired)
+          .sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        const picked9 = types9.find(t9 => t9.name === this.state.acDocType) || null;
+        // The three the form asks for itself are not asked for twice — same rule the Add-document
+        // dialog uses, so a type behaves the same way wherever it is filled in.
+        const extras9 = ((picked9 && Array.isArray(picked9.fields)) ? picked9.fields : [])
+          .filter(f9 => f9 && f9.type !== 'file' && !['number', 'expiry', 'issue'].includes(String(f9.purpose || '')));
+        const file9 = this.state.acDocFile || null;
+        const ready9 = !!picked9 && !!String(this.state.acDocNo || '').trim();
+        return {
+          acDocsSub: (this.state.acCName || 'This client').trim() + ' · add what you have, or skip',
+          // acErr2 too: the create call reports through it, and its banner lives on step 1.
+          acDocErr: this.state.acDocErr || this.state.acErr2 || '',
+          // The four every document has, whatever its type. Everything else comes from the type.
+          acDocNo: this.state.acDocNo || '', setAcDocNo: (e9) => this.setState({ acDocNo: e9.target.value, acDocErr: '' }),
+          acDocAuth: this.state.acDocAuth || '', setAcDocAuth: (e9) => this.setState({ acDocAuth: e9.target.value }),
+          acDocIssue: this.state.acDocIssue || '', setAcDocIssue: (e9) => this.setState({ acDocIssue: e9.target.value }),
+          acDocExpiry: this.state.acDocExpiry || '', setAcDocExpiry: (e9) => this.setState({ acDocExpiry: e9.target.value }),
+          acDocsCount: docs9.length ? String(docs9.length) : '',
+          acDocsNone: docs9.length === 0,
+          acDocsList: docs9.map((d9, i9) => ({
+            type: d9.typeName,
+            meta: [d9.docNumber, d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · ') || 'no number',
+            remove: () => this.setState({ acDocs: docs9.filter((_, k9) => k9 !== i9) }),
+          })),
+          // The drop zone says what it is holding, so a file picked and then forgotten is visible.
+          acDropBorder: this.state.acDropOver ? '#7C00FF' : '#D9CBF2',
+          acDropBg: this.state.acDropOver ? '#F5EEFF' : '#FBFAFE',
+          acDropTitle: this.state.acDropOver ? 'Drop it here' : 'Drag a file in',
+          acDropNote: 'PDF, JPG, PNG — up to 4 MB',
+          acHasFile: !!file9, acFileName: file9 ? file9.name : '',
+          acClearFile: () => this.setState({ acDocFile: null }),
+          acPickFile: () => this._acPickFile(),
+          acDtVal: this.state.acDocType || (types9.length ? 'Choose a document type' : 'No company document types yet'),
+          acDtColor: this.state.acDocType ? '#1A1523' : '#8C8899',
+          ddAcDtOpen: this.state.openDd === 'ac-dt',
+          ddAcDtToggle: () => this.setState({ openDd: this.state.openDd === 'ac-dt' ? null : 'ac-dt' }),
+          ddAcDtOptions: types9.map(t9 => ({
+            label: t9.name,
+            weight: this.state.acDocType === t9.name ? '700' : '500',
+            color: this.state.acDocType === t9.name ? '#7C00FF' : '#1A1523',
+            bg: this.state.acDocType === t9.name ? '#F5EEFF' : 'transparent',
+            // Switching type empties the type-specific answers: they were answers to a different
+            // question, and carrying them over files one type's data under another's name.
+            pick: () => this.setState({ acDocType: t9.name, acDocExtra: {}, openDd: null, acDocErr: '' }),
+          })),
+          // Straight into the master's own builder. The dialog it opens is the one Settings uses,
+          // so a type added here has everything a type added there has.
+          acNewDocType: () => { this.setState({ openDd: null }); this._openDtNew(); },
+          acDocExtras: extras9.map(f9 => {
+            const k9 = String(f9.id || f9.key || f9.label || '');
+            return {
+              label: String(f9.label || k9).toUpperCase(),
+              value: String((this.state.acDocExtra || {})[k9] || ''),
+              set: (e9) => this.setState({ acDocExtra: { ...(this.state.acDocExtra || {}), [k9]: e9.target.value } }),
+            };
+          }),
+          acCanAddDoc: ready9, acCantAddDoc: !ready9,
+          acAddDocWhy: !picked9 ? 'Choose a document type first' : 'Enter the document number',
+          acAddDocHeld: () => this.setState({ acDocErr: !picked9 ? 'Choose a document type first.' : 'A document needs its number.' }),
+          acAddDoc: () => {
+            const extra9 = {};
+            for (const f9 of extras9) {
+              const k9 = String(f9.id || f9.key || f9.label || '');
+              const v9 = String((this.state.acDocExtra || {})[k9] || '').trim();
+              if (v9) extra9[k9] = v9;
+            }
+            this.setState({
+              acDocs: [...docs9, {
+                typeName: picked9.name,
+                docNumber: String(this.state.acDocNo || '').trim(),
+                issuingAuthority: String(this.state.acDocAuth || '').trim(),
+                issueDate: this.state.acDocIssue || '',
+                expiryDate: this.state.acDocExpiry || '',
+                extra: extra9,
+                file: file9, fileName: file9 ? file9.name : '',
+              }],
+              // Cleared for the next one. The type is kept: a client usually arrives with several
+              // documents of different types, but typing the same type twice in a row is common too
+              // and re-picking it every time is the kind of friction that ends in a spreadsheet.
+              acDocNo: '', acDocAuth: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '',
+            });
+          },
+          acGoDocs: () => {
+            if (!(this.state.acCName || '').trim()) return this.setState({ acErr2: 'Company name is required' });
+            // Checked here, not at the end: the server refuses a client without one, and finding
+            // that out after a folder of documents has been typed in is the worst place to learn it.
+            if (!(this.state.acCr || '').trim()) return this.setState({ acErr2: 'CR number is required' });
+            this.setState({ acStep: 'docs', acErr2: '' });
+          },
+          acBackToForm: () => this.setState({ acStep: 'form', acDocErr: '' }),
+          acCreateLabel: docs9.length
+            ? 'Create client with ' + docs9.length + ' document' + (docs9.length === 1 ? '' : 's')
+            : 'Create client',
+        };
+      })(),
       acActivity: this.state.acActivity || '',
       acVat: this.state.acVat || '',
       acGosi: this.state.acGosi || '',
@@ -24563,6 +24856,10 @@ class Component extends DCLogic {
             const finish7 = (subOk7) => {
               // Keep the password the SERVER generated. It is returned once and is unrecoverable
               // afterwards — only re-issuable through Reset portal password.
+            // THE DOCUMENTS STEP 2 HELD. Written now, because until this moment there was no
+            // client for them to belong to. Each is uploaded and filed in turn; one that fails says
+            // so and the rest still go, which is better than losing a folder because of one PDF.
+            this._acFileDocs && this._acFileDocs(j7 && j7.id, j7 && j7.name);
               this.setState({ acStep: 'done', acHandedOver: false, acInvite: (j7 && j7.portalInvite) || null });
               this.toast('Client ' + st.acCName.trim() + ' created' + (pkgRow7 ? (subOk7 ? ' on ' + pkgRow7.name : ' \u2014 but the subscription could not be created') : '') + (pro7 ? ' \u00b7 ' + pro7 + ' handles their PRO work' : ''), pkgRow7 && !subOk7 ? 'error' : undefined);
               this._opReload && this._opReload('companies', 'companiesData');
@@ -28860,7 +29157,7 @@ class Component extends DCLogic {
       ...mkDd('ddDtnSubject', ['Employee', 'Company'], this.state.dtnSubject || 'Employee', (v) => this.setState({ dtnSubject: v })),
       ...mkDd('ddDtnAssignee', ['PRO Officer', 'Accountant', 'Admin'], this.state.dtnAssignee || 'PRO Officer', (v) => this.setState({ dtnAssignee: v })),
       dtnSubjectVal: this.state.dtnSubject || 'Employee', dtnAssigneeVal: this.state.dtnAssignee || 'PRO Officer',
-      openDtNew: () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnCard: true, dtnCardPos: '', dtnScope: 'all', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' }),
+      openDtNew: () => this._openDtNew(),
       closeDtNew: () => this.setState({ dtNewOpen: false, dtEditId: null }),
       setDtnName: (e) => this.setState({ dtnName: e.target.value, dtnErr: '' }),
       setDtnAuthority: (e) => this.setState({ dtnAuthority: e.target.value }),
