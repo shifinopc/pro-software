@@ -11511,6 +11511,7 @@
           <sc-if value="{{ acErr2 }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ acErr2 }}</div></sc-if>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-top:11px;">
             <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMPANY NAME *</div><input value="{{ acCName }}" onChange="{{ setAcCName }}" placeholder="e.g. Skyline Interiors LLC" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
+            <div style="grid-column:1 / -1;"><div style="display:flex; align-items:center; gap:8px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMPANY NAME (ARABIC)</div><span style="font-size:9px; color:#B4AFC4;">{{ acArHint }}</span></div><input value="{{ acNameAr }}" onChange="{{ setAcNameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
             <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER</div><input value="{{ acCr }}" onChange="{{ setAcCr }}" placeholder="1010123456" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
             <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CONTACT PERSON</div><input value="{{ acContact }}" onChange="{{ setAcContact }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
             <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL (PORTAL LOGIN)</div><input value="{{ acEmail }}" onChange="{{ setAcEmail }}" type="email" placeholder="name@company.sa" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
@@ -18606,6 +18607,71 @@ class Component extends DCLogic {
     // the stored minor units — so the client's portal and the PDF in their inbox quoted different
     // totals for the same invoice. The minor units are the figure of record; `amount` survives only as
     // the fallback for rows issued before those columns existed.
+    /**
+     * A NAME WRITTEN IN ARABIC LETTERS — the sound of it, never the meaning.
+     *
+     * "Knowledge Planet" becomes كنوليدج بلانيت, not كوكب المعرفة. A client's name is a name: the
+     * authorities want the one the owner answers to, spelled in their alphabet, and translating it
+     * would produce a company that does not exist.
+     *
+     * RULES, NOT A SERVICE. It runs as you type, costs nothing, works offline, and no client name
+     * leaves the building — which also means it is approximate, and the field it fills is editable
+     * for exactly that reason. It gets Latin words close (ستون, بلاستيك, كونتراكتينج) and it cannot
+     * know that Abdul is عبد; a person fixes those in one or two letters instead of typing the
+     * whole name in a second keyboard.
+     */
+    const _arDigraphs = [
+      ['tch', 'تش'], ['sch', 'ش'], ['sh', 'ش'], ['ch', 'تش'], ['th', 'ث'], ['kh', 'خ'],
+      ['gh', 'غ'], ['ph', 'ف'], ['ck', 'ك'], ['qu', 'كو'],
+      ['ee', 'ي'], ['ea', 'ي'], ['oo', 'و'], ['ou', 'و'], ['ow', 'و'], ['au', 'و'],
+      ['aw', 'و'], ['ai', 'اي'], ['ay', 'اي'], ['ei', 'اي'], ['ey', 'ي'], ['oa', 'و'],
+      ['ie', 'ي'], ['oi', 'وي'],
+    ];
+    const _arSingle = { a: 'ا', b: 'ب', c: 'ك', d: 'د', e: 'ي', f: 'ف', g: 'ج', h: 'ه',
+      i: 'ي', j: 'ج', k: 'ك', l: 'ل', m: 'م', n: 'ن', o: 'و', p: 'ب', q: 'ق', r: 'ر',
+      s: 'س', t: 'ت', u: 'و', v: 'ف', w: 'و', x: 'كس', y: 'ي', z: 'ز' };
+    const _arLead = { a: 'ا', e: 'إ', i: 'إ', o: 'أو', u: 'أو' };
+    // A word opening on a vowel digraph takes the hamza too — "out" is أوت, not وت.
+    const _arLeadDi = [['ou', 'أو'], ['oo', 'أو'], ['au', 'أو'], ['aw', 'أو'], ['ai', 'آي'], ['ay', 'آي'], ['ea', 'إي'], ['ee', 'إي']];
+    // Letter names, for initialisms: LLC spelled out beats لك, which is not a word in any language.
+    const _arLetter = { a: 'إيه', b: 'بي', c: 'سي', d: 'دي', e: 'إي', f: 'إف', g: 'جي', h: 'إتش',
+      i: 'آي', j: 'جيه', k: 'كيه', l: 'إل', m: 'إم', n: 'إن', o: 'أو', p: 'بي', q: 'كيو',
+      r: 'آر', s: 'إس', t: 'تي', u: 'يو', v: 'في', w: 'دبليو', x: 'إكس', y: 'واي', z: 'زد' };
+    // Spelled out when there is no vowel to pronounce (LLC, WLL) or it is too short to be a word (EC).
+    const _arIsInitialism = (w) => /^[A-Z.]{2,4}$/.test(w) && (!/[AEIOU]/.test(w) || w.replace(/\./g, '').length <= 2);
+    const _arWord = (w) => {
+      if (/[\u0600-\u06FF]/.test(w)) return w;                 // already Arabic — leave it alone
+      if (!/[a-z]/i.test(w)) return w;                          // digits, punctuation, symbols
+      if (_arIsInitialism(w)) return w.replace(/\./g, '').toLowerCase().split('').map(ch => _arLetter[ch] || '').join(' ');
+      let t = w.toLowerCase()
+        .replace(/([a-z])\1+/g, '$1')                           // Arabic has no doubled letters
+        .replace(/c(?=[eiy])/g, 's')                            // centre, city
+        // `y` inside a word is the long vowel of "sky", not the consonant of "yes" — Skyline is
+        // سكايلين. Word-FINAL it stays ي, or every Company becomes كومباناي.
+        .replace(/([a-z])y(?=[a-z])/g, '$1Y');
+      let out = '', i = 0, first = true;
+      while (i < t.length) {
+        if (first) {
+          const ld = _arLeadDi.find(d => t.startsWith(d[0], i));
+          if (ld) { out += ld[1]; i += ld[0].length; first = false; continue; }
+        }
+        if (t[i] === 'Y') { out += 'اي'; i += 1; first = false; continue; }
+        if (first && _arLead[t[i]] && !_arDigraphs.some(d => t.startsWith(d[0], i))) {
+          out += _arLead[t[i]]; i += 1; first = false; continue;
+        }
+        const dg = _arDigraphs.find(d => t.startsWith(d[0], i));
+        if (dg) { out += dg[1]; i += dg[0].length; first = false; continue; }
+        if (t[i] === 'e' && i === t.length - 1 && t.length > 2) { i += 1; continue; }  // silent final e
+        out += _arSingle[t[i]] || '';
+        i += 1; first = false;
+      }
+      // Two of the same long vowel running together is a rule colliding with itself (Althuraya came
+      // out الثوراايا), never something Arabic writes.
+      return out.replace(/ا{2,}/g, 'ا').replace(/ي{2,}/g, 'ي').replace(/و{2,}/g, 'و');
+    };
+    const arabicFromLatin = (text) => String(text == null ? '' : text)
+      .split(/(\s+)/).map(p => (/\s/.test(p) ? p : _arWord(p))).join('').trim();
+
     const _docTotal = (v) => (v && v.totalMinor != null) ? Number(v.totalMinor) / 100 : (Number(v && v.amount) || 0);
     // The same thing for a payment. `amount` is a whole-riyal copy, so a receipt for SAR 287.50 read
     // as 288 and an invoice could look overpaid by half a riyal; `amountMinor` is what was received.
@@ -24293,11 +24359,20 @@ class Component extends DCLogic {
       // add client
       showAddClient: !!this.state.addClient,
       acFormStep: acStep === 'form', acDoneStep: acStep === 'done',
-      openAddClient: () => this.setState({ addClient: true, acStep: 'form', acCName: '', acCr: '', acEmail: '', acPhone: '', acContact: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPro: 'Whoever is free', acPkg: 'Prospect / unassigned', acErr2: '' }),
+      openAddClient: () => this.setState({ addClient: true, acStep: 'form', acCName: '', acNameAr: '', acArTouched: false, acCr: '', acEmail: '', acPhone: '', acContact: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPro: 'Whoever is free', acPkg: 'Prospect / unassigned', acErr2: '' }),
       closeAddClient: () => this.setState({ addClient: false }),
       acCName: this.state.acCName || '', acCr: this.state.acCr || '', acEmail: this.state.acEmail || '', acPhone: this.state.acPhone || '', acContact: this.state.acContact || '',
+      acNameAr: this.state.acNameAr || '',
+      // Says which it is, so nobody has to guess whether the Arabic was suggested or saved.
+      acArHint: this.state.acArTouched ? 'edited by you' : (this.state.acNameAr ? 'suggested — correct it if it is wrong' : ''),
       acErr2: this.state.acErr2 || false,
-      setAcCName: (e) => this.setState({ acCName: e.target.value, acErr2: '' }),
+      // The Arabic follows the English UNTIL somebody types in it. After that the English stops
+      // overwriting their work — a suggestion that keeps undoing a correction is worse than none.
+      setAcCName: (e) => this.setState({
+        acCName: e.target.value, acErr2: '',
+        ...(this.state.acArTouched ? {} : { acNameAr: arabicFromLatin(e.target.value) }),
+      }),
+      setAcNameAr: (e) => this.setState({ acNameAr: e.target.value, acArTouched: true }),
       setAcCr: (e) => this.setState({ acCr: e.target.value }),
       setAcEmail: (e) => this.setState({ acEmail: e.target.value, acErr2: '' }),
       setAcPhone: (e) => this.setState({ acPhone: e.target.value, acErr2: '' }),
@@ -24387,7 +24462,7 @@ class Component extends DCLogic {
         const H7 = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok7 };
         fetch((this._apiBase || 'http://localhost:4100') + '/api/companies', {
           method: 'POST', headers: H7,
-          body: JSON.stringify({ name: st.acCName.trim(), cr: (st.acCr || '').trim() || null, contact: (st.acContact || '').trim() || null,
+          body: JSON.stringify({ name: st.acCName.trim(), nameAr: (st.acNameAr || '').trim() || null, cr: (st.acCr || '').trim() || null, contact: (st.acContact || '').trim() || null,
             email: (st.acEmail || '').trim() || null, phone: (st.acPhone || '').trim() || null,
             status: String(st.acStatus2 || 'prospect').toLowerCase(),
             ...(grpRow7 ? { groupId: grpRow7.id } : {}),
