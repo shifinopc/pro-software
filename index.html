@@ -14617,8 +14617,11 @@
             </sc-if>
             <div style="display:flex; flex-direction:column; gap:12px; margin-top:11px;">
               <sc-for list="{{ wdCaptures }}" as="c" hint-placeholder-count="2">
-                <div>
-                  <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if><sc-if value="{{ c.ruleErr }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#C0353A; background:#FEECEC; padding:2px 7px; border-radius:99px;">CHECK THIS</span></sc-if></label>
+                <!-- data-cap so the blocked Complete button can scroll to the answer it is waiting
+                     for. A dead grey button and one small orange line were all the sheet said; the
+                     field itself is where the reader is looking. -->
+                <div data-cap="{{ c.var }}">
+                  <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if><sc-if value="{{ c.ruleErr }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#C0353A; background:#FEECEC; padding:2px 7px; border-radius:99px;">CHECK THIS</span></sc-if><sc-if value="{{ c.missing }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#B8860B; background:#FEF4E2; padding:2px 7px; border-radius:99px;">NEEDED</span></sc-if></label>
                   <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
                     <div style="display:flex; gap:7px; flex-wrap:wrap;"><sc-for list="{{ c.options }}" as="o" hint-placeholder-count="2"><span onClick="{{ o.pick }}" style="font-size:11px; font-weight:600; color:{{ o.color }}; background:{{ o.bg }}; border:1px solid {{ o.border }}; padding:7px 10px; border-radius:99px; cursor:pointer; transition:background .12s, color .12s, border-color .12s;">{{ o.o }}</span></sc-for></div>
                   </sc-if>
@@ -14656,8 +14659,13 @@
               <sc-if value="{{ wdCompleteReady }}" hint-placeholder-val="{{ true }}">
                 <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">{{ wdCompleteLabel }}</button>
               </sc-if>
+              <!-- A BLOCKED BUTTON THAT ANSWERS WHEN PRESSED. It used to be `cursor:not-allowed`
+                   with no handler, so pressing it did nothing at all and the only explanation was a
+                   small orange line above it — which is exactly what a step that would not complete
+                   looked like from the other side of a support message. It now names what it is
+                   waiting for and scrolls to the first one. -->
               <sc-if value="{{ wdCompleteHeld }}" hint-placeholder-val="{{ false }}">
-                <button title="{{ wdHeldWhy }}" style="width:100%; margin-top:10px; background:#D8D3E3; color:#fff; border:none; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:not-allowed;">{{ wdCompleteLabel }}</button>
+                <button onClick="{{ wdHeldPoke }}" title="{{ wdHeldWhy }}" style="width:100%; margin-top:10px; background:#F3F1F7; color:#8C8899; border:1px dashed #D8D3E3; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#C0353A; color:#C0353A;">{{ wdHeldLabel }}</button>
               </sc-if>
             </div>
           </sc-if>
@@ -32795,10 +32803,17 @@ class Component extends DCLogic {
         .filter(c => !String(cap[c.var] == null ? '' : cap[c.var]).trim())
         .map(c => c.label || c.var);
       const _capsOk = _capsMissing.length === 0;
+      // ONCE SOMEBODY HAS ASKED TO COMPLETE, the unanswered questions are marked. Until then they
+      // are not: a form that opens covered in red has told the reader off for nothing.
+      const _pokeOn = this.state.wdPokeFor === selStep.id;
       const caps = (selStep.captures || []).filter(_capShown).map(c => {
         const val = cap[c.var] || '';
         return {
           var: c.var, label: c.label, type: c.type,
+          // Rendered from STATE, not by poking the node. An inline highlight written on click is
+          // gone on the next render — this runtime replaces the elements — which is the same lesson
+          // the board's drag highlight records a few hundred lines further down.
+          missing: _pokeOn && !(c.required === false || c.optional === true) && !String(val).trim(),
           // sc-if on presence, rather than a bound colour: a mostly-static style attribute gets
           // hoisted into a generated class and stops re-evaluating, so a bound border would freeze
           // at whatever it was on first render. An element that appears and disappears cannot.
@@ -32901,6 +32916,22 @@ class Component extends DCLogic {
         wdCompleteReady: gateOk && _capsOk,
         wdCompleteHeld: !(gateOk && _capsOk),
         wdHeldWhy: !_capsOk ? ('Still needed: ' + _capsMissing.join(', ')) : 'The required documents are not ready',
+        // The button says the COUNT; the bar above it already names them. Naming them twice makes a
+        // long button that wraps, and the number is what tells you whether you are nearly done.
+        wdHeldLabel: !_capsOk
+          ? (_capsMissing.length === 1 ? '1 answer still needed' : _capsMissing.length + ' answers still needed')
+          : 'Required documents not ready',
+        wdHeldPoke: () => {
+          // Straight to the first thing it is waiting for. Captures carry data-cap; a document gate
+          // has no single field to point at, so that case says it in a toast instead.
+          const first = _capsMissing.length ? (selStep.captures || []).filter(_capShown)
+            .find(c2 => !(c2.required === false || c2.optional === true)
+                     && !String(cap[c2.var] == null ? '' : cap[c2.var]).trim()) : null;
+          this.setState({ wdPokeFor: selStep.id });
+          const el2 = first && document.querySelector('[data-cap="' + first.var + '"]');
+          if (!el2) return this.toast(!_capsOk ? 'Still needed: ' + _capsMissing.join(', ') : 'Tick off the required documents first');
+          el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
         wdCounters: notReceived + ' not received · ' + notVerified + ' awaiting verify',
         wdAllDone: gateOk,
         // Purple when it can be pressed, grey when the document gate holds it — the same signal as

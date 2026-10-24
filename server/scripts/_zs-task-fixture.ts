@@ -73,10 +73,17 @@ async function create() {
       { key: "contract", label: "Authenticated contract", required: true },
       { key: "photo", label: "Photograph", required: false },
     ] as any,
+    // COPIED FROM THE LIVE "Issue Work Permit" STEP, conditional fields and all. A fixture whose
+    // fields are simpler than the real ones tests a form nobody uses: the two showIf fields below
+    // only appear when the fee is marked paid, and that branch is what a hand-written fixture
+    // leaves out.
     captures: [
       // options is a comma-separated STRING here, not an array — the console splits it.
-      { var: "estStatus", label: "Establishment status", type: "select", options: "Active, Blocked" },
-      { var: "refNo", label: "Qiwa reference", type: "text" },
+      { var: "permitTerm", label: "Work permit term", type: "select", options: "3_month,6_month,9_month,12_month", required: true },
+      { var: "permitAmount", label: "Work permit fee amount (SAR)", type: "number", required: true },
+      { var: "permitPaid", label: "Work permit fee — paid?", type: "select", options: "paid,unpaid", required: true },
+      { var: "permitRef", label: "Payment reference", type: "text", required: true, showIf: { var: "permitPaid", equals: "paid" } },
+      { var: "permitPaidOn", label: "Payment date", type: "date", required: true, showIf: { var: "permitPaid", equals: "paid" } },
     ] as any,
   });
   // ONLY STEP ONE IS CREATED. The engine makes the next step when this one is completed, and that
