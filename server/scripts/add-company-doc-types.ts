@@ -100,6 +100,22 @@ const FIX_AUTHORITY: { type: string; from: string; to: string }[] = [
 ];
 
 /**
+ * TYPES THAT WERE MARKED AS NEVER EXPIRING AND SHOULD NOT HAVE BEEN.
+ *
+ * The ZATCA certificate a PRO firm actually handles is the zakat/tax compliance certificate, which
+ * is issued for a period and has to be renewed — it is what a client is asked for before a
+ * government tender, a contract payment or a customs clearance, and an expired one stops all three.
+ * It was created here as a registration that never expires, which is the VAT registration
+ * certificate, not this.
+ *
+ * Changed only where the row still carries what this script set; a type the firm has since decided
+ * about keeps their decision.
+ */
+const FIX_EXPIRY: { type: string; from: boolean; to: boolean; leadDays: number }[] = [
+  { type: "ZATCA Certificate", from: true, to: false, leadDays: 30 },
+];
+
+/**
  * TYPES A CLIENT CAN HOLD SEVERAL OF AT ONCE.
  *
  * One per vehicle, not one per CR. Without the flag the Add-client form counted a second car as a
@@ -157,6 +173,16 @@ for (const want of FIX_AUTHORITY) {
 // after them on a fresh install and finds them.
 const repeatWork = (await prisma.documentType.findMany({ where: { name: { in: REPEATABLE }, repeatable: false }, select: { id: true, name: true } }));
 
+// Types whose "never expires" answer this script set and now disagrees with.
+const expiryWork: { id: string; type: string; to: boolean; leadDays: number }[] = [];
+for (const want of FIX_EXPIRY) {
+  const row = await prisma.documentType.findUnique({ where: { name: want.type }, select: { id: true, neverExpires: true } });
+  if (!row) { console.log(`not found     ${want.type} — expiry unchanged`); continue; }
+  if (row.neverExpires === want.to) continue;
+  if (row.neverExpires !== want.from) { console.log(`left alone    ${want.type} · neverExpires is already the firm's own answer`); continue; }
+  expiryWork.push({ id: row.id, type: want.type, to: want.to, leadDays: want.leadDays });
+}
+
 const say = (had: boolean, what: string) => console.log(`${had ? "already there" : write ? "creating    " : "would create"}  ${what}`);
 for (const c of CENTRES) say(haveCentres.has(c.name), `government centre · ${c.name}`);
 for (const t of TYPES) say(haveTypes.has(t.name), t.name);
@@ -166,6 +192,7 @@ for (const w of ADD_FIELDS) {
 }
 for (const job of authWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · authority → ${job.to}`);
 for (const job of repeatWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · several can be live at once`);
+for (const job of expiryWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · ${job.to ? "does not expire" : "expires, reminder " + job.leadDays + " days before"}`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
@@ -189,8 +216,11 @@ if (write) {
     await prisma.documentType.update({ where: { id: job.id }, data: { authority: job.to, packModified: true } });
   }
   if (repeatWork.length) await prisma.documentType.updateMany({ where: { id: { in: repeatWork.map(j => j.id) } }, data: { repeatable: true } });
+  for (const job of expiryWork) {
+    await prisma.documentType.update({ where: { id: job.id }, data: { neverExpires: job.to, leadDays: job.leadDays, packModified: true } });
+  }
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
   + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
-  + `${write ? "set" : "would set"} ${authWork.length} authority(ies) and ${repeatWork.length} repeatable flag(s)`);
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s) and ${expiryWork.length} expiry rule(s)`);
 await prisma.$disconnect();
