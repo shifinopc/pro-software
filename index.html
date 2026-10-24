@@ -32475,18 +32475,36 @@ class Component extends DCLogic {
       // One look when nothing is expected, three when something is. A branch can still open a step
       // we did not know about, so the look happens either way — it just does not linger.
       const maxTries9 = othersOpen9 ? 3 : 1;
-      let tries9 = 0;
+      let tries9 = 0, settled9 = false;
+      /**
+       * WAIT FOR THE LIST, DO NOT GUESS HOW LONG IT TAKES.
+       *
+       * This fired the reload and then read `myWorkData` 800ms later on a timer. That is a race it
+       * wins on a laptop — the dev API answers in about twenty milliseconds — and loses on live,
+       * where the request crosses to Helsinki through Cloudflare and `my-work` returns every active
+       * task in the firm. Three reads of stale state later it gave up and closed, so a step that
+       * HAD been created never appeared: the engine log shows `task.created` for the next node in
+       * the same millisecond as the completion, while the officer watched the sheet shut.
+       *
+       * `_opReload` already takes a callback that runs once the data is in state. Using it removes
+       * the assumption entirely.
+       */
       const look9 = () => {
-        this._opReload('workflow/my-work', 'myWorkData');
-        setTimeout(() => {
+        this._opReload('workflow/my-work', 'myWorkData', () => {
+          if (settled9) return;
           const rows9 = Array.isArray(this.state.myWorkData) ? this.state.myWorkData : [];
           const next9 = rows9.find(t9 => t9.status === 'active' && t9.id !== doneId9
             && (t9.instanceId || (t9.instance && t9.instance.id)) === instanceId9);
-          if (next9) { this.setState({ wdAdvancing: false }); return _openTaskDrawer(next9.id, instanceId9); }
-          if (++tries9 < maxTries9) return look9();
-          close9();
-        }, 800);
+          if (next9) { settled9 = true; this.setState({ wdAdvancing: false }); return _openTaskDrawer(next9.id, instanceId9); }
+          // The engine creates the next step inside the completion request, so one good read is
+          // normally enough. A retry covers a replica that has not caught up, not a slow network.
+          if (++tries9 < maxTries9) return setTimeout(look9, 600);
+          settled9 = true; close9();
+        });
       };
+      // AND A FLOOR UNDER IT. `_opReload` only calls back when the response parses as an array, so
+      // a failed request would leave the sheet spinning for ever. A hang is worse than a close.
+      setTimeout(() => { if (!settled9) { settled9 = true; close9(); } }, 12000);
       look9();
     };
     const wfStepDefs = (Array.isArray(this.state.myWorkData)
