@@ -27,6 +27,12 @@ export const ENGINE_NODE_TYPES = new Set([
   "courier", "dispatch",
   "delay",
   "parallel_split", "split", "parallel_join", "join",
+  // Was missing, and the engine has executed it since it was written: every template carrying an
+  // Insurance & Prerequisite Check was told, on screen and in red, that its gate would be skipped
+  // and the run would lie about it. The gate works. The list had drifted — which is the exact
+  // failure the comment above asks a reader to prevent, and a comment cannot.
+  // scripts/node-types-check.ts now compares the two and fails if they disagree.
+  "prereq_gate",
   "end",
 ]);
 
