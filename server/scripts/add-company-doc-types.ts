@@ -90,6 +90,15 @@ const FIX_AUTHORITY: { type: string; from: string; to: string }[] = [
 ];
 
 /**
+ * TYPES A CLIENT CAN HOLD SEVERAL OF AT ONCE.
+ *
+ * One per vehicle, not one per CR. Without the flag the Add-client form counted a second car as a
+ * second branch and refused the third, because nothing distinguished "another car" from "another
+ * branch". Set to true only; a type switched off by hand stays off.
+ */
+const REPEATABLE = ["Vehicle Registration", "Vehicle Insurance", "Vehicle Inspection (Fahas)"];
+
+/**
  * The authorities those types are issued by, as GOVERNMENT CENTRES.
  *
  * A document's authority is picked from this list, not typed, so a type whose authority is not a
@@ -134,6 +143,10 @@ for (const want of FIX_AUTHORITY) {
   authWork.push({ id: row.id, type: want.type, to: want.to });
 }
 
+// Types that should be repeatable and are not yet. A type created above arrives false, so this runs
+// after them on a fresh install and finds them.
+const repeatWork = (await prisma.documentType.findMany({ where: { name: { in: REPEATABLE }, repeatable: false }, select: { id: true, name: true } }));
+
 const say = (had: boolean, what: string) => console.log(`${had ? "already there" : write ? "creating    " : "would create"}  ${what}`);
 for (const c of CENTRES) say(haveCentres.has(c.name), `government centre · ${c.name}`);
 for (const t of TYPES) say(haveTypes.has(t.name), t.name);
@@ -142,6 +155,7 @@ for (const w of ADD_FIELDS) {
   console.log(`${job ? (write ? "adding fields " : "would add     ") + job.add.map(x => x.label).join(", ") : "fields present"}  on ${w.type}`);
 }
 for (const job of authWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · authority → ${job.to}`);
+for (const job of repeatWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · several can be live at once`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
@@ -164,8 +178,9 @@ if (write) {
   for (const job of authWork) {
     await prisma.documentType.update({ where: { id: job.id }, data: { authority: job.to, packModified: true } });
   }
+  if (repeatWork.length) await prisma.documentType.updateMany({ where: { id: { in: repeatWork.map(j => j.id) } }, data: { repeatable: true } });
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
   + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
-  + `${write ? "set" : "would set"} ${authWork.length} authority(ies)`);
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies) and ${repeatWork.length} repeatable flag(s)`);
 await prisma.$disconnect();

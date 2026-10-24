@@ -12300,6 +12300,7 @@
               </div>
             </sc-if>
             <sc-if value="{{ dtnPortalShow }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ toggleDtnRepeat }}" title="One per vehicle, shop or machine rather than one per client. Without this a second car reads as a second branch." style="display:flex; align-items:center; gap:9px; margin-top:9px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><div style="flex:1; min-width:0;"><span style="font-size:11px; font-weight:600; color:#4B4757;">A client can hold several of these at once</span><div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">One per vehicle, shop or machine &mdash; not one per client. A fleet of four cars holds four registrations on the same CR, and each renews on its own date. Leave this off for a document a client holds exactly one of, like a GOSI certificate, where a second one means another branch.</div></div><sc-if value="{{ dtnRepeatOn }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnRepeatOff }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
               <div onClick="{{ toggleDtnPortal }}" title="The client's licence to use a government portal — the thing that expires and stops the login working. Ties this type to the matching login in the credential vault, so an officer is warned before starting work against a lapsed licence." style="display:flex; align-items:center; gap:9px; margin-top:9px; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; background:#FBFAFE; cursor:pointer; justify-content:space-between;"><div style="flex:1; min-width:0;"><span style="font-size:11px; font-weight:600; color:#4B4757;">This is the client's licence to use the {{ dtnAuthorityLabel }} portal</span><div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">The client&rsquo;s right to use the portal &mdash; the thing that lapses and stops the login working. Each client&rsquo;s own licence, with its expiry, is filed against them as a document of this type.</div></div><sc-if value="{{ dtnPortalOn }}" hint-placeholder-val="{{ false }}"><div style="width:36px; height:21px; border-radius:99px; background:#7C00FF; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; right:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if><sc-if value="{{ dtnPortalOff }}" hint-placeholder-val="{{ true }}"><div style="width:36px; height:21px; border-radius:99px; background:#E0DAEC; position:relative; flex-shrink:0;"><span style="position:absolute; top:2.5px; left:2.5px; width:16px; height:16px; border-radius:99px; background:#fff;"></span></div></sc-if></div>
               <sc-if value="{{ dtnPortalWarn }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FFF9EE; border:1px solid #F4DDB0; border-radius:10px; padding:8px 11px; font-size:11px; color:#7A5A12; line-height:1.5;">Name the authority above — it is what links this licence to the matching login in the vault. Without it the licence is tracked but nothing points at it.</div></sc-if>
             <div style="display:flex; align-items:baseline; gap:9px; margin-top:12px; padding-top:13px; border-top:1px solid #F0EDF6;"><span style="font-size:10px; font-weight:700; color:#6F6C7A; letter-spacing:.07em;">RENEWAL</span></div>
@@ -18069,7 +18070,7 @@ class Component extends DCLogic {
     // read documentsAllData.
     this._docsState = (v) => ({ documentsData: (Array.isArray(v) ? v : []).filter(d => !d.supersededAt), documentsAllData: Array.isArray(v) ? v : [] });
     // On `this`, not only in the render values: the Add-client form opens the type builder too.
-    this._openDtNew = () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnCard: true, dtnCardPos: '', dtnScope: 'all', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' });
+    this._openDtNew = () => this.setState({ dtNewOpen: true, dtEditId: null, dtnName: '', dtnSubject: 'Employee', dtnAuthority: '', dtnLead: '30', dtnStatDays: '', dtnStatFrom: '', dtnStatBasis: '', dtnNever: false, dtnPortal: false, dtnRepeat: false, dtnCard: true, dtnCardPos: '', dtnScope: 'all', dtnFee: '', dtnApproval: true, dtnAssignee: 'PRO Officer', dtnFields: [['', 'text', true]], dtnPrereqs: [], dtnErr: '' });
 
     /**
      * A FILE, FROM A CLICK OR A DROP.
@@ -24738,6 +24739,10 @@ class Component extends DCLogic {
             if (branches9.includes(n9)) return { err: 'CR ' + n9 + ' has already been added for this client.' };
             return { estKey: n9, isCr: true, newBranch: true };
           }
+          // A type a client holds several of at once is one per THING, not one per CR: four cars
+          // mean four registrations on the same CR, so counting them into branches would file the
+          // second car under a branch and refuse the third.
+          if (type9 && type9.repeatable) return { estKey: '', isCr: false, repeat: true };
           const nth9 = staged9.filter(d9 => d9.typeName === (type9 && type9.name)).length;
           if (nth9 === 0) return { estKey: '', isCr: false };
           const to9 = branches9[nth9 - 1];
@@ -24774,10 +24779,12 @@ class Component extends DCLogic {
           acDocsNone: docs9.length === 0,
           acDocsList: docs9.map((d9, i9) => ({
             type: d9.typeName,
-            crBadge: d9.estKey ? 'SUB' : 'MAIN',
-            crColor: d9.estKey ? '#B8860B' : '#5B21B6',
-            crBg: d9.estKey ? '#FEF4E2' : '#F5EEFF',
-            meta: [d9.docNumber, crLabel9(d9), d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · '),
+            // MAIN or SUB answers "which branch", which is not a question a car has. For a type a
+            // client holds several of, the badge is what tells them apart — the plate, or nothing.
+            crBadge: d9.repeat ? String((d9.extra && (d9.extra.plate || d9.extra.vehicle)) || '').toUpperCase() : d9.estKey ? 'SUB' : 'MAIN',
+            crColor: d9.repeat ? '#0E7490' : d9.estKey ? '#B8860B' : '#5B21B6',
+            crBg: d9.repeat ? '#E3F5F9' : d9.estKey ? '#FEF4E2' : '#F5EEFF',
+            meta: [d9.docNumber, d9.repeat ? null : crLabel9(d9), d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · '),
             remove: () => this.setState({ acDocs: docs9.filter((_, k9) => k9 !== i9) }),
           })),
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
@@ -24844,7 +24851,7 @@ class Component extends DCLogic {
                 expiryDate: this.state.acDocExpiry || '',
                 extra: extra9,
                 file: file9, fileName: file9 ? file9.name : '',
-                estKey: to9.estKey, isCr: !!to9.isCr,
+                estKey: to9.estKey, isCr: !!to9.isCr, repeat: !!to9.repeat,
               }],
               // Cleared for the next one. The type is kept: a client usually arrives with several
               // documents of different types, but typing the same type twice in a row is common too
@@ -29105,6 +29112,7 @@ class Component extends DCLogic {
           d.statutoryDays == null ? '' : String(d.statutoryDays), d.statutoryFrom || '', d.statutoryBasis || '', d.neverExpires === true,
           d.portalLicence === true,
           d.onEmployeeCard === true, d.cardOrder == null ? '' : String(d.cardOrder), d.employeeScope || 'all',
+          d.repeatable === true,
         ])
       : ((dtReal || _authed) ? [] : docTypeDefs));
     // Opening a type now loads it into the SAME editor used to create one — the old read-only
@@ -29115,7 +29123,7 @@ class Component extends DCLogic {
         dtNewOpen: true, dtEditId: row9[9], dtnName: row9[0], dtnSubject: row9[1],
         dtnAuthority: row9[2] === '—' ? '' : row9[2], dtnLead: String(row9[3]),
         dtnStatDays: row9[10] || '', dtnStatFrom: row9[11] || '', dtnStatBasis: row9[12] || '', dtnNever: row9[13] === true,
-        dtnPortal: row9[14] === true, dtnCard: row9[15] === true, dtnCardPos: row9[16] || '', dtnScope: row9[17] || 'all',
+        dtnPortal: row9[14] === true, dtnRepeat: row9[18] === true, dtnCard: row9[15] === true, dtnCardPos: row9[16] || '', dtnScope: row9[17] || 'all',
         dtnFee: String(row9[4]).replace(/[^0-9]/g, ''), dtnApproval: !!row9[5], dtnAssignee: row9[6],
         // Fifth element = the field's existing id, carried so submit can reuse it.
         dtnFields: (row9[7] || []).map(f9 => [f9[0], f9[1], f9[2], f9[3] || '', f9[4] || '', f9[5] || '']).concat((row9[7] || []).length ? [] : [['', 'text', true, '', '', '']]),
@@ -29332,6 +29340,8 @@ class Component extends DCLogic {
       dtnCardPos: this.state.dtnCardPos == null ? '' : String(this.state.dtnCardPos),
       dtnCardOff: this.state.dtnCard !== true,
       dtnPortalShow: (this.state.dtnSubject || 'Employee') === 'Company',
+      dtnRepeatOn: this.state.dtnRepeat === true,
+      dtnRepeatOff: this.state.dtnRepeat !== true,
       dtnPortalOn: this.state.dtnPortal === true,
       dtnPortalOff: this.state.dtnPortal !== true,
       // Says why the box will not do anything yet, instead of letting it be ticked into silence.
@@ -29354,6 +29364,7 @@ class Component extends DCLogic {
       toggleDtnCard: () => this.setState({ dtnCard: this.state.dtnCard !== true }),
       setDtnCardPos: (e) => this.setState({ dtnCardPos: e.target.value }),
       toggleDtnPortal: () => this.setState({ dtnPortal: this.state.dtnPortal !== true }),
+      toggleDtnRepeat: () => this.setState({ dtnRepeat: this.state.dtnRepeat !== true }),
       addDtnField: () => this.setState({ dtnFields: [...(this.state.dtnFields || []), ['', 'text', false, '', '']] }),
       // WIRED: creates a real DocumentType (name unique; fields with generated ids).
       submitDtNew: () => {
@@ -29383,6 +29394,7 @@ class Component extends DCLogic {
           // Only meaningful on a company type: a portal licence belongs to the client, never to one
           // of its employees.
           portalLicence: (st.dtnSubject || 'Employee') === 'Company' && st.dtnPortal === true,
+          repeatable: st.dtnRepeat === true,
           // Only meaningful on an employee type — a company's trade licence is not something a
           // person is measured against.
           onEmployeeCard: (st.dtnSubject || 'Employee') !== 'Company' && st.dtnCard === true,
