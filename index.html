@@ -11674,6 +11674,25 @@
                 <sc-for list="{{ acDocExtras }}" as="x" hint-placeholder-count="0">
                   <div><label class="fm-lab">{{ x.label }}</label><input value="{{ x.value }}" onChange="{{ x.set }}" class="fm-inp"></div>
                 </sc-for>
+                <!-- THE SCAN, WHERE THE TYPING ENDS. The drop zone on the left comes first because
+                     a file dropped there is read and fills these boxes in; but with nothing to read
+                     — intake off, or a type no model handles — the details are typed and the only
+                     way to attach the paper was back at the top of the other column. Same file,
+                     same state, said again where the person actually finishes. -->
+                <sc-if value="{{ acNoFile }}" hint-placeholder-val="{{ true }}">
+                  <div onClick="{{ acPickFile }}" style="display:flex; align-items:center; gap:8px; border:1px dashed #DDD9E6; border-radius:11px; padding:9px 12px; cursor:pointer; background:#FCFBFE;" style-hover="border-color:#C9A2FF; background:#FBF7FF;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                    <span style="font-size:11px; font-weight:600; color:#6F6C7A;">Attach the scan</span>
+                    <span style="font-size:10px; color:#B4AFC4;">optional &middot; or drop it on the left</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:9px 12px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                    <span style="flex:1; min-width:0; font-size:11px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acFileName }}</span>
+                    <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
+                  </div>
+                </sc-if>
                 <div>
                   <sc-if value="{{ acCanAddDoc }}" hint-placeholder-val="{{ false }}">
                     <button onClick="{{ acAddDoc }}" style="width:100%; background:#F5EEFF; color:#7C00FF; border:1px dashed #C9A2FF; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#EBDBFF;">+ Add this document</button>
@@ -24798,7 +24817,7 @@ class Component extends DCLogic {
           acScanShow: !!this.state.acScanMsg,
           acScanMsg: this.state.acScanMsg || '',
           acScanNote: this.state.acScanNote || '', acScanNoteShow: !!this.state.acScanNote,
-          acHasFile: !!file9, acFileName: file9 ? file9.name : '',
+          acHasFile: !!file9, acNoFile: !file9, acFileName: file9 ? file9.name : '',
           acClearFile: () => this.setState({ acDocFile: null }),
           acPickFile: () => this._acPickFile(),
           acDtVal: this.state.acDocType || (types9.length ? 'Choose a document type' : 'No company document types yet'),
