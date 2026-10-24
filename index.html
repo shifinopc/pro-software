@@ -11673,7 +11673,21 @@
                 </sc-if>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
                   <div><label class="fm-lab">DOCUMENT / CERTIFICATE NUMBER</label><input value="{{ acDocNo }}" onChange="{{ setAcDocNo }}" class="fm-inp"></div>
-                  <div><label class="fm-lab">AUTHORITY</label><input value="{{ acDocAuth }}" onChange="{{ setAcDocAuth }}" placeholder="e.g. Ministry of Commerce" class="fm-inp"></div>
+                  <!-- Picked from the government centres, not typed. The same name has to reach the
+                       visit queue, the credential vault and the step picker, and four spellings of
+                       one authority are four places nobody is going. The chosen type fills it in. -->
+                  <div><label class="fm-lab">AUTHORITY</label>
+                    <div style="position:relative;">
+                      <div data-dd onClick="{{ ddAcGcToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ acDocAuthColor }};">{{ acDocAuthLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                      <sc-if value="{{ ddAcGcOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
+                          <sc-for list="{{ ddAcGcOptions }}" as="g" hint-placeholder-count="6">
+                            <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
                   <div><label class="fm-lab">ISSUE DATE</label><input value="{{ acDocIssue }}" onChange="{{ setAcDocIssue }}" type="date" class="fm-inp"></div>
@@ -24653,6 +24667,8 @@ class Component extends DCLogic {
         const types9 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
           .filter(t9 => (t9.subjectKind || 'employee') === 'company' && !t9.retired)
           .sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        const gcs9 = (Array.isArray(this.state.govCentersData) ? this.state.govCentersData : [])
+          .filter(g9 => !g9.retired).sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
         const picked9 = types9.find(t9 => t9.name === this.state.acDocType) || null;
         // The three the form asks for itself are not asked for twice — same rule the Add-document
         // dialog uses, so a type behaves the same way wherever it is filled in.
@@ -24707,7 +24723,20 @@ class Component extends DCLogic {
           })),
           // The four every document has, whatever its type. Everything else comes from the type.
           acDocNo: this.state.acDocNo || '', setAcDocNo: (e9) => this.setState({ acDocNo: e9.target.value, acDocErr: '' }),
-          acDocAuth: this.state.acDocAuth || '', setAcDocAuth: (e9) => this.setState({ acDocAuth: e9.target.value }),
+          acDocAuth: this.state.acDocAuth || '',
+          acDocAuthLabel: this.state.acDocAuth || 'Not recorded',
+          acDocAuthColor: this.state.acDocAuth ? '#1A1523' : '#8C8899',
+          ddAcGcOpen: this.state.openDd === 'ac-gc',
+          ddAcGcToggle: () => this.setState({ openDd: this.state.openDd === 'ac-gc' ? null : 'ac-gc' }),
+          // Blank first: the authority is optional, and a list you cannot back out of is a trap.
+          ddAcGcOptions: [{ name: '', sub: '' }, ...gcs9].map(g9 => ({
+            label: g9.name || 'Not recorded',
+            sub: g9.sub ? '  ·  ' + g9.sub : '',
+            weight: (this.state.acDocAuth || '') === g9.name ? '700' : '500',
+            color: (this.state.acDocAuth || '') === g9.name ? '#7C00FF' : (g9.name ? '#1A1523' : '#8C8899'),
+            bg: (this.state.acDocAuth || '') === g9.name ? '#F5EEFF' : 'transparent',
+            pick: () => this.setState({ acDocAuth: g9.name, openDd: null }),
+          })),
           acDocIssue: this.state.acDocIssue || '', setAcDocIssue: (e9) => this.setState({ acDocIssue: e9.target.value }),
           acDocExpiry: this.state.acDocExpiry || '', setAcDocExpiry: (e9) => this.setState({ acDocExpiry: e9.target.value }),
           acDocsCount: docs9.length ? String(docs9.length) : '',
@@ -24737,7 +24766,10 @@ class Component extends DCLogic {
             bg: this.state.acDocType === t9.name ? '#F5EEFF' : 'transparent',
             // Switching type empties the type-specific answers: they were answers to a different
             // question, and carrying them over files one type's data under another's name.
-            pick: () => this.setState({ acDocType: t9.name, acDocExtra: {}, openDd: null, acDocErr: '' }),
+            // ...and its authority, when that is a centre we have. A type whose authority is not
+            // on the list leaves the field alone rather than writing a name the picker cannot show.
+            pick: () => this.setState({ acDocType: t9.name, acDocExtra: {}, openDd: null, acDocErr: '',
+              acDocAuth: gcs9.some(g9 => g9.name === t9.authority) ? t9.authority : '' }),
           })),
           // Straight into the master's own builder. The dialog it opens is the one Settings uses,
           // so a type added here has everything a type added there has.

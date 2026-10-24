@@ -45,21 +45,42 @@ const TYPES: { name: string; authority: string; leadDays: number; neverExpires?:
   { name: "Saudization Certificate", authority: "Qiwa", leadDays: 30, fields: [f("band", "Nitaqat band")] },
 ];
 
+/**
+ * The authorities those types are issued by, as GOVERNMENT CENTRES.
+ *
+ * A document's authority is picked from this list, not typed, so a type whose authority is not a
+ * centre would offer a value the picker cannot show. Three of the six above are authorities the
+ * Saudi pack does not carry, so they are created here — in the same script, because a type and the
+ * centre it names have to arrive together or the type is born pointing at nothing.
+ */
+const CENTRES: { name: string; sub: string }[] = [
+  { name: "ZATCA", sub: "Tax and customs — VAT, e-invoicing, certificates" },
+  { name: "Baladiya", sub: "Municipality — shop and premises licensing" },
+  { name: "Ejar", sub: "Tenancy contracts" },
+];
+
 const write = process.argv.includes("--write");
 
-const existing = await prisma.documentType.findMany({ where: { name: { in: TYPES.map(t => t.name) } }, select: { name: true } });
-const have = new Set(existing.map(e => e.name));
-const todo = TYPES.filter(t => !have.has(t.name));
+const haveTypes = new Set((await prisma.documentType.findMany({ where: { name: { in: TYPES.map(t => t.name) } }, select: { name: true } })).map(e => e.name));
+const haveCentres = new Set((await prisma.govCenter.findMany({ where: { name: { in: CENTRES.map(c => c.name) } }, select: { name: true } })).map(e => e.name));
+const todoTypes = TYPES.filter(t => !haveTypes.has(t.name));
+const todoCentres = CENTRES.filter(c => !haveCentres.has(c.name));
 
-for (const t of TYPES) console.log(`${have.has(t.name) ? "already there" : write ? "creating    " : "would create"}  ${t.name}`);
+const say = (had: boolean, what: string) => console.log(`${had ? "already there" : write ? "creating    " : "would create"}  ${what}`);
+for (const c of CENTRES) say(haveCentres.has(c.name), `government centre · ${c.name}`);
+for (const t of TYPES) say(haveTypes.has(t.name), t.name);
 
-if (write && todo.length) {
-  await prisma.documentType.createMany({
-    data: todo.map(t => ({
-      name: t.name, authority: t.authority, leadDays: t.leadDays, neverExpires: !!t.neverExpires,
-      fields: t.fields ?? [], prereqs: [], subjectKind: "company", country: "SA",
-    })),
-  });
+if (write) {
+  // Centres first: a type names its authority, so the centre it names should already exist.
+  if (todoCentres.length) await prisma.govCenter.createMany({ data: todoCentres.map(c => ({ name: c.name, sub: c.sub, country: "SA" })) });
+  if (todoTypes.length) {
+    await prisma.documentType.createMany({
+      data: todoTypes.map(t => ({
+        name: t.name, authority: t.authority, leadDays: t.leadDays, neverExpires: !!t.neverExpires,
+        fields: t.fields ?? [], prereqs: [], subjectKind: "company", country: "SA",
+      })),
+    });
+  }
 }
-console.log(`\n${write ? "created" : "would create"} ${todo.length} of ${TYPES.length}`);
+console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s)`);
 await prisma.$disconnect();
