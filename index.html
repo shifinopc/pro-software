@@ -1923,6 +1923,21 @@
                 <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">OFFICER ON DUTY</div>
                 <input value="{{ gcOfficer }}" onInput="{{ setGcOfficer }}" placeholder="Who handles this authority (optional)" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;">
               </div>
+              <!-- Four authorities sell the client a licence to use the portal, and that licence is
+                   what lapses and stops an officer working. The rest simply work until the account
+                   is closed, so their credentials are never asked for an expiry. -->
+              <sc-if value="{{ gcLicOff }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ toggleGcLic }}" style="display:flex; align-items:center; gap:10px; margin-top:13px; border:1px solid #DDD9E6; border-radius:12px; padding:10px 12px; cursor:pointer; background:#FCFBFE;">
+                  <span style="width:17px; height:17px; border-radius:5px; border:1.5px solid #DDD9E6; background:#fff; flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:600; color:#4B4757;">The client&rsquo;s licence for this portal expires</div><div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">Credentials for it are asked when, and the date is tracked as a document.</div></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ gcLicOn }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ toggleGcLic }}" style="display:flex; align-items:center; gap:10px; margin-top:13px; border:1px solid #C9A2FF; border-radius:12px; padding:10px 12px; cursor:pointer; background:#F5EEFF;">
+                  <span style="width:17px; height:17px; border-radius:5px; border:1.5px solid #7C00FF; background:#7C00FF; flex-shrink:0; display:flex; align-items:center; justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:700; color:#5B21B6;">The client&rsquo;s licence for this portal expires</div><div style="font-size:10px; color:#8C7BA6; margin-top:2px; line-height:1.45;">Credentials for it are asked when, and the date is tracked as a document.</div></div>
+                </div>
+              </sc-if>
               <sc-if value="{{ gcHasErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#C0353A; margin-top:10px;">{{ gcErr }}</div></sc-if>
               <div style="display:flex; justify-content:flex-end; gap:9px; margin-top:13px;">
                 <button onClick="{{ closeGcModal }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:10px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
@@ -11468,35 +11483,61 @@
               </div>
             </sc-if>
 
-            <div style="margin-top:11px;">
-              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-                <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px; margin-bottom:0;">LICENCE EXPIRES</span>
-                <sc-if value="{{ ccLicShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:700; color:{{ ccLicFg }}; background:{{ ccLicBg }}; border:1px solid {{ ccLicBd }}; padding:2px 8px; border-radius:99px; white-space:nowrap;">{{ ccLicTitle }}</span></sc-if>
+            <!-- Only the portals that sell the client a licence to use them. Everywhere else the
+                 login works until the account is closed, and a blank date box on all of them was
+                 an invitation to put a guess in it. Which four is the centre's own answer. -->
+            <sc-if value="{{ ccLicAsk }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px;">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                  <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px; margin-bottom:0;">LICENCE EXPIRES</span>
+                  <sc-if value="{{ ccLicShow }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:700; color:{{ ccLicFg }}; background:{{ ccLicBg }}; border:1px solid {{ ccLicBd }}; padding:2px 8px; border-radius:99px; white-space:nowrap;">{{ ccLicTitle }}</span></sc-if>
+                </div>
+                <input value="{{ ccLicExpiry }}" onChange="{{ setCcLicExpiry }}" type="date" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
+                <div style="font-size:10px; color:#A9A6B4; margin-top:6px;">{{ ccLicHint }}</div>
               </div>
-              <input value="{{ ccLicExpiry }}" onChange="{{ setCcLicExpiry }}" type="date" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
-              <div style="font-size:10px; color:#A9A6B4; margin-top:6px;">{{ ccLicHint }}</div>
-            </div>
+            </sc-if>
           </div>
 
           <!-- RIGHT · what it is called, and what to type into it -->
           <div style="flex:1 1 330px; min-width:0; padding:4px 15px 14px 13px; display:flex; flex-direction:column; gap:13px;">
-            <label style="display:block;">
-              <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">LABEL</span>
-              <input value="{{ ccLabel }}" onChange="{{ setCcLabel }}" placeholder="e.g. Qiwa — main CR" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
-            </label>
+            <!-- HOW THIS PORTAL IS SIGNED IN TO. Through Nafath the officer enters the national ID
+                 and approves it on the holder's phone — there is no password, and a box asking for
+                 one is why somebody eventually invents one. Two zones swapped rather than one with
+                 its colours bound: a style attribute is fixed at an element's first render here. -->
+            <sc-if value="{{ ccNafathOff }}" hint-placeholder-val="{{ true }}">
+              <div onClick="{{ toggleCcNafath }}" style="display:flex; align-items:center; gap:10px; border:1px solid #DDD9E6; border-radius:12px; padding:10px 12px; cursor:pointer; background:#FCFBFE;">
+                <span style="width:17px; height:17px; border-radius:5px; border:1.5px solid #DDD9E6; background:#fff; flex-shrink:0;"></span>
+                <span style="font-size:11px; font-weight:600; color:#4B4757;">Signed in through Nafath</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ ccNafathOn }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ toggleCcNafath }}" style="display:flex; align-items:center; gap:10px; border:1px solid #C9A2FF; border-radius:12px; padding:10px 12px; cursor:pointer; background:#F5EEFF;">
+                <span style="width:17px; height:17px; border-radius:5px; border:1.5px solid #7C00FF; background:#7C00FF; flex-shrink:0; display:flex; align-items:center; justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                <span style="font-size:11px; font-weight:700; color:#5B21B6;">Signed in through Nafath</span>
+              </div>
+            </sc-if>
             <label style="display:block;">
               <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">PORTAL ADDRESS</span>
               <input value="{{ ccUrl }}" onChange="{{ setCcUrl }}" placeholder="qiwa.sa" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
             </label>
-            <label style="display:block;">
-              <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">USERNAME</span>
-              <input value="{{ ccUser }}" onChange="{{ setCcUser }}" placeholder="" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
-            </label>
-            <label style="display:block;">
-              <span style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;"><span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px; margin-bottom:0;">PASSWORD</span><span onClick="{{ toggleCcPassShow }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ ccPassEye }}</span></span>
-              <input value="{{ ccPass }}" onChange="{{ setCcPass }}" type="{{ ccPassType }}" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
-            </label>
-            <sc-if value="{{ ccPassHintShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:-5px;">{{ ccPassHint }}</div></sc-if>
+            <sc-if value="{{ ccNafathOn }}" hint-placeholder-val="{{ false }}">
+              <label style="display:block;">
+                <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">NAFATH NUMBER</span>
+                <input value="{{ ccNafathId }}" onChange="{{ setCcNafathId }}" placeholder="National ID / Iqama number" inputmode="numeric" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
+                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">No password is kept: the login is approved in the Nafath app on this person&rsquo;s phone.</div>
+              </label>
+            </sc-if>
+            <sc-if value="{{ ccNafathOff }}" hint-placeholder-val="{{ true }}">
+              <label style="display:block;">
+                <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">USERNAME</span>
+                <input value="{{ ccUser }}" onChange="{{ setCcUser }}" placeholder="" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
+              </label>
+              <label style="display:block;">
+                <span style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;"><span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px; margin-bottom:0;">PASSWORD</span><span onClick="{{ toggleCcPassShow }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ ccPassEye }}</span></span>
+                <input value="{{ ccPass }}" onChange="{{ setCcPass }}" type="{{ ccPassType }}" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
+              </label>
+              <sc-if value="{{ ccPassHintShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:-5px;">{{ ccPassHint }}</div></sc-if>
+            </sc-if>
           </div>
         </div>
 
@@ -24374,7 +24415,8 @@ class Component extends DCLogic {
             // Seeded from the licence already on file — an empty box beside a licence that exists
             // would read as "none recorded", and saving would then look like it had erased it.
             const L7 = _licFor(c7.govCenter);
-            this.setState({ cdCredModal: true, ccLabel: c7.label, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id,
+            this.setState({ cdCredModal: true, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id,
+              ccNafath: c7.nafath === true, ccNafathId: c7.nafathId || '',
               ccPortal: c7.govCenter || _CC_NO_PORTAL, ccLicExpiry: (L7 && !L7.missing && L7.expiry) ? String(L7.expiry).slice(0, 10) : '' });
           },
           copyUser: () => { try { navigator.clipboard && navigator.clipboard.writeText(c7.username || ''); } catch (e) {} this.toast('Username copied'); },
@@ -24404,7 +24446,7 @@ class Component extends DCLogic {
       // The button said "Add credential" while the heading above it said "Edit credential" — the
       // same dialog telling you two different things about what the click will do.
       clDetailApi.cdCredSave = this.state.ccEditId ? 'Save changes' : 'Add credential';
-      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccLabel: '', ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '' });
+      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '', ccNafath: false, ccNafathId: '' });
       clDetailApi.closeCdCred = () => this.setState({ cdCredModal: false, ccEditId: null, ccLicExpiry: '' });
       // Which authority this login is for. Optional — plenty of client logins are not a government
       // portal at all — but when it IS set, the step doing work at that authority can point at it.
@@ -24413,7 +24455,14 @@ class Component extends DCLogic {
         ..._govCenterNames,
         _CC_NO_PORTAL,
       ], this.state.ccPortal || _CC_NO_PORTAL, (v7) => this.setState({ ccPortal: v7 })));
-      clDetailApi.ccLabel = this.state.ccLabel || ''; clDetailApi.ccUrl = this.state.ccUrl || ''; clDetailApi.ccUser = this.state.ccUser || ''; clDetailApi.ccPass = this.state.ccPass || ''; clDetailApi.ccErr = this.state.ccErr || false;
+      clDetailApi.ccUrl = this.state.ccUrl || ''; clDetailApi.ccUser = this.state.ccUser || ''; clDetailApi.ccPass = this.state.ccPass || ''; clDetailApi.ccErr = this.state.ccErr || false;
+      clDetailApi.ccNafathOn = this.state.ccNafath === true;
+      clDetailApi.ccNafathOff = this.state.ccNafath !== true;
+      clDetailApi.ccNafathId = this.state.ccNafathId || '';
+      clDetailApi.setCcNafathId = (e9) => this.setState({ ccNafathId: e9.target.value, ccErr: '' });
+      // Turning it on empties the password box: it is not what signs this login in any more, and
+      // leaving it filled makes it look as though it will still be saved.
+      clDetailApi.toggleCcNafath = () => this.setState({ ccNafath: this.state.ccNafath !== true, ccPass: '', ccErr: '' });
       clDetailApi.ccPassHint = this.state.ccEditId ? 'Leave blank to keep the stored password' : '';
       clDetailApi.ccPassHintShow = !!this.state.ccEditId;
       // ── The licence behind the login being added ──
@@ -24428,6 +24477,9 @@ class Component extends DCLogic {
         const lic8 = known8 ? _licFor(port8) : null;
         Object.assign(clDetailApi, {
           ccLicExpiry: this.state.ccLicExpiry || '',
+          // Asked only where the authority sells a licence to use the portal — the centre's own answer.
+          ccLicAsk: !!(Array.isArray(this.state.govCentersData) ? this.state.govCentersData : [])
+            .find(g8 => g8.name === port8 && g8.hasLicence === true),
           // ── Every portal on screen at once ──
           //
           // Sixteen government platforms, each already carrying its own colour, were hidden behind a
@@ -24515,27 +24567,32 @@ class Component extends DCLogic {
       clDetailApi.ccPassType = this.state.ccPassShow ? 'text' : 'password';
       clDetailApi.ccPassEye = this.state.ccPassShow ? 'Hide' : 'Show';
       clDetailApi.toggleCcPassShow = () => this.setState({ ccPassShow: !this.state.ccPassShow });
-      clDetailApi.setCcLabel = (e) => this.setState({ ccLabel: e.target.value, ccErr: '' });
       clDetailApi.setCcUrl = (e) => this.setState({ ccUrl: e.target.value, ccErr: '' });
       clDetailApi.setCcUser = (e) => this.setState({ ccUser: e.target.value });
       clDetailApi.setCcPass = (e) => this.setState({ ccPass: e.target.value });
       clDetailApi.submitCdCred = () => {
         const st = this.state;
-        if (!(st.ccLabel || '').trim()) return this.setState({ ccErr: 'Label is required' });
         if (!(st.ccUrl || '').trim()) return this.setState({ ccErr: 'URL is required' });
-        if (!st.ccEditId && !(st.ccPass || '')) return this.setState({ ccErr: 'Password is required' });
+        if (st.ccNafath && !(st.ccNafathId || '').trim()) return this.setState({ ccErr: 'Enter the Nafath number' });
+        if (!st.ccNafath && !st.ccEditId && !(st.ccPass || '')) return this.setState({ ccErr: 'Password is required' });
         if (!clRow.realId) return this.setState({ ccErr: 'Open a real client to store credentials' });
         let url = st.ccUrl.trim(); if (!/^https?:\/\//.test(url)) url = 'https://' + url;
         const t7 = localStorage.getItem('stimespro:token');
         const H7 = { 'Content-Type': 'application/json', ...(t7 ? { Authorization: 'Bearer ' + t7 } : {}) };
-        const body7 = { companyId: clRow.realId, label: st.ccLabel.trim(), url, username: (st.ccUser || '').trim() || null,
+        // THE LABEL IS NO LONGER TYPED. It was a name somebody had to invent for every login, and
+        // "Qiwa" typed four different ways is four things to read in a list that should read as one.
+        // The portal names it; a login that is not a portal is named by its own address.
+        let host7 = url.replace(/^https?:\/\//, '').split('/')[0] || url;
+        const label7 = (st.ccPortal && st.ccPortal !== _CC_NO_PORTAL) ? st.ccPortal : host7;
+        const body7 = { companyId: clRow.realId, label: label7, url, username: (st.ccUser || '').trim() || null,
+          nafath: st.ccNafath === true, nafathId: st.ccNafath ? (st.ccNafathId || '').trim() : null,
           // Which authority this login belongs to. Declared here rather than guessed from the label,
           // so a step that names a portal can point straight at it — see the step drawer.
           govCenter: (st.ccPortal && st.ccPortal !== _CC_NO_PORTAL) ? st.ccPortal : null,
           // Typed here, filed as the client's licence document for this portal — the only place an
           // expiry drives anything in this system.
-          ...((st.ccLicExpiry || '').trim() ? { licenceExpiry: st.ccLicExpiry.trim() } : {}),
-          ...(st.ccPass ? { password: st.ccPass } : {}) };
+          ...((st.ccLicExpiry || '').trim() && clDetailApi.ccLicAsk ? { licenceExpiry: st.ccLicExpiry.trim() } : {}),
+          ...((!st.ccNafath && st.ccPass) ? { password: st.ccPass } : {}) };
         fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials' + (st.ccEditId ? '/' + st.ccEditId : ''), { method: st.ccEditId ? 'PUT' : 'POST', headers: H7, body: JSON.stringify(body7) })
           .then(r7 => r7.json().catch(() => ({})).then(j7 => ({ ok: r7.ok, j7 })))
           .then(({ ok, j7 }) => {
@@ -28022,14 +28079,14 @@ class Component extends DCLogic {
       // Which country's authority this is. Without it a new center belongs to nowhere and drops out
       // of the per-country list on Country Rules — the same "backfilled but not defaulted" gap the
       // client country had.
-      const body9 = { name: nm9, sub: (this.state.gcSub || '').trim() || null, officer: (this.state.gcOfficer || '').trim() || null, color: pal[0], bg: pal[1], country: _gcCountryCode };
+      const body9 = { name: nm9, sub: (this.state.gcSub || '').trim() || null, officer: (this.state.gcOfficer || '').trim() || null, color: pal[0], bg: pal[1], country: _gcCountryCode, hasLicence: this.state.gcLic === true };
       const t2 = localStorage.getItem('stimespro:token');
       const H9 = { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) };
       const url9 = (this._apiBase || 'http://localhost:4100') + '/api/gov-centers' + (editing ? '/' + editing.id : '');
       fetch(url9, { method: editing ? 'PUT' : 'POST', headers: H9, body: JSON.stringify(body9) })
         .then(r9 => {
           if (!r9.ok) return r9.json().then(j9 => this.setState({ gcErr: j9.error || 'Could not save' })).catch(() => this.setState({ gcErr: 'Could not save' }));
-          this.setState({ gcOpen: false, gcName: '', gcSub: '', gcOfficer: '', gcErr: '', gcEditId: null });
+          this.setState({ gcOpen: false, gcName: '', gcSub: '', gcOfficer: '', gcErr: '', gcEditId: null, gcLic: false });
           this.toast(editing ? 'Center updated' : 'Center "' + nm9 + '" added');
           this._opReload('gov-centers', 'govCentersData');
         }).catch(() => this.setState({ gcErr: 'Server unreachable' }));
@@ -28049,7 +28106,7 @@ class Component extends DCLogic {
     govCenters.forEach(gc9 => {
       const row9 = gcRows.find(g9 => g9.name === gc9.name);
       gc9.canManage = canWrite && !!row9;
-      gc9.edit = (ev9) => { ev9 && ev9.stopPropagation && ev9.stopPropagation(); if (row9) this.setState({ gcOpen: true, gcEditId: row9.id, gcName: row9.name, gcSub: row9.sub || '', gcOfficer: row9.officer || '', gcErr: '' }); };
+      gc9.edit = (ev9) => { ev9 && ev9.stopPropagation && ev9.stopPropagation(); if (row9) this.setState({ gcOpen: true, gcEditId: row9.id, gcName: row9.name, gcSub: row9.sub || '', gcOfficer: row9.officer || '', gcErr: '', gcLic: row9.hasLicence === true }); };
       gc9.remove = (ev9) => { ev9 && ev9.stopPropagation && ev9.stopPropagation(); if (row9) gcDelete(row9); };
     });
     const govCentersApi = {
@@ -28066,7 +28123,9 @@ class Component extends DCLogic {
       govHasCenters: govCenterDefs.length > 0,
       gcOpen: !!this.state.gcOpen,
       gcTitle: this.state.gcEditId ? 'Edit government center' : 'New government center',
-      openGcNew: () => this.setState({ gcOpen: true, gcEditId: null, gcName: '', gcSub: '', gcOfficer: '', gcErr: '' }),
+      openGcNew: () => this.setState({ gcOpen: true, gcEditId: null, gcName: '', gcSub: '', gcOfficer: '', gcErr: '', gcLic: false }),
+      gcLicOn: this.state.gcLic === true, gcLicOff: this.state.gcLic !== true,
+      toggleGcLic: () => this.setState({ gcLic: this.state.gcLic !== true, gcErr: '' }),
       closeGcModal: () => this.setState({ gcOpen: false, gcEditId: null }),
       gcName: this.state.gcName || '', setGcName: (e9) => this.setState({ gcName: e9.target.value, gcErr: '' }),
       gcSub: this.state.gcSub || '', setGcSub: (e9) => this.setState({ gcSub: e9.target.value }),

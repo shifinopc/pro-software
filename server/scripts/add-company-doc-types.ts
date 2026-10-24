@@ -152,7 +152,20 @@ const CENTRES: { name: string; sub: string }[] = [
   // Spelled out, because the list already holds Fasah — the customs single window — and the two are
   // one letter apart on screen.
   { name: "Fahas", sub: "Periodic vehicle inspection (MVPI) — the car is driven there" },
+  { name: "Saudi Business Centre", sub: "Business services — licences and company registration" },
+  // The identity portal behind most of the others, and a login in its own right: the manager's
+  // Absher account is what a client hands over, and it has its own user and password.
+  { name: "Absher", sub: "National identity portal — the manager's own account" },
 ];
+
+/**
+ * CENTRES WHOSE LICENCE EXPIRES.
+ *
+ * A credential is asked for a licence expiry only for these. Everywhere else the login simply works
+ * until the account is closed, and a date box on those invites somebody to put a guess in it.
+ * Set to true only; a centre switched off by hand stays off.
+ */
+const LICENSED = ["Muqeem", "Qiwa", "Mudad", "Tamm"];
 
 const write = process.argv.includes("--write");
 
@@ -185,6 +198,9 @@ for (const want of FIX_AUTHORITY) {
 // Types that should be repeatable and are not yet. A type created above arrives false, so this runs
 // after them on a fresh install and finds them.
 const repeatWork = (await prisma.documentType.findMany({ where: { name: { in: REPEATABLE }, repeatable: false }, select: { id: true, name: true } }));
+// Centres that should say their licence expires and do not yet. Read after the creates below would
+// have run, so a fresh install picks them up on the same pass: the create sets the flag directly.
+const licenceWork = (await prisma.govCenter.findMany({ where: { name: { in: LICENSED }, hasLicence: false }, select: { id: true, name: true } }));
 
 // Field labels this script wrote and now writes differently.
 const labelWork: { id: string; type: string; fieldId: string; to: string }[] = [];
@@ -219,10 +235,12 @@ for (const job of authWork) console.log(`${write ? "setting      " : "would set 
 for (const job of repeatWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · several can be live at once`);
 for (const job of expiryWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · ${job.to ? "does not expire" : "expires, reminder " + job.leadDays + " days before"}`);
 for (const job of labelWork) console.log(`${write ? "renaming     " : "would rename "} ${job.type} · field "${job.fieldId}" → "${job.to}"`);
+for (const job of licenceWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · its licence expires`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
-  if (todoCentres.length) await prisma.govCenter.createMany({ data: todoCentres.map(c => ({ name: c.name, sub: c.sub, country: "SA" })) });
+  if (todoCentres.length) await prisma.govCenter.createMany({ data: todoCentres.map(c => ({ name: c.name, sub: c.sub, country: "SA", hasLicence: LICENSED.includes(c.name) })) });
+  if (licenceWork.length) await prisma.govCenter.updateMany({ where: { id: { in: licenceWork.map(j => j.id) } }, data: { hasLicence: true } });
   if (todoTypes.length) {
     await prisma.documentType.createMany({
       data: todoTypes.map(t => ({
@@ -255,5 +273,5 @@ if (write) {
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
   + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
-  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s), ${expiryWork.length} expiry rule(s) and ${labelWork.length} label(s)`);
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s), ${expiryWork.length} expiry rule(s), ${labelWork.length} label(s) and ${licenceWork.length} licence flag(s)`);
 await prisma.$disconnect();

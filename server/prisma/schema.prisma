@@ -877,8 +877,20 @@ model SiteCredential {
   id        String  @id @default(cuid())
   company   Company @relation(fields: [companyId], references: [id])
   companyId String
+  /// A name for the row, no longer typed: it is the portal, or the site's host when the login is
+  /// not a portal at all. Somebody had to invent one for every credential, and "Qiwa" typed four
+  /// different ways is four things to read in a list that should have read as one.
   label     String
   url       String
+  /// SIGNED IN THROUGH NAFATH, so there is no password to keep.
+  ///
+  /// The national single sign-on: the officer enters the national ID and approves the login in the
+  /// Nafath app. Storing a password against one of these is storing something that does not exist,
+  /// and the form asking for it is the reason somebody eventually invents one.
+  nafath    Boolean @default(false)
+  /// The national ID the portal is entered with. Not a secret — it is on the Iqama — and useless on
+  /// its own, because the approval happens on the holder's phone.
+  nafathId  String?
   username  String?
   password  String // NOTE: encrypt at rest in production
   notes     String? @db.Text
@@ -2047,6 +2059,16 @@ model GovCenter {
   color        String?
   bg           String?
   officer      String? // default owning officer
+  /// THIS PORTAL'S LICENCE EXPIRES, so a credential for it is asked when.
+  ///
+  /// Most authorities do not work that way: a GOSI or ZATCA login simply works until the account is
+  /// closed. Four of them sell the client a licence to use the portal at all — Muqeem, Qiwa, Mudad
+  /// and Tamm — and that is the thing that lapses and stops an officer working. Asking for an
+  /// expiry on the rest produced a blank date box on every login, which invites a guess.
+  ///
+  /// On the centre, so the firm can change the answer when an authority changes its mind, rather
+  /// than four names being spelled out in the credential form.
+  hasLicence   Boolean @default(false)
   pending      Int     @default(0)
   submitted    Int     @default(0)
   approved     Int     @default(0)

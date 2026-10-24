@@ -5936,7 +5936,12 @@ app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async 
       username: b.username ? String(b.username).trim() : null,
       notes: b.notes ? String(b.notes) : null,
       govCenter: b.govCenter ? String(b.govCenter).trim() : null,
-      password: encrypt(String(password ?? "")),
+      // Nafath logins carry no password: the officer enters the national ID and approves it on the
+      // holder's phone. Stored as an empty string rather than a nullable column, so every read path
+      // that decrypts a password keeps working without learning about a second shape.
+      nafath: b.nafath === true,
+      nafathId: b.nafathId ? String(b.nafathId).trim() : null,
+      password: encrypt(b.nafath === true ? "" : String(password ?? "")),
     } });
     if (licenceExpiry && created.govCenter) await filePortalLicence({ companyId: created.companyId, govCenter: created.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
     const cn = await coName(created.companyId);
@@ -5961,8 +5966,13 @@ app.put("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, asy
     if (b.username !== undefined) data.username = b.username ? String(b.username).trim() : null;
     if (b.notes !== undefined) data.notes = b.notes ? String(b.notes) : null;
     if (b.govCenter !== undefined) data.govCenter = b.govCenter ? String(b.govCenter).trim() : null;
-    // Only re-encrypt when a new password is actually provided (blank = keep existing).
-    if (typeof password === "string" && password.length > 0) data.password = encrypt(password);
+    if (b.nafath !== undefined) data.nafath = b.nafath === true;
+    if (b.nafathId !== undefined) data.nafathId = b.nafathId ? String(b.nafathId).trim() : null;
+    // Only re-encrypt when a new password is actually provided (blank = keep existing) — and a
+    // credential switched to Nafath drops the one it had, because it is no longer how anybody signs
+    // in and a kept secret is a secret still worth stealing.
+    if (b.nafath === true) data.password = encrypt("");
+    else if (typeof password === "string" && password.length > 0) data.password = encrypt(password);
     const updated = await prisma.siteCredential.update({ where: { id: req.params.id }, data });
     if (licenceExpiry && updated.govCenter) await filePortalLicence({ companyId: updated.companyId, govCenter: updated.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
     const cn = await coName(updated.companyId);
