@@ -5809,6 +5809,14 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
       user: (req as any).auth?.email,
     });
     if (isClient) logNotification({ type: "system", title: "New client added", message: company.name });
+    // THE CR TYPED ON THE FORM BECOMES THE CLIENT'S MAIN CR, HERE.
+    //
+    // It was only ever created by the lifecycle move to client, or by the sweep that runs at server
+    // start — so a client added through this route held a CR number and no CR row until the next
+    // restart, and its own Commercial registrations card said "No CR on file". Nothing could be
+    // filed against a branch either, because there was no main CR for a branch to sit beside.
+    // Same call as the lifecycle move, and like it, a failure here must not fail the create.
+    await syncMainFromCompany(company.id).catch(() => {});
     res.status(201).json(portalInvite ? { ...company, portalInvite } : company);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
