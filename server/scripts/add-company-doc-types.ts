@@ -85,6 +85,9 @@ const ADD_FIELDS: { type: string; fields: Field[] }[] = [
   { type: "Vehicle Insurance", fields: [f("plate", "Plate number")] },
   // The trade name and where the premises are: two answers, and one box asking for both got one.
   { type: "Baladiya License", fields: [f("location", "Location")] },
+  // A person who has no Iqama yet is identified by the border number on their entry stamp, and it
+  // is what every Muqeem screen asks for until the Iqama is issued.
+  { type: "Iqama", fields: [f("border", "Border number")] },
 ];
 
 /**
@@ -167,6 +170,24 @@ const CENTRES: { name: string; sub: string }[] = [
  */
 const LICENSED = ["Muqeem", "Qiwa", "Mudad", "Tamm"];
 
+/**
+ * HOW LONG BEFORE AN EXPIRY THE WORK STARTS.
+ *
+ * A document that crosses its lead time starts its own renewal — that is where the task the firm
+ * asked for comes from, and the only thing that decides when is this number. The five below were
+ * carrying the pack's defaults, which say 30 days for everything from a health card to a passport.
+ *
+ * Changed only where the row still carries the value named in `from`, so a type the firm has since
+ * re-timed keeps their timing.
+ */
+const FIX_LEAD: { type: string; from: number; to: number; why: string }[] = [
+  { type: "Iqama", from: 60, to: 14, why: "two weeks" },
+  { type: "Passport", from: 30, to: 365, why: "a year — a renewal abroad is slow and blocks everything else" },
+  { type: "Health Insurance", from: 30, to: 7, why: "a week" },
+  { type: "Exit / Re-entry Visa", from: 30, to: 7, why: "seven days" },
+  // Driving License is already 30 and stays there.
+];
+
 const write = process.argv.includes("--write");
 
 const haveTypes = new Set((await prisma.documentType.findMany({ where: { name: { in: TYPES.map(t => t.name) } }, select: { name: true } })).map(e => e.name));
@@ -202,6 +223,16 @@ const repeatWork = (await prisma.documentType.findMany({ where: { name: { in: RE
 // have run, so a fresh install picks them up on the same pass: the create sets the flag directly.
 const licenceWork = (await prisma.govCenter.findMany({ where: { name: { in: LICENSED }, hasLicence: false }, select: { id: true, name: true } }));
 
+// Lead times this script re-times, where the row still carries the pack's own.
+const leadWork: { id: string; type: string; to: number; why: string }[] = [];
+for (const want of FIX_LEAD) {
+  const row = await prisma.documentType.findUnique({ where: { name: want.type }, select: { id: true, leadDays: true } });
+  if (!row) { console.log(`not found     ${want.type} — lead time unchanged`); continue; }
+  if (row.leadDays === want.to) continue;
+  if (row.leadDays !== want.from) { console.log(`left alone    ${want.type} · ${row.leadDays} days is the firm's own timing`); continue; }
+  leadWork.push({ id: row.id, type: want.type, to: want.to, why: want.why });
+}
+
 // Field labels this script wrote and now writes differently.
 const labelWork: { id: string; type: string; fieldId: string; to: string }[] = [];
 for (const want of FIX_FIELD_LABEL) {
@@ -236,11 +267,13 @@ for (const job of repeatWork) console.log(`${write ? "setting      " : "would se
 for (const job of expiryWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · ${job.to ? "does not expire" : "expires, reminder " + job.leadDays + " days before"}`);
 for (const job of labelWork) console.log(`${write ? "renaming     " : "would rename "} ${job.type} · field "${job.fieldId}" → "${job.to}"`);
 for (const job of licenceWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · its licence expires`);
+for (const job of leadWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · renewal starts ${job.to} days before expiry (${job.why})`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
   if (todoCentres.length) await prisma.govCenter.createMany({ data: todoCentres.map(c => ({ name: c.name, sub: c.sub, country: "SA", hasLicence: LICENSED.includes(c.name) })) });
   if (licenceWork.length) await prisma.govCenter.updateMany({ where: { id: { in: licenceWork.map(j => j.id) } }, data: { hasLicence: true } });
+  for (const job of leadWork) await prisma.documentType.update({ where: { id: job.id }, data: { leadDays: job.to, packModified: true } });
   if (todoTypes.length) {
     await prisma.documentType.createMany({
       data: todoTypes.map(t => ({
@@ -273,5 +306,5 @@ if (write) {
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
   + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
-  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s), ${expiryWork.length} expiry rule(s), ${labelWork.length} label(s) and ${licenceWork.length} licence flag(s)`);
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s), ${expiryWork.length} expiry rule(s), ${labelWork.length} label(s), ${licenceWork.length} licence flag(s) and ${leadWork.length} lead time(s)`);
 await prisma.$disconnect();

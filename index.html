@@ -431,6 +431,19 @@
   @media (max-width:860px){.ac-land > .ldf-col + .ldf-col{border-left:0;padding-left:0;border-top:1px solid #F3F1F7;padding-top:13px;}}
   .fm-wide{grid-column:1 / -1;}
   @media (max-width:640px){.fm-grid{grid-template-columns:minmax(0,1fr);}}
+  /* Add employee, landscape. The three sections become three columns side by side, each a
+     one-field-wide stack: a two-column grid inside a column gives six narrow boxes on a form whose
+     longest answer is a national address. The hairline between them is the same device Add client
+     uses, so the two forms read as one family. */
+  .emp-land{display:flex;gap:18px;align-items:flex-start;}
+  .emp-land > .fm-sec{flex:1 1 0;min-width:0;margin-top:0;padding-top:0;border-top:0;}
+  .emp-land > .fm-sec + .fm-sec{border-left:1px solid #F3F1F7;padding-left:19px;}
+  .emp-land .fm-grid{grid-template-columns:minmax(0,1fr);}
+  /* Two answers to one question stay on one line: the name as it is written in each script. */
+  .emp-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  @media (max-width:980px){.emp-land{flex-direction:column;gap:13px;}
+    .emp-land > .fm-sec + .fm-sec{border-left:0;padding-left:0;border-top:1px solid #F3F1F7;padding-top:12px;}
+    .emp-pair{grid-template-columns:minmax(0,1fr);}}
 
   .fm-lab{display:block;font-size:9px;font-weight:700;color:#A9A6B4;letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px;}
   .fm-req{color:#7C00FF;}
@@ -10537,7 +10550,7 @@
   </sc-if>
   <sc-if value="{{ showEmpModal }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeEmp }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:720px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:1080px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
 
         <div class="fm-head">
           <div style="min-width:0;">
@@ -10573,8 +10586,9 @@
             <div style="margin-top:10px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ eErrorGeneral }}</div>
           </sc-if>
 
+          <div class="emp-land" style="margin-top:12px;">
           <!-- ── Who they are ── -->
-          <div class="fm-sec" style="margin-top:12px;">
+          <div class="fm-sec">
             <div class="fm-sec-h">Who they are</div>
             <div class="fm-grid">
               <sc-if value="{{ eClientPick }}" hint-placeholder-val="{{ true }}">
@@ -10594,17 +10608,19 @@
               </div>
               </sc-if>
 
-              <div class="fm-wide">
-                <label class="fm-lab">Full name <span class="fm-req">*</span></label>
-                <input data-fm-field="name" value="{{ eName }}" onChange="{{ setEName }}" placeholder="e.g. Priya Sharma" class="{{ eNameCls }}">
-                <sc-if value="{{ eErrName }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ eErrName }}</div></sc-if>
-              </div>
-              <!-- The same name as the government writes it, suggested from the English. It is a
-                   transliteration — the SOUND of the name, which is what a passport and an Iqama
+              <!-- One name, two scripts, one row. The Arabic is suggested from the English — a
+                   transliteration, the SOUND of the name, which is what a passport and an Iqama
                    carry — so it is offered and not asserted, and the hint says which it is. -->
-              <div class="fm-wide">
-                <div style="display:flex; align-items:center; gap:8px;"><label class="fm-lab">Full name (Arabic)</label><span style="font-size:9px; color:#B4AFC4;">{{ eArHint }}</span></div>
-                <input value="{{ eNameAr }}" onChange="{{ setENameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp">
+              <div class="fm-wide emp-pair">
+                <div>
+                  <label class="fm-lab">Full name <span class="fm-req">*</span></label>
+                  <input data-fm-field="name" value="{{ eName }}" onChange="{{ setEName }}" placeholder="e.g. Priya Sharma" class="{{ eNameCls }}">
+                  <sc-if value="{{ eErrName }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ eErrName }}</div></sc-if>
+                </div>
+                <div>
+                  <div style="display:flex; align-items:center; gap:8px;"><label class="fm-lab">Full name (Arabic)</label><span style="font-size:9px; color:#B4AFC4;">{{ eArHint }}</span></div>
+                  <input value="{{ eNameAr }}" onChange="{{ setENameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp">
+                </div>
               </div>
               <sc-if value="{{ eCrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-wide"><label class="fm-lab">CR this person works under</label><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ eCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
 
@@ -10633,6 +10649,11 @@
                 <input value="{{ eJoinDate }}" onChange="{{ setEJoin }}" type="date" class="fm-inp">
               </div>
 
+              <div>
+                <label class="fm-lab">Working location</label>
+                <input value="{{ eWorkLoc }}" onChange="{{ setEWorkLoc }}" placeholder="e.g. Riyadh — Olaya site" class="fm-inp">
+                <div class="fm-hint">The site or project they are posted to. Not the CR they are sponsored under.</div>
+              </div>
               <div>
                 <label class="fm-lab">Visa quota</label>
                 <input value="{{ eVisaQuota }}" onChange="{{ setEQuota }}" type="number" min="1" class="fm-inp">
@@ -10681,6 +10702,19 @@
                   </sc-if>
                 </div>
                 <div class="fm-hint">Recorded by the government portals. Only used by a counting rule that names it.</div>
+              </div>
+              <div>
+                <label class="fm-lab">Mail id</label>
+                <input value="{{ eEmail }}" onChange="{{ setEEmail }}" placeholder="name@example.com" type="email" class="fm-inp">
+              </div>
+              <div>
+                <label class="fm-lab">Mobile number</label>
+                <input value="{{ ePhone }}" onChange="{{ setEPhone }}" placeholder="05X XXX XXXX" inputmode="tel" class="fm-inp">
+              </div>
+              <div>
+                <label class="fm-lab">National address</label>
+                <input value="{{ eNatAddr }}" onChange="{{ setENatAddr }}" placeholder="Short code, building, street, district" class="fm-inp">
+                <div class="fm-hint">As SPL writes it — the whole line, the way it is read off the certificate.</div>
               </div>
             </div>
             <!-- COUNTED FOR MORE THAN ONE.
@@ -10752,7 +10786,30 @@
                   </sc-if>
                 </div>
               </div>
+              <div>
+                <label class="fm-lab">Bank IBAN</label>
+                <input value="{{ eIban }}" onChange="{{ setEIban }}" placeholder="SA00 0000 0000 0000 0000 0000" class="fm-inp">
+                <div class="fm-hint">For the wage protection file. Kept as typed, spaces and all.</div>
+              </div>
+              <div>
+                <label class="fm-lab">Contract type</label>
+                <div class="fm-selwrap">
+                  <div data-dd data-open="{{ ddEContractOpen }}" onClick="{{ ddEContractToggle }}" class="fm-inp fm-sel"><span style="color:{{ eContractColor }};">{{ ddEContractVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                  <sc-if value="{{ ddEContractOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="fm-dd">
+                      <sc-for list="{{ ddEContractOptions }}" as="o" hint-placeholder-count="2">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+                <!-- The contract's own dates live on the Employment Contract document, in the next
+                     step. A date with two homes is a renewal that fires off whichever nobody updated. -->
+                <div class="fm-hint">Limited or unlimited — what ending the contract costs depends on it.</div>
+              </div>
             </div>
+          </div>
+
           </div>
 
           <!-- ── Documents ── full width, because a row needs the width. -->
@@ -21783,6 +21840,7 @@ class Component extends DCLogic {
     const _GENDER_LABEL = { male: 'Male', female: 'Female' };
     const _EMP_TYPE_OPTS = ['Full time', 'Part time'];
     const _JOB_CAT_OPTS = ['Skilled', 'Unskilled'];
+    const _CONTRACT_OPTS = ['Not recorded', 'Limited', 'Unlimited'];
     const _EMP_TYPE_VAL = { 'Full time': 'full_time', 'Part time': 'part_time' };
     const _JOB_CAT_VAL = { 'Skilled': 'skilled', 'Unskilled': 'unskilled' };
     // The reverse maps. Edit loads a STORED value and has to show the label for it; without these it
@@ -22234,7 +22292,7 @@ class Component extends DCLogic {
       setEDob: (e) => this.setState({ eDob: e.target.value }),
       setENat: (e) => this.setState({ eNat: e.target.value }),
       // From the all-Employees screen: no client is implied, so the picker is shown and starts empty.
-      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eNameAr: '', eArTouched: false, eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
+      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eNameAr: '', eArTouched: false, eWorkLoc: '', eEmail: '', ePhone: '', eNatAddr: '', eIban: '', eContract: _CONTRACT_OPTS[0], eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
       // Nationality is a code now, chosen from the server's list rather than typed. A text box with
       // the placeholder "e.g. Saudi" invites four spellings of one country, and a headcount that
       // misses a spelling under-reports — which is the direction that gets a client in trouble.
@@ -22253,6 +22311,16 @@ class Component extends DCLogic {
       ddEEmpTypeVal: this.state.eEmpType || _EMP_TYPE_OPTS[0],
       ...mkDd('ddEJobCat', _JOB_CAT_OPTS, this.state.eJobCat || _JOB_CAT_OPTS[0], (v9) => this.setState({ eJobCat: v9 })),
       ddEJobCatVal: this.state.eJobCat || _JOB_CAT_OPTS[0],
+      // Where they actually work, how to reach them, what they are paid into, and on what terms.
+      eWorkLoc: this.state.eWorkLoc || '', setEWorkLoc: (e9) => this.setState({ eWorkLoc: e9.target.value }),
+      eEmail: this.state.eEmail || '', setEEmail: (e9) => this.setState({ eEmail: e9.target.value, eError: '', eErrField: '' }),
+      ePhone: this.state.ePhone || '', setEPhone: (e9) => this.setState({ ePhone: e9.target.value }),
+      eNatAddr: this.state.eNatAddr || '', setENatAddr: (e9) => this.setState({ eNatAddr: e9.target.value }),
+      eIban: this.state.eIban || '', setEIban: (e9) => this.setState({ eIban: e9.target.value }),
+      // "Not recorded" first: a contract type nobody chose must not read as a decision somebody made.
+      ...mkDd('ddEContract', _CONTRACT_OPTS, this.state.eContract || _CONTRACT_OPTS[0], (v9) => this.setState({ eContract: v9 })),
+      ddEContractVal: this.state.eContract || _CONTRACT_OPTS[0],
+      eContractColor: (this.state.eContract && this.state.eContract !== _CONTRACT_OPTS[0]) ? '#1A1523' : '#8C8899',
       closeEmp: () => this.setState({ empModal: false }),
       // Typing into the field clears its own complaint — an error that outlives the fix teaches people to ignore errors.
       // The Arabic follows the English UNTIL somebody types in it. After that the English stops
@@ -22337,6 +22405,10 @@ class Component extends DCLogic {
         fetch((this._apiBase || 'http://localhost:4100') + '/api/employees', {
           method: 'POST', headers: H9,
           body: JSON.stringify({ name: st.eName.trim(), nameAr: (st.eNameAr || '').trim() || null, role: st.eRole.trim(), companyId: co9.id, status: 'valid',
+            email: (st.eEmail || '').trim() || null, phone: (st.ePhone || '').trim() || null,
+            nationalAddress: (st.eNatAddr || '').trim() || null, workLocation: (st.eWorkLoc || '').trim() || null,
+            iban: (st.eIban || '').trim() || null,
+            contractType: (st.eContract && st.eContract !== _CONTRACT_OPTS[0]) ? st.eContract : null,
             // Columns, not customData: a prerequisite reads these, and a fact with two homes is a
             // check that passes on the empty one.
             dob: (st.eDob || '').trim() || null, nationality: (st.eNat || '').trim() || null,
@@ -23439,7 +23511,7 @@ class Component extends DCLogic {
       clDetailApi.cdAddEmp = () => this.setState({
         empModal: true, eError: '', eErrField: '',
         eClient: clRow.name, eClientLocked: true, eEst: this.state.cdCrFilter && _crAll.some(x9 => x9.id === this.state.cdCrFilter) ? this.state.cdCrFilter : null,
-        eNameAr: '', eArTouched: false,
+        eNameAr: '', eArTouched: false, eWorkLoc: '', eEmail: '', ePhone: '', eNatAddr: '', eIban: '', eContract: _CONTRACT_OPTS[0],
         eDob: '', eNat: '', eSalary: '', eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0],
       });
       clDetailApi.wfOpenBand = () => this.setState({
