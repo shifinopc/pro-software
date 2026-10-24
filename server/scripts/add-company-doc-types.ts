@@ -35,7 +35,7 @@ const TYPES: { name: string; authority: string; leadDays: number; neverExpires?:
   // Municipal licence. It is issued per SHOP, so the premises it covers has to be on the record —
   // a client with four branches holds four of these and the number alone does not say which is which.
   // Which CR it belongs to is the document's establishmentId, not a field.
-  { name: "Baladiya License", authority: "Baladiya", leadDays: 45, fields: [f("shop", "Shop / location name")] },
+  { name: "Baladiya License", authority: "Baladiya", leadDays: 45, fields: [f("shop", "Shop name"), f("location", "Location")] },
 
   // The tenancy behind an address. Both parties matter: a rental contract identified only by its
   // number cannot be matched to the premises when it comes up for renewal.
@@ -83,6 +83,19 @@ const ADD_FIELDS: { type: string; fields: Field[] }[] = [
     f("owner", "Owner"),
   ] },
   { type: "Vehicle Insurance", fields: [f("plate", "Plate number")] },
+  // The trade name and where the premises are: two answers, and one box asking for both got one.
+  { type: "Baladiya License", fields: [f("location", "Location")] },
+];
+
+/**
+ * LABELS CORRECTED ON FIELDS THAT ALREADY EXIST.
+ *
+ * The field's ID never changes — that is what every document already captured keys its values by,
+ * and changing one would orphan them. Only what the box is called changes, and only while it still
+ * reads as this script wrote it.
+ */
+const FIX_FIELD_LABEL: { type: string; id: string; from: string; to: string }[] = [
+  { type: "Baladiya License", id: "shop", from: "Shop / location name", to: "Shop name" },
 ];
 
 /**
@@ -173,6 +186,18 @@ for (const want of FIX_AUTHORITY) {
 // after them on a fresh install and finds them.
 const repeatWork = (await prisma.documentType.findMany({ where: { name: { in: REPEATABLE }, repeatable: false }, select: { id: true, name: true } }));
 
+// Field labels this script wrote and now writes differently.
+const labelWork: { id: string; type: string; fieldId: string; to: string }[] = [];
+for (const want of FIX_FIELD_LABEL) {
+  const row = await prisma.documentType.findUnique({ where: { name: want.type }, select: { id: true, fields: true } });
+  if (!row) continue;
+  const fs = Array.isArray(row.fields) ? (row.fields as any[]) : [];
+  const fld = fs.find(x => String(x?.id ?? "") === want.id);
+  if (!fld || fld.label === want.to) continue;
+  if (fld.label !== want.from) { console.log(`left alone    ${want.type} · "${fld.label}" is the firm's own wording`); continue; }
+  labelWork.push({ id: row.id, type: want.type, fieldId: want.id, to: want.to });
+}
+
 // Types whose "never expires" answer this script set and now disagrees with.
 const expiryWork: { id: string; type: string; to: boolean; leadDays: number }[] = [];
 for (const want of FIX_EXPIRY) {
@@ -193,6 +218,7 @@ for (const w of ADD_FIELDS) {
 for (const job of authWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · authority → ${job.to}`);
 for (const job of repeatWork) console.log(`${write ? "setting      " : "would set    "} ${job.name} · several can be live at once`);
 for (const job of expiryWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · ${job.to ? "does not expire" : "expires, reminder " + job.leadDays + " days before"}`);
+for (const job of labelWork) console.log(`${write ? "renaming     " : "would rename "} ${job.type} · field "${job.fieldId}" → "${job.to}"`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
@@ -219,8 +245,15 @@ if (write) {
   for (const job of expiryWork) {
     await prisma.documentType.update({ where: { id: job.id }, data: { neverExpires: job.to, leadDays: job.leadDays, packModified: true } });
   }
+  // After the add-only pass, and re-reading the row so the field just appended is not dropped.
+  // A rename touches one entry and leaves the array's order and every id alone.
+  for (const job of labelWork) {
+    const row = await prisma.documentType.findUnique({ where: { id: job.id }, select: { fields: true } });
+    const fs = (Array.isArray(row?.fields) ? (row!.fields as any[]) : []).map(x => (String(x?.id ?? "") === job.fieldId ? { ...x, label: job.to } : x));
+    await prisma.documentType.update({ where: { id: job.id }, data: { fields: fs as any } });
+  }
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
   + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
-  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s) and ${expiryWork.length} expiry rule(s)`);
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies), ${repeatWork.length} repeatable flag(s), ${expiryWork.length} expiry rule(s) and ${labelWork.length} label(s)`);
 await prisma.$disconnect();
