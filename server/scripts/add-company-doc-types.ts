@@ -72,6 +72,16 @@ const ADD_FIELDS: { type: string; fields: Field[] }[] = [
     f("year", "Year of manufacture", "number"),
     f("owner", "Owner"),
   ] },
+  // Asked for on the inspection too. It repeats what the registration says about the car, which the
+  // firm has decided is worth it: a Fahas certificate is handled on its own, often by whoever drove
+  // the car there, and reading the model off it beats opening the registration to find out. The
+  // plate is still what ties a car's papers together, so a mismatch here is visible rather than
+  // structural.
+  { type: "Vehicle Inspection (Fahas)", fields: [
+    f("vehicle", "Vehicle name / model"),
+    f("year", "Year of manufacture", "number"),
+    f("owner", "Owner"),
+  ] },
   { type: "Vehicle Insurance", fields: [f("plate", "Plate number")] },
 ];
 
