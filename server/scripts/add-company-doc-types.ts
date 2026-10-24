@@ -159,6 +159,10 @@ const CENTRES: { name: string; sub: string }[] = [
   // The identity portal behind most of the others, and a login in its own right: the manager's
   // Absher account is what a client hands over, and it has its own user and password.
   { name: "Absher", sub: "National identity portal — the manager's own account" },
+  // Named by the Driving License type since the pack installed it, and never a centre — so that
+  // type filled no authority at all, and an officer planning a traffic-department visit had nothing
+  // to plan it against.
+  { name: "Muroor", sub: "Traffic department — driving licences and vehicle matters" },
 ];
 
 /**

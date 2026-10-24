@@ -10883,7 +10883,12 @@
                       <sc-if value="{{ ddEdGcOpen }}" hint-placeholder-val="{{ false }}">
                         <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
                           <sc-for list="{{ ddEdGcOptions }}" as="g" hint-placeholder-count="6">
-                            <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                            <sc-if value="{{ g.isHead }}" hint-placeholder-val="{{ false }}">
+                              <div style="padding:9px 11px 4px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#B4AFC4; border-top:1px solid #F3F1F7; margin-top:4px;">{{ g.label }}</div>
+                            </sc-if>
+                            <sc-if value="{{ g.isPick }}" hint-placeholder-val="{{ true }}">
+                              <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                            </sc-if>
                           </sc-for>
                         </div>
                       </sc-if>
@@ -11869,7 +11874,12 @@
                       <sc-if value="{{ ddAcGcOpen }}" hint-placeholder-val="{{ false }}">
                         <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
                           <sc-for list="{{ ddAcGcOptions }}" as="g" hint-placeholder-count="6">
-                            <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                            <sc-if value="{{ g.isHead }}" hint-placeholder-val="{{ false }}">
+                              <div style="padding:9px 11px 4px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#B4AFC4; border-top:1px solid #F3F1F7; margin-top:4px;">{{ g.label }}</div>
+                            </sc-if>
+                            <sc-if value="{{ g.isPick }}" hint-placeholder-val="{{ true }}">
+                              <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                            </sc-if>
                           </sc-for>
                         </div>
                       </sc-if>
@@ -22458,6 +22468,12 @@ class Component extends DCLogic {
           .sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
         const gcs9 = (Array.isArray(this.state.govCentersData) ? this.state.govCentersData : [])
           .filter(g9 => !g9.retired).sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        // Which authorities this kind of document comes from, read off the types themselves. The
+        // one already on this document counts as relevant even if no type names it any more.
+        const want9 = new Set(types9.map(t9 => t9.authority).filter(Boolean));
+        if (this.state.eDocAuth) want9.add(this.state.eDocAuth);
+        const useful9 = gcs9.filter(g9 => want9.has(g9.name));
+        const rest9 = gcs9.filter(g9 => !want9.has(g9.name));
         const picked9 = types9.find(t9 => t9.name === this.state.eDocType) || null;
         // The three the form asks for itself are not asked for twice — same rule the Add-document
         // dialog uses, so a type behaves the same way wherever it is filled in.
@@ -22481,8 +22497,14 @@ class Component extends DCLogic {
           ddEdGcOpen: this.state.openDd === 'ed-gc',
           ddEdGcToggle: () => this.setState({ openDd: this.state.openDd === 'ed-gc' ? null : 'ed-gc' }),
           // Blank first: the authority is optional, and a list you cannot back out of is a trap.
-          ddEdGcOptions: [{ name: '', sub: '' }, ...gcs9].map(g9 => ({
-            label: g9.name || 'Not recorded',
+          // THEN THE ONES THIS KIND OF DOCUMENT IS ACTUALLY ISSUED BY. Every centre was offered on
+          // both forms, so a passport could be recorded as issued by Baladiya and a Commercial
+          // Registration by Muqeem. The relevant ones are the authorities the types of THIS subject
+          // name — derived, so a type pointed at a new centre brings it along — and the rest stay
+          // below a line rather than being hidden, because a one-off is not a mistake.
+          ddEdGcOptions: [{ name: '', sub: '' }, ...useful9, ...(rest9.length ? [{ head: 'OTHER AUTHORITIES' }] : []), ...rest9].map(g9 => ({
+            isHead: !!g9.head, isPick: !g9.head,
+            label: g9.head || g9.name || 'Not recorded',
             sub: g9.sub ? '  ·  ' + g9.sub : '',
             weight: (this.state.eDocAuth || '') === g9.name ? '700' : '500',
             color: (this.state.eDocAuth || '') === g9.name ? '#7C00FF' : (g9.name ? '#1A1523' : '#8C8899'),
@@ -25183,6 +25205,12 @@ class Component extends DCLogic {
           .sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
         const gcs9 = (Array.isArray(this.state.govCentersData) ? this.state.govCentersData : [])
           .filter(g9 => !g9.retired).sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        // Which authorities this kind of document comes from, read off the types themselves. The
+        // one already on this document counts as relevant even if no type names it any more.
+        const want9 = new Set(types9.map(t9 => t9.authority).filter(Boolean));
+        if (this.state.acDocAuth) want9.add(this.state.acDocAuth);
+        const useful9 = gcs9.filter(g9 => want9.has(g9.name));
+        const rest9 = gcs9.filter(g9 => !want9.has(g9.name));
         const picked9 = types9.find(t9 => t9.name === this.state.acDocType) || null;
         // The three the form asks for itself are not asked for twice — same rule the Add-document
         // dialog uses, so a type behaves the same way wherever it is filled in.
@@ -25248,8 +25276,11 @@ class Component extends DCLogic {
           ddAcGcOpen: this.state.openDd === 'ac-gc',
           ddAcGcToggle: () => this.setState({ openDd: this.state.openDd === 'ac-gc' ? null : 'ac-gc' }),
           // Blank first: the authority is optional, and a list you cannot back out of is a trap.
-          ddAcGcOptions: [{ name: '', sub: '' }, ...gcs9].map(g9 => ({
-            label: g9.name || 'Not recorded',
+          // Then the ones a company document is actually issued by; the rest below a line. See the
+          // employee form for why both lists are split rather than one of them filtered.
+          ddAcGcOptions: [{ name: '', sub: '' }, ...useful9, ...(rest9.length ? [{ head: 'OTHER AUTHORITIES' }] : []), ...rest9].map(g9 => ({
+            isHead: !!g9.head, isPick: !g9.head,
+            label: g9.head || g9.name || 'Not recorded',
             sub: g9.sub ? '  ·  ' + g9.sub : '',
             weight: (this.state.acDocAuth || '') === g9.name ? '700' : '500',
             color: (this.state.acDocAuth || '') === g9.name ? '#7C00FF' : (g9.name ? '#1A1523' : '#8C8899'),
