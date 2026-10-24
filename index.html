@@ -11652,7 +11652,16 @@
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
                   <div><label class="fm-lab">ISSUE DATE</label><input value="{{ acDocIssue }}" onChange="{{ setAcDocIssue }}" type="date" class="fm-inp"></div>
-                  <div><label class="fm-lab">EXPIRY DATE</label><input value="{{ acDocExpiry }}" onChange="{{ setAcDocExpiry }}" type="date" class="fm-inp"></div>
+                  <!-- Some of these have no validity period at all — Articles of Association, a
+                       ZATCA or VAT certificate. Asking for an expiry invites somebody to invent
+                       one, and an invented expiry is a renewal that comes round for ever. The slot
+                       says so instead, and the type is what decides. -->
+                  <sc-if value="{{ acHasExpiry }}" hint-placeholder-val="{{ true }}">
+                    <div><label class="fm-lab">EXPIRY DATE</label><input value="{{ acDocExpiry }}" onChange="{{ setAcDocExpiry }}" type="date" class="fm-inp"></div>
+                  </sc-if>
+                  <sc-if value="{{ acNoExpiry }}" hint-placeholder-val="{{ false }}">
+                    <div><label class="fm-lab">EXPIRY DATE</label><div class="fm-inp" style="display:flex; align-items:center; color:#8C8899; background:#F7F6FA;">Does not expire</div></div>
+                  </sc-if>
                 </div>
                 <!-- Whatever else this type asks for. Defined on the type, so a Baladiya licence can
                      want a shop name without this form knowing what a Baladiya licence is. -->
@@ -24783,6 +24792,9 @@ class Component extends DCLogic {
         };
         const crLabel9 = (d9) => (d9.estKey ? 'Sub CR · ' + d9.estKey : 'Main CR' + (mainCr9 ? ' · ' + mainCr9 : ''));
         const file9 = this.state.acDocFile || null;
+        // A type with no validity period: the form does not ask for one, and does not record one
+        // even if a date was typed under the type picked before this one.
+        const noExpiry9 = !!picked9 && picked9.neverExpires === true;
         const ready9 = !!picked9 && !!String(this.state.acDocNo || '').trim();
         return {
           acDocsSub: (this.state.acCName || 'This client').trim() + ' · add what you have, or skip',
@@ -24806,6 +24818,7 @@ class Component extends DCLogic {
           })),
           acDocIssue: this.state.acDocIssue || '', setAcDocIssue: (e9) => this.setState({ acDocIssue: e9.target.value }),
           acDocExpiry: this.state.acDocExpiry || '', setAcDocExpiry: (e9) => this.setState({ acDocExpiry: e9.target.value }),
+          acNoExpiry: noExpiry9, acHasExpiry: !noExpiry9,
           acDocsCount: docs9.length ? String(docs9.length) : '',
           acDocsNone: docs9.length === 0,
           acDocsList: docs9.map((d9, i9) => ({
@@ -24880,7 +24893,7 @@ class Component extends DCLogic {
                 docNumber: String(this.state.acDocNo || '').trim(),
                 issuingAuthority: String(this.state.acDocAuth || '').trim(),
                 issueDate: this.state.acDocIssue || '',
-                expiryDate: this.state.acDocExpiry || '',
+                expiryDate: noExpiry9 ? '' : (this.state.acDocExpiry || ''),
                 extra: extra9,
                 file: file9, fileName: file9 ? file9.name : '',
                 estKey: to9.estKey, isCr: !!to9.isCr, repeat: !!to9.repeat,
