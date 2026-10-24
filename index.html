@@ -11586,21 +11586,6 @@
             <sc-if value="{{ acDocErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ acDocErr }}</div></sc-if>
             <div class="ldf-land ac-land">
               <div class="ldf-col">
-                <div class="ldf-cap">The file<span>drag one in, or click</span></div>
-                <!-- data-acdrop, not onDrop: the runtime renders a whitelist of attributes and drops
-                     the ones it does not know, which is why the board's drag is wired by hand too.
-                     One listener on the document finds this by its marker. -->
-                <div data-acdrop="1" onClick="{{ acPickFile }}" style="border:1.5px dashed {{ acDropBorder }}; background:{{ acDropBg }}; border-radius:14px; padding:22px 14px; text-align:center; cursor:pointer; transition:background .15s, border-color .15s;">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:7px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                  <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
-                  <div style="font-size:10px; color:#A9A6B4; margin-top:3px;">{{ acDropNote }}</div>
-                </div>
-                <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:10px; padding:8px 10px;">
-                    <span style="flex:1; min-width:0; font-size:10px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acFileName }}</span>
-                    <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
-                  </div>
-                </sc-if>
                 <!-- What the reader made of it. Shown rather than silently applied: the fields it
                      filled are on the right, and a "medium" on an expiry is a cue to check the
                      paper, not a verdict. -->
@@ -11679,20 +11664,27 @@
                      — intake off, or a type no model handles — the details are typed and the only
                      way to attach the paper was back at the top of the other column. Same file,
                      same state, said again where the person actually finishes. -->
-                <sc-if value="{{ acNoFile }}" hint-placeholder-val="{{ true }}">
-                  <div onClick="{{ acPickFile }}" style="display:flex; align-items:center; gap:8px; border:1px dashed #DDD9E6; border-radius:11px; padding:9px 12px; cursor:pointer; background:#FCFBFE;" style-hover="border-color:#C9A2FF; background:#FBF7FF;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                    <span style="font-size:11px; font-weight:600; color:#6F6C7A;">Attach the scan</span>
-                    <span style="font-size:10px; color:#B4AFC4;">optional &middot; or drop it on the left</span>
-                  </div>
-                </sc-if>
-                <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:9px 12px;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                    <span style="flex:1; min-width:0; font-size:11px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acFileName }}</span>
-                    <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
-                  </div>
-                </sc-if>
+                <!-- THE PAPER ITSELF, AS ONE OF THIS DOCUMENT'S FIELDS. There were two controls
+                     for one file — a drop zone in the other column and this row — which reads as
+                     two attachments. It is one: the scan belongs to the document being entered, so
+                     it sits with the rest of what that document needs, and this row is both the
+                     click target and the drop target. -->
+                <div data-acdrop="1">
+                  <sc-if value="{{ acNoFile }}" hint-placeholder-val="{{ true }}">
+                    <div onClick="{{ acPickFile }}" style="display:flex; align-items:center; gap:8px; border:1.5px dashed {{ acDropBorder }}; background:{{ acDropBg }}; border-radius:11px; padding:10px 12px; cursor:pointer; transition:background .15s, border-color .15s;" style-hover="border-color:#C9A2FF;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                      <span style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</span>
+                      <span style="font-size:10px; color:#A9A6B4;">{{ acDropNote }}</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:10px 12px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                      <span style="flex:1; min-width:0; font-size:11px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ acFileName }}</span>
+                      <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
+                    </div>
+                  </sc-if>
+                </div>
                 <div>
                   <sc-if value="{{ acCanAddDoc }}" hint-placeholder-val="{{ false }}">
                     <button onClick="{{ acAddDoc }}" style="width:100%; background:#F5EEFF; color:#7C00FF; border:1px dashed #C9A2FF; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#EBDBFF;">+ Add this document</button>
@@ -18130,7 +18122,9 @@ class Component extends DCLogic {
      */
     this._acScan = (name9, data9) => {
       const st9 = this.state.sdStatus;
-      if (!st9 || !st9.ready) return;   // intake is off, or nobody has chosen a model
+      // Intake off, or on with only the built-in passport reader: a company document has no MRZ to
+      // find, so there is nothing to try. The file is attached either way.
+      if (!st9 || !st9.ready || !st9.model) return;
       this.setState({ acScanBusy: true, acScanMsg: '', acScanNote: '' });
       const t9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/intake/read', {
@@ -18138,7 +18132,9 @@ class Component extends DCLogic {
         body: JSON.stringify({ name: name9, data: data9 }),
       }).then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
-          if (!ok) return this.setState({ acScanBusy: false, acScanMsg: '', acDocErr: (j && j.error) || 'The scan could not be read.' });
+          if (!ok) return this.setState({ acScanBusy: false, acScanNote: '',
+            acScanMsg: 'The file is attached, but it could not be read — fill the details in yourself. '
+              + ((j && j.error) || 'The reader did not answer.') });
           const f8 = (j && j.fields) || {}, c8 = (j && j.confidence) || {};
           const types8 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
             .filter(t8 => (t8.subjectKind || 'employee') === 'company' && !t8.retired);
@@ -18163,7 +18159,8 @@ class Component extends DCLogic {
               f8.expiryHijri ? 'expiry as printed: ' + f8.expiryHijri : null, j.notes].filter(Boolean).join(' · '),
           });
         })
-        .catch(() => this.setState({ acScanBusy: false, acDocErr: 'Could not reach the reader — the file is still attached.' }));
+        .catch(() => this.setState({ acScanBusy: false, acScanNote: '',
+          acScanMsg: 'The file is attached, but the reader could not be reached — fill the details in yourself.' }));
     };
     /**
      * File the branch CRs and the documents collected on step 2 against the client just created.
@@ -24809,11 +24806,12 @@ class Component extends DCLogic {
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
           acDropBorder: this.state.acDropOver ? '#7C00FF' : '#D9CBF2',
           acDropBg: this.state.acDropOver ? '#F5EEFF' : '#FBFAFE',
-          acDropTitle: this.state.acScanBusy ? 'Reading it…' : this.state.acDropOver ? 'Drop it here' : 'Drag a file in',
+          acDropTitle: this.state.acScanBusy ? 'Reading it…' : this.state.acDropOver ? 'Drop it here' : 'Attach the scan',
           // Whether a dropped file gets read at all is the firm's switch, not this form's. Said here
           // so nobody drops a scan expecting it to be read when document intake is off.
           acDropNote: this.state.acScanBusy ? 'This takes a few seconds'
-            : (this.state.sdStatus && this.state.sdStatus.ready) ? 'PDF, JPG, PNG — read automatically' : 'PDF, JPG, PNG — up to 4 MB',
+            : (this.state.sdStatus && this.state.sdStatus.ready && this.state.sdStatus.model) ? 'optional · drop one here and it is read for you'
+            : 'optional · drag one here, or click · PDF, JPG, PNG',
           acScanShow: !!this.state.acScanMsg,
           acScanMsg: this.state.acScanMsg || '',
           acScanNote: this.state.acScanNote || '', acScanNoteShow: !!this.state.acScanNote,
