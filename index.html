@@ -10599,6 +10599,13 @@
                 <input data-fm-field="name" value="{{ eName }}" onChange="{{ setEName }}" placeholder="e.g. Priya Sharma" class="{{ eNameCls }}">
                 <sc-if value="{{ eErrName }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ eErrName }}</div></sc-if>
               </div>
+              <!-- The same name as the government writes it, suggested from the English. It is a
+                   transliteration — the SOUND of the name, which is what a passport and an Iqama
+                   carry — so it is offered and not asserted, and the hint says which it is. -->
+              <div class="fm-wide">
+                <div style="display:flex; align-items:center; gap:8px;"><label class="fm-lab">Full name (Arabic)</label><span style="font-size:9px; color:#B4AFC4;">{{ eArHint }}</span></div>
+                <input value="{{ eNameAr }}" onChange="{{ setENameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp">
+              </div>
               <sc-if value="{{ eCrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-wide"><label class="fm-lab">CR this person works under</label><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ eCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
 
               <div>
@@ -22227,7 +22234,7 @@ class Component extends DCLogic {
       setEDob: (e) => this.setState({ eDob: e.target.value }),
       setENat: (e) => this.setState({ eNat: e.target.value }),
       // From the all-Employees screen: no client is implied, so the picker is shown and starts empty.
-      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
+      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eNameAr: '', eArTouched: false, eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
       // Nationality is a code now, chosen from the server's list rather than typed. A text box with
       // the placeholder "e.g. Saudi" invites four spellings of one country, and a headcount that
       // misses a spelling under-reports — which is the direction that gets a client in trouble.
@@ -22248,7 +22255,13 @@ class Component extends DCLogic {
       ddEJobCatVal: this.state.eJobCat || _JOB_CAT_OPTS[0],
       closeEmp: () => this.setState({ empModal: false }),
       // Typing into the field clears its own complaint — an error that outlives the fix teaches people to ignore errors.
-      setEName: (e) => this.setState({ eName: e.target.value, eError: '', eErrField: '' }),
+      // The Arabic follows the English UNTIL somebody types in it. After that the English stops
+      // overwriting their work — a suggestion that keeps undoing a correction is worse than none.
+      setEName: (e) => this.setState({ eName: e.target.value, eError: '', eErrField: '',
+        ...(this.state.eArTouched ? {} : { eNameAr: arabicFromLatin(e.target.value) }) }),
+      eNameAr: this.state.eNameAr || '',
+      eArHint: this.state.eArTouched ? 'edited by you' : (this.state.eNameAr ? 'suggested — correct it if it is wrong' : ''),
+      setENameAr: (e) => this.setState({ eNameAr: e.target.value, eArTouched: true }),
       ...(() => { const co9 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c9 => c9.name === this.state.eClient); const id9 = co9 && co9.id;
         return { eCrShow: !!(this.state.empModal && id9 && this._crMulti(id9)), eCrChips: this.state.empModal && id9 ? this._crChips(id9, this.state.eEst, (v9) => this.setState({ eEst: v9 })) : [] }; })(),
       setERole: (e) => this.setState({ eRole: e.target.value, eError: '', eErrField: '' }),
@@ -22323,7 +22336,7 @@ class Component extends DCLogic {
         const docs9 = (st.eDocs || []).filter(d9 => d9.type && d9.expiry);
         fetch((this._apiBase || 'http://localhost:4100') + '/api/employees', {
           method: 'POST', headers: H9,
-          body: JSON.stringify({ name: st.eName.trim(), role: st.eRole.trim(), companyId: co9.id, status: 'valid',
+          body: JSON.stringify({ name: st.eName.trim(), nameAr: (st.eNameAr || '').trim() || null, role: st.eRole.trim(), companyId: co9.id, status: 'valid',
             // Columns, not customData: a prerequisite reads these, and a fact with two homes is a
             // check that passes on the empty one.
             dob: (st.eDob || '').trim() || null, nationality: (st.eNat || '').trim() || null,
@@ -23426,6 +23439,7 @@ class Component extends DCLogic {
       clDetailApi.cdAddEmp = () => this.setState({
         empModal: true, eError: '', eErrField: '',
         eClient: clRow.name, eClientLocked: true, eEst: this.state.cdCrFilter && _crAll.some(x9 => x9.id === this.state.cdCrFilter) ? this.state.cdCrFilter : null,
+        eNameAr: '', eArTouched: false,
         eDob: '', eNat: '', eSalary: '', eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0],
       });
       clDetailApi.wfOpenBand = () => this.setState({
