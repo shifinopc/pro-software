@@ -18,6 +18,8 @@
 import { prisma } from "../src/db.js";
 
 type Field = { id: string; label: string; type: string; required: boolean; purpose: string; options: string };
+// No purpose on any of these: purpose says which run variable a field feeds, and the number, issue
+// date and expiry that renewals actually move are columns on every document, not fields.
 const f = (id: string, label: string, type = "text"): Field => ({ id, label, type, required: false, purpose: "", options: "" });
 
 const TYPES: { name: string; authority: string; leadDays: number; neverExpires?: boolean; fields?: Field[] }[] = [
@@ -43,6 +45,34 @@ const TYPES: { name: string; authority: string; leadDays: number; neverExpires?:
   // ladder a client is measured on is configured per client — a hardcoded list here would assert a
   // scheme that may not be theirs.
   { name: "Saudization Certificate", authority: "Qiwa", leadDays: 30, fields: [f("band", "Nitaqat band")] },
+
+  // The periodic inspection. Its own type because it has its own expiry: a car can be insured and
+  // registered and still be off the road for a lapsed Fahas, and a renewals queue that tracks one
+  // date per vehicle would never say so.
+  { name: "Vehicle Inspection (Fahas)", authority: "Fahas", leadDays: 30, fields: [f("plate", "Plate number")] },
+];
+
+/**
+ * FIELDS ADDED TO TYPES THAT ALREADY EXIST.
+ *
+ * Add-only, matched by field id. A type somebody has edited keeps every field they put on it, and
+ * nothing is renamed or removed — a document captured under a type keeps its values keyed by these
+ * ids, so changing one would orphan what is already on file.
+ *
+ * WHY THE CAR'S IDENTITY SITS ON THE REGISTRATION AND NOWHERE ELSE. Owner, year and model are facts
+ * about the vehicle, not about a particular paper. The Istimara is the document that states them,
+ * so it carries them once; the insurance and the inspection carry the plate, which is what ties the
+ * three together, and their own dates. Repeating make and year on all three would mean typing one
+ * car three times and letting the three copies drift.
+ */
+const ADD_FIELDS: { type: string; fields: Field[] }[] = [
+  { type: "Vehicle Registration", fields: [
+    f("plate", "Plate number"),
+    f("vehicle", "Vehicle name / model"),
+    f("year", "Year of manufacture", "number"),
+    f("owner", "Owner"),
+  ] },
+  { type: "Vehicle Insurance", fields: [f("plate", "Plate number")] },
 ];
 
 /**
@@ -57,6 +87,9 @@ const CENTRES: { name: string; sub: string }[] = [
   { name: "ZATCA", sub: "Tax and customs — VAT, e-invoicing, certificates" },
   { name: "Baladiya", sub: "Municipality — shop and premises licensing" },
   { name: "Ejar", sub: "Tenancy contracts" },
+  // Spelled out, because the list already holds Fasah — the customs single window — and the two are
+  // one letter apart on screen.
+  { name: "Fahas", sub: "Periodic vehicle inspection (MVPI) — the car is driven there" },
 ];
 
 const write = process.argv.includes("--write");
@@ -66,9 +99,24 @@ const haveCentres = new Set((await prisma.govCenter.findMany({ where: { name: { 
 const todoTypes = TYPES.filter(t => !haveTypes.has(t.name));
 const todoCentres = CENTRES.filter(c => !haveCentres.has(c.name));
 
+// Fields missing from types that already exist. Read before anything is written, so the dry run
+// reports exactly what the real run will do.
+const fieldWork: { id: string; name: string; add: Field[] }[] = [];
+for (const want of ADD_FIELDS) {
+  const row = await prisma.documentType.findUnique({ where: { name: want.type }, select: { id: true, name: true, fields: true } });
+  if (!row) { console.log(`not found     ${want.type} — no fields added`); continue; }
+  const have = new Set((Array.isArray(row.fields) ? row.fields : []).map((x: any) => String(x?.id ?? "")));
+  const add = want.fields.filter(x => !have.has(x.id));
+  if (add.length) fieldWork.push({ id: row.id, name: row.name, add });
+}
+
 const say = (had: boolean, what: string) => console.log(`${had ? "already there" : write ? "creating    " : "would create"}  ${what}`);
 for (const c of CENTRES) say(haveCentres.has(c.name), `government centre · ${c.name}`);
 for (const t of TYPES) say(haveTypes.has(t.name), t.name);
+for (const w of ADD_FIELDS) {
+  const job = fieldWork.find(j => j.name === w.type);
+  console.log(`${job ? (write ? "adding fields " : "would add     ") + job.add.map(x => x.label).join(", ") : "fields present"}  on ${w.type}`);
+}
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
@@ -81,6 +129,14 @@ if (write) {
       })),
     });
   }
+  // Appended, never reordered or replaced: the fields a person added themselves stay where they put
+  // them, and every document already captured keeps its values.
+  for (const job of fieldWork) {
+    const row = await prisma.documentType.findUnique({ where: { id: job.id }, select: { fields: true } });
+    const current = Array.isArray(row?.fields) ? (row!.fields as any[]) : [];
+    await prisma.documentType.update({ where: { id: job.id }, data: { fields: [...current, ...job.add] as any } });
+  }
 }
-console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s)`);
+console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
+  + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s)`);
 await prisma.$disconnect();
