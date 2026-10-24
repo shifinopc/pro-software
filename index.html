@@ -11670,11 +11670,26 @@
                      it sits with the rest of what that document needs, and this row is both the
                      click target and the drop target. -->
                 <div data-acdrop="1">
-                  <sc-if value="{{ acNoFile }}" hint-placeholder-val="{{ true }}">
-                    <div onClick="{{ acPickFile }}" style="display:flex; align-items:center; gap:8px; border:1.5px dashed {{ acDropBorder }}; background:{{ acDropBg }}; border-radius:11px; padding:10px 12px; cursor:pointer; transition:background .15s, border-color .15s;" style-hover="border-color:#C9A2FF;">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                      <span style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</span>
-                      <span style="font-size:10px; color:#A9A6B4;">{{ acDropNote }}</span>
+                  <!-- A target, not a line of text. It does two jobs and both want a box you can
+                       aim a file at: dropped here the document is read and the boxes above fill
+                       themselves, and with nothing to read it is simply how the paper is attached.
+
+                       TWO ZONES, SWAPPED, rather than one with its colours bound. A style attribute
+                       is fixed at the element's first render here — the box kept its idle colours
+                       while its own text read "Drop it here" — so the lit state is a different
+                       element, which is how every other state in this file is drawn. -->
+                  <sc-if value="{{ acDropCold }}" hint-placeholder-val="{{ true }}">
+                    <div onClick="{{ acPickFile }}" style="border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ acDropNote }}</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ acDropHot }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ acDropNote }}</div>
                     </div>
                   </sc-if>
                   <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
@@ -24804,14 +24819,14 @@ class Component extends DCLogic {
             remove: () => this.setState({ acDocs: docs9.filter((_, k9) => k9 !== i9) }),
           })),
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
-          acDropBorder: this.state.acDropOver ? '#7C00FF' : '#D9CBF2',
-          acDropBg: this.state.acDropOver ? '#F5EEFF' : '#FBFAFE',
-          acDropTitle: this.state.acScanBusy ? 'Reading it…' : this.state.acDropOver ? 'Drop it here' : 'Attach the scan',
+          acDropCold: !file9 && !this.state.acDropOver,
+          acDropHot: !file9 && !!this.state.acDropOver,
+          acDropTitle: this.state.acScanBusy ? 'Reading it…' : this.state.acDropOver ? 'Drop it here' : 'Drag the scan in, or click',
           // Whether a dropped file gets read at all is the firm's switch, not this form's. Said here
           // so nobody drops a scan expecting it to be read when document intake is off.
           acDropNote: this.state.acScanBusy ? 'This takes a few seconds'
-            : (this.state.sdStatus && this.state.sdStatus.ready && this.state.sdStatus.model) ? 'optional · drop one here and it is read for you'
-            : 'optional · drag one here, or click · PDF, JPG, PNG',
+            : (this.state.sdStatus && this.state.sdStatus.ready && this.state.sdStatus.model) ? 'PDF, JPG, PNG — read for you, and the boxes above fill in'
+            : 'PDF, JPG, PNG — optional',
           acScanShow: !!this.state.acScanMsg,
           acScanMsg: this.state.acScanMsg || '',
           acScanNote: this.state.acScanNote || '', acScanNoteShow: !!this.state.acScanNote,
