@@ -242,6 +242,61 @@ function readUpload(asset: { id: string; name: string; private: boolean; path: s
   return { data: fs.readFileSync(file), mediaType, fileName: asset.name };
 }
 
+/**
+ * READ A SCAN AND RETURN WHAT IT SAYS, WITHOUT WRITING ANYTHING.
+ *
+ * For the Add-client form, where the documents are collected BEFORE the client exists: there is no
+ * companyId yet, so there is nothing for a DocumentSuggestion to belong to and nothing for
+ * checkExtraction to check the reading against. The bytes are passed in and never stored — a client
+ * somebody abandons halfway leaves no file on the disk.
+ *
+ * Deliberately NOT a second way to send a document to a model: it goes through the same switch, the
+ * same admin-chosen model and the same free local passport reader first. If intake is off, this is
+ * off.
+ *
+ * The caller still types nothing it does not want to: what comes back is a suggestion on a form,
+ * with the confidence per field, which a person corrects before anything is saved.
+ */
+export async function readScan(input: { data: Buffer; fileName: string; model?: string | null; extractor?: Extractor }) {
+  const status = await intakeStatus();
+  if (!status.ready) throw new IntakeError(status.why ?? "Document intake is not available.", 409);
+  const model = input.model !== undefined ? input.model : status.model;
+
+  const ext = path.extname(input.fileName || "").toLowerCase();
+  const mediaType = ext === ".pdf" ? "application/pdf" : ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp"
+    : (ext === ".jpg" || ext === ".jpeg") ? "image/jpeg" : "";
+  if (!mediaType || (mediaType !== "application/pdf" && !SUPPORTED_IMAGE.has(mediaType))) throw new IntakeError("The reader accepts PDF, JPG, PNG or WEBP scans.");
+  const file = { data: input.data, mediaType, fileName: input.fileName };
+
+  const types = await prisma.documentType.findMany({ where: { retired: false }, select: { name: true, subjectKind: true, authority: true } });
+  let ex: Extraction; let usedModel = BUILTIN_READER;
+  if (input.extractor) {
+    ex = await input.extractor(file, types.map(t => t.name), model ?? BUILTIN_READER);
+    usedModel = model ?? BUILTIN_READER;
+  } else {
+    // Free and local first, exactly as createSuggestion does it.
+    const mrz = await readPassportMrz(file);
+    if (mrz.extraction) ex = mrz.extraction;
+    else if (model) { ex = await modelExtractor(file, types.map(t => t.name), model); usedModel = model; }
+    else throw new IntakeError(`${mrz.why} Other documents need a model, and none is chosen for document intake.`, 422);
+  }
+
+  // Match the name the model read to a type this system actually has, through the same alias table
+  // the checks use. An unmatched reading still returns its fields — the person picks the type.
+  const read = String(ex.documentType ?? "").trim();
+  const dt = types.find(t => t.name.toLowerCase() === (ALIAS[read.toLowerCase()] ?? read.toLowerCase())) ?? null;
+  return {
+    model: usedModel,
+    read: ex.documentType ?? null,
+    docType: dt?.name ?? null,
+    subjectKind: dt?.subjectKind ?? null,
+    authority: dt?.authority ?? null,
+    fields: ex.fields,
+    confidence: ex.confidence,
+    notes: ex.notes || null,
+  };
+}
+
 export async function createSuggestion(input: {
   companyId: string; employeeId: string | null; fileAssetId: string; actorId: string | null; privateDir: string;
   extractor?: Extractor; ignoreSwitch?: boolean;

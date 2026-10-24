@@ -34,7 +34,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
          replyTimes } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
-import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, IntakeError } from "./intake-agent.js";
+import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, readScan, IntakeError } from "./intake-agent.js";
 import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
 import { qiwaOccupations } from "./agent-data-quality.js";
@@ -292,6 +292,7 @@ app.use("/api", (req, res, next) => (req.path === "/health" ? next() : apiLimite
 // handlers cap the real sizes themselves (see /api/upload).
 const BIG_BODY = [
   /^\/api\/upload$/,
+  /^\/api\/intake\/read$/,                                       // a scan read in memory, never stored
   /^\/api\/packs\//,                                             // country pack JSON
   /^\/api\/proposal-templates(\/[^/]+)?$/,                       // .docx template
   /^\/api\/documents\/[^/]+\/file$/,
@@ -4472,6 +4473,31 @@ app.put("/api/intake/settings", requireAuth, requireStaff, async (req, res) => {
   const next = await setIntakeSettings({ enabled: typeof body.enabled === "boolean" ? body.enabled : undefined, model: body.model ? String(body.model) : undefined });
   await logAudit({ action: "intake.settings", actorId: a.sub, target: "intakeAgent", detail: `enabled=${next.enabled} model=${next.model}`, ip: clientIp(req) });
   res.json(next);
+});
+
+/**
+ * Read a scan and answer with what it says. NOTHING IS STORED — not the file, not a suggestion.
+ *
+ * For the Add-client form, which collects a new client's documents before the client exists. The
+ * same switch and the same admin-chosen model as every other reading; the audit line is written
+ * because a document was sent to a reader, which is the fact worth keeping whether or not the
+ * client was ever created.
+ */
+app.post("/api/intake/read", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const name = String(req.body?.name ?? "").trim();
+    const data = String(req.body?.data ?? "");
+    if (!name || !data) return res.status(400).json({ error: "A file is required" });
+    const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
+    if (!buf.length || buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "File must be under 4 MB" });
+    // The name got a vote; the bytes get the decision — the same rule as the upload route.
+    const sniffed = sniffFileType(buf);
+    if (!sniffed || sniffed === ".svg") return res.status(400).json({ error: "That file is not a PDF, JPG, PNG or WEBP — check you picked the right one" });
+    const out = await readScan({ data: buf, fileName: name.replace(/\.[^.]*$/, "") + sniffed });
+    await logAudit({ action: "intake.read", actorId: a?.sub, target: "new client", detail: `${out.docType ?? out.read ?? "unrecognised"} · ${out.model} · not stored`, ip: clientIp(req) });
+    res.json(out);
+  } catch (e: any) { return intakeFail(res, e, "intake.read"); }
 });
 
 /** Read an uploaded scan and store what was read as a pending suggestion. */

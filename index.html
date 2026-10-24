@@ -11627,6 +11627,15 @@
                     <span onClick="{{ acClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
                   </div>
                 </sc-if>
+                <!-- What the reader made of it. Shown rather than silently applied: the fields it
+                     filled are on the right, and a "medium" on an expiry is a cue to check the
+                     paper, not a verdict. -->
+                <sc-if value="{{ acScanShow }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:9px 11px;">
+                    <div style="font-size:10px; font-weight:700; color:#5B21B6; line-height:1.5;">{{ acScanMsg }}</div>
+                    <sc-if value="{{ acScanNoteShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#8C7BA6; margin-top:3px; line-height:1.5;">{{ acScanNote }}</div></sc-if>
+                  </div>
+                </sc-if>
                 <div class="ldf-cap">Added<span>{{ acDocsCount }}</span></div>
                 <sc-if value="{{ acDocsNone }}" hint-placeholder-val="{{ true }}">
                   <div style="font-size:10px; color:#B4AFC4; line-height:1.6;">Nothing yet. A client can be created without any — these can be added from the client at any time.</div>
@@ -18111,9 +18120,63 @@ class Component extends DCLogic {
       if (f9.size > 4 * 1024 * 1024) return this.setState({ acDocErr: f9.name + ' is ' + Math.round(f9.size / 1048576) + ' MB — the limit is 4 MB.' });
       if (!/\.(pdf|jpe?g|png|webp)$/i.test(f9.name)) return this.setState({ acDocErr: 'Only PDF, JPG, PNG or WEBP can be attached.' });
       const r9 = new FileReader();
-      r9.onload = () => this.setState({ acDocFile: { name: f9.name, size: f9.size, data: String(r9.result || '') }, acDocErr: '' });
+      r9.onload = () => {
+        const data9 = String(r9.result || '');
+        this.setState({ acDocFile: { name: f9.name, size: f9.size, data: data9 }, acDocErr: '' });
+        this._acScan(f9.name, data9);
+      };
       r9.onerror = () => this.setState({ acDocErr: 'That file could not be read.' });
       r9.readAsDataURL(f9);
+    };
+    /**
+     * READ THE SCAN AND FILL IN WHAT IT SAYS.
+     *
+     * The same reader the Scan document dialog uses, through the same switch and the same
+     * admin-chosen model — this is not a second route out of the building. /api/intake/read stores
+     * nothing: the bytes are read in memory and the answer comes back, because at this point there
+     * is no client for a file or a suggestion to belong to.
+     *
+     * IT FILLS BLANKS ONLY. Overwriting something a person typed would make the reading a thing to
+     * undo rather than a head start, and the officer is the one who signs off on these numbers.
+     * What it read and how sure it was of each field is shown beside the form, so a "medium" on an
+     * expiry date is checked against the paper rather than taken on trust.
+     */
+    this._acScan = (name9, data9) => {
+      const st9 = this.state.sdStatus;
+      if (!st9 || !st9.ready) return;   // intake is off, or nobody has chosen a model
+      this.setState({ acScanBusy: true, acScanMsg: '', acScanNote: '' });
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/intake/read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        body: JSON.stringify({ name: name9, data: data9 }),
+      }).then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.setState({ acScanBusy: false, acScanMsg: '', acDocErr: (j && j.error) || 'The scan could not be read.' });
+          const f8 = (j && j.fields) || {}, c8 = (j && j.confidence) || {};
+          const types8 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
+            .filter(t8 => (t8.subjectKind || 'employee') === 'company' && !t8.retired);
+          // An Iqama read here is a person's paper on a form that files company documents: the
+          // reading is reported, but it is not silently filed against the company.
+          const dt8 = j.docType ? types8.find(t8 => t8.name === j.docType) : null;
+          const next8 = {}, filled8 = [];
+          const put8 = (key8, val8, what8) => { if (val8 && !String(this.state[key8] || '').trim()) { next8[key8] = val8; filled8.push(what8); } };
+          if (dt8 && !this.state.acDocType) { next8.acDocType = dt8.name; next8.acDocExtra = {}; filled8.push('type'); if (j.authority) next8.acDocAuth = j.authority; }
+          put8('acDocNo', f8.number, 'number');
+          put8('acDocIssue', f8.issueDate, 'issue date');
+          put8('acDocExpiry', f8.expiry, 'expiry');
+          const sure8 = (k8) => (c8[k8] ? ' (' + c8[k8] + ')' : '');
+          const saw8 = j.docType || j.read || 'something it did not recognise';
+          this.setState({
+            ...next8, acScanBusy: false,
+            acScanMsg: 'Read as ' + saw8 + (filled8.length ? ' — filled in the ' + filled8.join(', ') : ' — nothing left to fill in')
+              + (dt8 ? '' : j.read ? ', which is not a company document type here, so pick the type yourself' : ''),
+            // The Hijri date is reported, never converted: converting it here would be this form
+            // asserting a Gregorian date that is not printed on the paper.
+            acScanNote: [f8.number ? 'number' + sure8('number') : null, f8.expiry ? 'expiry' + sure8('expiry') : null,
+              f8.expiryHijri ? 'expiry as printed: ' + f8.expiryHijri : null, j.notes].filter(Boolean).join(' · '),
+          });
+        })
+        .catch(() => this.setState({ acScanBusy: false, acDocErr: 'Could not reach the reader — the file is still attached.' }));
     };
     /**
      * File the branch CRs and the documents collected on step 2 against the client just created.
@@ -24655,7 +24718,7 @@ class Component extends DCLogic {
       showAddClient: !!this.state.addClient,
       acFormStep: acStep === 'form', acDocsStep: acStep === 'docs', acDoneStep: acStep === 'done',
       openAddClient: () => this.setState({ addClient: true, acStep: 'form', acCName: '', acNameAr: '', acArTouched: false, acCr: '', acEmail: '', acPhone: '', acContact: '', acStatus2: 'Prospect', acGroup: 'None', acRep: 'Unassigned', acPro: 'Whoever is free', acPkg: 'Prospect / unassigned', acErr2: '',
-        acType: 'Saudi Company', acDocs: [], acSubCrs: [], acDocEst: '', acCrAdding: false, acCrNew: '', acCrNewCity: '', acDocType: '', acDocNo: '', acDocAuth: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '', acDropOver: false, acActivity: '', acVat: '', acGosi: '', acMol: '', acChamber: '', acShortAddr: '', acBuilding: '', acStreet: '', acSecondary: '', acDistrict: '', acPostal: '', acCity: '', acMisa: '', acDesignation: '' }),
+        acType: 'Saudi Company', acDocs: [], acSubCrs: [], acDocEst: '', acCrAdding: false, acCrNew: '', acCrNewCity: '', acDocType: '', acDocNo: '', acDocAuth: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '', acDropOver: false, acScanBusy: false, acScanMsg: '', acScanNote: '', acActivity: '', acVat: '', acGosi: '', acMol: '', acChamber: '', acShortAddr: '', acBuilding: '', acStreet: '', acSecondary: '', acDistrict: '', acPostal: '', acCity: '', acMisa: '', acDesignation: '' }),
       closeAddClient: () => this.setState({ addClient: false }),
       acCName: this.state.acCName || '', acCr: this.state.acCr || '', acEmail: this.state.acEmail || '', acPhone: this.state.acPhone || '', acContact: this.state.acContact || '',
       acNameAr: this.state.acNameAr || '',
@@ -24750,8 +24813,14 @@ class Component extends DCLogic {
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
           acDropBorder: this.state.acDropOver ? '#7C00FF' : '#D9CBF2',
           acDropBg: this.state.acDropOver ? '#F5EEFF' : '#FBFAFE',
-          acDropTitle: this.state.acDropOver ? 'Drop it here' : 'Drag a file in',
-          acDropNote: 'PDF, JPG, PNG — up to 4 MB',
+          acDropTitle: this.state.acScanBusy ? 'Reading it…' : this.state.acDropOver ? 'Drop it here' : 'Drag a file in',
+          // Whether a dropped file gets read at all is the firm's switch, not this form's. Said here
+          // so nobody drops a scan expecting it to be read when document intake is off.
+          acDropNote: this.state.acScanBusy ? 'This takes a few seconds'
+            : (this.state.sdStatus && this.state.sdStatus.ready) ? 'PDF, JPG, PNG — read automatically' : 'PDF, JPG, PNG — up to 4 MB',
+          acScanShow: !!this.state.acScanMsg,
+          acScanMsg: this.state.acScanMsg || '',
+          acScanNote: this.state.acScanNote || '', acScanNoteShow: !!this.state.acScanNote,
           acHasFile: !!file9, acFileName: file9 ? file9.name : '',
           acClearFile: () => this.setState({ acDocFile: null }),
           acPickFile: () => this._acPickFile(),
@@ -24806,7 +24875,8 @@ class Component extends DCLogic {
               // Cleared for the next one. The type is kept: a client usually arrives with several
               // documents of different types, but typing the same type twice in a row is common too
               // and re-picking it every time is the kind of friction that ends in a spreadsheet.
-              acDocNo: '', acDocAuth: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '',
+              acDocNo: '', acDocIssue: '', acDocExpiry: '', acDocExtra: {}, acDocFile: null, acDocErr: '',
+              acScanMsg: '', acScanNote: '',
             });
           },
           acGoDocs: () => {
@@ -24814,6 +24884,8 @@ class Component extends DCLogic {
             // Checked here, not at the end: the server refuses a client without one, and finding
             // that out after a folder of documents has been typed in is the worst place to learn it.
             if (!(this.state.acCr || '').trim()) return this.setState({ acErr2: 'CR number is required' });
+            // Is the reader available? Asked once, when the step that uses it opens.
+            this._sdLoadStatus && this._sdLoadStatus();
             this.setState({ acStep: 'docs', acErr2: '' });
           },
           acBackToForm: () => this.setState({ acStep: 'form', acDocErr: '' }),
