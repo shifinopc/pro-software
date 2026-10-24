@@ -76,6 +76,20 @@ const ADD_FIELDS: { type: string; fields: Field[] }[] = [
 ];
 
 /**
+ * AUTHORITIES CORRECTED ON TYPES THAT ALREADY EXIST.
+ *
+ * Only when the row still carries the value the pack installed — `from` has to match, so a firm
+ * that already chose something else keeps their choice. The row is marked packModified, which is
+ * what makes a future pack upgrade show a diff instead of quietly putting the old value back.
+ *
+ * A motor policy is issued by the insurer. Tamm is where you look it up, which is not the same
+ * thing, and the authority on a document is what the visit queue and the credential vault match on.
+ */
+const FIX_AUTHORITY: { type: string; from: string; to: string }[] = [
+  { type: "Vehicle Insurance", from: "Tamm", to: "Insurer" },
+];
+
+/**
  * The authorities those types are issued by, as GOVERNMENT CENTRES.
  *
  * A document's authority is picked from this list, not typed, so a type whose authority is not a
@@ -110,6 +124,16 @@ for (const want of ADD_FIELDS) {
   if (add.length) fieldWork.push({ id: row.id, name: row.name, add });
 }
 
+// Authorities still on the pack's value. Read before anything is written, same as the fields.
+const authWork: { id: string; type: string; to: string }[] = [];
+for (const want of FIX_AUTHORITY) {
+  const row = await prisma.documentType.findUnique({ where: { name: want.type }, select: { id: true, authority: true } });
+  if (!row) { console.log(`not found     ${want.type} — authority unchanged`); continue; }
+  if (row.authority === want.to) continue;
+  if (row.authority !== want.from) { console.log(`left alone    ${want.type} · authority is "${row.authority}", not the pack's "${want.from}"`); continue; }
+  authWork.push({ id: row.id, type: want.type, to: want.to });
+}
+
 const say = (had: boolean, what: string) => console.log(`${had ? "already there" : write ? "creating    " : "would create"}  ${what}`);
 for (const c of CENTRES) say(haveCentres.has(c.name), `government centre · ${c.name}`);
 for (const t of TYPES) say(haveTypes.has(t.name), t.name);
@@ -117,6 +141,7 @@ for (const w of ADD_FIELDS) {
   const job = fieldWork.find(j => j.name === w.type);
   console.log(`${job ? (write ? "adding fields " : "would add     ") + job.add.map(x => x.label).join(", ") : "fields present"}  on ${w.type}`);
 }
+for (const job of authWork) console.log(`${write ? "setting      " : "would set    "} ${job.type} · authority → ${job.to}`);
 
 if (write) {
   // Centres first: a type names its authority, so the centre it names should already exist.
@@ -136,7 +161,11 @@ if (write) {
     const current = Array.isArray(row?.fields) ? (row!.fields as any[]) : [];
     await prisma.documentType.update({ where: { id: job.id }, data: { fields: [...current, ...job.add] as any } });
   }
+  for (const job of authWork) {
+    await prisma.documentType.update({ where: { id: job.id }, data: { authority: job.to, packModified: true } });
+  }
 }
 console.log(`\n${write ? "created" : "would create"} ${todoCentres.length} centre(s) and ${todoTypes.length} type(s), `
-  + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s)`);
+  + `${write ? "added" : "would add"} ${fieldWork.reduce((n, j) => n + j.add.length, 0)} field(s), `
+  + `${write ? "set" : "would set"} ${authWork.length} authority(ies)`);
 await prisma.$disconnect();
