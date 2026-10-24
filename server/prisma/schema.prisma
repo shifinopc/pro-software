@@ -34,11 +34,41 @@ model Company {
   /// Captured at the moment the lead becomes a client instead; see `lifecycle`.
   cr        String?
   industry  String?
+
+  // ── WHAT THE AUTHORITIES KNOW THIS COMPANY BY ───────────────────────────────────────────────
+  //
+  // Every one of these is an IDENTIFIER, not a quantity, so they are strings: a VAT number is
+  // fifteen digits and overflows Int, and a building number or postal code that loses its leading
+  // zero is a different address. Nothing is computed from them; they are copied onto filings.
+  mainActivity    String?
+  vatNumber       String?
+  gosiNumber      String? // GOSI subscription number
+  molId           String? // Ministry of Labour establishment id
+  chamberNumber   String? // Chamber of Commerce membership number
+
+  // ── THE NATIONAL ADDRESS ────────────────────────────────────────────────────────────────────
+  //
+  // A Saudi address is a fixed shape and the authorities want every part of it. `shortAddress` is
+  // the four-letter-plus-four-digit code that stands for the whole thing; the rest is what it
+  // expands to, kept because a form that asks for the parts cannot be filled from the code alone.
+  // `city` already exists below and is the last line of this block.
+  shortAddress    String?
+  buildingNumber  String?
+  street          String?
+  secondaryNumber String?
+  district        String?
+  postalCode      String?
+
+  // What kind of entity it is, which decides what else is asked: a foreign investment company has
+  // a MISA licence and no other type does.
+  companyType     String?
+  misaLicense     String?
   employees Int     @default(0)
   status    String  @default("active")
   overdue   Int     @default(0)
   expiring  Int     @default(0)
-  contact   String?
+  contact   String? // the person's name
+  contactDesignation String? // what they are to the company — who to ask for, and about what
   email     String?
   phone     String?
   city      String?
