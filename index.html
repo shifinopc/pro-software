@@ -10552,6 +10552,7 @@
     <div onClick="{{ closeEmp }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:1080px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
 
+        <sc-if value="{{ edFormStep }}" hint-placeholder-val="{{ true }}">
         <div class="fm-head">
           <div style="min-width:0;">
             <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Add employee</div>
@@ -10569,7 +10570,9 @@
           </div>
           <div onClick="{{ closeEmp }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
+        </sc-if>
 
+        <sc-if value="{{ edFormStep }}" hint-placeholder-val="{{ true }}">
         <div class="fm-body" data-hidescroll="true">
           <!-- Green says "here is your allowance". Until a client is chosen there is no allowance to
                report, so the strip goes neutral rather than dressing a prompt up as good news. -->
@@ -10812,43 +10815,160 @@
 
           </div>
 
-          <!-- ── Documents ── full width, because a row needs the width. -->
-          <div class="fm-sec">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
-              <div>
-                <div class="fm-sec-h">Documents</div>
-                <div class="fm-sec-s">A row with a type and an expiry becomes a tracked compliance record.</div>
-              </div>
-              <span onClick="{{ addEDoc }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; flex-shrink:0; padding:2px 4px;" style-hover="text-decoration:underline;">+ Add row</span>
+        </div>
+        </sc-if>
+        <sc-if value="{{ edDocsStep }}" hint-placeholder-val="{{ false }}">
+          <div class="fm-head">
+            <div style="min-width:0;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Their documents</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ edDocsSub }}</div>
             </div>
-            <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px;">
-              <sc-for list="{{ eDocRows }}" as="d" hint-placeholder-count="1">
-                <div class="fm-row">
-                  <div class="fm-selwrap">
-                    <div data-dd data-open="{{ d.ddOpen }}" onClick="{{ d.ddToggle }}" class="fm-inp fm-sel"><span>{{ d.type }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
-                    <sc-if value="{{ d.ddOpen }}" hint-placeholder-val="{{ false }}">
-                      <div data-dd data-hidescroll="true" class="fm-dd">
-                        <sc-for list="{{ d.ddOptions }}" as="o" hint-placeholder-count="4">
-                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span><sc-if value="{{ o.active }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></div>
+            <div onClick="{{ closeAddClient }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+          </div>
+          <div class="fm-body">
+            <sc-if value="{{ edDocErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ edDocErr }}</div></sc-if>
+            <div class="ldf-land ac-land">
+              <div class="ldf-col">
+                <!-- What the reader made of it. Shown rather than silently applied: the fields it
+                     filled are on the right, and a "medium" on an expiry is a cue to check the
+                     paper, not a verdict. -->
+                <sc-if value="{{ edScanShow }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:9px 11px;">
+                    <div style="font-size:10px; font-weight:700; color:#5B21B6; line-height:1.5;">{{ edScanMsg }}</div>
+                    <sc-if value="{{ edScanNoteShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#8C7BA6; margin-top:3px; line-height:1.5;">{{ edScanNote }}</div></sc-if>
+                  </div>
+                </sc-if>
+                <div class="ldf-cap">Added<span>{{ edDocsCount }}</span></div>
+                <sc-if value="{{ edDocsNone }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:10px; color:#B4AFC4; line-height:1.6;">Nothing yet. The person can be added without any — these can be filed from their profile at any time.</div>
+                </sc-if>
+                <sc-for list="{{ edDocsList }}" as="d" hint-placeholder-count="0">
+                  <div style="display:flex; align-items:center; gap:8px; border:1px solid #F0EDF6; border-radius:10px; padding:8px 10px;">
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.type }}</span>
+                      </div>
+                      <div style="font-size:9px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.meta }}</div>
+                    </div>
+                    <span onClick="{{ d.remove }}" title="Remove" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">&times;</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div class="ldf-col" style="flex:1.6 1 0;">
+                <div class="ldf-cap">This document</div>
+                <div>
+                  <label class="fm-lab">DOCUMENT TYPE</label>
+                  <div style="position:relative;">
+                    <div data-dd onClick="{{ ddEdDtToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ edDtColor }};">{{ edDtVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                    <sc-if value="{{ ddEdDtOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
+                        <sc-for list="{{ ddEdDtOptions }}" as="o" hint-placeholder-count="5">
+                          <div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div>
                         </sc-for>
+                        <!-- A type nobody has defined yet is added to the MASTER, not to this form,
+                             so the next client gets it too. Opens the same builder Settings uses. -->
+                        <div onClick="{{ edNewDocType }}" style="margin-top:4px; padding:8px 11px; border-top:1px solid #F3F1F7; border-radius:8px; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="background:#F7F3FD;">+ New document type…</div>
                       </div>
                     </sc-if>
                   </div>
-                  <input value="{{ d.expiry }}" onChange="{{ d.setExpiry }}" type="date" class="fm-inp">
-                  <label class="fm-file" style="color:{{ d.fileColor }}; background:{{ d.fileBg }};">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                    <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.fileLabel }}</span>
-                    <input type="file" onChange="{{ d.setFile }}" style="display:none;">
-                  </label>
-                  <div onClick="{{ d.remove }}" class="fm-x" title="Remove this row">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                  <div><label class="fm-lab">DOCUMENT / CERTIFICATE NUMBER</label><input value="{{ edDocNo }}" onChange="{{ setEdDocNo }}" class="fm-inp"></div>
+                  <!-- Picked from the government centres, not typed. The same name has to reach the
+                       visit queue, the credential vault and the step picker, and four spellings of
+                       one authority are four places nobody is going. The chosen type fills it in. -->
+                  <div><label class="fm-lab">AUTHORITY</label>
+                    <div style="position:relative;">
+                      <div data-dd onClick="{{ ddEdGcToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ edDocAuthColor }};">{{ edDocAuthLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                      <sc-if value="{{ ddEdGcOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
+                          <sc-for list="{{ ddEdGcOptions }}" as="g" hint-placeholder-count="6">
+                            <div onClick="{{ g.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ g.weight }}; color:{{ g.color }}; background:{{ g.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ g.label }}<span style="color:#A9A6B4; font-weight:500;">{{ g.sub }}</span></div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
                   </div>
                 </div>
-              </sc-for>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                  <div><label class="fm-lab">ISSUE DATE</label><input value="{{ edDocIssue }}" onChange="{{ setEdDocIssue }}" type="date" class="fm-inp"></div>
+                  <!-- Some of these have no validity period at all — Articles of Association, a
+                       ZATCA or VAT certificate. Asking for an expiry invites somebody to invent
+                       one, and an invented expiry is a renewal that comes round for ever. The slot
+                       says so instead, and the type is what decides. -->
+                  <sc-if value="{{ edHasExpiry }}" hint-placeholder-val="{{ true }}">
+                    <div><label class="fm-lab">EXPIRY DATE</label><input value="{{ edDocExpiry }}" onChange="{{ setEdDocExpiry }}" type="date" class="fm-inp"></div>
+                  </sc-if>
+                  <sc-if value="{{ edNoExpiry }}" hint-placeholder-val="{{ false }}">
+                    <div><label class="fm-lab">EXPIRY DATE</label><div class="fm-inp" style="display:flex; align-items:center; color:#8C8899; background:#F7F6FA;">Does not expire</div></div>
+                  </sc-if>
+                </div>
+                <!-- Whatever else this type asks for. Defined on the type, so a Baladiya licence can
+                     want a shop name without this form knowing what a Baladiya licence is. -->
+                <sc-for list="{{ edDocExtras }}" as="x" hint-placeholder-count="0">
+                  <div><label class="fm-lab">{{ x.label }}</label><input value="{{ x.value }}" onChange="{{ x.set }}" class="fm-inp"></div>
+                </sc-for>
+                <!-- THE SCAN, WHERE THE TYPING ENDS. The drop zone on the left comes first because
+                     a file dropped there is read and fills these boxes in; but with nothing to read
+                     — intake off, or a type no model handles — the details are typed and the only
+                     way to attach the paper was back at the top of the other column. Same file,
+                     same state, said again where the person actually finishes. -->
+                <!-- THE PAPER ITSELF, AS ONE OF THIS DOCUMENT'S FIELDS. There were two controls
+                     for one file — a drop zone in the other column and this row — which reads as
+                     two attachments. It is one: the scan belongs to the document being entered, so
+                     it sits with the rest of what that document needs, and this row is both the
+                     click target and the drop target. -->
+                <div data-eddrop="1">
+                  <!-- A target, not a line of text. It does two jobs and both want a box you can
+                       aim a file at: dropped here the document is read and the boxes above fill
+                       themselves, and with nothing to read it is simply how the paper is attached.
+
+                       TWO ZONES, SWAPPED, rather than one with its colours bound. A style attribute
+                       is fixed at the element's first render here — the box kept its idle colours
+                       while its own text read "Drop it here" — so the lit state is a different
+                       element, which is how every other state in this file is drawn. -->
+                  <sc-if value="{{ edDropCold }}" hint-placeholder-val="{{ true }}">
+                    <div onClick="{{ edPickFile }}" style="border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ edDropNote }}</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ edDropHot }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ edDropNote }}</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ edHasFile }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex; align-items:center; gap:8px; background:#F5EEFF; border:1px solid #EDE1FC; border-radius:11px; padding:10px 12px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                      <span style="flex:1; min-width:0; font-size:11px; font-weight:600; color:#5B21B6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ edFileName }}</span>
+                      <span onClick="{{ edClearFile }}" style="font-size:10px; font-weight:700; color:#C0353A; cursor:pointer; flex-shrink:0;">Remove</span>
+                    </div>
+                  </sc-if>
+                </div>
+                <div>
+                  <sc-if value="{{ edCanAddDoc }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ edAddDoc }}" style="width:100%; background:#F5EEFF; color:#7C00FF; border:1px dashed #C9A2FF; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="background:#EBDBFF;">+ Add this document</button>
+                  </sc-if>
+                  <sc-if value="{{ edCantAddDoc }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ edAddDocHeld }}" style="width:100%; background:#F3F1F7; color:#8C8899; border:1px dashed #D8D3E3; font-size:11px; font-weight:700; padding:10px 0; border-radius:11px; cursor:pointer;" style-hover="border-color:#C0353A; color:#C0353A;">{{ edAddDocWhy }}</button>
+                  </sc-if>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+          <div class="fm-foot">
+            <button onClick="{{ edBackToForm }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">← Back</button>
+            <span style="font-size:10px; color:#A9A6B4;">Step 2 of 2 · Documents</span>
+            <div style="flex:1;"></div>
+            <button onClick="{{ submitEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ edCreateLabel }}</button>
+          </div>
+        </sc-if>
 
+        <sc-if value="{{ edFormStep }}" hint-placeholder-val="{{ true }}">
         <div class="fm-foot">
           <!-- The message lands where the eye already is: next to the button that was just pressed.
                It replaces the "* required" hint rather than sitting beside it, so there is one line
@@ -10863,8 +10983,9 @@
             <span style="flex:1; font-size:10px; color:#A9A6B4;"><span class="fm-req">*</span> required</span>
           </sc-if>
           <button onClick="{{ closeEmp }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
-          <button onClick="{{ submitEmp }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Add employee</button>
+          <button onClick="{{ edGoDocs }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Next →</button>
         </div>
+        </sc-if>
       </div>
     </div>
   </sc-if>
@@ -18223,17 +18344,22 @@ class Component extends DCLogic {
      * company profile — refusing it here says so while the file is still in front of the person,
      * rather than after a round trip.
      */
-    this._acTakeFile = (f9) => {
+    // WHICH FORM IS ASKING. Add client and Add employee collect documents the same way and keep
+    // their answers in their own state, so the one implementation is told the prefix rather than
+    // copied with the names changed — two copies of a reader drift, and only one of them gets fixed.
+    this._acTakeFile = (f9, p9) => {
+      p9 = p9 || 'ac';
+      const err9 = (m9) => this.setState({ [p9 + 'DocErr']: m9 });
       if (!f9) return;
-      if (f9.size > 4 * 1024 * 1024) return this.setState({ acDocErr: f9.name + ' is ' + Math.round(f9.size / 1048576) + ' MB — the limit is 4 MB.' });
-      if (!/\.(pdf|jpe?g|png|webp)$/i.test(f9.name)) return this.setState({ acDocErr: 'Only PDF, JPG, PNG or WEBP can be attached.' });
+      if (f9.size > 4 * 1024 * 1024) return err9(f9.name + ' is ' + Math.round(f9.size / 1048576) + ' MB — the limit is 4 MB.');
+      if (!/\.(pdf|jpe?g|png|webp)$/i.test(f9.name)) return err9('Only PDF, JPG, PNG or WEBP can be attached.');
       const r9 = new FileReader();
       r9.onload = () => {
         const data9 = String(r9.result || '');
-        this.setState({ acDocFile: { name: f9.name, size: f9.size, data: data9 }, acDocErr: '' });
-        this._acScan(f9.name, data9);
+        this.setState({ [p9 + 'DocFile']: { name: f9.name, size: f9.size, data: data9 }, [p9 + 'DocErr']: '' });
+        this._acScan(f9.name, data9, p9);
       };
-      r9.onerror = () => this.setState({ acDocErr: 'That file could not be read.' });
+      r9.onerror = () => err9('That file could not be read.');
       r9.readAsDataURL(f9);
     };
     /**
@@ -18249,47 +18375,51 @@ class Component extends DCLogic {
      * What it read and how sure it was of each field is shown beside the form, so a "medium" on an
      * expiry date is checked against the paper rather than taken on trust.
      */
-    this._acScan = (name9, data9) => {
+    this._acScan = (name9, data9, p9) => {
+      p9 = p9 || 'ac';
       const st9 = this.state.sdStatus;
-      // Intake off, or on with only the built-in passport reader: a company document has no MRZ to
-      // find, so there is nothing to try. The file is attached either way.
+      // Intake off, or on with only the built-in passport reader. That reader finds a passport's MRZ
+      // and nothing else, so on the client's documents there is nothing to try; on an employee's a
+      // passport will read for free. The file is attached either way.
+      if (p9 === 'ed' && st9 && st9.ready && !st9.model && !/passport/i.test(this.state.eDocType || '')) return;
       if (!st9 || !st9.ready || !st9.model) return;
-      this.setState({ acScanBusy: true, acScanMsg: '', acScanNote: '' });
+      this.setState({ [p9 + 'ScanBusy']: true, [p9 + 'ScanMsg']: '', [p9 + 'ScanNote']: '' });
       const t9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/intake/read', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
         body: JSON.stringify({ name: name9, data: data9 }),
       }).then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
-          if (!ok) return this.setState({ acScanBusy: false, acScanNote: '',
-            acScanMsg: 'The file is attached, but it could not be read — fill the details in yourself. '
+          if (!ok) return this.setState({ [p9 + 'ScanBusy']: false, [p9 + 'ScanNote']: '',
+            [p9 + 'ScanMsg']: 'The file is attached, but it could not be read — fill the details in yourself. '
               + ((j && j.error) || 'The reader did not answer.') });
           const f8 = (j && j.fields) || {}, c8 = (j && j.confidence) || {};
           const types8 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
-            .filter(t8 => (t8.subjectKind || 'employee') === 'company' && !t8.retired);
-          // An Iqama read here is a person's paper on a form that files company documents: the
-          // reading is reported, but it is not silently filed against the company.
+            .filter(t8 => (t8.subjectKind || 'employee') === (p9 === 'ed' ? 'employee' : 'company') && !t8.retired);
+          // A reading that belongs to the other kind of subject — an Iqama on the client's documents,
+          // a Commercial Registration on a person's — is reported and not filed: the type picker is
+          // left alone, so nobody files somebody's passport against a company by accident.
           const dt8 = j.docType ? types8.find(t8 => t8.name === j.docType) : null;
           const next8 = {}, filled8 = [];
           const put8 = (key8, val8, what8) => { if (val8 && !String(this.state[key8] || '').trim()) { next8[key8] = val8; filled8.push(what8); } };
-          if (dt8 && !this.state.acDocType) { next8.acDocType = dt8.name; next8.acDocExtra = {}; filled8.push('type'); if (j.authority) next8.acDocAuth = j.authority; }
-          put8('acDocNo', f8.number, 'number');
-          put8('acDocIssue', f8.issueDate, 'issue date');
-          put8('acDocExpiry', f8.expiry, 'expiry');
+          if (dt8 && !this.state[p9 + 'DocType']) { next8[p9 + 'DocType'] = dt8.name; next8[p9 + 'DocExtra'] = {}; filled8.push('type'); if (j.authority) next8[p9 + 'DocAuth'] = j.authority; }
+          put8(p9 + 'DocNo', f8.number, 'number');
+          put8(p9 + 'DocIssue', f8.issueDate, 'issue date');
+          put8(p9 + 'DocExpiry', f8.expiry, 'expiry');
           const sure8 = (k8) => (c8[k8] ? ' (' + c8[k8] + ')' : '');
           const saw8 = j.docType || j.read || 'something it did not recognise';
           this.setState({
-            ...next8, acScanBusy: false,
-            acScanMsg: 'Read as ' + saw8 + (filled8.length ? ' — filled in the ' + filled8.join(', ') : ' — nothing left to fill in')
-              + (dt8 ? '' : j.read ? ', which is not a company document type here, so pick the type yourself' : ''),
+            ...next8, [p9 + 'ScanBusy']: false,
+            [p9 + 'ScanMsg']: 'Read as ' + saw8 + (filled8.length ? ' — filled in the ' + filled8.join(', ') : ' — nothing left to fill in')
+              + (dt8 ? '' : j.read ? ', which is not a ' + (p9 === 'ed' ? "person's" : 'company') + ' document type here, so pick the type yourself' : ''),
             // The Hijri date is reported, never converted: converting it here would be this form
             // asserting a Gregorian date that is not printed on the paper.
-            acScanNote: [f8.number ? 'number' + sure8('number') : null, f8.expiry ? 'expiry' + sure8('expiry') : null,
+            [p9 + 'ScanNote']: [f8.number ? 'number' + sure8('number') : null, f8.expiry ? 'expiry' + sure8('expiry') : null,
               f8.expiryHijri ? 'expiry as printed: ' + f8.expiryHijri : null, j.notes].filter(Boolean).join(' · '),
           });
         })
-        .catch(() => this.setState({ acScanBusy: false, acScanNote: '',
-          acScanMsg: 'The file is attached, but the reader could not be reached — fill the details in yourself.' }));
+        .catch(() => this.setState({ [p9 + 'ScanBusy']: false, [p9 + 'ScanNote']: '',
+          [p9 + 'ScanMsg']: 'The file is attached, but the reader could not be reached — fill the details in yourself.' }));
     };
     /**
      * File the branch CRs and the documents collected on step 2 against the client just created.
@@ -18357,30 +18487,33 @@ class Component extends DCLogic {
         + (branches9.length ? ' · ' + branches9.length + ' branch CR' + (branches9.length === 1 ? '' : 's') + ' recognised' : ''));
     };
 
-    this._acPickFile = () => {
+    this._acPickFile = (p9) => {
       const i9 = document.createElement('input');
       i9.type = 'file';
       i9.accept = '.pdf,.jpg,.jpeg,.png,.webp';
-      i9.onchange = () => this._acTakeFile(i9.files && i9.files[0]);
+      i9.onchange = () => this._acTakeFile(i9.files && i9.files[0], p9 || 'ac');
       i9.click();
     };
     // Dropping anywhere else on the page must not make the browser navigate to the file, which is
     // what it does by default and looks exactly like the app crashing.
     if (!this._acDropBound) {
       this._acDropBound = true;
-      const zone9 = (e9) => e9.target && e9.target.closest && e9.target.closest('[data-acdrop]');
+      // Only one of the two is ever on screen, and its marker says which.
+      const SEL9 = '[data-acdrop],[data-eddrop]';
+      const open9 = () => { const z9 = document.querySelector(SEL9); return z9 ? (z9.hasAttribute('data-eddrop') ? 'ed' : 'ac') : null; };
+      const zone9 = (e9) => e9.target && e9.target.closest && e9.target.closest(SEL9);
       window.addEventListener('dragover', (e9) => {
-        if (!document.querySelector('[data-acdrop]')) return;
+        const p9 = open9(); if (!p9) return;
         e9.preventDefault();
         const over9 = !!zone9(e9);
-        if (!!this.state.acDropOver !== over9) this.setState({ acDropOver: over9 });
+        if (!!this.state[p9 + 'DropOver'] !== over9) this.setState({ [p9 + 'DropOver']: over9 });
       });
-      window.addEventListener('dragleave', (e9) => { if (!e9.relatedTarget && this.state.acDropOver) this.setState({ acDropOver: false }); });
+      window.addEventListener('dragleave', (e9) => { const p9 = open9(); if (p9 && !e9.relatedTarget && this.state[p9 + 'DropOver']) this.setState({ [p9 + 'DropOver']: false }); });
       window.addEventListener('drop', (e9) => {
-        if (!document.querySelector('[data-acdrop]')) return;
+        const p9 = open9(); if (!p9) return;
         e9.preventDefault();
-        if (this.state.acDropOver) this.setState({ acDropOver: false });
-        if (zone9(e9)) this._acTakeFile(e9.dataTransfer && e9.dataTransfer.files && e9.dataTransfer.files[0]);
+        if (this.state[p9 + 'DropOver']) this.setState({ [p9 + 'DropOver']: false });
+        if (zone9(e9)) this._acTakeFile(e9.dataTransfer && e9.dataTransfer.files && e9.dataTransfer.files[0], p9);
       });
     }
 
@@ -22292,7 +22425,7 @@ class Component extends DCLogic {
       setEDob: (e) => this.setState({ eDob: e.target.value }),
       setENat: (e) => this.setState({ eNat: e.target.value }),
       // From the all-Employees screen: no client is implied, so the picker is shown and starts empty.
-      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eClient: '', eClientLocked: false, eNameAr: '', eArTouched: false, eWorkLoc: '', eEmail: '', ePhone: '', eNatAddr: '', eIban: '', eContract: _CONTRACT_OPTS[0], eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
+      openEmp: () => this.setState({ empModal: true, eError: '', eErrField: '', eStep: 'form', eDocs: [], eDocType: '', eDocNo: '', eDocAuth: '', eDocIssue: '', eDocExpiry: '', eDocExtra: {}, eDocFile: null, eDocErr: '', eDropOver: false, eScanBusy: false, eScanMsg: '', eScanNote: '', eClient: '', eClientLocked: false, eNameAr: '', eArTouched: false, eWorkLoc: '', eEmail: '', ePhone: '', eNatAddr: '', eIban: '', eContract: _CONTRACT_OPTS[0], eDob: '', eNat: '', eGender: '', eSalary: '', eTraits: [], eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0] }),
       // Nationality is a code now, chosen from the server's list rather than typed. A text box with
       // the placeholder "e.g. Saudi" invites four spellings of one country, and a headcount that
       // misses a spelling under-reports — which is the direction that gets a client in trouble.
@@ -22311,6 +22444,149 @@ class Component extends DCLogic {
       ddEEmpTypeVal: this.state.eEmpType || _EMP_TYPE_OPTS[0],
       ...mkDd('ddEJobCat', _JOB_CAT_OPTS, this.state.eJobCat || _JOB_CAT_OPTS[0], (v9) => this.setState({ eJobCat: v9 })),
       ddEJobCatVal: this.state.eJobCat || _JOB_CAT_OPTS[0],
+      // Two steps: the person, then their documents. Same shape as Add client, because it is the
+      // same job — and the documents cannot be written until the person they belong to exists.
+      edFormStep: (this.state.eStep || 'form') === 'form',
+      edDocsStep: (this.state.eStep || 'form') === 'docs',
+      // ── STEP 2 · THIS PERSON'S DOCUMENTS ──────────────────────────────────────────────────────────
+      ...(() => {
+        const docs9 = Array.isArray(this.state.eDocs) ? this.state.eDocs : [];
+        // Employee types only. A Commercial Registration belongs to the company, and offering it
+        // here would invite a document filed against a person who can never hold one.
+        const types9 = (Array.isArray(this.state.docTypesData) ? this.state.docTypesData : [])
+          .filter(t9 => (t9.subjectKind || 'employee') === 'employee' && !t9.retired)
+          .sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        const gcs9 = (Array.isArray(this.state.govCentersData) ? this.state.govCentersData : [])
+          .filter(g9 => !g9.retired).sort((x9, y9) => String(x9.name).localeCompare(String(y9.name)));
+        const picked9 = types9.find(t9 => t9.name === this.state.eDocType) || null;
+        // The three the form asks for itself are not asked for twice — same rule the Add-document
+        // dialog uses, so a type behaves the same way wherever it is filled in.
+        const extras9 = ((picked9 && Array.isArray(picked9.fields)) ? picked9.fields : [])
+          .filter(f9 => f9 && f9.type !== 'file' && !['number', 'expiry', 'issue'].includes(String(f9.purpose || '')));
+        const file9 = this.state.eDocFile || null;
+        // A type with no validity period: the form does not ask for one, and does not record one
+        // even if a date was typed under the type picked before this one.
+        const noExpiry9 = !!picked9 && picked9.neverExpires === true;
+        const ready9 = !!picked9 && !!String(this.state.eDocNo || '').trim();
+        return {
+          edDocsSub: (this.state.eName || 'This person').trim() + ' · add what you have, or skip',
+
+          // eError too: the save reports through it, and its banner lives on step 1.
+          edDocErr: this.state.eDocErr || this.state.eError || '',
+          // The four every document has, whatever its type. Everything else comes from the type.
+          edDocNo: this.state.eDocNo || '', setEdDocNo: (e9) => this.setState({ eDocNo: e9.target.value, eDocErr: '' }),
+          eDocAuth: this.state.eDocAuth || '',
+          edDocAuthLabel: this.state.eDocAuth || 'Not recorded',
+          edDocAuthColor: this.state.eDocAuth ? '#1A1523' : '#8C8899',
+          ddEdGcOpen: this.state.openDd === 'ed-gc',
+          ddEdGcToggle: () => this.setState({ openDd: this.state.openDd === 'ed-gc' ? null : 'ed-gc' }),
+          // Blank first: the authority is optional, and a list you cannot back out of is a trap.
+          ddEdGcOptions: [{ name: '', sub: '' }, ...gcs9].map(g9 => ({
+            label: g9.name || 'Not recorded',
+            sub: g9.sub ? '  ·  ' + g9.sub : '',
+            weight: (this.state.eDocAuth || '') === g9.name ? '700' : '500',
+            color: (this.state.eDocAuth || '') === g9.name ? '#7C00FF' : (g9.name ? '#1A1523' : '#8C8899'),
+            bg: (this.state.eDocAuth || '') === g9.name ? '#F5EEFF' : 'transparent',
+            pick: () => this.setState({ eDocAuth: g9.name, openDd: null }),
+          })),
+          edDocIssue: this.state.eDocIssue || '', setEdDocIssue: (e9) => this.setState({ eDocIssue: e9.target.value }),
+          edDocExpiry: this.state.eDocExpiry || '', setEdDocExpiry: (e9) => this.setState({ eDocExpiry: e9.target.value }),
+          edNoExpiry: noExpiry9, edHasExpiry: !noExpiry9,
+          edDocsCount: docs9.length ? String(docs9.length) : '',
+          edDocsNone: docs9.length === 0,
+          edDocsList: docs9.map((d9, i9) => ({
+            type: d9.typeName,
+            // MAIN or SUB answers "which branch", which is not a question a car has. For a type a
+            // client holds several of, the badge is what tells them apart — the plate, or nothing.
+            meta: [d9.docNumber, d9.issuingAuthority, d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · '),
+            remove: () => this.setState({ eDocs: docs9.filter((_, k9) => k9 !== i9) }),
+          })),
+          // The drop zone says what it is holding, so a file picked and then forgotten is visible.
+          edDropCold: !file9 && !this.state.eDropOver,
+          edDropHot: !file9 && !!this.state.eDropOver,
+          edDropTitle: this.state.eScanBusy ? 'Reading it…' : this.state.eDropOver ? 'Drop it here' : 'Drag the scan in, or click',
+          // Whether a dropped file gets read at all is the firm's switch, not this form's. Said here
+          // so nobody drops a scan expecting it to be read when document intake is off.
+          edDropNote: this.state.eScanBusy ? 'This takes a few seconds'
+            : (this.state.sdStatus && this.state.sdStatus.ready && this.state.sdStatus.model) ? 'PDF, JPG, PNG — read for you, and the boxes above fill in'
+            : 'PDF, JPG, PNG — optional',
+          edScanShow: !!this.state.eScanMsg,
+          edScanMsg: this.state.eScanMsg || '',
+          edScanNote: this.state.eScanNote || '', edScanNoteShow: !!this.state.eScanNote,
+          edHasFile: !!file9, edNoFile: !file9, edFileName: file9 ? file9.name : '',
+          edClearFile: () => this.setState({ eDocFile: null }),
+          edPickFile: () => this._acPickFile('ed'),
+          edDtVal: this.state.eDocType || (types9.length ? 'Choose a document type' : 'No company document types yet'),
+          edDtColor: this.state.eDocType ? '#1A1523' : '#8C8899',
+          ddEdDtOpen: this.state.openDd === 'ed-dt',
+          ddEdDtToggle: () => this.setState({ openDd: this.state.openDd === 'ed-dt' ? null : 'ed-dt' }),
+          ddEdDtOptions: types9.map(t9 => ({
+            label: t9.name,
+            weight: this.state.eDocType === t9.name ? '700' : '500',
+            color: this.state.eDocType === t9.name ? '#7C00FF' : '#1A1523',
+            bg: this.state.eDocType === t9.name ? '#F5EEFF' : 'transparent',
+            // Switching type empties the type-specific answers: they were answers to a different
+            // question, and carrying them over files one type's data under another's name.
+            // ...and its authority, when that is a centre we have. A type whose authority is not
+            // on the list leaves the field alone rather than writing a name the picker cannot show.
+            pick: () => this.setState({ eDocType: t9.name, eDocExtra: {}, openDd: null, eDocErr: '',
+              eDocAuth: gcs9.some(g9 => g9.name === t9.authority) ? t9.authority : '' }),
+          })),
+          // Straight into the master's own builder. The dialog it opens is the one Settings uses,
+          // so a type added here has everything a type added there has.
+          edNewDocType: () => { this.setState({ openDd: null }); this._openDtNew(); },
+          edDocExtras: extras9.map(f9 => {
+            const k9 = String(f9.id || f9.key || f9.label || '');
+            return {
+              label: String(f9.label || k9).toUpperCase(),
+              value: String((this.state.eDocExtra || {})[k9] || ''),
+              set: (e9) => this.setState({ eDocExtra: { ...(this.state.eDocExtra || {}), [k9]: e9.target.value } }),
+            };
+          }),
+          edCanAddDoc: ready9, edCantAddDoc: !ready9,
+          edAddDocWhy: !picked9 ? 'Choose a document type first' : 'Enter the document number',
+          edAddDocHeld: () => this.setState({ eDocErr: !picked9 ? 'Choose a document type first.' : 'A document needs its number.' }),
+          edAddDoc: () => {
+            const extra9 = {};
+            for (const f9 of extras9) {
+              const k9 = String(f9.id || f9.key || f9.label || '');
+              const v9 = String((this.state.eDocExtra || {})[k9] || '').trim();
+              if (v9) extra9[k9] = v9;
+            }
+            this.setState({
+              eDocs: [...docs9, {
+                typeName: picked9.name,
+                docNumber: String(this.state.eDocNo || '').trim(),
+                issuingAuthority: String(this.state.eDocAuth || '').trim(),
+                issueDate: this.state.eDocIssue || '',
+                expiryDate: noExpiry9 ? '' : (this.state.eDocExpiry || ''),
+                extra: extra9,
+                file: file9, fileName: file9 ? file9.name : '',
+
+              }],
+              // Cleared for the next one. The type is kept: a client usually arrives with several
+              // documents of different types, but typing the same type twice in a row is common too
+              // and re-picking it every time is the kind of friction that ends in a spreadsheet.
+              eDocNo: '', eDocIssue: '', eDocExpiry: '', eDocExtra: {}, eDocFile: null, eDocErr: '',
+              eScanMsg: '', eScanNote: '',
+            });
+          },
+          // The same three the save checks, asked before the documents rather than after them.
+          edGoDocs: () => {
+            if (!(this.state.eClient || '').trim()) return this.setState({ eError: 'Choose the client this person works for', eErrField: 'client' });
+            if (!(this.state.eName || '').trim()) return this.setState({ eError: 'Enter their full name', eErrField: 'name' });
+            if (!(this.state.eRole || '').trim()) return this.setState({ eError: 'Enter their role', eErrField: 'role' });
+            // Is the reader available? Asked once, when the step that uses it opens.
+            this._sdLoadStatus && this._sdLoadStatus();
+            this.setState({ eStep: 'docs', eError: '', eErrField: '' });
+          },
+          edBackToForm: () => this.setState({ eStep: 'form', eDocErr: '' }),
+          edCreateLabel: docs9.length
+            ? 'Add employee with ' + docs9.length + ' document' + (docs9.length === 1 ? '' : 's')
+            : 'Add employee',
+        };
+      })(),
+
       // Where they actually work, how to reach them, what they are paid into, and on what terms.
       eWorkLoc: this.state.eWorkLoc || '', setEWorkLoc: (e9) => this.setState({ eWorkLoc: e9.target.value }),
       eEmail: this.state.eEmail || '', setEEmail: (e9) => this.setState({ eEmail: e9.target.value, eError: '', eErrField: '' }),
@@ -22401,7 +22677,8 @@ class Component extends DCLogic {
         // POST only carried name+role. They now persist on the employee's customData, and each
         // document row becomes a real compliance Document so the expiry actually gets tracked.
         const H9 = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok9 };
-        const docs9 = (st.eDocs || []).filter(d9 => d9.type && d9.expiry);
+        // Staged on step 2, each already complete: a type, its number, and whatever that type asks.
+        const docs9 = Array.isArray(st.eDocs) ? st.eDocs : [];
         fetch((this._apiBase || 'http://localhost:4100') + '/api/employees', {
           method: 'POST', headers: H9,
           body: JSON.stringify({ name: st.eName.trim(), nameAr: (st.eNameAr || '').trim() || null, role: st.eRole.trim(), companyId: co9.id, status: 'valid',
@@ -22433,7 +22710,7 @@ class Component extends DCLogic {
             // Report only what actually saved: an earlier version claimed "N documents tracked"
             // even when every POST had failed.
             const after9 = (savedN9) => {
-              this.setState({ empModal: false, eName: '', eRole: '', eJoinDate: '', eDocs: [{ type: _eDocTypeNames[0] || 'Passport', expiry: '' }] });
+              this.setState({ empModal: false, eStep: 'form', eName: '', eRole: '', eJoinDate: '', eDocs: [] });
               // A new hire moves the ratio further than an edit does, and this refreshed the list of
               // people and nothing else.
               this._afterWorkforceChange();
@@ -22445,12 +22722,31 @@ class Component extends DCLogic {
               }
             };
             if (!created9 || !docs9.length) return after9(0);
-            Promise.all(docs9.map(d9 => fetch((this._apiBase || 'http://localhost:4100') + '/api/documents', {
-              method: 'POST', headers: H9,
-              // NOTE: Document has no `client` column — sending one makes Prisma reject the whole row.
-              body: JSON.stringify({ docType: d9.type, person: st.eName.trim(), companyId: co9.id, employeeId: created9.id,
-                expiryDate: d9.expiry, status: 'valid' }) }).then(r8 => r8.ok).catch(() => false)))
-              .then(rs9 => after9(rs9.filter(Boolean).length));
+            // One at a time, because each may carry a scan that has to be uploaded first, and a file
+            // that will not upload must not take the other four documents with it.
+            (async () => {
+              const api9 = this._apiBase || 'http://localhost:4100';
+              let ok9 = 0;
+              for (const d9 of docs9) {
+                try {
+                  let filePath9 = null;
+                  if (d9.file && d9.file.data) {
+                    const up9 = await fetch(api9 + '/api/upload', { method: 'POST', headers: H9,
+                      body: JSON.stringify({ name: d9.file.name, kind: 'document', data: d9.file.data }) }).then(r8 => r8.json());
+                    if (up9 && up9.path) filePath9 = up9.path; else throw new Error('upload refused');
+                  }
+                  // NOTE: Document has no `client` column — sending one makes Prisma reject the whole row.
+                  const r8 = await fetch(api9 + '/api/documents', { method: 'POST', headers: H9,
+                    body: JSON.stringify({ docType: d9.typeName, person: st.eName.trim(), companyId: co9.id, employeeId: created9.id,
+                      docNumber: d9.docNumber || null, issuingAuthority: d9.issuingAuthority || null,
+                      issueDate: d9.issueDate || null, expiryDate: d9.expiryDate || null, status: 'valid',
+                      ...((filePath9 || Object.keys(d9.extra || {}).length)
+                        ? { customData: { ...(filePath9 ? { file: filePath9 } : {}), ...(d9.extra || {}) } } : {}) }) });
+                  if (r8.ok) ok9++;
+                } catch (e9) { /* counted as not saved; after9 reports the shortfall */ }
+              }
+              after9(ok9);
+            })();
           })
           .catch(() => this.setState({ eError: 'Cannot reach the server — the employee was NOT saved' }));
       },
@@ -23511,6 +23807,7 @@ class Component extends DCLogic {
       clDetailApi.cdAddEmp = () => this.setState({
         empModal: true, eError: '', eErrField: '',
         eClient: clRow.name, eClientLocked: true, eEst: this.state.cdCrFilter && _crAll.some(x9 => x9.id === this.state.cdCrFilter) ? this.state.cdCrFilter : null,
+        eStep: 'form', eDocs: [], eDocType: '', eDocNo: '', eDocAuth: '', eDocIssue: '', eDocExpiry: '', eDocExtra: {}, eDocFile: null, eDocErr: '', eDropOver: false, eScanBusy: false, eScanMsg: '', eScanNote: '',
         eNameAr: '', eArTouched: false, eWorkLoc: '', eEmail: '', ePhone: '', eNatAddr: '', eIban: '', eContract: _CONTRACT_OPTS[0],
         eDob: '', eNat: '', eSalary: '', eEmpType: _EMP_TYPE_OPTS[0], eJobCat: _JOB_CAT_OPTS[0],
       });
