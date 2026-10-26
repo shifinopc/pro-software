@@ -22088,6 +22088,20 @@ class Component extends DCLogic {
       // silently reads empty is how a real value gets overwritten by the next save.
       return hit9 ? (hit9.nationality + ' · ' + hit9.name) : (code9 ? String(code9) : 'Select a nationality');
     };
+    /**
+     * JUST THE NATIONALITY WORD, for a column too narrow for "Indian · India".
+     *
+     * The employee list printed `e.nationality` straight out of the row, which is an ISO code since
+     * the day nationality stopped being free text — so a column headed NATIONALITY read "IN" and
+     * "BD". Every picker in the product resolves it; the one place that only displays it did not.
+     *
+     * Unrecognised values show AS THEMSELVES, the same rule `_labelFromCode` follows: a row holding
+     * something not on the list is a row somebody has to notice, not one to blank out.
+     */
+    const _natFromCode = (code9) => {
+      const hit9 = _countryList.find(c9 => c9.code === String(code9 || '').toUpperCase());
+      return hit9 ? hit9.nationality : (code9 ? String(code9) : '');
+    };
     const _eNatLabel = _labelFromCode(this.state.eNat);
     const _GENDER_VAL = { 'Not recorded': '', 'Male': 'male', 'Female': 'female' };
     const _GENDER_LABEL = { male: 'Male', female: 'Female' };
@@ -24737,7 +24751,7 @@ class Component extends DCLogic {
         const iqNo9 = _empDocNumber(e9, docs9, _empIqamaType) || e9.govId || '';
         return { name, role, status, stBg: t[0], stColor: t[1], initials,
           empId: e9.id,
-          empCode: e9.code || '—', nationality: e9.nationality || '—',
+          empCode: e9.code || '—', nationality: _natFromCode(e9.nationality) || '—',
           iqamaNo: iqNo9, hasIqamaNo: !!iqNo9, iqamaIdCell: iqNo9 || '—',
           contractExp: conExp9.text, contractExpColor: conExp9.color,
           iqamaExp: iqExp9.text, iqamaExpColor: iqExp9.color,
