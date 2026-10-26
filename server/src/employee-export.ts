@@ -16,6 +16,7 @@
  */
 import ExcelJS from "exceljs";
 import { prisma } from "./db.js";
+import { countryNationality } from "./countries.js";
 
 const FILL = (argb: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 const AMBER = FILL("FFFDF0D5");
@@ -72,7 +73,14 @@ export async function buildEmployeeWorkbook(companyId?: string, onlyIds?: string
     const iqamaNo = mine.find(d => d.docType === iqamaType)?.docNumber || e.govId || "";
     const isNat = NATIONAL.test(String(e.nationality ?? "").trim());
 
-    const row = ws.addRow([e.name, iqamaNo, e.nationality ?? "", ...types.map(() => "")]);
+    // The WORD, not the code. Nationality is stored as an ISO code on purpose, and a column headed
+    // "Nationality" that reads "IN" is the storage format reaching the person who opens the file.
+    // This sheet is colour-coded and carries a legend — it is for a human, not a portal upload.
+    //
+    // It also still round-trips: the importer puts this column through resolveCountry, which takes
+    // the nationality word as readily as the code, so an exported sheet edited and sent back reads
+    // the same either way. Checked, not assumed.
+    const row = ws.addRow([e.name, iqamaNo, countryNationality(e.nationality), ...types.map(() => "")]);
     row.height = 18;
     row.getCell(1).font = { bold: true, size: 10 };
     for (let i = 1; i <= 3; i++) row.getCell(i).alignment = { vertical: "middle" };
