@@ -4380,10 +4380,10 @@ app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requi
  * IS the company. Everything else is the same shape, so somebody who has imported employees once
  * already knows how this behaves.
  */
-app.get("/api/leads/import-template", requireAuth, requireStaff, (_req, res) => {
+app.get("/api/leads/import-template", requireAuth, requireStaff, async (_req, res) => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="lead-import-template.csv"');
-  res.send(leadImportTemplateCsv());
+  res.send(await leadImportTemplateCsv());
 });
 
 app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {

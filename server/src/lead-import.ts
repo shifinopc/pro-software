@@ -49,7 +49,10 @@ export const LEAD_EXAMPLE_ROW: Record<string, string> = {
   source: "Exhibition",
   city: "Riyadh",
   industry: "Construction",
-  product: "Iqama Renewal",
+  // TWO PRODUCTS, not one. A lead wanting PRO and VAT is the ordinary case, and the only place
+  // anybody learns that one cell can hold both is here. The commas are also why the cell is quoted
+  // in the file, which is the other thing the example has to show.
+  product: "PRO, VAT",
   campaign: "Riyadh Build 2026",
   note: "Met at stand 4B — 40 staff, renewals due in March",
 };
@@ -70,12 +73,32 @@ const ALIAS: Record<string, string> = {
   remarks: "note", notes: "note", comment: "note", details: "note",
 };
 
+const clean = (v: unknown) => String(v ?? "").trim();
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
-/** The file the Template button hands out — the headings, then the single example. */
-export function leadImportTemplateCsv(): string {
+/** A configured list, or nothing at all — a template must not fail because a table is empty. */
+const names = async (q: () => Promise<Array<{ name: string }>>) =>
+  (await q().catch(() => [])).map(r => clean(r.name)).filter(Boolean);
+
+/**
+ * The file the Template button hands out — the headings, then the single example.
+ *
+ * THE EXAMPLE USES THIS INSTALL'S OWN PRODUCTS AND SOURCES where it has them. A sample naming
+ * products nobody has configured teaches the wrong words and then warns about them on the way back
+ * in, which makes the template look broken the first time it is used. It falls back to the literals
+ * when nothing is configured yet, because a template must still download on a new install.
+ */
+export async function leadImportTemplateCsv(): Promise<string> {
+  const products = await names(() => prisma.product.findMany({ select: { name: true }, orderBy: { name: "asc" } }));
+  const sources = await names(() => prisma.leadSource.findMany({ select: { name: true } }));
+  const example: Record<string, string> = {
+    ...LEAD_EXAMPLE_ROW,
+    // Two of them, so the example still shows that one cell can hold several.
+    ...(products.length ? { product: products.slice(0, 2).join(", ") } : {}),
+    ...(sources.length ? { source: sources[0] } : {}),
+  };
   const head = LEAD_IMPORT_COLUMNS.join(",");
-  const row = LEAD_IMPORT_COLUMNS.map(c => csvCell(LEAD_EXAMPLE_ROW[c] ?? "")).join(",");
+  const row = LEAD_IMPORT_COLUMNS.map(c => csvCell(example[c] ?? "")).join(",");
   // The BOM is what makes Excel read it as UTF-8; without it an Arabic name arrives as mojibake.
   return `﻿${head}\n${row}\n`;
 }
@@ -101,7 +124,6 @@ export type LeadPlan = {
   unknownColumns: string[];
 };
 
-const clean = (v: unknown) => String(v ?? "").trim();
 const looksLikeEmail = (v: string) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
 const looksLikePhone = (v: string) => !v || /^[+()\d][\d\s()+.-]{5,}$/.test(v);
 
@@ -125,9 +147,22 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
   const index = await duplicateIndex();
   // The configured sources, so a typo in that column is said out loud rather than quietly stored as
   // a source nothing reports on.
-  const sources = (await prisma.leadSource.findMany({ select: { name: true } }).catch(() => []))
-    .map(s => clean(s.name)).filter(Boolean);
+  const sources = await names(() => prisma.leadSource.findMany({ select: { name: true } }));
   const sourceByLower = new Map(sources.map(s => [s.toLowerCase(), s]));
+  /**
+   * ONE CELL, SEVERAL PRODUCTS.
+   *
+   * `service` is a comma-separated list, because the Add lead form's Product box is a multi-select
+   * and writes "PRO, VAT". So a lead wanting Auditing, VAT and PRO is ONE row with all three in the
+   * one column — quoted in the file, because of the commas.
+   *
+   * Each name is checked against the configured products and snapped to their spelling. The Leads
+   * product filter offers exactly those names and matches on them, so a product typed as anything
+   * else is stored and then cannot be found under any option the filter has: present in the data
+   * and absent from every screen that exists to find it.
+   */
+  const products = await names(() => prisma.product.findMany({ select: { name: true } }));
+  const productByLower = new Map(products.map(x => [x.toLowerCase(), x]));
 
   const refused: LeadIssue[] = [], warnings: LeadIssue[] = [], skipped: LeadIssue[] = [];
   const rows: LeadPlanRow[] = [];
@@ -163,6 +198,15 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
       warnings.push({ row: lineNo, name, what: `Source "${rawSource}" is not one of yours — imported as typed` });
     }
 
+    const wanted = cell("product").split(",").map(x => x.trim()).filter(Boolean);
+    const unknownProducts = products.length ? wanted.filter(x => !productByLower.has(x.toLowerCase())) : [];
+    const product = wanted.map(x => productByLower.get(x.toLowerCase()) ?? x).join(", ");
+    if (unknownProducts.length) {
+      warnings.push({ row: lineNo, name, what:
+        `${unknownProducts.map(x => `"${x}"`).join(", ")} ${unknownProducts.length === 1 ? "is not one of your products" : "are not among your products"} `
+        + `(${products.join(", ")}) — imported as typed, and the Product filter will not find it` });
+    }
+
     const contactName = cell("contact_name");
     // Exactly what the Add lead form sends: contact details with nobody attached are refused by the
     // route, so an email with no contact name is filed against the company's own name, as the form
@@ -175,7 +219,7 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
       row: lineNo, name,
       contact: contactName || (contacts.length ? name : "—"),
       source: source || "—",
-      product: cell("product") || "—",
+      product: product || "—",
       duplicate: dup,
       body: {
         name, lifecycle: "lead",
@@ -184,7 +228,7 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
         sourceDetail: cell("note") || null,
         industry: cell("industry") || null,
         campaign: cell("campaign") || null,
-        service: cell("product") || null,
+        service: product || null,
         contacts,
       },
     });

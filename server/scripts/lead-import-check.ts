@@ -53,7 +53,7 @@ const formFields = (() => {
     .filter(k => !["body", "jobTitle", "email", "phone"].includes(k));
 })();
 
-const csv = leadImportTemplateCsv();
+const csv = await leadImportTemplateCsv();
 console.log(`template: ${LEAD_IMPORT_COLUMNS.length} columns, 1 example row, ${csv.length} bytes`);
 
 // 1. Every column the importer knows is offered, and the example fills in every one of them. A
@@ -61,6 +61,16 @@ console.log(`template: ${LEAD_IMPORT_COLUMNS.length} columns, 1 example row, ${c
 for (const c of LEAD_IMPORT_COLUMNS) {
   if (!csv.includes(c)) fails.push(`the template has no "${c}" heading`);
   if (!String(LEAD_EXAMPLE_ROW[c] ?? "").trim()) fails.push(`the example row leaves "${c}" empty — show what belongs there`);
+}
+// The product cell must show MORE THAN ONE, because one cell holding several is the thing about
+// this file that nobody guesses — a lead wanting Auditing, VAT and PRO is one row, not three.
+{
+  const line = csv.replace(/^﻿/, "").split("\n")[1] ?? "";
+  const col = LEAD_IMPORT_COLUMNS.indexOf("product");
+  const cells = [...line.matchAll(/("([^"]|"")*"|[^,]*)(,|$)/g)].map(m => m[1].replace(/^"|"$/g, "").replace(/""/g, '"'));
+  if (!String(cells[col] ?? "").includes(",")) {
+    fails.push(`the example's product cell is "${cells[col]}" — it must name two, or nothing teaches that one cell takes several`);
+  }
 }
 
 // 2. The file the button hands out survives the planner that reads it back.
