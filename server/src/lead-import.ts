@@ -166,8 +166,22 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
 
   const refused: LeadIssue[] = [], warnings: LeadIssue[] = [], skipped: LeadIssue[] = [];
   const rows: LeadPlanRow[] = [];
-  // Two rows for the same company inside ONE file is the commonest duplicate of all, and the
-  // database cannot catch it: neither of them exists yet while the plan is being made.
+  /**
+   * TWO ROWS FOR THE SAME LEAD INSIDE ONE FILE — the commonest duplicate of all, and one the
+   * database cannot catch, because neither row exists yet while the plan is being made.
+   *
+   * THE EMAIL DECIDES IT, NOT THE NAME. Keying on the name alone looked obvious and is wrong in
+   * both directions, which a real file of ninety leads showed in one pass:
+   *
+   *   two people called "Latheef", with different email addresses, are two leads — and the second
+   *   was being dropped as a repeat of the first, silently, which is the worst way to lose a lead;
+   *
+   *   "Hadil" and "HADIL CHEVIDIKUNNAN KOYAMMU" share one address and are one person, and keying
+   *   on the name let both through.
+   *
+   * So a row with an address is identified by it, and the name is the fallback only for a row that
+   * has none — where it is the only thing there is to go on.
+   */
   const seen = new Map<string, number>();
 
   for (let i = 0; i < body.length; i++) {
@@ -176,15 +190,21 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
     const name = cell("company_name");
     if (!name) { refused.push({ row: lineNo, name: "—", what: "No company name" }); continue; }
 
-    const earlier = seen.get(name.toLowerCase());
-    if (earlier) { skipped.push({ row: lineNo, name, what: `Same company as row ${earlier} in this file` }); continue; }
-    seen.set(name.toLowerCase(), lineNo);
-
     let email = cell("email"), phone = cell("phone");
     // A bad cell loses THAT cell, never the row — the stance the employee import settled on after
     // refusing rows and importing them anyway.
     if (!looksLikeEmail(email)) { warnings.push({ row: lineNo, name, what: `"${email}" is not an email address — imported without it` }); email = ""; }
     if (!looksLikePhone(phone)) { warnings.push({ row: lineNo, name, what: `"${phone}" is not a phone number — imported without it` }); phone = ""; }
+
+    const key = email ? `email:${email.toLowerCase()}` : `name:${name.toLowerCase()}`;
+    const earlier = seen.get(key);
+    if (earlier) {
+      skipped.push({ row: lineNo, name, what: email
+        ? `Same email as row ${earlier} in this file (${email})`
+        : `Same name as row ${earlier} in this file, and no email to tell them apart` });
+      continue;
+    }
+    seen.set(key, lineNo);
 
     const dup = index.match({ name, email, phone })[0] ?? null;
     if (dup && dup.confidence === "certain") {
