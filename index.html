@@ -7526,7 +7526,11 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Leads</h1>
           </div>
           <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
-            <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
+            <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+              <span onClick="{{ liTemplate }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Template</span>
+              <button onClick="{{ liOpenImport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Import</button>
+              <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
+            </div>
           </sc-if>
         </section>
 
@@ -10547,6 +10551,127 @@
        The preview is the point. A spreadsheet whose dates were typed the other way round, or whose
        nationalities the system does not recognise, is caught here rather than across three hundred
        records. Nothing is written until "Import" is pressed on the preview. -->
+  <sc-if value="{{ showLeadImport }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ liClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:720px; max-height:88vh; overflow-y:auto; padding:17px 18px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Import leads</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">One row per company. Nothing is saved until you have seen the preview.</div>
+          </div>
+          <div onClick="{{ liClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+
+        <sc-if value="{{ liHasErr }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:11px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:10px 13px; font-size:11px; font-weight:600; color:#C0353A; line-height:1.5;">{{ liErr }}</div>
+        </sc-if>
+
+        <!-- 1. choose a file -->
+        <sc-if value="{{ liStepPick }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px; font-size:11px; color:#4B4757; line-height:1.6;">
+            Only <b>company_name</b> is required. A company already on file is recognised and left alone, not added twice. Owners are chosen by your sales rules, exactly as they are for a lead added by hand.
+          </div>
+          <label style="margin-top:11px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed #D9C6F5; background:#FCFAFF; border-radius:14px; padding:19px 13px; cursor:pointer; text-align:center;" style-hover="border-color:#7C00FF; background:#F8F2FF;">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+            <span style="font-size:12px; font-weight:700; color:#26074D;">Choose a CSV file</span>
+            <span style="font-size:11px; color:#8C8899;">Up to 1,000 leads</span>
+            <input type="file" accept=".csv,text/csv" onChange="{{ liPick }}" style="display:none;">
+          </label>
+          <div style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <span style="font-size:11px; color:#8C8899;">Saving from Excel? Choose CSV UTF-8.</span>
+            <span onClick="{{ liTemplate }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Download template</span>
+          </div>
+        </sc-if>
+
+        <!-- 2. what it would do -->
+        <sc-if value="{{ liStepPreview }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:11px; font-size:11px; color:#8C8899;">{{ liFileName }} &middot; {{ liRowsRead }} rows read</div>
+          <div style="margin-top:10px; display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
+            <div style="background:#E7F8EF; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#0E9355; letter-spacing:.05em;">NEW LEADS</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#0E9355;">{{ liNew }}</div></div>
+            <div style="background:#F3F1F7; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#6F6C7A; letter-spacing:.05em;">ALREADY ON FILE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#4B4757;">{{ liSkipped }}</div></div>
+            <div style="background:#FEECEC; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#C0353A; letter-spacing:.05em;">REFUSED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#C0353A;">{{ liRefused }}</div></div>
+          </div>
+
+          <sc-if value="{{ liHasUnknown }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px; font-size:11px; color:#7A5A12; background:#FEF9ED; border:1px solid #F7E4BF; border-radius:10px; padding:8px 12px;">Columns not read: <b>{{ liUnknown }}</b>. Nothing in them is imported.</div>
+          </sc-if>
+
+          <sc-if value="{{ liHasRefused }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:11px; font-size:10px; font-weight:700; color:#C0353A; letter-spacing:.06em;">NOT IMPORTED &mdash; FIX THESE ROWS AND IMPORT AGAIN</div>
+            <div style="margin-top:6px; border:1px solid #FBD5D5; border-radius:11px; max-height:130px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ liRefusedRows }}" as="x" hint-placeholder-count="2">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #FDF0F0; font-size:11px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#8A2A2E;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ liHasSkipped }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px; font-size:10px; font-weight:700; color:#6F6C7A; letter-spacing:.06em;">ALREADY ON FILE &mdash; LEFT ALONE</div>
+            <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; max-height:130px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ liSkippedRows }}" as="x" hint-placeholder-count="2">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:11px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#6F6C7A;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ liHasWarn }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px; font-size:10px; font-weight:700; color:#B8860B; letter-spacing:.06em;">IMPORTED, WITH SOMETHING TO CHECK</div>
+            <div style="margin-top:6px; border:1px solid #F7E4BF; border-radius:11px; max-height:130px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ liWarnRows }}" as="x" hint-placeholder-count="2">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #FBF3E3; font-size:11px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#7A5A12;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ liHasPreview }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px; font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHAT WILL BE ADDED</div>
+            <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; max-height:220px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ liPreviewRows }}" as="x" hint-placeholder-count="4">
+                <div style="display:grid; grid-template-columns:1.3fr 1fr 90px 1fr; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:11px;">
+                  <span style="font-weight:600; color:#26074D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
+                  <span style="color:#6F6C7A; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.contact }}</span>
+                  <span style="color:#8C8899; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.source }}</span>
+                  <span style="color:#5B21B6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.product }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ liHasMore }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 12px; font-size:11px; color:#8C8899;">{{ liMore }}</div></sc-if>
+            </div>
+          </sc-if>
+
+          <div style="display:flex; gap:10px; margin-top:13px; justify-content:space-between; align-items:center;">
+            <span onClick="{{ liAnother }}" style="font-size:11px; font-weight:700; color:#6F6C7A; cursor:pointer;" style-hover="text-decoration:underline;">Choose a different file</span>
+            <div style="display:flex; gap:10px;">
+              <button onClick="{{ liClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+              <sc-if value="{{ liCanCommit }}" hint-placeholder-val="{{ true }}"><button onClick="{{ liCommit }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 14px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ liCommitLabel }}</button></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- 3. done -->
+        <sc-if value="{{ liStepDone }}" hint-placeholder-val="{{ false }}">
+          <sc-if value="{{ liHasFailed }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:11px; font-size:10px; font-weight:700; color:#C0353A; letter-spacing:.06em;">THESE WERE NOT ADDED</div>
+            <div style="margin-top:6px; border:1px solid #FBD5D5; border-radius:11px; max-height:130px; overflow-y:auto;" data-hidescroll="true">
+              <sc-for list="{{ liFailedRows }}" as="x" hint-placeholder-count="1">
+                <div style="display:flex; gap:10px; padding:7px 12px; border-bottom:1px solid #FDF0F0; font-size:11px;"><span style="color:#A9A6B4; flex-shrink:0; width:52px;">row {{ x.row }}</span><span style="font-weight:700; color:#26074D; flex-shrink:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span><span style="color:#8A2A2E;">{{ x.what }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="margin-top:14px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:10px 0 4px;">
+            <div style="width:46px; height:46px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">Import complete</div>
+            <div style="font-size:11px; color:#4B4757; line-height:1.6; max-width:460px;">{{ liDoneMsg }}</div>
+          </div>
+          <div style="display:flex; justify-content:center; margin-top:12px;"><button onClick="{{ liClose }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 17px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Done</button></div>
+        </sc-if>
+
+        <sc-if value="{{ liBusy }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px; font-size:11px; font-weight:600; color:#7C00FF; text-align:center;">{{ liBusyLabel }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ showEmpImport }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ eiClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:720px; max-height:88vh; overflow-y:auto; padding:17px 18px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -22437,6 +22562,111 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
       this.toast && this.toast('Template downloaded — dates are DD/MM/YYYY' + (crs9.length > 1 ? ', and each row names its CR' : ''));
     });
+    // -- IMPORT LEADS --
+    // The same contract as the employee import above: the server reads the file and says what it
+    // would do, and nothing is written until the preview's own button is pressed. The commit
+    // re-sends the FILE rather than the plan, so the browser can never hand the server a list of
+    // leads to create.
+    this._liSend = this._liSend || ((commit) => {
+      const st9 = this.state;
+      if (!st9.liCsv) return;
+      const t9 = localStorage.getItem('stimespro:token');
+      this.setState({ liBusy: true, liErr: '' });
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit }),
+      })
+        .then(r => r.json().then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.setState({ liBusy: false, liErr: (j && j.error) || 'The file could not be read.' });
+          if (!commit) return this.setState({ liBusy: false, liStep: 'preview', liPlan: j });
+          this.setState({ liBusy: false, liStep: 'done', liPlan: j, liResult: j.result || null });
+          this._crmReload && this._crmReload();
+        })
+        .catch(() => this.setState({ liBusy: false, liErr: 'Could not reach the server -- nothing was imported.' }));
+    });
+    const _liPlan = this.state.liPlan || null;
+    const _liRes = this.state.liResult || null;
+    const _liN = (n9, one, many) => n9 + ' ' + (n9 === 1 ? one : many);
+    const liApi = {
+      showLeadImport: !!this.state.liOpen,
+      liOpenImport: () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '' }),
+      liClose: () => this.setState({ liOpen: false }),
+      liStepPick: (this.state.liStep || 'pick') === 'pick',
+      liStepPreview: this.state.liStep === 'preview',
+      liStepDone: this.state.liStep === 'done',
+      liBusy: !!this.state.liBusy,
+      liBusyLabel: this.state.liStep === 'preview' ? 'Importing...' : 'Reading the file...',
+      liHasErr: !!this.state.liErr,
+      liErr: this.state.liErr || '',
+      liFileName: this.state.liFileName || '',
+      liRowsRead: _liPlan ? _liPlan.rowsRead : 0,
+      liNew: _liPlan ? _liPlan.creates : 0,
+      liSkipped: _liPlan ? _liPlan.skipped.length : 0,
+      liRefused: _liPlan ? _liPlan.refused.length : 0,
+      liHasSkipped: !!(_liPlan && _liPlan.skipped.length),
+      liSkippedRows: _liPlan ? _liPlan.skipped : [],
+      liHasRefused: !!(_liPlan && _liPlan.refused.length),
+      liRefusedRows: _liPlan ? _liPlan.refused : [],
+      liHasWarn: !!(_liPlan && _liPlan.warnings.length),
+      liWarnRows: _liPlan ? _liPlan.warnings : [],
+      // Columns the file carries that the importer does not read. Said out loud, because a column
+      // of budgets that silently went nowhere is the kind of thing discovered a quarter later.
+      liHasUnknown: !!(_liPlan && _liPlan.unknownColumns && _liPlan.unknownColumns.length),
+      liUnknown: _liPlan && _liPlan.unknownColumns ? _liPlan.unknownColumns.join(', ') : '',
+      liHasPreview: !!(_liPlan && _liPlan.preview && _liPlan.preview.length),
+      liPreviewRows: _liPlan && _liPlan.preview ? _liPlan.preview.map(r9 => ({
+        row: r9.row, name: r9.name, contact: r9.contact, source: r9.source, product: r9.product,
+        dupShow: !!r9.dup, dup: r9.dup ? ('like ' + r9.dup) : '',
+      })) : [],
+      liHasMore: !!(_liPlan && _liPlan.creates > (_liPlan.preview || []).length),
+      liMore: _liPlan ? ('...and ' + (_liPlan.creates - (_liPlan.preview || []).length) + ' more') : '',
+      liCanCommit: !!(_liPlan && _liPlan.creates > 0) && !this.state.liBusy,
+      liCommitLabel: _liPlan ? ('Import ' + _liN(_liPlan.creates, 'lead', 'leads')) : 'Import',
+      liCommit: () => { if (!this.state.liBusy) this._liSend(true); },
+      liAnother: () => this.setState({ liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liErr: '' }),
+      liDoneMsg: !_liRes ? '' : (_liN(_liRes.made, 'lead was', 'leads were') + ' added'
+        + (_liPlan && _liPlan.skipped.length ? ', ' + _liPlan.skipped.length + ' already on file' : '')
+        + (_liRes.failed && _liRes.failed.length ? ', and ' + _liRes.failed.length + ' the server refused' : '')
+        + '. Owners were chosen by your sales rules, the same as a lead added by hand.'),
+      liHasFailed: !!(_liRes && _liRes.failed && _liRes.failed.length),
+      liFailedRows: _liRes && _liRes.failed ? _liRes.failed : [],
+      liPick: (ev9) => {
+        const f9 = ev9.target.files && ev9.target.files[0];
+        // Cleared so choosing the same file again -- after fixing it in Excel -- fires again.
+        ev9.target.value = '';
+        if (!f9) return;
+        if (!/\.csv$/i.test(f9.name)) return this.setState({ liErr: 'That is not a CSV file. In Excel, use Save As then CSV UTF-8.' });
+        if (f9.size > 4 * 1024 * 1024) return this.setState({ liErr: 'That file is over 4 MB. Split it into smaller files.' });
+        const rd9 = new FileReader();
+        rd9.onload = () => { this.setState({ liCsv: String(rd9.result || ''), liFileName: f9.name }); setTimeout(() => this._liSend(false), 0); };
+        rd9.onerror = () => this.setState({ liErr: 'The file could not be read.' });
+        rd9.readAsText(f9);
+      },
+      // THE TEMPLATE COMES FROM THE SERVER, not from a copy of the column list kept here.
+      //
+      // The employee template is built in the browser and needs a check script to notice when the
+      // two lists drift. One list, served by the code that reads the file back, cannot drift.
+      // Fetched rather than linked because the endpoint needs the bearer token, which an <a href>
+      // does not carry.
+      liTemplate: () => {
+        const t9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/import-template', {
+          headers: { ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        })
+          .then(r9 => (r9.ok ? r9.blob() : Promise.reject(new Error('refused'))))
+          .then(b9 => {
+            const a9 = document.createElement('a');
+            a9.href = URL.createObjectURL(b9);
+            a9.download = 'lead-import-template.csv';
+            document.body.appendChild(a9); a9.click(); a9.remove();
+            setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+            this.toast && this.toast('Template downloaded -- one example row, replace it with your own');
+          })
+          .catch(() => this.toast && this.toast('Could not download the template', 'error'));
+      },
+    };
     // ── SCAN DOCUMENT (the intake agent) ──
     const _sdApiBase = () => this._apiBase || 'http://localhost:4100';
     const _sdHeaders = () => { const t9 = localStorage.getItem('stimespro:token'); return { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }; };
@@ -22579,6 +22809,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     };
     const empApi = {
       ...eiApi,
+      ...liApi,
       ...sdApi,
       showEmpModal: this.state.empModal, eDocRows,
       // The SAME option sources Add uses — the country list from the API, the departments master,

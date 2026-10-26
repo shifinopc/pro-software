@@ -87,19 +87,60 @@ type Answer = { status: number; body: unknown };
  * socket: `write` and `end` are replaced so the bytes land in an array instead of on a connection
  * that does not exist.
  *
+ * It answers POST as well as GET. /api/boot only ever asks for GETs — a caller that could name any
+ * path AND any method would be a way to make the server do anything through one call — but an
+ * import needs the real creation route rather than its own copy of what creating means, and that is
+ * the same argument this file is built on. The restriction that matters lives on the caller: /boot
+ * reads from a fixed list, and the lead import posts to exactly one path it names itself.
+ *
  * `accept-encoding: identity` matters. The compression middleware wraps `write`/`end` when the
  * caller accepts gzip, and it would hand back compressed bytes that this then tried to parse as
  * text. Asking for no encoding keeps the body readable; the outer response is compressed once,
  * on the way out, as it always was.
  */
-function runInProcess(app: Express, parent: Request, path: string): Promise<Answer> {
+export function runInProcess(app: Express, parent: Request, path: string, init?: { method?: string; body?: unknown }): Promise<Answer> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const payload = init?.body === undefined ? null : Buffer.from(JSON.stringify(init.body), "utf8");
   return new Promise<Answer>((resolve) => {
-    const req = new Readable({ read() { this.push(null); } }) as unknown as http.IncomingMessage & { auth?: unknown };
-    req.method = "GET";
+    const req = new Readable({ read() { this.push(payload); this.push(null); } }) as unknown as http.IncomingMessage & { auth?: unknown };
+    req.method = method;
     req.url = path;
     req.headers = { ...parent.headers, "accept-encoding": "identity" };
-    (req as any).connection = (parent as any).connection;
-    (req as any).socket = (parent as any).socket;
+    // The body is this one, not the parent's. Without re-stating both, express.json() either reads
+    // the caller's Content-Length against a different payload and hangs, or sees the parent's type
+    // and parses nothing — and a route that validates its body then refuses every row.
+    if (payload) {
+      req.headers["content-type"] = "application/json";
+      req.headers["content-length"] = String(payload.byteLength);
+    } else {
+      delete req.headers["content-type"];
+      delete req.headers["content-length"];
+    }
+    // A STAND-IN SOCKET, NOT THE CALLER'S.
+    //
+    // This handed the sub-request the parent's real socket, and for a GET it looked harmless. It is
+    // not: middleware all the way down registers finish/close listeners on `req.socket`
+    // (on-finished does, and body-parser goes through it), so when a sub-request completed, the
+    // listeners watching the caller's connection fired for it. A POST made that visible — the row
+    // was written, 201 came back, and then the caller's connection was torn down before the real
+    // response could be sent, which reads as "could not reach the server" after the work is done.
+    //
+    // Only the address is carried over, because that is the only thing anything downstream asks a
+    // socket for here: `req.ip` feeds the rate limiter and the audit trail, and a sub-request must
+    // be attributed to whoever made the outer call.
+    const stand = {
+      remoteAddress: (parent as any).socket?.remoteAddress,
+      remoteFamily: (parent as any).socket?.remoteFamily,
+      encrypted: (parent as any).socket?.encrypted,
+      destroyed: false,
+      readable: true,
+      writable: true,
+      setTimeout() { /* nothing to time out: there is no connection */ },
+      on() { return stand; }, once() { return stand; }, removeListener() { return stand; },
+      emit() { return false; }, destroy() { /* nothing to destroy */ },
+    } as any;
+    (req as any).connection = stand;
+    (req as any).socket = stand;
     // The verified principal, carried over so requireAuth does not repeat the work. See auth.ts.
     (req as any).auth = (parent as any).auth;
 

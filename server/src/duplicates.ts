@@ -95,18 +95,44 @@ export async function findDuplicates(input: {
   name?: string | null; cr?: string | null; email?: string | null; phone?: string | null;
   excludeId?: string | null;
 }): Promise<DuplicateMatch[]> {
-  const name = normName(input.name);
-  const cr = normCr(input.cr);
-  const email = normEmail(input.email);
-  const phone = normPhone(input.phone);
-  if (!name && !cr && !email && !phone) return [];
+  return (await duplicateIndex()).match(input);
+}
 
+/**
+ * THE SAME RULES, LOADED ONCE.
+ *
+ * `findDuplicates` reads every company to answer about one. That is right for a form — one call as
+ * somebody types — and ruinous for an import, which asks the same question of three hundred rows
+ * and would read the whole table three hundred times over.
+ *
+ * So the read happens once and the matching is a function over that snapshot. `findDuplicates` is
+ * now that function called with one input, which is what keeps this from becoming a second matcher
+ * that drifts: there is one loop, and both callers are inside it.
+ *
+ * The snapshot is deliberately NOT cached between calls. A plan and the apply that follows must see
+ * the same world, and a cache that outlived a request would eventually answer about companies that
+ * had since been created — including by the import itself.
+ */
+export async function duplicateIndex() {
   const all = await prisma.company.findMany({
     select: { id: true, name: true, cr: true, email: true, phone: true, lifecycle: true, ownerId: true },
     take: 5000,
   });
   const owners = await prisma.user.findMany({ select: { id: true, name: true } });
   const ownerName = new Map(owners.map(u => [u.id, u.name]));
+  return { match: (input: Parameters<typeof findDuplicates>[0]) => matchAgainst(all, ownerName, input) };
+}
+
+function matchAgainst(
+  all: Array<{ id: string; name: string; cr: string | null; email: string | null; phone: string | null; lifecycle: string; ownerId: string | null }>,
+  ownerName: Map<string, string>,
+  input: { name?: string | null; cr?: string | null; email?: string | null; phone?: string | null; excludeId?: string | null },
+): DuplicateMatch[] {
+  const name = normName(input.name);
+  const cr = normCr(input.cr);
+  const email = normEmail(input.email);
+  const phone = normPhone(input.phone);
+  if (!name && !cr && !email && !phone) return [];
 
   const out: DuplicateMatch[] = [];
   for (const c of all) {

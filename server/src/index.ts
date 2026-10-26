@@ -34,6 +34,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
          replyTimes } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
+import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, readScan, IntakeError } from "./intake-agent.js";
 import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
@@ -4369,6 +4370,47 @@ app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requi
     res.json({ ...summary, result });
   } catch (e: any) {
     return fail(res, 400, e, "employees.import");
+  }
+});
+
+/**
+ * LEADS, THE SAME WAY — a file in, a plan, then the real creation route.
+ *
+ * Deliberately NOT scoped to a client the way the employee import is: a lead has no client yet, it
+ * IS the company. Everything else is the same shape, so somebody who has imported employees once
+ * already knows how this behaves.
+ */
+app.get("/api/leads/import-template", requireAuth, requireStaff, (_req, res) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="lead-import-template.csv"');
+  res.send(leadImportTemplateCsv());
+});
+
+app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const csv = String(req.body?.csv ?? "");
+    if (!csv.trim()) return res.status(400).json({ error: "Choose a CSV file to import" });
+
+    // Re-planned rather than trusting a plan the browser sends back, for the same reason the
+    // employee import re-reads its file: a caller that could post rows would be posting straight
+    // past every rule the plan applies.
+    const plan = await planLeadImport(csv);
+    const { rows, ...summary } = plan;
+    const preview = rows.slice(0, 50).map(r => ({ row: r.row, name: r.name, contact: r.contact, source: r.source, product: r.product, dup: r.duplicate?.name ?? null }));
+
+    if (!req.body?.commit) return res.json({ ...summary, preview });
+
+    if (!rows.length) return res.status(400).json({ error: "Nothing in this file can be imported. Every row was refused or is already on file." });
+    const result = await applyLeadImport(app, req as any, plan);
+    await logAudit({
+      action: "leads.imported", actorId: a?.sub, target: `${result.made} leads`, ip: clientIp(req),
+      detail: `${result.made} created, ${plan.skipped.length} skipped, ${plan.refused.length} refused, ${result.failed.length} failed`,
+    });
+    logActivity({ type: "sales", message: `Imported ${result.made} lead${result.made === 1 ? "" : "s"}`, user: a?.email });
+    res.json({ ...summary, preview, result });
+  } catch (e: any) {
+    return fail(res, 400, e, "leads.import");
   }
 });
 
