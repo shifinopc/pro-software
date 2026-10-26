@@ -35091,14 +35091,28 @@ class Component extends DCLogic {
      * about would print "Lead 13" over four rows, and the next person to add a filter here gets it
      * right by default instead of having to find all three.
      */
+    /**
+     * A field that holds more than one answer, as a comma-separated string.
+     *
+     * Product is not one choice but a set — a lead asking for company formation usually wants
+     * the PRO work that follows it. Stored in the one `service` column rather than as a JSON
+     * array for one reason: the box stays a TEXT box, and "PRO, VAT, something we have not
+     * named yet" has to be writable. The cost is honest — anything reporting on this field has
+     * to split it, and the sales router does exactly that.
+     */
+    const _parts9 = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
     const LD_NO_PROD9 = '\u0000not-set'; // a sentinel, since every real value is something typed
     const _ldProd9 = this.state.ldProduct || '';
     const _ldMatch9 = (l) => {
-      const svc9 = String(l.service || '').trim();
+      const svc9 = _parts9(l.service);
+      // MEMBERSHIP, not equality. The Product box is a multi-select — "Company Formation, PRO" is
+      // one lead wanting two things — so comparing the whole string would hide that lead from both
+      // of the filters it belongs under, which is the one case this filter exists for.
+      //
       // "Not set" is a CHOICE, not the absence of one. Most leads carry no service at all, and
       // finding those to fill them in is the first thing anybody opens this filter for.
-      if (_ldProd9 === LD_NO_PROD9) { if (svc9) return false; }
-      else if (_ldProd9 && svc9 !== _ldProd9) return false;
+      if (_ldProd9 === LD_NO_PROD9) { if (svc9.length) return false; }
+      else if (_ldProd9 && !svc9.some(s => s.toLowerCase() === _ldProd9.toLowerCase())) return false;
       if (!_ldQ9) return true;
       const people = _contactRows.filter(c => c.companyId === l.id);
       return [l.name, l.city, l.source, l.sourceDetail, l.contact, l.email, l.phone, l.service,
@@ -35702,17 +35716,6 @@ class Component extends DCLogic {
       const already = _sourceIsOther9((form || {}).source, (form || {}).sourceOther);
       return already ? { ...(form || {}), sourceOther: true } : { ...(form || {}), source: '', sourceOther: true };
     };
-
-    /**
-     * A field that holds more than one answer, as a comma-separated string.
-     *
-     * Product is not one choice but a set — a lead asking for company formation usually wants
-     * the PRO work that follows it. Stored in the one `service` column rather than as a JSON
-     * array for one reason: the box stays a TEXT box, and "PRO, VAT, something we have not
-     * named yet" has to be writable. The cost is honest — anything reporting on this field has
-     * to split it, and the sales router does exactly that.
-     */
-    const _parts9 = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
 
     const _chips9 = (list, current, apply) => list.map(o => {
       const on = String(current || '').trim().toLowerCase() === String(o.name).trim().toLowerCase();
@@ -40124,27 +40127,30 @@ class Component extends DCLogic {
       ldQuery: this.state.ldQuery || '',
       setLdQuery: (e) => this.setState({ ldQuery: e.target.value, ldPage: 1 }),
       /**
-       * THE PRODUCT FILTER. Its options are the Product list UNION what the leads actually carry.
+       * THE PRODUCT FILTER — THE PRODUCT LIST, and nothing else.
        *
-       * `service` is free text on purpose — the Product list is a set of suggestions people may
-       * type past, so that the one lead wanting something nobody has added yet can still be saved.
-       * An option list built from Products alone would therefore leave exactly that lead
-       * unreachable by the filter, which is the lead most worth finding.
+       * It briefly also offered whatever text leads happened to carry, on the reasoning that
+       * `service` is free text and a lead holding something off the list would otherwise be
+       * unreachable. That was wrong about what this control is for. The filter is a fixed set of
+       * things the firm sells, the same four the Add lead box ticks; one lead's typed sentence is
+       * not a product, and putting it here turns a filter into a list of everything anyone has
+       * ever typed. Products are managed under Sales Settings — that is where a real new one is
+       * added, and then it appears here. Anything typed past the list is still found by the search
+       * box, which reads `service` too.
+       *
+       * Retired products are left out: they are retired-not-erased, so a lead that still carries
+       * one stays reachable through the search box.
        */
-      ...mkDdSearch('ddLdProd', (() => {
-        const names9 = [...new Set([
-          ...(Array.isArray(this.state.productsData) ? this.state.productsData : [])
-            .filter(p => !p.retired).map(p => String(p.name || '').trim()),
-          ..._leadRows.map(l => String(l.service || '').trim()),
-        ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
-        return [
-          { value: '', label: 'All products' },
-          ...names9.map(n => ({ value: n, label: n })),
-          // Last, not first: it is the biggest group today and would otherwise sit where the eye
-          // lands on a list whose point is the named services.
-          { value: LD_NO_PROD9, label: 'Not set' },
-        ];
-      })(), _ldProd9, (v) => this.setState({ ldProduct: v, ldPage: 1 })),
+      ...mkDdSearch('ddLdProd', [
+        { value: '', label: 'All products' },
+        ...(Array.isArray(this.state.productsData) ? this.state.productsData : [])
+          .filter(p => !p.retired)
+          .map(p => ({ value: String(p.name || '').trim(), label: String(p.name || '').trim() }))
+          .filter(o => o.value),
+        // Last, not first: it is the biggest group today and would otherwise sit where the eye
+        // lands on a list whose point is the named services.
+        { value: LD_NO_PROD9, label: 'Not set' },
+      ], _ldProd9, (v) => this.setState({ ldProduct: v, ldPage: 1 })),
       // mkDdSearch rather than mkDd because the options carry a value distinct from their label —
       // "No grouping" stores '' — and the search box is simply left out of the markup.
       ...mkDdSearch('ddLdGroup', [
