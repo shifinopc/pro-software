@@ -25,6 +25,7 @@ import type { Express, Request } from "express";
 import { parseCsv } from "./employee-import.js";
 import { duplicateIndex, type DuplicateMatch } from "./duplicates.js";
 import { runInProcess } from "./boot.js";
+import { publish } from "./realtime.js";
 import { prisma } from "./db.js";
 
 /** The columns the template offers, in order — and the only ones read. */
@@ -264,14 +265,37 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
  * A row the route refuses is reported against its line and the rest continue: one bad row in a file
  * of three hundred must not undo the other two hundred and ninety-nine, and stopping halfway leaves
  * somebody guessing where it got to.
+ *
+ * IT SAYS WHERE IT HAS GOT TO, ROW BY ROW. Ninety leads is ninety full passes through the creation
+ * route, which is some seconds of nothing while the one request the browser made stays open. A
+ * label reading "Importing…" for that long is indistinguishable from a hang, and the person
+ * watching it has no way to tell whether to wait or to reload — and reloading mid-import is the one
+ * thing they must not do.
+ *
+ * The progress goes out on the SSE channel the console is already connected to, tagged with the
+ * `job` the browser made up when it pressed the button. Tagged, because `publish` fans out to every
+ * staff member: without it, two people importing at once would drive each other's progress bars.
+ * The browser keeps only the events carrying its own job and ignores the rest.
+ *
+ * It is a report, never a dependency: nothing here waits for a listener, and an import with no
+ * console attached runs exactly as it did before.
  */
-export async function applyLeadImport(app: Express, parent: Request, plan: LeadPlan): Promise<{ made: number; failed: LeadIssue[] }> {
+export async function applyLeadImport(
+  app: Express, parent: Request, plan: LeadPlan, job?: string | null,
+): Promise<{ made: number; failed: LeadIssue[] }> {
   let made = 0;
   const failed: LeadIssue[] = [];
+  const total = plan.rows.length;
+  const say = (done: number, name: string) => {
+    if (!job) return;
+    try { publish("lead-import", { job, done, total, name }, { to: "staff" }); } catch { /* a progress bar is not worth failing an import for */ }
+  };
+  say(0, plan.rows[0]?.name ?? "");
   for (const r of plan.rows) {
     const a = await runInProcess(app, parent, "/api/companies", { method: "POST", body: r.body });
     if (a.status >= 200 && a.status < 300) made++;
     else failed.push({ row: r.row, name: r.name, what: String((a.body as any)?.error ?? `The server refused this row (${a.status})`) });
+    say(made + failed.length, r.name);
   }
   return { made, failed };
 }

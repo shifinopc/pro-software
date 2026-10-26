@@ -4402,7 +4402,10 @@ app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async
     if (!req.body?.commit) return res.json({ ...summary, preview });
 
     if (!rows.length) return res.status(400).json({ error: "Nothing in this file can be imported. Every row was refused or is already on file." });
-    const result = await applyLeadImport(app, req as any, plan);
+    // The browser's own job id, echoed on every progress event so one person's bar is not driven
+    // by another's import. Any string it likes; the server only ever hands it back.
+    const job = String(req.body?.job ?? "").slice(0, 64) || null;
+    const result = await applyLeadImport(app, req as any, plan, job);
     await logAudit({
       action: "leads.imported", actorId: a?.sub, target: `${result.made} leads`, ip: clientIp(req),
       detail: `${result.made} created, ${plan.skipped.length} skipped, ${plan.refused.length} refused, ${result.failed.length} failed`,

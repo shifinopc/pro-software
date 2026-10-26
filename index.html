@@ -10663,7 +10663,34 @@
         </sc-if>
 
         <sc-if value="{{ liBusy }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:10px; font-size:11px; font-weight:600; color:#7C00FF; text-align:center;">{{ liBusyLabel }}</div>
+          <div style="margin-top:12px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+              <span style="font-size:11px; font-weight:700; color:#7C00FF;">{{ liBusyLabel }}<span style="letter-spacing:1px;"><span style="animation:typingDot 1.1s infinite;">.</span><span style="animation:typingDot 1.1s .18s infinite;">.</span><span style="animation:typingDot 1.1s .36s infinite;">.</span></span></span>
+              <span style="font-size:11px; font-weight:700; color:#6F6C7A; font-variant-numeric:tabular-nums;">{{ liProgCount }}</span>
+            </div>
+            <!-- The track. overflow:hidden is what keeps the sheen inside the rounded ends. -->
+            <div style="margin-top:7px; height:7px; border-radius:99px; background:#F0EAFB; overflow:hidden; position:relative;">
+              <!-- KNOWN: a real width, eased so each row nudges it forward rather than snapping.
+                   The sheen is the house `sweep`, the same one the rest of the app uses. -->
+              <sc-if value="{{ liProgKnown }}" hint-placeholder-val="{{ true }}">
+                <div style="height:100%; width:{{ liProgPct }}; border-radius:99px; background:linear-gradient(90deg,#9333EA,#7C00FF); transition:width .45s cubic-bezier(.22,1,.36,1); position:relative; overflow:hidden;">
+                  <div style="position:absolute; inset:0; width:40%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0)); animation:sweep 1.25s linear infinite;"></div>
+                </div>
+              </sc-if>
+              <!-- NOT KNOWN YET: nothing has been reported, so the bar must not claim a position.
+                   A short block travels the track instead — it says working, and nothing more. -->
+              <sc-if value="{{ liProgUnknown }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:0; left:0; height:100%; width:34%; border-radius:99px; background:linear-gradient(90deg,#9333EA,#7C00FF); animation:sweep 1.15s cubic-bezier(.45,0,.55,1) infinite;"></div>
+              </sc-if>
+            </div>
+            <!-- Whose row is being written. The count says how far; this says it is still moving. -->
+            <sc-if value="{{ liProgNowShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:6px; font-size:10px; color:#8C8899; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ liProgNow }}</div>
+            </sc-if>
+            <sc-if value="{{ liProgShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:6px; font-size:10px; color:#A9A6B4;">Leave this open until it finishes.</div>
+            </sc-if>
+          </div>
         </sc-if>
       </div>
     </div>
@@ -17963,6 +17990,14 @@ class Component extends DCLogic {
               this.toast('New message from ' + (d.clientName || 'a client'));
             }
           });
+          // HOW FAR THE IMPORT HAS GOT. Only events carrying THIS browser's job id count: publish
+          // fans out to every staff member, so without the check two people importing at once
+          // would drive each other's bars.
+          es.addEventListener('lead-import', (ev) => {
+            let d = null; try { d = JSON.parse(ev.data); } catch (e) { return; }
+            if (!d || !d.job || d.job !== this._liJob) return;
+            this.setState({ liDone: d.done, liTotal: d.total, liNow: d.name || '' });
+          });
           es.addEventListener('typing', (ev) => {
             let d = null; try { d = JSON.parse(ev.data); } catch (e) { return; }
             if (!d || d.from !== 'client') return;
@@ -22568,11 +22603,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const st9 = this.state;
       if (!st9.liCsv) return;
       const t9 = localStorage.getItem('stimespro:token');
-      this.setState({ liBusy: true, liErr: '' });
+      // A fresh id per run, so a bar can never be driven by the tail of a previous import.
+      this._liJob = 'li-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      this.setState({ liBusy: true, liErr: '', liDone: 0, liTotal: commit ? (st9.liPlan ? st9.liPlan.creates : 0) : 0, liNow: '' });
       fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
-        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit }),
+        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit, job: this._liJob }),
       })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
@@ -22594,7 +22631,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       liStepPreview: this.state.liStep === 'preview',
       liStepDone: this.state.liStep === 'done',
       liBusy: !!this.state.liBusy,
-      liBusyLabel: this.state.liStep === 'preview' ? 'Importing...' : 'Reading the file...',
+      liBusyLabel: this.state.liStep === 'preview' ? 'Importing' : 'Reading the file',
+      ...(() => {
+        // READING a file has no count to report — it is one call and it is quick. IMPORTING does,
+        // and it is the one that takes long enough for somebody to wonder whether it has died.
+        const importing9 = !!this.state.liBusy && this.state.liStep === 'preview';
+        const total9 = Number(this.state.liTotal || 0);
+        const done9 = Math.min(Number(this.state.liDone || 0), total9 || Infinity);
+        // Determinate ONLY once a row has actually been reported. Before that the server may not
+        // have started, or this console may have no stream at all — and a bar frozen at 0% claims
+        // to know something it does not. The indeterminate sweep says "working" and nothing more.
+        const known9 = importing9 && total9 > 0 && done9 > 0;
+        const pct9 = known9 ? Math.max(2, Math.round((done9 / total9) * 100)) : 0;
+        return {
+          liProgShow: importing9,
+          liProgKnown: known9,
+          liProgUnknown: importing9 && !known9,
+          liProgPct: pct9 + '%',
+          liProgCount: total9 ? (done9 + ' of ' + total9) : '',
+          liProgNow: this.state.liNow || '',
+          liProgNowShow: !!(known9 && this.state.liNow),
+        };
+      })(),
       liHasErr: !!this.state.liErr,
       liErr: this.state.liErr || '',
       liFileName: this.state.liFileName || '',
