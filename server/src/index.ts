@@ -86,6 +86,7 @@ import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
+import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
@@ -8287,6 +8288,16 @@ app.post("/api/cron/tick", requireAuth, requireStaff, requireWriteRole, async (_
 });
 
 /**
+ * MOUNTED HERE, AFTER EVERY ROUTE AND BEFORE THE CATCH-ALL BELOW.
+ *
+ * /api/boot answers by running the other routes in process, so all of them have to be registered
+ * first — and it has to come before the 404 handler below, which otherwise answers for it. It was
+ * mounted after that handler to begin with, and the whole endpoint returned 404 while every single
+ * route it dispatches to worked perfectly.
+ */
+mountBoot(app);
+
+/**
  * THE API ANSWERS IN JSON, INCLUDING WHEN IT FAILS.
  *
  * Anything that reached here matched no route, or threw. Express's defaults handle both by sending
@@ -8349,6 +8360,7 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
  * after one can genuinely be corrupt. It is still preferable to a hard exit on a single-instance
  * deployment with no supervisor to restart it.
  */
+
 process.on("unhandledRejection", (reason: any) => {
   console.error("[unhandledRejection]", reason?.stack ?? reason);
 });

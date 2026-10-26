@@ -146,6 +146,22 @@ export function requireHuman(req: Request, res: Response, next: NextFunction) {
 // Verifies the JWT, then confirms against the DB that the account is still active and the
 // token hasn't been invalidated (tokenVersion bump on password change / disable).
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  /**
+   * ALREADY CHECKED, ON THIS SAME REQUEST'S BEHALF.
+   *
+   * /api/boot answers one request by running the ~80 boot routes in process, so they stay the real
+   * routes with their real permission checks rather than a second copy of 80 queries that could
+   * disagree. Without this line each of those would verify the token and look the user up again:
+   * measured at ~4ms a time, which is ~330ms of a ~775ms boot spent proving the same thing eighty
+   * times.
+   *
+   * SAFE BECAUSE `auth` IS NOT AN INPUT. It is a property this middleware assigns to the request
+   * object; nothing a caller can send — no header, no body, no query — can set it. The only way it
+   * is already present is that this same middleware ran for the parent request and boot.ts copied
+   * the verified result onto the sub-request. A request arriving from outside always has it unset.
+   */
+  if ((req as any).auth) return next();
+
   // An API key is the other way in. Keys were issuable long before anything accepted one, so a key
   // looked like access and granted none; this is the middleware that makes them mean something.
   const rawKey = String(req.headers["x-api-key"] ?? "").trim();
