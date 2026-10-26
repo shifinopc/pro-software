@@ -13936,6 +13936,34 @@
                  score panel that is meant to reward filling them in was the thing you could not
                  see. Two columns, split by the question each answers: who they are on the left,
                  what they want on the right. It stacks back to one column under 820px. -->
+            <!-- Paste first, type the rest. A PRO lead usually arrives as a forwarded message with
+                 a signature under it, and every line of that block is a field on this form. -->
+            <div style="border:1px dashed #D9C6F5; background:#FCFAFF; border-radius:12px; padding:10px 12px; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <span style="font-size:11px; font-weight:700; color:#5B21B6;">Paste an email signature and this fills itself in</span>
+                <sc-if value="{{ sigShow }}" hint-placeholder-val="{{ false }}">
+                  <span onClick="{{ sigClear }}" style="font-size:10px; font-weight:700; color:#6F6C7A; cursor:pointer;" style-hover="text-decoration:underline;">Clear</span>
+                </sc-if>
+              </div>
+              <textarea onInput="{{ sigSet }}" rows="2" placeholder="Faisal Al Otaibi&#10;Operations Manager · Al Noor Contracting Est&#10;0551234567 · faisal@alnoor.com.sa" style="margin-top:7px; width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:8px 10px; resize:vertical;" value="{{ sigText }}"></textarea>
+              <sc-if value="{{ sigBusy }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; font-size:10px; font-weight:600; color:#7C00FF;">Reading it…</div>
+              </sc-if>
+              <sc-if value="{{ sigHasErr }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; font-size:10px; color:#C0353A;">{{ sigErr }}</div>
+              </sc-if>
+              <sc-if value="{{ sigHasHits }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                  <sc-for list="{{ sigHits }}" as="h" hint-placeholder-count="3">
+                    <!-- One chip per field found. Clicking it puts that value in the box; the colour
+                         separates what was matched by shape from what was read off a line's position. -->
+                    <span onClick="{{ h.take }}" title="{{ h.why }}" style="font-size:10px; font-weight:600; color:{{ h.color }}; background:{{ h.bg }}; border:1px solid {{ h.bd }}; border-radius:99px; padding:4px 9px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ h.label }} · {{ h.value }}</span>
+                  </sc-for>
+                  <span onClick="{{ sigTakeAll }}" style="font-size:10px; font-weight:700; color:#fff; background:#7C00FF; border-radius:99px; padding:4px 11px; cursor:pointer;" style-hover="background:#6900D6;">Use all</span>
+                </div>
+                <div style="margin-top:6px; font-size:10px; color:#A9A6B4;">{{ sigNote }}</div>
+              </sc-if>
+            </div>
             <div class="ldf-land">
             <div class="ldf-col">
               <div class="ldf-cap">The company<span>who you are talking to</span></div>
@@ -18226,7 +18254,7 @@ class Component extends DCLogic {
      */
     this._openLeadForm = () => {
       if (this._previewScore) this._previewScore({});
-      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '' });
+      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '', sigText: '', sigHits: null, sigErr: '' });
     };
     /**
      * Open the deal DRAWER — the reading of a deal, not the form for changing it.
@@ -36407,6 +36435,31 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * skipped the two side effects below would leave the auto score and the duplicate warning
      * showing an answer for the number as it was a keystroke ago.
      */
+    /**
+     * PASTE → SUGGEST → ACCEPT. The parser is on the server (one set of rules, shared with the
+     * importer's idea of a phone number); this only shows what came back and writes what is
+     * clicked. Nothing is filled in by itself: a signature is somebody else's formatting, and a
+     * field quietly overwritten is worse than a field left empty.
+     */
+    this._sigParse = this._sigParse || ((text) => {
+      clearTimeout(this._sigT);
+      if (!String(text || '').trim()) return this.setState({ sigHits: null, sigErr: '' });
+      // Debounced: a paste is one event but typing into the box is many.
+      this._sigT = setTimeout(() => {
+        const t9 = localStorage.getItem('stimespro:token');
+        this.setState({ sigBusy: true, sigErr: '' });
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/parse-signature', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+          body: JSON.stringify({ text }),
+        })
+          .then(r => r.json().then(j => ({ ok: r.ok, j })))
+          .then(({ ok, j }) => this.setState(ok
+            ? { sigBusy: false, sigHits: j, sigErr: '' }
+            : { sigBusy: false, sigHits: null, sigErr: (j && j.error) || 'That could not be read.' }))
+          .catch(() => this.setState({ sigBusy: false, sigErr: 'Could not reach the server.' }));
+      }, 400);
+    });
     const _setLdfField9 = (k, v) => {
       const next = { ...(this.state.ldForm || {}), [k]: v };
       this.setState({ ldForm: next, ldfErr: '', ldfBad: '' });
@@ -41592,6 +41645,40 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : 'A company you are pitching. No CR number needed — that gets captured when they become a client.',
       ldfSaveLabel: (_ldf && _ldf.id) ? 'Save changes' : 'Save lead',
       ldFormClose: () => this.setState({ ldForm: null, ldfErr: '', ldfBad: '', dupMatches: [] }),
+      ...(() => {
+        // The parser's names, and the form field each one belongs in.
+        const MAP9 = [
+          ['companyName', 'name', 'Company'], ['contactName', 'contact', 'Contact'],
+          ['jobTitle', 'title', 'Title'], ['email', 'email', 'Email'],
+          ['phone', 'phone', 'Phone'], ['city', 'city', 'City'],
+        ];
+        const hits9 = this.state.sigHits || null;
+        const found9 = hits9 ? MAP9.filter(m => hits9[m[0]] && hits9[m[0]].value) : [];
+        const take9 = (field, value) => _setLdfField9(field, value);
+        return {
+          sigText: this.state.sigText || '',
+          sigShow: !!(this.state.sigText || '').trim(),
+          sigBusy: !!this.state.sigBusy,
+          sigHasErr: !!this.state.sigErr,
+          sigErr: this.state.sigErr || '',
+          sigHasHits: found9.length > 0,
+          sigNote: found9.some(m => hits9[m[0]].confidence === 'guess')
+            ? 'Purple was matched by shape and is reliable. Grey was read off a line\u2019s position \u2014 check it.'
+            : 'All of these were matched by shape.',
+          sigHits: found9.map(m => {
+            const h9 = hits9[m[0]];
+            const sure9 = h9.confidence === 'sure';
+            return {
+              label: m[2], value: String(h9.value).slice(0, 34), why: h9.why,
+              color: sure9 ? '#5B21B6' : '#4B4757', bg: sure9 ? '#F5EEFF' : '#F6F4F9', bd: sure9 ? '#E9D8FF' : '#E4E1EC',
+              take: () => take9(m[1], h9.value),
+            };
+          }),
+          sigTakeAll: () => { for (const m of found9) take9(m[1], hits9[m[0]].value); },
+          sigSet: (e) => { const v = e.target.value; this.setState({ sigText: v }); this._sigParse(v); },
+          sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', sigHits: null, sigErr: '' }); },
+        };
+      })(),
       ldfName: (_ldf && _ldf.name) || '', ldfContact: (_ldf && _ldf.contact) || '', ldfTitle: (_ldf && _ldf.title) || '',
       ldfEmail: (_ldf && _ldf.email) || '', ldfSource: (_ldf && _ldf.source) || '',
       ldfCity: (_ldf && _ldf.city) || '', ldfNote: (_ldf && _ldf.note) || '', ldfErr: this.state.ldfErr || '',

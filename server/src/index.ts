@@ -36,6 +36,7 @@ import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./m
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
 import { planMerge, applyMerge } from "./company-merge.js";
+import { parseSignature } from "./signature.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, readScan, IntakeError } from "./intake-agent.js";
 import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
@@ -4372,6 +4373,24 @@ app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requi
   } catch (e: any) {
     return fail(res, 400, e, "employees.import");
   }
+});
+
+/**
+ * Paste a signature, get the fields.
+ *
+ * Reads only — it writes nothing and names nobody. The console sends the pasted block and gets back
+ * suggestions, each one saying how sure it is and why; what becomes a lead is whatever the person
+ * accepts on the form afterwards.
+ *
+ * On the server rather than in the browser so there is ONE parser: the rules the console would need
+ * are the same rules the importer needs for a phone number, and two copies of "what shape is a
+ * Saudi mobile" is how they come to disagree.
+ */
+app.post("/api/leads/parse-signature", requireAuth, requireStaff, (req, res) => {
+  const text = String(req.body?.text ?? "");
+  if (!text.trim()) return res.status(400).json({ error: "Paste the signature block first." });
+  if (text.length > 4000) return res.status(400).json({ error: "That is longer than a signature — paste just the block at the end of the message." });
+  res.json(parseSignature(text));
 });
 
 /**
