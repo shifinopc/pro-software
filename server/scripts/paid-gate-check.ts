@@ -10,10 +10,10 @@
  * This reads the graph THE DATABASE ACTUALLY HOLDS, not the rebuild script, because the two drift —
  * the template is also editable in the builder, and a rule deleted there is a gate that is gone.
  *
- * A step may hold the line either way, and the workflow uses both:
- *   RULE     — completion is refused while the answer is "unpaid" (the fee steps)
- *   LOOP     — completion is allowed and a decision routes straight back to the step (violations)
- * Either passes. Neither fails, and the step is named.
+ * Holding the line is not enough on its own: the step must SAY SO. Violations used to be held by a
+ * decision that routed the run straight back, which does stop it — and looks exactly like a refresh,
+ * because completing closed the task and re-raised it with the boxes empty. So only a rule passes,
+ * and a silent loop is reported as the failure it is.
  *
  * It is written against the shape rather than against three known variables, so a fourth fee added
  * next year is checked the day it is added and nobody has to remember this file exists.
@@ -76,7 +76,8 @@ const main = async () => {
           fails.push(`${where} — refuses "${PAID}" too: ${stillBroken[0].message}. The step cannot be completed at all.`);
         }
       } else if (byLoop) {
-        console.log(`  ok    ${where}\n        loops back via "${byLoop.label || byLoop.id}"`);
+        fails.push(`${where} — held only by the decision "${byLoop.label || byLoop.id}", which routes back silently. `
+          + `The step completes, re-opens with the boxes empty, and nothing tells the officer why.`);
       } else {
         fails.push(`${where} — "${UNPAID}" completes the step and the run moves on. Nothing stops it.`);
       }

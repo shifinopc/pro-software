@@ -47,8 +47,11 @@ const money = (p: string, label: string) => [
  * while it is true; it just is not a finished step. The officer keeps what they typed, the task
  * stays on their desk, and it completes the moment the payment is recorded.
  *
- * The violations step already works this way by a different route — its decision loops back until
- * the fine is settled — so it is deliberately left alone rather than given a second mechanism.
+ * VIOLATIONS USED TO DO THIS THE OTHER WAY and it was worse. A decision sent the run straight back
+ * to the step, so the step did not advance — but completing it closed the task and re-raised it with
+ * the boxes empty, which on screen is a refresh with no explanation and the officer's typing gone.
+ * Not advancing is not the requirement; saying why is. The decision that looped is deleted with this,
+ * because a refusal here makes its "else" branch unreachable.
  */
 const mustBePaid = (p: string, label: string, when?: { var: string; op: string; value: string }) => ({
   ...(when ? { when } : {}),
@@ -109,12 +112,8 @@ const nodes = [
         { var: "violationPaid", type: "select", label: "Violation — paid?", options: "paid,unpaid", required: true, showIf: { var: "hasViolation", equals: "yes" } },
         { var: "violationRef", type: "text", label: "Payment reference", required: true, showIf: { var: "violationPaid", equals: "paid" } },
         { var: "violationPaidOn", type: "date", label: "Payment date", required: true, showIf: { var: "violationPaid", equals: "paid" } },
-      ] } },
-  { id: "d_viol", type: "decision", label: "Clear of violations?",
-    config: { branches: [
-      { var: "hasViolation", op: "eq", value: "none", key: "clear" },
-      { var: "violationPaid", op: "eq", value: "paid", key: "clear" },
-    ] } },
+      ],
+      rules: [mustBePaid("violation", "The outstanding violation", { var: "hasViolation", op: "eq", value: "yes" })] } },
 
   { id: "renew", type: "task", label: "Renew Iqama",
     config: { assigneeRole: "pro_officer", slaHours: 24,
@@ -144,10 +143,7 @@ const edges = [
   { from: "fix_ins", to: "prereq", condition: "" },
   { from: "permit", to: "jawazat", condition: "" },
   { from: "jawazat", to: "violations", condition: "" },
-  { from: "violations", to: "d_viol", condition: "" },
-  { from: "d_viol", to: "renew", condition: "clear" },
-  // Not a dead end: the step comes back until the violation is recorded settled.
-  { from: "d_viol", to: "violations", condition: "else" },
+  { from: "violations", to: "renew", condition: "" },
   { from: "renew", to: "issue_iqama", condition: "" },
   { from: "issue_iqama", to: "issue_permit", condition: "" },
   { from: "issue_permit", to: "notify", condition: "" },
