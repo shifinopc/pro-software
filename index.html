@@ -3420,7 +3420,7 @@
             <div>
               <div style="font-size:11px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">PRO OPERATIONS</div>
               <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Task List</h1>
-              <div style="font-size:11px; color:#8C8899; margin-top:4px;">Every officer's tasks across all clients · My Tasks shows only yours</div>
+              <div style="font-size:11px; color:#8C8899; margin-top:4px;">{{ tasksSubtitle }}</div>
             </div><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ openTaskModal }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ New task</button></sc-if>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;">
@@ -3434,9 +3434,6 @@
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content;">
             <sc-for list="{{ taskTabs }}" as="t" hint-placeholder-count="5"><span onClick="{{ t.select }}" style="font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 10px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }}</span></sc-for>
-            </div>
-            <div style="display:flex; align-items:center; gap:7px; margin-left:6px;">
-              <sc-for list="{{ taskSaved }}" as="s" hint-placeholder-count="4"><span onClick="{{ s.select }}" style="font-size:10px; font-weight:600; color:{{ s.color }}; background:{{ s.bg }}; border:1px solid #EDEBF2; padding:5px 11px; border-radius:99px; cursor:pointer;">☆ {{ s.label }}</span></sc-for>
             </div>
             <span onClick="{{ toggleSelAll }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; margin-left:auto;" style-hover="text-decoration:underline;">Select all</span>
             <span onClick="{{ toggleArchivedView }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ taskArchiveLabel }}</span>
@@ -4710,7 +4707,7 @@
           <div>
             <div style="font-size:11px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">OPERATIONS</div>
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Appointments</h1>
-            <div style="font-size:11px; color:#8C8899; margin-top:4px;">Medical, biometrics, government visits &amp; meetings across clients</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">{{ apptSubtitle }}</div>
           </div>
           <div style="display:flex; align-items:center; gap:11px;">
             <span onClick="{{ aptShow }}" title="What kinds of appointment this firm books" style="font-size:11px; font-weight:600; color:#6F6C7A; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF; text-decoration:underline;">Types</span>
@@ -26961,7 +26958,32 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         };
       });
     })();
-    const visibleTasks = [...allTasks.filter(t => t.archived === showArchived), ..._tlRuns];
+    /**
+     * THE CLIENT PICKER AT THE TOP OF THE PAGE MEANS THIS LIST TOO.
+     *
+     * Documents, invoices, employees, workflow runs, tickets and the dashboard all narrow to the
+     * chosen client; this list did not, so picking "Malbriz Arabia Company" left it showing every
+     * other client's renewals. A filter that is visibly set and silently ignored is worse than no
+     * filter — the reader believes the list in front of them.
+     *
+     * Both halves carry a resolved client NAME already (`clientName` falling back to the company),
+     * so this compares what the picker holds. A row with no client at all drops out of a scoped
+     * view, which is right: it is not this client's work.
+     */
+    const _tlScope = (rows) => _clientScope ? rows.filter(t9 => t9.client === _clientScope) : rows;
+    const visibleTasks = _tlScope([...allTasks.filter(t => t.archived === showArchived), ..._tlRuns]);
+    // The sidebar badge, counted off the SAME rows the screen renders — which is what the comment
+    // on _liveBadges already promises and this one entry did not keep. It read `taskDefs`: plain
+    // tasks only, so it said 3 while the list showed sixty, because almost everything here is a
+    // workflow run. Archived is excluded outright rather than following the screen's toggle — a
+    // badge that changes when you tick "show archived" is reporting the control, not the work.
+    const _tlOpen = _tlScope([...allTasks.filter(t9 => !t9.archived), ..._tlRuns])
+      .filter(t9 => t9.status !== 'Done' && t9.status !== 'Cancelled');
+    // The heading said "across all clients" whether or not one was chosen, so with the list correctly
+    // narrowed the page contradicted itself in its own subtitle.
+    const tasksSubtitle = _clientScope
+      ? (_clientScope + " · every officer's tasks for this client. My Tasks shows only yours")
+      : "Every officer's tasks across all clients · My Tasks shows only yours";
     const tasks = visibleTasks.filter(t => tFilter === 'All' || t.status === tFilter);
     const taskTabs = ['All', 'To do', 'In progress', 'Blocked', 'Done'].map(k => ({
       label: k, select: () => this.setState({ taskFilter: k }),
@@ -27073,13 +27095,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       _taskBucket('Cancelled', '#8C8899', '#F3F1F7', t => t.status === 'Cancelled'),
     ].filter(Boolean);
     const tasksApi = {
-      tasks, taskTabs, tasksEmpty: tasks.length === 0, taskGroups,
+      tasks, taskTabs, tasksEmpty: tasks.length === 0, taskGroups, tasksSubtitle,
       taskArchivedView: showArchived,
       taskArchiveLabel: showArchived ? '← Back to active' : 'View archived',
       toggleArchivedView: () => this.setState({ taskArchived: !showArchived }),
-      taskSaved: [['All open', 'All'], ['To do', 'To do'], ['In progress', 'In progress'], ['Blocked', 'Blocked']].map(([label, f]) => ({
-        label, active: tFilter === f, color: tFilter === f ? '#7C00FF' : '#8C8899', bg: tFilter === f ? '#F5EEFF' : '#fff',
-        select: () => this.setState({ taskFilter: f }) })),
       taskSelected: (this.state.taskSel || []).length,
       taskAnySel: (this.state.taskSel || []).length > 0,
       taskAllSel: (this.state.taskSel || []).length === tasks.length && tasks.length > 0,
@@ -27679,7 +27698,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const qSlaTone = { ok: ['#E7F8EF', '#0E9355'], warn: ['#FEF4E2', '#B8860B'], late: ['#FEECEC', '#C0353A'] };
     // WIRED: real client service requests from /api/service-requests. open→New, resolved/rejected→Ready
     // (the resolved/rejected chip overlays via qStatusMap-style state).
-    const qSrv = Array.isArray(this.state.serviceRequestsData) ? this.state.serviceRequestsData : null;
+    // Narrowed by the header's client picker, like every other list on the page. _scopeRows is the
+    // same helper the dashboard uses, so the queue and the dashboard's request count cannot disagree.
+    const qSrv = Array.isArray(this.state.serviceRequestsData) ? _scopeRows(this.state.serviceRequestsData) : null;
     // 'accepted' is new — without it an accepted request fell back to 'New' and the queue said
     // nobody had touched something a task and a workflow had already been created for.
     const Q_STAGE = { open: 'New', accepted: 'Accepted', resolved: 'Ready', rejected: 'Ready' };
@@ -34192,7 +34213,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       claim: r.claim || (() => {}),
       ...r, kindLabel: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[0], kindColor: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[1], kindBg: (kindBadge[r.kind] || ['—', '#6F6C7A', '#F3F1F7'])[2],
       badgeNum: r.badge[0], badgeUnit: r.badge[1], badgeBg: r.badge[2], badgeColor: r.badge[3],
-    }));
+    })).filter(r => !_clientScope || r.client === _clientScope);
     // ── NARROW TO ONE WORKFLOW ──────────────────────────────────────────────────────────────────
     //
     // A PRO officer's queue mixes everything they are responsible for: plain tasks beside steps from
@@ -42764,7 +42785,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _apTypeOf = (name) => _apTypes.find(t => String(t.name).toLowerCase() === String(name || '').trim().toLowerCase()) || null;
     const apMgmtStatus = this.state.apMgmtStatus || {};
     // WIRED: real appointments from /api/appointments; status changes persist via PUT.
-    const apData = this.state.appointmentsData;
+    // Scoped to the chosen client. Done at the source rather than on the built rows, because a row
+    // keeps only a display string by then and the client is no longer a field you can match on.
+    const apData = Array.isArray(this.state.appointmentsData) ? _scopeRows(this.state.appointmentsData) : this.state.appointmentsData;
     const apptDefs = (Array.isArray(apData)
       ? apData.map(a2 => [a2.id, a2.type || 'Meeting', a2.employee || '—', a2.clientName || '—', a2.location || '—', a2.date || '—', a2.time || '—', 'Unassigned', a2.status || '', a2.notes || '', Array.isArray(a2.history) ? a2.history : [], a2.taskId || null, (a2.pendingReschedule && typeof a2.pendingReschedule === 'object') ? a2.pendingReschedule : null])
       : (_authed ? [] : [
@@ -43071,6 +43094,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ...apManageApi,
       // The tabs ARE the ladder, plus any status on a record that the ladder does not contain —
       // otherwise a value nobody configured is a row you can see but never filter to.
+      // Says which client when one is chosen. The same lie the dashboard's request title already
+      // refuses to tell: a heading reading "across clients" over a list showing one is worse than
+      // no heading, because it is read as a fact about the list.
+      apptSubtitle: _clientScope
+        ? (_clientScope + ' · medical, biometrics, government visits & meetings')
+        : 'Medical, biometrics, government visits & meetings across clients',
       apptTabs: ['All'].concat(_apLadder.names, [...new Set(allAppts.map(a => a.status))].filter(x => x && !_apLadder.known(x))).map(k => ({
         label: k, count: k === 'All' ? allAppts.length : apCount2(k),
         select: () => this.setState({ apMgmtFilter: k }),
@@ -43091,7 +43120,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // ---- Courier board ----
     const courStatusMap = this.state.courStatus || {};
     // WIRED: real courier shipments from /api/courier-shipments; advance persists via PUT.
-    const crData2 = this.state.courierData;
+    // Scoped here and not below for a concrete reason: the board's subject cell is
+    // `clientName · ref` joined into one string, so by the time a row exists there is no client
+    // left to filter on without picking a substring apart.
+    const crData2 = Array.isArray(this.state.courierData) ? _scopeRows(this.state.courierData) : this.state.courierData;
     const courierDefs = (Array.isArray(crData2)
       ? crData2.map(c2 => [c2.id, c2.description || (c2.direction === 'inbound' ? 'Document pickup' : 'Document delivery'), [c2.clientName, c2.ref].filter(Boolean).join(' · ') || '—', (c2.fromPlace && c2.toPlace) ? (c2.fromPlace + ' → ' + c2.toPlace) : (c2.direction === 'inbound' ? 'Authority → office' : 'Office → client'), c2.carrier || '—', c2.status || '',
           // What is actually in the envelope. A shipment that names its document can be traced from
@@ -43490,7 +43522,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // without scope=personal is the oversight view — for an admin it returns everyone's work —
         // so this badge read 9 while the screen it points at said "Inbox zero".
         'My Tasks': allWorkRows.length,
-        'Task List': taskDefs.filter(t9 => !t9._archived && t9.status !== 'Done' && t9.status !== 'Cancelled').length,
+        'Task List': _tlOpen.length,
         'Approvals': apCount('Pending'),
         'SLA Monitor': slaCols[1].count + slaCols[2].count,
         'Requests Queue': allQueue.filter(q9 => q9.stage === 'New').length,

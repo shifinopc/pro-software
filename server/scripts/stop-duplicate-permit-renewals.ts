@@ -30,7 +30,31 @@ import { prisma } from "../src/db.js";
 
 const APPLY = process.argv.includes("--apply");
 const nowISO = () => new Date().toISOString();
-const who = (i: { variables: unknown }) => String(((i.variables ?? {}) as any).employeeId ?? "").trim();
+
+/**
+ * WHO A RUN IS ABOUT — and why one key is not enough.
+ *
+ * This read `variables.employeeId`, and that quietly let three duplicates through: a run started by
+ * hand carries the person's NAME and no id (there is no employeeId column on an instance, only
+ * whatever is in variables), so a permit run failed to match an Iqama renewal running for the very
+ * same employee and the report called it genuine work.
+ *
+ * Keying by name INSTEAD was the obvious repair and is just as broken the other way: one side then
+ * holds "id:abc" and the other "name:…", two key spaces that can never meet however equal the
+ * people are. So a run offers EVERY key it can prove, and two runs are the same person if they
+ * share any one of them.
+ *
+ * The name key is scoped to the client, because two employees of one name in one company is the
+ * case that makes a bare name wrong — the same name+company fallback completeTask already uses.
+ */
+const keysOf = (i: { variables: unknown; title: string; companyId: string | null }): string[] => {
+  const out: string[] = [];
+  const id = String(((i.variables ?? {}) as any).employeeId ?? "").trim();
+  if (id) out.push("id:" + id);
+  const name = i.title.replace(/.*—\s*/, "").trim().toLowerCase();
+  if (name && name !== i.title.trim().toLowerCase()) out.push(`name:${i.companyId ?? "-"}:${name}`);
+  return out;
+};
 
 const main = async () => {
   const tpl = await prisma.workflowTemplate.findFirst({ where: { name: "Work Permit Renewal" } });
@@ -61,17 +85,33 @@ const main = async () => {
 
   const running = await prisma.workflowInstance.findMany({
     where: { status: "running" },
-    select: { id: true, title: true, clientName: true, variables: true, startedAt: true, template: { select: { name: true } } },
+    select: { id: true, title: true, clientName: true, companyId: true, variables: true, startedAt: true, template: { select: { name: true } } },
   });
-  const iqamaFor = new Set(running.filter(i => i.template.name === "Iqama Renewal").map(who).filter(Boolean));
+  const iqamaFor = new Set(running.filter(i => i.template.name === "Iqama Renewal").flatMap(keysOf));
   const permits = running.filter(i => i.template.name === "Work Permit Renewal");
-  const dupes = permits.filter(i => who(i) && iqamaFor.has(who(i)));
+  const dupes = permits.filter(i => keysOf(i).some(k => iqamaFor.has(k)));
   const keep = permits.filter(i => !dupes.includes(i));
 
   console.log(`\nrunning Work Permit renewals: ${permits.length}`);
   console.log(`  duplicates (same person has an Iqama renewal running): ${dupes.length}`);
   console.log(`  left alone: ${keep.length}`);
-  for (const k of keep) console.log(`      keep  ${k.clientName ?? "—"} — ${k.title}${who(k) ? "" : "   [no employeeId — cannot be checked]"}`);
+  for (const k of keep) {
+    // No Iqama renewal for this person. Either it is genuinely not due, or the renewal pass is
+    // HOLDING it on a prerequisite — which is the answer somebody reading this list actually wants,
+    // because then the permit is not blocked on the permit at all.
+    const name = k.title.replace(/—.*/, "").trim() && k.title.replace(/.*—\s*/, "").trim();
+    const held = await prisma.notification.findFirst({
+      where: { dedupeKey: { startsWith: "renewal-held:" }, message: { contains: name } },
+      select: { message: true },
+    });
+    const other = await prisma.workflowInstance.findMany({
+      where: { status: "running", title: { contains: name }, NOT: { template: { name: "Work Permit Renewal" } } },
+      select: { template: { select: { name: true } } },
+    });
+    console.log(`      keep  ${k.clientName ?? "—"} — ${k.title}`);
+    if (held) console.log(`              Iqama renewal held: ${held.message}`);
+    if (other.length) console.log(`              also running: ${other.map(o => o.template.name).join(", ")}`);
+  }
 
   if (!APPLY) return console.log(`\nreport only. Re-run with --apply to switch the trigger off and cancel ${dupes.length}.`);
 
