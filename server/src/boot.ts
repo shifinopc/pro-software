@@ -58,6 +58,17 @@ export const BOOT_PATHS: string[] = [
   "/api/countries", "/api/packs", "/api/packs/installed", "/api/packs/updates",
   "/api/workforce", "/api/workforce-history?days=90", "/api/setup-check", "/api/groups",
   "/api/service-items", "/api/api-keys", "/api/credentials", "/api/notifications",
+  // The rest of what a cold start asks for, found by counting the requests a real sign-in made
+  // after the first list was in place: twenty-four were left, and all but the two POSTs below are
+  // plain GET lists that were already being fetched anyway.
+  //   /api/auth/login and /api/stream-ticket are POSTs and stay out — this batch is GET only.
+  "/api/users", "/api/companies", "/api/employees", "/api/documents", "/api/tasks",
+  "/api/invoices", "/api/payments", "/api/quotations", "/api/service-requests", "/api/audit",
+  "/api/sales-report", "/api/proposal-templates", "/api/workflow/my-work",
+  "/api/workforce-bands", "/api/workforce-band-sets",
+  "/api/appointments", "/api/appointment-statuses", "/api/appointment-types",
+  "/api/courier-shipments", "/api/courier-statuses",
+  "/api/agents", "/api/agents/connection",
 ];
 
 type Answer = { status: number; body: unknown };

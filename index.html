@@ -16459,10 +16459,44 @@ class Component extends DCLogic {
      * 403 is scoped to the dataset — a role may legitimately be denied one collection and hold
      * others, so it must not read as a broken app.
      */
+    /**
+     * THE EIGHTY STARTUP LISTS, FETCHED AS ONE REQUEST.
+     *
+     * Starting the console asks for about eighty lists. /api/boot answers all of them together —
+     * the server runs the same routes in process, so what comes back is what each route would have
+     * said, guards and all (see server/src/boot.ts).
+     *
+     * This is deliberately a DROP-IN for fetch rather than a rewrite of the eighty call sites. Each
+     * of those already handles its own shape — one returns an object, one an array, several treat a
+     * failure as "leave what we have alone" — and rewriting eighty of them to read out of a map is
+     * eighty chances to get one wrong for no gain. They keep their `.then` chains; only where the
+     * answer comes from changes.
+     *
+     * A PATH THE BATCH DOES NOT CARRY FALLS THROUGH to a real request. That is what makes the list
+     * on the server safe to forget: adding a boot call and not adding it there costs one request,
+     * not a blank screen.
+     */
+    this._bootReady = this._bootReady || Promise.resolve();
+    this._bootPrime = () => {
+      const tok = localStorage.getItem('stimespro:token');
+      this._bootBatch = null;
+      if (!tok) return (this._bootReady = Promise.resolve());
+      return (this._bootReady = fetch((this._apiBase || 'http://localhost:4100') + '/api/boot', { headers: { Authorization: 'Bearer ' + tok } })
+        .then(r => (r.ok ? r.json() : null))
+        .then(j => { this._bootBatch = (j && j.paths) || null; })
+        // A batch that fails is not a failure: every call simply goes the way it used to.
+        .catch(() => { this._bootBatch = null; }));
+    };
+    // Looks enough like a Response for the callers above: `ok`, `status`, and `json()`.
+    this._bootFetch = (path, init) => this._bootReady.then(() => {
+      const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
+      if (!hit) return fetch((this._apiBase || 'http://localhost:4100') + path, init);
+      return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body) };
+    });
     this._load = (path, key, apply) => {
       const tok = localStorage.getItem('stimespro:token');
       this._setLoad(key, 'loading');
-      return fetch((this._apiBase || 'http://localhost:4100') + path, { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+      return this._bootFetch(path, { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
         .then((res) => {
           // 401 with a token in hand means it was rejected — the session died under them.
           // 401 with no token means they are simply signed out, which is not a fault and must not
@@ -17204,37 +17238,41 @@ class Component extends DCLogic {
       const tok = localStorage.getItem('stimespro:token');
       const hdr = {};
       if (tok) hdr.Authorization = 'Bearer ' + tok;
+      // One request for the eighty lists below; see _bootFetch. Primed before any of them run, so
+      // each resolves out of the batch instead of asking again. Anything the batch does not carry
+      // still goes the old way.
+      this._bootPrime();
       // A FAILED load must leave what we already have alone. These used to resolve to `{}` on a
       // non-2xx, and `{}` passes a `typeof v === 'object'` guard — so one 401 (this runs more than
       // once, and can fire before the token is in hand) silently wiped the loaded settings. For
       // `orgSet` that meant invoices printing with no seller name at all.
-      fetch(API + '/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
       this._load('/api/users', 'usersData', (v) => this.setState({ usersData: v }));
       // The resolved matrix, from the server. Presets used to live only in this file, so the
       // screen could draw a grid the backend had never heard of — which is exactly how it ended
       // up showing 11 modules while the enforcement knew 12.
-      this._loadPerms = () => fetch(API + '/api/permissions', { headers: hdr })
+      this._loadPerms = () => this._bootFetch('/api/permissions', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && v.modules) this.setState({ permsApi: v }); })
         .catch(() => {});
       this._loadPerms();
       // What the grid covers, asked of the router. Failure is silent and the panel simply does not
       // draw: a diagnostic that cannot answer should say nothing rather than imply full coverage.
-      fetch(API + '/api/permissions/coverage', { headers: hdr })
+      this._bootFetch('/api/permissions/coverage', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && Array.isArray(v.modules)) this.setState({ permCoverage: v }); })
         .catch(() => {});
       // The mailbox connection. Four working endpoints had no UI at all, so a firm could not
       // connect a mailbox from the console — the Inbox could only ever show what a sync had already
       // fetched, and nothing could start one.
-      this._loadMailbox = () => fetch(API + '/api/mailbox/status', { headers: hdr })
+      this._loadMailbox = () => this._bootFetch('/api/mailbox/status', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v) this.setState({ mboxData: v }); })
         .catch(() => {});
       this._loadMailbox();
       // The kinds of courier job this firm runs. Was five words hardcoded in the booking form, so a
       // firm running anything else had to ask for a code change.
-      this._loadCourierTypes = () => fetch(API + '/api/courier-job-types', { headers: hdr })
+      this._loadCourierTypes = () => this._bootFetch('/api/courier-job-types', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ courierTypesData: v }); })
         .catch(() => {});
@@ -17256,45 +17294,45 @@ class Component extends DCLogic {
       };
       this._loadLadders();
       // What a checklist rule may be written against, with how many clients hold a value for each.
-      fetch(API + '/api/checklist-vocabulary', { headers: hdr })
+      this._bootFetch('/api/checklist-vocabulary', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v) this.setState({ checklistVocabData: v }); })
         .catch(() => {});
-      fetch(API + '/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
-      fetch(API + '/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
+      this._bootFetch('/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
+      this._bootFetch('/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
       this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
-      fetch(API + '/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
-      fetch(API + '/api/settings/notifDigest', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifDigestState: v }); }).catch(() => {});
-      fetch(API + '/api/email-log?days=7', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v) this.setState({ mailLog: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/notifDigest', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifDigestState: v }); }).catch(() => {});
+      this._bootFetch('/api/email-log?days=7', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v) this.setState({ mailLog: v }); }).catch(() => {});
       // Both automation blobs, merged into one flat map for the screen. `autoRulesRaw.sales` is kept
       // separately so saving the two numbers on this screen cannot drop the toggles that live in the
       // same blob but are edited elsewhere.
       this._loadAutoRules = () => Promise.all([
-        fetch(API + '/api/settings/salesRules', { headers: hdr }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
-        fetch(API + '/api/settings/jobRules', { headers: hdr }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+        this._bootFetch('/api/settings/salesRules', { headers: hdr }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
+        this._bootFetch('/api/settings/jobRules', { headers: hdr }).then(r => (r.ok ? r.json() : {})).catch(() => ({})),
       ]).then(([sales, job]) => this.setState({
         autoRules: { ...(sales || {}), ...(job || {}) },
         autoRulesRaw: { sales: sales || {}, job: job || {} },
       }));
       this._loadAutoRules();
-      fetch(API + '/api/settings/security', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ securityState: v }); }).catch(() => {});
-      fetch(API + '/api/settings/printBranding', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printBranding: v }); }).catch(() => {});
-      fetch(API + '/api/settings/printLayout', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printLayout: v }); }).catch(() => {});
-      fetch(API + '/api/settings/roles', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customRoles: v }); }).catch(() => {});
-      fetch(API + '/api/workflow/templates', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfTemplates: v }); }).catch(() => {});
-      fetch(API + '/api/custom-objects', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customObjects: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/security', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ securityState: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/printBranding', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printBranding: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/printLayout', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ printLayout: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/roles', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customRoles: v }); }).catch(() => {});
+      this._bootFetch('/api/workflow/templates', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfTemplates: v }); }).catch(() => {});
+      this._bootFetch('/api/custom-objects', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ customObjects: v }); }).catch(() => {});
       // Both the configured formats and the next number each one would produce, so the screen can
       // show what the current settings actually yield rather than a sample.
-      fetch(API + '/api/record-sequences', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.sequences) this.setState({ rsSaved: v.sequences, rsNext: v.next || {} }); }).catch(() => {});
+      this._bootFetch('/api/record-sequences', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.sequences) this.setState({ rsSaved: v.sequences, rsNext: v.next || {} }); }).catch(() => {});
       // Admin-only: a 403 for every other role is expected, and leaves both pieces of state unset
       // so the nav badge simply doesn't appear.
-      fetch(API + '/api/error-reports', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.rows)) this.setState({ errReportsData: v.rows, errReportCounts: v.counts || {} }); }).catch(() => {});
+      this._bootFetch('/api/error-reports', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.rows)) this.setState({ errReportsData: v.rows, errReportCounts: v.counts || {} }); }).catch(() => {});
       this._load('/api/invoices', 'invoicesData', (v) => this.setState({ invoicesData: v }));
-      fetch(API + '/api/document-types', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ docTypesData: v }); }).catch(() => {});
+      this._bootFetch('/api/document-types', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ docTypesData: v }); }).catch(() => {});
       // The send-out library: small, and needed by the proposal dialog the moment it opens.
-      fetch(API + '/api/collateral', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ collateralData: v }); }).catch(() => {});
-      fetch(API + '/api/settings/countryRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ countryRulesData: v }); }).catch(() => {});
-      fetch(API + '/api/settings/departments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ deptData: v }); }).catch(() => {});
+      this._bootFetch('/api/collateral', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ collateralData: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/countryRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ countryRulesData: v }); }).catch(() => {});
+      this._bootFetch('/api/settings/departments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ deptData: v }); }).catch(() => {});
       this._load('/api/companies', 'companiesData', (v) => this.setState({ companiesData: v }));
       this._load('/api/proposal-templates', 'propTemplates', (v) => this.setState({ propTemplates: v }));
       // Leads and prospects, asked for explicitly. /api/companies defaults to CLIENTS ONLY so that
@@ -17303,17 +17341,17 @@ class Component extends DCLogic {
       // lists and asking thirty render sites to remember the difference.
       // `churned` included so its tab can show a real count — asking for a lifecycle the fetch
       // never returns is a tab that reads zero forever and looks like a bug in the data.
-      this._loadLeads = () => fetch(API + '/api/companies?lifecycle=lead,prospect,lost,churned', { headers: hdr })
+      this._loadLeads = () => this._bootFetch('/api/companies?lifecycle=lead,prospect,lost,churned', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ leadsData: v }); })
         .catch(() => {});
       this._loadLeads();
-      this._loadContacts = () => fetch(API + '/api/contacts', { headers: hdr })
+      this._loadContacts = () => this._bootFetch('/api/contacts', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ contactsData: v }); })
         .catch(() => {});
       this._loadContacts();
-      this._loadContactsArchived = () => fetch(API + '/api/contacts?includeArchived=1', { headers: hdr })
+      this._loadContactsArchived = () => this._bootFetch('/api/contacts?includeArchived=1', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ contactsArchivedData: v.filter(c => c.archived) }); })
         .catch(() => {});
@@ -17326,7 +17364,7 @@ class Component extends DCLogic {
         const who = mine === undefined ? this.state.pipMine : mine;
         const me = (this.state.meUser || {}).id || '';
         const qs = who && me ? '?ownerId=' + encodeURIComponent(me) : '';
-        return fetch(API + '/api/pipeline' + qs, { headers: hdr })
+        return this._bootFetch('/api/pipeline' + qs, { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
           .then(v => { if (v && Array.isArray(v.columns)) this.setState({ pipelineData: v }); })
           .catch(() => {});
@@ -17334,7 +17372,7 @@ class Component extends DCLogic {
       this._loadPipeline();
       // The checklist rules, so a stage can be pointed at one by NAME. Same list the workflow
       // builder uses — one vocabulary across both halves rather than two that drift.
-      this._loadChecklistRules = () => fetch(API + '/api/workflow/checklist-rules', { headers: hdr })
+      this._loadChecklistRules = () => this._bootFetch('/api/workflow/checklist-rules', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ checklistRulesData: v }); })
         .catch(() => {});
@@ -17342,12 +17380,12 @@ class Component extends DCLogic {
       // The field sets — what a step RECORDS, as against what it collects. Same screen-and-pack
       // treatment as the checklist rules above, and loaded the same way so the workflow builder and
       // the Field Sets screen read one list rather than two that can disagree.
-      this._loadFieldSets = () => fetch(API + '/api/workflow/field-sets', { headers: hdr })
+      this._loadFieldSets = () => this._bootFetch('/api/workflow/field-sets', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ fieldSetsData: v }); })
         .catch(() => {});
       this._loadFieldSets();
-      this._loadStages = () => fetch(API + '/api/pipeline-stages', { headers: hdr })
+      this._loadStages = () => this._bootFetch('/api/pipeline-stages', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ stagesData: v }); })
         .catch(() => {});
@@ -17355,22 +17393,22 @@ class Component extends DCLogic {
       // The two wording lists. They are SUGGESTIONS — every field that uses them still accepts
       // anything typed, so an empty list degrades to a plain text box rather than blocking the save.
       this._loadPicklists = () => {
-        fetch(API + '/api/lead-sources', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/lead-sources', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ leadSourcesData: v }); }).catch(() => {});
-        fetch(API + '/api/lost-reasons', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/lost-reasons', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ lostReasonsData: v }); }).catch(() => {});
-        fetch(API + '/api/competitors', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/competitors', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ competitorsData: v }); }).catch(() => {});
-        fetch(API + '/api/industries', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/industries', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ industriesData: v }); }).catch(() => {});
         // What the firm sells, and what a quotation line charges for.
-        fetch(API + '/api/products', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/products', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ productsData: v }); }).catch(() => {});
-        fetch(API + '/api/charge-types', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/charge-types', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ chargeTypesData: v }); }).catch(() => {});
-        fetch(API + '/api/campaigns', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/campaigns', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ campaignsData: v }); }).catch(() => {});
-        fetch(API + '/api/cancel-reasons', { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        this._bootFetch('/api/cancel-reasons', { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (Array.isArray(v)) this.setState({ cancelReasonsData: v }); }).catch(() => {});
       };
       this._loadPicklists();
@@ -17400,7 +17438,7 @@ class Component extends DCLogic {
         const p = period || this._tpPeriod || '';
         // A REFUSAL IS AN ANSWER. Swallowing it left the screen saying "Loading…" for as long as
         // somebody cared to look at it — no data and no explanation, which is the worst of both.
-        return fetch(API + '/api/team-performance' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
+        return this._bootFetch('/api/team-performance' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
           .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, j })).catch(() => ({ ok: false, status: r.status, j: null })))
           .then(({ ok, status, j }) => {
             if (ok && j && j.period) return this.setState({ tpData: j, tpError: '' });
@@ -17416,27 +17454,27 @@ class Component extends DCLogic {
       this._loadTF = (period) => {
         if (period !== undefined) this._tfPeriod = period;
         const p = this._tfPeriod || '';
-        return fetch(API + '/api/targets-forecast' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
+        return this._bootFetch('/api/targets-forecast' + (p ? '?period=' + encodeURIComponent(p) : ''), { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
           .then(v => { if (v) this.setState({ tfData: v }); })
           .catch(() => {});
       };
-      this._loadInbox = () => fetch(API + '/api/inbox', { headers: hdr })
+      this._loadInbox = () => this._bootFetch('/api/inbox', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v) this.setState({ inboxData: v }); })
         .catch(() => {});
-      this._loadTeams = () => fetch(API + '/api/teams?all=1', { headers: hdr })
+      this._loadTeams = () => this._bootFetch('/api/teams?all=1', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ teamsData: v }); })
         .catch(() => {});
       this._loadTeams();
       // `mine` is passed in rather than read from state, so a chip press cannot race a stale closure.
-      this._loadFollowUps = (mine) => fetch(API + '/api/follow-ups' + (mine ? '?mine=1' : ''), { headers: hdr })
+      this._loadFollowUps = (mine) => this._bootFetch('/api/follow-ups' + (mine ? '?mine=1' : ''), { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ followUpsData: v }); })
         .catch(() => {});
       this._loadFollowUps(this.state.fuMine);
-      this._loadInteractions = () => fetch(API + '/api/interactions', { headers: hdr })
+      this._loadInteractions = () => this._bootFetch('/api/interactions', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ interactionsData: v }); })
         .catch(() => {});
@@ -17445,12 +17483,12 @@ class Component extends DCLogic {
       // would put a second opinion about the quarter on the screen, and the two would disagree the
       // first time either changed.
       // Stage history: dwell times, death stages and who deals are lost to.
-      this._loadStageAnalytics = () => fetch(API + '/api/stage-analytics', { headers: hdr })
+      this._loadStageAnalytics = () => this._bootFetch('/api/stage-analytics', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && Array.isArray(v.stages)) this.setState({ stageAnalytics: v }); })
         .catch(() => {});
       this._loadStageAnalytics();
-      this._loadSalesReport = (period) => fetch(API + '/api/sales-report' + (period ? '?period=' + encodeURIComponent(period) : ''), { headers: hdr })
+      this._loadSalesReport = (period) => this._bootFetch('/api/sales-report' + (period ? '?period=' + encodeURIComponent(period) : ''), { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         // The WHOLE envelope, for the reason the ops loader below already gives: `scope` and
         // `membershipAsAt` label the very rows in `report`, and splitting them across state keys is
@@ -17477,7 +17515,7 @@ class Component extends DCLogic {
         clearTimeout(this._scoreT);
         this._scoreT = setTimeout(() => {
           const seq = ++this._scoreSeq;
-          fetch(API + '/api/leads/score-preview', {
+          this._bootFetch('/api/leads/score-preview', {
             method: 'POST', headers: { 'Content-Type': 'application/json', ...hdr },
             body: JSON.stringify(draft || {}),
           })
@@ -17492,7 +17530,7 @@ class Component extends DCLogic {
         if (o.month) qs.set('month', o.month);
         if (o.mine) qs.set('mine', '1');
         const q = qs.toString();
-        return fetch(API + '/api/crm-dashboard' + (q ? '?' + q : ''), { headers: hdr })
+        return this._bootFetch('/api/crm-dashboard' + (q ? '?' + q : ''), { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
           .then(v => { if (v && v.leads) this.setState({ crmDash: v }); })
           .catch(() => {});
@@ -17507,14 +17545,14 @@ class Component extends DCLogic {
         if (o.days) qs.set('days', String(o.days));
         if (o.mine) qs.set('mine', '1');
         if (o.auto) qs.set('auto', '1');
-        return fetch(API + '/api/activities' + (qs.toString() ? '?' + qs : ''), { headers: hdr })
+        return this._bootFetch('/api/activities' + (qs.toString() ? '?' + qs : ''), { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
           .then(v => { if (v && Array.isArray(v.rows)) this.setState({ activityData: v }); })
           .catch(() => {});
       };
       this._loadActivities();
       // One company's ownership history, fetched when its panel opens.
-      this._loadAssignments = (companyId) => fetch(API + '/api/companies/' + companyId + '/assignments', { headers: hdr })
+      this._loadAssignments = (companyId) => this._bootFetch('/api/companies/' + companyId + '/assignments', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ ldpAssignments: v }); })
         .catch(() => {});
@@ -17522,12 +17560,12 @@ class Component extends DCLogic {
       // whether the screen says "your work" or "the team" and must never drift from the rows it labels.
       // Booking links. Loaded with everything else because the Appointments screen shows them
       // inline rather than behind a tab, so there is no later moment to fetch them at.
-      this._loadBookingLinks = () => fetch(API + '/api/booking-links', { headers: hdr })
+      this._loadBookingLinks = () => this._bootFetch('/api/booking-links', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ bookingLinks: v, blDraft: null }); })
         .catch(() => {});
       this._loadBookingLinks();
-      this._saveBookingLinks = (links) => fetch(API + '/api/booking-links', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...hdr }, body: JSON.stringify({ links }) })
+      this._saveBookingLinks = (links) => this._bootFetch('/api/booking-links', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...hdr }, body: JSON.stringify({ links }) })
         .then(async r => {
           const j = await r.json().catch(() => ({}));
           if (!r.ok) return this.setState({ blErr: j.error || 'Could not save the links' });
@@ -17538,7 +17576,7 @@ class Component extends DCLogic {
       // How promising each lead is. Derived server-side on every read — there is no stored score,
       // so this is refetched rather than cached, and it is refetched after anything that would
       // change one (logging a contact, opening a deal).
-      this._loadLeadScores = () => fetch(API + '/api/lead-scores', { headers: hdr })
+      this._loadLeadScores = () => this._bootFetch('/api/lead-scores', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ leadScores: v }); })
         .catch(() => {});
@@ -17548,16 +17586,16 @@ class Component extends DCLogic {
       // WHO IS ACTUALLY NEXT. /api/owner-rotation has always been able to answer it and nothing
       // asked — so the rules screen said work "balances by workload" without ever showing the
       // workload it balances against.
-      this._loadRotation = () => fetch(API + '/api/owner-rotation', { headers: hdr })
+      this._loadRotation = () => this._bootFetch('/api/owner-rotation', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ rotationData: v }); })
         .catch(() => {});
       this._loadRotation();
-      this._loadAssignRules = () => fetch(API + '/api/assignment-rules', { headers: hdr })
+      this._loadAssignRules = () => this._bootFetch('/api/assignment-rules', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ assignRules: v, arDraft: null }); })
         .catch(() => {});
-      this._saveAssignRules = (rules) => fetch(API + '/api/assignment-rules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...hdr }, body: JSON.stringify({ rules }) })
+      this._saveAssignRules = (rules) => this._bootFetch('/api/assignment-rules', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...hdr }, body: JSON.stringify({ rules }) })
         .then(async r => {
           const j = await r.json().catch(() => ({}));
           if (!r.ok) return this.setState({ arErr: j.error || 'Could not save the rules' });
@@ -17565,7 +17603,7 @@ class Component extends DCLogic {
         })
         .catch(() => this.setState({ arErr: 'Server unreachable — nothing was saved' }));
       // What this system is connected to. Read on demand from Settings → Integrations.
-      this._loadIntegrations = () => fetch(API + '/api/integrations', { headers: hdr })
+      this._loadIntegrations = () => this._bootFetch('/api/integrations', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && Array.isArray(v.channels)) this.setState({ integrationsData: v.channels }); })
         .catch(() => {});
@@ -17575,7 +17613,7 @@ class Component extends DCLogic {
       // owner pickers are searchable, and a search that cannot find a colleague by name reads as
       // broken rather than as a rule. They are listed apart and labelled — see the grouping in
       // _ownerGroups9 — so widening what is offered never blurs who is normally assignable.
-      this._loadAssignableOwners = () => fetch(API + '/api/assignable-owners?all=1', { headers: hdr })
+      this._loadAssignableOwners = () => this._bootFetch('/api/assignable-owners?all=1', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ assignableOwners: v }); })
         .catch(() => {});
@@ -17584,21 +17622,21 @@ class Component extends DCLogic {
       this._load('/api/documents', 'documentsData', (v) => this.setState(this._docsState(v)));
       this._load('/api/tasks', 'tasksData', (v) => this.setState({ tasksData: v }));
       this._load('/api/service-requests', 'serviceRequestsData', (v) => this.setState({ serviceRequestsData: v }));
-      fetch(API + '/api/upgrade-requests', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ upgradeRequestsData: v }); }).catch(() => {});
-      fetch(API + '/api/activity-log', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ activitiesData: v }); }).catch(() => {});
+      this._bootFetch('/api/upgrade-requests', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ upgradeRequestsData: v }); }).catch(() => {});
+      this._bootFetch('/api/activity-log', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ activitiesData: v }); }).catch(() => {});
       this._load('/api/workflow/my-work', 'myWorkData', (v) => this.setState({ myWorkData: v }));
-      fetch(API + '/api/subscriptions', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ subscriptionsData: v }); }).catch(() => {});
-      fetch(API + '/api/packages', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ packagesData: v }); }).catch(() => {});
-      fetch(API + '/api/gov-centers', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ govCentersData: v }); }).catch(() => {});
+      this._bootFetch('/api/subscriptions', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ subscriptionsData: v }); }).catch(() => {});
+      this._bootFetch('/api/packages', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ packagesData: v }); }).catch(() => {});
+      this._bootFetch('/api/gov-centers', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ govCentersData: v }); }).catch(() => {});
       // The country list comes FROM the server, never a copy kept here. A second list is how the
       // picker ends up offering a country the server does not recognise.
-      fetch(API + '/api/countries').then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ countriesData: v }); }).catch(() => {});
+      this._bootFetch('/api/countries').then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ countriesData: v }); }).catch(() => {});
       // Packs available on this server, for the Add-country flow.
-      fetch(API + '/api/packs', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.packs)) this.setState({ packsData: v.packs }); }).catch(() => {});
-      fetch(API + '/api/packs/installed', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ packsInstalled: v }); }).catch(() => {});
+      this._bootFetch('/api/packs', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.packs)) this.setState({ packsData: v.packs }); }).catch(() => {});
+      this._bootFetch('/api/packs/installed', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ packsInstalled: v }); }).catch(() => {});
       // Workforce ratios, keyed by client so a detail page can read its own without a second request.
       // Counted on the SERVER — the console must not hold a second opinion of a compliance figure.
-      this._loadWorkforce = () => fetch(API + '/api/workforce', { headers: hdr })
+      this._loadWorkforce = () => this._bootFetch('/api/workforce', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ workforceData: Object.fromEntries(v.map(w => [w.companyId, w])) }); })
         .catch(() => {});
@@ -17606,21 +17644,21 @@ class Component extends DCLogic {
       // The recorded trend, keyed by client. Every point is a row somebody's tick wrote on a day
       // that has already happened — nothing here is computed from today's numbers, which is the
       // whole reason the table exists.
-      this._loadWfHistory = () => fetch(API + '/api/workforce-history?days=90', { headers: hdr })
+      this._loadWfHistory = () => this._bootFetch('/api/workforce-history?days=90', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && typeof v === 'object') this.setState({ wfHistory: v }); })
         .catch(() => {});
       this._loadWfHistory();
       // What is not set up. Counted on the SERVER on every request — a cached score would keep
       // congratulating somebody for work they have not done.
-      this._loadSetupCheck = () => fetch(API + '/api/setup-check', { headers: hdr })
+      this._loadSetupCheck = () => this._bootFetch('/api/setup-check', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && Array.isArray(v.findings)) this.setState({ setupCheck: v }); })
         .catch(() => {});
       this._loadSetupCheck();
       // Which countries have a newer pack waiting. Computed on the SERVER so the badge and the
       // Upgrade button cannot disagree about whether an update exists.
-      this._loadPackUpdates = () => fetch(API + '/api/packs/updates', { headers: hdr })
+      this._loadPackUpdates = () => this._bootFetch('/api/packs/updates', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (v && typeof v === 'object') this.setState({ packUpdates: v }); })
         .catch(() => {});
@@ -17633,16 +17671,16 @@ class Component extends DCLogic {
       this._load('/api/appointments', 'appointmentsData', (v) => this.setState({ appointmentsData: v }));
       this._load('/api/courier-shipments', 'courierData', (v) => this.setState({ courierData: v }));
       this._load('/api/payments', 'paymentsData', (v) => this.setState({ paymentsData: v }));
-      fetch(API + '/api/groups', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ groupsData: v }); }).catch(() => {});
-      fetch(API + '/api/auth/my-activity', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myActivityData: v }); }).catch(() => {});
+      this._bootFetch('/api/groups', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ groupsData: v }); }).catch(() => {});
+      this._bootFetch('/api/auth/my-activity', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ myActivityData: v }); }).catch(() => {});
       this._load('/api/quotations', 'quotationsData', (v) => this.setState({ quotationsData: v }));
-      fetch(API + '/api/service-items', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ serviceItemsData: v }); }).catch(() => {});
-      fetch(API + '/api/api-keys', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ apiKeysData: v }); }).catch(() => {});
+      this._bootFetch('/api/service-items', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ serviceItemsData: v }); }).catch(() => {});
+      this._bootFetch('/api/api-keys', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ apiKeysData: v }); }).catch(() => {});
       // Client site credentials (admin-only read; passwords are never included in the list payload).
-      fetch(API + '/api/credentials', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ credentialsData: v }); }).catch(() => {});
-      fetch(API + '/api/email-config', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ emailCfg: v }); }).catch(() => {});
-      fetch(API + '/api/notifications', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ notificationsData: v }); }).catch(() => {});
-      fetch(API + '/api/workflow/instances', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfInstancesData: v }); }).catch(() => {});
+      this._bootFetch('/api/credentials', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ credentialsData: v }); }).catch(() => {});
+      this._bootFetch('/api/email-config', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ emailCfg: v }); }).catch(() => {});
+      this._bootFetch('/api/notifications', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ notificationsData: v }); }).catch(() => {});
+      this._bootFetch('/api/workflow/instances', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfInstancesData: v }); }).catch(() => {});
     };
     // ── Live channel (SSE): incoming client replies + "client is typing…" ──
     // Same ticket handshake as the portal (EventSource can't set an Authorization header).
