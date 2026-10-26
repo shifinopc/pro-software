@@ -22970,8 +22970,34 @@ class Component extends DCLogic {
     const _gInvs = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
     const _gCos = Array.isArray(this.state.companiesData) ? this.state.companiesData : [];
     const _gDaysLeft = (d9) => { const t9 = new Date(d9.expiryDate); return isNaN(+t9) ? null : Math.ceil((t9 - Date.now()) / 864e5); };
-    const _gOverdue = (coId) => _gDocs.filter(d9 => d9.companyId === coId && (d9.status === 'overdue' || (_gDaysLeft(d9) != null && _gDaysLeft(d9) < 0))).length;
-    const _gExpiring = (coId) => _gDocs.filter(d9 => { const n9 = _gDaysLeft(d9); return d9.companyId === coId && n9 != null && n9 >= 0 && n9 <= 30; }).length;
+    /**
+     * COUNTED ONCE, NOT ONCE PER COMPANY.
+     *
+     * These two were a filter over every document, run per company — and four separate reduces call
+     * them across the client list, so ~500 documents were walked 68 times on every render, each walk
+     * parsing a Date out of every row it touched. 12ms of every click in the console, for two
+     * numbers. One pass over the documents builds the same answer for every company at once.
+     *
+     * The two counts are incremented INDEPENDENTLY, not as an either/or: a document can be marked
+     * overdue and still fall inside the 30-day window, and it was counted in both before. The point
+     * of this change is speed, so the arithmetic has to come out identical — that overlap included.
+     */
+    const _gDocCounts = (() => {
+      const by9 = new Map();   // companyId → { overdue, expiring }
+      for (const d9 of _gDocs) {
+        const n9 = _gDaysLeft(d9);
+        const over9 = d9.status === 'overdue' || (n9 != null && n9 < 0);
+        const exp9 = n9 != null && n9 >= 0 && n9 <= 30;
+        if (!over9 && !exp9) continue;
+        const e9 = by9.get(d9.companyId) || { overdue: 0, expiring: 0 };
+        if (over9) e9.overdue++;
+        if (exp9) e9.expiring++;
+        by9.set(d9.companyId, e9);
+      }
+      return by9;
+    })();
+    const _gOverdue = (coId) => (_gDocCounts.get(coId) || { overdue: 0 }).overdue;
+    const _gExpiring = (coId) => (_gDocCounts.get(coId) || { expiring: 0 }).expiring;
     // A draft was never issued and a void was cancelled — neither is money owed.
     const _gOwed = (coId) => _gInvs
       .filter(v9 => v9.companyId === coId && !['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase()))
