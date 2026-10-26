@@ -15,6 +15,40 @@
   function token() {
     try { return localStorage.getItem(APP === 'portal' ? 'stimespro:portalToken' : 'stimespro:token'); } catch (e) { return null; }
   }
+  /**
+   * ASK FOR THE DATA BEFORE THE REST OF THIS DOCUMENT HAS BEEN READ.
+   *
+   * This file is 3.7 MB, and the app cannot ask for anything until the browser has parsed all of it
+   * and started the component. Measured: the document arrives at 1.53s and the first API request
+   * leaves at 2.16s — 629ms of reading HTML while the network sits idle, and then the screen waits
+   * again for the answers. That gap is why a refresh shows an empty dashboard for about a second.
+   *
+   * This runs in the HEAD, so it goes out while the body below is still being parsed. The requests
+   * and the parsing then happen at the same time instead of one after the other, and by the time
+   * the app is ready to render, its data is already in hand.
+   *
+   * CONSUMED ONCE. These are the answers to questions asked at a single moment. _hydrateAuthed runs
+   * again after signing in, and must not be handed this one's results — each is taken at most once,
+   * and only while the token that fetched it is still the token in use.
+   */
+  window.__preboot = (function () {
+    var t = token();
+    if (!t) return null;                      // signed out: nothing here is answerable yet
+    var h = { Authorization: 'Bearer ' + t };
+    var get = function (p) {
+      return fetch(API + p, { headers: h }).then(function (r) {
+        return r.json().then(
+          function (b) { return { ok: r.ok, status: r.status, body: b }; },
+          function () { return { ok: r.ok, status: r.status, body: null }; }
+        );
+      }).catch(function () { return null; }); // a failure here just means the app asks again
+    };
+    var first = {};
+    ['/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
+     '/api/tasks', '/api/service-requests', '/api/crm-dashboard'].forEach(function (p) { first[p] = get(p); });
+    return { token: t, boot: get('/api/boot'), first: first };
+  })();
+
   // Exposed so the app itself can file a report (the 404 screen and the "Report a problem" menu
   // item both call this) without duplicating the request.
   window.__stimesReport = function (payload) {
@@ -16477,13 +16511,32 @@ class Component extends DCLogic {
      * not a blank screen.
      */
     this._bootReady = this._bootReady || Promise.resolve();
+    /**
+     * Take an answer the HEAD already asked for, at most once, and only while it is still OURS.
+     *
+     * The token is compared because the page can be loaded signed in as one person and then signed
+     * in as another without a fresh document — the pre-boot answers belong to whoever was signed in
+     * when the document loaded, and handing them to somebody else would show them another person's
+     * screen.
+     */
+    this._preboot = (path) => {
+      const pre = window.__preboot;
+      if (!pre || pre.token !== localStorage.getItem('stimespro:token')) return null;
+      if (path === '/api/boot') { const p = pre.boot; pre.boot = null; return p; }
+      const p = pre.first ? pre.first[path] : null;
+      if (p) pre.first[path] = null;
+      return p;
+    };
     this._bootPrime = () => {
       const tok = localStorage.getItem('stimespro:token');
       this._bootBatch = null;
       if (!tok) return (this._bootReady = Promise.resolve());
-      return (this._bootReady = fetch((this._apiBase || 'http://localhost:4100') + '/api/boot', { headers: { Authorization: 'Bearer ' + tok } })
+      const early = this._preboot('/api/boot');
+      const got = early || fetch((this._apiBase || 'http://localhost:4100') + '/api/boot', { headers: { Authorization: 'Bearer ' + tok } })
         .then(r => (r.ok ? r.json() : null))
-        .then(j => { this._bootBatch = (j && j.paths) || null; })
+        .then(j => ({ ok: true, body: j }));
+      return (this._bootReady = got
+        .then(res => { this._bootBatch = (res && res.ok && res.body && res.body.paths) || null; })
         // A batch that fails is not a failure: every call simply goes the way it used to.
         .catch(() => { this._bootBatch = null; }));
     };
@@ -16537,8 +16590,15 @@ class Component extends DCLogic {
       if (!localStorage.getItem('stimespro:token') && PUBLIC_WHEN_SIGNED_OUT.indexOf(path) < 0) {
         return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve(null), text: () => Promise.resolve('') });
       }
-      // Straight out, in parallel with the batch — not queued behind it.
-      if (FIRST_PAINT.indexOf(path) >= 0) return fetch(base + path, init);
+      // Already asked for in the HEAD, before this document finished parsing — otherwise straight
+      // out now, in parallel with the batch rather than queued behind it.
+      if (FIRST_PAINT.indexOf(path) >= 0) {
+        const early = this._preboot(path);
+        if (early) return early.then(res => (res
+          ? { ok: res.ok, status: res.status, json: () => Promise.resolve(res.body), text: () => Promise.resolve(JSON.stringify(res.body)) }
+          : fetch(base + path, init)));
+        return fetch(base + path, init);
+      }
       return this._bootReady.then(() => {
         const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
         if (!hit) return fetch(base + path, init);
@@ -19958,28 +20018,26 @@ class Component extends DCLogic {
     // screen's own module is the wrong question to ask there.
     const canWriteDocs = _mayDo('Documents', 'Create');
     const canWriteTasks = canWrite || _mayDo('Tasks', 'Create');
-    const _openReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : (_authed ? null : 14);
-    const _expDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'expiring').length : (_authed ? null : 26);
-    const _ovdDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'overdue').length : (_authed ? null : 7);
+    const _openReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : (_authed ? 0 : 14);
+    const _expDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'expiring').length : (_authed ? 0 : 26);
+    const _ovdDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'overdue').length : (_authed ? 0 : 7);
         /**
-     * NOT LOADED IS NOT ZERO.
+     * NOT LOADED IS NOT ZERO — asked of the LIST, not of the count.
      *
-     * These four read their lists, and the lists are null until they arrive. Showing 0 for null
-     * put four confident numbers on the screen that were not answers — a refresh showed a client
-     * portfolio with nothing overdue, nothing due for renewal and nothing owed, for the best part
-     * of a second, before the real figures replaced them. People reported it as the page loading
-     * 'dummy data', which is exactly what it looked like.
+     * These counts are read in six places, so they stay numbers. The question 'has this arrived
+     * yet' is answered by the list they are counted from, which is already null until it does.
      *
-     * A dash says the same thing honestly: we do not know yet. The signed-out preview keeps its
-     * sample numbers, which is what the `_authed` branch is for.
+     * I got this wrong the first time by making the COUNTS null, which put the string 'null' on
+     * the Operations health tile and into three pipeline bars — five readers I had not looked for
+     * before changing what they read. Checking the source instead touches only the four tiles that
+     * asked the question.
      */
-const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].includes(String(v2.status).toLowerCase())).reduce((a2, v2) => a2 + _docTotal(v2), 0) : (_authed ? null : 46200);
-    const _kpiNum = (v) => (v == null ? '—' : String(v));
+const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].includes(String(v2.status).toLowerCase())).reduce((a2, v2) => a2 + _docTotal(v2), 0) : (_authed ? 0 : 46200);
     const kpis = [
-      [_kpiNum(_openReq), 'Open requests', I.layers, pal.purple, '#7C00FF', 'Requests Queue', 'Operations'],
-      [_kpiNum(_expDocs), 'Renewals ≤ 30d · all clients', I.refresh, pal.amber, '#F59E0B', 'Renewals', 'Clients & Compliance'],
-      [_kpiNum(_ovdDocs), 'Overdue documents', I.folder, pal.violet, '#6D5BD0', 'Compliance', 'Clients & Compliance'],
-      [_unpaidSum == null ? '—' : fmtCur(_unpaidSum), 'Unpaid client invoices', I.invoice, pal.red, '#E5484D', 'Invoices', 'Finance'],
+      [(_dSrv || !_authed) ? String(_openReq) : '—', 'Open requests', I.layers, pal.purple, '#7C00FF', 'Requests Queue', 'Operations'],
+      [(_dDocs || !_authed) ? String(_expDocs) : '—', 'Renewals ≤ 30d · all clients', I.refresh, pal.amber, '#F59E0B', 'Renewals', 'Clients & Compliance'],
+      [(_dDocs || !_authed) ? String(_ovdDocs) : '—', 'Overdue documents', I.folder, pal.violet, '#6D5BD0', 'Compliance', 'Clients & Compliance'],
+      [(_dInv || !_authed) ? fmtCur(_unpaidSum) : '—', 'Unpaid client invoices', I.invoice, pal.red, '#E5484D', 'Invoices', 'Finance'],
     ].map(([value, label, icon, p, dot, dest, grp]) => ({ value, label, icon, iconBg: p[0], iconColor: p[1], dot, go: () => this.setState({ active: dest, activeGroup: grp }) }));
 
     // WIRED: donut = real service-request status distribution (open / resolved / rejected).
