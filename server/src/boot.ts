@@ -34,7 +34,7 @@ import { requireAuth, requireStaff } from "./auth.js";
  * fetches it the old way. That fallback is what makes adding to this list safe to forget.
  */
 export const BOOT_PATHS: string[] = [
-  "/api/auth/me", "/api/auth/my-activity",
+  "/api/auth/my-activity",
   "/api/settings/org", "/api/settings/perms", "/api/settings/security", "/api/settings/roles",
   "/api/settings/notifRules", "/api/settings/notifDigest", "/api/settings/printBranding",
   "/api/settings/printLayout", "/api/settings/countryRules", "/api/settings/departments",
@@ -51,7 +51,7 @@ export const BOOT_PATHS: string[] = [
   "/api/competitors", "/api/industries", "/api/products", "/api/charge-types", "/api/campaigns",
   "/api/cancel-reasons", "/api/team-performance", "/api/targets-forecast", "/api/inbox",
   "/api/teams?all=1", "/api/follow-ups",
-  "/api/interactions", "/api/stage-analytics", "/api/crm-dashboard", "/api/activities",
+  "/api/interactions", "/api/stage-analytics", "/api/activities",
   "/api/booking-links", "/api/lead-scores", "/api/owner-rotation", "/api/assignment-rules",
   "/api/integrations", "/api/assignable-owners?all=1", "/api/upgrade-requests",
   "/api/activity-log", "/api/subscriptions", "/api/packages", "/api/gov-centers",
