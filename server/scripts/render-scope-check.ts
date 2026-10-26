@@ -61,5 +61,36 @@ for (const g of GROUPS) {
   }
 }
 
+/**
+ * THE CALENDAR POPOVER builds its events inside `if (this.state.calOpen)`. Walking every document
+ * and every task to fill a popover that is shut was 91ms of every click on every screen.
+ *
+ * A different regression from the one above, so a different check: `_calEv` is always declared and
+ * is simply empty while the calendar is closed, so nothing can read it wrongly. What would undo the
+ * fix is a third source added below the other two and outside the gate — easy to do, since the two
+ * that are there look exactly like top-level statements. Every write to `_calEv` must be inside it.
+ */
+const calGate = lines.findIndex(l => l.includes("if (this.state.calOpen) {"));
+if (calGate < 0) {
+  fail("the calendar's `if (this.state.calOpen)` gate is gone — its events are being built on every click again");
+} else {
+  // The gate sits at one indent inside renderVals, so its block ends at the first line that closes
+  // at exactly that indent.
+  const indent = lines[calGate].match(/^\s*/)![0];
+  const calEnd = lines.findIndex((l, i) => i > calGate && l === indent + "}");
+  if (calEnd < 0) { fail("could not find the end of the calendar gate — this check needs updating."); }
+  else {
+    const writes = lines
+      .map((l, i) => ({ i, l }))
+      .filter(({ l }) => /_calEv\[[^\]]*\]\s*=/.test(l));
+    const outside = writes.filter(w => w.i < calGate || w.i > calEnd);
+    if (outside.length) {
+      for (const o of outside) fail(`_calEv is written at line ${o.i + 1}, outside the calOpen gate — that work happens on every click on every screen:\n          ${o.l.trim().slice(0, 110)}`);
+    } else {
+      console.log(`  ok    calendar: all ${writes.length} writes to _calEv are inside the calOpen gate (lines ${calGate + 1}-${calEnd + 1})`);
+    }
+  }
+}
+
 console.log(bad ? `\n${bad} problem${bad === 1 ? "" : "s"}.` : "\nin order.");
 process.exit(bad ? 1 : 0);

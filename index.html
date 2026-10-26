@@ -42271,28 +42271,43 @@ class Component extends DCLogic {
     const _calEv = {};   // "y-m-d" → [{ color, label, when, rank, go }]
     const _calScope = (this.state.clientFilter && this.state.clientFilter !== 'All clients') ? this.state.clientFilter : null;
     const _calCoIds = _calScope ? new Set((Array.isArray(this.state.companiesData) ? this.state.companiesData : []).filter(c9 => c9.name === _calScope).map(c9 => c9.id)) : null;
-    (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).forEach(d2 => {
-      if (!d2.expiryDate || (_calCoIds && !_calCoIds.has(d2.companyId))) return;
-      const dd = new Date(d2.expiryDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
-      const st2 = String(d2.status || '').toLowerCase();
-      if (st2 === 'in_progress') return;   // already being renewed — not a date anyone has to act on
-      const late2 = dd < _calNow;
-      const days2 = Math.round((dd - _calNow) / 86400000);
-      (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
-        color: late2 ? '#E5484D' : '#F59E0B', rank: late2 ? 0 : 1,
-        label: d2.docType + (d2.person ? ' — ' + d2.person : ''),
-        when: late2 ? Math.abs(days2) + 'd overdue' : days2 === 0 ? 'expires today' : 'expires ' + _calMon(dd),
-        go: () => this.setState({ calOpen: false, active: 'Compliance', activeGroup: 'Clients & Compliance', compFilter: 'All', compQ: d2.docNumber || d2.person || d2.docType }),
+    /**
+     * THE CALENDAR'S EVENTS, AND ONLY WHILE THE CALENDAR IS OPEN.
+     *
+     * The two loops below walk every document and every task, parse a Date out of each and build an
+     * event object carrying its own click handler. renderVals runs on EVERY state change in the
+     * console, so all of that happened on every click on every screen — 55ms of it, measured — to
+     * fill a popover that is shut almost all of the time.
+     *
+     * `calOpen` is exactly what the popover's own markup is gated on (`showCal` below), so the
+     * events are built precisely when something can read them. Everything downstream reads `_calEv`,
+     * which is then simply empty — the same thing it holds for a month with nothing in it, so no
+     * reader sees a shape it has not always handled.
+     */
+    if (this.state.calOpen) {
+      (Array.isArray(this.state.documentsData) ? this.state.documentsData : []).forEach(d2 => {
+        if (!d2.expiryDate || (_calCoIds && !_calCoIds.has(d2.companyId))) return;
+        const dd = new Date(d2.expiryDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
+        const st2 = String(d2.status || '').toLowerCase();
+        if (st2 === 'in_progress') return;   // already being renewed — not a date anyone has to act on
+        const late2 = dd < _calNow;
+        const days2 = Math.round((dd - _calNow) / 86400000);
+        (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
+          color: late2 ? '#E5484D' : '#F59E0B', rank: late2 ? 0 : 1,
+          label: d2.docType + (d2.person ? ' — ' + d2.person : ''),
+          when: late2 ? Math.abs(days2) + 'd overdue' : days2 === 0 ? 'expires today' : 'expires ' + _calMon(dd),
+          go: () => this.setState({ calOpen: false, active: 'Compliance', activeGroup: 'Clients & Compliance', compFilter: 'All', compQ: d2.docNumber || d2.person || d2.docType }),
+        });
       });
-    });
-    (Array.isArray(this.state.tasksData) ? this.state.tasksData : []).forEach(t2 => {
-      if (t2.archived || t2.status === 'done' || !t2.dueDate) return;
-      const dd = new Date(t2.dueDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
-      (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
-        color: '#7C00FF', rank: 2, label: t2.title || 'Task', when: (dd < _calNow ? 'was due ' : 'due ') + _calMon(dd),
-        go: () => this.setState({ calOpen: false }),
+      (Array.isArray(this.state.tasksData) ? this.state.tasksData : []).forEach(t2 => {
+        if (t2.archived || t2.status === 'done' || !t2.dueDate) return;
+        const dd = new Date(t2.dueDate); if (isNaN(+dd)) return; dd.setHours(0, 0, 0, 0);
+        (_calEv[_calKey(dd)] = _calEv[_calKey(dd)] || []).push({
+          color: '#7C00FF', rank: 2, label: t2.title || 'Task', when: (dd < _calNow ? 'was due ' : 'due ') + _calMon(dd),
+          go: () => this.setState({ calOpen: false }),
+        });
       });
-    });
+    }
     const _calSel = this.state.calSel && String(this.state.calSel).startsWith(_calY + '-' + _calM + '-') ? this.state.calSel : null;
     const calDays = [];
     const _calFirstDow = (new Date(_calY, _calM, 1).getDay() + 6) % 7; // Monday first
