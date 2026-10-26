@@ -204,13 +204,38 @@ export async function runCrmDuplicates() {
         : (weight.get(keep.id) ?? 0) > (weight.get(drop[0]?.id ?? "") ?? 0)
           ? "it carries the most history" : "it is the older record";
 
+      /**
+       * A SHARED PHONE NUMBER IS NOT ENOUGH TO OFFER A MERGE.
+       *
+       * Found on live data the hour this shipped: "Malbriz Arabia Company" and "MOONPACK PLASTIC
+       * COMPANY" share one mobile — the PRO agent's, or an owner who holds both — and are two real
+       * clients with two real CR numbers. The grouping is still worth a person's glance, which is
+       * why the finding stays. The one-click button is what must not be there: a phone-only match
+       * where neither record carries a CR would sail past every refusal planMerge has and destroy a
+       * client record.
+       *
+       * So the strength is read off the RECORDS, not off whichever rule grouped them first — the
+       * Sheikh Moudheen pair was filed under "same phone" and also shares an email, and suppressing
+       * it on the label alone would have hidden a genuine duplicate.
+       */
+      const same = (a: string | null | undefined, b: string | null | undefined) => {
+        const x = String(a ?? "").trim().toLowerCase(), y = String(b ?? "").trim().toLowerCase();
+        return !!x && x === y;
+      };
+      const mergeable = drop.filter(d =>
+        same(keep.cr, d.cr) || same(keep.email, d.email) || same(normName(keep.name).join(" "), normName(d.name).join(" ")));
+
       await raise({
         kind: "duplicate-company", key: `co:${key}`, companyId: keep.id,
         title: `${ids.length} records look like the same company — ${g.rows[0].name}`,
         summary: `They share the ${g.why}. Merging moves the others' contacts, deals, documents and history onto the one that is kept, and retires them.`,
         output: {
-          merge: { keepId: keep.id, keepName: keep.name, dropIds: drop.map(d => d.id), dropNames: drop.map(d => d.name) },
-          facts: [{ label: "Would keep", value: `${keep.name} — ${why}` }],
+          ...(mergeable.length
+            ? { merge: { keepId: keep.id, keepName: keep.name, dropIds: mergeable.map(d => d.id), dropNames: mergeable.map(d => d.name) } }
+            : {}),
+          facts: mergeable.length
+            ? [{ label: "Would keep", value: `${keep.name} — ${why}` }]
+            : [{ label: "No merge offered", value: "These share only a phone number, which two separate companies often do — one owner, one office, or the officer's own mobile. Check them by hand." }],
           lists: [{ title: "Records", items: ordered.map(r => ({ text: `${r.id === keep.id ? "KEEP · " : "merge in · "}${r.name} · ${r.lifecycle}${r.cr ? ` · CR ${r.cr}` : ""}${r.phone ? ` · ${r.phone}` : ""}${r.email ? ` · ${r.email}` : ""}` })) }],
         },
       });
