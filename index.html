@@ -13723,7 +13723,25 @@
               </div>
               <div>
                 <label class="fm-lab">Phone</label>
-                <input value="{{ ldfPhone }}" onInput="{{ setLdfPhone }}" placeholder="+966 5X XXX XXXX" class="fm-inp">
+                <!-- The country code is PICKED and defaults to +966, so a Saudi number — which is
+                     nearly all of them — is typed exactly as it is spoken, and a number from
+                     anywhere else cannot be saved without its code in front. -->
+                <div style="display:flex; gap:7px; align-items:flex-start;">
+                  <div data-dd style="position:relative; flex:0 0 auto;">
+                    <div onClick="{{ ldfDialToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:5px; cursor:pointer; width:88px; box-sizing:border-box;">
+                      <span style="flex:1;">{{ ldfDial }}</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </div>
+                    <sc-if value="{{ ldfDialOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd data-hidescroll="true" class="qc-dd" style="min-width:235px; max-height:240px; overflow-y:auto;">
+                        <sc-for list="{{ ldfDialOptions }}" as="o" hint-placeholder-count="6">
+                          <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span>{{ o.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <input value="{{ ldfPhone }}" onInput="{{ setLdfPhone }}" placeholder="5X XXX XXXX" class="fm-inp" style="flex:1; min-width:0;">
+                </div>
                 <sc-if value="{{ ldfPhoneErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfPhoneErr }}</div></sc-if>
               </div>
               <div>
@@ -17839,7 +17857,7 @@ class Component extends DCLogic {
      */
     this._openLeadForm = () => {
       if (this._previewScore) this._previewScore({});
-      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [] });
+      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '' });
     };
     /**
      * Open the deal DRAWER — the reading of a deal, not the form for changing it.
@@ -35717,6 +35735,62 @@ class Component extends DCLogic {
       return already ? { ...(form || {}), sourceOther: true } : { ...(form || {}), source: '', sourceOther: true };
     };
 
+    /**
+     * Writing one field of the lead form.
+     *
+     * Hoisted out of the setter factory because the phone box is no longer the only thing that
+     * writes a phone number — the dial-code picker beside it writes one too, and a picker that
+     * skipped the two side effects below would leave the auto score and the duplicate warning
+     * showing an answer for the number as it was a keystroke ago.
+     */
+    const _setLdfField9 = (k, v) => {
+      const next = { ...(this.state.ldForm || {}), [k]: v };
+      this.setState({ ldForm: next, ldfErr: '', ldfBad: '' });
+      // Re-score on the five fields the model actually reads. Firing on job title or notes
+      // would cost a request per keystroke for a number that cannot move.
+      if (!next.id && ['contact', 'email', 'phone', 'source', 'city'].includes(k) && this._previewScore) {
+        this._previewScore({ contact: next.contact, email: next.email, phone: next.phone, source: next.source, city: next.city });
+      }
+      // Only the three fields that identify a company are worth asking about.
+      if (k === 'name' || k === 'email' || k === 'phone') {
+        // `excludeId` when editing, or the record would warn that it is a duplicate of itself —
+        // the most alarming possible message about a lead somebody is simply correcting.
+        this._checkDuplicate({ name: next.name, email: next.email, phone: next.phone, excludeId: next.id || '' });
+      }
+    };
+
+    /**
+     * A PHONE NUMBER IS STILL ONE STORED VALUE. `phone` keeps "+966 5X XXX XXXX" exactly as before,
+     * so the lead score's "no way to contact this lead", the duplicate check, the click-to-call and
+     * every export go on reading the column they already read. The picker only splits it for the eye.
+     *
+     * SPLITTING WHAT IS ALREADY ON FILE is the hard half. The column holds whatever has been typed
+     * into it over the years, and every one of these is really in there today:
+     *
+     *   +966501080092 · 00966509801528 · 966533675383 · 61 410852277 · 0591257033 · 592261238
+     *
+     * A leading "+" or "00" says international outright. Without either it is a GUESS, and one only
+     * worth making when the number cannot be a local one: no leading zero, and at least 11 digits.
+     * "0591257033" is a Saudi mobile written the Saudi way and "592261238" is too short to be
+     * carrying a country code — reading either as international would chop real digits off the
+     * front of somebody's phone number.
+     *
+     * LONGEST PREFIX WINS. "+97" is a prefix of "+971", and "+1" is both the United States and
+     * Canada — taking the first dial code that fits would read a UAE number as a +97 one.
+     */
+    const _dialList9 = _countryList.filter(c => c && c.dial);
+    const _splitPhone9 = (v) => {
+      const n9 = String(v || '').replace(/[\s()-]/g, '');
+      const intl9 = n9.startsWith('+') ? n9
+        : n9.startsWith('00') ? '+' + n9.slice(2)
+        : (!n9.startsWith('0') && n9.replace(/\D/g, '').length >= 11) ? '+' + n9
+        : '';
+      const dial9 = _dialList9.map(c => c.dial)
+        .filter(d => intl9.startsWith(d))
+        .sort((a, b) => b.length - a.length)[0] || '';
+      return dial9 ? { dial: dial9, local: intl9.slice(dial9.length) } : { dial: '', local: String(v || '').trim() };
+    };
+
     const _chips9 = (list, current, apply) => list.map(o => {
       const on = String(current || '').trim().toLowerCase() === String(o.name).trim().toLowerCase();
       return {
@@ -40495,7 +40569,7 @@ class Component extends DCLogic {
             });
           },
           edit: () => this.setState({
-            ldForm: _ldDraft9(l, primary),
+            ldForm: _ldDraft9(l, primary), ldfDial: '',
             ldfErr: '', ldfBad: '', dupMatches: [],
           }),
           // promote / win / lose / reopen are NOT here any more. They moved to the lead panel
@@ -40744,7 +40818,7 @@ class Component extends DCLogic {
           // something else happens to be on screen is the kind of thing that fails once, in a demo.
           ldpEdit: () => this.setState({
             leadPanel: null, ldfErr: '', ldfBad: '', dupMatches: [],
-            ldForm: _ldDraft9(lp, primary),
+            ldForm: _ldDraft9(lp, primary), ldfDial: '',
           }),
           ldpOpenDealShow: canWrite && !!lp && lp.lifecycle !== 'lost' && !deal,
           ldpOpenDeal: () => { this.setState({ leadPanel: null }); this._openDeal(lp.id, lp.name); },
@@ -40855,7 +40929,7 @@ class Component extends DCLogic {
       ldfSaveLabel: (_ldf && _ldf.id) ? 'Save changes' : 'Save lead',
       ldFormClose: () => this.setState({ ldForm: null, ldfErr: '', ldfBad: '', dupMatches: [] }),
       ldfName: (_ldf && _ldf.name) || '', ldfContact: (_ldf && _ldf.contact) || '', ldfTitle: (_ldf && _ldf.title) || '',
-      ldfEmail: (_ldf && _ldf.email) || '', ldfPhone: (_ldf && _ldf.phone) || '', ldfSource: (_ldf && _ldf.source) || '',
+      ldfEmail: (_ldf && _ldf.email) || '', ldfSource: (_ldf && _ldf.source) || '',
       ldfCity: (_ldf && _ldf.city) || '', ldfNote: (_ldf && _ldf.note) || '', ldfErr: this.state.ldfErr || '',
       // WHICH SERVICE THEY CAME FOR. Same shape as Industry — a text box with the configured list
       // offered as chips — because it is the same kind of fact: a short set of usual answers that
@@ -40909,24 +40983,44 @@ class Component extends DCLogic {
       setLdfCampaign: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), campaign: e.target.value }, ldfErr: '' }),
       ldfCampaignChips: _chips9(_campaignList, _ldf && _ldf.campaign, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), campaign: v }, ldfErr: '' })),
       hasCampaignChips: _campaignList.length > 0,
-      ...Object.fromEntries(['name', 'contact', 'title', 'email', 'phone', 'source', 'city', 'note'].map(k => [
+      ...Object.fromEntries(['name', 'contact', 'title', 'email', 'source', 'city', 'note'].map(k => [
         'setLdf' + k.charAt(0).toUpperCase() + k.slice(1),
-        (e) => {
-          const next = { ...(this.state.ldForm || {}), [k]: e.target.value };
-          this.setState({ ldForm: next, ldfErr: '', ldfBad: '' });
-          // Re-score on the five fields the model actually reads. Firing on job title or notes
-          // would cost a request per keystroke for a number that cannot move.
-          if (!next.id && ['contact', 'email', 'phone', 'source', 'city'].includes(k) && this._previewScore) {
-            this._previewScore({ contact: next.contact, email: next.email, phone: next.phone, source: next.source, city: next.city });
-          }
-          // Only the three fields that identify a company are worth asking about.
-          if (k === 'name' || k === 'email' || k === 'phone') {
-            // `excludeId` when editing, or the record would warn that it is a duplicate of itself —
-            // the most alarming possible message about a lead somebody is simply correcting.
-            this._checkDuplicate({ name: next.name, email: next.email, phone: next.phone, excludeId: next.id || '' });
-          }
-        },
+        (e) => _setLdfField9(k, e.target.value),
       ])),
+      // ── Phone: the dial code is picked, the rest is typed ──────────────────────────────────
+      //
+      // `phone` is left out of the factory above and assembled here instead, because what the box
+      // holds is no longer what the field stores: the box holds the local number and the field
+      // stores it with the dial code in front.
+      ...(() => {
+        const open9 = this.state.openDd === 'ldf-dial';
+        const raw9 = String((_ldf && _ldf.phone) || '');
+        const split9 = _splitPhone9(raw9);
+        // Saudi Arabia unless the number on file says otherwise. Nearly every lead is Saudi, and
+        // the default being the common case is the whole point of asking this way.
+        const dial9 = this.state.ldfDial || split9.dial || '+966';
+        const local9 = split9.dial ? split9.local : raw9.trim();
+        // AN EMPTY NUMBER STORES AN EMPTY PHONE, never a bare "+966". A lead holding nothing but a
+        // dial code counts as contactable to the lead score and reads as a phone number on the
+        // list, and it is neither.
+        const write9 = (d9, n9) => {
+          this.setState({ ldfDial: d9 });
+          _setLdfField9('phone', String(n9 || '').trim() ? (d9 + ' ' + String(n9).trim()) : '');
+        };
+        return {
+          ldfDial: dial9,
+          ldfDialOpen: open9,
+          ldfDialToggle: () => this.setState({ openDd: open9 ? null : 'ldf-dial' }),
+          ldfDialOptions: _dialList9.map(c9 => ({
+            label: c9.dial + '  ' + c9.name,
+            weight: c9.dial === dial9 ? '700' : '500',
+            color: c9.dial === dial9 ? '#7C00FF' : '#1A1523',
+            pick: () => write9(c9.dial, local9),
+          })),
+          ldfPhone: local9,
+          setLdfPhone: (e) => write9(dial9, e.target.value),
+        };
+      })(),
       // ── Possible duplicates ──
       ldDupOpen: !!_ldf && (this.state.dupMatches || []).length > 0,
       ldDupTitle: (() => {
