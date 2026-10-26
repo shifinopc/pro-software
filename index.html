@@ -16487,11 +16487,37 @@ class Component extends DCLogic {
         // A batch that fails is not a failure: every call simply goes the way it used to.
         .catch(() => { this._bootBatch = null; }));
     };
-    // Looks enough like a Response for the callers above: `ok`, `status`, and `json()`.
+    /**
+     * SIGNED OUT, SO DO NOT ASK.
+     *
+     * The startup loaders run whether or not anybody is signed in, because they are DEFINED in the
+     * same pass that CALLS them — forty-two definitions interleaved with ninety-six calls — so the
+     * function cannot simply return early without leaving half the loaders undefined.
+     *
+     * The result was that opening the sign-in page fired eighty-nine requests carrying no token,
+     * every one of which came back 401. Nothing was broken by it; it was just work, on every visit
+     * to the one screen where nobody has asked for anything yet.
+     *
+     * Gating here instead costs one condition and reaches all ninety-six, because they all come
+     * through this function now. The answer handed back is the same 401 those calls were already
+     * getting, so every caller behaves exactly as it did — including `_load`, which marks the key
+     * expired and deliberately does NOT raise "session expired" when there was no token to begin
+     * with. The only difference is that nobody is asked.
+     *
+     * `/api/countries` is the exception, and checked rather than assumed: of the ninety-seven boot
+     * paths it is the only one that answers without a token, being static reference data that needs
+     * neither auth nor the database.
+     */
+    const PUBLIC_WHEN_SIGNED_OUT = ['/api/countries'];
+    // Looks enough like a Response for the callers above: `ok`, `status`, `json()` and `text()`.
     this._bootFetch = (path, init) => this._bootReady.then(() => {
+      const base = (this._apiBase || 'http://localhost:4100');
+      if (!localStorage.getItem('stimespro:token') && PUBLIC_WHEN_SIGNED_OUT.indexOf(path) < 0) {
+        return { ok: false, status: 401, json: () => Promise.resolve(null), text: () => Promise.resolve('') };
+      }
       const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
-      if (!hit) return fetch((this._apiBase || 'http://localhost:4100') + path, init);
-      return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body) };
+      if (!hit) return fetch(base + path, init);
+      return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body), text: () => Promise.resolve(JSON.stringify(hit.body)) };
     });
     this._load = (path, key, apply) => {
       const tok = localStorage.getItem('stimespro:token');
@@ -17284,7 +17310,9 @@ class Component extends DCLogic {
       // them. Every shipment the software raised itself therefore read as Requested however far it
       // had actually got, and matched no tab. One definition, served.
       this._loadLadders = () => {
-        const get = (p, k) => fetch(API + p, { headers: hdr }).then(r => (r.ok ? r.json() : null))
+        // Through _bootFetch like the rest: these three are in the batch, and they were the last
+        // requests still being made from the sign-in screen with no token to make them with.
+        const get = (p, k) => this._bootFetch(p, { headers: hdr }).then(r => (r.ok ? r.json() : null))
           .then(v => { if (v) this.setState({ [k]: v }); }).catch(() => {});
         return Promise.all([
           get('/api/courier-statuses', 'courierStatusData'),
