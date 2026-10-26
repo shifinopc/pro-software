@@ -51,7 +51,8 @@
     // scripts/first-paint-check.ts fails when they are.
     var first = {};
     window.__firstPaint = ['/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
-      '/api/tasks', '/api/service-requests', '/api/crm-dashboard', '/api/users', '/api/subscriptions'];
+      '/api/tasks', '/api/service-requests', '/api/crm-dashboard', '/api/users', '/api/subscriptions',
+      '/api/workflow/my-work'];
     window.__firstPaint.forEach(function (p) { first[p] = get(p); });
     return { token: t, boot: get('/api/boot'), first: first };
   })();
@@ -20015,6 +20016,17 @@ class Component extends DCLogic {
     const _dDocs = _scopeRows(Array.isArray(this.state.documentsData) ? this.state.documentsData : null);
     const _dInv = _scopeRows(Array.isArray(this.state.invoicesData) ? this.state.invoicesData : null);
     const _dTasks = Array.isArray(this.state.tasksData) ? this.state.tasksData : null;
+    /**
+     * Has the first screen's data arrived? The four 'What needs me today' tiles are counted from
+     * these lists several thousand lines apart, and each showed 0 until they did — four pieces of
+     * work reported as nothing to do. They are all in the first-paint set now, so this is only
+     * reached when a request actually failed; a dash is still the honest answer there.
+     *
+     * Evaluated when CALLED, not here: `_authed` is declared a few lines below this, and reading a
+     * const above its declaration throws — which it did, taking the whole screen down until the
+     * check was moved inside the function.
+     */
+    const _need9 = (v) => (((_dDocs && _dInv && _dTasks) || !_authed) ? v : '—');
     // Signed-in? (token present). Design/sample fallbacks below are for the UNAUTHENTICATED design
     // preview only — once logged in we show REAL data (and an empty state when there's nothing yet),
     // never sample rows. So a freshly-wiped tenant shows empty states, not fake clients/submissions.
@@ -21703,7 +21715,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })),
       invOutstanding: fmtCur(invOutstanding),
       invPaidYtd: fmtCur(invPaidYtd),
-      invOutCount: invoicesFull.filter(v => v.payable).length,
+      invOutCount: _need9(invoicesFull.filter(v => v.payable).length),
       payMonth: _payThisMonth ? fmtCur(_paySum(_payThisMonth)) : (_authed ? '—' : 'AED 18,900'),
       payMonthCount: _payThisMonth ? _payThisMonth.length + (_payThisMonth.length === 1 ? ' payment' : ' payments') : (_authed ? 'Loading…' : '12 payments'),
       payYtd: _payThisYear ? fmtCur(_paySum(_payThisYear)) : (_authed ? '—' : 'AED 64,200'),
@@ -27657,7 +27669,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           .catch(() => this.setState({ acceptBusy: false, acceptErr: 'Server unreachable — nothing was accepted' }));
       },
     };
-    const approvalsApi = { approvals: approvalsFlat, approvalGroups, approvalsPending: apCount('Pending'), approvalSummary, ...apNoteApi, ...acceptApi };
+    const approvalsApi = { approvals: approvalsFlat, approvalGroups, approvalsPending: _need9(apCount('Pending')), approvalSummary, ...apNoteApi, ...acceptApi };
 
     // ===== Requests Queue (provider) =====
     const qStageMap = {
@@ -28657,7 +28669,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       fpClose: () => this._closeFile(),
       fpDownload: () => { const a9 = document.createElement('a'); a9.href = this.state.fpUrl; const ext9 = { 'application/pdf': '.pdf', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' }[this.state.fpType] || ''; const nm9 = String(this.state.fpName || 'document'); a9.download = (/\.[a-z0-9]{2,4}$/i.test(nm9) ? nm9 : nm9 + ext9).replace(/[\\/:*?"<>|]+/g, '_'); document.body.appendChild(a9); a9.click(); a9.remove(); },
       renewalsRows: compScoped.filter(r => r.status === 'Expiring' || r.status === 'Expired' || r.status === 'Processing').sort((a, z) => a.days - z.days),
-      renewalsDue30: compScoped.filter(r => r.status === 'Expiring').length,
+      renewalsDue30: _need9(compScoped.filter(r => r.status === 'Expiring').length),
       renewalsOverdue: compScoped.filter(r => r.status === 'Expired').length,
       renewalsProcessing: compScoped.filter(r => r.status === 'Processing').length,
       renewalsEmpty: compScoped.filter(r => r.status === 'Expiring' || r.status === 'Expired' || r.status === 'Processing').length === 0,
@@ -35024,7 +35036,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       .map(g => ({ ...g, count: g.rows.length }));
 
     const myWorkApi = {
-      myWorkGroups, wkOverdue, wkToday, wkWeek, wkBlocked, myWorkEmpty: allWorkRows.length === 0,
+      myWorkGroups, wkOverdue: _need9(wkOverdue), wkToday, wkWeek, wkBlocked, myWorkEmpty: allWorkRows.length === 0,
       // Shown only when there is a choice to make: one workflow and a filter is decoration.
       mtWfShow: mtMode === 'pending' && _wfKeys.length > 1,
       mtWfChips: [{ key: null, label: 'Everything', n: allWorkRows.length }]
@@ -35168,14 +35180,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _revMom = (_revPays && _revPrev > 0) ? Math.round((_revThis - _revPrev) / _revPrev * 100) : null;
     // WIRED: dashboard ops stats / pipeline / team workload / revenue from real data.
     const _dueToday = _dTasks ? _dTasks.filter(t2 => !t2.archived && t2.status !== 'done' && t2.dueDate && new Date(t2.dueDate).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0)).length : 23;
-    const _apWaiting = (Array.isArray(this.state.myWorkData) ? this.state.myWorkData.filter(t2 => t2.nodeType === 'approval' && t2.status === 'active').length : 0) + (_dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : 5);
+    const _myWork = Array.isArray(this.state.myWorkData) ? this.state.myWorkData : null;
+    const _apWaiting = (_myWork ? _myWork.filter(t2 => t2.nodeType === 'approval' && t2.status === 'active').length : 0) + (_dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : 5);
     const _slaRisk = _dDocs ? _dDocs.filter(d2 => (Number(d2.daysLeft) || 0) <= 7 && d2.status !== 'valid').length : 4;
     const _slaBreached = _dDocs ? _dDocs.filter(d2 => d2.status === 'overdue').length : 1;
+    // A number, or a dash while the list it is counted from has not arrived. The signed-out
+    // preview keeps its sample figures, which is what the second branch is for.
+    const _num9 = (v, src) => ((src || !_authed) ? String(v) : '—');
     const opsStats = [
-      ['Open requests', String(_openReq), '#7C00FF', '#F3E8FF', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', 'client portal intake', () => this.setState({ active: 'Requests Queue', activeGroup: 'Operations' })],
-      ['Tasks due today', String(_dueToday), '#0284C7', '#E4F4FD', 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', 'incl. overdue', () => this.setState({ active: 'Task List', activeGroup: 'Operations' })],
-      ['Approvals waiting', String(_apWaiting), '#B8860B', '#FEF4E2', 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3', 'requests + workflow', () => this.setState({ active: 'Approvals', activeGroup: 'Operations' })],
-      ['SLA at risk', String(_slaRisk), '#C0353A', '#FEECEC', 'M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z', _slaBreached + ' breached', () => this.setState({ active: 'SLA Monitor', activeGroup: 'Operations' })],
+      ['Open requests', _num9(_openReq, _dSrv), '#7C00FF', '#F3E8FF', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', 'client portal intake', () => this.setState({ active: 'Requests Queue', activeGroup: 'Operations' })],
+      ['Tasks due today', _num9(_dueToday, _dTasks), '#0284C7', '#E4F4FD', 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11', 'incl. overdue', () => this.setState({ active: 'Task List', activeGroup: 'Operations' })],
+      ['Approvals waiting', _num9(_apWaiting, _myWork), '#B8860B', '#FEF4E2', 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3', 'requests + workflow', () => this.setState({ active: 'Approvals', activeGroup: 'Operations' })],
+      ['SLA at risk', _num9(_slaRisk, _dDocs), '#C0353A', '#FEECEC', 'M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z', _slaBreached + ' breached', () => this.setState({ active: 'SLA Monitor', activeGroup: 'Operations' })],
     ].map(([label, value, color, bg, icon, sub, go]) => ({ label, value, color, bg, icon, sub, go }));
 
     const _resolvedReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'resolved').length : 23;
@@ -35185,10 +35201,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ['In review', _apWaiting, '#8B17FF'],
       ['Govt. processing', _expDocs, '#7C00FF'],
       ['Ready / collected', _resolvedReq, '#5E00C4'],
-    ] : (_authed ? [
-      ['New requests', 0, '#C9A2FF'], ['Docs pending', 0, '#A55BFF'], ['In review', 0, '#8B17FF'],
-      ['Govt. processing', 0, '#7C00FF'], ['Ready / collected', 0, '#5E00C4'],
-    ] : [
+    // Nothing at all until the requests arrive, rather than five stages reported as empty. An
+    // empty row of bars reads as 'no work in the pipeline', which is an answer; the absence of
+    // bars reads as what it is.
+    ] : (_authed ? [] : [
       ['New requests', 14, '#C9A2FF'], ['Docs pending', 9, '#A55BFF'], ['In review', 11, '#8B17FF'],
       ['Govt. processing', 18, '#7C00FF'], ['Ready / collected', 23, '#5E00C4'],
     ]);
@@ -35196,7 +35212,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const pipeSteps = pipeline.map(([label, count, color]) => ({ label, count, color, pct: Math.round(count / pipeMax * 100) }));
     // The header used to read a literal "75 in flight" — the sum of the signed-out demo figures,
     // so a freshly deployed instance with an empty database still claimed 75 live requests.
-    const pipeInFlight = pipeline.reduce((a, p) => a + p[1], 0) + ' in flight';
+    const pipeInFlight = (_dSrv || !_authed) ? (pipeline.reduce((a, p) => a + p[1], 0) + ' in flight') : '';
 
     // Team workload: real staff + their open-task counts.
     const _staffUsers = Array.isArray(this.state.usersData) ? this.state.usersData.filter(u => u.type !== 'portal' && u.status === 'active') : null;

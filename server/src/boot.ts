@@ -70,7 +70,7 @@ export const BOOT_PATHS: string[] = [
   // like answers. They are listed as FIRST_PAINT in index.html; putting them back here would have
   // them fetched twice.
   "/api/employees", "/api/payments", "/api/quotations", "/api/audit",
-  "/api/sales-report", "/api/proposal-templates", "/api/workflow/my-work",
+  "/api/sales-report", "/api/proposal-templates",
   "/api/workforce-bands", "/api/workforce-band-sets",
   "/api/appointments", "/api/appointment-statuses", "/api/appointment-types",
   "/api/courier-shipments", "/api/courier-statuses",
