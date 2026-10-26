@@ -7519,6 +7519,21 @@
               <span onClick="{{ ldViewList }}" title="One row per lead" style="font-size:10px; font-weight:700; color:{{ ldListColor }}; background:{{ ldListBg }}; box-shadow:{{ ldListShadow }}; padding:5px 11px; border-radius:99px; cursor:pointer;">List</span>
               <span onClick="{{ ldViewBoard }}" title="A column per status, all of them at once" style="font-size:10px; font-weight:700; color:{{ ldBoardColor }}; background:{{ ldBoardBg }}; box-shadow:{{ ldBoardShadow }}; padding:5px 11px; border-radius:99px; cursor:pointer;">Board</span>
             </div>
+            <!-- Which service they came for. Beside the grouping control rather than among the
+                 tabs above: those are stages of one pipeline and this cuts across all of them. -->
+            <div class="pill-selwrap">
+              <div data-dd data-open="{{ ddLdProdOpen }}" onClick="{{ ddLdProdToggle }}" class="pill-sel">
+                <span>{{ ddLdProdLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddLdProdOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="pill-dd">
+                  <sc-for list="{{ ddLdProdOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
             <div class="pill-selwrap">
               <div data-dd data-open="{{ ddLdGroupOpen }}" onClick="{{ ddLdGroupToggle }}" class="pill-sel">
                 <span>{{ ddLdGroupLabel }}</span>
@@ -35062,14 +35077,31 @@ class Component extends DCLogic {
       .flatMap(c9 => c9.deals)
       .find(d9 => d9.companyId === companyId) || null;
     const _ldFilter = this.state.ldFilter || 'All';
-    // Stage filter, then the search box, then grouping — in that order, because each narrows what
-    // the last one left. The search reaches the CONTACTS too: somebody hunting for a lead usually
-    // remembers the person they spoke to rather than the company's registered name.
+    // Stage filter, then the search box and the product, then grouping — in that order, because
+    // each narrows what the last one left. The search reaches the CONTACTS too: somebody hunting
+    // for a lead usually remembers the person they spoke to rather than the company's registered
+    // name.
     const _ldQ9 = String(this.state.ldQuery || '').trim().toLowerCase();
+    /**
+     * WHICH SERVICE THEY CAME FOR, as a filter — `Company.service`, which holds a name from the
+     * Product list as free text rather than an id, so this matches on the name.
+     *
+     * It narrows inside _ldMatch9 rather than beside it because THREE places filter with that one
+     * function — the list, the board, and the tab counts. A product filter the counts did not know
+     * about would print "Lead 13" over four rows, and the next person to add a filter here gets it
+     * right by default instead of having to find all three.
+     */
+    const LD_NO_PROD9 = '\u0000not-set'; // a sentinel, since every real value is something typed
+    const _ldProd9 = this.state.ldProduct || '';
     const _ldMatch9 = (l) => {
+      const svc9 = String(l.service || '').trim();
+      // "Not set" is a CHOICE, not the absence of one. Most leads carry no service at all, and
+      // finding those to fill them in is the first thing anybody opens this filter for.
+      if (_ldProd9 === LD_NO_PROD9) { if (svc9) return false; }
+      else if (_ldProd9 && svc9 !== _ldProd9) return false;
       if (!_ldQ9) return true;
       const people = _contactRows.filter(c => c.companyId === l.id);
-      return [l.name, l.city, l.source, l.sourceDetail, l.contact, l.email, l.phone,
+      return [l.name, l.city, l.source, l.sourceDetail, l.contact, l.email, l.phone, l.service,
         ...people.flatMap(c => [c.name, c.email, c.phone, c.jobTitle])]
         .some(v => String(v || '').toLowerCase().includes(_ldQ9));
     };
@@ -40091,6 +40123,28 @@ class Component extends DCLogic {
       // ── search, grouping and selection ──────────────────────────────────────────────────────
       ldQuery: this.state.ldQuery || '',
       setLdQuery: (e) => this.setState({ ldQuery: e.target.value, ldPage: 1 }),
+      /**
+       * THE PRODUCT FILTER. Its options are the Product list UNION what the leads actually carry.
+       *
+       * `service` is free text on purpose — the Product list is a set of suggestions people may
+       * type past, so that the one lead wanting something nobody has added yet can still be saved.
+       * An option list built from Products alone would therefore leave exactly that lead
+       * unreachable by the filter, which is the lead most worth finding.
+       */
+      ...mkDdSearch('ddLdProd', (() => {
+        const names9 = [...new Set([
+          ...(Array.isArray(this.state.productsData) ? this.state.productsData : [])
+            .filter(p => !p.retired).map(p => String(p.name || '').trim()),
+          ..._leadRows.map(l => String(l.service || '').trim()),
+        ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        return [
+          { value: '', label: 'All products' },
+          ...names9.map(n => ({ value: n, label: n })),
+          // Last, not first: it is the biggest group today and would otherwise sit where the eye
+          // lands on a list whose point is the named services.
+          { value: LD_NO_PROD9, label: 'Not set' },
+        ];
+      })(), _ldProd9, (v) => this.setState({ ldProduct: v, ldPage: 1 })),
       // mkDdSearch rather than mkDd because the options carry a value distinct from their label —
       // "No grouping" stores '' — and the search box is simply left out of the markup.
       ...mkDdSearch('ddLdGroup', [
