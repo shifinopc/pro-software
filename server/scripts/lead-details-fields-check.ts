@@ -69,7 +69,52 @@ const dropped = sentFields.filter(f => !ELSEWHERE.has(f) && !writtenFields.inclu
 console.log(`  the edit form sends: ${sentFields.join(", ")}`);
 console.log(`  the route writes:    ${writtenFields.join(", ")}`);
 
-if (!dropped.length) { console.log("\nin order — nothing is sent and dropped."); process.exit(0); }
+/**
+ * AND WHAT THE FORM SENDS, THE FORM MUST FIRST LOAD.
+ *
+ * The other half of the same hinge, and the more dangerous one. `_ldDraft9` fills the edit dialog
+ * from the lead; the body above posts whatever the dialog holds. A field in the second list and not
+ * the first opens blank on a record that has a value — and then posts that blank back.
+ *
+ * `service` was exactly this. While the route ignored it, a blank Product was merely confusing. The
+ * moment the route started honouring it, opening a lead to fix its city and pressing save would
+ * have posted an empty Product and erased the answer on file. The fix to one bug armed the other.
+ */
+const draftFields = (() => {
+  const from = html.indexOf("const _ldDraft9 = (l, primary) => ({");
+  const to = html.indexOf("});", from);
+  if (from < 0 || to < 0) return null;
+  return [...new Set([...html.slice(from, to).matchAll(/^\s{6}([a-zA-Z][a-zA-Z0-9]*)\s*:/gm)].map(m => m[1]))];
+})();
+
+/** The `f.x` the save body actually reads out of that draft. */
+const readFields = (() => {
+  const at = html.indexOf("'/api/companies/' + f.id + '/details'");
+  const from = html.indexOf("JSON.stringify({", at);
+  const to = html.indexOf("}),", from);
+  if (at < 0 || from < 0 || to < 0) return null;
+  return [...new Set([...html.slice(from, to).matchAll(/\bf\.([a-zA-Z][a-zA-Z0-9]*)/g)].map(m => m[1]))];
+})();
+
+if (!draftFields || !readFields) {
+  console.error("Could not find _ldDraft9 or what the save reads from it. This check needs updating.");
+  process.exit(2);
+}
+
+const notLoaded = readFields.filter(f => !draftFields.includes(f));
+console.log(`  the form loads:      ${draftFields.join(", ")}`);
+console.log(`  the save reads:      ${readFields.join(", ")}`);
+
+if (notLoaded.length) {
+  for (const f of notLoaded) {
+    console.log(`\n  FAIL  the save posts "${f}", but _ldDraft9 never loads it into the dialog.`);
+    console.log(`        The box opens EMPTY on a record that has a value, and saving writes that empty back.`);
+    console.log(`        Add it to the draft:   ${f}: l.${f} || '',`);
+  }
+  process.exit(1);
+}
+
+if (!dropped.length) { console.log("\nin order — nothing is sent and dropped, and nothing is sent unloaded."); process.exit(0); }
 for (const f of dropped) {
   console.log(`\n  FAIL  "${f}" is sent by the edit form and written nowhere in the route.`);
   console.log(`        Saving will answer 200, close the dialog, and leave the old value on the row.`);
