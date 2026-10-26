@@ -28,12 +28,18 @@ import { LEAD_IMPORT_COLUMNS, LEAD_EXAMPLE_ROW, leadImportTemplateCsv, planLeadI
 import { prisma } from "../src/db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const html = fs.readFileSync(path.join(here, "..", "..", "index.html"), "utf8");
+// The console lives at the repo root, which the API container does not carry — only `server/` is
+// copied into the image. Run this on the box and the file is simply not there, so the half of the
+// check that compares the import against the FORM is skipped and said to be skipped, rather than
+// taking the whole check down in the one place somebody most wants to run it.
+const htmlPath = path.join(here, "..", "..", "index.html");
+const html = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, "utf8") : null;
 
 const fails: string[] = [];
 
 /** The keys the Add lead form puts in the body it posts to /api/companies. */
 const formFields = (() => {
+  if (!html) return null;
   // ANCHORED ON THE ADD LEAD FORM, not on "lifecycle: 'lead'". Two places in the console create a
   // lead — this form, and "make a lead of this" in the inbox, which posts a different body — and
   // the looser anchor found the inbox one, so the check reported the import missing fields that
@@ -84,7 +90,10 @@ if (!plan.creates && !plan.skipped.length) fails.push("the template's example ro
 for (const sk of plan.skipped) console.log(`  note: ${sk.what} — expected if a previous run imported the example`);
 
 // 3. The import writes what the form writes.
-if (!formFields) {
+if (!html) {
+  console.log("\nnote: index.html is not here (the API image carries only server/), so the");
+  console.log("      import-against-the-form half of this check did not run.");
+} else if (!formFields) {
   fails.push("could not find the Add lead form's POST body in index.html — this check needs updating");
 } else if (plan.rows.length) {
   const sent = new Set(Object.keys(plan.rows[0].body));
