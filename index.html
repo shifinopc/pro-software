@@ -43,9 +43,16 @@
         );
       }).catch(function () { return null; }); // a failure here just means the app asks again
     };
+    // THE ONE LIST. The app reads it back as FIRST_PAINT rather than keeping its own copy — two
+    // copies would mean a path the app waits for that this never asked for, which is a path fetched
+    // late, which is the delay this whole thing exists to remove.
+    //
+    // These must NOT also be in BOOT_PATHS on the server, or they are fetched twice.
+    // scripts/first-paint-check.ts fails when they are.
     var first = {};
-    ['/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
-     '/api/tasks', '/api/service-requests', '/api/crm-dashboard'].forEach(function (p) { first[p] = get(p); });
+    window.__firstPaint = ['/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
+      '/api/tasks', '/api/service-requests', '/api/crm-dashboard', '/api/users', '/api/subscriptions'];
+    window.__firstPaint.forEach(function (p) { first[p] = get(p); });
     return { token: t, boot: get('/api/boot'), first: first };
   })();
 
@@ -16598,10 +16605,7 @@ class Component extends DCLogic {
      *
      * They are NOT in BOOT_PATHS on the server, or they would be fetched twice.
      */
-    const FIRST_PAINT = [
-      '/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
-      '/api/tasks', '/api/service-requests', '/api/crm-dashboard',
-    ];
+    const FIRST_PAINT = window.__firstPaint || [];
     // Looks enough like a Response for the callers above: `ok`, `status`, `json()` and `text()`.
     this._bootFetch = (path, init) => {
       const base = (this._apiBase || 'http://localhost:4100');
@@ -35214,14 +35218,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _mrr = _subs ? _subs.reduce((a2, s2) => a2 + (s2.package && s2.package.billingCycle === 'yearly' ? Math.round((Number(s2.price) || 0) / 12) : (Number(s2.price) || 0)), 0) : null;
     const _collected = _dInv ? _dInv.filter(v2 => String(v2.status).toLowerCase() === 'paid').reduce((a2, v2) => a2 + _docTotal(v2), 0) : null;
     const revenue = {
-      mrr: _mrr != null ? fmtCur(_mrr) : (_authed ? fmtCur(0) : 'SAR 128,400'),
+      // SAR 0.00 is an answer. Until the subscriptions arrive there isn't one, and a firm being
+      // told its recurring revenue is nothing — even for a moment — is the worst of these to get
+      // wrong. Same for collected and outstanding below, which are counted from the invoices.
+      mrr: _mrr != null ? fmtCur(_mrr) : (_authed ? '—' : 'SAR 128,400'),
       mom: _revMom == null ? '' : (_revMom > 0 ? '+' : '') + _revMom + '%',
       hasMom: _revMom != null,
       momUp: (_revMom || 0) >= 0,
       momDown: (_revMom || 0) < 0,
       momColor: (_revMom || 0) >= 0 ? '#4ADE80' : '#FCA5A5',
       sparkLabel: _revPays ? 'Collected · last 12 months' : '',
-      collected: _collected != null ? fmtCur(_collected) : (_authed ? fmtCur(0) : 'SAR 82,150'), outstanding: fmtCur(_unpaidSum),
+      collected: _collected != null ? fmtCur(_collected) : (_authed ? '—' : 'SAR 82,150'),
+      outstanding: _dInv ? fmtCur(_unpaidSum) : (_authed ? '—' : fmtCur(_unpaidSum)),
       collectedPct: (_collected != null && (_collected + _unpaidSum) > 0) ? Math.round(_collected / (_collected + _unpaidSum) * 100) : (_authed ? 0 : 64), spark: revSpark,
     };
 
@@ -43493,7 +43501,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       docEmployeeEmpty: docScope === 'employees' && employeeDocs.length === 0,
       slaAllEmpty: slaTotal === 0,
       clientHealthEmpty: clientHealth.length === 0,
-      teamEmpty: team.length === 0,
+      // Only once the staff list has actually arrived. It said "No team members yet — invite staff
+      // in Settings → Users" while it was still loading: an instruction to go and fix something
+      // that is not wrong.
+      teamEmpty: !!_staffUsers && team.length === 0,
       receivablesEmpty: receivables.length === 0,
       // A heading that says "across clients" above a list showing one client is the same lie the
       // filter was telling, just smaller. Both titles follow the scope.

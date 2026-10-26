@@ -54,7 +54,7 @@ export const BOOT_PATHS: string[] = [
   "/api/interactions", "/api/stage-analytics", "/api/activities",
   "/api/booking-links", "/api/lead-scores", "/api/owner-rotation", "/api/assignment-rules",
   "/api/integrations", "/api/assignable-owners?all=1", "/api/upgrade-requests",
-  "/api/activity-log", "/api/subscriptions", "/api/packages", "/api/gov-centers",
+  "/api/activity-log", "/api/packages", "/api/gov-centers",
   "/api/countries", "/api/packs", "/api/packs/installed", "/api/packs/updates",
   "/api/workforce", "/api/workforce-history?days=90", "/api/setup-check", "/api/groups",
   "/api/service-items", "/api/api-keys", "/api/credentials", "/api/notifications",
@@ -69,7 +69,7 @@ export const BOOT_PATHS: string[] = [
   // first screen showed zeros until everything had arrived — about a second of numbers that look
   // like answers. They are listed as FIRST_PAINT in index.html; putting them back here would have
   // them fetched twice.
-  "/api/users", "/api/employees", "/api/payments", "/api/quotations", "/api/audit",
+  "/api/employees", "/api/payments", "/api/quotations", "/api/audit",
   "/api/sales-report", "/api/proposal-templates", "/api/workflow/my-work",
   "/api/workforce-bands", "/api/workforce-band-sets",
   "/api/appointments", "/api/appointment-statuses", "/api/appointment-types",
