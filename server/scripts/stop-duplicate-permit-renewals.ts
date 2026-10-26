@@ -29,6 +29,22 @@
 import { prisma } from "../src/db.js";
 
 const APPLY = process.argv.includes("--apply");
+/**
+ * ALSO CANCEL THE ONES THAT ARE MERELY BLOCKED — a SECOND rule, deliberately not folded into the
+ * first, because it rests on different evidence and deserves to be refused on its own.
+ *
+ * A permit run can survive the duplicate test and still be work nobody can do. These three did: no
+ * Iqama renewal is running for them because the renewal pass is HOLDING it on a prerequisite — an
+ * expired passport, a lapsed insurance — and the permit cannot be renewed before that either, since
+ * Qiwa will refuse it. The blocker already has its own workflow running and on the board. When it
+ * clears, the hold releases itself and the Iqama renewal renews the permit with the Iqama. So the
+ * permit row is a second, unactionable copy of a problem already represented.
+ *
+ * THE GUARD: a run is only cancelled here when something else IS running for that person. A permit
+ * renewal with nothing else behind it is the one case where this row is the only record that the
+ * work exists, and deleting it would delete the work.
+ */
+const ALSO_BLOCKED = process.argv.includes("--also-blocked");
 const nowISO = () => new Date().toISOString();
 
 /**
@@ -90,16 +106,13 @@ const main = async () => {
   const iqamaFor = new Set(running.filter(i => i.template.name === "Iqama Renewal").flatMap(keysOf));
   const permits = running.filter(i => i.template.name === "Work Permit Renewal");
   const dupes = permits.filter(i => keysOf(i).some(k => iqamaFor.has(k)));
-  const keep = permits.filter(i => !dupes.includes(i));
+  const rest = permits.filter(i => !dupes.includes(i));
 
-  console.log(`\nrunning Work Permit renewals: ${permits.length}`);
-  console.log(`  duplicates (same person has an Iqama renewal running): ${dupes.length}`);
-  console.log(`  left alone: ${keep.length}`);
-  for (const k of keep) {
-    // No Iqama renewal for this person. Either it is genuinely not due, or the renewal pass is
-    // HOLDING it on a prerequisite — which is the answer somebody reading this list actually wants,
-    // because then the permit is not blocked on the permit at all.
-    const name = k.title.replace(/—.*/, "").trim() && k.title.replace(/.*—\s*/, "").trim();
+  // What else is open for this person — the fact that decides whether a non-duplicate is still
+  // cancellable, and the one a reader of this list actually wants either way.
+  const context = [] as { run: typeof permits[number]; held: string | null; other: string[] }[];
+  for (const k of rest) {
+    const name = k.title.replace(/.*—\s*/, "").trim();
     const held = await prisma.notification.findFirst({
       where: { dedupeKey: { startsWith: "renewal-held:" }, message: { contains: name } },
       select: { message: true },
@@ -108,18 +121,36 @@ const main = async () => {
       where: { status: "running", title: { contains: name }, NOT: { template: { name: "Work Permit Renewal" } } },
       select: { template: { select: { name: true } } },
     });
-    console.log(`      keep  ${k.clientName ?? "—"} — ${k.title}`);
-    if (held) console.log(`              Iqama renewal held: ${held.message}`);
-    if (other.length) console.log(`              also running: ${other.map(o => o.template.name).join(", ")}`);
+    context.push({ run: k, held: held?.message ?? null, other: other.map(o => o.template.name) });
+  }
+  const blocked = ALSO_BLOCKED ? context.filter(c => c.other.length > 0) : [];
+  const keep = context.filter(c => !blocked.includes(c));
+  const doomed = [...dupes, ...blocked.map(b => b.run)];
+
+  console.log(`
+running Work Permit renewals: ${permits.length}`);
+  console.log(`  duplicates (same person has an Iqama renewal running): ${dupes.length}`);
+  if (ALSO_BLOCKED) console.log(`  blocked behind another renewal, also cancelled: ${blocked.length}`);
+  for (const b of blocked) {
+    console.log(`     cancel  ${b.run.clientName ?? "—"} — ${b.run.title}`);
+    if (b.held) console.log(`              ${b.held}`);
+    console.log(`              already on the board as: ${b.other.join(", ")}`);
+  }
+  console.log(`  left alone: ${keep.length}`);
+  for (const k of keep) {
+    console.log(`      keep  ${k.run.clientName ?? "—"} — ${k.run.title}`);
+    if (k.held) console.log(`              Iqama renewal held: ${k.held}`);
+    if (k.other.length) console.log(`              also running: ${k.other.join(", ")}`);
+    else console.log(`              nothing else is running for this person — this row IS the work`);
   }
 
-  if (!APPLY) return console.log(`\nreport only. Re-run with --apply to switch the trigger off and cancel ${dupes.length}.`);
+  if (!APPLY) return console.log(`\nreport only. Re-run with --apply to switch the trigger off and cancel ${doomed.length}.`);
 
   await prisma.workflowTemplate.update({ where: { id: tpl.id }, data: { trigger: "manual" } });
   console.log(`\ntrigger: document_expiry -> manual (the template stays active and startable by hand)`);
 
   let steps = 0, tasks = 0;
-  for (const i of dupes) {
+  for (const i of doomed) {
     await prisma.workflowInstance.update({ where: { id: i.id }, data: { status: "cancelled", completedAt: nowISO() } });
     // Exactly what POST /instances/:id/cancel does: the run, its open steps, and the task row that
     // carries it. Leaving any of the three behind is how an officer keeps work in their inbox for
@@ -128,9 +159,12 @@ const main = async () => {
     tasks += (await prisma.task.updateMany({ where: { workflowInstanceId: i.id, NOT: { status: "done" } }, data: { status: "cancelled" } })).count;
     await prisma.workflowLog.create({ data: {
       instanceId: i.id, action: "instance.cancelled", actor: "stop-duplicate-permit-renewals",
-      detail: "The Iqama renewal for this employee renews the work permit with it", at: nowISO() } });
+      detail: dupes.includes(i)
+        ? "The Iqama renewal for this employee renews the work permit with it"
+        : "Blocked behind another renewal that is already on the board; the Iqama renewal will renew the permit once the hold clears",
+      at: nowISO() } });
   }
-  console.log(`cancelled ${dupes.length} run(s), ${steps} open step(s), ${tasks} task row(s)`);
+  console.log(`cancelled ${doomed.length} run(s), ${steps} open step(s), ${tasks} task row(s)`);
   console.log(`\nThe hourly renewal pass clears renewalRunId on those permits by itself; with the`);
   console.log(`trigger off, nothing raises them again.`);
 };
