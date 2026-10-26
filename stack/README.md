@@ -100,20 +100,29 @@ sign-in — no client accounts exist yet.
 ```bash
 cd ~/stimespro/app && git pull
 cd .. && docker compose -f app/stack/docker-compose.yml --env-file .env up -d --build
+app/stack/purge-cdn.sh
 ```
 
 The schema is re-pushed on start; the volumes are untouched.
 
-**Then purge the Cloudflare cache.** Cloudflare → ionob.in → Caching → Configuration → *Purge
-Everything*. The console document is 3.3 MB and is marked `no-cache`, so before it was cached at the
-edge every cold visit re-fetched it from Finland and had it compressed on the way — 2.2 s for the
-document alone. A cache rule (*Cache STIMES PRO console + portal HTML*, hostnames `pro.ionob.in` and
-`cp.ionob.in`) now holds it at the edge for an hour, which brings that to ~0.6 s.
+**The third line is not optional, which is why it is a line of the command and not a sentence here.**
+The console is one 3.7 MB document. A cache rule (*Cache STIMES PRO console + portal HTML*,
+hostnames `pro.ionob.in` and `cp.ionob.in`, Edge TTL 1 hour, Browser TTL *Respect origin*) holds it
+at the edge so it is served from a city near the user instead of from Finland. Measured, from India:
 
-The cost of that is this step: browsers still revalidate on every load, but they revalidate against
-the edge, so **until the cache is purged the edge keeps serving the previous deploy's HTML — for up
-to an hour.** The in-app "new version" banner cannot help, because a reload gets the same cached
-document. Purging takes one click and is the last step of every deploy.
+| | document TTFB | document total | a repeat visit |
+|---|---|---|---|
+| cached at the edge | 0.5 s | 0.8 s | 0.13 s |
+| not cached | 1.1 s | 2.6 s | 0.75 s |
+
+Browsers revalidate on every load (the origin says `no-cache, must-revalidate`), but they revalidate
+against the *edge* — so until the edge is purged it answers with the PREVIOUS deploy's document, for
+up to an hour, and a reload gets the same copy. The in-app version banner cannot help with that.
+
+This used to be a paragraph asking for a click. It was forgotten, the stale build was blamed on the
+cache rule, the rule was replaced with a bypass, and every page load got about two seconds slower
+until somebody measured it. `purge-cdn.sh` exits non-zero and says so loudly when it cannot purge,
+so a deploy that skipped it does not look like a deploy that finished.
 
 ## Backups
 
