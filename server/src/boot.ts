@@ -62,8 +62,14 @@ export const BOOT_PATHS: string[] = [
   // after the first list was in place: twenty-four were left, and all but the two POSTs below are
   // plain GET lists that were already being fetched anyway.
   //   /api/auth/login and /api/stream-ticket are POSTs and stay out — this batch is GET only.
-  "/api/users", "/api/companies", "/api/employees", "/api/documents", "/api/tasks",
-  "/api/invoices", "/api/payments", "/api/quotations", "/api/service-requests", "/api/audit",
+  //
+  // NOT HERE, DELIBERATELY: /api/auth/me, /api/companies, /api/documents, /api/invoices,
+  // /api/tasks, /api/service-requests and /api/crm-dashboard. Those are what the dashboard reads,
+  // and the console fetches them on their own, alongside this batch. Batching them too meant the
+  // first screen showed zeros until everything had arrived — about a second of numbers that look
+  // like answers. They are listed as FIRST_PAINT in index.html; putting them back here would have
+  // them fetched twice.
+  "/api/users", "/api/employees", "/api/payments", "/api/quotations", "/api/audit",
   "/api/sales-report", "/api/proposal-templates", "/api/workflow/my-work",
   "/api/workforce-bands", "/api/workforce-band-sets",
   "/api/appointments", "/api/appointment-statuses", "/api/appointment-types",

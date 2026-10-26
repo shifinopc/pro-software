@@ -16509,16 +16509,42 @@ class Component extends DCLogic {
      * neither auth nor the database.
      */
     const PUBLIC_WHEN_SIGNED_OUT = ['/api/countries'];
+
+    /**
+     * WHAT THE FIRST SCREEN NEEDS GOES ON ITS OWN, AT ONCE.
+     *
+     * Batching the lot had a cost I did not see until it was running: nothing at all appears until
+     * the one request finishes. Measured on a refresh — the page renders at 1.38s and the batch
+     * lands at 2.30s, so for most of a second the dashboard shows zeros that look like answers.
+     * Before batching, the quick lists trickled in from about 1.65s and the screen filled as they
+     * came. Fewer requests, later data: the wrong trade on the screen people look at first.
+     *
+     * These seven are what the dashboard actually reads — the four lists behind its numbers, the
+     * client list the numbers are scoped by, the sales panel, and who you are. They go straight
+     * out, alongside the batch rather than behind it, so the zeros are replaced in about the time
+     * they used to be. The other ninety still travel together.
+     *
+     * They are NOT in BOOT_PATHS on the server, or they would be fetched twice.
+     */
+    const FIRST_PAINT = [
+      '/api/auth/me', '/api/companies', '/api/documents', '/api/invoices',
+      '/api/tasks', '/api/service-requests', '/api/crm-dashboard',
+    ];
     // Looks enough like a Response for the callers above: `ok`, `status`, `json()` and `text()`.
-    this._bootFetch = (path, init) => this._bootReady.then(() => {
+    this._bootFetch = (path, init) => {
       const base = (this._apiBase || 'http://localhost:4100');
+      // Decided without waiting for anything: there is nothing to wait for.
       if (!localStorage.getItem('stimespro:token') && PUBLIC_WHEN_SIGNED_OUT.indexOf(path) < 0) {
-        return { ok: false, status: 401, json: () => Promise.resolve(null), text: () => Promise.resolve('') };
+        return Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve(null), text: () => Promise.resolve('') });
       }
-      const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
-      if (!hit) return fetch(base + path, init);
-      return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body), text: () => Promise.resolve(JSON.stringify(hit.body)) };
-    });
+      // Straight out, in parallel with the batch — not queued behind it.
+      if (FIRST_PAINT.indexOf(path) >= 0) return fetch(base + path, init);
+      return this._bootReady.then(() => {
+        const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
+        if (!hit) return fetch(base + path, init);
+        return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body), text: () => Promise.resolve(JSON.stringify(hit.body)) };
+      });
+    };
     this._load = (path, key, apply) => {
       const tok = localStorage.getItem('stimespro:token');
       this._setLoad(key, 'loading');
@@ -19932,15 +19958,28 @@ class Component extends DCLogic {
     // screen's own module is the wrong question to ask there.
     const canWriteDocs = _mayDo('Documents', 'Create');
     const canWriteTasks = canWrite || _mayDo('Tasks', 'Create');
-    const _openReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : (_authed ? 0 : 14);
-    const _expDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'expiring').length : (_authed ? 0 : 26);
-    const _ovdDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'overdue').length : (_authed ? 0 : 7);
-    const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].includes(String(v2.status).toLowerCase())).reduce((a2, v2) => a2 + _docTotal(v2), 0) : (_authed ? 0 : 46200);
+    const _openReq = _dSrv ? _dSrv.filter(r2 => String(r2.status).toLowerCase() === 'open').length : (_authed ? null : 14);
+    const _expDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'expiring').length : (_authed ? null : 26);
+    const _ovdDocs = _dDocs ? _dDocs.filter(d2 => d2.status === 'overdue').length : (_authed ? null : 7);
+        /**
+     * NOT LOADED IS NOT ZERO.
+     *
+     * These four read their lists, and the lists are null until they arrive. Showing 0 for null
+     * put four confident numbers on the screen that were not answers — a refresh showed a client
+     * portfolio with nothing overdue, nothing due for renewal and nothing owed, for the best part
+     * of a second, before the real figures replaced them. People reported it as the page loading
+     * 'dummy data', which is exactly what it looked like.
+     *
+     * A dash says the same thing honestly: we do not know yet. The signed-out preview keeps its
+     * sample numbers, which is what the `_authed` branch is for.
+     */
+const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].includes(String(v2.status).toLowerCase())).reduce((a2, v2) => a2 + _docTotal(v2), 0) : (_authed ? null : 46200);
+    const _kpiNum = (v) => (v == null ? '—' : String(v));
     const kpis = [
-      [String(_openReq), 'Open requests', I.layers, pal.purple, '#7C00FF', 'Requests Queue', 'Operations'],
-      [String(_expDocs), 'Renewals ≤ 30d · all clients', I.refresh, pal.amber, '#F59E0B', 'Renewals', 'Clients & Compliance'],
-      [String(_ovdDocs), 'Overdue documents', I.folder, pal.violet, '#6D5BD0', 'Compliance', 'Clients & Compliance'],
-      [fmtCur(_unpaidSum), 'Unpaid client invoices', I.invoice, pal.red, '#E5484D', 'Invoices', 'Finance'],
+      [_kpiNum(_openReq), 'Open requests', I.layers, pal.purple, '#7C00FF', 'Requests Queue', 'Operations'],
+      [_kpiNum(_expDocs), 'Renewals ≤ 30d · all clients', I.refresh, pal.amber, '#F59E0B', 'Renewals', 'Clients & Compliance'],
+      [_kpiNum(_ovdDocs), 'Overdue documents', I.folder, pal.violet, '#6D5BD0', 'Compliance', 'Clients & Compliance'],
+      [_unpaidSum == null ? '—' : fmtCur(_unpaidSum), 'Unpaid client invoices', I.invoice, pal.red, '#E5484D', 'Invoices', 'Finance'],
     ].map(([value, label, icon, p, dot, dest, grp]) => ({ value, label, icon, iconBg: p[0], iconColor: p[1], dot, go: () => this.setState({ active: dest, activeGroup: grp }) }));
 
     // WIRED: donut = real service-request status distribution (open / resolved / rejected).
