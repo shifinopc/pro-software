@@ -2144,6 +2144,14 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
         // have it wiped as a side effect of renaming the company.
         ...("industry" in b ? { industry: b.industry || null } : {}),
         ...("campaign" in b ? { campaign: b.campaign || null } : {}),
+        // And then it happened again, to `service` — which service they came for. The Product box
+        // on the edit form ticked, the save said it had worked, the row kept its old answer. It is
+        // worse than it was for industry, because Leads can now be FILTERED by product: a lead
+        // silently keeps the wrong one and then fails to appear under the filter meant to find it.
+        //
+        // Twice is a pattern, so scripts/lead-details-fields-check.ts now compares what the edit
+        // form sends against what this route writes, and fails when a field is sent and dropped.
+        ...("service" in b ? { service: b.service || null } : {}),
         // `null` is a real choice here — a manager deliberately unassigning — so the key being
         // PRESENT is what decides, not whether it has a value.
         ...("ownerId" in b ? { ownerId: b.ownerId || null } : {}),
