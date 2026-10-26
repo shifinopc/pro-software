@@ -35,6 +35,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
+import { planMerge, applyMerge } from "./company-merge.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, readScan, IntakeError } from "./intake-agent.js";
 import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
@@ -5772,7 +5773,9 @@ app.get("/api/companies", requireAuth, requireStaff, requireReadRole("super_admi
     asked === "all" ? undefined
     : asked ? { in: asked.split(",").map(s => s.trim()).filter(s => LIFECYCLES.includes(s)) }
     : ACTIVE_CLIENT;
-  const where: any = lifecycle === undefined ? {} : { lifecycle };
+  // A MERGED RECORD IS NOT A CLIENT. It is kept so old links still resolve, and it must never
+  // appear in a list, a picker or a count again — which is every caller of this route.
+  const where: any = { mergedIntoId: null, ...(lifecycle === undefined ? {} : { lifecycle }) };
 
   if (a.role === "sales") {
     // One filter, no id list: a salesperson's clients are simply the ones they own.
@@ -5781,6 +5784,34 @@ app.get("/api/companies", requireAuth, requireStaff, requireReadRole("super_admi
   // Live counts here too: this explicit route is registered BEFORE the generic CRUD, so it wins
   // for /api/companies and would otherwise still serve the stale stored columns.
   res.json(await withLiveCounts(await prisma.company.findMany({ where, take: 500 }))); // hard cap: this list was unbounded
+});
+
+/**
+ * MERGE ONE COMPANY INTO ANOTHER.
+ *
+ * `:id` is the record being KEPT and `from` the one being retired — that way the URL names what
+ * survives, and a half-read call cannot destroy the wrong one.
+ *
+ * Without `commit` it only plans: what would move, what would be filled in, what would collide and
+ * what stops it. The rules all live in company-merge.ts.
+ *
+ * Delete rather than Edit: a merge takes a client off every list in the product. Whoever may not
+ * delete one may not retire one this way either.
+ */
+app.post("/api/companies/:id/merge", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    if (!(await can(a.role, "Clients", "Delete"))) return res.status(403).json({ error: "Merging retires a client record, so it needs the same permission as deleting one." });
+    const from = String(req.body?.from ?? "").trim();
+    if (!from) return res.status(400).json({ error: "Name the record to merge in as `from`." });
+    const plan = await planMerge(req.params.id, from);
+    if (!req.body?.commit) return res.json(plan);
+    if (plan.blocks.length) return res.status(409).json({ error: plan.blocks[0], plan });
+    const me = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true } }).catch(() => null);
+    res.json(await applyMerge(req.params.id, from, { id: a.sub, name: me?.name ?? a.email ?? "Staff" }));
+  } catch (e: any) {
+    return fail(res, 400, e, "companies.merge");
+  }
 });
 
 // Create a company AND auto-provision a portal login for it. The password is RANDOM per client and

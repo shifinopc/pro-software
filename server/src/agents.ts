@@ -279,6 +279,11 @@ function kitActions(t: { agent: string; status: string; output: any }) {
   if (t.agent === clientsAg.PORTAL && Array.isArray(o.invitees) && o.invitees.length) a.push({ key: "resend", label: "Re-send invitations", primary: true });
   if (Array.isArray(o.tasks) && o.tasks.length) a.push({ key: "tasks", label: `Create ${o.tasks.length} task${o.tasks.length === 1 ? "" : "s"}`, primary: true });
   if (Array.isArray(o.lines) && o.lines.length) a.push({ key: "invoice", label: "Create draft invoice", primary: true });
+  // The survivor is named on the finding, so the label can say what will happen rather than opening
+  // a form to ask. Merging is refused server-side without the Clients Delete permission.
+  if (o.merge?.keepName && (o.merge.dropIds || []).length) {
+    a.push({ key: "merge", label: `Merge into ${String(o.merge.keepName).slice(0, 40)}`, primary: true });
+  }
   if (o.draft) a.push({ key: "send", label: "Review and send", primary: true });
   a.push({ key: "done", label: t.agent === brief.BRIEF ? "Mark read" : "Mark handled", primary: !a.length });
   if (t.agent !== brief.BRIEF) a.push({ key: "dismiss", label: "Not a problem" });

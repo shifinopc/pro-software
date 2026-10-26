@@ -6,7 +6,8 @@
  * None of them sends anything, changes a stage, or merges a record.
  */
 import { prisma } from "./db.js";
-import { daysFromToday, normName } from "./agent-core.js";
+import { planMerge, applyMerge } from "./company-merge.js";
+import { daysFromToday, normName, decide, requirePerm, AgentActionError, type AgentActor } from "./agent-core.js";
 import { runFindings, standardAct, groupBy, plural, money, today, addDays, check, LIST_MAX, type TaskLine } from "./agent-kit.js";
 
 const OPEN_LEAD = ["lead", "prospect"];
@@ -172,11 +173,46 @@ export async function runCrmDuplicates() {
       const key = ids.join("+");
       if (done.has(key)) continue;
       done.add(key);
+      /**
+       * WHICH ONE SURVIVES — proposed here, so the person is deciding rather than designing.
+       *
+       * Leaving it to whoever clicks meant either a dialog or a coin toss, and the agent already
+       * holds everything the choice needs. The order is not arbitrary:
+       *
+       *   1. a CLIENT outranks a prospect outranks a lead. Retiring the record that is actually
+       *      trading, in favour of a lead someone typed last week, is the one unrecoverable way to
+       *      get this wrong.
+       *   2. then whichever carries more history, because moving less is less to go wrong.
+       *   3. then the older record, as the original somebody has been linking to.
+       */
+      const rank: Record<string, number> = { client: 0, prospect: 1, lead: 2, lost: 3, churned: 4 };
+      const uniq = [...new Map(g.rows.map(r => [r.id, r])).values()];
+      const weight = new Map<string, number>();
+      for (const r of uniq) {
+        weight.set(r.id, await prisma.contact.count({ where: { companyId: r.id } })
+          + await prisma.document.count({ where: { companyId: r.id } })
+          + await prisma.invoice.count({ where: { companyId: r.id } })
+          + await prisma.employee.count({ where: { companyId: r.id } }));
+      }
+      const ordered = [...uniq].sort((a, b) =>
+        (rank[a.lifecycle] ?? 9) - (rank[b.lifecycle] ?? 9)
+        || (weight.get(b.id) ?? 0) - (weight.get(a.id) ?? 0)
+        || String(a.id).localeCompare(String(b.id)));
+      const keep = ordered[0], drop = ordered.slice(1);
+      const why = keep.lifecycle !== drop[0]?.lifecycle
+        ? `it is the ${keep.lifecycle} and the other${drop.length === 1 ? " is" : "s are"} not`
+        : (weight.get(keep.id) ?? 0) > (weight.get(drop[0]?.id ?? "") ?? 0)
+          ? "it carries the most history" : "it is the older record";
+
       await raise({
-        kind: "duplicate-company", key: `co:${key}`, companyId: ids[0],
+        kind: "duplicate-company", key: `co:${key}`, companyId: keep.id,
         title: `${ids.length} records look like the same company — ${g.rows[0].name}`,
-        summary: `They share the ${g.why}. Keep one and move the others' contacts, deals and history onto it.`,
-        output: { lists: [{ title: "Records", items: g.rows.map(r => ({ text: `${r.name} · ${r.lifecycle}${r.cr ? ` · CR ${r.cr}` : ""}${r.phone ? ` · ${r.phone}` : ""}${r.email ? ` · ${r.email}` : ""}` })) }] },
+        summary: `They share the ${g.why}. Merging moves the others' contacts, deals, documents and history onto the one that is kept, and retires them.`,
+        output: {
+          merge: { keepId: keep.id, keepName: keep.name, dropIds: drop.map(d => d.id), dropNames: drop.map(d => d.name) },
+          facts: [{ label: "Would keep", value: `${keep.name} — ${why}` }],
+          lists: [{ title: "Records", items: ordered.map(r => ({ text: `${r.id === keep.id ? "KEEP · " : "merge in · "}${r.name} · ${r.lifecycle}${r.cr ? ` · CR ${r.cr}` : ""}${r.phone ? ` · ${r.phone}` : ""}${r.email ? ` · ${r.email}` : ""}` })) }],
+        },
       });
     }
     const contacts = await prisma.contact.findMany({ where: { archived: false, NOT: { email: null } }, select: { id: true, name: true, email: true, companyId: true }, take: 20000 });
@@ -197,4 +233,40 @@ export async function runCrmDuplicates() {
 export const actLeads = standardAct(LEADS, { module: "Leads", what: "close sales follow-ups" });
 export const actQuotes = standardAct(QUOTES, { module: "Quotations", what: "close quotation follow-ups" });
 export const actWon = standardAct(WON, { module: "Pipeline", what: "close onboarding items" });
-export const actDupes = standardAct(DUPES, { module: "Clients", what: "close duplicate findings" });
+/**
+ * `merge` on top of the standard actions, because this is the one finding whose whole point is a
+ * thing the agent must never do by itself and nobody could do by hand without an afternoon.
+ *
+ * The survivor was chosen when the finding was raised and is named on it, so the click is a
+ * decision about what is on screen, not a form to fill in. Merging needs the same permission as
+ * deleting a client: it takes a record off every list in the product.
+ */
+const actDupesStandard = standardAct(DUPES, { module: "Clients", what: "close duplicate findings" });
+
+export const actDupes = async (taskId: string, action: string, input: any, actor: AgentActor) => {
+  if (action !== "merge") return actDupesStandard(taskId, action, input, actor);
+
+  const t = await prisma.agentTask.findUnique({ where: { id: taskId } });
+  if (!t || t.agent !== DUPES) throw new AgentActionError("That item no longer exists.", 404);
+  if (t.status !== "review") throw new AgentActionError(`This item is already ${t.status}.`, 409);
+  await requirePerm(actor, "Clients", "Delete", "merge client records");
+
+  const m = ((t.output ?? {}) as any).merge;
+  if (!m?.keepId || !Array.isArray(m.dropIds) || !m.dropIds.length) throw new AgentActionError("This finding does not say which record to keep.");
+
+  // One at a time, and the first refusal stops it: a group of three where the third carries a
+  // different CR must not be half-merged because the second was fine.
+  const done: string[] = [];
+  for (const id of m.dropIds as string[]) {
+    const plan = await planMerge(m.keepId, id);
+    if (plan.blocks.length) {
+      throw new AgentActionError(done.length
+        ? `${done.join(", ")} merged. Then: ${plan.blocks[0]}`
+        : plan.blocks[0], 409);
+    }
+    await applyMerge(m.keepId, id, actor);
+    done.push(plan.loser.name);
+  }
+  await decide(t.id, "done", actor, { merged: { into: m.keepName, records: done } });
+  return { ok: true, message: `${done.join(", ")} ${done.length === 1 ? "is" : "are"} now part of “${m.keepName}”.` };
+};
