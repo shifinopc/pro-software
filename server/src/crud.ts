@@ -457,6 +457,33 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         }
       }
 
+      // WHERE A COMPANY SITS IN ITS LIFE IS NOT A COLUMN YOU SET.
+      //
+      // The lead edit route refuses `lifecycle` on purpose, and says why: "a correction form must
+      // not be able to turn a lead into a client, which provisions a portal login and opens a deal."
+      // That refusal was enforced on exactly one of the two routes that can write a company. This
+      // one took whatever it was handed — nothing in the console sends it, but the guard a comment
+      // describes as deliberate held only as long as nobody used the other door.
+      //
+      // Worse than the escalation is what it would leave behind. POST /lifecycle does the rest of
+      // what the change MEANS: the portal login, the opened deal, the transition row that dates the
+      // move. Writing the column alone produces a record that says "client" with none of it — not a
+      // client, and no longer a lead either, which is harder to notice and harder to undo than a
+      // refusal would have been.
+      //
+      // Measured against `before`, so a caller echoing the row back unchanged is not rejected for a
+      // field it never meant to touch. Creation is untouched: a new lead is born with its lifecycle,
+      // and that is the POST, not this.
+      if (modelName === "company" && req.body?.lifecycle !== undefined
+          && String(req.body.lifecycle ?? "") !== String((before as any).lifecycle ?? "")) {
+        return res.status(409).json({
+          error: `A company's lifecycle cannot be changed here. Use POST /api/companies/${req.params.id}/lifecycle, `
+            + `which also does what the move means — the portal login, the deal, and the dated record of it.`,
+          fields: ["lifecycle"],
+          lifecycle: `/api/companies/${req.params.id}/lifecycle`,
+        });
+      }
+
       // WHEN A TASK FINISHES, RECORD WHEN.
       //
       // The status flipping to "done" was the whole record of a completion, so nothing could answer
