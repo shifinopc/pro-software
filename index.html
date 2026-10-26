@@ -18909,10 +18909,13 @@ class Component extends DCLogic {
     } else if (localStorage.getItem('stimespro:token')) {
       // If a valid staff token already exists, skip the login screen and go straight in.
       fetch(API + '/api/auth/me', { headers: { Authorization: 'Bearer ' + localStorage.getItem('stimespro:token') } })
-        // Only a REJECTED session signs you out. A busy server (429) or a failing one (5xx) says nothing about
-        // the session, and clearing it there turned a rate limit into a forced logout.
+        // Only a REJECTED session signs you out, and 401 is the only answer that means that. A busy
+        // server (429), a failing one (5xx) and anything else say nothing about the session, and
+        // clearing it there turned a rate limit into a forced logout. Listing what to tolerate was
+        // the wrong way round: 403 was not on the list, so a Cloudflare challenge in front of the
+        // API threw the token away as if the session had been refused.
         .then(r => {
-          if (!(r.ok || r.status === 429 || r.status >= 500)) { localStorage.removeItem('stimespro:token'); return this.setState({ auth: 'login' }); }
+          if (r.status === 401) { localStorage.removeItem('stimespro:token'); return this.setState({ auth: 'login' }); }
           // A reload must not be a way around the set-password screen. Only an OK response carries
           // the flag; on 429/5xx we know nothing, so the session stands as before.
           if (!r.ok) return this.setState({ auth: 'in' });

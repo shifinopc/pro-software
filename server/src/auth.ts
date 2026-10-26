@@ -201,8 +201,21 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
     (req as any).auth = payload;
     next();
-  } catch {
-    res.status(401).json({ error: "Auth check failed" });
+  } catch (e) {
+    /**
+     * A FAILING DATABASE IS NOT A REJECTED SESSION.
+     *
+     * This answered 401, and the console reads any 401 as "your token is dead": it wipes the token
+     * and puts the login screen back. So one failed `user.findUnique` — a pool timeout under the
+     * ~85 calls the console fires on boot, with the hourly compliance scan on the same five
+     * connections — logged people straight back out of a session that was perfectly valid.
+     *
+     * 503 is what actually happened, and the console already treats a failing server as saying
+     * nothing about the session. Logged, too: this was a silent `catch {}`, so after the fact there
+     * was no way to tell whether it had ever fired.
+     */
+    console.error("[auth] check failed:", e);
+    res.status(503).json({ error: "Could not check your session just now — try that again." });
   }
 }
 
