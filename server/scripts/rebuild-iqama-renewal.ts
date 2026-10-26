@@ -38,6 +38,24 @@ const money = (p: string, label: string) => [
   { var: p + "PaidOn", type: "date", label: "Payment date", required: true, showIf: { var: p + "Paid", equals: "paid" } },
 ];
 
+/**
+ * AN UNPAID FEE DOES NOT ADVANCE THE RENEWAL.
+ *
+ * Every fee step offered "unpaid" and then completed anyway, so a run walked past the work permit
+ * fee and the Jawazat fee with both recorded unsettled and reached "Renew Iqama" — which Jawazat
+ * will refuse, because the renewal is the thing the fee buys. "Unpaid" is still the honest answer
+ * while it is true; it just is not a finished step. The officer keeps what they typed, the task
+ * stays on their desk, and it completes the moment the payment is recorded.
+ *
+ * The violations step already works this way by a different route — its decision loops back until
+ * the fine is settled — so it is deliberately left alone rather than given a second mechanism.
+ */
+const mustBePaid = (p: string, label: string, when?: { var: string; op: string; value: string }) => ({
+  ...(when ? { when } : {}),
+  then: { var: p + "Paid", op: "eq", value: "paid" },
+  message: label + " is still unpaid. The renewal cannot go forward until it is settled — record the payment, or leave this step open until it is made.",
+});
+
 const nodes = [
   { id: "start", type: "start", label: "Renewal Created", config: {} },
 
@@ -59,7 +77,8 @@ const nodes = [
       captures: [
         { var: "permitTerm", type: "select", label: "Work permit term", options: TERMS, required: true },
         ...money("permit", "Work permit fee"),
-      ] } },
+      ],
+      rules: [mustBePaid("permit", "The work permit fee")] } },
 
   { id: "jawazat", type: "task", label: "Payment for Jawazat",
     config: { assigneeRole: "pro_officer", slaHours: 48,
@@ -74,6 +93,10 @@ const nodes = [
         { var: "latePaid", type: "select", label: "Late payment — paid?", options: "paid,unpaid", required: true, showIf: { var: "lateApplies", equals: "yes" } },
         { var: "lateRef", type: "text", label: "Late payment reference", required: true, showIf: { var: "latePaid", equals: "paid" } },
         { var: "latePaidOn", type: "date", label: "Late payment date", required: true, showIf: { var: "latePaid", equals: "paid" } },
+      ],
+      rules: [
+        mustBePaid("jawazat", "The Jawazat fee"),
+        mustBePaid("late", "The late payment charge", { var: "lateApplies", op: "eq", value: "yes" }),
       ] } },
 
   { id: "violations", type: "task", label: "Check Traffic / Other Violations",
