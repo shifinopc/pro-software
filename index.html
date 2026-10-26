@@ -9938,9 +9938,19 @@
               </div>
               <sc-if value="{{ eeCrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-wide"><label class="fm-lab">CR this person works under</label><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><sc-for list="{{ eeCrChips }}" as="c" hint-placeholder-count="2"><span onClick="{{ c.pick }}" style="font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span></sc-for></div></div></sc-if>
 
+              <div class="fm-wide">
+                <label class="fm-lab">Full name (Arabic)</label>
+                <input value="{{ eeNameAr }}" onChange="{{ setEeNameAr }}" dir="rtl" placeholder="الاسم بالعربية" class="fm-inp">
+              </div>
+
               <div>
                 <label class="fm-lab">Role / designation</label>
                 <input value="{{ eeRole }}" onChange="{{ setEeRole }}" placeholder="e.g. Site Engineer" class="fm-inp">
+              </div>
+
+              <div>
+                <label class="fm-lab">Working location</label>
+                <input value="{{ eeWorkLoc }}" onChange="{{ setEeWorkLoc }}" placeholder="e.g. Riyadh — Olaya site" class="fm-inp">
               </div>
 
               <div>
@@ -10014,6 +10024,18 @@
                 </div>
                 <div class="fm-hint">Recorded by the government portals. Only used by a counting rule that names it.</div>
               </div>
+              <div>
+                <label class="fm-lab">Mail id</label>
+                <input value="{{ eeEmail }}" onChange="{{ setEeEmail }}" placeholder="name@example.com" type="email" class="fm-inp">
+              </div>
+              <div>
+                <label class="fm-lab">Mobile number</label>
+                <input value="{{ eePhone }}" onChange="{{ setEePhone }}" placeholder="05X XXX XXXX" inputmode="tel" class="fm-inp">
+              </div>
+              <div class="fm-wide">
+                <label class="fm-lab">National address</label>
+                <input value="{{ eeNatAddr }}" onChange="{{ setEeNatAddr }}" placeholder="Short code, building, street, district" class="fm-inp">
+              </div>
             </div>
             <!-- COUNTED FOR MORE THAN ONE.
                  Not a hard-coded "has a disability" box: these are generated from the counting rules
@@ -10080,6 +10102,23 @@
                     </div>
                   </sc-if>
                 </div>
+              </div>
+              <div>
+                <label class="fm-lab">Contract type</label>
+                <div class="fm-selwrap">
+                  <div data-dd data-open="{{ ddEeContractOpen }}" onClick="{{ ddEeContractToggle }}" class="fm-inp fm-sel"><span style="color:{{ eeContractColor }};">{{ ddEeContractVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                  <sc-if value="{{ ddEeContractOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="fm-dd">
+                      <sc-for list="{{ ddEeContractOptions }}" as="o" hint-placeholder-count="2">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+              <div class="fm-wide">
+                <label class="fm-lab">Bank IBAN</label>
+                <input value="{{ eeIban }}" onChange="{{ setEeIban }}" placeholder="SA00 0000 0000 0000 0000 0000" class="fm-inp">
               </div>
             </div>
           </div>
@@ -21442,6 +21481,7 @@ class Component extends DCLogic {
       ? ((invoicesFull.find(v => _recSlug(v.no) === _invWant) || {}).no || this.state.invDetail)
       : this.state.invDetail;
     const invDetailRow = _invNo ? invoicesFull.find(v => v.no === _invNo) : null;
+    const _CONTRACT_OPTS = ['Not recorded', 'Limited', 'Unlimited'];  // hoisted: the employee EDIT dialog reads it above where it used to be declared
     const financeApi = {
       invoicesFull: invRows, invTabs, invChart,
       invPageShown: _invShown9.length > 0,
@@ -21613,6 +21653,24 @@ class Component extends DCLogic {
       eeJoin: this.state.eeJoin || '', setEeJoin: (e9) => this.setState({ eeJoin: e9.target.value }),
       eeQuota: this.state.eeQuota || '1', setEeQuota: (e9) => this.setState({ eeQuota: e9.target.value }),
       eeSalary: this.state.eeSalary || '', setEeSalary: (e9) => this.setState({ eeSalary: e9.target.value }),
+      // ── The seven the Add dialog asks for and this one did not ────────────────────────────
+      //
+      // They were added to Add and not here, which made them set-once: an IBAN typed wrongly could
+      // only be fixed by deleting the person and entering them again. Nothing was lost by the gap —
+      // the route leaves out what it is not sent — but a record you cannot correct is not a record.
+      //
+      // Same labels and placeholders as Add, deliberately: the two dialogs describe the same seven
+      // facts, and a field called "Mail id" in one and "Email" in the other reads as two fields.
+      eeNameAr: this.state.eeNameAr || '', setEeNameAr: (e9) => this.setState({ eeNameAr: e9.target.value }),
+      eeEmail: this.state.eeEmail || '', setEeEmail: (e9) => this.setState({ eeEmail: e9.target.value }),
+      eePhone: this.state.eePhone || '', setEePhone: (e9) => this.setState({ eePhone: e9.target.value }),
+      eeNatAddr: this.state.eeNatAddr || '', setEeNatAddr: (e9) => this.setState({ eeNatAddr: e9.target.value }),
+      eeWorkLoc: this.state.eeWorkLoc || '', setEeWorkLoc: (e9) => this.setState({ eeWorkLoc: e9.target.value }),
+      eeIban: this.state.eeIban || '', setEeIban: (e9) => this.setState({ eeIban: e9.target.value }),
+      ...mkDd('ddEeContract', _CONTRACT_OPTS, this.state.eeContract || _CONTRACT_OPTS[0], (v9) => this.setState({ eeContract: v9 })),
+      ddEeContractVal: this.state.eeContract || _CONTRACT_OPTS[0],
+      // Greyed while it still reads "Not recorded", so an unanswered question does not look answered.
+      eeContractColor: this.state.eeContract && this.state.eeContract !== _CONTRACT_OPTS[0] ? '#1A1523' : '#A9A6B4',
       // Error reporting matches Add: on the field, and in the footer beside the button pressed.
       eeErr: this.state.eeErr || '', eeHasErr: !!(this.state.eeErr || ''),
       eeErrName: this.state.eeErrField === 'name' ? (this.state.eeErr || '') : false,
@@ -21640,6 +21698,12 @@ class Component extends DCLogic {
             employmentType: st9.eeType || null, jobCategory: st9.eeCat || null,
             countingTraits: Array.isArray(st9.eeTraits) ? st9.eeTraits : [],
             department: st9.eeDept || null, joinDate: st9.eeJoin || null, visaQuota: Number(st9.eeQuota) || 1,
+            nameAr: (st9.eeNameAr || '').trim() || null, email: (st9.eeEmail || '').trim() || null,
+            phone: (st9.eePhone || '').trim() || null, nationalAddress: (st9.eeNatAddr || '').trim() || null,
+            workLocation: (st9.eeWorkLoc || '').trim() || null, iban: (st9.eeIban || '').trim() || null,
+            // "Not recorded" is the absence of an answer, not an answer — stored as null, exactly
+            // as the Add dialog stores it.
+            contractType: (st9.eeContract && st9.eeContract !== _CONTRACT_OPTS[0]) ? st9.eeContract : null,
             // Only when the client has a choice of CRs — otherwise the field is left as it is.
             ...(this._crMulti(st9.eeCompanyId) ? { establishmentId: this._crValid(st9.eeCompanyId, st9.eeEst) } : {}),
           }) })
@@ -22029,7 +22093,6 @@ class Component extends DCLogic {
     const _GENDER_LABEL = { male: 'Male', female: 'Female' };
     const _EMP_TYPE_OPTS = ['Full time', 'Part time'];
     const _JOB_CAT_OPTS = ['Skilled', 'Unskilled'];
-    const _CONTRACT_OPTS = ['Not recorded', 'Limited', 'Unlimited'];
     const _EMP_TYPE_VAL = { 'Full time': 'full_time', 'Part time': 'part_time' };
     const _JOB_CAT_VAL = { 'Skilled': 'skilled', 'Unskilled': 'unskilled' };
     // The reverse maps. Edit loads a STORED value and has to show the label for it; without these it
@@ -24711,6 +24774,11 @@ class Component extends DCLogic {
               // Stored in minor units; shown as whole currency, the way it was typed in.
               eeSalary: e9.salary == null ? '' : String(e9.salary / 100),
               eeType: e9.employmentType || '', eeCat: e9.jobCategory || '',
+              // Loaded because they are sent. A field this dialog posts and does not fill opens
+              // blank on a record that has a value, and then writes that blank back over it.
+              eeNameAr: e9.nameAr || '', eeEmail: e9.email || '', eePhone: e9.phone || '',
+              eeNatAddr: e9.nationalAddress || '', eeWorkLoc: e9.workLocation || '',
+              eeIban: e9.iban || '', eeContract: e9.contractType || _CONTRACT_OPTS[0],
             });
           },
           // Only while they are still a plain active record. Once an exit has started or finished,

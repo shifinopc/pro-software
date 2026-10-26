@@ -4596,6 +4596,16 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   const nextGender = keep(b.gender, emp.gender, str);
   const nextType = keep(b.employmentType, emp.employmentType, str);
   const nextCat = keep(b.jobCategory, emp.jobCategory, str);
+  // The seven the Add dialog has always asked for. They were writable only at creation, so an IBAN
+  // typed wrongly could be corrected only by deleting the person — `keep()` means a caller that
+  // does not mention one still leaves it alone, so older callers are unaffected.
+  const nextNameAr = keep(b.nameAr, emp.nameAr, str);
+  const nextEmail = keep(b.email, emp.email, str);
+  const nextPhone = keep(b.phone, emp.phone, str);
+  const nextNatAddr = keep(b.nationalAddress, emp.nationalAddress, str);
+  const nextWorkLoc = keep(b.workLocation, emp.workLocation, str);
+  const nextIban = keep(b.iban, emp.iban, str);
+  const nextContract = keep(b.contractType, emp.contractType, str);
   // Minor units, like every other money value here — a salary held as a float is the rounding bug
   // the invoices already had, waiting to happen against a wage floor.
   const nextSalary = b.salary === undefined ? emp.salary
@@ -4634,6 +4644,17 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
   note("department", cur.department, nextCustom.department);
   note("joining date", cur.joinDate, nextCustom.joinDate);
   note("visa quota", cur.visaQuota, nextCustom.visaQuota);
+  // NOTED, NOT JUST WRITTEN. `changes` is not only the history line — the route returns
+  // `unchanged` and skips the update entirely when it is empty, so a field that is written but
+  // never noted cannot be edited ON ITS OWN: correcting only an email would answer 200, record
+  // nothing, and leave the old address on file. Every writable field belongs in this list.
+  note("Arabic name", emp.nameAr, nextNameAr);
+  note("email", emp.email, nextEmail);
+  note("mobile", emp.phone, nextPhone);
+  note("national address", emp.nationalAddress, nextNatAddr);
+  note("working location", emp.workLocation, nextWorkLoc);
+  note("IBAN", emp.iban, nextIban);
+  note("contract type", emp.contractType, nextContract);
   note("counted as", (Array.isArray(emp.countingTraits) ? emp.countingTraits : []).join(", ") || "everyone else", (nextTraits as string[]).join(", ") || "everyone else");
   if (nextEst !== (emp.establishmentId ?? null)) {
     const crOf = async (id: string | null) => id ? (await prisma.establishment.findUnique({ where: { id }, select: { crNumber: true } }))?.crNumber ?? "?" : "main CR";
@@ -4649,6 +4670,8 @@ app.post("/api/employees/:id/edit", requireAuth, requireStaff, requireWriteRole,
       dob: nextDob, nationality: nextNat, gender: nextGender, salary: nextSalary,
       employmentType: nextType, jobCategory: nextCat, customData: nextCustom, countingTraits: nextTraits,
       establishmentId: nextEst,
+      nameAr: nextNameAr, email: nextEmail, phone: nextPhone, nationalAddress: nextNatAddr,
+      workLocation: nextWorkLoc, iban: nextIban, contractType: nextContract,
       history: [...(Array.isArray(emp.history) ? (emp.history as any[]) : []),
         { at: new Date().toISOString(), event: "edited", by: me?.name ?? "Staff", detail: changes.join(" · ") }],
     },
