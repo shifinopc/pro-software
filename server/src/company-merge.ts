@@ -74,15 +74,25 @@ const MOVERS: Mover[] = [
 /**
  * Scalars worth carrying over when the survivor has nothing in them. Never an overwrite.
  *
+ * EVERY NAME HERE IS A REAL COLUMN, and the check script asserts it against the schema. The first
+ * version of this list was written from memory and three of its fourteen entries — website, address,
+ * notes — are not fields on Company at all. They did nothing, silently: an absent field reads as
+ * undefined, is treated as empty and skipped. A list that is wrong and harmless today is a list
+ * that is wrong and load-bearing the day somebody adds a column by that name.
+ *
  * `contact`, `email` and `phone` are DELIBERATELY ABSENT. contacts.ts owns those three — they are a
  * mirror of whichever contact is primary, and `syncPrimaryContact` rewrites them at the end of
  * every merge. Filling them here produced a plan that promised "email = sales@…" and a survivor
  * whose email was still empty a second later: the preview lied, which is worse than the gap it was
  * trying to close. The address is not lost — it travels across on the contact that carries it.
  */
-const FILLABLE = [
-  "cr", "nameAr", "website", "city", "country", "address", "industry",
-  "mainActivity", "source", "sourceDetail", "campaign", "service", "notes", "vatNumber",
+export const FILLABLE = [
+  "cr", "nameAr", "city", "country", "industry", "mainActivity", "service",
+  "source", "sourceDetail", "campaign", "companyType", "contactDesignation",
+  // The government numbers, which is where this earns its keep: a lead record often carries the CR
+  // or the MOL id that the client record was never given.
+  "vatNumber", "gosiNumber", "molId", "chamberNumber", "misaLicense",
+  "shortAddress", "buildingNumber", "street", "secondaryNumber", "district", "postalCode",
 ] as const;
 
 export type MergePlan = {

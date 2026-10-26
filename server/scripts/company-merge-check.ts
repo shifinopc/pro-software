@@ -17,7 +17,8 @@
  * working would be the most expensive bug in this file, and the least visible.
  */
 import { prisma } from "../src/db.js";
-import { planMerge, applyMerge } from "../src/company-merge.js";
+import { Prisma } from "@prisma/client";
+import { planMerge, applyMerge, FILLABLE } from "../src/company-merge.js";
 
 if (!/@(localhost|127\.0\.0\.1)/.test(String(process.env.DATABASE_URL ?? ""))) {
   console.error("\nRefusing to run: this builds and deletes records, so it is for a LOCAL database only.\n");
@@ -30,6 +31,15 @@ const ok = (cond: boolean, what: string, got?: unknown) => {
   else { fails.push(`${what}${got === undefined ? "" : ` — got ${JSON.stringify(got)}`}`); console.log(`  FAIL  ${what}`); }
 };
 const PREFIX = "ZZ MergeCheck";
+
+// Every name in FILLABLE must be a real column. Three of the first fourteen were not, and nothing
+// said so, because an absent field reads as undefined and is quietly skipped.
+{
+  const cols = new Set((Prisma.dmmf.datamodel.models.find(m => m.name === "Company")?.fields ?? []).map(f => f.name));
+  const unreal = (FILLABLE as readonly string[]).filter(f => !cols.has(f));
+  console.log("the fields a merge may fill:");
+  ok(unreal.length === 0, "every fillable field is a real column on Company", unreal);
+}
 
 const clean = async () => {
   const ids = (await prisma.company.findMany({ where: { name: { startsWith: PREFIX } }, select: { id: true } })).map(c => c.id);
