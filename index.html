@@ -957,6 +957,16 @@
     </div>
   </sc-if>
 
+  <!-- While we do not yet know whether anybody is signed in, and before the first screen has its
+       numbers. Deliberately almost nothing: on a normal load the data is already in hand and this
+       is gone within a frame, so anything more elaborate would itself be the flash. -->
+  <sc-if value="{{ showBooting }}" hint-placeholder-val="{{ false }}">
+    <div style="min-height:100vh; width:100%; display:flex; align-items:center; justify-content:center; background:#FBFAFD;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.4" stroke-linecap="round" style="opacity:.55;">
+        <path d="M12 3a9 9 0 1 0 9 9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/></path>
+      </svg>
+    </div>
+  </sc-if>
   <sc-if value="{{ showPortal }}" hint-placeholder-val="{{ true }}"><div style="display:flex; min-height:100vh; width:100%;">
 
 
@@ -16261,7 +16271,11 @@ class Component extends DCLogic {
   state = { active: 'Dashboard', prefs: { email: true, whatsapp: true, renewals: true, statement: false },
     ticketModal: false, tSubject: '', tDesc: '', tCategory: 'Visa & Immigration',
     bookModal: false, bType: '', bDay: '21', bSlot: '9:30 AM', booked: [],
-    auth: 'in', lEmail: '', lPass: '', lShow: false, lError: '',
+    // 'booting' until we know. This used to start at 'in', so the console painted itself the
+    // instant it mounted — full chrome, every panel empty — and the real figures replaced the
+    // blanks a moment later. That flash is what people called the dummy page; it cannot be fixed
+    // by fetching sooner, because the first paint happens before any answer can arrive.
+    auth: 'booting', lEmail: '', lPass: '', lShow: false, lError: '',
     nPass: '', cPass: '', nShow: false, pError: '',
     empModal: false, eName: '', eRole: '', eDept: 'Engineering', eVisaQuota: '1', eJoinDate: '', eError: '', eErrField: '', eClient: '', eClientLocked: false, clientSlug: null, routeRecord: null,
     eDocs: [{ type: 'Passport', expiry: '' }],
@@ -16531,6 +16545,11 @@ class Component extends DCLogic {
       const tok = localStorage.getItem('stimespro:token');
       this._bootBatch = null;
       if (!tok) return (this._bootReady = Promise.resolve());
+      // Captured before anything consumes them: these are what the first screen is waiting on.
+      const pre9 = (window.__preboot && window.__preboot.token === tok) ? window.__preboot : null;
+      this._firstPaintReady = pre9
+        ? Promise.all(Object.keys(pre9.first).map(k => pre9.first[k]).filter(Boolean)).catch(() => null)
+        : Promise.resolve();
       const early = this._preboot('/api/boot');
       const got = early || fetch((this._apiBase || 'http://localhost:4100') + '/api/boot', { headers: { Authorization: 'Bearer ' + tok } })
         .then(r => (r.ok ? r.json() : null))
@@ -19143,9 +19162,23 @@ class Component extends DCLogic {
           // A reload must not be a way around the set-password screen. Only an OK response carries
           // the flag; on 429/5xx we know nothing, so the session stands as before.
           if (!r.ok) return this.setState({ auth: 'in' });
-          return r.json().then(j => this.setState({ auth: j && j.mustChangePassword ? 'change' : 'in' })).catch(() => this.setState({ auth: 'in' }));
+          // AND the first screen's data, so what appears is populated rather than blank. These were
+          // asked for in the HEAD and are usually already in hand by now, so this waits for nothing;
+          // when the network is slow it holds the splash a moment longer instead of showing zeros.
+          return r.json()
+            .then(j => (this._firstPaintReady || Promise.resolve()).then(() => j))
+            .then(j => this.setState({ auth: j && j.mustChangePassword ? 'change' : 'in' }))
+            .catch(() => this.setState({ auth: 'in' }));
         })
-        .catch(() => {});
+        // A NETWORK FAILURE MUST NOT LEAVE PEOPLE ON THE SPLASH. Before the splash existed this
+        // swallowed the error and the app showed anyway, with each call handling its own 401. That
+        // behaviour is kept: holding the first paint is for the normal case, not a trap for a bad
+        // connection.
+        .catch(() => this.setState({ auth: 'in' }));
+      // And a floor under it, for the failure that never resolves at all rather than rejecting:
+      // after eight seconds the console appears regardless, which is where it would have been from
+      // the first frame before any of this.
+      setTimeout(() => { if (this.state.auth === 'booting') this.setState({ auth: 'in' }); }, 8000);
     } else {
       this.setState({ auth: 'login' });
     }
@@ -21096,6 +21129,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const s = this.state;
     const authApi = {
       showLogin: s.auth === 'login', showChangePw: s.auth === 'change', showPortal: s.auth === 'in',
+      showBooting: s.auth === 'booting',
       lEmail: s.lEmail, lPass: s.lPass, lError: s.lError || false,
       lPassType: s.lShow ? 'text' : 'password', lEyeIcon: s.lShow ? EYE_OFF : EYE,
       setLEmail: (e) => this.setState({ lEmail: e.target.value, lError: '' }),
