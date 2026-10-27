@@ -576,6 +576,18 @@
   .tbl-row:focus-within .row-acts{opacity:1; pointer-events:auto;}
   /* A touch screen has no hover and would never show them at all. */
   @media (hover:none){ .tbl-row .row-acts{opacity:1; pointer-events:auto;} }
+  /* THE CLIENTS TABLE'S OWN TREATMENT, now shared by all three.
+     The purple bar is the part that does the work: a row tint alone is easy to lose on a white
+     table, and the bar says WHICH row the pointer is on from the far side of the screen — which
+     is where your eye is when you are reading the Score column.
+     !important because the row carries its background inline (a suspended client is pink), and
+     an inline background outranks any class. */
+  .tbl-row:hover{background:#FBF8FF !important; box-shadow:inset 3px 0 0 #7C00FF;}
+  .tbl-row:last-child{border-bottom:none;}
+  /* Rows arrive one after another, 70ms apart, the way the clients list already did. The delay is
+     per row and capped at fifteen, so a long page does not end in a wait. */
+  .tbl-row{animation:clRowIn .6s cubic-bezier(.22,1,.36,1) both;}
+  @media (prefers-reduced-motion: reduce){ .tbl-row{animation-name:clRowFade !important; animation-duration:.45s !important;} }
   .ldf-land{display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;align-items:start;margin-top:10px;}
   .ldf-land > .ldf-col{display:contents;}
   /* A thin rule, not a row of its own. Three captions at 42px each were 126px of header in a
@@ -1715,7 +1727,7 @@
           <span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">{{ dashReqTitle }}</span>
           <a href="#" onClick="{{ goRequests }}" style="font-size:11px;">Open queue →</a>
         </div>
-        <div style="overflow-x:auto;"><div style="min-width:1040px;">
+        <div style="overflow-x:auto;"><div style="min-width:880px;">
           <div style="display:grid; grid-template-columns:88px 1.4fr 1.2fr 1fr 118px 74px 90px; gap:10px; padding:8px 15px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid #F0EDF6;">
             <span>Ref</span><span>Service</span><span>Client</span><span>Officer</span><span>Stage</span><span>ETA</span><span></span>
           </div>
@@ -7798,13 +7810,15 @@
           </section>
         </sc-if>
 
-        <section class="pg-card tbl-scroll" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <!-- Thirteen columns do not squeeze below about 1400px without every cell becoming an
-               ellipsis. Below that the table scrolls sideways, which keeps each column readable. -->
-          <div style="overflow-x:auto;"><div style="min-width:1400px;">
-          <div style="display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.9fr) 84px minmax(0,1.05fr) minmax(0,.9fr) minmax(0,1.3fr) 112px minmax(0,1fr) 44px 76px minmax(0,.95fr) 150px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Website</span><span>City</span><span>Contact</span><span>Role</span><span>Email</span><span>Phone</span><span>Product</span><span style="text-align:right;">Score</span><span>Stage</span><span>Managed by</span><span></span></div>
+        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:clip;">
+          <!-- No scroller, so the header can stick to the PAGE: a box that scrolls on either axis
+               becomes the sticky header's container, and the header would then stay put against a
+               box that never moves while the page carried it away. Same trade the clients list
+               takes — thirteen columns fit a laptop and narrow below that. -->
+          <div><div>
+          <div style="position:sticky; top:0; z-index:3; background:#fff; display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.9fr) 84px minmax(0,1.05fr) minmax(0,.9fr) minmax(0,1.3fr) 112px minmax(0,1fr) 44px 76px minmax(0,.95fr) 150px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Website</span><span>City</span><span>Contact</span><span>Role</span><span>Email</span><span>Phone</span><span>Product</span><span style="text-align:right;">Score</span><span>Stage</span><span>Managed by</span><span></span></div>
           <sc-for list="{{ ldRows }}" as="l" hint-placeholder-count="4">
-            <div class="tbl-row" style="display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.9fr) 84px minmax(0,1.05fr) minmax(0,.9fr) minmax(0,1.3fr) 112px minmax(0,1fr) 44px 76px minmax(0,.95fr) 150px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;" style-hover="background:#FAF7FE;">
+            <div class="tbl-row" style="animation-delay:{{ l.rowDelay }}; display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.9fr) 84px minmax(0,1.05fr) minmax(0,.9fr) minmax(0,1.3fr) 112px minmax(0,1fr) 44px 76px minmax(0,.95fr) 150px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:12px;">{{ l.tick }}</span>
 
               <!-- Company. The facts a single line cannot hold — industry, city, when it arrived,
@@ -7961,15 +7975,15 @@
           </section>
         </sc-if>
 
-        <section class="pg-card tbl-scroll" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <div style="overflow-x:auto;"><div style="min-width:880px;">
-            <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.3fr) 112px 84px minmax(0,1fr) 70px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+        <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:clip;">
+          <div><div>
+            <div style="position:sticky; top:0; z-index:3; background:#fff; display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.3fr) 112px 84px minmax(0,1fr) 70px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
               <span onClick="{{ ctToggleAll }}" title="Select all on this page" style="cursor:pointer; color:{{ ctAllFg }}; font-size:12px;">{{ ctAll }}</span><span>Person</span><span>Company</span><span>Role</span><span>Email</span><span>Phone</span><span>Stage</span><span>Owner</span><span></span>
             </div>
             <sc-for list="{{ ctRows }}" as="p" hint-placeholder-count="8">
               <!-- One line per person, the same shape the leads table uses: plain text in columns,
                    no pills, and the two actions only on the row being pointed at. -->
-              <div onClick="{{ p.open }}" class="tbl-row" style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.3fr) 112px 84px minmax(0,1fr) 70px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px; cursor:pointer;" style-hover="background:#FAF7FE;">
+              <div onClick="{{ p.open }}" class="tbl-row" style="animation-delay:{{ p.rowDelay }}; display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.3fr) 112px 84px minmax(0,1fr) 70px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px; cursor:pointer;">
                 <span onClick="{{ p.toggle }}" title="Select" style="cursor:pointer; color:{{ p.tickFg }}; font-size:12px;">{{ p.tick }}</span>
                 <div style="display:flex; align-items:center; gap:9px; min-width:0;">
                   <span style="width:22px; height:22px; border-radius:7px; background:{{ p.avBg }}; color:{{ p.avColor }}; font-family:'Space Grotesk',sans-serif; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span>
@@ -41573,7 +41587,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // later, and then the two disagree about who may do what.
         };
         };
-        return { ldRows: _ldPaged9.map(_ldRow9) };
+        // 80ms, then 70 a row, capped at fifteen — the clients list's own cascade, and the cap is
+        // why a long page does not end in a wait for the last row.
+        return { ldRows: _ldPaged9.map((l9, i9) => ({ ..._ldRow9(l9), rowDelay: (80 + Math.min(i9, 14) * 70) + 'ms' })) };
       })(),
       // ══ Lead detail panel ═══════════════════════════════════════════════════════════════════
       //
@@ -42452,7 +42468,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           return { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) };
         };
         return {
-          ctRows: _ctShown9,
+          ctRows: _ctShown9.map((r9, i9) => ({ ...r9, rowDelay: (80 + Math.min(i9, 14) * 70) + 'ms' })),
           ctEmpty: _ctFiltered9.length === 0,
 
           // ── selection ─────────────────────────────────────────────────────────
