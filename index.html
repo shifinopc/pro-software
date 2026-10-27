@@ -457,6 +457,63 @@
      one grid: a two-column grid inside a two-column layout gives four narrow boxes, and a phone
      number does not need to be 180px wide to be read. `align-content:start` so a short column
      does not stretch its fields to match the tall one beside it. */
+  /* ── Lead discovery ───────────────────────────────────────────────────────────────────────
+     Paste a domain, watch the form fill itself. The panel is the first thing in the dialog
+     because it is the fastest way to finish the dialog.
+
+     THE GLOW IS NOT DECORATION. Looking a site up means the server fetching somebody else's
+     website, which takes seconds and happens entirely out of sight — the one state in this
+     product where nothing on screen would move. A spinner would say "working"; a glow that
+     drifts under the box being read says WHICH thing is working, and stops the second it does.
+     It is one pseudo-element and two radial gradients, so it costs a composite and no layout. */
+  .ld-disc{position:relative;border-radius:16px;padding:12px 13px;overflow:hidden;
+    background:linear-gradient(#FCFAFF,#FCFAFF) padding-box,
+               linear-gradient(120deg,#EADCFF,#D9C6F5,#EADCFF) border-box;
+    border:1.5px solid transparent;transition:box-shadow .3s ease;}
+  /* THE GLOW IS A REAL ELEMENT, NOT A ::after TOGGLED BY CLASS. The pseudo-element version is
+     correct CSS — it resolves to opacity 1 on a plain div outside this runtime — and on the panel
+     itself it stayed at 0 with the class applied and the animation running, which is the same
+     class of trouble the runtime's own notes describe about styles that persist across renders.
+     An element that is rendered or not rendered has no such state to get stuck in. */
+  .ld-glow{position:absolute;inset:-60% -20%;pointer-events:none;
+    background:radial-gradient(38% 58% at 22% 50%,rgba(124,0,255,.20),transparent 70%),
+               radial-gradient(32% 52% at 72% 42%,rgba(190,120,255,.18),transparent 70%);
+    animation:discDrift 2.6s ease-in-out infinite alternate;}
+  .ld-disc.is-busy{box-shadow:0 0 0 4px rgba(124,0,255,.07);}
+  .ld-disc.is-done{box-shadow:0 0 0 4px rgba(14,147,85,.07);}
+  @keyframes discDrift{from{transform:translate(-7%,-3%) scale(1);}
+                       to{transform:translate(9%,4%) scale(1.1);}}
+  .ld-disc > *{position:relative;}
+  /* The bar under the input while it reads. Indeterminate on purpose: a fetch of somebody else's
+     site reports no progress, and a bar that claimed a percentage would be inventing one. */
+  .ld-scan{height:2px;border-radius:99px;background:#EDE3FB;overflow:hidden;margin-top:9px;}
+  .ld-scan i{display:block;height:100%;width:38%;border-radius:99px;
+    background:linear-gradient(90deg,#9333EA,#7C00FF);animation:sweep 1.1s cubic-bezier(.45,0,.55,1) infinite;}
+  /* Found. Each one arrives a beat after the last, so the eye is led across them rather than
+     having eight things appear at once and reading none. Delays are per position, not bound:
+     a style attribute carrying a changing delay is a thing this runtime hoists. */
+  .ld-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px;}
+  .ld-chips > *{animation:stagIn .42s cubic-bezier(.16,1,.3,1) both;}
+  .ld-chips > *:nth-child(1){animation-delay:.00s}
+  .ld-chips > *:nth-child(2){animation-delay:.05s}
+  .ld-chips > *:nth-child(3){animation-delay:.10s}
+  .ld-chips > *:nth-child(4){animation-delay:.15s}
+  .ld-chips > *:nth-child(5){animation-delay:.20s}
+  .ld-chips > *:nth-child(6){animation-delay:.25s}
+  .ld-chips > *:nth-child(7){animation-delay:.30s}
+  .ld-chips > *:nth-child(8){animation-delay:.35s}
+  .ld-chips > *:nth-child(n+9){animation-delay:.40s}
+  .ld-found{display:flex;align-items:center;gap:9px;animation:stagIn .45s cubic-bezier(.16,1,.3,1) both;}
+  .ld-logo{width:34px;height:34px;border-radius:10px;object-fit:contain;background:#fff;
+    border:1px solid #EDEBF2;flex-shrink:0;animation:popIn .4s cubic-bezier(.34,1.4,.64,1) both;}
+  .ld-inp{flex:1;min-width:0;font-family:inherit;font-size:12px;color:#1A1523;background:#fff;
+    border:1px solid #E6DFF5;border-radius:10px;padding:9px 11px;outline:none;transition:border-color .2s ease,box-shadow .2s ease;}
+  .ld-inp:focus{border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.10);}
+  @media (prefers-reduced-motion:reduce){
+    .ld-glow{animation:none;}
+    .ld-scan i{animation:none;width:100%;opacity:.5;}
+    .ld-chips > *,.ld-found,.ld-logo{animation:none;}
+  }
   .ldf-land{display:flex;gap:18px;align-items:flex-start;margin-top:10px;}
   .ldf-col{flex:1 1 0;min-width:0;display:grid;gap:11px;align-content:start;}
   .ldf-cap{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7C00FF;}
@@ -13936,36 +13993,61 @@
                  score panel that is meant to reward filling them in was the thing you could not
                  see. Two columns, split by the question each answers: who they are on the left,
                  what they want on the right. It stacks back to one column under 820px. -->
-            <!-- Paste first, type the rest. A PRO lead usually arrives as a forwarded message with
-                 a signature under it, and every line of that block is a field on this form. -->
-            <div style="border:1px dashed #D9C6F5; background:#FCFAFF; border-radius:12px; padding:10px 12px; margin-bottom:12px;">
+            <!-- Paste first, type the rest. A PRO lead arrives as a domain on a card or a
+                 signature under a forwarded message, and both of those fill most of this dialog. -->
+            <div class="ld-disc {{ discState }}" style="margin-bottom:12px;">
               <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                <span style="font-size:11px; font-weight:700; color:#5B21B6;">Paste a website or an email signature and this fills itself in</span>
+                <span style="font-size:11px; font-weight:700; color:#5B21B6;">{{ discTitle }}</span>
                 <sc-if value="{{ sigShow }}" hint-placeholder-val="{{ false }}">
-                  <span onClick="{{ sigClear }}" style="font-size:10px; font-weight:700; color:#6F6C7A; cursor:pointer;" style-hover="text-decoration:underline;">Clear</span>
+                  <span onClick="{{ sigClear }}" style="font-size:10px; font-weight:700; color:#6F6C7A; cursor:pointer;" style-hover="text-decoration:underline;">Start again</span>
                 </sc-if>
               </div>
-              <div style="margin-top:7px; display:flex; gap:6px; align-items:center;">
-                <input value="{{ siteUrl }}" onInput="{{ siteSet }}" onKeyDown="{{ siteKey }}" placeholder="their website, to look up" style="flex:1; min-width:0; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:7px 10px;">
-                <button onClick="{{ siteGo }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:700; padding:7px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">Look up</button>
+
+              <div style="margin-top:8px; display:flex; gap:7px; align-items:center;">
+                <input value="{{ siteUrl }}" onInput="{{ siteSet }}" onKeyDown="{{ siteKey }}" placeholder="their website, to look up" class="ld-inp">
+                <button onClick="{{ siteGo }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 15px; border-radius:99px; cursor:pointer; white-space:nowrap; box-shadow:0 2px 8px rgba(124,0,255,.22);" style-hover="background:#6900D6;">{{ discBtn }}</button>
               </div>
-              <textarea onInput="{{ sigSet }}" rows="2" placeholder="Faisal Al Otaibi&#10;Operations Manager · Al Noor Contracting Est&#10;0551234567 · faisal@alnoor.com.sa" style="margin-top:7px; width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:8px 10px; resize:vertical;" value="{{ sigText }}"></textarea>
+
+              <!-- The only honest progress for a fetch of somebody else's site. -->
               <sc-if value="{{ sigBusy }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:6px; font-size:10px; font-weight:600; color:#7C00FF;">{{ sigBusyWhat }}</div>
+                <div class="ld-glow"></div>
+                <div class="ld-scan"><i></i></div>
+                <div style="margin-top:7px; font-size:10px; font-weight:600; color:#7C00FF;">{{ sigBusyWhat }}</div>
               </sc-if>
+
               <sc-if value="{{ sigHasErr }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:6px; font-size:10px; color:#C0353A;">{{ sigErr }}</div>
+                <div style="margin-top:8px; font-size:10px; color:#C0353A; background:#FEECEC; border:1px solid #FBD5D5; border-radius:9px; padding:7px 10px;">{{ sigErr }}</div>
               </sc-if>
+
+              <!-- What came back. The logo and the name read as the company; the chips are the
+                   fields, each one a click away from the box it belongs in. -->
               <sc-if value="{{ sigHasHits }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-                  <sc-for list="{{ sigHits }}" as="h" hint-placeholder-count="3">
-                    <!-- One chip per field found. Clicking it puts that value in the box; the colour
-                         separates what the source states outright from what was inferred. -->
-                    <span onClick="{{ h.take }}" title="{{ h.why }}" style="font-size:10px; font-weight:600; color:{{ h.color }}; background:{{ h.bg }}; border:1px solid {{ h.bd }}; border-radius:99px; padding:4px 9px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ h.label }} · {{ h.value }}</span>
-                  </sc-for>
-                  <span onClick="{{ sigTakeAll }}" style="font-size:10px; font-weight:700; color:#fff; background:#7C00FF; border-radius:99px; padding:4px 11px; cursor:pointer;" style-hover="background:#6900D6;">Use all</span>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #EFE7FB;">
+                  <div class="ld-found">
+                    <sc-if value="{{ discLogoShow }}" hint-placeholder-val="{{ false }}">
+                      <img src="{{ discLogo }}" alt="" class="ld-logo">
+                    </sc-if>
+                    <div style="min-width:0;">
+                      <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; color:#26074D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ discFoundName }}</div>
+                      <div style="font-size:10px; color:#0E9355; font-weight:700; margin-top:2px;">{{ discFoundCount }}</div>
+                    </div>
+                  </div>
+                  <div class="ld-chips">
+                    <sc-for list="{{ sigHits }}" as="h" hint-placeholder-count="4">
+                      <span onClick="{{ h.take }}" title="{{ h.why }}" style="font-size:10px; font-weight:600; color:{{ h.color }}; background:{{ h.bg }}; border:1px solid {{ h.bd }}; border-radius:99px; padding:4px 10px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ h.label }} · {{ h.value }}</span>
+                    </sc-for>
+                    <span onClick="{{ sigTakeAll }}" style="font-size:10px; font-weight:700; color:#fff; background:#0E9355; border-radius:99px; padding:4px 12px; cursor:pointer;" style-hover="background:#0B7A46;">Use all</span>
+                  </div>
+                  <div style="margin-top:7px; font-size:10px; color:#A9A6B4;">{{ sigNote }}</div>
                 </div>
-                <div style="margin-top:6px; font-size:10px; color:#A9A6B4;">{{ sigNote }}</div>
+              </sc-if>
+
+              <!-- The second way in, out of the way until it is wanted. -->
+              <sc-if value="{{ sigPasteOpen }}" hint-placeholder-val="{{ false }}">
+                <textarea onInput="{{ sigSet }}" rows="3" placeholder="Faisal Al Otaibi&#10;Operations Manager · Al Noor Contracting Est&#10;0551234567 · faisal@alnoor.com.sa" style="margin-top:9px; width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:10px; padding:9px 11px; resize:vertical;" value="{{ sigText }}"></textarea>
+              </sc-if>
+              <sc-if value="{{ sigPasteShut }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ sigPasteToggle }}" style="margin-top:8px; font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer; width:fit-content;" style-hover="text-decoration:underline;">…or paste an email signature instead</div>
               </sc-if>
             </div>
             <div class="ldf-land">
@@ -41705,6 +41787,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const found9 = hits9 ? MAP9.filter(m => hits9[m[0]] && hits9[m[0]].value) : [];
         const take9 = (field, value) => _setLdfField9(field, value);
         return {
+          // The panel's three states, as one class the CSS keys off: idle, reading, found.
+          discState: this.state.sigBusy ? 'is-busy' : (hits9 && found9.length ? 'is-done' : ''),
+          discTitle: this.state.sigBusy ? 'Reading it now…'
+            : (hits9 && found9.length) ? 'Here is what the site says about them'
+            : 'Start with their website — this fills the form in',
+          discBtn: this.state.sigBusy ? 'Reading…' : 'Look up',
+          discLogo: (hits9 && hits9.logo && hits9.logo.value) || '',
+          discLogoShow: !!(hits9 && hits9.logo && hits9.logo.value),
+          discFoundName: (hits9 && hits9.companyName && hits9.companyName.value) || (this.state.siteUrl || '').trim(),
+          discFoundCount: found9.length === 1 ? '1 field found' : found9.length + ' fields found',
+          // The signature box stays shut until asked for: two big inputs side by side is how
+          // somebody pastes a signature into the box that wanted a domain.
+          sigPasteOpen: !!this.state.sigPasteOpen || !!(this.state.sigText || '').trim(),
+          sigPasteShut: !(this.state.sigPasteOpen || (this.state.sigText || '').trim()),
+          sigPasteToggle: () => this.setState({ sigPasteOpen: true }),
           siteUrl: this.state.siteUrl || '',
           siteSet: (e) => this.setState({ siteUrl: e.target.value, sigErr: '' }),
           siteKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this._siteLookup(); } },
@@ -41733,7 +41830,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           }),
           sigTakeAll: () => { for (const m of found9) take9(m[1], hits9[m[0]].value); },
           sigSet: (e) => { const v = e.target.value; this.setState({ sigText: v }); this._sigParse(v); },
-          sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', siteUrl: '', sigHits: null, sigErr: '' }); },
+          sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', siteUrl: '', sigHits: null, sigErr: '', sigPasteOpen: false }); },
         };
       })(),
       ldfWebsite: (_ldf && _ldf.website) || '', setLdfWebsite: (e) => _setLdfField9('website', e.target.value),
