@@ -17033,6 +17033,13 @@ class Component extends DCLogic {
       return this._bootReady.then(() => {
         const hit = this._bootBatch && Object.prototype.hasOwnProperty.call(this._bootBatch, path) ? this._bootBatch[path] : null;
         if (!hit) return fetch(base + path, init);
+        // CONSUMED, NOT KEPT. The batch is a head start on the first read, not a cache: every
+        // loader in the app goes through here, so holding an answer meant `_crmReload()` after a
+        // save handed back the list as it was when the page loaded. A lead saved, a toast saying
+        // so, and no new row until the page was refreshed — the same for contacts, follow-ups and
+        // everything else whose path the boot batch carries. The second read goes to the server,
+        // which is what every caller already believed it was doing.
+        delete this._bootBatch[path];
         return { ok: hit.status >= 200 && hit.status < 300, status: hit.status, json: () => Promise.resolve(hit.body), text: () => Promise.resolve(JSON.stringify(hit.body)) };
       });
     };
