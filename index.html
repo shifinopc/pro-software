@@ -475,10 +475,37 @@
      itself it stayed at 0 with the class applied and the animation running, which is the same
      class of trouble the runtime's own notes describe about styles that persist across renders.
      An element that is rendered or not rendered has no such state to get stuck in. */
-  .ld-glow{position:absolute;inset:-60% -20%;pointer-events:none;
-    background:radial-gradient(38% 58% at 22% 50%,rgba(124,0,255,.20),transparent 70%),
-               radial-gradient(32% 52% at 72% 42%,rgba(190,120,255,.18),transparent 70%);
-    animation:discDrift 2.6s ease-in-out infinite alternate;}
+  /* THREE BLOBS DRIFTING UNDER THE PANEL WHILE IT READS.
+     A real lookup is not instant — worldstarmanpower.ae takes four and a half seconds — and for
+     all of it the server is fetching somebody else's site with nothing on screen to show for it.
+     The first version of this was two faint gradients and was, fairly, not noticed at all.
+     Blurred circles on their own paths read as something alive rather than as a texture, and they
+     sit UNDER the content: z-index 0 against the panel's own children at 1, so the words stay
+     crisp while the colour moves behind them. */
+  .ld-glow{position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:16px;z-index:0;}
+  /* Sized and placed so each circle's CENTRE is inside the panel. The first attempt hung them off
+     the top edge, where `overflow:hidden` ate most of each one and what was left read as a faint
+     tint rather than as movement. */
+  .ld-glow b{position:absolute;display:block;border-radius:50%;filter:blur(24px);opacity:.62;}
+  .ld-glow b:nth-child(1){width:150px;height:150px;background:#9333EA;left:-30px;top:-20px;
+    animation:blobA 3.2s ease-in-out infinite alternate;}
+  .ld-glow b:nth-child(2){width:130px;height:130px;background:#7C00FF;left:40%;top:-28px;
+    animation:blobB 2.5s ease-in-out infinite alternate;}
+  .ld-glow b:nth-child(3){width:140px;height:140px;background:#C084FC;right:-25px;top:-18px;
+    animation:blobC 3.9s ease-in-out infinite alternate;}
+  @keyframes blobA{to{transform:translate(80px,34px) scale(1.18);}}
+  @keyframes blobB{to{transform:translate(-55px,46px) scale(.88);}}
+  @keyframes blobC{to{transform:translate(-90px,28px) scale(1.22);}}
+  .ld-disc > *:not(.ld-glow){z-index:1;}
+  /* Where the answers will land, held open while they are fetched, so the panel does not jump
+     when they arrive and there is something to look at that is the shape of the result. */
+  .ld-skel{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .ld-skel i{display:block;height:21px;border-radius:99px;
+    background:linear-gradient(90deg,#F0E9FB 25%,#E3D6F7 37%,#F0E9FB 63%);
+    background-size:300% 100%;animation:shimmer2 1.3s linear infinite;}
+  .ld-skel i:nth-child(1){width:150px}.ld-skel i:nth-child(2){width:112px}
+  .ld-skel i:nth-child(3){width:128px}.ld-skel i:nth-child(4){width:84px}
+  .ld-skel i:nth-child(5){width:140px}
   .ld-disc.is-busy{box-shadow:0 0 0 4px rgba(124,0,255,.07);}
   .ld-disc.is-done{box-shadow:0 0 0 4px rgba(14,147,85,.07);}
   @keyframes discDrift{from{transform:translate(-7%,-3%) scale(1);}
@@ -510,7 +537,8 @@
     border:1px solid #E6DFF5;border-radius:10px;padding:9px 11px;outline:none;transition:border-color .2s ease,box-shadow .2s ease;}
   .ld-inp:focus{border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.10);}
   @media (prefers-reduced-motion:reduce){
-    .ld-glow{animation:none;}
+    .ld-glow b{animation:none;}
+    .ld-skel i{animation:none;}
     .ld-scan i{animation:none;width:100%;opacity:.5;}
     .ld-chips > *,.ld-found,.ld-logo{animation:none;}
   }
@@ -14022,9 +14050,10 @@
 
               <!-- The only honest progress for a fetch of somebody else's site. -->
               <sc-if value="{{ sigBusy }}" hint-placeholder-val="{{ false }}">
-                <div class="ld-glow"></div>
+                <div class="ld-glow"><b></b><b></b><b></b></div>
                 <div class="ld-scan"><i></i></div>
                 <div style="margin-top:7px; font-size:10px; font-weight:600; color:#7C00FF;">{{ sigBusyWhat }}</div>
+                <div class="ld-skel"><i></i><i></i><i></i><i></i><i></i></div>
               </sc-if>
 
               <sc-if value="{{ sigHasErr }}" hint-placeholder-val="{{ false }}">
@@ -36587,6 +36616,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const url9 = String(this.state.siteUrl || '').trim();
       if (!url9 || this.state.sigBusy) return;
       const t9 = localStorage.getItem('stimespro:token');
+      // A FLOOR ON HOW BRIEFLY THIS CAN SHOW. A warm site answers in under half a second and the
+      // whole state — blobs, bar, skeleton — became a flicker that read as a glitch rather than as
+      // work. Held to 700ms so it is always seen as one deliberate thing. It costs nothing on a
+      // slow site, which is every site that actually needs the reassurance.
+      const began9 = Date.now();
+      const settle9 = (next) => setTimeout(() => this.setState(next), Math.max(0, 700 - (Date.now() - began9)));
       this.setState({ sigBusy: true, sigErr: '' });
       fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/lookup-site', {
         method: 'POST',
@@ -36594,10 +36629,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         body: JSON.stringify({ url: url9 }),
       })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
-        .then(({ ok, j }) => this.setState(ok
+        .then(({ ok, j }) => settle9(ok
           ? { sigBusy: false, sigHits: j, sigErr: '', sigUsed: false }
           : { sigBusy: false, sigHits: null, sigErr: (j && j.error) || 'That site could not be read.' }))
-        .catch(() => this.setState({ sigBusy: false, sigErr: 'Could not reach the server.' }));
+        // Says WHICH server. "Could not reach the server" sent somebody looking at the website they
+        // had just typed, when what was down was this product's own API.
+        .catch(() => settle9({ sigBusy: false, sigErr: 'Could not reach STIMES PRO itself — the website was never contacted. Try again in a moment.' }));
     });
     this._sigParse = this._sigParse || ((text) => {
       clearTimeout(this._sigT);
