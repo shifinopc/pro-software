@@ -24,10 +24,22 @@
 
 export type Confidence = "sure" | "guess";
 export type SignatureField = { value: string; confidence: Confidence; why: string };
-export type ParsedSignature = Partial<Record<
-  "contactName" | "jobTitle" | "companyName" | "email" | "phone" | "website" | "city",
-  SignatureField
->> & { lines: number };
+
+/**
+ * ONE VOCABULARY FOR EVERY SUGGESTION, whoever produced it.
+ *
+ * A signature and a company website are two inputs to the same screen: the chips, the sure/guess
+ * marking and the form field each one lands in are shared. Two key sets would mean two mappings in
+ * the console and a field that works from one input and silently does nothing from the other.
+ *
+ * A producer fills what it can and leaves the rest absent — a signature rarely carries a postcode,
+ * and a website rarely names the person you spoke to.
+ */
+export type LeadFieldKey =
+  | "contactName" | "jobTitle" | "companyName" | "email" | "phone" | "website"
+  | "city" | "street" | "postalCode" | "country" | "logo" | "description";
+
+export type ParsedSignature = Partial<Record<LeadFieldKey, SignatureField>> & { lines: number };
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const URL_RE = /\b((?:https?:\/\/)?(?:www\.)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?:com|net|org|sa|ae|co|io|biz|info|me|app|dev|site|online|store|com\.sa|org\.sa|gov\.sa)(?:\/[^\s<>"']*)?)/i;

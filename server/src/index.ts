@@ -37,6 +37,7 @@ import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
 import { planMerge, applyMerge } from "./company-merge.js";
 import { parseSignature } from "./signature.js";
+import { lookupSite, SiteLookupError } from "./site-lookup.js";
 import { intakeStatus, setIntakeSettings, createSuggestion, acceptSuggestion, rejectSuggestion, intakeActivity, readScan, IntakeError } from "./intake-agent.js";
 import { agentsOverview, updateAgent, runNow, actOnTask, askAssistant, kickAgent, importGovExport, GovExportError } from "./agents.js";
 import { AgentActionError } from "./agent-core.js";
@@ -4386,6 +4387,25 @@ app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requi
  * are the same rules the importer needs for a phone number, and two copies of "what shape is a
  * Saudi mobile" is how they come to disagree.
  */
+/**
+ * Paste a company's website, get the fields it publishes about itself.
+ *
+ * Reads only, writes nothing, names nobody — same contract as the signature parser, and the same
+ * suggestion shape, so the console renders both through one set of chips.
+ *
+ * Staff-only and never reachable from the portal: this makes the SERVER fetch a URL somebody typed,
+ * and the guards in site-lookup.ts are what keep that from being a way to read the inside of this
+ * network. A signed-in member of staff is the smallest audience that makes the feature useful.
+ */
+app.post("/api/leads/lookup-site", requireAuth, requireStaff, async (req, res) => {
+  try {
+    res.json(await lookupSite(String(req.body?.url ?? "")));
+  } catch (e: any) {
+    if (e instanceof SiteLookupError) return res.status(e.status).json({ error: e.message });
+    return fail(res, 502, e, "leads.lookupSite");
+  }
+});
+
 app.post("/api/leads/parse-signature", requireAuth, requireStaff, (req, res) => {
   const text = String(req.body?.text ?? "");
   if (!text.trim()) return res.status(400).json({ error: "Paste the signature block first." });
