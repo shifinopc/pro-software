@@ -514,12 +514,24 @@
     .ld-scan i{animation:none;width:100%;opacity:.5;}
     .ld-chips > *,.ld-found,.ld-logo{animation:none;}
   }
-  .ldf-land{display:flex;gap:18px;align-items:flex-start;margin-top:10px;}
-  .ldf-col{flex:1 1 0;min-width:0;display:grid;gap:11px;align-content:start;}
+  /* THREE COLUMNS, ONE QUESTION EACH: who they are, who you spoke to, what they came for.
+     Two columns meant eight fields in one and five in the other, so the form ran past the fold and
+     the lead score — the thing that rewards filling it in — was below it. Four, four and five fits
+     on a laptop without scrolling. */
+  .ldf-land{display:flex;gap:16px;align-items:flex-start;margin-top:12px;}
+  /* Tighter than the shared control, and only here: these boxes hold a name and a phone number,
+     not a paragraph, and the height was spending the screen this form does not have. */
+  .ldf-land .fm-inp{padding:8px 10px;font-size:12px;}
+  .ldf-land .fm-lab{margin-bottom:4px;}
+  .ldf-land textarea.fm-inp{min-height:62px;}
+  /* Below this the three columns are narrower than the fields want to be. Two, then one. */
+  @media (max-width:1040px){.ldf-land{flex-wrap:wrap;}.ldf-land > .ldf-col{flex:1 1 44%;}}
+
+  .ldf-col{flex:1 1 0;min-width:0;display:grid;gap:9px;align-content:start;}
   .ldf-cap{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7C00FF;}
   .ldf-cap span{font-size:10px;font-weight:500;letter-spacing:0;text-transform:none;color:#A9A6B4;}
   /* Below this the two columns are narrower than the fields want to be, so it goes back to one. */
-  @media (max-width:860px){.ldf-land{flex-direction:column;gap:12px;}}
+  @media (max-width:720px){.ldf-land{flex-direction:column;gap:12px;}.ldf-land > .ldf-col{flex:1 1 auto;}}
   /* Add client only. Three columns of grey boxes read as one long list unless something says where
      each group ends — a hairline does it without adding a box inside a box. The second caption in a
      column (National address, How we will work it) gets a rule above it for the same reason: it is
@@ -13980,7 +13992,7 @@
   </sc-if>
   <sc-if value="{{ ldFormOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ ldFormClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:940px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:1120px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
         <div class="fm-head">
           <div style="min-width:0;">
             <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ldfHeading }}</div>
@@ -14021,6 +14033,18 @@
 
               <!-- What came back. The logo and the name read as the company; the chips are the
                    fields, each one a click away from the box it belongs in. -->
+              <!-- ONCE THE FIELDS ARE TAKEN THE PANEL HAS DONE ITS JOB. Leaving eight chips open
+                   above a filled-in form is a second copy of the answer, and it is what pushed the
+                   dialog into scrolling at the exact moment somebody wanted to read it. -->
+              <sc-if value="{{ sigUsed }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:10px; padding-top:10px; border-top:1px solid #EFE7FB; display:flex; align-items:center; gap:8px; animation:stagIn .35s cubic-bezier(.16,1,.3,1) both;">
+                  <sc-if value="{{ discLogoShow }}" hint-placeholder-val="{{ false }}">
+                    <img src="{{ discLogo }}" alt="" style="width:22px; height:22px; border-radius:6px; object-fit:contain; background:#fff; border:1px solid #EDEBF2; flex-shrink:0;">
+                  </sc-if>
+                  <span style="font-size:11px; font-weight:700; color:#0E9355;">{{ sigUsedMsg }}</span>
+                  <span onClick="{{ sigShowAgain }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">show what was found</span>
+                </div>
+              </sc-if>
               <sc-if value="{{ sigHasHits }}" hint-placeholder-val="{{ false }}">
                 <div style="margin-top:10px; padding-top:10px; border-top:1px solid #EFE7FB;">
                   <div class="ld-found">
@@ -14052,7 +14076,7 @@
             </div>
             <div class="ldf-land">
             <div class="ldf-col">
-              <div class="ldf-cap">The company<span>who you are talking to</span></div>
+              <div class="ldf-cap">The company<span>who they are</span></div>
               <div class="fm-wide">
                 <label class="fm-lab">Company name <span class="fm-req">*</span></label>
                 <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
@@ -14066,9 +14090,27 @@
                   <sc-if value="{{ ldfLogoShow }}" hint-placeholder-val="{{ false }}">
                     <img src="{{ ldfLogo }}" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:contain; background:#F6F4F9; border:1px solid #EDEBF2; flex-shrink:0;">
                   </sc-if>
-                  <input value="{{ ldfWebsite }}" onInput="{{ setLdfWebsite }}" placeholder="palmate.sa" class="fm-inp" style="flex:1; min-width:0;">
+                  <input value="{{ ldfWebsite }}" onInput="{{ setLdfWebsite }}" placeholder="their-company.sa" class="fm-inp" style="flex:1; min-width:0;">
                 </div>
               </div>
+              <div>
+                <label class="fm-lab">Industry</label>
+                <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp">
+                <sc-if value="{{ hasIndustryChips }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
+                    <sc-for list="{{ ldfIndustryChips }}" as="c" hint-placeholder-count="5">
+                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div>
+                <label class="fm-lab">City</label>
+                <input value="{{ ldfCity }}" onInput="{{ setLdfCity }}" class="fm-inp">
+              </div>
+            </div>
+            <div class="ldf-col">
+              <div class="ldf-cap">Who you spoke to<span>so somebody can call them</span></div>
               <div>
                 <label class="fm-lab">Contact person</label>
                 <input value="{{ ldfContact }}" onInput="{{ setLdfContact }}" placeholder="Who you spoke to" class="fm-inp">
@@ -14106,6 +14148,9 @@
                 </div>
                 <sc-if value="{{ ldfPhoneErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfPhoneErr }}</div></sc-if>
               </div>
+            </div>
+            <div class="ldf-col">
+              <div class="ldf-cap">The opportunity<span>what they came for</span></div>
               <div>
                 <label class="fm-lab">Where from</label>
                 <!-- A dropdown over the configured list, with a way out of it. The escape hatch is not
@@ -14131,13 +14176,6 @@
                   <input value="{{ ldfSource }}" onInput="{{ setLdfSource }}" placeholder="{{ sourceOtherHint }}" class="fm-inp" style="margin-top:7px;">
                 </sc-if>
               </div>
-              <div>
-                <label class="fm-lab">City</label>
-                <input value="{{ ldfCity }}" onInput="{{ setLdfCity }}" class="fm-inp">
-              </div>
-            </div>
-            <div class="ldf-col">
-              <div class="ldf-cap">The opportunity<span>what they came for</span></div>
               <div>
                 <!-- WHICH SERVICE THEY CAME FOR. Above Industry because it is the question the
                      salesperson is actually holding: what the client wants from us, as against
@@ -14165,17 +14203,6 @@
                   </sc-if>
                 </div>
                 <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
-              </div>
-              <div>
-                <label class="fm-lab">Industry</label>
-                <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp">
-                <sc-if value="{{ hasIndustryChips }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                    <sc-for list="{{ ldfIndustryChips }}" as="c" hint-placeholder-count="5">
-                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                    </sc-for>
-                  </div>
-                </sc-if>
               </div>
               <div>
                 <label class="fm-lab">Campaign</label>
@@ -14217,7 +14244,13 @@
                 <label class="fm-lab">Notes</label>
                 <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:60px; padding:9px 13px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
               </div>
-            <!-- AUTO LEAD SCORE, from the design. Live as the form is typed, so somebody can see that
+            </div>
+            </div>
+            <!-- SPANS THE BOTTOM, rather than sitting in the third column. It is a reading of the
+                 WHOLE form, so a column was the wrong place for it twice over: it made that column
+                 nearly twice the height of the other two, which is what pushed the dialog into
+                 scrolling, and it read as though it belonged to the fields directly above it.
+                 AUTO LEAD SCORE, from the design. Live as the form is typed, so somebody can see that
                  naming the source or adding a number is worth something — rather than finding out
                  after they have saved. Scored by the SAME function the Leads list uses; a preview
                  worked out in the browser would be a second copy of the model, and the number here
@@ -14236,8 +14269,6 @@
                 <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ ldfScoreWhy }}</div>
               </div>
             </sc-if>
-            </div>
-            </div>
           <!-- Possible duplicates. A warning, never a block: two real companies can share a name,
                and a form that refuses the save teaches people to type a wrong one instead. -->
           <sc-if value="{{ ldDupOpen }}" hint-placeholder-val="{{ false }}">
@@ -18351,7 +18382,7 @@ class Component extends DCLogic {
      */
     this._openLeadForm = () => {
       if (this._previewScore) this._previewScore({});
-      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', website: '', logoUrl: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '', sigText: '', siteUrl: '', sigHits: null, sigErr: '' });
+      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', website: '', logoUrl: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '', sigText: '', siteUrl: '', sigHits: null, sigErr: '', sigUsed: false });
     };
     /**
      * Open the deal DRAWER — the reading of a deal, not the form for changing it.
@@ -36564,7 +36595,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => this.setState(ok
-          ? { sigBusy: false, sigHits: j, sigErr: '' }
+          ? { sigBusy: false, sigHits: j, sigErr: '', sigUsed: false }
           : { sigBusy: false, sigHits: null, sigErr: (j && j.error) || 'That site could not be read.' }))
         .catch(() => this.setState({ sigBusy: false, sigErr: 'Could not reach the server.' }));
     });
@@ -36582,7 +36613,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         })
           .then(r => r.json().then(j => ({ ok: r.ok, j })))
           .then(({ ok, j }) => this.setState(ok
-            ? { sigBusy: false, sigHits: j, sigErr: '' }
+            ? { sigBusy: false, sigHits: j, sigErr: '', sigUsed: false }
             : { sigBusy: false, sigHits: null, sigErr: (j && j.error) || 'That could not be read.' }))
           .catch(() => this.setState({ sigBusy: false, sigErr: 'Could not reach the server.' }));
       }, 400);
@@ -41812,7 +41843,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           sigBusyWhat: (this.state.siteUrl || '').trim() ? 'Reading that website\u2026' : 'Reading it\u2026',
           sigHasErr: !!this.state.sigErr,
           sigErr: this.state.sigErr || '',
-          sigHasHits: found9.length > 0,
+          // Hidden once used, and brought back by name rather than by undoing anything.
+          sigHasHits: found9.length > 0 && !this.state.sigUsed,
+          sigUsed: !!this.state.sigUsed && found9.length > 0,
+          sigUsedMsg: found9.length === 1 ? '1 field filled in from the site' : found9.length + ' fields filled in from the site',
+          sigShowAgain: () => this.setState({ sigUsed: false }),
           sigNote: found9.some(m => hits9[m[0]].confidence === 'guess')
           // Worded for BOTH inputs: "read off a line's position" is true of a signature and
           // meaningless for a website, where the same distinction is between what the site states
@@ -41828,9 +41863,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               take: () => take9(m[1], h9.value),
             };
           }),
-          sigTakeAll: () => { for (const m of found9) take9(m[1], hits9[m[0]].value); },
+          sigTakeAll: () => { for (const m of found9) take9(m[1], hits9[m[0]].value); this.setState({ sigUsed: true }); },
           sigSet: (e) => { const v = e.target.value; this.setState({ sigText: v }); this._sigParse(v); },
-          sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', siteUrl: '', sigHits: null, sigErr: '', sigPasteOpen: false }); },
+          sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', siteUrl: '', sigHits: null, sigErr: '', sigPasteOpen: false, sigUsed: false }); },
         };
       })(),
       ldfWebsite: (_ldf && _ldf.website) || '', setLdfWebsite: (e) => _setLdfField9('website', e.target.value),
