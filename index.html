@@ -2394,6 +2394,47 @@
               </div>
               </sc-if>
 
+              <!-- The company's own documents, with the ones in trouble marked. The numbers in the
+                   hero say HOW MANY are overdue; this says WHICH, which is the next question and
+                   used to need the Documents tab and a filter to answer. -->
+              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:12px 14px;">
+                  <div class="ov-h">
+                    <span class="ov-ic" style="background:#E4F4FD; color:#0284C7;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 14h6M9 18h4"></path></svg></span>
+                    <div style="min-width:0;">
+                      <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Company documents</div>
+                      <div style="font-size:11px; color:{{ ovDocsSubInk }}; margin-top:2px;">{{ ovDocsSub }}</div>
+                    </div>
+                  </div>
+                  <span onClick="{{ ovDocsGo }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Open Documents →</span>
+                </div>
+                <sc-if value="{{ ovDocsHas }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; flex-direction:column; gap:7px; padding:0 14px 13px;">
+                    <sc-for list="{{ ovDocs }}" as="d" hint-placeholder-count="4">
+                      <div onClick="{{ d.open }}" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:{{ d.rowBg }}; border:1px solid #F0EDF6; border-left:3px solid {{ d.rowBd }}; border-radius:12px; padding:9px 12px; cursor:pointer;" style-hover="border-color:#D9C6F5;">
+                        <div style="min-width:0; flex:1;">
+                          <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.name }}</div>
+                          <div style="font-size:10px; color:#A9A6B4; margin-top:2px; font-family:ui-monospace,monospace;">{{ d.number }}</div>
+                        </div>
+                        <div style="text-align:right; min-width:120px;">
+                          <div style="font-size:11px; font-weight:600; color:#4B4757; font-variant-numeric:tabular-nums;">{{ d.expiry }}</div>
+                          <sc-if value="{{ d.whenShow }}" hint-placeholder-val="{{ true }}">
+                            <div style="font-size:10px; color:{{ d.ink }}; margin-top:2px;">{{ d.when }}</div>
+                          </sc-if>
+                        </div>
+                        <span style="font-size:10px; font-weight:700; color:{{ d.ink }}; background:{{ d.chipBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ d.state }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ ovDocsMoreShow }}" hint-placeholder-val="{{ false }}">
+                      <span onClick="{{ ovDocsGo }}" style="font-size:11px; color:#8C8899; cursor:pointer; padding:2px 2px 0;" style-hover="color:#7C00FF;">{{ ovDocsMore }} →</span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ovDocsEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:0 14px 15px; font-size:11px; color:#8C8899; line-height:1.6;">Nothing on file for the company itself yet — the CR certificate, the Chamber membership, the GOSI and Qiwa registrations all show here once they are added. Employees' papers live on the Employees tab.</div>
+                </sc-if>
+              </div>
+
               <!-- Workforce nationalisation. The RATIO is counted from employee records; the BAND is a
                    fact somebody read on the official portal and wrote down, never a number this app
                    works out for itself — its thresholds vary by sector and size, so a computed band
@@ -25289,6 +25330,82 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const _cdStatOrder = ['Expired', 'Expiring soon', 'No expiry date', 'Processing', 'Valid'];
       const _cdStatNames = _cdStatOrder.filter(n7 => _cdStatCount[n7]);
       const _cdDocsF = _cdStat ? _cdByType7.filter(d7 => _cdDocStatus(d7) === _cdStat) : _cdByType7;
+      /**
+       * THE COMPANY'S OWN PAPERS, ON THE OVERVIEW, WORST FIRST.
+       *
+       * The overview could say "2 overdue · 4 expiring" and nothing else — true, and no use to
+       * somebody whose next question is always "which ones". Answering it meant the Documents tab
+       * and two filters.
+       *
+       * THE COMPANY'S, NOT ITS PEOPLE'S. This is the client's own card — the CR certificate, the
+       * MISA licence, the Chamber membership — and an Iqama belonging to one of eight employees is
+       * a different question, asked on the Employees tab and on Compliance. It also means the
+       * count here will not match the tiles above, which count every document on the client; the
+       * subtitle says "company documents" for exactly that reason.
+       *
+       * The TYPE decides whose a document is, not the employee link: the link is corroboration and
+       * is frequently absent, while every type carries a subjectKind. A type nobody has set up
+       * falls back to "it names no employee", which is the same question asked a weaker way.
+       */
+      const _ovDocs9 = _cdDocs.filter(d7 => {
+        const t7 = _dtByName[d7.docType];
+        return t7 ? String(t7.subjectKind || '') === 'company' : !d7.employeeId;
+      });
+      const _OV_RANK9 = { 'Expired': 0, 'Expiring soon': 1, 'Processing': 2, 'No expiry date': 3, 'Valid': 4 };
+      const _OV_INK9 = {
+        'Expired': ['#C0353A', '#FEECEC'], 'Expiring soon': ['#B7791F', '#FFF6E5'],
+        'Processing': ['#0284C7', '#E4F4FD'], 'No expiry date': ['#8C8899', '#F3F1F7'],
+        'Valid': ['#0E9355', '#E7F8EF'],
+      };
+      const _ovRows9 = _ovDocs9
+        .map(d7 => {
+          const st7 = _cdDocStatus(d7);
+          const n7 = Number(d7.daysLeft);
+          const bad7 = st7 === 'Expired' || st7 === 'Expiring soon';
+          return { d: d7, st: st7, days: Number.isFinite(n7) ? n7 : null, bad: bad7 };
+        })
+        .sort((a7, z7) => (_OV_RANK9[a7.st] - _OV_RANK9[z7.st])
+          || ((a7.days === null ? 1e9 : a7.days) - (z7.days === null ? 1e9 : z7.days)));
+      const _ovBad9 = _ovRows9.filter(r7 => r7.bad).length;
+      // Eight, then a line saying how many more. Worst-first means the eight shown are the eight
+      // that matter; a client with ninety documents would otherwise bury the rest of the overview.
+      const OV_CAP9 = 8;
+      const _ovShown9 = _ovRows9.slice(0, OV_CAP9);
+      clDetailApi.ovDocsShow = true;
+      clDetailApi.ovDocsHas = _ovRows9.length > 0;
+      clDetailApi.ovDocsEmpty = _ovRows9.length === 0;
+      clDetailApi.ovDocsSub = _ovRows9.length
+        ? (_ovBad9
+            ? _ovBad9 + ' of ' + _ovRows9.length + ' company document' + (_ovRows9.length === 1 ? '' : 's') + ' need' + (_ovBad9 === 1 ? 's' : '') + ' attention'
+            : _ovRows9.length + ' company document' + (_ovRows9.length === 1 ? '' : 's') + ', all in date')
+        : 'Licences, certificates and registrations held by the company itself';
+      clDetailApi.ovDocsSubInk = _ovBad9 ? '#C0353A' : '#8C8899';
+      clDetailApi.ovDocs = _ovShown9.map(r7 => {
+        const [ink7, bg7] = _OV_INK9[r7.st] || _OV_INK9.Valid;
+        const when7 = r7.days === null ? ''
+          : r7.days < 0 ? Math.abs(r7.days) + ' day' + (Math.abs(r7.days) === 1 ? '' : 's') + ' ago'
+          : r7.days === 0 ? 'today'
+          : 'in ' + r7.days + ' day' + (r7.days === 1 ? '' : 's');
+        return {
+          name: r7.d.docType || 'Document',
+          number: r7.d.docNumber ? '#' + r7.d.docNumber : 'no number recorded',
+          state: r7.st, ink: ink7, chipBg: bg7,
+          // The date AND the distance to it. One of them alone is half an answer: a date needs
+          // counting from today, and "in 12 days" leaves you wondering which day that is.
+          expiry: r7.d.expiryDate ? String(r7.d.expiryDate).slice(0, 10) : 'No expiry date',
+          when: when7,
+          whenShow: !!when7,
+          // The row carries its own urgency: a tinted strip down the left for the ones that are
+          // wrong, nothing at all for the ones that are fine. A list where every row is decorated
+          // is a list with no highlight in it.
+          rowBg: r7.bad ? bg7 : '#fff',
+          rowBd: r7.bad ? ink7 : 'transparent',
+          open: () => this.setState({ clientTab: 'Documents', cdDocStatus: '', cdDocType: r7.d.docType }),
+        };
+      });
+      clDetailApi.ovDocsMoreShow = _ovRows9.length > OV_CAP9;
+      clDetailApi.ovDocsMore = (_ovRows9.length - OV_CAP9) + ' more on the Documents tab';
+      clDetailApi.ovDocsGo = () => this.setState({ clientTab: 'Documents', cdDocType: '', cdDocStatus: '' });
       clDetailApi.cdStatFilterShow = _cdStatNames.length > 1;
       const _cdStatOpen = this.state.openDd === 'cd-docstatus';
       clDetailApi.cdStatOpen = _cdStatOpen;
