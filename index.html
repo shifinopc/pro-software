@@ -446,7 +446,7 @@
   /* The one scrolling region. Header and footer stay put, so the primary action is
      never scrolled off the bottom of a long form. */
   /* position:relative so it is the offsetParent the scroll-to-error walk stops at. */
-  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px 20px 16px;}
+  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:11px 20px 12px;}
   .fm-foot{display:flex;align-items:center;gap:10px;padding:13px 20px;border-top:1px solid #F3F1F8;background:#fff;flex-shrink:0;}
 
   .fm-sec + .fm-sec{margin-top:13px;padding-top:12px;border-top:1px solid #F5F2FA;}
@@ -549,33 +549,56 @@
   .ldf-land{display:flex;gap:16px;align-items:flex-start;margin-top:12px;}
   /* Tighter than the shared control, and only here: these boxes hold a name and a phone number,
      not a paragraph, and the height was spending the screen this form does not have. */
-  /* ── The modern pass, scoped to this dialog ───────────────────────────────────────────────
-     The form was a grid of identical outlined boxes: every field drawn with the same 1px border,
-     so nothing was quieter than anything else and the eye had no route through it.
+  /* ── Dense ────────────────────────────────────────────────────────────────────────────────
+     Label beside the field, not above it, and two fields to a row. Thirteen fields in seven rows
+     instead of three columns of five, which is the difference between a form somebody fills in
+     once and a tool somebody uses twenty times a day.
 
-     SURFACES, NOT OUTLINES. A field at rest is a soft fill with no border — it reads as a place
-     to type without drawing a line around itself. The border appears on focus, with a ring, so
-     the one box you are in is the only one asking for attention. That is the whole idea: spend
-     the contrast on the active field instead of spreading it evenly over thirteen inactive ones. */
-  .ldf-land .fm-inp{padding:9px 11px;font-size:12px;height:38px;border:1px solid transparent;
-    background:#F6F4FA;border-radius:10px;
+     The three sections survive as full-width rules rather than as columns. They were doing real
+     work — who they are, who you spoke to, what they came for — and losing them would make this a
+     list of thirteen boxes. As columns they also guaranteed dead space: the opportunity has more
+     fields than the company does, so two of the three always ended halfway down.
+
+     `display:contents` is what lets the markup keep its three groups while the GRID flattens them
+     into one run of rows. No fields were moved to do this. */
+  .ldf-land{display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;align-items:start;margin-top:10px;}
+  .ldf-land > .ldf-col{display:contents;}
+  /* A thin rule, not a row of its own. Three captions at 42px each were 126px of header in a
+     dialog whose whole point is now that it fits. */
+  .ldf-land .ldf-cap{grid-column:1/-1;align-items:center;gap:7px;margin:4px 0 0;line-height:1.2;}
+  .ldf-land > .ldf-col:first-child > .ldf-cap{margin-top:0;}
+  .ldf-land .ldf-cap > span{white-space:nowrap;}
+  .ldf-land .ldf-cap::before{content:"";width:5px;height:5px;border-radius:99px;background:#7C00FF;flex-shrink:0;}
+  /* The field itself: label left, input right, on one line. */
+  /* :not(.ldf-cap) — the caption is a div in the same place, and the label/field grid was
+     overriding its flex and dropping the aside onto a second line. */
+  .ldf-land .ldf-col > div:not(.ldf-cap){display:grid;grid-template-columns:86px minmax(0,1fr);align-items:center;gap:0 10px;min-width:0;}
+  .ldf-land .fm-lab{margin:0;font-size:10px;font-weight:600;letter-spacing:.01em;text-transform:none;
+    color:#8C8899;text-align:left;line-height:1.3;white-space:nowrap;}
+  .ldf-land .fm-req{color:#C0353A;}
+  /* Anything that does not fit a half-row takes the whole one. */
+  .ldf-land .fm-wide{grid-column:1/-1;}
+  /* Notes is the one field a paragraph really goes in. */
+  .ldf-land .ldf-notes{grid-column:1/-1;align-items:start;}
+  .ldf-land .ldf-notes .fm-lab{padding-top:8px;}
+  /* Helper text and errors sit under the FIELD, not under the label, so the column stays straight. */
+  .ldf-land .ldf-col > div > .fm-err,
+  .ldf-land .ldf-col > div > .fm-hint{grid-column:2;margin-top:3px;}
+  .ldf-land .fm-inp{padding:7px 10px;font-size:12px;height:34px;border:1px solid transparent;
+    background:#F6F4FA;border-radius:9px;
     transition:background .15s ease,border-color .15s ease,box-shadow .15s ease;}
   .ldf-land .fm-inp:hover{background:#F2EFF8;}
   .ldf-land .fm-inp:focus{background:#fff;border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.10);outline:none;}
   .ldf-land .fm-inp::placeholder{color:#B5B1C2;}
-  .ldf-land textarea.fm-inp{min-height:76px;height:auto;line-height:1.5;}
-  /* The label stops shouting. It was 9px, bold, uppercase and letter-spaced — the same weight as
-     the caption above it — so a column read as one undifferentiated stack of capitals. */
-  .ldf-land .fm-lab{margin-bottom:5px;font-size:10px;font-weight:600;letter-spacing:.01em;
-    text-transform:none;color:#8C8899;}
-  .ldf-land .fm-req{color:#C0353A;}
-  /* A hairline between columns, instead of guessing from the gap where one subject ends. */
-  .ldf-land > .ldf-col + .ldf-col{border-left:1px solid #F0EDF6;padding-left:16px;}
-  /* The caption gets a dot, which is cheaper than a heavier weight and does the same job of
-     saying "a new subject starts here". */
-  .ldf-land .ldf-cap{align-items:center;gap:6px;}
-  .ldf-land .ldf-cap::before{content:"";width:5px;height:5px;border-radius:99px;background:#7C00FF;flex-shrink:0;}
-  @media (max-width:1040px){.ldf-land > .ldf-col + .ldf-col{border-left:none;padding-left:0;}}
+  .ldf-land textarea.fm-inp{min-height:46px;height:auto;line-height:1.45;padding:7px 10px;}
+  /* The two notes under Product and Managed by are asides, not labels. At the shared size they
+     were adding forty pixels to the rows that carry them. */
+  .ldf-land .ldf-col > div > div[style*="font-size:10px"]{font-size:9px;line-height:1.35;}
+  /* One column under 760px: two half-width fields side by side stop being readable before that. */
+  @media (max-width:760px){
+    .ldf-land{grid-template-columns:1fr;}
+    .ldf-land .ldf-col > div{grid-template-columns:72px minmax(0,1fr);}
+  }
   /* Below this the three columns are narrower than the fields want to be. Two, then one. */
   @media (max-width:1040px){.ldf-land{flex-wrap:wrap;}.ldf-land > .ldf-col{flex:1 1 44%;}}
 
@@ -14044,7 +14067,7 @@
   </sc-if>
   <sc-if value="{{ ldFormOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ ldFormClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:118; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:1120px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:900px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
         <div class="fm-head">
           <div style="min-width:0;">
             <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ldfHeading }}</div>
@@ -14059,7 +14082,7 @@
                  what they want on the right. It stacks back to one column under 820px. -->
             <!-- Paste first, type the rest. A PRO lead arrives as a domain on a card or a
                  signature under a forwarded message, and both of those fill most of this dialog. -->
-            <div class="ld-disc {{ discState }}" style="margin-bottom:12px;">
+            <div class="ld-disc {{ discState }}" style="margin-bottom:9px;">
               <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                 <span style="font-size:11px; font-weight:700; color:#5B21B6;">{{ discTitle }}</span>
                 <sc-if value="{{ sigShow }}" hint-placeholder-val="{{ false }}">
@@ -14135,7 +14158,7 @@
                 <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
                 <sc-if value="{{ ldfNameErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfNameErr }}</div></sc-if>
               </div>
-              <div class="fm-wide">
+              <div>
                 <label class="fm-lab">Website</label>
                 <div style="display:flex; gap:8px; align-items:center;">
                   <!-- The logo sits beside the box it came from. It is a remote image, so it is
@@ -14255,7 +14278,7 @@
                     </div>
                   </sc-if>
                 </div>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:5px;">Pick as many as apply, or type your own.</div>
+                <div class="fm-hint">Pick as many as apply, or type your own.</div>
               </div>
               <div>
                 <label class="fm-lab">Campaign</label>
@@ -14270,7 +14293,7 @@
                   </div>
                 </sc-if>
               </div>
-              <div class="fm-wide">
+              <div>
                 <label class="fm-lab">Managed by</label>
                 <!-- The FIELD is the search box. One control: it shows the answer when closed and
                      takes the search when open, rather than a box showing a name above a second box
@@ -14293,9 +14316,9 @@
                 </div>
                 <sc-if value="{{ ldfOwnerWarn }}" hint-placeholder-val="{{ true }}"><div class="fm-hint" style="color:#B8860B;">Nobody owns this yet — an unowned lead does not appear for any sales user.</div></sc-if>
               </div>
-              <div class="fm-wide">
+              <div class="fm-wide ldf-notes">
                 <label class="fm-lab">Notes</label>
-                <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:60px; padding:9px 13px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
+                <textarea value="{{ ldfNote }}" onInput="{{ setLdfNote }}" placeholder="What they need, who referred them…" class="fm-inp" style="height:46px; padding:7px 10px; resize:vertical; font-family:inherit; line-height:1.5;"></textarea>
               </div>
             </div>
             </div>
