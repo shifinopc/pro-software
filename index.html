@@ -7770,9 +7770,12 @@
         </sc-if>
 
         <section class="pg-card tbl-scroll" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <div style="display:grid; grid-template-columns:26px minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr) 108px 76px minmax(0,1.1fr) 44px 112px 160px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Website</span><span>Contact</span><span>Email</span><span>Phone</span><span>Source</span><span>Need</span><span style="text-align:right;">Score</span><span>Stage</span><span></span></div>
+          <!-- Fourteen columns do not squeeze below about 1500px without every cell becoming an
+               ellipsis. Below that the table scrolls sideways, which keeps each column readable. -->
+          <div style="overflow-x:auto;"><div style="min-width:1500px;">
+          <div style="display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.85fr) 80px minmax(0,1fr) minmax(0,.85fr) minmax(0,1.2fr) 108px minmax(0,.9fr) minmax(0,1fr) 44px 72px minmax(0,.9fr) 150px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Website</span><span>City</span><span>Contact</span><span>Role</span><span>Email</span><span>Phone</span><span>Product</span><span>Need</span><span style="text-align:right;">Score</span><span>Stage</span><span>Managed by</span><span></span></div>
           <sc-for list="{{ ldRows }}" as="l" hint-placeholder-count="4">
-            <div class="tbl-row" style="display:grid; grid-template-columns:26px minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.25fr) 108px 76px minmax(0,1.1fr) 44px 112px 160px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;" style-hover="background:#FAF7FE;">
+            <div class="tbl-row" style="display:grid; grid-template-columns:26px minmax(0,1.2fr) minmax(0,.85fr) 80px minmax(0,1fr) minmax(0,.85fr) minmax(0,1.2fr) 108px minmax(0,.9fr) minmax(0,1fr) 44px 72px minmax(0,.9fr) 150px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;" style-hover="background:#FAF7FE;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:12px;">{{ l.tick }}</span>
 
               <!-- Company. The facts a single line cannot hold — industry, city, when it arrived,
@@ -7805,14 +7808,20 @@
                 <span style="color:#D8D5E0;">—</span>
               </sc-if>
 
-              <!-- The person. A dash, not the company name again: a lead saved with nobody named
-                   is filed with the company as its own contact, which is the right thing in the
-                   database and says nothing in a column of its own. -->
+              <span title="{{ l.city }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.cityCell }}</span>
+              <!-- The person as recorded, even where that is the company's own name — which is what
+                   a lead saved with nobody named is filed as. Showing a dash there made the column
+                   look broken; the repetition is in the data, and this is where you would notice
+                   it and fix it. -->
               <span title="{{ l.whoTip }}" style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.who }}</span>
+              <span title="{{ l.role }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.roleCell }}</span>
               <span title="{{ l.email }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.emailCell }}</span>
               <span title="{{ l.phone }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;">{{ l.phoneCell }}</span>
 
-              <span title="{{ l.source }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.source }}</span>
+              <!-- What they are being sold. SOURCE used to sit here and was empty on 96 of 104
+                   rows — it is asked for on the form, rarely filled in, and still on the lead
+                   panel. A column that is a dash all the way down is a column of nothing. -->
+              <span title="{{ l.product }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.productCell }}</span>
               <span title="{{ l.need }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.need }}</span>
 
               <!-- The score as a number, with its whole arithmetic in the tooltip. Absent rather
@@ -7820,13 +7829,10 @@
                    tabular-nums so a column of them lines up on the digit. -->
               <span title="{{ l.scoreTitle }}" style="text-align:right; font-weight:700; color:{{ l.scoreFg }}; font-variant-numeric:tabular-nums; cursor:help;">{{ l.score }}</span>
 
-              <!-- Stage and owner read as one answer about a row — "Prospect, Rashid" — so they
-                   share a cell. The stage carries the colour it has everywhere else; the owner is
-                   grey, because an unowned lead should look unfinished rather than alarming. -->
-              <span title="{{ l.stageTip }}" style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                <span style="font-weight:600; color:{{ l.stColor }};">{{ l.stage }}</span>
-                <span style="color:#A9A6B4;"> · {{ l.owner }}</span>
-              </span>
+              <span title="{{ l.stageTip }}" style="min-width:0; font-weight:600; color:{{ l.stColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.stage }}</span>
+              <!-- Who is working it. It shared the stage cell while there were eight columns; with
+                   fourteen it is a question of its own — "whose is this" is not "how far along". -->
+              <span title="{{ l.stageTip }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.owner }}</span>
 
               <div class="row-acts" style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
                 <!-- Real links, not decoration: mailto and tel open the thing the officer was about
@@ -7872,6 +7878,7 @@
               </sc-if>
             </div>
           </sc-if>
+          </div></div>
           <sc-if value="{{ ldEmpty }}" hint-placeholder-val="{{ false }}">
             <div style="padding:28px 15px; text-align:center;">
               <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">{{ ldEmptyTitle }}</div>
@@ -41268,10 +41275,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // with the COMPANY as its own contact — that is the create path, the edit path and the
           // importer all doing the same sane thing — and repeating the company name in the next
           // column tells the reader nothing. The email or phone does.
-          who: (() => {
-            const n = (primary && primary.name) || l.contact || '';
-            return (n && n !== l.name) ? n : '—';
-          })(),
+          who: (primary && primary.name) || l.contact || '—',
+          role: (primary && primary.jobTitle) || '',
+          roleCell: (primary && primary.jobTitle) || '—',
+          city: l.city || '',
+          cityCell: l.city || '—',
+          // One company can be being sold several things — the form takes a list — so this is the
+          // whole string, not the first of them.
+          product: l.service || '',
+          productCell: l.service || '—',
           // Their own columns now. Kept as the raw value for the tooltip and a shown value that
           // falls back to a dash, so an empty cell reads as "none recorded" rather than as a gap.
           email: (primary && primary.email) || l.email || '',
