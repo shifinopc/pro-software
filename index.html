@@ -4195,9 +4195,9 @@
           </sc-for>
         </section>
         <section>
-          <div class="cl-table" style="background:#fff; border:1px solid #ECE9F2; border-radius:16px; overflow:hidden;">
+          <div class="cl-table" style="background:#fff; border:1px solid #ECE9F2; border-radius:16px; overflow:clip;">
             <div style="display:flex; align-items:center; gap:10px; padding:0 12px 0 14px; border-bottom:1px solid #EEEBF3; flex-wrap:nowrap; min-height:52px;">
-              <div class="cl-tabs" style="display:flex; align-items:stretch; gap:11px; align-self:stretch; overflow-x:auto; min-width:0; flex-shrink:1; scrollbar-width:none;">
+              <div class="cl-tabs" style="display:flex; align-items:stretch; gap:14px; align-self:stretch; overflow-x:auto; min-width:0; flex-shrink:1; scrollbar-width:none;">
                 <sc-for list="{{ emKindTabs }}" as="k" hint-placeholder-count="3"><span data-cltab onClick="{{ k.select }}" style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:{{ k.tabColor }}; cursor:pointer; white-space:nowrap; box-shadow:inset 0 -2px 0 {{ k.tabLine }}; padding:0 1px;">{{ k.label }}<span style="font-size:10px; font-weight:700; color:{{ k.tabCount }}; background:{{ k.tabCountBg }}; padding:1px 7px; border-radius:99px;">{{ k.count }}</span></span></sc-for>
               </div>
               <div style="flex:1;"></div>
@@ -4211,27 +4211,50 @@
                 <sc-for list="{{ emSortOpts }}" as="o" hint-placeholder-count="4"><span onClick="{{ o.select }}" style="font-size:11px; font-weight:600; color:{{ o.qColor }}; background:{{ o.qBg }}; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap;">{{ o.label }}</span></sc-for>
               </div>
             </div>
-            <div class="cl-scroll" style="overflow:auto; height:calc(100vh - 420px); min-height:340px;"><div style="min-width:940px;">
-              <div style="display:grid; grid-template-columns:minmax(250px,2fr) minmax(160px,1.4fr) 130px 150px 130px 110px; gap:12px; padding:11px 14px; background:#FBF9FE; border-bottom:1px solid #EFEAF7; font-size:11px; font-weight:600; color:#8C7FA8; position:sticky; top:0; z-index:2;">
-                <span>Employee</span><span>Client</span><span>Nationality</span><span>Iqama expiry</span><span>Visa</span><span></span>
+            <!-- No scroller: fifteen rows and a pager, and the page is the only thing that
+                 scrolls — which is also what lets the header below stick to it. -->
+            <div><div>
+              <div style="position:sticky; top:0; z-index:3; display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.9fr) 96px 104px 96px 110px; gap:8px; padding:10px 14px 8px; background:#FBF9FE; border-bottom:1px solid #EFEAF7; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">
+                <span>Employee</span><span>Client</span><span>Role</span><span>Nationality</span><span>Iqama expiry</span><span>Visa</span><span></span>
               </div>
               <sc-for list="{{ emRows }}" as="e" hint-placeholder-count="6">
-                <div onClick="{{ e.view }}" class="cl-row" style="animation:clRowIn .6s cubic-bezier(.22,1,.36,1) both; animation-delay:{{ e.emDelay }}; display:grid; grid-template-columns:minmax(250px,2fr) minmax(160px,1.4fr) 130px 150px 130px 110px; gap:12px; align-items:center; padding:12px 14px; border-bottom:1px solid #F3F1F6; font-size:12px; color:#4B4757; cursor:pointer; background:#fff; transition:background .12s;">
-                  <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-                    <div style="width:36px; height:36px; border-radius:99px; background:{{ e.avBg }}; color:{{ e.avColor }}; font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ e.initials }}</div>
-                    <div style="min-width:0;"><div style="font-weight:600; color:#18151F; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.name }}</div><div style="font-size:10px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.emSub }}</div></div>
+                <!-- One line per person, like Leads, Contacts and Clients: plain text in columns,
+                     the purple bar on the row under the pointer, and the one action on that row. -->
+                <div onClick="{{ e.view }}" class="cl-row tbl-row" style="animation-delay:{{ e.emDelay }}; display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.9fr) 96px 104px 96px 110px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px; cursor:pointer;">
+                  <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                    <span style="width:22px; height:22px; border-radius:99px; background:{{ e.avBg }}; color:{{ e.avColor }}; font-family:'Space Grotesk',sans-serif; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ e.initials }}</span>
+                    <span style="font-weight:600; color:#18151F; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.name }}</span>
                   </div>
-                  <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.client }}</span>
-                  <span style="font-size:10px; font-weight:600; color:{{ e.emNatFg }}; background:{{ e.emNatBg }}; padding:3px 9px; border-radius:99px; width:fit-content; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.emNat }}</span>
-                  <div><div style="font-size:11px; color:#4B4757; font-variant-numeric:tabular-nums;">{{ e.eid }}</div><div style="font-size:10px; font-weight:700; color:{{ e.iqColor }}; margin-top:1px;">{{ e.iqText }}</div></div>
-                  <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:{{ e.vColor }}; background:{{ e.vBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:5px; height:5px; border-radius:99px; background:{{ e.vColor }};"></span>{{ e.visa }}</span>
-                  <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px;"><span onClick="{{ e.emDocs }}" style="font-size:11px; font-weight:600; color:#5B21B6; background:#F3EBFF; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#E9DBFF;">Documents</span><svg class="cl-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9C6D3" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></div>
+                  <span title="{{ e.client }}" style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.client }}</span>
+                  <!-- Role and the staff code, which were the grey second line under the name.
+                       As a column they compare down the page instead of being read one at a time. -->
+                  <span title="{{ e.emSub }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.emSub }}</span>
+                  <!-- Saudi keeps its green, which is the fact the nationalisation band is counted
+                       from; the pill goes, as it did everywhere else. -->
+                  <span title="{{ e.emNatTitle }}" style="min-width:0; font-weight:600; color:{{ e.emNatFg }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.emNat }}</span>
+                  <span title="{{ e.eid }}" style="min-width:0; font-weight:600; color:{{ e.iqColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;">{{ e.iqText }}</span>
+                  <span style="min-width:0; font-weight:600; color:{{ e.vColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ e.visa }}</span>
+                  <div class="row-acts" style="display:flex; align-items:center; justify-content:flex-end;">
+                    <span onClick="{{ e.emDocs }}" style="font-size:10px; font-weight:700; color:#5B21B6; background:#F5EEFF; border:1px solid #E4D3FB; padding:4px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Documents</span>
+                  </div>
                 </div>
               </sc-for>
               <sc-if value="{{ emNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:58px 13px; text-align:center;"><div style="font-size:12px; font-weight:700; color:#1A1523;">No employees match</div><div style="font-size:11px; color:#8C8899; margin-top:4px;">Try another filter or search, or <span onClick="{{ emClear }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">clear the filters</span>.</div></div></sc-if>
               <sc-if value="{{ employeesEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:58px 13px; text-align:center;"><div style="font-size:12px; font-weight:700; color:#1A1523;">No employees yet</div><div style="font-size:11px; color:#8C8899; margin-top:4px;">Sponsored staff you manage for your clients appear here. Use “+ Add employee” or import them from a client’s page.</div></div></sc-if>
             </div></div>
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 14px; background:#fff; border-top:1px solid #F3F1F6; font-size:11px; color:#9A97A6;"><span>{{ emShown }}</span><span>Click a row to open the employee</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:11px 14px; background:#fff; border-top:1px solid #F3F1F6; font-size:11px; color:#9A97A6;">
+              <span style="font-variant-numeric:tabular-nums;">{{ emShown }}</span>
+              <sc-if value="{{ emPagerShown }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span onClick="{{ emPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ emPrevOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                  <sc-for list="{{ emPages }}" as="p" hint-placeholder-count="2">
+                    <span onClick="{{ p.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.color }}; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;" style-hover="border-color:#7C00FF;">{{ p.n }}</span>
+                  </sc-for>
+                  <span onClick="{{ emNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ emNextOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                </div>
+              </sc-if>
+              <span>Click a row to open the employee</span>
+            </div>
           </div>
         </section>
       </div></sc-if>
@@ -21262,16 +21285,32 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const cnt9 = (st9) => all9.filter(e9 => e9.stage === st9).length;
       const tile9 = (key9, label9, value9, cap9, fg9, dot9) => { const on9 = F9 === key9;
         return { label: label9, value: String(value9), caption: cap9, dot: dot9, plainNum: key9 === null ? '#26074D' : value9 ? fg9 : '#26074D', plainBg: on9 ? '#FAF6FF' : '#fff', plainLabel: on9 ? '#5B21B6' : '#77738A',
-          plainTop: on9 ? '#7C00FF' : 'transparent', pick: () => { this.setState({ emF: on9 ? null : key9 }); replay9(); } }; };
+          plainTop: on9 ? '#7C00FF' : 'transparent', pick: () => { this.setState({ emF: on9 ? null : key9, emPage: 1 }); replay9(); } }; };
       const sa9 = all9.filter(e9 => e9.saudi).length;
       const born9 = (e9) => { const id9 = String(e9.created || ''); const m9 = id9.match(/^c?l?(\d{13})/); if (m9) return Number(m9[1]); if (/^c[a-z0-9]{20,}$/.test(id9)) return parseInt(id9.slice(1, 9), 36) || 0; return 0; };
       const rows9 = all9.filter(e9 => (!F9 || e9.stage === F9) && (K9 === 'All' || (K9 === 'saudi' ? e9.saudi : !e9.saudi))
           && (!Q9 || [e9.name, e9.role, e9.client, e9.code, e9.nationality].join(' ').toLowerCase().includes(Q9)))
         .slice().sort((a9, b9) => S9 === 'name' ? a9.name.localeCompare(b9.name) : S9 === 'iqama' ? ((a9.iqDays == null ? 1e9 : a9.iqDays) - (b9.iqDays == null ? 1e9 : b9.iqDays)) : S9 === 'client' ? (a9.client.localeCompare(b9.client) || a9.name.localeCompare(b9.name)) : born9(b9) - born9(a9))
-        .map((e9, i9) => ({ ...e9, emDelay: (80 + Math.min(i9, 14) * 55) + 'ms',
+        .map((e9, i9) => ({ ...e9, emDelay: (80 + Math.min(i9 % 15, 14) * 70) + 'ms',
           emSub: [e9.role && e9.role !== '—' ? e9.role : '', e9.code].filter(Boolean).join(' · ') || '—',
-          emNat: e9.nationality || '—', emNatBg: e9.saudi ? '#E7F8EF' : '#F4F3F7', emNatFg: e9.saudi ? '#0E9355' : '#6F6C7A',
+          emNat: (() => {
+            const c9 = String(e9.nationality || '').trim();
+            if (!c9) return '—';
+            if (c9.length !== 2) return c9;
+            const hit9 = (Array.isArray(this.state.countriesData) ? this.state.countriesData : [])
+              .find(x9 => String(x9.code).toUpperCase() === c9.toUpperCase());
+            return (hit9 && hit9.name) || c9;
+          })(),
+          emNatTitle: e9.nationality || 'Not recorded',
+          emNatBg: e9.saudi ? '#E7F8EF' : '#F4F3F7', emNatFg: e9.saudi ? '#0E9355' : '#6F6C7A',
           emDocs: (ev9) => { if (ev9 && ev9.stopPropagation) ev9.stopPropagation(); e9.docsView && e9.docsView(); } }));
+      // FIFTEEN TO A PAGE, and the list stops being a pane with its own scrollbar inside the
+      // page — the same move the clients list made, for the same reason: a fixed-height scroller
+      // hides both how many there are and the pagination that would say so.
+      const EM_PER9 = 15;
+      const _emPages9 = Math.max(1, Math.ceil(rows9.length / EM_PER9));
+      const _emPage9 = Math.min(Math.max(1, this.state.emPage || 1), _emPages9);
+      const _emShown9 = rows9.slice((_emPage9 - 1) * EM_PER9, _emPage9 * EM_PER9);
       return {
         emTiles: [
           tile9(null, 'All employees', all9.length, sa9 + ' Saudi · ' + (all9.length - sa9) + ' expat', '#26074D', '#7C00FF'),
@@ -21282,14 +21321,30 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ],
         emKindTabs: [['All', 'All staff', all9.length], ['saudi', 'Saudi nationals', sa9], ['expat', 'Expats', all9.length - sa9]].map(([k9, l9, c9]) => { const on9 = K9 === k9;
           return { label: l9, count: String(c9), tabColor: on9 ? '#5B21B6' : '#8B8898', tabLine: on9 ? '#7C00FF' : 'transparent', tabCount: on9 ? '#7C00FF' : '#B9B6C4', tabCountBg: on9 ? '#F3EBFF' : '#F4F3F7',
-            select: () => { this.setState({ emKind: k9 }); replay9(); } }; }),
+            select: () => { this.setState({ emKind: k9, emPage: 1 }); replay9(); } }; }),
         emSortOpts: [['newest', 'Newest'], ['name', 'Name A–Z'], ['iqama', 'Iqama expiry'], ['client', 'Client']].map(([k9, l9]) => ({ label: l9, qColor: S9 === k9 ? '#5B21B6' : '#9A97A6', qBg: S9 === k9 ? '#F3EBFF' : 'transparent',
-          select: () => { this.setState({ emSort: k9 }); replay9(); } })),
-        emRows: rows9,
-        emQ: this.state.emQ || '', emSetQ: (ev9) => this.setState({ emQ: ev9 && ev9.target ? ev9.target.value : '' }),
+          select: () => { this.setState({ emSort: k9, emPage: 1 }); replay9(); } })),
+        emRows: _emShown9,
+        emQ: this.state.emQ || '', emSetQ: (ev9) => this.setState({ emQ: ev9 && ev9.target ? ev9.target.value : '', emPage: 1 }),
         emFiltering: !!F9 || K9 !== 'All' || !!Q9,
-        emClear: () => { this.setState({ emF: null, emKind: 'All', emQ: '' }); replay9(); },
-        emShown: rows9.length + ' of ' + all9.length + ' employee' + (all9.length === 1 ? '' : 's'),
+        emClear: () => { this.setState({ emF: null, emKind: 'All', emQ: '', emPage: 1 }); replay9(); },
+        emShown: rows9.length
+          ? ((_emPage9 - 1) * EM_PER9 + 1) + '\u2013' + Math.min(_emPage9 * EM_PER9, rows9.length) + ' of ' + rows9.length
+            + ' employee' + (rows9.length === 1 ? '' : 's')
+          : 'No employees',
+        emPageShown: rows9.length > 0,
+        emPagerShown: _emPages9 > 1,
+        emPages: Array.from({ length: _emPages9 }, (_, i9) => i9 + 1).map(n9 => ({
+          n: String(n9),
+          color: n9 === _emPage9 ? '#fff' : '#6F6C7A',
+          bg: n9 === _emPage9 ? '#7C00FF' : '#fff',
+          bd: n9 === _emPage9 ? '#7C00FF' : '#EDEBF2',
+          pick: () => this.setState({ emPage: n9 }),
+        })),
+        emPrevOp: _emPage9 > 1 ? '1' : '.35',
+        emNextOp: _emPage9 < _emPages9 ? '1' : '.35',
+        emPrev: () => { if (_emPage9 > 1) this.setState({ emPage: _emPage9 - 1 }); },
+        emNext: () => { if (_emPage9 < _emPages9) this.setState({ emPage: _emPage9 + 1 }); },
         emNoMatch: all9.length > 0 && rows9.length === 0,
       };
     })();
