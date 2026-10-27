@@ -7724,6 +7724,24 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Leads</h1>
           </div>
           <div style="display:flex; gap:9px; align-items:center; margin-left:auto;">
+            <!-- UP HERE, not in the table's header band, because it opens a menu and that band
+                 is inside a card with overflow:clip — which the card needs for its rounded corners
+                 and for the sticky header, and which cut this menu off at the card's edge. The
+                 clients band carries only tabs, a search box and sort chips; none of them opens
+                 anything. So it sits beside the Excel menu, in a section that clips nothing. -->
+            <div class="pill-selwrap">
+              <div data-dd data-open="{{ ddLdProdOpen }}" onClick="{{ ddLdProdToggle }}" class="pill-sel">
+                <span>{{ ddLdProdLabel }}</span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <sc-if value="{{ ddLdProdOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" class="pill-dd" style="left:auto; right:0;">
+                  <sc-for list="{{ ddLdProdOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
                 <!-- Everything that moves a spreadsheet in or out, under one control. Template
@@ -7795,21 +7813,6 @@
             <div style="position:relative; width:230px; flex-shrink:0; margin:9px 0;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
               <input value="{{ ldQuery }}" onInput="{{ setLdQuery }}" placeholder="Company, city, source, contact" style="width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:9px 10px 9px 38px; outline:none;">
-            </div>
-            <!-- Which service they came for, kept out of the tabs: those are stages of one
-                 pipeline and this cuts across all of them. -->
-            <div class="pill-selwrap">
-              <div data-dd data-open="{{ ddLdProdOpen }}" onClick="{{ ddLdProdToggle }}" class="pill-sel">
-                <span>{{ ddLdProdLabel }}</span>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
-              </div>
-              <sc-if value="{{ ddLdProdOpen }}" hint-placeholder-val="{{ false }}">
-                <div data-dd data-hidescroll="true" class="pill-dd">
-                  <sc-for list="{{ ddLdProdOptions }}" as="o" hint-placeholder-count="4">
-                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
-                  </sc-for>
-                </div>
-              </sc-if>
             </div>
           </div>
           <!-- No scroller, so the header can stick to the PAGE: a box that scrolls on either axis
