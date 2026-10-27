@@ -442,12 +442,12 @@
   @media (prefers-reduced-motion:reduce){
     .fm-rise,.fm-step,.fm-step-back{animation:none;}
   }
-  .fm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:13px 17px 10px;border-bottom:1px solid #F0EDF6;flex-shrink:0;}
+  .fm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 20px 13px;border-bottom:1px solid #F3F1F8;flex-shrink:0;}
   /* The one scrolling region. Header and footer stay put, so the primary action is
      never scrolled off the bottom of a long form. */
   /* position:relative so it is the offsetParent the scroll-to-error walk stops at. */
-  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:11px 15px 11px;}
-  .fm-foot{display:flex;align-items:center;gap:10px;padding:13px 17px;border-top:1px solid #F0EDF6;background:#fff;flex-shrink:0;}
+  .fm-body{position:relative;flex:1;min-height:0;overflow-y:auto;padding:14px 20px 16px;}
+  .fm-foot{display:flex;align-items:center;gap:10px;padding:13px 20px;border-top:1px solid #F3F1F8;background:#fff;flex-shrink:0;}
 
   .fm-sec + .fm-sec{margin-top:13px;padding-top:12px;border-top:1px solid #F5F2FA;}
   .fm-sec-h{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#26074D;}
@@ -549,9 +549,33 @@
   .ldf-land{display:flex;gap:16px;align-items:flex-start;margin-top:12px;}
   /* Tighter than the shared control, and only here: these boxes hold a name and a phone number,
      not a paragraph, and the height was spending the screen this form does not have. */
-  .ldf-land .fm-inp{padding:8px 10px;font-size:12px;}
-  .ldf-land .fm-lab{margin-bottom:4px;}
-  .ldf-land textarea.fm-inp{min-height:62px;}
+  /* ── The modern pass, scoped to this dialog ───────────────────────────────────────────────
+     The form was a grid of identical outlined boxes: every field drawn with the same 1px border,
+     so nothing was quieter than anything else and the eye had no route through it.
+
+     SURFACES, NOT OUTLINES. A field at rest is a soft fill with no border — it reads as a place
+     to type without drawing a line around itself. The border appears on focus, with a ring, so
+     the one box you are in is the only one asking for attention. That is the whole idea: spend
+     the contrast on the active field instead of spreading it evenly over thirteen inactive ones. */
+  .ldf-land .fm-inp{padding:9px 11px;font-size:12px;height:38px;border:1px solid transparent;
+    background:#F6F4FA;border-radius:10px;
+    transition:background .15s ease,border-color .15s ease,box-shadow .15s ease;}
+  .ldf-land .fm-inp:hover{background:#F2EFF8;}
+  .ldf-land .fm-inp:focus{background:#fff;border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.10);outline:none;}
+  .ldf-land .fm-inp::placeholder{color:#B5B1C2;}
+  .ldf-land textarea.fm-inp{min-height:76px;height:auto;line-height:1.5;}
+  /* The label stops shouting. It was 9px, bold, uppercase and letter-spaced — the same weight as
+     the caption above it — so a column read as one undifferentiated stack of capitals. */
+  .ldf-land .fm-lab{margin-bottom:5px;font-size:10px;font-weight:600;letter-spacing:.01em;
+    text-transform:none;color:#8C8899;}
+  .ldf-land .fm-req{color:#C0353A;}
+  /* A hairline between columns, instead of guessing from the gap where one subject ends. */
+  .ldf-land > .ldf-col + .ldf-col{border-left:1px solid #F0EDF6;padding-left:16px;}
+  /* The caption gets a dot, which is cheaper than a heavier weight and does the same job of
+     saying "a new subject starts here". */
+  .ldf-land .ldf-cap{align-items:center;gap:6px;}
+  .ldf-land .ldf-cap::before{content:"";width:5px;height:5px;border-radius:99px;background:#7C00FF;flex-shrink:0;}
+  @media (max-width:1040px){.ldf-land > .ldf-col + .ldf-col{border-left:none;padding-left:0;}}
   /* Below this the three columns are narrower than the fields want to be. Two, then one. */
   @media (max-width:1040px){.ldf-land{flex-wrap:wrap;}.ldf-land > .ldf-col{flex:1 1 44%;}}
 
@@ -14285,17 +14309,24 @@
                  worked out in the browser would be a second copy of the model, and the number here
                  would start disagreeing with the number on the row. -->
             <sc-if value="{{ ldfScoreShown }}" hint-placeholder-val="{{ true }}">
-              <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:14px; padding:12px 11px;">
-                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
-                  <span style="font-size:9px; font-weight:700; color:#7C00FF; letter-spacing:.08em;">AUTO LEAD SCORE</span>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
+              <!-- ONE ROW, NOT FOUR. Spanning the width it had no reason to stack: the number, the
+                   bar, the band and the reason read left to right, and it stops being the thing
+                   that pushes the dialog past the fold. -->
+              <div style="margin-top:12px; background:#FAF8FE; border:1px solid #F0EDF6; border-radius:14px; padding:11px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:baseline; gap:8px; flex-shrink:0;">
+                  <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:21px; line-height:1; color:{{ ldfScoreColor }};">{{ ldfScore }}</span>
+                  <span style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.08em;">AUTO SCORE</span>
                 </div>
-                <div style="height:7px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;">
-                  <div style="height:100%; width:{{ ldfScore }}%; min-width:{{ ldfScoreMin }}; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.16,1,.3,1);"></div>
+                <div style="flex:1 1 170px; min-width:110px;">
+                  <div style="height:6px; background:#EFEBF7; border-radius:99px; overflow:hidden;">
+                    <div style="height:100%; width:{{ ldfScore }}%; min-width:{{ ldfScoreMin }}; background:{{ ldfScoreColor }}; border-radius:99px; transition:width .35s cubic-bezier(.22,1,.36,1);"></div>
+                  </div>
                 </div>
-                <div style="font-size:10px; color:#4B4757; margin-top:8px; font-weight:600;">{{ ldfScoreBand }}</div>
-                <!-- What moved it, in the model's own words, so the number is never just a number. -->
-                <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.5;">{{ ldfScoreWhy }}</div>
+                <div style="flex:2 1 240px; min-width:0;">
+                  <div style="font-size:11px; color:#26074D; font-weight:700;">{{ ldfScoreBand }}</div>
+                  <!-- What moved it, in the model's own words, so the number is never just a number. -->
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:1px; line-height:1.45;">{{ ldfScoreWhy }}</div>
+                </div>
               </div>
             </sc-if>
           <!-- Possible duplicates. A warning, never a block: two real companies can share a name,
