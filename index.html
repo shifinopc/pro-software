@@ -7679,23 +7679,10 @@
            Companies that are not clients yet. Same record as a client, a different state on it, so
            nothing has to be copied across when one is won — see Company.lifecycle. -->
       <sc-if value="{{ showLeads }}" hint-placeholder-val="{{ false }}"><div style="display:flex; flex-direction:column; gap:12px;" data-screen-label="Leads">
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:11px; flex-wrap:wrap;">
-          <div>
-            <div style="font-size:11px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES · CRM</div>
-            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Leads</h1>
-          </div>
-          <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
-            <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
-              <button onClick="{{ liTemplate }}" title="A CSV with the columns the import reads and one example row" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>Template</button>
-              <button onClick="{{ liOpenImport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button>
-              <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
-            </div>
-          </sc-if>
-        </section>
-
-        <!-- Tabs, search and ordering on ONE row, as the design has them.
-             They were three stacked bands — tabs, then a gap, then search and the picker — which
-             pushed the table a third of the way down the screen before a single lead appeared.
+        <!-- THE WHOLE HEADER IS ONE ROW: the title, the tabs, the search, the product filter and
+             the three buttons. It was two bands — title and buttons, then tabs and search — which
+             spent a strip of the screen before a single lead appeared. It WRAPS rather than
+             overflows, so a narrow window gets its bands back instead of a sideways scroll.
 
              The tabs sit in one shared track rather than as nine separate outlined pills. Nine
              bordered chips in a row read as nine buttons of equal weight; a track with one raised
@@ -7707,7 +7694,11 @@
              below, which animates too and comes later in the document, painted straight over
              the open menu. 30 rather than the 20 its neighbours carry, because the bulk-action
              bar sits between this and the table at 20 and an open menu belongs above both. -->
-        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; position:relative; z-index:30; display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .05s both; position:relative; z-index:30; display:flex; gap:12px 14px; flex-wrap:wrap; align-items:center;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">SALES · CRM</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Leads</h1>
+          </div>
           <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center; background:#F3EFFA; border-radius:99px; padding:3px;">
             <sc-for list="{{ ldFilters }}" as="f" hint-placeholder-count="9">
               <span onClick="{{ f.pick }}" style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:6px 13px; border-radius:99px; cursor:pointer; background:{{ f.bg }}; color:{{ f.fg }}; box-shadow:{{ f.shadow }};">
@@ -7716,13 +7707,16 @@
               </span>
             </sc-for>
           </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-            <div style="position:relative; min-width:250px;">
+          <!-- margin-left:auto, not space-between: with the heading and the tabs both on this
+               row, space-between would push the tabs into the middle of a gap that grows with the
+               window. This keeps the tabs beside the title and the controls on the right edge. -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-left:auto;">
+            <div style="position:relative; min-width:230px;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
               <input value="{{ ldQuery }}" onInput="{{ setLdQuery }}" placeholder="Company, city, source, contact" style="width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #EDEBF2; border-radius:99px; padding:9px 10px 9px 38px; outline:none;">
             </div>
-            <!-- Which service they came for. Beside the grouping control rather than among the
-                 tabs above: those are stages of one pipeline and this cuts across all of them. -->
+            <!-- Which service they came for, kept out of the tabs: those are stages of one
+                 pipeline and this cuts across all of them. -->
             <div class="pill-selwrap">
               <div data-dd data-open="{{ ddLdProdOpen }}" onClick="{{ ddLdProdToggle }}" class="pill-sel">
                 <span>{{ ddLdProdLabel }}</span>
@@ -7736,6 +7730,13 @@
                 </div>
               </sc-if>
             </div>
+            <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+                <button onClick="{{ liTemplate }}" title="A CSV with the columns the import reads and one example row" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>Template</button>
+                <button onClick="{{ liOpenImport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button>
+                <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
+              </div>
+            </sc-if>
           </div>
         </section>
         <sc-if value="{{ ldFilterNoteShown }}" hint-placeholder-val="{{ false }}">
