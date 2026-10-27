@@ -7783,7 +7783,20 @@
             <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) 104px minmax(0,1.1fr) 116px 104px 206px; gap:10px; align-items:center; padding:13px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:12px;">{{ l.tick }}</span>
               <div onClick="{{ l.open }}" style="min-width:0; cursor:pointer; display:flex; align-items:center; gap:10px;" title="Open this lead">
-                <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:{{ l.avColor }}; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700; flex-shrink:0;">{{ l.initials }}</span>
+                <!-- The company's own mark when the lookup found one, the initials tile when it
+                     did not. A BACKGROUND IMAGE rather than an <img>: this runtime strips onerror,
+                     so a broken <img> would show the browser's torn-page glyph in every row it
+                     reached, while a background that fails to load simply does not paint.
+                     Same pattern as the org logo on the login screen.
+                     shortcut: a logo URL that has since died leaves a blank white tile instead of
+                     falling back to the initials — revisit if sites start rotting faster than
+                     leads get worked. -->
+                <span style="position:relative; width:32px; height:32px; flex-shrink:0;">
+                  <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:{{ l.avColor }}; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700;">{{ l.initials }}</span>
+                  <sc-if value="{{ l.logoShown }}" hint-placeholder-val="{{ false }}">
+                    <span role="img" aria-label="Company logo" style="position:absolute; inset:0; border-radius:10px; border:1px solid #F0EDF6; background:#fff center/contain no-repeat; background-image:url('{{ l.logo }}');"></span>
+                  </sc-if>
+                </span>
                 <span style="min-width:0;">
                   <span style="display:flex; align-items:center; gap:7px; min-width:0;">
                     <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="color:#7C00FF;">{{ l.name }}</span>
@@ -7796,7 +7809,12 @@
                       <span title="Campaign that produced this lead" style="flex-shrink:0; font-size:9px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ l.campaign }}</span>
                     </sc-if>
                   </span>
-                  <span style="display:block; font-size:10px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.meta }}</span>
+                  <span style="display:flex; align-items:center; gap:6px; min-width:0; margin-top:2px;">
+                    <sc-if value="{{ l.siteShown }}" hint-placeholder-val="{{ false }}">
+                      <span onClick="{{ l.siteOpen }}" title="{{ l.siteTitle }}" style="font-size:10px; font-weight:600; color:#7C00FF; cursor:pointer; flex-shrink:0; max-width:75%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="text-decoration:underline;">{{ l.site }}</span>
+                    </sc-if>
+                    <span style="flex:1 1 auto; min-width:0; font-size:10px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.meta }}</span>
+                  </span>
                   <sc-if value="{{ l.arrivedShown }}" hint-placeholder-val="{{ false }}">
                     <span style="display:block; font-size:10px; color:#BFBCC9; margin-top:2px;">{{ l.arrivedAgo }}</span>
                   </sc-if>
@@ -41383,6 +41401,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // New tabs filter on. A row that qualifies for a tab should say WHY on its own face;
         // otherwise the tab looks like it has shuffled the list for reasons of its own.
         const idle = l.idleDays;
+        // The website, shown as the DOMAIN. The scheme and the trailing slash are the parts
+        // nobody reads, and the domain is what somebody recognises from a business card.
+        const siteRaw9 = String(l.website || '').trim();
+        const site9 = siteRaw9.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '').split('/')[0];
         const arrivedAgo = (() => {
           const t = Date.parse(String(l.arrivedAt ?? ''));
           if (!Number.isFinite(t)) return null;
@@ -41395,8 +41417,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // the fact that makes a company name mean something to somebody who has not met them.
           // `sourceDetail` has left this line — it is the Need column now, and saying it twice on
           // one row is how a table stops being scannable.
+          // "No details yet" only when there really are none: a row showing a domain has a
+          // detail, and saying both on one line is how a list stops being scannable.
           meta: [l.industry, l.city].filter(Boolean).join(' · ')
-            || (l.lostReason ? 'Lost: ' + l.lostReason : 'No details yet'),
+            || (l.lostReason ? 'Lost: ' + l.lostReason : (site9 ? '' : 'No details yet')),
+          site: site9,
+          siteShown: !!site9,
+          siteTitle: site9 ? 'Open ' + site9 + ' in a new tab' : '',
+          // stopPropagation, or clicking the domain also opens the lead panel behind the new tab.
+          siteOpen: (ev9) => {
+            ev9 && ev9.stopPropagation && ev9.stopPropagation();
+            window.open(/^https?:\/\//i.test(siteRaw9) ? siteRaw9 : 'https://' + siteRaw9, '_blank', 'noopener');
+          },
+          logo: l.logoUrl || '',
+          logoShown: !!l.logoUrl,
           // Amber past the threshold, red past double it — the same two-band treatment stalled deals
           // use, so "left too long" reads identically wherever it appears.
           isIdle: idle != null && idle >= 10,
