@@ -13946,7 +13946,7 @@
                 </sc-if>
               </div>
               <div style="margin-top:7px; display:flex; gap:6px; align-items:center;">
-                <input value="{{ siteUrl }}" onInput="{{ siteSet }}" onKeyDown="{{ siteKey }}" placeholder="palmate.sa" style="flex:1; min-width:0; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:7px 10px;">
+                <input value="{{ siteUrl }}" onInput="{{ siteSet }}" onKeyDown="{{ siteKey }}" placeholder="their website, to look up" style="flex:1; min-width:0; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:7px 10px;">
                 <button onClick="{{ siteGo }}" style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:700; padding:7px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">Look up</button>
               </div>
               <textarea onInput="{{ sigSet }}" rows="2" placeholder="Faisal Al Otaibi&#10;Operations Manager · Al Noor Contracting Est&#10;0551234567 · faisal@alnoor.com.sa" style="margin-top:7px; width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#fff; border:1px solid #E6DFF5; border-radius:9px; padding:8px 10px; resize:vertical;" value="{{ sigText }}"></textarea>
@@ -13975,6 +13975,17 @@
                 <label class="fm-lab">Company name <span class="fm-req">*</span></label>
                 <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
                 <sc-if value="{{ ldfNameErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfNameErr }}</div></sc-if>
+              </div>
+              <div class="fm-wide">
+                <label class="fm-lab">Website</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <!-- The logo sits beside the box it came from. It is a remote image, so it is
+                       allowed to fail: the tile behind it is what shows when it does. -->
+                  <sc-if value="{{ ldfLogoShow }}" hint-placeholder-val="{{ false }}">
+                    <img src="{{ ldfLogo }}" alt="" style="width:30px; height:30px; border-radius:8px; object-fit:contain; background:#F6F4F9; border:1px solid #EDEBF2; flex-shrink:0;">
+                  </sc-if>
+                  <input value="{{ ldfWebsite }}" onInput="{{ setLdfWebsite }}" placeholder="palmate.sa" class="fm-inp" style="flex:1; min-width:0;">
+                </div>
               </div>
               <div>
                 <label class="fm-lab">Contact person</label>
@@ -18258,7 +18269,7 @@ class Component extends DCLogic {
      */
     this._openLeadForm = () => {
       if (this._previewScore) this._previewScore({});
-      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '', sigText: '', siteUrl: '', sigHits: null, sigErr: '' });
+      this.setState({ ldForm: { name: '', contact: '', title: '', email: '', phone: '', website: '', logoUrl: '', source: '', city: '', industry: '', campaign: '', note: '', owner: '' }, ldfErr: '', ldfBad: '', ldfScoreData: null, dupMatches: [], ldfDial: '', sigText: '', siteUrl: '', sigHits: null, sigErr: '' });
     };
     /**
      * Open the deal DRAWER — the reading of a deal, not the form for changing it.
@@ -35961,6 +35972,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // A field the form SENDS must be a field the form LOADS. scripts/lead-details-fields-check.ts
       // now checks that too, having only checked form-against-route before.
       service: l.service || '',
+      // A field the form SENDS must be a field the form LOADS — the rule scripts/
+      // lead-details-fields-check.ts exists to enforce, learned twice the hard way.
+      website: l.website || '',
+      logoUrl: l.logoUrl || '',
       note: l.sourceDetail || '',
       owner: l.ownerId || '',
       sourceOther: false,
@@ -41684,7 +41699,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           ['companyName', 'name', 'Company'], ['contactName', 'contact', 'Contact'],
           ['jobTitle', 'title', 'Title'], ['email', 'email', 'Email'],
           ['phone', 'phone', 'Phone'], ['city', 'city', 'City'],
-          ['description', 'note', 'About'],
+          ['description', 'note', 'About'], ['website', 'website', 'Website'], ['logo', 'logoUrl', 'Logo'],
         ];
         const hits9 = this.state.sigHits || null;
         const found9 = hits9 ? MAP9.filter(m => hits9[m[0]] && hits9[m[0]].value) : [];
@@ -41721,6 +41736,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           sigClear: () => { clearTimeout(this._sigT); this.setState({ sigText: '', siteUrl: '', sigHits: null, sigErr: '' }); },
         };
       })(),
+      ldfWebsite: (_ldf && _ldf.website) || '', setLdfWebsite: (e) => _setLdfField9('website', e.target.value),
+      ldfLogo: (_ldf && _ldf.logoUrl) || '', ldfLogoShow: !!(_ldf && _ldf.logoUrl),
       ldfName: (_ldf && _ldf.name) || '', ldfContact: (_ldf && _ldf.contact) || '', ldfTitle: (_ldf && _ldf.title) || '',
       ldfEmail: (_ldf && _ldf.email) || '', ldfSource: (_ldf && _ldf.source) || '',
       ldfCity: (_ldf && _ldf.city) || '', ldfNote: (_ldf && _ldf.note) || '', ldfErr: this.state.ldfErr || '',
@@ -41853,10 +41870,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (ph && !/^\+?[\d\s().-]{7,20}$/.test(ph)) {
           return this.setState({ ldfErr: '"' + ph + '" is not a phone number. Leave it blank if you do not have one yet.', ldfBad: 'phone' });
         }
-        // A contact's details with nobody attached to them is a record no one can act on.
-        if ((em || ph) && !String(f.contact || '').trim()) {
-          return this.setState({ ldfErr: 'Whose email or phone is this? Add the contact person, or clear those two fields.', ldfBad: 'contact' });
-        }
+        // DETAILS WITH NOBODY ATTACHED ARE FILED AGAINST THE COMPANY, not refused.
+        //
+        // This used to block the save and ask whose number it was. That was right while every
+        // number was typed by a person who knew — and wrong now: a website lookup returns the
+        // company's switchboard and names nobody, which is the ordinary case, not a mistake. Both
+        // save paths here and the importer already do the same thing with it, filing the details
+        // against the company's own name, so the block contradicted the behaviour of every path it
+        // was guarding. The server still refuses a contact that genuinely has no name.
 
         // ── correcting one that exists ──
         // A separate route from the create, not the generic CRUD PUT: `contacts` is a relation, and
@@ -41871,9 +41892,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
             service: f.service || null,
+              website: f.website || null,
+              logoUrl: f.logoUrl || null,
               ownerId: f.owner || null,
               contact: {
-                name: String(f.contact || '').trim() || null,
+                // THE SAME FALLBACK THE CREATE PATH AND THE IMPORTER BOTH USE. Editing sent a
+                // contact with a phone and no name, and the server refuses that outright —
+                // “Whose email or phone is this?” It was always reachable by typing a number and
+                // no person; the website lookup makes it ordinary, because a company site gives
+                // you a switchboard and names nobody. Filed against the company itself, as an
+                // imported lead already is.
+                name: String(f.contact || '').trim() || String(f.name || '').trim() || null,
                 jobTitle: f.title || null, email: f.email || null, phone: f.phone || null,
               },
             }),
@@ -41892,6 +41921,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
             service: f.service || null,
+            website: f.website || null,
+            logoUrl: f.logoUrl || null,
             ownerId: f.owner || null,
             // Sent as contacts, not as the three flat columns: the server writes those from the
             // primary contact, and handing it both would be two answers to the same question.

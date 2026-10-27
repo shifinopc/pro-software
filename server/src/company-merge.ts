@@ -87,7 +87,7 @@ const MOVERS: Mover[] = [
  * trying to close. The address is not lost — it travels across on the contact that carries it.
  */
 export const FILLABLE = [
-  "cr", "nameAr", "city", "country", "industry", "mainActivity", "service",
+  "cr", "nameAr", "city", "country", "industry", "mainActivity", "service", "website", "logoUrl",
   "source", "sourceDetail", "campaign", "companyType", "contactDesignation",
   // The government numbers, which is where this earns its keep: a lead record often carries the CR
   // or the MOL id that the client record was never given.

@@ -30,7 +30,7 @@ import { prisma } from "./db.js";
 
 /** The columns the template offers, in order — and the only ones read. */
 export const LEAD_IMPORT_COLUMNS = [
-  "company_name", "contact_name", "job_title", "email", "phone",
+  "company_name", "contact_name", "job_title", "email", "phone", "website",
   "source", "city", "industry", "product", "campaign", "note",
 ] as const;
 
@@ -47,6 +47,7 @@ export const LEAD_EXAMPLE_ROW: Record<string, string> = {
   job_title: "Operations Manager",
   email: "faisal@alnoor-contracting.example",
   phone: "+966 55 123 4567",
+  website: "alnoor-contracting.example",
   source: "Exhibition",
   city: "Riyadh",
   industry: "Construction",
@@ -67,6 +68,7 @@ const ALIAS: Record<string, string> = {
   contact: "contact_name", person: "contact_name", "contact person": "contact_name",
   title: "job_title", designation: "job_title", position: "job_title",
   "e-mail": "email", mail: "email", "email address": "email",
+  url: "website", site: "website", web: "website", "web site": "website", homepage: "website",
   mobile: "phone", telephone: "phone", tel: "phone", "phone number": "phone", whatsapp: "phone",
   "lead source": "source", channel: "source",
   service: "product", "service required": "product", interest: "product", requirement: "product",
@@ -228,6 +230,10 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
         + `(${products.join(", ")}) — imported as typed, and the Product filter will not find it` });
     }
 
+    // Stored as a bare domain, matching what the site lookup writes: two records must not differ
+    // only by "https://" or a "www.", which is exactly what a duplicate check would compare.
+    const website = cell("website").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
+
     const contactName = cell("contact_name");
     // Exactly what the Add lead form sends: contact details with nobody attached are refused by the
     // route, so an email with no contact name is filed against the company's own name, as the form
@@ -250,6 +256,7 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
         industry: cell("industry") || null,
         campaign: cell("campaign") || null,
         service: product || null,
+        website: website || null,
         contacts,
       },
     });

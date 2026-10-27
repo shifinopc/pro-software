@@ -90,6 +90,14 @@ model Company {
   /// Set when this record was merged INTO another and retired. The row is kept rather than deleted:
   /// every old link, bookmark and audit line still resolves, and the trail says where it went.
   /// Everything that reads a list of companies must exclude these — a merged record is not a client.
+  /// Their own website, as a bare domain — "palmate.sa", no scheme and no www. Stored that way so
+  /// two records cannot differ only by decoration, which is what a duplicate check compares.
+  website       String?
+  /// The company's logo, as the URL the site publishes. A REMOTE address, deliberately: caching it
+  /// would mean fetching and storing somebody else's image on every lead. The console falls back
+  /// to the initials tile when it fails to load, so a logo that rots degrades to what was there
+  /// before rather than to a broken image.
+  logoUrl       String?
   mergedIntoId  String?
   /// Who owns the relationship — the staff user's id.
   ///
@@ -112,7 +120,10 @@ model Company {
   /// ("referred by Al Rajhi HR"), because a source you cannot ask a follow-up question about is
   /// worth very little when deciding where the next riyal of marketing goes.
   source        String?
-  sourceDetail  String?
+  /// How they came to us in their own words. A note, so it gets the type the other notes have:
+  /// at the default length it is 191 characters, and a long one failed the whole save with a raw
+  /// database error. Reachable by typing; a pasted website description reaches it every time.
+  sourceDetail  String?  @db.Text
   /// Which marketing effort generated this lead, when one did. Optional always — most leads are
   /// not the fruit of a campaign, and forcing an answer would fill the column with fiction.
   campaign      String?

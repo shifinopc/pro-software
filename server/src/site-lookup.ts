@@ -244,7 +244,10 @@ export function readPage(html: string, url: URL): SiteLookup {
     put("companyName", piece, "guess", "taken from the page title, which is not always the legal name");
   }
 
-  put("description", metaOf(html, "description") || metaOf(html, "og:description"), "guess", "the site's own description of itself");
+  // Capped: this lands in a notes field somebody will read at a glance, and a site's meta
+  // description can run to several hundred characters of keywords.
+  const desc = (metaOf(html, "description") || metaOf(html, "og:description")).slice(0, 280);
+  put("description", desc, "guess", "the site's own description of itself");
 
   if (!out.logo) {
     const og = metaOf(html, "og:image");

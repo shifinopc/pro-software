@@ -97,9 +97,17 @@ if (!html) {
   fails.push("could not find the Add lead form's POST body in index.html — this check needs updating");
 } else if (plan.rows.length) {
   const sent = new Set(Object.keys(plan.rows[0].body));
-  // ownerId is the one the import deliberately omits: leaving it out is what lets the sales rules
-  // route the lead, which is better than every imported lead landing unassigned.
-  const expected = formFields.filter(f => f !== "ownerId");
+  /**
+   * Two the import deliberately omits.
+   *
+   * `ownerId` — leaving it out is what lets the sales rules route the lead, which is better than
+   * every imported lead landing unassigned.
+   *
+   * `logoUrl` — it is never typed. It arrives from a website lookup, and a column in the import
+   * template inviting people to paste image addresses would be noise in every file. An imported
+   * lead has no logo, which is not the same as an imported lead MISSING one.
+   */
+  const expected = formFields.filter(f => !["ownerId", "logoUrl"].includes(f));
   const missing = expected.filter(f => !sent.has(f));
   if (missing.length) {
     fails.push(`the Add lead form sends ${missing.map(m => `"${m}"`).join(", ")} and the import does not — `

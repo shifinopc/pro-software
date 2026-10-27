@@ -2157,6 +2157,9 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
         // Twice is a pattern, so scripts/lead-details-fields-check.ts now compares what the edit
         // form sends against what this route writes, and fails when a field is sent and dropped.
         ...("service" in b ? { service: b.service || null } : {}),
+        // Keyed on presence for the same reason as the three above: clearing the box is an answer.
+        ...("website" in b ? { website: b.website || null } : {}),
+        ...("logoUrl" in b ? { logoUrl: b.logoUrl || null } : {}),
         // `null` is a real choice here — a manager deliberately unassigning — so the key being
         // PRESENT is what decides, not whether it has a value.
         ...("ownerId" in b ? { ownerId: b.ownerId || null } : {}),
