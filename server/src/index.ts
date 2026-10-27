@@ -25,6 +25,7 @@ import { findDuplicates } from "./duplicates.js";
 import { nextOwner, nextOwnerFor, rotation, distributeUnowned, assignableOwners, recordAssignment, assignmentHistory } from "./assignment.js";
 import { routeFor } from "./routing.js";
 import { scoreOpenLeads, scoreLead, sourceConversion } from "./leadscore.js";
+import { buildLeadWorkbook } from "./lead-export.js";
 import { freeSlots, bookSlot } from "./booking.js";
 import { visibleUserIds, actableTeamIds } from "./visibility.js";
 import { teamViews, teamHistory, addMember, removeMember, setLead, personProblem, todayDay, TEAM_KINDS } from "./teams.js";
@@ -4427,6 +4428,37 @@ app.get("/api/leads/import-template", requireAuth, requireStaff, async (_req, re
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="lead-import-template.csv"');
   res.send(await leadImportTemplateCsv());
+});
+
+/**
+ * The leads on screen, as a workbook.
+ *
+ * POST rather than GET, which every other export here is: the caller sends the ids the screen is
+ * showing, and the list of every open lead does not fit in a URL. It is still a READ — nothing is
+ * written and `requireWriteRole` is deliberately absent — so it sits behind requireStaff alone,
+ * like the employee sheet: taking a copy of a list you can already see is not a change to it.
+ *
+ * The SCORES come from scoreOpenLeads, the same call the screen's own numbers come from, rather
+ * than from the browser. A sheet that disagrees with the list it was taken from is worse than one
+ * with no scores at all.
+ */
+app.post("/api/leads/export.xlsx", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x: any) => String(x)).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: "Nothing to export." });
+    // shortcut: 5000 at a time. Beyond that this is a report to schedule, not a button to press,
+    // and the sheet stops being something anybody opens in Excel anyway.
+    if (ids.length > 5000) return res.status(413).json({ error: "That is more than 5000 leads — narrow the list first." });
+    const scores = await scoreOpenLeads();
+    const byId: Record<string, number> = {};
+    for (const s of scores as any[]) if (s && s.companyId != null) byId[String(s.companyId)] = s.score;
+    const { wb, leads } = await buildLeadWorkbook(ids, byId);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="leads-${businessToday()}.xlsx"`);
+    res.setHeader("X-Lead-Count", String(leads));
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e: any) { fail(res, 500, e, req.path); }
 });
 
 app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
