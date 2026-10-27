@@ -7732,8 +7732,25 @@
             </div>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
-                <button onClick="{{ liTemplate }}" title="A CSV with the columns the import reads and one example row" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>Template</button>
-                <button onClick="{{ liOpenImport }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 10px; border-radius:99px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;" style-hover="border-color:#A9A6B4;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>Import</button>
+                <!-- Everything that moves a spreadsheet in or out, under one control. Template
+                     and Import were two buttons of equal weight beside Add lead, for jobs done
+                     once a month; Export is the third of the same kind and would have made three.
+                     left:auto/right:0 because this hangs off the right edge of the window — the
+                     shared .pill-dd anchors left and would have opened off-screen. -->
+                <div class="pill-selwrap">
+                  <div data-dd data-open="{{ ddLdXlsOpen }}" onClick="{{ ddLdXlsToggle }}" title="Export, import, or download the import template" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:7px 11px; border-radius:99px; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 13l6 6M15 13l-6 6"></path></svg>
+                    Excel
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                  </div>
+                  <sc-if value="{{ ddLdXlsOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" class="pill-dd" style="left:auto; right:0;">
+                      <sc-for list="{{ ddLdXlsOptions }}" as="o" hint-placeholder-count="3">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
                 <button onClick="{{ ldAdd }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:8px 10px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">+ Add lead</button>
               </div>
             </sc-if>
@@ -22778,7 +22795,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _liN = (n9, one, many) => n9 + ' ' + (n9 === 1 ? one : many);
     const liApi = {
       showLeadImport: !!this.state.liOpen,
-      liOpenImport: () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '' }),
+      liOpenImport: (this._liOpenImport9 = () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '' })),
       liClose: () => this.setState({ liOpen: false }),
       liStepPick: (this.state.liStep || 'pick') === 'pick',
       liStepPreview: this.state.liStep === 'preview',
@@ -22858,7 +22875,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // two lists drift. One list, served by the code that reads the file back, cannot drift.
       // Fetched rather than linked because the endpoint needs the bearer token, which an <a href>
       // does not carry.
-      liTemplate: () => {
+      liTemplate: (this._liTemplate9 = () => {
         const t9 = localStorage.getItem('stimespro:token');
         fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/import-template', {
           headers: { ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
@@ -22873,7 +22890,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             this.toast && this.toast('Template downloaded -- one example row, replace it with your own');
           })
           .catch(() => this.toast && this.toast('Could not download the template', 'error'));
-      },
+      }),
     };
     // ── SCAN DOCUMENT (the intake agent) ──
     const _sdApiBase = () => this._apiBase || 'http://localhost:4100';
@@ -36003,6 +36020,43 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * bottom of an empty table.
      */
 
+    /**
+     * EXPORT WHAT IS ON SCREEN, not the whole book: the tab, the search and the product filter
+     * all narrow `_ldVisible`, and somebody who filtered to "Idle" and pressed Export means those.
+     * All of them though, not the page — paging is a reading convenience, not a selection.
+     *
+     * Carries MORE than the table does: source, industry, campaign and the notes are on the record
+     * and the point of a spreadsheet is to have them, where a column of them on screen was the
+     * thing that made the table unreadable.
+     *
+     * The BOM is not decoration. Excel reads a UTF-8 CSV as the local codepage without it, and
+     * every Arabic name in this list comes out as mojibake — which is most of why people stop
+     * trusting an export.
+     */
+    const _ldExport9 = () => {
+      const cell9 = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const HEAD9 = ['Company', 'Website', 'City', 'Industry', 'Contact', 'Role', 'Email', 'Phone',
+        'Product', 'Source', 'Campaign', 'Notes', 'Score', 'Stage', 'Managed by', 'Added'];
+      const rows9 = _ldVisible.map(l => {
+        const mine9 = _contactRows.filter(c => c.companyId === l.id);
+        const pri9 = mine9.find(c => c.isPrimary) || mine9[0] || null;
+        const sc9 = _scoreBy9.get(l.id) || null;
+        const tone9 = _LC_TONE[l.lifecycle] || _LC_TONE.lead;
+        return [l.name, l.website, l.city, l.industry,
+          (pri9 && pri9.name) || l.contact, (pri9 && pri9.jobTitle) || '',
+          (pri9 && pri9.email) || l.email, (pri9 && pri9.phone) || l.phone,
+          l.service, l.source, l.campaign, l.sourceDetail,
+          sc9 ? sc9.score : '', tone9.label, _ownerOf(l),
+          String(l.arrivedAt || l.createdAt || '').slice(0, 10)];
+      });
+      const csv9 = '\ufeff' + [HEAD9, ...rows9].map(r => r.map(cell9).join(',')).join('\r\n');
+      const a9 = document.createElement('a');
+      a9.href = URL.createObjectURL(new Blob([csv9], { type: 'text/csv;charset=utf-8' }));
+      a9.download = 'leads-' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a9); a9.click(); a9.remove();
+      setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+      this.toast && this.toast(rows9.length + (rows9.length === 1 ? ' lead exported' : ' leads exported'));
+    };
     // Eight was right for a row three lines tall; the one-line row is 41px, so eight of them
     // is a short table over a lot of empty card.
     const LD_PER_PAGE = 15;
@@ -41072,6 +41126,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // lands on a list whose point is the named services.
         { value: LD_NO_PROD9, label: 'Not set' },
       ], _ldProd9, (v) => this.setState({ ldProduct: v, ldPage: 1 })),
+      // An ACTION menu rather than a picker: nothing is ever "selected", so `current` is a value
+      // no option carries and the label is fixed. mkDd closes it after a pick either way.
+      ...mkDd('ddLdXls', [
+        { value: 'export', label: 'Export these leads' },
+        { value: 'import', label: 'Import from a file' },
+        { value: 'template', label: 'Download the template' },
+      ], null, (v) => {
+        // The import block owns both of these; it hangs them on `this` for exactly this reason,
+        // because a second copy of the open-state shape is one that drifts.
+        if (v === 'import') return this._liOpenImport9 && this._liOpenImport9();
+        if (v === 'template') return this._liTemplate9 && this._liTemplate9();
+        _ldExport9();
+      }, 'Excel'),
       ldPageLabel: _ldVisible.length
         ? ((_ldPage9 - 1) * LD_PER_PAGE + 1) + '\u2013' + Math.min(_ldPage9 * LD_PER_PAGE, _ldVisible.length) + ' of ' + _ldVisible.length
         : '',
