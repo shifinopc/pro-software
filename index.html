@@ -3759,50 +3759,87 @@
               <div style="font-size:11px; color:#8C8899; margin-top:4px;">Document renewals & workflow steps against their deadlines</div>
             </div>
           </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:230px 1fr; gap:11px;">
-            <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:13px 14px; display:flex; align-items:center; gap:12px;">
-              <div style="position:relative; width:78px; height:78px; flex-shrink:0;">
-                <svg width="78" height="78" viewBox="0 0 60 60" style="transform:rotate(-90deg);">
-                  <circle cx="30" cy="30" r="26" fill="none" stroke="#F0EDF6" stroke-width="7"></circle>
-                  <circle cx="30" cy="30" r="26" fill="none" stroke="#12B76A" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ slaCirc }} 163"></circle>
-                </svg>
-                <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;"><span style="font-family:'Space Grotesk',sans-serif; font-size:16px; font-weight:700;">{{ slaHealthPct }}%</span></div>
-              </div>
-              <div><div style="font-size:11px; font-weight:700;">On-track rate</div><div style="font-size:10px; color:#A9A6B4; margin-top:2px;">{{ slaTotal }} items monitored</div></div>
+          <!-- ONE STRIP, not four cards. The three counts were four tiles across the top and then
+               three column headings underneath, saying the same numbers twice before a single row
+               of work appeared. They are the table's tabs now; what survives up here is the rate,
+               which is the one number the tabs cannot say. -->
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:13px 16px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+            <div style="position:relative; width:64px; height:64px; flex-shrink:0;">
+              <svg width="64" height="64" viewBox="0 0 60 60" style="transform:rotate(-90deg);">
+                <circle cx="30" cy="30" r="26" fill="none" stroke="#F0EDF6" stroke-width="7"></circle>
+                <circle cx="30" cy="30" r="26" fill="none" stroke="#12B76A" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ slaCirc }} 163"></circle>
+              </svg>
+              <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700;">{{ slaHealthPct }}%</span></div>
             </div>
-            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:11px;">
+            <div>
+              <div style="font-size:11px; font-weight:700;">On-track rate</div>
+              <div style="font-size:10px; color:#A9A6B4; margin-top:2px;">{{ slaTotal }} items monitored</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:22px; margin-left:auto; flex-wrap:wrap;">
               <sc-for list="{{ slaSummary }}" as="s" hint-placeholder-count="3">
-                <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:11px 12px;">
-                  <div style="display:flex; align-items:center; gap:8px;"><span style="width:9px; height:9px; border-radius:99px; background:{{ s.color }};"></span><span style="font-size:11px; color:#6F6C7A; font-weight:600;">{{ s.title }}</span></div>
-                  <div style="font-family:'Space Grotesk',sans-serif; font-size:23px; font-weight:700; margin-top:6px; color:{{ s.color }};">{{ s.count }}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="width:8px; height:8px; border-radius:99px; background:{{ s.color }};"></span>
+                  <span style="font-size:11px; color:#6F6C7A;">{{ s.title }}</span>
+                  <span style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:{{ s.color }}; font-variant-numeric:tabular-nums;">{{ s.count }}</span>
                 </div>
               </sc-for>
             </div>
           </section>
-          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:11px; align-items:start;">
-            <sc-for list="{{ slaCols }}" as="c" hint-placeholder-count="3">
-              <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:11px 12px;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span style="width:9px; height:9px; border-radius:99px; background:{{ c.color }};"></span>
-                  <span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">{{ c.title }}</span>
-                  <span style="font-size:10px; font-weight:700; color:{{ c.color }}; background:{{ c.bg }}; padding:1px 9px; border-radius:99px; margin-left:auto;">{{ c.count }}</span>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:9px; margin-top:13px;">
-                  <sc-for list="{{ c.items }}" as="i" hint-placeholder-count="3">
-                    <div style="border:1px solid #F0EDF6; border-radius:12px; padding:11px 13px;">
-                      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.label }}</span><span style="font-size:10px; font-weight:700; color:{{ i.barColor }}; flex-shrink:0;">{{ i.when }}</span></div>
-                      <div style="display:flex; align-items:center; gap:6px; margin-top:3px;"><span style="font-size:9px; font-weight:700; color:#6F6C7A; background:#F3F1F7; padding:1px 7px; border-radius:99px;">{{ i.source }}</span><span style="font-size:10px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.sub }}</span></div>
-                      <div style="height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden; margin-top:9px;"><div style="height:100%; width:{{ i.pct }}%; background:{{ i.barColor }}; border-radius:99px; animation:slideRight .8s cubic-bezier(.16,1,.3,1) both;"></div></div>
-                      <sc-if value="{{ i.canEscalate }}" hint-placeholder-val="{{ false }}"><div style="text-align:right; margin-top:9px;"><span onClick="{{ i.escalate }}" style="font-size:9px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:5px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Escalate</span></div></sc-if>
-                      <sc-if value="{{ i.escalated }}" hint-placeholder-val="{{ false }}"><div style="text-align:right; margin-top:9px;"><span style="font-size:9px; font-weight:700; color:#0E9355;">Escalated ✓ · admins notified</span></div></sc-if>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ c.empty }}" hint-placeholder-val="{{ false }}">
-                    <div style="border:1px dashed #EDEBF2; border-radius:12px; padding:14px 10px; text-align:center; font-size:11px; font-weight:600; color:#B4AFC4;">{{ c.emptyText }}</div>
-                  </sc-if>
-                </div>
+
+          <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; overflow:clip; position:relative; z-index:20;">
+            <div style="display:flex; align-items:center; gap:10px; padding:0 12px 0 14px; border-bottom:1px solid #EEEBF3; flex-wrap:nowrap; min-height:52px;">
+              <div class="cl-tabs" style="display:flex; align-items:stretch; gap:14px; align-self:stretch; overflow-x:auto; min-width:0; flex-shrink:1; scrollbar-width:none;">
+                <sc-for list="{{ slaTabs }}" as="t" hint-placeholder-count="4">
+                  <span data-cltab onClick="{{ t.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:{{ t.tabColor }}; cursor:pointer; white-space:nowrap; box-shadow:inset 0 -2px 0 {{ t.tabLine }}; padding:0 1px;">{{ t.label }}<span style="font-size:10px; font-weight:700; color:{{ t.tabCount }}; background:{{ t.tabCountBg }}; padding:1px 7px; border-radius:99px;">{{ t.count }}</span></span>
+                </sc-for>
               </div>
-            </sc-for>
+              <div style="flex:1;"></div>
+              <div style="position:relative; width:230px; flex-shrink:0; margin:9px 0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                <input value="{{ slaQuery }}" onInput="{{ setSlaQuery }}" placeholder="Document, step, client" style="width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; color:#1A1523; background:#F8F6FC; border:1px solid #EFEAF7; border-radius:10px; padding:7px 10px 7px 38px; outline:none;">
+              </div>
+            </div>
+            <div><div>
+              <div style="position:sticky; top:0; z-index:3; background:#fff; display:grid; grid-template-columns:minmax(0,1.7fr) 92px minmax(0,1.1fr) minmax(0,.8fr) 104px 86px 92px 104px; gap:8px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;">
+                <span>What</span><span>Source</span><span>Client</span><span>Via</span><span style="text-align:right;">Deadline</span><span>State</span><span>Escalation</span><span></span>
+              </div>
+              <sc-for list="{{ slaRows }}" as="i" hint-placeholder-count="8">
+                <div class="tbl-row" style="animation-delay:{{ i.rowDelay }}; display:grid; grid-template-columns:minmax(0,1.7fr) 92px minmax(0,1.1fr) minmax(0,.8fr) 104px 86px 92px 104px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;">
+                  <span title="{{ i.label }}" style="min-width:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.label }}</span>
+                  <span style="min-width:0; font-weight:600; color:{{ i.sourceInk }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.source }}</span>
+                  <span title="{{ i.client }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.client }}</span>
+                  <span title="{{ i.via }}" style="min-width:0; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.via }}</span>
+                  <!-- The bar is gone. On 191 breached rows it was 191 full-width red bars, every
+                       one of them at 100% — a measurement that cannot vary is decoration. The
+                       words say it: "44h overdue" is the fact, in the colour of its state. -->
+                  <span style="text-align:right; font-weight:700; color:{{ i.barColor }}; font-variant-numeric:tabular-nums;">{{ i.when }}</span>
+                  <span style="min-width:0; font-weight:600; color:{{ i.stateInk }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.stateLabel }}</span>
+                  <span style="min-width:0; font-size:10px; font-weight:600; color:{{ i.escInk }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ i.escText }}</span>
+                  <div class="row-acts" style="display:flex; justify-content:flex-end;">
+                    <sc-if value="{{ i.canEscalate }}" hint-placeholder-val="{{ true }}">
+                      <span onClick="{{ i.escalate }}" title="Tell the admins about this one" style="font-size:10px; font-weight:700; color:#C0353A; background:#FEECEC; border:1px solid #FBD5D5; padding:4px 11px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#FBD5D5;">Escalate</span>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ slaEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:30px 15px; text-align:center; font-size:11px; color:#8C8899;">{{ slaEmptyText }}</div>
+              </sc-if>
+            </div></div>
+            <sc-if value="{{ slaPageShown }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:11px 14px; border-top:1px solid #F0EDF6;">
+                <span style="font-size:11px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ slaPageLabel }}</span>
+                <sc-if value="{{ slaPagerShown }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span onClick="{{ slaPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ slaPrevOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                    <sc-for list="{{ slaPages }}" as="p" hint-placeholder-count="2">
+                      <span onClick="{{ p.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.color }}; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;" style-hover="border-color:#7C00FF;">{{ p.n }}</span>
+                    </sc-for>
+                    <span onClick="{{ slaNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ slaNextOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
           </section>
         </div></sc-if>
 
@@ -34444,7 +34481,89 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       return { title, color, bg, count: items.length, items, empty: items.length === 0,
         emptyText: k === 'on' ? 'Nothing on track yet' : k === 'risk' ? 'Nothing at risk — good' : 'No breaches 🎉' };
     });
-    const slaApi = { slaCols };
+    /**
+     * ONE LIST, not three columns.
+     *
+     * The three columns were side by side and the same height on screen while holding 6, 0 and 191
+     * items — two thirds of the width showing nothing and the third an endless scroll. Worse, the
+     * shape said the three are comparable, when the only question this screen answers is "what do
+     * I do next", and the answer is always in the red one.
+     *
+     * So: the same table every other list in this app uses, with the three states as tabs, and
+     * MOST URGENT FIRST across all of them — breached by how far over, then at risk, then on track.
+     * The old per-column sort is kept inside each group; what changes is that they are one run.
+     */
+    const SLA_ORDER9 = { breach: 0, risk: 1, on: 2 };
+    const _slaFlat9 = slaCols.flatMap(c => c.items)
+      .sort((a, z) => (SLA_ORDER9[a.tone] - SLA_ORDER9[z.tone]) || (z.pct - a.pct));
+    const _slaTab9 = this.state.slaTab || 'All';
+    const _slaQ9 = String(this.state.slaQuery || '').trim().toLowerCase();
+    const _slaKeep9 = (m) => (_slaTab9 === 'All' || m.tone === _slaTab9)
+      && (!_slaQ9 || (m.label + ' ' + m.sub).toLowerCase().includes(_slaQ9));
+    const _slaVisible9 = _slaFlat9.filter(_slaKeep9);
+    const SLA_PER9 = 15;
+    const _slaPages9 = Math.max(1, Math.ceil(_slaVisible9.length / SLA_PER9));
+    const _slaPage9 = Math.min(Math.max(1, this.state.slaPage || 1), _slaPages9);
+    const _slaShown9 = _slaVisible9.slice((_slaPage9 - 1) * SLA_PER9, _slaPage9 * SLA_PER9);
+    const slaApi = {
+      slaCols,
+      slaRows: _slaShown9.map((m, i9) => {
+        // "Client · authority" or "Client · workflow" — split at the LAST dot so a client with a
+        // dot in its own name keeps it.
+        const cut9 = String(m.sub || '').lastIndexOf(' · ');
+        const [title9, ink9] = TONE[m.tone];
+        return {
+          ...m,
+          rowDelay: (80 + Math.min(i9, 14) * 70) + 'ms',
+          client: cut9 > 0 ? m.sub.slice(0, cut9) : (m.sub || '—'),
+          // The authority a document is renewed at — MOHRE, Muqeem, the DED. A workflow step's
+          // half of that string is the literal word "workflow", which the Source column already
+          // says, so it shows a dash rather than repeating itself 187 times.
+          via: (() => { const v9 = cut9 > 0 ? m.sub.slice(cut9 + 3) : ''; return (!v9 || v9 === 'workflow') ? '—' : v9; })(),
+          stateLabel: title9, stateInk: ink9,
+          // The source is a fact about where the deadline comes from, and it decides what you can
+          // do about it — a document is renewed, a step is worked. Worth its own column.
+          sourceInk: m.source === 'Workflow' ? '#7C00FF' : '#0284C7',
+          escInk: m.escalated ? '#0E9355' : '#B4AFC4',
+          escText: m.escalated ? 'Escalated' : '—',
+        };
+      }),
+      slaTabs: [['All', 'All', _slaFlat9.length], ['on', 'On track', slaCols[0].count],
+                ['risk', 'At risk', slaCols[1].count], ['breach', 'Breached', slaCols[2].count]]
+        .map(([k9, label9, n9]) => {
+          const on9 = _slaTab9 === k9;
+          return {
+            label: label9, count: String(n9),
+            pick: () => this.setState({ slaTab: k9, slaPage: 1 }),
+            tabColor: on9 ? '#5B21B6' : '#8B8898', tabLine: on9 ? '#7C00FF' : 'transparent',
+            tabCount: on9 ? '#7C00FF' : '#B9B6C4', tabCountBg: on9 ? '#F3E8FF' : '#F4F3F7',
+          };
+        }),
+      slaQuery: this.state.slaQuery || '',
+      setSlaQuery: (e) => this.setState({ slaQuery: e.target.value, slaPage: 1 }),
+      slaEmpty: _slaVisible9.length === 0,
+      slaEmptyText: _slaQ9 ? 'Nothing matches that search.'
+        : _slaTab9 === 'risk' ? 'Nothing at risk — good.'
+        : _slaTab9 === 'breach' ? 'No breaches. Long may it last.'
+        : _slaTab9 === 'on' ? 'Nothing on track yet.'
+        : 'Nothing has a deadline to miss yet.',
+      slaPageLabel: _slaVisible9.length
+        ? ((_slaPage9 - 1) * SLA_PER9 + 1) + '\u2013' + Math.min(_slaPage9 * SLA_PER9, _slaVisible9.length) + ' of ' + _slaVisible9.length
+        : '',
+      slaPageShown: _slaVisible9.length > 0,
+      slaPagerShown: _slaPages9 > 1,
+      slaPages: Array.from({ length: _slaPages9 }, (_, i9) => i9 + 1).map(n9 => ({
+        n: String(n9),
+        color: n9 === _slaPage9 ? '#fff' : '#6F6C7A',
+        bg: n9 === _slaPage9 ? '#7C00FF' : '#fff',
+        bd: n9 === _slaPage9 ? '#7C00FF' : '#EDEBF2',
+        pick: () => this.setState({ slaPage: n9 }),
+      })),
+      slaPrevOp: _slaPage9 > 1 ? '1' : '.35',
+      slaNextOp: _slaPage9 < _slaPages9 ? '1' : '.35',
+      slaPrev: () => { if (_slaPage9 > 1) this.setState({ slaPage: _slaPage9 - 1 }); },
+      slaNext: () => { if (_slaPage9 < _slaPages9) this.setState({ slaPage: _slaPage9 + 1 }); },
+    };
     const slaTotal = slaMerged.length;
     const slaOnTrack = slaCols[0].count;
     const slaSummary = slaCols.map(c => ({ title: c.title, count: c.count, color: c.color, bg: c.bg }));
