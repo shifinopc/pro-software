@@ -561,6 +561,21 @@
 
      `display:contents` is what lets the markup keep its three groups while the GRID flattens them
      into one run of rows. No fields were moved to do this. */
+  /* ── The leads table ──────────────────────────────────────────────────────────────────────
+     ONE LINE PER LEAD. The row carried three lines, four pills, a progress bar and a flame, so
+     eight leads filled the screen and the things that differ between them — the name, the score,
+     the stage — were the smallest marks on it. Everything here is now a column of plain text,
+     which is what makes a table scannable: the eye runs down one column, not around a card.
+
+     The six action buttons appear on the row the pointer is over. They were drawn on every row,
+     which meant 48 coloured squares down the right of a list whose job is to be read.
+     pointer-events go with the opacity — an invisible control that still takes a click is worse
+     than a visible one. */
+  .ld-row .ld-acts{opacity:0; pointer-events:none; transition:opacity .12s ease;}
+  .ld-row:hover .ld-acts,
+  .ld-row:focus-within .ld-acts{opacity:1; pointer-events:auto;}
+  /* A touch screen has no hover and would never show them at all. */
+  @media (hover:none){ .ld-row .ld-acts{opacity:1; pointer-events:auto;} }
   .ldf-land{display:grid;grid-template-columns:1fr 1fr;gap:5px 18px;align-items:start;margin-top:10px;}
   .ldf-land > .ldf-col{display:contents;}
   /* A thin rule, not a row of its own. Three captions at 42px each were 126px of header in a
@@ -7778,117 +7793,84 @@
 
         <sc-if value="{{ ldListOn }}" hint-placeholder-val="{{ true }}">
         <section class="pg-card tbl-scroll" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; overflow:hidden;">
-          <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) 104px minmax(0,1.1fr) 116px 104px 206px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Contact</span><span>Source</span><span>Need</span><span>Score</span><span>Stage</span><span></span></div>
+          <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.1fr) 88px minmax(0,1fr) 48px 128px 168px; gap:10px; padding:10px 14px 8px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span onClick="{{ ldToggleAll }}" title="Select all" style="cursor:pointer; color:{{ ldAllFg }}; font-size:12px;">{{ ldAllMark }}</span><span>Company</span><span>Website</span><span>Contact</span><span>Source</span><span>Need</span><span style="text-align:right;">Score</span><span>Stage</span><span></span></div>
           <sc-for list="{{ ldRows }}" as="l" hint-placeholder-count="4">
-            <div style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) 104px minmax(0,1.1fr) 116px 104px 206px; gap:10px; align-items:center; padding:13px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
+            <div class="ld-row" style="display:grid; grid-template-columns:26px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.1fr) 88px minmax(0,1fr) 48px 128px 168px; gap:10px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px;" style-hover="background:#FAF7FE;">
               <span onClick="{{ l.toggle }}" title="Select" style="cursor:pointer; color:{{ l.tickFg }}; font-size:12px;">{{ l.tick }}</span>
-              <div onClick="{{ l.open }}" style="min-width:0; cursor:pointer; display:flex; align-items:center; gap:10px;" title="Open this lead">
+
+              <!-- Company. The facts a single line cannot hold — industry, city, when it arrived,
+                   which campaign brought it — are in the tooltip rather than gone. -->
+              <div onClick="{{ l.open }}" title="{{ l.rowTip }}" style="min-width:0; cursor:pointer; display:flex; align-items:center; gap:9px;">
                 <!-- The company's own mark when the lookup found one, the initials tile when it
                      did not. A BACKGROUND IMAGE rather than an <img>: this runtime strips onerror,
                      so a broken <img> would show the browser's torn-page glyph in every row it
                      reached, while a background that fails to load simply does not paint.
-                     Same pattern as the org logo on the login screen.
                      shortcut: a logo URL that has since died leaves a blank white tile instead of
                      falling back to the initials — revisit if sites start rotting faster than
                      leads get worked. -->
-                <span style="position:relative; width:32px; height:32px; flex-shrink:0;">
-                  <span style="width:32px; height:32px; border-radius:10px; background:{{ l.avBg }}; color:{{ l.avColor }}; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700;">{{ l.initials }}</span>
+                <span style="position:relative; width:22px; height:22px; flex-shrink:0;">
+                  <span style="width:22px; height:22px; border-radius:7px; background:{{ l.avBg }}; color:{{ l.avColor }}; display:flex; align-items:center; justify-content:center; font-family:'Space Grotesk',sans-serif; font-size:9px; font-weight:700;">{{ l.initials }}</span>
                   <sc-if value="{{ l.logoShown }}" hint-placeholder-val="{{ false }}">
-                    <span role="img" aria-label="Company logo" style="position:absolute; inset:0; border-radius:10px; border:1px solid #F0EDF6; background:#fff center/contain no-repeat; background-image:url('{{ l.logo }}');"></span>
+                    <span role="img" aria-label="Company logo" style="position:absolute; inset:0; border-radius:7px; border:1px solid #F0EDF6; background:#fff center/contain no-repeat; background-image:url('{{ l.logo }}');"></span>
                   </sc-if>
                 </span>
-                <span style="min-width:0;">
-                  <span style="display:flex; align-items:center; gap:7px; min-width:0;">
-                    <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="color:#7C00FF;">{{ l.name }}</span>
-                    <!-- Why this row is in the Idle tab, on the row. Without it the tab looks like
-                         it has reordered the list for reasons of its own. -->
-                    <sc-if value="{{ l.isIdle }}" hint-placeholder-val="{{ false }}">
-                      <span title="Nothing logged and no deal for this long" style="flex-shrink:0; font-size:9px; font-weight:700; color:{{ l.idleColor }}; background:{{ l.idleBg }}; padding:2px 8px; border-radius:99px;">{{ l.idleLabel }}</span>
-                    </sc-if>
-                    <sc-if value="{{ l.campaignShown }}" hint-placeholder-val="{{ false }}">
-                      <span title="Campaign that produced this lead" style="flex-shrink:0; font-size:9px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ l.campaign }}</span>
-                    </sc-if>
-                  </span>
-                  <span style="display:flex; align-items:center; gap:6px; min-width:0; margin-top:2px;">
-                    <sc-if value="{{ l.siteShown }}" hint-placeholder-val="{{ false }}">
-                      <span onClick="{{ l.siteOpen }}" title="{{ l.siteTitle }}" style="font-size:10px; font-weight:600; color:#7C00FF; cursor:pointer; flex-shrink:0; max-width:75%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="text-decoration:underline;">{{ l.site }}</span>
-                    </sc-if>
-                    <span style="flex:1 1 auto; min-width:0; font-size:10px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.meta }}</span>
-                  </span>
-                  <sc-if value="{{ l.arrivedShown }}" hint-placeholder-val="{{ false }}">
-                    <span style="display:block; font-size:10px; color:#BFBCC9; margin-top:2px;">{{ l.arrivedAgo }}</span>
-                  </sc-if>
-                </span>
-              </div>
-              <div style="min-width:0;">
-                <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.contact }}</div>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.reach }}</div>
-              </div>
-              <!-- A chip, like every other categorical value on the screen. As plain grey text it
-                   was the only one that read as prose. -->
-              <span style="justify-self:start;">
-                <sc-if value="{{ l.sourceShown }}" hint-placeholder-val="{{ true }}">
-                  <span style="font-size:9px; font-weight:600; color:#6F6C7A; background:#F3F1F7; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ l.source }}</span>
+                <span style="font-weight:600; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="color:#7C00FF;">{{ l.name }}</span>
+                <!-- Why this row is in the Idle tab, on the row — as a word, not a pill. -->
+                <sc-if value="{{ l.isIdle }}" hint-placeholder-val="{{ false }}">
+                  <span title="Nothing logged and no deal for this long" style="flex-shrink:0; font-size:10px; color:{{ l.idleColor }};">{{ l.idleLabel }}</span>
                 </sc-if>
+              </div>
+
+              <sc-if value="{{ l.siteShown }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ l.siteOpen }}" title="{{ l.siteTitle }}" style="min-width:0; color:#7C00FF; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" style-hover="text-decoration:underline;">{{ l.site }}</span>
+              </sc-if>
+              <sc-if value="{{ l.siteMissing }}" hint-placeholder-val="{{ false }}">
+                <span style="color:#D8D5E0;">—</span>
+              </sc-if>
+
+              <!-- The person, or the only way to reach them when nobody is named. Both are in the
+                   tooltip, because one line can only ever show one of them. -->
+              <span title="{{ l.whoTip }}" style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.who }}</span>
+
+              <span title="{{ l.source }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.source }}</span>
+              <span title="{{ l.need }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.need }}</span>
+
+              <!-- The score as a number, with its whole arithmetic in the tooltip. Absent rather
+                   than zero when it has not been worked out — see the note on `hasScore`.
+                   tabular-nums so a column of them lines up on the digit. -->
+              <span title="{{ l.scoreTitle }}" style="text-align:right; font-weight:700; color:{{ l.scoreFg }}; font-variant-numeric:tabular-nums; cursor:help;">{{ l.score }}</span>
+
+              <!-- Stage and owner read as one answer about a row — "Prospect, Rashid" — so they
+                   share a cell. The stage carries the colour it has everywhere else; the owner is
+                   grey, because an unowned lead should look unfinished rather than alarming. -->
+              <span title="{{ l.stageTip }}" style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                <span style="font-weight:600; color:{{ l.stColor }};">{{ l.stage }}</span>
+                <span style="color:#A9A6B4;"> · {{ l.owner }}</span>
               </span>
-              <span title="{{ l.need }}" style="color:#4B4757; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.need }}</span>
-              <!-- The score, with its whole arithmetic in the tooltip. Absent rather than zero when
-                   it has not been worked out — see the note on `hasScore`. -->
-              <div style="display:flex; align-items:center; gap:7px; min-width:0;">
-                <sc-if value="{{ l.hasScore }}" hint-placeholder-val="{{ true }}">
-                  <span title="{{ l.scoreTitle }}" style="flex:1; min-width:34px; height:5px; background:#F0EDF6; border-radius:99px; overflow:hidden; cursor:help;"><span style="display:block; height:100%; width:{{ l.scorePct }}; background:{{ l.scoreBar }}; border-radius:99px;"></span></span>
-                  <span title="{{ l.scoreTitle }}" style="font-size:11px; font-weight:700; color:{{ l.scoreFg }}; font-variant-numeric:tabular-nums; cursor:help; flex-shrink:0;">{{ l.score }}</span>
-                  <sc-if value="{{ l.isHot }}" hint-placeholder-val="{{ false }}">
-                    <span title="Scored hot" style="font-size:9px; flex-shrink:0;">🔥</span>
-                  </sc-if>
-                </sc-if>
-              </div>
-              <!-- Stage and who owns it, stacked. They were two columns; one of them had to give way
-                   to Need, and these two are read together anyway — "Prospect, Rashid" is one answer
-                   about a row, not two. -->
-              <div style="min-width:0; justify-self:start;">
-                <span style="display:inline-block; font-size:9px; font-weight:700; color:{{ l.stColor }}; background:{{ l.stBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ l.stage }}</span>
-                <div style="font-size:10px; color:#A9A6B4; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.owner }}</div>
-              </div>
-              <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap; align-items:center;">
+
+              <div class="ld-acts" style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
                 <!-- Real links, not decoration: mailto and tel open the thing the officer was about
                      to open anyway. Shown greyed and inert when there is nothing to open, rather
                      than hidden — a row whose icons move around is harder to use than one whose
                      icons are consistently placed. -->
-                <a href="{{ l.mailHref }}" title="{{ l.mailTitle }}" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ l.mailOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{ l.mailFg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 7l10 6 10-6"></path></svg></a>
-                <a href="{{ l.telHref }}" title="{{ l.telTitle }}" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ l.telOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{ l.telFg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"></path></svg></a>
-                <!-- The profile, with a composer in front of it. It sits beside mail and phone
-                     because it belongs to the same question — how do I reach this lead — and not
-                     with edit and delete, which change what the record is. -->
+                <a href="{{ l.mailHref }}" title="{{ l.mailTitle }}" style="width:26px; height:26px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ l.mailOp }};" style-hover="border-color:#7C00FF;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ l.mailFg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M2 7l10 6 10-6"></path></svg></a>
+                <a href="{{ l.telHref }}" title="{{ l.telTitle }}" style="width:26px; height:26px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; text-decoration:none; opacity:{{ l.telOp }};" style-hover="border-color:#7C00FF;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="{{ l.telFg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"></path></svg></a>
                 <sc-if value="{{ l.canSendProfile }}" hint-placeholder-val="{{ true }}">
-                  <span onClick="{{ l.sendProfile }}" title="Send the company profile to this lead" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#7C00FF; background:#F7F3FD;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 14l2.5 2.5L16 12"></path></svg></span>
+                  <span onClick="{{ l.sendProfile }}" title="Send the company profile to this lead" style="width:26px; height:26px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#7C00FF; background:#F7F3FD;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 14l2.5 2.5L16 12"></path></svg></span>
                 </sc-if>
-                <!-- WHAT IS LEFT HERE IS THE LIGHT STUFF: reach them, correct a typo, put them on
-                     the board. Every one carries a `title`, because an unlabelled icon is only safe
-                     when the reader can recover the word.
-
-                     Promote, Won, Lost and Reopen used to sit here too. Eight icons on a row is not
-                     a toolbar, it is a wall — they wrapped onto a second line and the row stopped
-                     being scannable, which is the one thing a list has to be. And they were the
-                     wrong four to render as coloured squares: turning a lead into a client
-                     provisions a portal login and stamps a CR, and that decision deserves a word
-                     rather than a green tick two pixels from a red cross.
-
-                     They now live on the lead panel, spelled out. One click further away, which is
-                     the right distance for the actions that change what a record IS. -->
                 <sc-if value="{{ l.canDelete }}" hint-placeholder-val="{{ false }}">
-                  <span onClick="{{ l.del }}" title="Delete this lead — only possible while nothing is attached to it" style="width:28px; height:28px; border-radius:8px; border:1px solid #FBD5D5; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FEECEC; border-color:#F5A9A9;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg></span>
+                  <span onClick="{{ l.del }}" title="Delete this lead — only possible while nothing is attached to it" style="width:26px; height:26px; border-radius:8px; border:1px solid #FBD5D5; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FEECEC; border-color:#F5A9A9;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"></path></svg></span>
                 </sc-if>
                 <sc-if value="{{ l.canEdit }}" hint-placeholder-val="{{ true }}">
-                  <span onClick="{{ l.edit }}" title="Correct these details" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#7C00FF; background:#F7F3FD;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg></span>
+                  <span onClick="{{ l.edit }}" title="Correct these details" style="width:26px; height:26px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="border-color:#7C00FF; background:#F7F3FD;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg></span>
                 </sc-if>
                 <sc-if value="{{ l.canOpenDeal }}" hint-placeholder-val="{{ true }}">
-                  <span onClick="{{ l.openDeal }}" title="Open a deal on the pipeline board" style="width:28px; height:28px; border-radius:8px; border:1px solid #E4D3FB; background:#F9F4FF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M12 12v5M9.5 14.5h5"></path></svg></span>
+                  <span onClick="{{ l.openDeal }}" title="Open a deal on the pipeline board" style="width:26px; height:26px; border-radius:8px; border:1px solid #E4D3FB; background:#F9F4FF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M12 12v5M9.5 14.5h5"></path></svg></span>
                 </sc-if>
                 <!-- A status, not an action: it has no click and no pointer, so nothing about it
                      invites a press. The deal's title is in the tooltip. -->
                 <sc-if value="{{ l.hasDeal }}" hint-placeholder-val="{{ false }}">
-                  <span title="On the board — {{ l.dealTitle }}" style="width:28px; height:28px; border-radius:8px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M9 14l2 2 4-4"></path></svg></span>
+                  <span title="On the board — {{ l.dealTitle }}" style="width:26px; height:26px; border-radius:8px; background:#E7F8EF; display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M9 14l2 2 4-4"></path></svg></span>
                 </sc-if>
               </div>
             </div>
@@ -36153,7 +36135,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       .sort((a, b) => ((_scoreBy9.get(b.id) || {}).score ?? -1) - ((_scoreBy9.get(a.id) || {}).score ?? -1)
         || String(a.name).localeCompare(String(b.name)));
 
-    const LD_PER_PAGE = 8;
+    // Eight was right for a row three lines tall; the one-line row is 45px, so eight of them
+    // is a short table over a lot of empty card. Twenty fills a laptop screen and still
+    // pages — 102 leads on one scroll would be worse than either.
+    const LD_PER_PAGE = 20;
     const _ldPageCount9 = Math.max(1, Math.ceil(_ldVisible.length / LD_PER_PAGE));
     const _ldPage9 = Math.min(Math.max(1, this.state.ldPage || 1), _ldPageCount9);
     const _ldPaged9 = _ldVisible.slice((_ldPage9 - 1) * LD_PER_PAGE, _ldPage9 * LD_PER_PAGE);
@@ -41430,6 +41415,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             || (l.lostReason ? 'Lost: ' + l.lostReason : (site9 ? '' : 'No details yet')),
           site: site9,
           siteShown: !!site9,
+          siteMissing: !site9,
+          // One line can show the person OR the way to reach them, so it shows whichever is
+          // worth more and carries both in the tooltip. A lead saved with nobody named is filed
+          // with the COMPANY as its own contact — that is the create path, the edit path and the
+          // importer all doing the same sane thing — and repeating the company name in the next
+          // column tells the reader nothing. The email or phone does.
+          who: (() => {
+            const n = (primary && primary.name) || l.contact || '';
+            const reach = (primary && (primary.email || primary.phone)) || l.email || l.phone || '';
+            return (n && n !== l.name) ? n : (reach || n || '—');
+          })(),
+          whoTip: [(primary && primary.name) || l.contact, (primary && primary.email) || l.email, (primary && primary.phone) || l.phone]
+            .filter(Boolean).join('  ·  ') || 'Nobody recorded yet',
+          stageTip: tone.label + ' · ' + (_ownerOf(l) || 'Unassigned'),
+          // What a single line cannot hold. Kept on the row as a tooltip rather than dropped:
+          // industry and city were the line under the name, and "added today" the line under that.
+          rowTip: ['Open ' + l.name, [l.industry, l.city].filter(Boolean).join(' · '),
+            arrivedAgo, l.campaign ? 'Campaign: ' + l.campaign : ''].filter(Boolean).join('\n'),
           siteTitle: site9 ? 'Open ' + site9 + ' in a new tab' : '',
           // stopPropagation, or clicking the domain also opens the lead panel behind the new tab.
           siteOpen: (ev9) => {
