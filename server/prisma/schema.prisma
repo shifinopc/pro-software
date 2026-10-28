@@ -33,6 +33,14 @@ model Company {
   /// pushes people into typing "0000" — a fake number that then looks exactly like a real one.
   /// Captured at the moment the lead becomes a client instead; see `lifecycle`.
   cr        String?
+  /// TRUE when this client HAS NO CR YET — because we are the ones getting it for them.
+  ///
+  /// Business setup is a service the firm sells: the client signs, pays and is onboarded months
+  /// before a commercial registration exists, and the CR is an OUTPUT of the New Company Formation
+  /// workflow, not a fact known at the start. Without this, such a client is indistinguishable from
+  /// one whose CR somebody forgot to type in — and the data-quality agents chase the second kind
+  /// forever. Set when the conversion waives the CR; cleared the moment a real one lands.
+  crPending Boolean @default(false)
   industry  String?
 
   // ── WHAT THE AUTHORITIES KNOW THIS COMPANY BY ───────────────────────────────────────────────

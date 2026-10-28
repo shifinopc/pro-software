@@ -2144,9 +2144,13 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
       where: { id: existing.id },
       data: {
         name,
-        city: b.city ?? null,
-        source: b.source ?? null,
-        sourceDetail: b.sourceDetail ?? null,
+        // Keyed on PRESENCE, like industry and the rest below. They used to be `?? null`, which is
+        // only safe while one form is the route's only caller: the Add-client form now reaches here
+        // to convert a lead, it has no Source box, and `?? null` would have erased where the lead
+        // came from as a side effect of signing them.
+        ...("city" in b ? { city: b.city || null } : {}),
+        ...("source" in b ? { source: b.source || null } : {}),
+        ...("sourceDetail" in b ? { sourceDetail: b.sourceDetail || null } : {}),
         // Industry and campaign were missing from this list entirely. The create route is the
         // generic CRUD one, which writes whatever columns it is handed, so a NEW lead kept both —
         // and the edit form sent them faithfully on every save, to a route that quietly dropped
@@ -2168,6 +2172,34 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
         // Keyed on presence for the same reason as the three above: clearing the box is an answer.
         ...("website" in b ? { website: b.website || null } : {}),
         ...("logoUrl" in b ? { logoUrl: b.logoUrl || null } : {}),
+        // ── THE CLIENT'S OWN PARTICULARS ────────────────────────────────────────────────────
+        //
+        // Written at creation and nowhere else, so there was no way to fill in a VAT number or an
+        // address after the fact — and no way at all for a lead that BECAME a client, which is the
+        // ordinary route in. The Add-client form converts a lead through this route rather than a
+        // second one, because this is where a rename re-addresses the unsent quotations and where
+        // an owner change leaves an assignment record. Presence-keyed throughout: the lead edit
+        // form mentions none of these and must not wipe them.
+        ...("nameAr" in b ? { nameAr: b.nameAr || null } : {}),
+        ...("companyType" in b ? { companyType: b.companyType || null } : {}),
+        ...("contactDesignation" in b ? { contactDesignation: b.contactDesignation || null } : {}),
+        ...("mainActivity" in b ? { mainActivity: b.mainActivity || null } : {}),
+        ...("vatNumber" in b ? { vatNumber: b.vatNumber || null } : {}),
+        ...("gosiNumber" in b ? { gosiNumber: b.gosiNumber || null } : {}),
+        ...("molId" in b ? { molId: b.molId || null } : {}),
+        ...("chamberNumber" in b ? { chamberNumber: b.chamberNumber || null } : {}),
+        ...("misaLicense" in b ? { misaLicense: b.misaLicense || null } : {}),
+        ...("shortAddress" in b ? { shortAddress: b.shortAddress || null } : {}),
+        ...("buildingNumber" in b ? { buildingNumber: b.buildingNumber || null } : {}),
+        ...("street" in b ? { street: b.street || null } : {}),
+        ...("secondaryNumber" in b ? { secondaryNumber: b.secondaryNumber || null } : {}),
+        ...("district" in b ? { district: b.district || null } : {}),
+        ...("postalCode" in b ? { postalCode: b.postalCode || null } : {}),
+        ...("groupId" in b ? { groupId: b.groupId || null } : {}),
+        // `lifecycle` is still refused here, and deliberately: this writes what a company IS, not
+        // where it sits in its life. That move is POST /:id/lifecycle, which also provisions the
+        // portal login and dates the transition.
+        ...("status" in b ? { status: String(b.status ?? "").trim() || undefined } : {}),
         // `null` is a real choice here — a manager deliberately unassigning — so the key being
         // PRESENT is what decides, not whether it has a value.
         ...("ownerId" in b ? { ownerId: b.ownerId || null } : {}),
@@ -4027,7 +4059,16 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
   const lostReason = String((req.body ?? {}).lostReason ?? "").trim();
   // Both of these are refused rather than defaulted. A CR invented here is a fake number on a real
   // client; a blank lost-reason makes the one report that could improve next quarter useless.
-  if (to === ACTIVE_CLIENT && !cr) return res.status(400).json({ error: "A CR number is required to make this a client" });
+  // THE ONE WAY TO BECOME A CLIENT WITHOUT A CR: say so.
+  //
+  // Business setup is a service the firm sells. That client signs, pays and is onboarded months
+  // before a commercial registration exists — and a prospect gets no portal login (see auth.ts) and
+  // is never billed (see the recurring run in jobs.ts), so leaving them one is not an option. The
+  // waiver is explicit and recorded on the record, so "no CR yet" never looks like "CR not typed in".
+  const crPending = (req.body ?? {}).crPending === true;
+  if (to === ACTIVE_CLIENT && !cr && !crPending) {
+    return res.status(400).json({ error: "A CR number is required to make this a client — or tick \"no CR yet\" if we are setting this company up." });
+  }
   if ((to === "lost" || to === "churned") && !lostReason) return res.status(400).json({ error: "Say why it was lost — that is the whole value of recording it" });
 
   // The change and its history row commit or fail together — a company whose current state
@@ -4069,7 +4110,12 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
       where: { id: co.id },
       data: {
         lifecycle: to,
-        cr: to === ACTIVE_CLIENT ? cr : co.cr,
+        // NULL, not "", when there is none: the column's own comment says nullable, and an empty
+        // string is a third state that every `cr: null` query would then miss.
+        cr: to === ACTIVE_CLIENT ? (cr || null) : co.cr,
+        // Only ever set on the way IN to client, and a CR given here clears it. Moving back out
+        // (churned, lost) leaves it alone: it says something about the CR, not about the lifecycle.
+        ...(to === ACTIVE_CLIENT ? { crPending: !cr } : {}),
         lostReason: to === "lost" || to === "churned" ? lostReason : null,
         // Taken on the day they became a client, not the day the lead was typed in.
         createdAt: to === ACTIVE_CLIENT && !co.createdAt ? nowLc : co.createdAt,

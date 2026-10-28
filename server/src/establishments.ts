@@ -85,7 +85,10 @@ export async function resolveEstablishmentId(companyId: string, id: unknown): Pr
 
 async function mirrorCompanyCr(companyId: string) {
   const main = await mainEstablishment(companyId);
-  if (main) await prisma.company.update({ where: { id: companyId }, data: { cr: main.crNumber } });
+  // A main CR exists, so nobody is waiting for one any more — however it got here. The CRs card's
+  // own "+ Add main CR" reaches this too, and a waiver left standing beside a real registration is
+  // a flag that outlives the fact it describes.
+  if (main) await prisma.company.update({ where: { id: companyId }, data: { cr: main.crNumber, crPending: false } });
 }
 
 async function assertUnique(companyId: string, crNumber: string, exceptId?: string) {
@@ -178,6 +181,47 @@ export async function syncMainFromCompany(companyId: string) {
     return;
   }
   if (normCr(main.crNumber) !== cr) await prisma.establishment.update({ where: { id: main.id }, data: { crNumber: cr } });
+}
+
+/**
+ * THE COMMERCIAL REGISTRATION THAT FINISHES A BUSINESS SETUP.
+ *
+ * A client converted with `crPending` has no CR because the firm is getting them one. When it comes,
+ * it comes as a CERTIFICATE — the document somebody files against the client — and that document is
+ * the only honest moment to learn the number. Typing it into a field somewhere else as well would be
+ * the same number in two places, which is exactly what `Company.cr` and the main CR row already work
+ * hard to avoid.
+ *
+ * So: the first commercial registration filed for a client still waiting for one becomes the MAIN CR,
+ * and the waiver is lifted. Deliberately narrow — it does nothing for a client that already has a CR,
+ * nothing for a client that never waived one, and nothing for an employee's document.
+ *
+ * Returns whether it adopted, so the caller can say so. Never throws into the caller's path: a
+ * certificate that files correctly must not fail because the bookkeeping around it did.
+ */
+export async function adoptMainCr(doc: {
+  companyId?: string | null; employeeId?: string | null; docType?: string | null; docNumber?: string | null;
+}): Promise<string | null> {
+  if (!doc.companyId || doc.employeeId) return null;
+  const cr = normCr(doc.docNumber);
+  if (!isRealCr(cr)) return null;
+  const co = await prisma.company.findUnique({
+    where: { id: doc.companyId },
+    select: { id: true, crPending: true, cr: true },
+  });
+  if (!co || !co.crPending || isRealCr(co.cr)) return null;
+  // Which types ARE a commercial registration is the firm's own list, so it is read from the type
+  // rather than hardcoded here — by pack key first, because a firm may rename the row.
+  const name = String(doc.docType ?? "");
+  const dt = await prisma.documentType.findFirst({ where: { name }, select: { packKey: true, name: true } });
+  const isCr = dt
+    ? dt.packKey === "sa.doctype.commercial-registration" || dt.name === "Commercial Registration"
+    : name === "Commercial Registration";
+  if (!isCr) return null;
+  // cr first, then the main-CR row from it — syncMainFromCompany is the one writer of that pairing.
+  await prisma.company.update({ where: { id: co.id }, data: { cr, crPending: false } });
+  await syncMainFromCompany(co.id);
+  return cr;
 }
 
 /** A short label for a CR — used in renewal titles, lists and exports. */

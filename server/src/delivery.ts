@@ -185,7 +185,8 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
           type: "system",
           title: `${co.name} is not a client yet`,
           message: `They accepted ${q.number} and work has started, but the record is still marked "${co.lifecycle}"`
-            + `${co.cr ? "" : " with no CR number"}. Open the lead and use "Won — turn into a client" to set it up.`,
+            + `${co.cr ? "" : " with no CR number"}. Open the lead and use "Mark won" — it opens the client form, `
+            + `where "no CR yet" is a tick if we are the ones setting this company up.`,
         });
       }
     }

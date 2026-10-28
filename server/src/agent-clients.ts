@@ -15,7 +15,7 @@ import { orgName } from "./emailshell.js";
 
 const daysSince = (iso?: string | null) => { const d = daysFromToday(iso); return d === null ? null : -d; };
 const OPEN_INV = ["pending", "unpaid", "sent", "overdue"];
-const clients = () => prisma.company.findMany({ where: { lifecycle: ACTIVE_CLIENT }, select: { id: true, name: true, cr: true, email: true, status: true, createdAt: true, ownerId: true, groupId: true }, take: 5000 });
+const clients = () => prisma.company.findMany({ where: { lifecycle: ACTIVE_CLIENT }, select: { id: true, name: true, cr: true, crPending: true, email: true, status: true, createdAt: true, ownerId: true, groupId: true }, take: 5000 });
 
 async function outstandingBy(companyIds: string[]) {
   const invs = await prisma.invoice.findMany({ where: { companyId: { in: companyIds }, status: { in: OPEN_INV } }, select: { id: true, number: true, amount: true, dueDate: true, companyId: true, currency: true, promisedDate: true } });
@@ -50,7 +50,9 @@ export async function runClientOnboarding() {
       const docs = coDocs.filter(d => d.companyId === c.id).map(d => d.docType);
       const hasCr = docs.some(d => /\bcr\b|commercial reg/i.test(d));
       const checks = [
-        check(c.cr ? "ok" : "flag", "CR number", c.cr || "Missing."),
+        // A client whose CR we are still getting for them is not missing data — see Company.crPending.
+        check(c.cr ? "ok" : c.crPending ? "ok" : "flag", "CR number",
+          c.cr || (c.crPending ? "Being issued — business setup in progress." : "Missing.")),
         check(primary?.email || c.email ? "ok" : "flag", "Main contact with email", primary?.email || c.email || "No email to send documents and invoices to."),
         check(hasSub ? "ok" : "flag", "Package", hasSub ? "Active." : "No active package — nothing will be billed."),
         check(logins.length ? (logins.some(l => l.lastActive) ? "ok" : "unknown") : "flag", "Portal", !logins.length ? "No portal user." : logins.some(l => l.lastActive) ? "The client has signed in." : "Invited, never signed in."),

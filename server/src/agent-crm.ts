@@ -108,7 +108,7 @@ export async function runWonOnboarding() {
     const companyIds = [...new Set([...accepted.map(q => q.companyId), ...won.map(o => o.companyId)].filter(Boolean) as string[])];
     if (!companyIds.length) return ["No deals won in the last 45 days."];
     const [cos, subs, portal, staffCount, tasksFromQuotes] = await Promise.all([
-      prisma.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, name: true, lifecycle: true, cr: true, email: true, ownerId: true, groupId: true } }),
+      prisma.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, name: true, lifecycle: true, cr: true, crPending: true, email: true, ownerId: true, groupId: true } }),
       prisma.subscription.findMany({ where: { OR: [{ companyId: { in: companyIds } }, { scope: "company", refId: { in: companyIds } }] }, select: { companyId: true, refId: true, daysLeft: true } }),
       prisma.user.findMany({ where: { type: "portal", companyId: { in: companyIds } }, select: { companyId: true } }),
       prisma.employee.groupBy({ by: ["companyId"], where: { companyId: { in: companyIds }, archived: false }, _count: { _all: true } }),
@@ -126,7 +126,8 @@ export async function runWonOnboarding() {
       const notInvoiced = quotes.filter(q => !invoiced.has(q.id));
       const checks = [
         check(co.lifecycle === "client" ? "ok" : "flag", "Marked as a client", co.lifecycle === "client" ? "Lifecycle is client." : `Still “${co.lifecycle}” — promote it so it is billed and counted.`),
-        check(co.cr ? "ok" : "flag", "CR number", co.cr ? co.cr : "Missing — needed for a client record."),
+        check(co.cr ? "ok" : co.crPending ? "ok" : "flag", "CR number",
+          co.cr ? co.cr : co.crPending ? "Being issued — business setup in progress." : "Missing — needed for a client record."),
         check(hasSub ? "ok" : "flag", "Package", hasSub ? "Has an active subscription." : "No active package yet."),
         check(hasPortal ? "ok" : "flag", "Portal access", hasPortal ? "A portal user exists." : "No portal user — the client cannot upload or follow requests."),
         check(staff ? "ok" : "flag", "Employees", staff ? `${staff} on file.` : "No employees imported yet."),
@@ -137,7 +138,7 @@ export async function runWonOnboarding() {
       if (!open.length) continue;
       const due = addDays(today(), 3);
       const tasks: TaskLine[] = [
-        ...(co.lifecycle !== "client" || !co.cr ? [{ title: `Onboarding: complete the client record for ${co.name} (CR, lifecycle)`, dueDate: due, assigneeId: co.ownerId }] : []),
+        ...(co.lifecycle !== "client" || (!co.cr && !co.crPending) ? [{ title: `Onboarding: complete the client record for ${co.name} (CR, lifecycle)`, dueDate: due, assigneeId: co.ownerId }] : []),
         ...(!hasSub ? [{ title: `Onboarding: set up the package for ${co.name}`, dueDate: due, assigneeId: co.ownerId }] : []),
         ...(!hasPortal ? [{ title: `Onboarding: invite ${co.name} to the client portal`, dueDate: due, assigneeId: co.ownerId }] : []),
         ...(!staff ? [{ title: `Onboarding: import ${co.name}'s employees`, dueDate: addDays(today(), 7), assigneeId: co.ownerId }] : []),

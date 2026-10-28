@@ -12,7 +12,7 @@ import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } fr
 import { startDeliveryForQuotation } from "./delivery.js";
 import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
-import { resolveEstablishmentId, syncMainFromCompany, EstablishmentError } from "./establishments.js";
+import { resolveEstablishmentId, syncMainFromCompany, adoptMainCr, EstablishmentError } from "./establishments.js";
 
 /**
  * An employee or company document may name one of the client's CRs. It must be an active CR of THAT
@@ -393,6 +393,13 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
       // A client created with a CR has that CR as its main one from the start.
       if (modelName === "company" && (created as any).cr) await syncMainFromCompany(created.id).catch(() => {});
+      // ...and a client still waiting for one gets it from the certificate, whenever that arrives:
+      // from step 2 of the Add-client form on the day they sign, or from their Documents tab months
+      // later when the formation work finishes. One place, so both doors behave the same.
+      if (modelName === "document") {
+        const adopted = await adoptMainCr(created).catch(() => null);
+        if (adopted) logActivity({ type: "client", message: `CR ${adopted} issued — ${created.person || "the client"} is now registered`, user: "System" });
+      }
       // Persisted activity feed + notifications for compliance-critical events
       const act = await activityFor(modelName, created);
       if (act) logActivity(act);

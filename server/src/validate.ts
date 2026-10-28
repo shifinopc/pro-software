@@ -37,7 +37,12 @@ export function validate(model: string, data: any, isCreate: boolean): string | 
       // handed one over. Enforced against the lifecycle rather than always, which is what stops
       // people typing "0000" to get past the form.
       if (has("lifecycle") && !LIFECYCLES.includes(String(data.lifecycle))) return `Lifecycle must be one of: ${LIFECYCLES.join(", ")}`;
-      if (isCreate && (data.lifecycle ?? "client") === "client" && blank(data.cr)) return "CR number is required for a client";
+      // `crPending` is the one way past it, and it is a statement, not a blank: the firm is doing
+      // this company's business setup, so the CR does not exist yet and will arrive as the output of
+      // the formation work. Everything downstream can tell that apart from a CR nobody typed in.
+      if (isCreate && (data.lifecycle ?? "client") === "client" && blank(data.cr) && data.crPending !== true) {
+        return "CR number is required for a client";
+      }
       return null;
 
     case "contact":
