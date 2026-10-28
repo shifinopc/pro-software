@@ -918,6 +918,62 @@
     </div>
   </sc-if>
 
+  <!-- CONNECT BY PASSWORD. The other two providers hand off to their own sign-in page; this one
+       cannot, because there is nobody to hand off to. So it is the one mailbox flow that asks for
+       a credential, and it says plainly what it does with it. -->
+  <sc-if value="{{ imapShow }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ imapClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:480; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .15s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-rise" style="width:440px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); overflow:hidden;">
+        <div style="padding:14px 16px 15px;">
+          <div style="display:flex; align-items:flex-start; gap:12px;">
+            <span style="width:30px; height:30px; border-radius:10px; background:#F3E8FF; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m2 7 10 6 10-6"></path></svg>
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; color:#1A1523;">{{ imapTitle }}</div>
+              <div style="font-size:11px; color:#6F6C7A; margin-top:4px; line-height:1.5;">{{ imapBody }}</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL ADDRESS</div>
+            <input value="{{ imapAddr }}" onInput="{{ setImapAddr }}" placeholder="you@gmail.com" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; outline:none;"></div>
+
+          <!-- Shared only: the same question the OAuth flow asks first, for the same reason —
+               a list of raw addresses is unreadable the moment there are two. -->
+          <sc-if value="{{ imapLabelShow }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:10px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHAT TO CALL IT</div>
+              <input value="{{ imapLabel }}" onInput="{{ setImapLabel }}" placeholder="e.g. Enquiries, Sales" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; outline:none;"></div>
+          </sc-if>
+
+          <div style="margin-top:10px;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ imapPassLabel }}</div>
+            <input value="{{ imapPass }}" onInput="{{ setImapPass }}" type="password" placeholder="{{ imapPassPlaceholder }}" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; outline:none;">
+            <div style="font-size:10px; color:{{ imapHintInk }}; margin-top:6px; line-height:1.55;">{{ imapHint }}</div></div>
+
+          <!-- Only when we cannot work the server out from the address. Asking every person for
+               their IMAP host is asking most of them to fail. -->
+          <sc-if value="{{ imapHostShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:9px; margin-top:10px;">
+              <div style="flex:1; min-width:0;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">IMAP SERVER</div>
+                <input value="{{ imapHost }}" onInput="{{ setImapHost }}" placeholder="imap.yourdomain.com" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; outline:none;"></div>
+              <div style="width:86px; flex-shrink:0;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PORT</div>
+                <input value="{{ imapPort }}" onInput="{{ setImapPort }}" placeholder="993" style="margin-top:6px; width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; outline:none;"></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ imapErrShow }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:11px; background:#FEECEC; border:1px solid #F8D3D3; border-radius:11px; padding:9px 12px; font-size:11px; color:#C0353A; line-height:1.5;">{{ imapErr }}</div>
+          </sc-if>
+
+          <div style="display:flex; align-items:center; gap:9px; margin-top:13px;">
+            <div style="flex:1;"></div>
+            <button onClick="{{ imapClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+            <button onClick="{{ imapSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 15px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ imapBtn }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ dlgShow }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ dlgCancel }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:500; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .15s ease both;">
       <div onClick="{{ stopClick }}" class="fm-rise" style="width:430px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); overflow:hidden;">
@@ -39586,6 +39642,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   + '<path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>'
                   + '<path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>']),
               },
+              imap: {
+                name: 'Any mailbox', short: 'Any mailbox',
+                icon: svg9(['0 0 24 24',
+                  '<rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="#7C00FF" stroke-width="2"/>'
+                  + '<path d="m2 7 10 6 10-6" fill="none" stroke="#7C00FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>']),
+              },
               microsoft: {
                 name: 'Microsoft 365', short: 'Microsoft',
                 icon: svg9(['0 0 23 23',
@@ -39593,7 +39655,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   + '<path fill="#00A4EF" d="M1 12h10v10H1z"/><path fill="#FFB900" d="M12 12h10v10H12z"/>']),
               },
             };
-            const provs9 = ['google', 'microsoft']
+            const openImap9 = (kind9) => this.setState({
+              imapKind: kind9, imapAddr: '', imapPass: '', imapHost: '', imapPort: '',
+              imapLabel: '', imapErr: '', imapNeedHost: false, imapBusy: false,
+            });
+            const provs9 = ['google', 'microsoft', 'imap']
               .filter(id => av9[id])
               .map(id => ({
                 id,
@@ -39603,6 +39669,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 label: BRAND9[id].name,
                 icon: BRAND9[id].icon,
                 go: () => {
+                  if (id === 'imap') return openImap9('personal');
                   fetch(_api9() + '/api/mailbox/connect?provider=' + id, { headers: _hdr9() })
                     .then(r => r.json())
                     .then(j => {
@@ -39622,7 +39689,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               mbConnected: !!(M9 && M9.connected),
               mbNotConnected: !!M9 && !M9.connected,
               mbAddress: (M9 && M9.address) || '',
-              mbProvider: M9 && M9.provider === 'microsoft' ? 'Microsoft 365' : M9 && M9.provider ? 'Google Workspace' : '',
+              mbProvider: M9 && M9.provider === 'imap' ? 'IMAP'
+                : M9 && M9.provider === 'microsoft' ? 'Microsoft 365'
+                : M9 && M9.provider ? 'Google Workspace' : '',
               mbLastSync: 'Last checked ' + ago9(M9 && M9.lastSyncAt),
               mbHasError: !!(M9 && M9.lastError),
               mbError: (M9 && M9.lastError) || '',
@@ -39652,6 +39721,81 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               },
               mbRefresh: () => { if (this._loadMailbox) this._loadMailbox(); if (this._loadInbox) this._loadInbox(); },
 
+              // ── connect by password ──────────────────────────────────────────────────────
+              ...(() => {
+                const k9 = this.state.imapKind || '';
+                const shared9 = k9 === 'shared';
+                const addr9 = this.state.imapAddr || '';
+                // COSMETIC ONLY: it decides the wording, never whether the connection is allowed.
+                // The server owns that, so a drift here changes a hint and nothing else.
+                const big9 = /@(gmail|googlemail|outlook|hotmail|live|msn|yahoo)\./i.test(addr9);
+                const busy9x = !!this.state.imapBusy;
+                return {
+                  imapShow: !!k9,
+                  imapTitle: shared9 ? 'Connect an office mailbox' : 'Connect your mailbox',
+                  imapBody: shared9
+                    ? 'Read by everyone who can see the Inbox. Sign in as the mailbox itself \u2014 info@ or sales@ \u2014 not as yourself.'
+                    : 'Works with any provider. The password is encrypted before it is stored and is never shown again, here or anywhere else.',
+                  imapAddr: addr9,
+                  setImapAddr: (e9) => this.setState({ imapAddr: e9 && e9.target ? e9.target.value : '' }),
+                  imapLabelShow: shared9,
+                  imapLabel: this.state.imapLabel || '',
+                  setImapLabel: (e9) => this.setState({ imapLabel: e9 && e9.target ? e9.target.value : '' }),
+                  imapPass: this.state.imapPass || '',
+                  setImapPass: (e9) => this.setState({ imapPass: e9 && e9.target ? e9.target.value : '' }),
+                  imapPassLabel: big9 ? 'APP PASSWORD' : 'PASSWORD',
+                  imapPassPlaceholder: big9 ? '16 characters from your account' : 'Mailbox password',
+                  // Said BEFORE the attempt, not after it fails: these providers refuse an account
+                  // password outright, and "authentication failed" sends people off to check a
+                  // password that was never going to be accepted.
+                  imapHint: big9
+                    ? 'This provider will not accept your normal password. Turn on 2-step verification, create an app password for mail, and paste that here.'
+                    : 'Most servers take the mailbox password. If yours uses app passwords, use one of those.',
+                  imapHintInk: big9 ? '#B7791F' : '#A9A6B4',
+                  // Revealed only when the server says it cannot work the host out for itself.
+                  imapHostShow: !!this.state.imapNeedHost,
+                  imapHost: this.state.imapHost || '',
+                  setImapHost: (e9) => this.setState({ imapHost: e9 && e9.target ? e9.target.value : '' }),
+                  imapPort: this.state.imapPort || '',
+                  setImapPort: (e9) => this.setState({ imapPort: e9 && e9.target ? e9.target.value : '' }),
+                  imapErrShow: !!this.state.imapErr,
+                  imapErr: this.state.imapErr || '',
+                  imapBtn: busy9x ? 'Checking\u2026' : 'Connect',
+                  imapClose: () => this.setState({ imapKind: '', imapPass: '' }),
+                  imapSave: () => {
+                    if (busy9x) return;
+                    if (shared9 && !String(this.state.imapLabel || '').trim()) {
+                      return this.setState({ imapErr: 'Give it a name people will recognise.' });
+                    }
+                    this.setState({ imapBusy: true, imapErr: '' });
+                    fetch(_api9() + '/api/mailbox/imap/' + (shared9 ? 'shared/' : '') + 'connect', {
+                      method: 'POST', headers: { ..._hdr9(), 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        address: addr9, password: this.state.imapPass || '',
+                        host: this.state.imapHost || '', port: this.state.imapPort || '',
+                        label: this.state.imapLabel || '',
+                      }),
+                    })
+                      .then(r9 => r9.json().then(j9 => ({ ok: r9.ok, j: j9 })))
+                      .then(({ ok: ok9, j: j9 }) => {
+                        this.setState({ imapBusy: false });
+                        if (!ok9) {
+                          return this.setState({
+                            imapErr: (j9 && j9.error) || 'Could not connect that mailbox',
+                            imapNeedHost: !!(j9 && j9.needHost) || !!this.state.imapNeedHost,
+                          });
+                        }
+                        // The password leaves the browser the moment it has been used.
+                        this.setState({ imapKind: '', imapPass: '' });
+                        this.toast('Mailbox connected \u2014 ' + ((j9 && j9.address) || addr9));
+                        if (this._loadMailbox) this._loadMailbox();
+                        if (this._loadInbox) this._loadInbox();
+                      })
+                      .catch(() => this.setState({ imapBusy: false, imapErr: 'Server unreachable' }));
+                  },
+                };
+              })(),
+
               // ── the office's own mailboxes ────────────────────────────────────────────────
               ...(() => {
                 const list9 = (M9 && Array.isArray(M9.shared)) ? M9.shared : [];
@@ -39668,7 +39812,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   shdRows: list9.map(m9 => ({
                     name: m9.label || m9.address,
                     meta: (m9.label ? m9.address + ' \u00b7 ' : '')
-                      + (m9.provider === 'microsoft' ? 'Microsoft 365' : 'Google Workspace')
+                      + (m9.provider === 'imap' ? 'IMAP' : m9.provider === 'microsoft' ? 'Microsoft 365' : 'Google Workspace')
                       + ' \u00b7 Last checked ' + ago9(m9.lastSyncAt),
                     dot: m9.status === 'active' ? '#12B76A' : '#E8A33D',
                     hasError: !!m9.lastError,
@@ -39703,6 +39847,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                     label: '+ ' + BRAND9[p9.id].short,
                     icon: BRAND9[p9.id].icon,
                     go: () => {
+                      if (p9.id === 'imap') return openImap9('shared');
                       this._prompt('What is this mailbox called?', 'Enquiries', {
                         required: true, requiredNote: 'Give it a name people will recognise',
                         okLabel: 'Continue', placeholder: 'e.g. Enquiries, Sales, Support',

@@ -34,6 +34,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
          personalMailbox, sharedMailboxes, readableMailboxes, mailboxName, buildMatchIndex,
          replyTimes } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
+import { verifyImap, credBlob, hostFor, needsAppPassword } from "./imap.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
 import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
 import { planMerge, applyMerge } from "./company-merge.js";
@@ -178,6 +179,12 @@ const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeade
  * about "too many requests" that names nothing the admin did wrong. Thirty leaves the abuse ceiling
  * low while putting it far above any honest day's work.
  */
+/**
+ * A password per attempt, against a host the caller names. Slower than the API limiter because a
+ * wrong one is a failed login on somebody's real mail account, and providers lock accounts out on
+ * repetition — the throttle protects the user's mailbox, not only this server.
+ */
+const imapLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: "Too many mailbox connection attempts — try again later" } });
 const inviteLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many invitations sent from here in the last hour — try again shortly" } });
 
 // Allow the console + portal origins (local dev and live). Override with CORS_ORIGINS in .env
@@ -7550,7 +7557,9 @@ app.get("/api/mailbox/status", requireAuth, requireStaff, async (req, res) => {
       id: m.id, label: m.label, address: m.address, provider: m.provider,
       status: m.status, lastSyncAt: m.lastSyncAt, lastError: m.lastError,
     })),
-    available: { google, microsoft },
+    // IMAP is always available: it needs no app registration, no client id and no consent screen,
+    // which is the entire reason it is here.
+    available: { google, microsoft, imap: true },
     // Said plainly rather than left for somebody to infer from two false flags.
     setupNote: google || microsoft ? null
       : "No mail provider is configured yet. An admin needs to register an app on the firm's own Google Workspace or Microsoft 365 tenant and add its client id and secret to the server environment.",
@@ -7584,6 +7593,65 @@ app.get("/api/mailbox/shared/connect", requireAuth, requireStaff, requireReadRol
   const state = signState({ sub: (req as any).auth.sub, provider, kind: "shared", label });
   res.json({ url: authorizeUrl(provider, state) });
 });
+
+/**
+ * CONNECT A MAILBOX BY PASSWORD, over IMAP.
+ *
+ * Not an OAuth route and deliberately shaped differently: there is no redirect, no state and no
+ * provider to ask. The credentials are PROVED before anything is written — a row saved unverified
+ * looks connected on screen and fails silently on the next tick, which is how somebody ends up
+ * believing their mail is being read when it is not.
+ *
+ * The password reaches this process once, is encrypted with CRED_KEY on the way into the row, and
+ * is never returned by any route. It is not logged: the IMAP client's own logger is off, because
+ * it prints every command and IMAP commands carry addresses and subjects.
+ */
+async function imapConnect(req: any, res: any, kind: "personal" | "shared") {
+  const b = req.body ?? {};
+  const address = String(b.address ?? "").trim().toLowerCase();
+  const pass = String(b.password ?? "");
+  const host = String(b.host ?? "").trim() || hostFor(address);
+  const port = Number(b.port) || 993;
+
+  if (!address.includes("@")) return res.status(400).json({ error: "That does not look like an email address." });
+  if (!pass) return res.status(400).json({ error: "A password is needed to read the mailbox." });
+  // `needHost` rather than the form keeping its own copy of the host table: two lists of mail
+  // servers that must agree is one list too many.
+  if (!host) return res.status(400).json({ needHost: true, error: "We do not know the IMAP server for that address — enter it, for example imap.yourdomain.com." });
+  // The caller names the host, so the server must not be talked into dialling its own network.
+  // Staff-only is not enough on its own: it would still turn this route into a port scanner.
+  if (/^(localhost$|127\.|10\.|192\.168\.|169\.254\.|0\.|\[?::1)/i.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+    return res.status(400).json({ error: "That host is not reachable from here." });
+  }
+
+  try {
+    const checked = await verifyImap({ host, port, user: address, pass });
+    const label = kind === "shared" ? (String(b.label ?? "").trim().slice(0, 60) || null) : null;
+    await saveConnection((req as any).auth.sub, "imap", checked.address, { accessToken: credBlob({ host, port, user: address, pass }) }, { kind, label });
+    await logAudit({ action: kind === "shared" ? "mailbox.shared_connected" : "mailbox.connected",
+                     actorId: (req as any).auth.sub, target: checked.address,
+                     detail: `imap ${host}${kind === "shared" && label ? ` — shared (${label})` : ""}` });
+    res.json({ ok: true, address: checked.address, messages: checked.messages });
+  } catch (e: any) {
+    // The LIBRARY'S OWN FLAGS, not a regex over `message` — which for every IMAP refusal is the
+    // unhelpful string "Command failed". The cause is in `authenticationFailed` and the server's
+    // verbatim reply, and reading those is the difference between "Command failed" and a rep
+    // knowing they need an app password.
+    const detail = String(e?.responseText ?? e?.message ?? e);
+    const authFailed = e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
+    const friendly = authFailed
+      ? (needsAppPassword(address)
+          ? `That sign-in was refused (${detail}). This provider will not accept your normal password here — turn on 2-step verification, create an app password for mail, and use that.`
+          : `That sign-in was refused (${detail}). Check the address and password.`)
+      : /certificate|self[- ]signed|tls|ssl/i.test(detail) ? "The mail server's security certificate could not be verified."
+      : /timeout|ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ETIMEDOUT/i.test(detail) ? `Could not reach ${host} on port ${port}.`
+      : detail.slice(0, 200);
+    res.status(400).json({ error: friendly });
+  }
+}
+
+app.post("/api/mailbox/imap/connect", imapLimiter, requireAuth, requireStaff, (req, res) => imapConnect(req, res, "personal"));
+app.post("/api/mailbox/imap/shared/connect", imapLimiter, requireAuth, requireStaff, requireReadRole("super_admin", "admin"), (req, res) => imapConnect(req, res, "shared"));
 
 app.get("/api/mailbox/callback", async (req, res) => {
   const code = String(req.query.code ?? "");

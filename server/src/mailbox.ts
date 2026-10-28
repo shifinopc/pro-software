@@ -49,7 +49,7 @@ export interface FetchResult {
 
 /** What every adapter must do, and nothing more. */
 export interface MailboxProvider {
-  readonly name: "google" | "microsoft";
+  readonly name: "google" | "microsoft" | "imap";
   /** Exchange a refresh token for a live access token. */
   refresh(refreshToken: string): Promise<{ accessToken: string; expiresAt: string }>;
   /** Messages since `cursor` (or a recent window when null). */
@@ -667,7 +667,7 @@ export async function replyTimes(scope?: string | string[] | null): Promise<{
  * that used to say so made shared mailboxes impossible to express at all.
  */
 export async function saveConnection(
-  userId: string, provider: "google" | "microsoft", address: string,
+  userId: string, provider: "google" | "microsoft" | "imap", address: string,
   tokens: { accessToken: string; refreshToken?: string | null; expiresAt?: string | null },
   opts?: { kind?: string; label?: string | null },
 ) {
@@ -702,6 +702,11 @@ export async function saveConnection(
 
 /** The live access token, refreshed if it is about to expire. Never returned to any route. */
 export async function accessTokenFor(conn: { id: string; accessTokenEnc: string; refreshTokenEnc: string | null; expiresAt: string | null }, provider: MailboxProvider): Promise<string> {
+  // A password is not a grant: there is no expiry to beat and nothing to exchange. Said here
+  // rather than by storing a fake far-future expiry, which would be a lie the next reader has to
+  // decode.
+  if (provider.name === "imap") return decrypt(conn.accessTokenEnc);
+
   // Refreshed AHEAD of expiry, not after a 401. A sync that only recovers from failure spends
   // every cycle failing first, and the failure is indistinguishable from a revoked grant.
   const soon = Date.now() + 120_000;

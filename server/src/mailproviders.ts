@@ -17,6 +17,7 @@
  */
 import type { MailboxProvider, FetchResult, RawMessage, MessageBody } from "./mailbox.js";
 import { htmlToText } from "./mailbox.js";
+import { imapProvider } from "./imap.js";
 
 const env = (k: string) => String(process.env[k] ?? "").trim();
 
@@ -251,4 +252,6 @@ export const microsoftProvider: MailboxProvider = {
 };
 
 export const providerFor = (name: string): MailboxProvider =>
-  name === "microsoft" ? microsoftProvider : googleProvider;
+  name === "imap" ? imapProvider
+  : name === "microsoft" ? microsoftProvider
+  : googleProvider;
