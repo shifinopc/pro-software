@@ -42,6 +42,7 @@ import { publish } from "./realtime.js";
 import { prisma } from "./db.js";
 import { INDIVIDUAL } from "./validate.js";
 import { FILLABLE } from "./company-merge.js";
+import ExcelJS from "exceljs";
 
 /** The columns the template offers, in order — and the only ones read. */
 export const LEAD_IMPORT_COLUMNS = [
@@ -115,6 +116,11 @@ const ALIAS: Record<string, string> = {
 };
 
 const clean = (v: unknown) => String(v ?? "").trim();
+/** A heading as written, reduced to the column this file reads. */
+const headerName = (raw: unknown) => {
+  const k = clean(raw).toLowerCase().replace(/\s+/g, " ");
+  return ALIAS[k] ?? k.replace(/\s+/g, "_");
+};
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
 /** A configured list, or nothing at all — a template must not fail because a table is empty. */
@@ -142,6 +148,72 @@ export async function leadImportTemplateCsv(): Promise<string> {
   const row = LEAD_IMPORT_COLUMNS.map(c => csvCell(example[c] ?? "")).join(",");
   // The BOM is what makes Excel read it as UTF-8; without it an Arabic name arrives as mojibake.
   return `﻿${head}\n${row}\n`;
+}
+
+/**
+ * A SPREADSHEET, READ AS THE ROWS IT IS.
+ *
+ * The file this app HANDS OUT is .xlsx — the Leads export — and the importer took .csv only, so
+ * the round trip it exists for ("export, type the missing column in, upload it back") had a
+ * Save As in the middle of it. People hit "That is not a CSV file" holding a file this program
+ * wrote. A format the app produces is a format the app should read.
+ *
+ * THE HEADINGS ARE NOT ON ROW 1 of that export: row 1 is the purple title band, row 2 is the
+ * headings. So this finds the heading row rather than assuming it — the first row that names a
+ * company column, which is the one the planner cannot work without anyway. Anything above it is a
+ * banner and is dropped. A sheet with no such row is passed through unchanged, so the planner
+ * gives its own error, which names the headings it did find.
+ *
+ * A ROW MERGED ACROSS THE SHEET IS A BANNER, NOT A LEAD. That export ends with a legend row —
+ * "green 70+ · amber 40-69 · …" — merged across all sixteen columns, and without this the file
+ * came back as its own leads plus one new company called after the colour key. The signal is
+ * structural rather than a guess at the words: no data row has its second cell merged into its
+ * first, and no sheet anybody writes by hand does either.
+ *
+ * Everything becomes text here and the CSV planner does the rest: one reader, one set of rules,
+ * and a spreadsheet import that cannot drift from the CSV one because it IS the CSV one.
+ */
+const cellText = (v: any): string => {
+  if (v === null || v === undefined) return "";
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === "object") {
+    // Excel's shapes for a cell that is not a plain value: styled runs, a formula and its answer,
+    // a link. The ANSWER is what a reader sees, so it is what gets imported.
+    if (Array.isArray(v.richText)) return v.richText.map((p: any) => String(p?.text ?? "")).join("");
+    if ("text" in v) return String(v.text ?? "");
+    if ("result" in v) return String(v.result ?? "");
+    if ("hyperlink" in v) return String(v.hyperlink ?? "");
+    return "";
+  }
+  return String(v);
+};
+
+export async function xlsxToCsv(buf: Buffer): Promise<string> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as any);
+  const ws = wb.worksheets.find(w => w.actualRowCount > 0) ?? wb.worksheets[0];
+  if (!ws) throw new Error("That spreadsheet has no sheets in it.");
+
+  const grid: string[][] = [];
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const wideMerge = (() => {
+      try {
+        const second: any = row.getCell(2);
+        return !!second?.isMerged && second.master?.address === row.getCell(1).address;
+      } catch { return false; }
+    })();
+    if (wideMerge) return;
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (c, i) => { cells[i - 1] = cellText(c.value); });
+    for (let i = 0; i < cells.length; i++) if (cells[i] === undefined) cells[i] = "";
+    grid.push(cells);
+  });
+
+  // shortcut: a banner is at most a few rows. Looking further would start finding the word
+  // "company" in somebody's data and treating that row as the headings.
+  const head = grid.findIndex((r, i) => i < 10 && r.some(c => headerName(c) === "company_name"));
+  const rows = head > 0 ? grid.slice(head) : grid;
+  return rows.map(r => r.map(c => csvCell(c)).join(",")).join("\n") + "\n";
 }
 
 export type LeadIssue = { row: number; name: string; what: string };
@@ -179,15 +251,14 @@ export async function planLeadImport(csvText: string, opts: { fill?: boolean } =
   const grid = parseCsv(csvText.replace(/^﻿/, ""));
   if (!grid.length) throw new Error("That file is empty.");
 
-  const header = grid[0].map(h => {
-    const k = clean(h).toLowerCase().replace(/\s+/g, " ");
-    return ALIAS[k] ?? k.replace(/\s+/g, "_");
-  });
+  const header = grid[0].map(headerName);
   if (!header.includes("company_name")) {
     throw new Error(`This file has no company_name column. It has: ${grid[0].map(clean).filter(Boolean).join(", ") || "nothing"}. Download the template to see the headings.`);
   }
   const known = new Set<string>(LEAD_IMPORT_COLUMNS);
-  const unknownColumns = [...new Set(header.filter(h => h && !known.has(h)))];
+  // Named as the SHEET names them, not as this file renames them: a warning about "managed_by"
+  // when the column says "Managed by" asks the reader to work out that those are the same thing.
+  const unknownColumns = [...new Set(header.map((h, i) => (h && !known.has(h) ? clean(grid[0][i]) : "")).filter(Boolean))];
 
   const body = grid.slice(1);
   if (body.length > MAX_ROWS) throw new Error(`That file has ${body.length} rows. Import at most ${MAX_ROWS} at a time.`);

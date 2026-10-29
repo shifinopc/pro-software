@@ -10855,12 +10855,12 @@
         <sc-if value="{{ liStepPick }}" hint-placeholder-val="{{ true }}">
           <label style="margin-top:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1.5px dashed #D9C6F5; background:#FCFAFF; border-radius:14px; padding:19px 13px; cursor:pointer; text-align:center;" style-hover="border-color:#7C00FF; background:#F8F2FF;">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-            <span style="font-size:12px; font-weight:700; color:#26074D;">Choose a CSV file</span>
+            <span style="font-size:12px; font-weight:700; color:#26074D;">Choose a CSV or Excel file</span>
             <span style="font-size:11px; color:#8C8899;">Up to 1,000 leads</span>
-            <input type="file" accept=".csv,text/csv" onChange="{{ liPick }}" style="display:none;">
+            <input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange="{{ liPick }}" style="display:none;">
           </label>
           <div style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-            <span style="font-size:11px; color:#8C8899;">Saving from Excel? Choose CSV UTF-8.</span>
+            <span style="font-size:11px; color:#8C8899;">The workbook from Export these leads imports as it is.</span>
             <span onClick="{{ liTemplate }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Download template</span>
           </div>
           <!-- THE CORRECTIONS CASE — a list that went in without its City column, which used to
@@ -23181,7 +23181,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // leads to create.
     this._liSend = this._liSend || ((commit) => {
       const st9 = this.state;
-      if (!st9.liCsv) return;
+      if (!st9.liCsv && !st9.liXlsx) return;
       const t9 = localStorage.getItem('stimespro:token');
       // A fresh id per run, so a bar can never be driven by the tail of a previous import.
       this._liJob = 'li-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -23192,7 +23192,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
         // The mode goes with the file on BOTH calls: the server re-plans on the commit, and a
         // commit planned the other way round would create the leads the preview promised to fill.
-        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit, fill: !!st9.liFill, job: this._liJob }),
+        body: JSON.stringify({ csv: st9.liCsv || '', xlsx: st9.liXlsx || '', commit: !!commit, fill: !!st9.liFill, job: this._liJob }),
       })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
@@ -23211,7 +23211,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _liN = (n9, one, many) => n9 + ' ' + (n9 === 1 ? one : many);
     const liApi = {
       showLeadImport: !!this.state.liOpen,
-      liOpenImport: (this._liOpenImport9 = () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '', liFill: false })),
+      liOpenImport: (this._liOpenImport9 = () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liXlsx: '', liFileName: '', liPlan: null, liResult: null, liErr: '', liFill: false })),
       // Changing the mode invalidates the plan it was read under, so the file goes back to be
       // re-read rather than leaving a preview on screen that describes the other answer.
       liToggleFill: () => this.setState({ liFill: !this.state.liFill, liStep: 'pick', liPlan: null }),
@@ -23284,7 +23284,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : _liPlan.updates ? ('Fill in ' + _liN(_liPlan.updates, 'lead', 'leads'))
         : ('Import ' + _liN(_liPlan.creates, 'lead', 'leads')),
       liCommit: () => { if (!this.state.liBusy) this._liSend(true); },
-      liAnother: () => this.setState({ liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liErr: '' }),
+      liAnother: () => this.setState({ liStep: 'pick', liCsv: '', liXlsx: '', liFileName: '', liPlan: null, liErr: '' }),
       liDoneMsg: !_liRes ? '' : (_liN(_liRes.made, 'lead was', 'leads were') + ' added'
         + (_liRes.filled ? ', ' + _liN(_liRes.filled, 'lead was', 'leads were') + ' filled in' : '')
         + (_liPlan && _liPlan.skipped.length ? ', ' + _liPlan.skipped.length + ' already on file' : '')
@@ -23297,12 +23297,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // Cleared so choosing the same file again -- after fixing it in Excel -- fires again.
         ev9.target.value = '';
         if (!f9) return;
-        if (!/\.csv$/i.test(f9.name)) return this.setState({ liErr: 'That is not a CSV file. In Excel, use Save As then CSV UTF-8.' });
+        // .xlsx IS the format this app hands out -- the Leads export -- so refusing it meant a
+        // Save As in the middle of the round trip the export exists for. The sheet is turned into
+        // rows on the server, by the same reader the CSV goes through.
+        const xl9 = /\.xlsx$/i.test(f9.name);
+        if (!xl9 && !/\.csv$/i.test(f9.name)) return this.setState({ liErr: 'That is not a CSV or Excel file. Export the leads, or download the template.' });
         if (f9.size > 4 * 1024 * 1024) return this.setState({ liErr: 'That file is over 4 MB. Split it into smaller files.' });
         const rd9 = new FileReader();
-        rd9.onload = () => { this.setState({ liCsv: String(rd9.result || ''), liFileName: f9.name }); setTimeout(() => this._liSend(false), 0); };
+        rd9.onload = () => {
+          // readAsDataURL gives base64 already: building it by hand from the bytes overflows the
+          // stack on a file this size.
+          const v9 = String(rd9.result || '');
+          this.setState(xl9
+            ? { liXlsx: v9.slice(v9.indexOf(',') + 1), liCsv: '', liFileName: f9.name }
+            : { liCsv: v9, liXlsx: '', liFileName: f9.name });
+          setTimeout(() => this._liSend(false), 0);
+        };
         rd9.onerror = () => this.setState({ liErr: 'The file could not be read.' });
-        rd9.readAsText(f9);
+        if (xl9) rd9.readAsDataURL(f9); else rd9.readAsText(f9);
       },
       // THE TEMPLATE COMES FROM THE SERVER, not from a copy of the column list kept here.
       //

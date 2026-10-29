@@ -37,7 +37,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { verifyImap, credBlob, hostFor, needsAppPassword } from "./imap.js";
 import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
-import { planLeadImport, applyLeadImport, leadImportTemplateCsv } from "./lead-import.js";
+import { planLeadImport, applyLeadImport, leadImportTemplateCsv, xlsxToCsv } from "./lead-import.js";
 import { planMerge, applyMerge } from "./company-merge.js";
 import { parseSignature } from "./signature.js";
 import { lookupSite, SiteLookupError } from "./site-lookup.js";
@@ -311,6 +311,7 @@ const BIG_BODY = [
   /^\/api\/proposal-templates(\/[^/]+)?$/,                       // .docx template
   /^\/api\/documents\/[^/]+\/file$/,
   /^\/api\/companies\/[^/]+\/employees\/import$/,                // spreadsheet
+  /^\/api\/leads\/import$/,                                      // spreadsheet, base64
   /^\/api\/portal\/service-requests\/[^/]+\/attachments$/,
 ];
 const bigJson = express.json({ limit: "36mb" });
@@ -4514,8 +4515,18 @@ app.post("/api/leads/export.xlsx", requireAuth, requireStaff, async (req, res) =
 app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   try {
-    const csv = String(req.body?.csv ?? "");
-    if (!csv.trim()) return res.status(400).json({ error: "Choose a CSV file to import" });
+    // An .xlsx arrives base64'd and becomes the same rows a CSV would have: one reader below, and
+    // the file this app HANDS OUT -- the Leads export -- is a spreadsheet.
+    const b64 = String(req.body?.xlsx ?? "");
+    let csv = String(req.body?.csv ?? "");
+    if (b64) {
+      try {
+        csv = await xlsxToCsv(Buffer.from(b64, "base64"));
+      } catch {
+        return res.status(400).json({ error: "That spreadsheet could not be read. Save it as CSV UTF-8 and import that instead." });
+      }
+    }
+    if (!csv.trim()) return res.status(400).json({ error: "Choose a CSV or Excel file to import" });
 
     // Re-planned rather than trusting a plan the browser sends back, for the same reason the
     // employee import re-reads its file: a caller that could post rows would be posting straight
