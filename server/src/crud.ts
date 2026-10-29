@@ -13,6 +13,7 @@ import { startDeliveryForQuotation } from "./delivery.js";
 import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
 import { resolveEstablishmentId, syncMainFromCompany, adoptMainCr, EstablishmentError } from "./establishments.js";
+import { reAddressOnRename } from "./companyname.js";
 
 /**
  * An employee or company document may name one of the client's CRs. It must be an active CR of THAT
@@ -572,6 +573,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       });
       // The client form edits `cr`, which mirrors the main CR: keep the main CR in step.
       if (modelName === "company" && req.body && "cr" in req.body) await syncMainFromCompany(updated.id).catch(() => {});
+      // A RENAME HERE COUNTS TOO. The lead-edit route has always re-addressed the drafts a rename
+      // makes wrong; this is the route the CLIENT form uses, and it did not — so the one rename that
+      // matters most, the legal name at the end of a business setup, was the one that did nothing.
+      if (modelName === "company") {
+        // Reported rather than swallowed: the rename itself has already been saved, so failing the
+        // request would be a lie — but drafts left addressed to the old name are a quiet wrong, and
+        // a quiet wrong with no line in the log is one nobody ever finds.
+        await reAddressOnRename(updated, (before as any).name, (req as any).auth?.sub)
+          .catch(e => console.error("[crud] renamed the company but could not re-address its drafts:", (e as any)?.message ?? e));
+      }
       if (modelName === "invoice" && req.body?.status === "paid") {
         logActivity({ type: "finance", message: `Invoice ${updated.number} marked paid` });
         logNotification({ type: "payment", title: `Payment received: ${updated.number}`, message: updated.clientName ?? undefined });

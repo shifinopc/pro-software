@@ -14,6 +14,7 @@
  * still edits `cr` — synced back here. One writer each way, so the two cannot disagree.
  */
 import { prisma } from "./db.js";
+import { logNotification } from "./auth.js";
 import { resolveCountry } from "./countries.js";
 
 export class EstablishmentError extends Error { constructor(message: string, public status = 400) { super(message); } }
@@ -207,7 +208,7 @@ export async function adoptMainCr(doc: {
   if (!isRealCr(cr)) return null;
   const co = await prisma.company.findUnique({
     where: { id: doc.companyId },
-    select: { id: true, crPending: true, cr: true },
+    select: { id: true, name: true, crPending: true, cr: true, companyType: true },
   });
   if (!co || !co.crPending || isRealCr(co.cr)) return null;
   // Which types ARE a commercial registration is the firm's own list, so it is read from the type
@@ -221,6 +222,24 @@ export async function adoptMainCr(doc: {
   // cr first, then the main-CR row from it — syncMainFromCompany is the one writer of that pairing.
   await prisma.company.update({ where: { id: co.id }, data: { cr, crPending: false } });
   await syncMainFromCompany(co.id);
+  /**
+   * AND IF THE RECORD STILL SAYS IT IS A PERSON, SOMEBODY HAS TO SAY WHAT THE COMPANY IS CALLED.
+   *
+   * This is the end of a business setup: a client who signed as "Abdullah Al-Ghamdi" now holds a
+   * certificate in the name of a company. Renaming them here is tempting and wrong — the legal name
+   * is a human reading of the certificate, and silently rewriting a client's name across every list,
+   * print and draft is not something a background hook should do. So it asks.
+   *
+   * The entity type has to move with it, or the form will go on hiding the VAT, GOSI and MOL boxes
+   * that the new company needs.
+   */
+  if (String(co.companyType ?? "") === "Individual") {
+    await logNotification({
+      type: "system",
+      title: `${co.name} is registered — set the company name`,
+      message: `CR ${cr} has been filed, but the record is still a person. Open them, and set the legal name and the type of company.`,
+    }).catch(() => {});
+  }
   return cr;
 }
 

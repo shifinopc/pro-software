@@ -12144,6 +12144,7 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 10px; margin-top:12px;">
           <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMPANY NAME</div><input value="{{ ecName }}" onChange="{{ setEcName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER</div><input value="{{ ecCr }}" onChange="{{ setEcCr }}" placeholder="1010123456" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
+          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TYPE OF CLIENT</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcTypeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ecTypeVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcTypeOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><sc-if value="{{ ecTypeNudgeShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#B7791F; margin-top:5px; line-height:1.5;">{{ ecTypeNudge }}</div></sc-if></div>
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CONTACT PERSON</div><input value="{{ ecContact }}" onChange="{{ setEcContact }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL</div><input value="{{ ecEmail }}" onChange="{{ setEcEmail }}" placeholder="name@company.sa" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PHONE</div><input value="{{ ecPhone }}" onChange="{{ setEcPhone }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
@@ -26353,7 +26354,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const grp9 = (Array.isArray(this.state.groupsData) ? this.state.groupsData : [])
               .find(g9 => g9.id === raw9.groupId);
             return { ecCountry: raw9.country || '', ecCity: raw9.city || '', ecIndustry: raw9.industry || '',
-                     ecCr: raw9.cr || '', ecGroup: (grp9 && grp9.name) || 'None' };
+                     ecCr: raw9.cr || '', ecGroup: (grp9 && grp9.name) || 'None',
+                     // WITHOUT THIS THERE IS NO WAY OUT OF "Individual". A client the firm has just
+                     // formed a company for holds a CR and is still recorded as a person, and every
+                     // form goes on hiding the VAT, GOSI and MOL boxes their new company needs.
+                     ecType: raw9.companyType || '' };
           })(),
           ecErr: '',
         });
@@ -26381,6 +26386,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ecErrShow: !!this.state.ecErr,
       ...mkDd('ddEcStatus', ['Prospect', 'Onboarding', 'Active', 'Suspended', 'Inactive'], this.state.ecStatus || 'Active', (v) => this.setState({ ecStatus: v })),
       ecStatusVal: this.state.ecStatus || 'Active',
+      // "Not recorded" is a real answer and the one most rows hold, so it is on the list rather than
+      // being something you can only ever move away from.
+      ...mkDd('ddEcType', ['Not recorded', 'Individual', 'Saudi Company', 'Establishment Saudi', 'GCC Citizen Company', 'GCC Citizen Establishment', 'Foreign Investment Company'],
+        this.state.ecType || 'Not recorded', (v) => this.setState({ ecType: v === 'Not recorded' ? '' : v })),
+      ecTypeVal: this.state.ecType || 'Not recorded',
+      // Said only where it is news: a client holding a CR that is still filed as a person is the
+      // end of a business setup with its last step missing.
+      ecTypeNudgeShow: (this.state.ecType || '') === 'Individual' && !!String(this.state.ecCr || '').trim(),
+      ecTypeNudge: 'They hold a CR but are still recorded as a person. Set the legal name above and the type here.',
       /**
        * SAVE. This dialog used to close and set a flag, and that was all of it — every field typed
        * into it was discarded, silently, including the one the band editor sends people here to fix.
@@ -26406,6 +26420,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             city: (st9.ecCity || '').trim() || null,
             industry: (st9.ecIndustry || '').trim() || null,
             cr: (st9.ecCr || '').trim() || null,
+            companyType: (st9.ecType || '').trim() || null,
             // Sent as an id, and null clears it. The picker deals in names because that is what a
             // person reads; the column deals in ids because two groups can be renamed to match.
             groupId: (() => {
