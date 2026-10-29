@@ -11,7 +11,7 @@ import QRCode from "qrcode";
 import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
 import { workflowRouter } from "./workflow.js";
-import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, contactProblem, billingAmountProblem } from "./validate.js";
+import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, INDIVIDUAL, contactProblem, billingAmountProblem } from "./validate.js";
 import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryContact } from "./contacts.js";
 import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics } from "./pipeline.js";
 import { crmDashboard } from "./crmdashboard.js";
@@ -4108,8 +4108,12 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
   // is never billed (see the recurring run in jobs.ts), so leaving them one is not an option. The
   // waiver is explicit and recorded on the record, so "no CR yet" never looks like "CR not typed in".
   const crPending = (req.body ?? {}).crPending === true;
-  if (to === ACTIVE_CLIENT && !cr && !crPending) {
-    return res.status(400).json({ error: "A CR number is required to make this a client — or tick \"no CR yet\" if we are setting this company up." });
+  // An individual is the third answer to "where is the CR": there isn't one, and there won't be.
+  // Read off the record rather than the body — the client form saves the particulars through
+  // /details before it asks for this move, so the type is already on the row.
+  const isIndividual = String(co.companyType ?? "") === INDIVIDUAL;
+  if (to === ACTIVE_CLIENT && !cr && !crPending && !isIndividual) {
+    return res.status(400).json({ error: "A CR number is required to make this a client — or tick \"no CR yet\" if we are setting this company up. A client who is a person needs neither." });
   }
   if ((to === "lost" || to === "churned") && !lostReason) return res.status(400).json({ error: "Say why it was lost — that is the whole value of recording it" });
 
@@ -4157,7 +4161,9 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
         cr: to === ACTIVE_CLIENT ? (cr || null) : co.cr,
         // Only ever set on the way IN to client, and a CR given here clears it. Moving back out
         // (churned, lost) leaves it alone: it says something about the CR, not about the lifecycle.
-        ...(to === ACTIVE_CLIENT ? { crPending: !cr } : {}),
+        // Never for a person with no company coming: "pending" would promise a certificate that
+        // is not on its way, and the client page would tell everyone to wait for it.
+        ...(to === ACTIVE_CLIENT ? { crPending: !cr && (!isIndividual || crPending) } : {}),
         lostReason: to === "lost" || to === "churned" ? lostReason : null,
         // Taken on the day they became a client, not the day the lead was typed in.
         createdAt: to === ACTIVE_CLIENT && !co.createdAt ? nowLc : co.createdAt,

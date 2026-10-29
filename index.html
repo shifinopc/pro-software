@@ -614,7 +614,11 @@
   /* Notes is the one field a paragraph really goes in. */
   .ldf-land .ldf-notes{grid-column:1/-1;align-items:start;}
   .ldf-land .ldf-notes .fm-lab{padding-top:8px;}
-  /* Helper text and errors sit under the FIELD, not under the label, so the column stays straight. */
+  /* Helper text, errors and chip rows sit under the FIELD, not under the label, so the column
+     stays straight. The cell is a two-column grid, so a third child otherwise drops into the LABEL
+     column — which is where the Company/Person chips landed, and where the industry and source
+     chips have always landed on the rare lead that has them. One rule for every extra child. */
+  .ldf-land .ldf-col > div:not(.ldf-cap) > *:nth-child(n+3){grid-column:2;}
   .ldf-land .ldf-col > div > .fm-err,
   .ldf-land .ldf-col > div > .fm-hint{grid-column:2;margin-top:3px;}
   .ldf-land .fm-inp{padding:7px 10px;font-size:12px;height:34px;border:1px solid transparent;
@@ -12276,8 +12280,8 @@
             <sc-if value="{{ acErr2 }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ acErr2 }}</div></sc-if>
             <div class="ldf-land ac-land">
             <div class="ldf-col">
-                            <div class="ldf-cap">The company</div>
-              <div><label class="fm-lab">COMPANY NAME <span class="fm-req">*</span></label><input value="{{ acCName }}" onChange="{{ setAcCName }}" placeholder="e.g. Skyline Interiors LLC" class="fm-inp"></div>
+                            <div class="ldf-cap">{{ acPartyCap }}</div>
+              <div><label class="fm-lab">{{ acNameLabel }} <span class="fm-req">*</span></label><input value="{{ acCName }}" onChange="{{ setAcCName }}" placeholder="{{ acNamePlaceholder }}" class="fm-inp"></div>
               <!-- The label is the grid item itself, like every other one here. Wrapped in a flex
                    div beside its hint it was a flex item sizing to its own text inside an 86px
                    column, which is how it came to run on under the input instead of being laid out.
@@ -12288,20 +12292,24 @@
                    onboarded months before a commercial registration exists — and a prospect gets no
                    portal login and is never billed, so leaving them one is not an option. The tick
                    says the CR is coming; it does not leave the box blank and hope. -->
-              <div><label class="fm-lab">CR NUMBER <span class="fm-req">{{ acCrStar }}</span></label><input value="{{ acCr }}" onChange="{{ setAcCr }}" placeholder="{{ acCrPlaceholder }}" inputmode="numeric" class="fm-inp"><div onClick="{{ toggleAcCrPending }}" class="fm-hint" style="display:flex; align-items:center; gap:7px; cursor:pointer;"><span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ acCrPendBd }}; background:{{ acCrPendBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><sc-if value="{{ acCrPending }}" hint-placeholder-val="{{ false }}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></span><span>No CR yet — we are setting this company up</span></div></div>
+              <div><label class="fm-lab">CR NUMBER <span class="fm-req">{{ acCrStar }}</span></label><input value="{{ acCr }}" onChange="{{ setAcCr }}" placeholder="{{ acCrPlaceholder }}" inputmode="numeric" class="fm-inp"><div onClick="{{ toggleAcCrPending }}" class="fm-hint" style="display:flex; align-items:center; gap:7px; cursor:pointer;"><span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ acCrPendBd }}; background:{{ acCrPendBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><sc-if value="{{ acCrPending }}" hint-placeholder-val="{{ false }}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></span><span>No CR yet — we are setting this company up</span></div><sc-if value="{{ acCrIndividualShow }}" hint-placeholder-val="{{ false }}"><div class="fm-hint">{{ acCrIndividualNote }}</div></sc-if></div>
               <div><label class="fm-lab">MAIN ACTIVITY</label><input value="{{ acActivity }}" onChange="{{ setAcActivity }}" placeholder="e.g. Building contracting" class="fm-inp"></div>
-              <div><label class="fm-lab">TYPE OF COMPANY</label><div style="position:relative;"><div data-dd onClick="{{ ddAcTypeToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcTypeOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+              <div><label class="fm-lab">{{ acTypeLabel }}</label><div style="position:relative;"><div data-dd onClick="{{ ddAcTypeToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcTypeOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <sc-if value="{{ acIsForeign }}" hint-placeholder-val="{{ false }}">
               <div><label class="fm-lab">MISA LICENSE NUMBER</label><input value="{{ acMisa }}" onChange="{{ setAcMisa }}" placeholder="e.g. 1234567890" class="fm-inp"></div>
               </sc-if>
             </div>
             <div class="ldf-col">
+              <!-- Hidden for a person, caption and all: VAT, GOSI, MOL and the chamber are things a
+                   registered company has. An empty section under a heading reads as data missing. -->
+              <sc-if value="{{ acIsCompany }}" hint-placeholder-val="{{ true }}">
                             <div class="ldf-cap">Registrations</div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;"><div><label class="fm-lab">VAT NUMBER</label><input value="{{ acVat }}" onChange="{{ setAcVat }}" placeholder="15 digits" inputmode="numeric" class="fm-inp"></div><div><label class="fm-lab">GOSI SUBSCRIPTION NUMBER</label><input value="{{ acGosi }}" onChange="{{ setAcGosi }}" inputmode="numeric" class="fm-inp"></div></div>
               <!-- Beside MOL ID, not under it. It took the whole row because its label did not fit
                    in half of one; the label is now as short as the others in this section, and
                    `align-items:end` keeps the two inputs level if a narrow pane wraps one anyway. -->
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; align-items:end;"><div><label class="fm-lab">MOL ID</label><input value="{{ acMol }}" onChange="{{ setAcMol }}" inputmode="numeric" class="fm-inp"></div><div><label class="fm-lab">CHAMBER MEMBERSHIP NUMBER</label><input value="{{ acChamber }}" onChange="{{ setAcChamber }}" inputmode="numeric" class="fm-inp"></div></div>
+              </sc-if>
                             <div class="ldf-cap">National address<span>as on the CR</span></div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;"><div><label class="fm-lab">SHORT ADDRESS</label><input value="{{ acShortAddr }}" onChange="{{ setAcShortAddr }}" placeholder="e.g. RRRD2929" class="fm-inp"></div><div><label class="fm-lab">BUILDING NUMBER</label><input value="{{ acBuilding }}" onChange="{{ setAcBuilding }}" inputmode="numeric" class="fm-inp"></div></div>
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;"><div><label class="fm-lab">STREET</label><input value="{{ acStreet }}" onChange="{{ setAcStreet }}" class="fm-inp"></div><div><label class="fm-lab">SECONDARY NUMBER</label><input value="{{ acSecondary }}" onChange="{{ setAcSecondary }}" inputmode="numeric" class="fm-inp"></div></div>
@@ -14305,10 +14313,16 @@
             </div>
             <div class="ldf-land">
             <div class="ldf-col">
-              <div class="ldf-cap">The company<span>who they are</span></div>
+              <div class="ldf-cap">{{ ldfPartyCap }}<span>who they are</span></div>
               <div class="fm-wide">
-                <label class="fm-lab">Company name <span class="fm-req">*</span></label>
-                <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="e.g. Al Faisal Contracting" class="fm-inp">
+                <label class="fm-lab">{{ ldfNameLabel }} <span class="fm-req">*</span></label>
+                <input value="{{ ldfName }}" onInput="{{ setLdfName }}" placeholder="{{ ldfNamePlaceholder }}" class="fm-inp">
+                <!-- Under the name, because it decides what the name above IS. -->
+                <div style="display:flex; gap:5px; margin-top:6px;">
+                  <sc-for list="{{ ldfKindChips }}" as="k" hint-placeholder-count="2">
+                    <span onClick="{{ k.pick }}" style="font-size:10px; font-weight:600; line-height:1.5; color:{{ k.fg }}; background:{{ k.bg }}; border:1px solid {{ k.bd }}; padding:3px 11px; border-radius:99px; cursor:pointer;">{{ k.label }}</span>
+                  </sc-for>
+                </div>
                 <sc-if value="{{ ldfNameErr }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:5px;">{{ ldfNameErr }}</div></sc-if>
               </div>
               <div>
@@ -26722,7 +26736,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             if (!(this.state.acCName || '').trim()) return this.setState({ acErr2: 'Company name is required' });
             // Checked here, not at the end: the server refuses a client without one, and finding
             // that out after a folder of documents has been typed in is the worst place to learn it.
-            if (!(this.state.acCr || '').trim() && !this.state.acCrPending) {
+            // Not asked of a person: see acIsIndividual. The server applies the same three-way rule.
+            if (!(this.state.acCr || '').trim() && !this.state.acCrPending && (this.state.acType || '') !== 'Individual') {
               return this.setState({ acErr2: 'CR number is required — or tick "no CR yet" if we are setting this company up.' });
             }
             // Is the reader available? Asked once, when the step that uses it opens.
@@ -26753,9 +26768,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // field. Compared against the stored value rather than a flag, so there is one source of
       // truth for which type is selected.
       acIsForeign: (this.state.acType || '') === 'Foreign Investment Company',
+      // A person has no CR, no VAT number, no GOSI file and no MOL id. Those boxes are not
+      // "optional" for them, they are meaningless — and a form that asks anyway is how a client
+      // record ends up with somebody's Iqama number typed into a VAT field.
+      acIsIndividual: (this.state.acType || '') === 'Individual',
+      acIsCompany: (this.state.acType || '') !== 'Individual',
+      acNameLabel: (this.state.acType || '') === 'Individual' ? 'FULL NAME' : 'COMPANY NAME',
+      acNamePlaceholder: (this.state.acType || '') === 'Individual' ? 'e.g. Abdullah Al-Ghamdi' : 'e.g. Skyline Interiors LLC',
+      acPartyCap: (this.state.acType || '') === 'Individual' ? 'The person' : 'The company',
+      // The picker names what kind of CLIENT this is, and one of its answers is "not a company".
+      acTypeLabel: (this.state.acType || '') === 'Individual' ? 'TYPE OF CLIENT' : 'TYPE OF COMPANY',
+      // Shown only to a person, and only to say which of the two they are: a client who will never
+      // have a CR, or one whose company we are about to form.
+      acCrIndividualShow: (this.state.acType || '') === 'Individual' && !this.state.acCrPending,
+      acCrIndividualNote: 'A person has no commercial registration. If we are forming a company for them, tick below — the CR is recorded when the certificate is filed.',
       ddAcTypeOpen: this.state.openDd === 'ac-type',
       ddAcTypeToggle: () => this.setState({ openDd: this.state.openDd === 'ac-type' ? null : 'ac-type' }),
-      ddAcTypeOptions: ['Saudi Company', 'Establishment Saudi', 'GCC Citizen Company', 'GCC Citizen Establishment', 'Foreign Investment Company'].map(t => ({
+      // A PERSON IS A KIND OF CLIENT. The firm sells to individuals — somebody sponsoring a
+      // domestic worker, or somebody who wants a company formed and has not got one yet — and every
+      // one of them arrived as a person's name typed into a box labelled "company name". First in
+      // the list because it is what people are looking for; the default is still a Saudi company.
+      ddAcTypeOptions: ['Individual', 'Saudi Company', 'Establishment Saudi', 'GCC Citizen Company', 'GCC Citizen Establishment', 'Foreign Investment Company'].map(t => ({
         label: t, weight: (this.state.acType || 'Saudi Company') === t ? '700' : '500',
         color: (this.state.acType || 'Saudi Company') === t ? '#7C00FF' : '#1A1523',
         bg: (this.state.acType || 'Saudi Company') === t ? '#F5EEFF' : 'transparent',
@@ -26795,8 +26828,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // One truth, and no way to save a record that says both.
       setAcCr: (e) => this.setState({ acCr: e.target.value, ...(String(e.target.value || '').trim() ? { acCrPending: false } : {}), acErr2: '' }),
       acCrPending: !!this.state.acCrPending,
-      acCrStar: this.state.acCrPending ? '' : '*',
-      acCrPlaceholder: this.state.acCrPending ? 'Issued as part of the setup' : '1010123456',
+      acCrStar: (this.state.acCrPending || (this.state.acType || '') === 'Individual') ? '' : '*',
+      acCrPlaceholder: this.state.acCrPending ? 'Issued as part of the setup'
+        : (this.state.acType || '') === 'Individual' ? 'A person has no CR'
+        : '1010123456',
       acCrPendBd: this.state.acCrPending ? '#7C00FF' : '#DDD9E6',
       acCrPendBg: this.state.acCrPending ? '#7C00FF' : '#fff',
       toggleAcCrPending: () => this.setState({
@@ -36890,6 +36925,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       city: l.city || '',
       industry: l.industry || '',
       campaign: l.campaign || '',
+      // WHETHER THIS IS A PERSON OR A COMPANY, asked here rather than at conversion. It is the
+      // moment somebody is actually typing the name, and the box has been demanding a company name
+      // from the people least able to give one — the ones coming to the firm to be given one.
+      // A field the form SENDS must be a field the form LOADS; see lead-details-fields-check.ts.
+      companyType: l.companyType || '',
       // WHICH SERVICE THEY CAME FOR, loaded like every other field the form sends back.
       //
       // It was missing here, so the Product box opened empty on a lead that had one. That read as
@@ -42729,7 +42769,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ldfGeneralErr: this.state.ldfBad ? '' : (this.state.ldfErr || ''),
       ldfSub: (_ldf && _ldf.id)
         ? 'Correcting the details. To make them a client, or mark them lost, use the buttons on the row — those do more than change a field.'
-        : 'A company you are pitching. No CR number needed — that gets captured when they become a client.',
+        // It is not always a company: the firm pitches to people too, and to people who are coming
+        // to it precisely because they have not got a company yet.
+        : ((_ldf && _ldf.companyType) || '') === 'Individual'
+          ? 'A person you are pitching. If they want a company, that gets set up after they sign — nothing here needs a CR.'
+          : 'A company you are pitching. No CR number needed — that gets captured when they become a client.',
       ldfSaveLabel: (_ldf && _ldf.id) ? 'Save changes' : 'Save lead',
       ldFormClose: () => this.setState({ ldForm: null, ldfErr: '', ldfBad: '', dupMatches: [] }),
       ...(() => {
@@ -42847,6 +42891,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           }),
         };
       })(),
+      // Two chips, not the client form's six-item picker: at lead time the only distinction that
+      // changes anything is person or company. WHICH kind of company is asked on the client form,
+      // where the answer decides which registrations are collected.
+      ldfKindChips: [['', 'Company'], ['Individual', 'Person']].map(([v9, label9]) => {
+        const on9 = ((_ldf && _ldf.companyType) || '') === v9;
+        return {
+          label: label9,
+          fg: on9 ? '#fff' : '#6F6C7A', bg: on9 ? '#7C00FF' : '#fff', bd: on9 ? '#7C00FF' : '#DDD9E6',
+          pick: () => this.setState({ ldForm: { ...(this.state.ldForm || {}), companyType: v9 }, ldfErr: '', ldfBad: '' }),
+        };
+      }),
+      ldfPartyCap: ((_ldf && _ldf.companyType) || '') === 'Individual' ? 'The person' : 'The company',
+      ldfNameLabel: ((_ldf && _ldf.companyType) || '') === 'Individual' ? 'Full name' : 'Company name',
+      ldfNamePlaceholder: ((_ldf && _ldf.companyType) || '') === 'Individual' ? 'e.g. Abdullah Al-Ghamdi' : 'e.g. Al Faisal Contracting',
       ldfIndustry: (_ldf && _ldf.industry) || '',
       setLdfIndustry: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: e.target.value }, ldfErr: '' }),
       ldfIndustryChips: _chips9(_industryList, _ldf && _ldf.industry, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: v }, ldfErr: '' })),
@@ -42954,6 +43012,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
             service: f.service || null,
+            companyType: f.companyType || null,
               website: f.website || null,
               logoUrl: f.logoUrl || null,
               ownerId: f.owner || null,
@@ -42983,6 +43042,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             city: f.city || null, source: f.source || null, sourceDetail: f.note || null,
             industry: f.industry || null, campaign: f.campaign || null,
             service: f.service || null,
+            companyType: f.companyType || null,
             website: f.website || null,
             logoUrl: f.logoUrl || null,
             ownerId: f.owner || null,

@@ -24,6 +24,18 @@ export const ACTIVE_CLIENT = "client";
 export const NON_CLIENT = ["lead", "prospect", "lost"];
 
 // isCreate=true → required fields enforced. isCreate=false (PUT) → only validate fields that are present.
+/**
+ * A CLIENT WHO IS A PERSON, not a company.
+ *
+ * The firm sells to individuals: somebody sponsoring a domestic worker, or somebody who wants a
+ * company formed and does not have one yet. Both arrive as a lead with a person's name in a box
+ * labelled "company name", and the second one is why `crPending` exists.
+ *
+ * Held in `companyType`, which already decides which other fields are asked for, rather than a new
+ * column: one field answering "what kind of thing is this" beats two that can disagree.
+ */
+export const INDIVIDUAL = "Individual";
+
 export function validate(model: string, data: any, isCreate: boolean): string | null {
   if (!data || typeof data !== "object") return "Request body is required";
   const has = (k: string) => Object.prototype.hasOwnProperty.call(data, k) && data[k] !== undefined && data[k] !== null;
@@ -40,7 +52,11 @@ export function validate(model: string, data: any, isCreate: boolean): string | 
       // `crPending` is the one way past it, and it is a statement, not a blank: the firm is doing
       // this company's business setup, so the CR does not exist yet and will arrive as the output of
       // the formation work. Everything downstream can tell that apart from a CR nobody typed in.
-      if (isCreate && (data.lifecycle ?? "client") === "client" && blank(data.cr) && data.crPending !== true) {
+      // A person has no commercial registration and never will — that is not the same as one that
+      // has not been issued yet, so it is not `crPending`, it simply does not apply. A person the
+      // firm is FORMING a company for ticks crPending as well, and gets their CR when it is issued.
+      if (isCreate && (data.lifecycle ?? "client") === "client" && blank(data.cr)
+          && data.crPending !== true && String(data.companyType ?? "") !== INDIVIDUAL) {
         return "CR number is required for a client";
       }
       return null;
