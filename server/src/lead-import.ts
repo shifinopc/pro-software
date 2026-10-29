@@ -27,10 +27,11 @@ import { duplicateIndex, type DuplicateMatch } from "./duplicates.js";
 import { runInProcess } from "./boot.js";
 import { publish } from "./realtime.js";
 import { prisma } from "./db.js";
+import { INDIVIDUAL } from "./validate.js";
 
 /** The columns the template offers, in order — and the only ones read. */
 export const LEAD_IMPORT_COLUMNS = [
-  "company_name", "contact_name", "job_title", "email", "phone", "website",
+  "company_name", "company_type", "contact_name", "job_title", "email", "country_code", "phone", "website",
   "source", "city", "industry", "product", "campaign", "note",
 ] as const;
 
@@ -43,10 +44,14 @@ export const LEAD_IMPORT_COLUMNS = [
  */
 export const LEAD_EXAMPLE_ROW: Record<string, string> = {
   company_name: "Al Noor Contracting Est",
+  company_type: "Company",
   contact_name: "Faisal Al Otaibi",
   job_title: "Operations Manager",
   email: "faisal@alnoor-contracting.example",
-  phone: "+966 55 123 4567",
+  // SPLIT, because a column nobody sees used is a column nobody fills in. A number that already
+  // carries its code in the phone cell still imports — see the join in planLeadImport.
+  country_code: "+966",
+  phone: "55 123 4567",
   website: "alnoor-contracting.example",
   source: "Exhibition",
   city: "Riyadh",
@@ -66,10 +71,14 @@ const ALIAS: Record<string, string> = {
   company: "company_name", name: "company_name", client: "company_name", lead: "company_name",
   "company name": "company_name", organisation: "company_name", organization: "company_name",
   contact: "contact_name", person: "contact_name", "contact person": "contact_name",
+  type: "company_type", kind: "company_type", "lead type": "company_type",
+  "client type": "company_type", "type of client": "company_type",
   title: "job_title", designation: "job_title", position: "job_title",
   "e-mail": "email", mail: "email", "email address": "email",
   url: "website", site: "website", web: "website", "web site": "website", homepage: "website",
   mobile: "phone", telephone: "phone", tel: "phone", "phone number": "phone", whatsapp: "phone",
+  "country code": "country_code", "dial code": "country_code", dial: "country_code",
+  code: "country_code", cc: "country_code", isd: "country_code", "isd code": "country_code",
   "lead source": "source", channel: "source",
   service: "product", "service required": "product", interest: "product", requirement: "product",
   town: "city", location: "city", sector: "industry",
@@ -199,6 +208,23 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
     if (!looksLikeEmail(email)) { warnings.push({ row: lineNo, name, what: `"${email}" is not an email address — imported without it` }); email = ""; }
     if (!looksLikePhone(phone)) { warnings.push({ row: lineNo, name, what: `"${phone}" is not a phone number — imported without it` }); phone = ""; }
 
+    /**
+     * THE CODE ARRIVES IN ITS OWN COLUMN, because that is how these lists are written: a sheet of
+     * local numbers with the country in a column beside them, or named once at the top and pasted
+     * down. Until now that column was simply ignored and every number imported without its code.
+     *
+     * The Add lead form stores the code in front of the number ("+966 55 123 4567"), so that is
+     * what is built here — a lead typed in and a lead imported hold the same shape of string.
+     * A number that already carries a code keeps it, and a code with no number stays nothing,
+     * exactly as the form refuses to store a bare "+966".
+     */
+    const dial = cell("country_code").replace(/\D/g, "");
+    if (phone && dial && !/^(\+|00)/.test(phone)) {
+      // 05x is how a Saudi mobile is written at home; the trunk zero goes once a country code is
+      // in front of it, or the number dials nowhere.
+      phone = `+${dial} ${phone.replace(/^0+/, "")}`.trim();
+    }
+
     const key = email ? `email:${email.toLowerCase()}` : `name:${name.toLowerCase()}`;
     const earlier = seen.get(key);
     if (earlier) {
@@ -213,6 +239,20 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
     if (dup && dup.confidence === "certain") {
       skipped.push({ row: lineNo, name, what: `Already on file as "${dup.name}" — ${dup.why}` });
       continue;
+    }
+
+    /**
+     * PERSON OR COMPANY, the one distinction the Add lead form asks at lead time — and the one
+     * the import was silently dropping, so every imported lead came in as a company and a sheet of
+     * individual sponsors had to be corrected by hand afterwards.
+     *
+     * WHICH kind of company is not asked here any more than it is on the form; that is the client
+     * form's question, where the answer decides which registrations are collected.
+     */
+    const rawKind = cell("company_type");
+    const kind = /^(individual|person)$/i.test(rawKind) ? INDIVIDUAL : "";
+    if (rawKind && !kind && !/^company$/i.test(rawKind)) {
+      warnings.push({ row: lineNo, name, what: `"${rawKind}" is not Company or Person — imported as a company` });
     }
 
     const rawSource = cell("source");
@@ -250,6 +290,7 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
       duplicate: dup,
       body: {
         name, lifecycle: "lead",
+        companyType: kind || null,
         city: cell("city") || null,
         source: source || null,
         sourceDetail: cell("note") || null,
