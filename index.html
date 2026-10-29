@@ -675,6 +675,11 @@
   .fm-inp:hover{border-color:#C9A2FF;}
   .fm-inp:focus{outline:none;border-color:#7C00FF;box-shadow:0 0 0 3px rgba(124,0,255,.12);}
   .fm-hint{font-size:9px;color:#A9A6B4;margin-top:5px;line-height:1.45;}
+  /* A hint that appears as you type must not push the form down with it. The Arabic name suggests
+     itself from the first keystroke, and mounting its line moved every row below by 16px — the
+     form jumped under the cursor. The line is always there now, empty until there is something to
+     say. 13px is one line at this size (9px x 1.45). */
+  .fm-hint-slot{min-height:13px;}
   /* A rejected field says so ON ITSELF. A single banner at the top of a scrolling dialog is invisible
      from the bottom of it, where the button is — so pressing Save appeared to do nothing at all. */
   .fm-inp.is-bad{border-color:#C0353A;background:#FFFCFC;}
@@ -12287,7 +12292,7 @@
                    div beside its hint it was a flex item sizing to its own text inside an 86px
                    column, which is how it came to run on under the input instead of being laid out.
                    The hint goes under the field, where the form's other hints are. -->
-              <div><label class="fm-lab">ARABIC NAME</label><input value="{{ acNameAr }}" onChange="{{ setAcNameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp"><sc-if value="{{ acArHintShow }}" hint-placeholder-val="{{ false }}"><div class="fm-hint">{{ acArHint }}</div></sc-if></div>
+              <div><label class="fm-lab">ARABIC NAME</label><input value="{{ acNameAr }}" onChange="{{ setAcNameAr }}" dir="rtl" placeholder="يُقترح من الاسم الإنجليزي" class="fm-inp"><div class="fm-hint fm-hint-slot">{{ acArHint }}</div></div>
               <div><label class="fm-lab">CLIENT GROUP</label><div style="position:relative;"><div data-dd onClick="{{ ddAcGroupToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acGroupVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcGroupOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcGroupOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <!-- BUSINESS SETUP. The firm sells company formation, so a client can sign, pay and be
                    onboarded months before a commercial registration exists — and a prospect gets no
@@ -26902,7 +26907,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // Hidden rather than empty: an empty hint still takes its margin, and on a converted lead —
       // where the Arabic name arrives already filled in — that is a gap under one field and not the
       // one beside it.
-      acArHintShow: !!(this.state.acArTouched || this.state.acNameAr),
       acErr2: this.state.acErr2 || false,
       // The Arabic follows the English UNTIL somebody types in it. After that the English stops
       // overwriting their work — a suggestion that keeps undoing a correction is worse than none.
