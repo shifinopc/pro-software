@@ -10863,13 +10863,29 @@
             <span style="font-size:11px; color:#8C8899;">Saving from Excel? Choose CSV UTF-8.</span>
             <span onClick="{{ liTemplate }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Download template</span>
           </div>
+          <!-- THE CORRECTIONS CASE — a list that went in without its City column, which used to
+               mean opening every record one at a time. Ticking this makes the same file the repair:
+               export the leads, type the column in, upload it back.
+               OFF BY DEFAULT, and reset every time this opens. On a fresh list it would complete
+               near-matches instead of creating them, and the two intents are indistinguishable
+               from the file alone. -->
+          <div onClick="{{ liToggleFill }}" style="margin-top:11px; display:flex; gap:9px; align-items:flex-start; border:1px solid {{ liFillBd }}; background:{{ liFillBg }}; border-radius:12px; padding:10px 12px; cursor:pointer;">
+            <span style="font-size:13px; line-height:1.15; color:{{ liFillFg }}; flex-shrink:0;">{{ liFillMark }}</span>
+            <span style="min-width:0;">
+              <span style="display:block; font-size:11px; font-weight:700; color:#26074D;">These leads are already on file &mdash; fill in their blank fields</span>
+              <span style="display:block; font-size:10px; color:#6F6C7A; margin-top:3px; line-height:1.55;">For a sheet that adds a column somebody forgot, such as City. Only empty fields are written &mdash; the name, the contact, and anything that already has an answer are left exactly as they are.</span>
+            </span>
+          </div>
         </sc-if>
 
         <!-- 2. what it would do -->
         <sc-if value="{{ liStepPreview }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:11px; font-size:11px; color:#8C8899;">{{ liFileName }} &middot; {{ liRowsRead }} rows read</div>
-          <div style="margin-top:10px; display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
+          <div style="margin-top:10px; display:grid; grid-template-columns:{{ liCols }}; gap:10px;">
             <div style="background:#E7F8EF; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#0E9355; letter-spacing:.05em;">NEW LEADS</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#0E9355;">{{ liNew }}</div></div>
+            <sc-if value="{{ liFillOn }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#F5EEFF; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#5B21B6; letter-spacing:.05em;">FILLED IN</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#5B21B6;">{{ liFilled }}</div></div>
+            </sc-if>
             <div style="background:#F3F1F7; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#6F6C7A; letter-spacing:.05em;">ALREADY ON FILE</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#4B4757;">{{ liSkipped }}</div></div>
             <div style="background:#FEECEC; border-radius:12px; padding:11px 13px;"><div style="font-size:9px; font-weight:700; color:#C0353A; letter-spacing:.05em;">REFUSED</div><div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; color:#C0353A;">{{ liRefused }}</div></div>
           </div>
@@ -10906,14 +10922,18 @@
           </sc-if>
 
           <sc-if value="{{ liHasPreview }}" hint-placeholder-val="{{ false }}">
-            <div style="margin-top:10px; font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">WHAT WILL BE ADDED</div>
+            <div style="margin-top:10px; font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">{{ liPreviewTitle }}</div>
             <div style="margin-top:6px; border:1px solid #EDEBF2; border-radius:11px; max-height:220px; overflow-y:auto;" data-hidescroll="true">
               <sc-for list="{{ liPreviewRows }}" as="x" hint-placeholder-count="4">
-                <div style="display:grid; grid-template-columns:1.3fr 1fr 90px 1fr; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:11px;">
+                <div style="display:grid; grid-template-columns:1.3fr 1fr 90px 1fr 70px; gap:10px; align-items:center; padding:7px 12px; border-bottom:1px solid #F6F4F9; font-size:11px;">
                   <span style="font-weight:600; color:#26074D; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.name }}</span>
                   <span style="color:#6F6C7A; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.contact }}</span>
                   <span style="color:#8C8899; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.source }}</span>
                   <span style="color:#5B21B6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.product }}</span>
+                  <!-- Which of the two things this row does, and for a fill the columns it writes.
+                       A wrong match is the only real risk here, so it is on the row rather than in
+                       the totals above. -->
+                  <span title="{{ x.actWhat }}" style="text-align:right; font-size:9px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:{{ x.actFg }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ x.act }}</span>
                 </div>
               </sc-for>
               <sc-if value="{{ liHasMore }}" hint-placeholder-val="{{ false }}"><div style="padding:8px 12px; font-size:11px; color:#8C8899;">{{ liMore }}</div></sc-if>
@@ -23165,11 +23185,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const t9 = localStorage.getItem('stimespro:token');
       // A fresh id per run, so a bar can never be driven by the tail of a previous import.
       this._liJob = 'li-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-      this.setState({ liBusy: true, liErr: '', liDone: 0, liTotal: commit ? (st9.liPlan ? st9.liPlan.creates : 0) : 0, liNow: '' });
+      const planned9 = st9.liPlan ? (st9.liPlan.creates + (st9.liPlan.updates || 0)) : 0;
+      this.setState({ liBusy: true, liErr: '', liDone: 0, liTotal: commit ? planned9 : 0, liNow: '' });
       fetch((this._apiBase || 'http://localhost:4100') + '/api/leads/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
-        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit, job: this._liJob }),
+        // The mode goes with the file on BOTH calls: the server re-plans on the commit, and a
+        // commit planned the other way round would create the leads the preview promised to fill.
+        body: JSON.stringify({ csv: st9.liCsv, commit: !!commit, fill: !!st9.liFill, job: this._liJob }),
       })
         .then(r => r.json().then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
@@ -23181,11 +23204,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         .catch(() => this.setState({ liBusy: false, liErr: 'Could not reach the server -- nothing was imported.' }));
     });
     const _liPlan = this.state.liPlan || null;
+    // Rows that will be written, of either kind. The button, the "and N more" line and the
+    // progress bar all mean this and all used to mean `creates`.
+    const _liPlanTotal = _liPlan ? (_liPlan.creates + (_liPlan.updates || 0)) : 0;
     const _liRes = this.state.liResult || null;
     const _liN = (n9, one, many) => n9 + ' ' + (n9 === 1 ? one : many);
     const liApi = {
       showLeadImport: !!this.state.liOpen,
-      liOpenImport: (this._liOpenImport9 = () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '' })),
+      liOpenImport: (this._liOpenImport9 = () => this.setState({ liOpen: true, liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liResult: null, liErr: '', liFill: false })),
+      // Changing the mode invalidates the plan it was read under, so the file goes back to be
+      // re-read rather than leaving a preview on screen that describes the other answer.
+      liToggleFill: () => this.setState({ liFill: !this.state.liFill, liStep: 'pick', liPlan: null }),
+      liFillOn: !!this.state.liFill,
+      liFillMark: this.state.liFill ? '☑' : '☐',
+      liFillFg: this.state.liFill ? '#7C00FF' : '#C9C6D2',
+      liFillBd: this.state.liFill ? '#D9C6F5' : '#EDEBF2',
+      liFillBg: this.state.liFill ? '#FCFAFF' : '#fff',
       liClose: () => this.setState({ liOpen: false }),
       liStepPick: (this.state.liStep || 'pick') === 'pick',
       liStepPreview: this.state.liStep === 'preview',
@@ -23218,6 +23252,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       liFileName: this.state.liFileName || '',
       liRowsRead: _liPlan ? _liPlan.rowsRead : 0,
       liNew: _liPlan ? _liPlan.creates : 0,
+      liFilled: _liPlan ? (_liPlan.updates || 0) : 0,
+      liCols: this.state.liFill ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)',
       liSkipped: _liPlan ? _liPlan.skipped.length : 0,
       liRefused: _liPlan ? _liPlan.refused.length : 0,
       liHasSkipped: !!(_liPlan && _liPlan.skipped.length),
@@ -23231,20 +23267,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       liHasUnknown: !!(_liPlan && _liPlan.unknownColumns && _liPlan.unknownColumns.length),
       liUnknown: _liPlan && _liPlan.unknownColumns ? _liPlan.unknownColumns.join(', ') : '',
       liHasPreview: !!(_liPlan && _liPlan.preview && _liPlan.preview.length),
+      liPreviewTitle: _liPlan && _liPlan.updates ? 'WHAT WILL BE ADDED AND FILLED IN' : 'WHAT WILL BE ADDED',
       liPreviewRows: _liPlan && _liPlan.preview ? _liPlan.preview.map(r9 => ({
         row: r9.row, name: r9.name, contact: r9.contact, source: r9.source, product: r9.product,
         dupShow: !!r9.dup, dup: r9.dup ? ('like ' + r9.dup) : '',
+        act: r9.act || 'new',
+        actFg: r9.act === 'fill in' ? '#5B21B6' : '#0E9355',
+        // On hover, because the columns are the detail and the action is the headline.
+        actWhat: r9.act === 'fill in' ? ('Fills in ' + (r9.fills || '') + ' on the lead already on file') : 'Creates a new lead',
       })) : [],
-      liHasMore: !!(_liPlan && _liPlan.creates > (_liPlan.preview || []).length),
-      liMore: _liPlan ? ('...and ' + (_liPlan.creates - (_liPlan.preview || []).length) + ' more') : '',
-      liCanCommit: !!(_liPlan && _liPlan.creates > 0) && !this.state.liBusy,
-      liCommitLabel: _liPlan ? ('Import ' + _liN(_liPlan.creates, 'lead', 'leads')) : 'Import',
+      liHasMore: !!(_liPlan && _liPlanTotal > (_liPlan.preview || []).length),
+      liMore: _liPlan ? ('...and ' + (_liPlanTotal - (_liPlan.preview || []).length) + ' more') : '',
+      liCanCommit: !!(_liPlan && _liPlanTotal > 0) && !this.state.liBusy,
+      liCommitLabel: !_liPlan ? 'Import'
+        : (_liPlan.creates && _liPlan.updates) ? ('Import ' + _liPlan.creates + ' and fill in ' + _liPlan.updates)
+        : _liPlan.updates ? ('Fill in ' + _liN(_liPlan.updates, 'lead', 'leads'))
+        : ('Import ' + _liN(_liPlan.creates, 'lead', 'leads')),
       liCommit: () => { if (!this.state.liBusy) this._liSend(true); },
       liAnother: () => this.setState({ liStep: 'pick', liCsv: '', liFileName: '', liPlan: null, liErr: '' }),
       liDoneMsg: !_liRes ? '' : (_liN(_liRes.made, 'lead was', 'leads were') + ' added'
+        + (_liRes.filled ? ', ' + _liN(_liRes.filled, 'lead was', 'leads were') + ' filled in' : '')
         + (_liPlan && _liPlan.skipped.length ? ', ' + _liPlan.skipped.length + ' already on file' : '')
         + (_liRes.failed && _liRes.failed.length ? ', and ' + _liRes.failed.length + ' the server refused' : '')
-        + '. Owners were chosen by your sales rules, the same as a lead added by hand.'),
+        + (_liRes.made ? '. Owners were chosen by your sales rules, the same as a lead added by hand.' : '.')),
       liHasFailed: !!(_liRes && _liRes.failed && _liRes.failed.length),
       liFailedRows: _liRes && _liRes.failed ? _liRes.failed : [],
       liPick: (ev9) => {

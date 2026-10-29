@@ -4520,9 +4520,17 @@ app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async
     // Re-planned rather than trusting a plan the browser sends back, for the same reason the
     // employee import re-reads its file: a caller that could post rows would be posting straight
     // past every rule the plan applies.
-    const plan = await planLeadImport(csv);
+    // `fill` is the person saying these leads are already on file and the file is a correction to
+    // them. It changes what a near-match means, so it is re-read on the commit with the file.
+    const plan = await planLeadImport(csv, { fill: !!req.body?.fill });
     const { rows, ...summary } = plan;
-    const preview = rows.slice(0, 50).map(r => ({ row: r.row, name: r.name, contact: r.contact, source: r.source, product: r.product, dup: r.duplicate?.name ?? null }));
+    const preview = rows.slice(0, 50).map(r => ({
+      row: r.row, name: r.name, contact: r.contact, source: r.source, product: r.product,
+      dup: r.duplicate?.name ?? null,
+      act: r.kind === "fill" ? "fill in" : "new",
+      // Which columns this row would write — the whole question a fill raises.
+      fills: r.fills.join(", "),
+    }));
 
     if (!req.body?.commit) return res.json({ ...summary, preview });
 
@@ -4533,9 +4541,14 @@ app.post("/api/leads/import", requireAuth, requireStaff, requireWriteRole, async
     const result = await applyLeadImport(app, req as any, plan, job);
     await logAudit({
       action: "leads.imported", actorId: a?.sub, target: `${result.made} leads`, ip: clientIp(req),
-      detail: `${result.made} created, ${plan.skipped.length} skipped, ${plan.refused.length} refused, ${result.failed.length} failed`,
+      detail: `${result.made} created, ${result.filled} filled in, ${plan.skipped.length} skipped, ${plan.refused.length} refused, ${result.failed.length} failed`,
     });
-    logActivity({ type: "sales", message: `Imported ${result.made} lead${result.made === 1 ? "" : "s"}`, user: a?.email });
+    logActivity({
+      type: "sales", user: a?.email,
+      message: result.filled
+        ? `Imported ${result.made} lead${result.made === 1 ? "" : "s"} and filled in ${result.filled}`
+        : `Imported ${result.made} lead${result.made === 1 ? "" : "s"}`,
+    });
     res.json({ ...summary, preview, result });
   } catch (e: any) {
     return fail(res, 400, e, "leads.import");

@@ -17,6 +17,19 @@
  * to imports without anybody remembering this file exists, and a lead typed in by hand and a lead
  * imported are the same object by construction rather than by inspection.
  *
+ * IT ALSO FILLS IN WHAT A FILE FORGOT, when asked to. A list arrives without a City column,
+ * three hundred leads are created without one, and the only way back was to open three hundred
+ * records. So `fill` mode treats a row that matches a lead already on file as a correction to that
+ * lead rather than a second one: it writes the fields the record has NOTHING in, and never touches
+ * a field that has an answer. The round trip is already there — the Leads export writes a sheet
+ * whose headings this reads — so the repair is export, type the column in, upload the same file.
+ *
+ * It is a mode and not the default because the two intents are genuinely different, and no amount
+ * of looking at a row tells you which one you are holding. A fresh list of ninety prospects wants
+ * every near-match created and flagged; a corrections sheet wants every near-match completed. Guess
+ * wrong on the first and you merge two real companies that share a trade name; guess wrong on the
+ * second and you duplicate the list you were trying to fix.
+ *
  * THE TEMPLATE IS SERVED FROM HERE for the same reason. The employee template is built in the
  * browser from its own copy of the column list, and the two can drift — which is why there is a
  * check script whose whole job is to notice. One list, written once, is cheaper than a guard.
@@ -28,6 +41,7 @@ import { runInProcess } from "./boot.js";
 import { publish } from "./realtime.js";
 import { prisma } from "./db.js";
 import { INDIVIDUAL } from "./validate.js";
+import { FILLABLE } from "./company-merge.js";
 
 /** The columns the template offers, in order — and the only ones read. */
 export const LEAD_IMPORT_COLUMNS = [
@@ -66,6 +80,19 @@ export const LEAD_EXAMPLE_ROW: Record<string, string> = {
 
 const MAX_ROWS = 1000;
 
+/**
+ * What a re-import may fill in: the columns this file reads that a MERGE is also allowed to copy.
+ *
+ * FILLABLE is the vetted list — same rule (never an overwrite), already asserted against the
+ * schema by its own check script, and `contact`, `email` and `phone` are deliberately absent from
+ * it because contacts.ts owns those three and writing them here would promise something that is
+ * overwritten a second later. Which is why a fill leaves the contact alone and the dialog says so.
+ */
+export const IMPORT_FILLS = ["companyType", "city", "source", "sourceDetail", "industry", "campaign", "service", "website"] as const;
+for (const f of IMPORT_FILLS) {
+  if (!(FILLABLE as readonly string[]).includes(f)) throw new Error(`IMPORT_FILLS has "${f}", which a merge will not copy — one of the two lists is wrong`);
+}
+
 /** Column names people actually use, mapped to the ones this reads. */
 const ALIAS: Record<string, string> = {
   company: "company_name", name: "company_name", client: "company_name", lead: "company_name",
@@ -73,7 +100,9 @@ const ALIAS: Record<string, string> = {
   contact: "contact_name", person: "contact_name", "contact person": "contact_name",
   type: "company_type", kind: "company_type", "lead type": "company_type",
   "client type": "company_type", "type of client": "company_type",
-  title: "job_title", designation: "job_title", position: "job_title",
+  // `role` is there because the Leads EXPORT heads that column "Role", and that sheet coming back
+  // with a column filled in is the whole point of fill mode.
+  title: "job_title", designation: "job_title", position: "job_title", role: "job_title",
   "e-mail": "email", mail: "email", "email address": "email",
   url: "website", site: "website", web: "website", "web site": "website", homepage: "website",
   mobile: "phone", telephone: "phone", tel: "phone", "phone number": "phone", whatsapp: "phone",
@@ -119,6 +148,12 @@ export type LeadIssue = { row: number; name: string; what: string };
 export type LeadPlanRow = {
   row: number;
   name: string;
+  /** A new lead, or the blank fields of one already on file. */
+  kind: "new" | "fill";
+  /** The record being completed, for a fill. */
+  id: string | null;
+  /** Which fields a fill would write, for the preview — a fill with none is skipped, not planned. */
+  fills: string[];
   body: Record<string, unknown>;
   /** What the preview shows about this row, in the words the reader needs. */
   contact: string;
@@ -129,6 +164,7 @@ export type LeadPlanRow = {
 export type LeadPlan = {
   rowsRead: number;
   creates: number;
+  updates: number;
   skipped: LeadIssue[];
   refused: LeadIssue[];
   warnings: LeadIssue[];
@@ -139,7 +175,7 @@ export type LeadPlan = {
 const looksLikeEmail = (v: string) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
 const looksLikePhone = (v: string) => !v || /^[+()\d][\d\s()+.-]{5,}$/.test(v);
 
-export async function planLeadImport(csvText: string): Promise<LeadPlan> {
+export async function planLeadImport(csvText: string, opts: { fill?: boolean } = {}): Promise<LeadPlan> {
   const grid = parseCsv(csvText.replace(/^﻿/, ""));
   if (!grid.length) throw new Error("That file is empty.");
 
@@ -157,6 +193,14 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
   if (body.length > MAX_ROWS) throw new Error(`That file has ${body.length} rows. Import at most ${MAX_ROWS} at a time.`);
 
   const index = await duplicateIndex();
+  // What the records already hold, so "is this field empty" is answered from the database rather
+  // than from the match. Read once for the file, and only in fill mode — a normal import asks
+  // nothing of it. Keyed by id, which is what a match hands back.
+  const onFileFields = opts.fill
+    ? new Map((await prisma.company.findMany({
+        select: { id: true, ...Object.fromEntries(IMPORT_FILLS.map(f => [f, true])) } as any,
+      })).map((c: any) => [String(c.id), c as Record<string, unknown>]))
+    : null;
   // The configured sources, so a typo in that column is said out loud rather than quietly stored as
   // a source nothing reports on.
   const sources = await names(() => prisma.leadSource.findMany({ select: { name: true } }));
@@ -236,8 +280,24 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
     seen.set(key, lineNo);
 
     const dup = index.match({ name, email, phone })[0] ?? null;
-    if (dup && dup.confidence === "certain") {
-      skipped.push({ row: lineNo, name, what: `Already on file as "${dup.name}" — ${dup.why}` });
+    /**
+     * IS THIS A LEAD WE ALREADY HAVE?
+     *
+     * A normal import answers only on `certain` — a shared CR or a shared email address, where
+     * there is nothing to weigh — and stops the row there, which is what it has always done.
+     *
+     * FILL MODE ALSO ACCEPTS `likely`: the same phone number, or the same name once spelling and
+     * legal form are ignored. That is the match a corrections sheet lands on, because 26 of this
+     * firm's 117 leads have no email address for a `certain` match to use — and without it the
+     * file meant to repair them would create a second copy of each instead.
+     *
+     * `possible` is still a new lead in both modes. That rule is one name being the start of
+     * another — "Al Noor" against "Al Noor Trading" — which is as often two real companies as one,
+     * and the mode does not make that guess any safer.
+     */
+    const onFile = dup && (dup.confidence === "certain" || (!!opts.fill && dup.confidence === "likely"));
+    if (onFile && !opts.fill) {
+      skipped.push({ row: lineNo, name, what: `Already on file as "${dup!.name}" — ${dup!.why}` });
       continue;
     }
 
@@ -282,33 +342,72 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
       ? [{ name: contactName || name, jobTitle: cell("job_title") || null, email: email || null, phone: phone || null }]
       : [];
 
+    const fields: Record<string, string | null> = {
+      companyType: kind || null,
+      city: cell("city") || null,
+      source: source || null,
+      sourceDetail: cell("note") || null,
+      industry: cell("industry") || null,
+      campaign: cell("campaign") || null,
+      service: product || null,
+      website: website || null,
+    };
+
+    if (onFile) {
+      /**
+       * ONLY WHAT IS EMPTY. A field with an answer is somebody's answer, and a sheet is not
+       * evidence that it is wrong — which is also what makes this safe to run twice.
+       *
+       * THE NAME IS NOT TOUCHED EITHER, and the record's own name is what gets sent: a fill is
+       * reached by a name that matched once legal forms were ignored, so writing the sheet's
+       * spelling over it would rename the company as a side effect of filling in its city — and
+       * a rename re-addresses its unsent quotations.
+       */
+      // No row for it means this cannot tell what is empty, and "assume everything" would write
+      // over answers that are already there. The only safe reading of a gap is to leave it alone.
+      const have = onFileFields!.get(dup!.id);
+      if (!have) {
+        skipped.push({ row: lineNo, name, what: `Already on file as "${dup!.name}" — could not read what it already holds` });
+        continue;
+      }
+      const fills = IMPORT_FILLS.filter(f => !clean(have[f]) && clean(fields[f]));
+      if (!fills.length) {
+        skipped.push({ row: lineNo, name, what: `Already on file as "${dup!.name}", with nothing this row adds` });
+        continue;
+      }
+      rows.push({
+        row: lineNo, name: dup!.name, kind: "fill", id: dup!.id, fills,
+        contact: contactName || "—",
+        source: source || "—",
+        product: product || "—",
+        duplicate: dup,
+        body: { name: dup!.name, ...Object.fromEntries(fills.map(f => [f, fields[f]])) },
+      });
+      continue;
+    }
+
     rows.push({
-      row: lineNo, name,
+      row: lineNo, name, kind: "new", id: null, fills: [],
       contact: contactName || (contacts.length ? name : "—"),
       source: source || "—",
       product: product || "—",
       duplicate: dup,
-      body: {
-        name, lifecycle: "lead",
-        companyType: kind || null,
-        city: cell("city") || null,
-        source: source || null,
-        sourceDetail: cell("note") || null,
-        industry: cell("industry") || null,
-        campaign: cell("campaign") || null,
-        service: product || null,
-        website: website || null,
-        contacts,
-      },
+      body: { name, lifecycle: "lead", ...fields, contacts },
     });
     if (dup) warnings.push({ row: lineNo, name, what: `Looks like "${dup.name}" — ${dup.why}. Imported anyway; check it.` });
   }
 
-  return { rowsRead: body.length, creates: rows.length, skipped, refused, warnings, rows, unknownColumns };
+  return {
+    rowsRead: body.length,
+    creates: rows.filter(r => r.kind === "new").length,
+    updates: rows.filter(r => r.kind === "fill").length,
+    skipped, refused, warnings, rows, unknownColumns,
+  };
 }
 
 /**
- * Create them, through the route that already knows how.
+ * Create them, through the route that already knows how — and fill the others in through the route
+ * the edit form uses, which writes only the fields it is handed and leaves the rest alone.
  *
  * A row the route refuses is reported against its line and the rest continue: one bad row in a file
  * of three hundred must not undo the other two hundred and ninety-nine, and stopping halfway leaves
@@ -330,8 +429,8 @@ export async function planLeadImport(csvText: string): Promise<LeadPlan> {
  */
 export async function applyLeadImport(
   app: Express, parent: Request, plan: LeadPlan, job?: string | null,
-): Promise<{ made: number; failed: LeadIssue[] }> {
-  let made = 0;
+): Promise<{ made: number; filled: number; failed: LeadIssue[] }> {
+  let made = 0, filled = 0;
   const failed: LeadIssue[] = [];
   const total = plan.rows.length;
   const say = (done: number, name: string) => {
@@ -340,10 +439,12 @@ export async function applyLeadImport(
   };
   say(0, plan.rows[0]?.name ?? "");
   for (const r of plan.rows) {
-    const a = await runInProcess(app, parent, "/api/companies", { method: "POST", body: r.body });
-    if (a.status >= 200 && a.status < 300) made++;
+    const a = r.kind === "fill"
+      ? await runInProcess(app, parent, `/api/companies/${r.id}/details`, { method: "PUT", body: r.body })
+      : await runInProcess(app, parent, "/api/companies", { method: "POST", body: r.body });
+    if (a.status >= 200 && a.status < 300) { if (r.kind === "fill") filled++; else made++; }
     else failed.push({ row: r.row, name: r.name, what: String((a.body as any)?.error ?? `The server refused this row (${a.status})`) });
-    say(made + failed.length, r.name);
+    say(made + filled + failed.length, r.name);
   }
-  return { made, failed };
+  return { made, filled, failed };
 }

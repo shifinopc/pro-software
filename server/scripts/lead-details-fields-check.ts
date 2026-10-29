@@ -19,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IMPORT_FILLS } from "../src/lead-import.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(here, "..", "..", "index.html"), "utf8");
@@ -114,7 +115,27 @@ if (notLoaded.length) {
   process.exit(1);
 }
 
-if (!dropped.length) { console.log("\nin order — nothing is sent and dropped, and nothing is sent unloaded."); process.exit(0); }
+/**
+ * AND THE IMPORT REACHES THE SAME ROUTE, so the same trap is set for it.
+ *
+ * A re-import in fill mode PUTs its columns here. A name in IMPORT_FILLS that this route does not
+ * write would make a fill report "97 leads filled in" and change nothing at all: the exact failure
+ * the two halves above exist to catch, one caller along, and with a hundred rows of false
+ * confidence attached to it.
+ */
+const unwritten = IMPORT_FILLS.filter(f => !writtenFields.includes(f));
+console.log(`  the import fills:    ${IMPORT_FILLS.join(", ")}`);
+if (unwritten.length) {
+  for (const f of unwritten) {
+    console.log(`
+  FAIL  the lead import fills in "${f}", and the route writes it nowhere.`);
+    console.log(`        A fill-in import would say it worked and leave every row exactly as it was.`);
+    console.log(`            ...("${f}" in b ? { ${f}: b.${f} || null } : {}),`);
+  }
+  process.exit(1);
+}
+
+if (!dropped.length) { console.log("\nin order — nothing is sent and dropped, nothing is sent unloaded, and the import's fills all land."); process.exit(0); }
 for (const f of dropped) {
   console.log(`\n  FAIL  "${f}" is sent by the edit form and written nowhere in the route.`);
   console.log(`        Saving will answer 200, close the dialog, and leave the old value on the row.`);
