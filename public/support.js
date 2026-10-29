@@ -496,6 +496,7 @@
     const tag = el.tagName.toLowerCase();
     if (tag === "sc-for") return walkFor(el, host);
     if (tag === "sc-if") return walkIf(el, host);
+    if (tag === "sc-freeze") return walkFreeze(el, host);
     if (tag === "x-import") return walkXImport(el, host);
     if (tag === "sc-helmet") return host.helmet(el);
     if (tag === "dc-import") return walkComponent(el, host);
@@ -598,6 +599,30 @@
         { key },
         kids.map((b, j) => b(vals, ctx, j))
       ) : null;
+    };
+  }
+  /**
+   * NOTHING BEHIND A DIALOG CAN CHANGE, SO STOP REBUILDING IT.
+   *
+   * Handing React back the SAME element object makes it skip the whole subtree: the props are
+   * identical, so there is nothing to diff. Measured on the Leads screen, one keystroke in the
+   * Add-lead form cost ~540ms, and most of that was rebuilding the list, filters and header that
+   * the dialog is sitting on top of — work nobody can see the result of.
+   *
+   * It only freezes the BUILD. The markup stays in the page and looks exactly as it did, which is
+   * why this is not an sc-if: hiding the screen would leave a blank backdrop behind the dialog.
+   *
+   * shortcut: the cache lives on the compiled binder, so it is shared by every instance of the
+   * component. Fine while the console is one instance; make it per-instance if that ever changes.
+   */
+  function walkFreeze(el, host) {
+    const valGet = compileAttr(el.getAttribute("value") || "");
+    const kids = walkChildren(el, host);
+    let cached = null;
+    return (vals, ctx, key) => {
+      if (valGet(vals) && cached) return cached;
+      cached = h(getReact().Fragment, { key }, kids.map((b, j) => b(vals, ctx, j)));
+      return cached;
     };
   }
   function walkComponent(el, host) {
