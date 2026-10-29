@@ -97,7 +97,7 @@ import { toIsoDate, DateValueError, businessToday, setBusinessZone } from "./dat
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
-import { sendInvitation, type InviteResult } from "./invitations.js";
+import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
@@ -1305,6 +1305,48 @@ app.post("/api/users/:id/login-as", requireAuth, requireStaff, requireHuman, asy
     ? signToken({ sub: u.id, type: "portal", companyId: u.companyId, tv: u.tokenVersion })
     : signToken({ sub: u.id, type: "staff", role: u.roleId, tv: u.tokenVersion });
   res.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.roleId, type: u.type, companyId: u.companyId } });
+});
+
+/**
+ * CREATE A CLIENT'S FIRST PORTAL LOGIN — the step that did not exist.
+ *
+ * Until now the only moment a client could be given one was the instant they became a client, at
+ * whatever address the lead happened to carry. If that address was wrong, or absent, or the client
+ * did not want their salesperson's Gmail administering their portal, there was no second chance:
+ * `reset-portal-password` answers "This client has no portal login" and `resend-invite` needs an
+ * account that already exists. The client page even told people to use the reset — which cannot
+ * work. So: the one route that can hand out the first login, to an address somebody chose.
+ *
+ * NOT a way to add a second administrator. One client_admin per client is what the rest of this
+ * system assumes; a client who needs more people in their portal gets them from inside it.
+ */
+app.post("/api/companies/:id/portal-invite", requireAuth, requireStaff, requireWriteRole, requireHuman, inviteLimiter, async (req, res) => {
+  const a = (req as any).auth;
+  const co = await prisma.company.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, contact: true, lifecycle: true } });
+  if (!co) return res.status(404).json({ error: "Client not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  // Only a client has a portal — the same rule the sign-in check enforces from the other side.
+  if (co.lifecycle !== ACTIVE_CLIENT) {
+    return res.status(409).json({ error: `${co.name} is still "${co.lifecycle}". A portal belongs to a client — convert them first.` });
+  }
+  const held = await prisma.user.findFirst({ where: { companyId: co.id, type: "portal" }, select: { email: true } });
+  if (held) {
+    return res.status(409).json({ error: `${co.name} already signs in as ${held.email}. Use Resend invitation or Reset portal password for that account.` });
+  }
+  const email = String((req.body ?? {}).email ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Enter the address the client wants their portal administered from." });
+  // Checked here so the refusal can SAY what is wrong. provisionPortalLogin also refuses a taken
+  // address, but silently — it is the guard, not the explanation.
+  const taken = await prisma.user.findUnique({ where: { email }, select: { type: true, name: true } });
+  if (taken) {
+    const who = taken.type === "staff" ? `a staff account (${taken.name})` : "another client's portal login";
+    return res.status(409).json({ error: `${email} is already ${who}. A portal login needs its own address.` });
+  }
+  const invite = await provisionPortalLogin(co, { email, actorId: a?.sub, actorEmail: a?.email, ip: clientIp(req) });
+  if (!invite) return res.status(409).json({ error: "That address could not be used — try another." });
+  // InviteResult already carries the address, the one-time link and whether the mail left.
+  res.json(invite);
 });
 
 // Admin-only: any staff being able to reset a client's portal password meant a low-privilege role
@@ -4132,26 +4174,20 @@ app.post("/api/companies/:id/lifecycle", requireAuth, requireStaff, requireWrite
   // The CR given on becoming a client is the client's main CR.
   if (to === ACTIVE_CLIENT) await syncMainFromCompany(co.id).catch(() => {});
 
-  // The portal login, once, on becoming a client. Same rules as the create route: only with a real
-  // address, only if that address is not already a user. The account is created with NO password —
-  // the invitation link they receive is what sets the first one. See invitations.ts.
+  // THE PORTAL LOGIN IS NOW ASKED FOR, NOT ASSUMED.
+  //
+  // It used to be created silently at whatever address the lead happened to arrive with. That is
+  // frequently a personal Gmail, a shared info@ or the salesperson's own, and it made that address
+  // the client's portal ADMINISTRATOR — an account the client never chose and could not be moved
+  // off, because until now nothing could create a second one.
+  //
+  // `portalEmail` is keyed on PRESENCE, like the fields on /details: absent keeps the old behaviour
+  // for every other caller, "" means none yet, and an address means that one. "None yet" is a real
+  // answer now rather than a dead end — see POST /:id/portal-invite.
   let portalInvite: InviteResult | null = null;
   if (to === ACTIVE_CLIENT) {
-    const email = String(company.email || "").toLowerCase();
-    if (email.includes("@")) {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (!existing) {
-        const pu = await prisma.user.create({
-          data: {
-            name: company.contact ?? company.name, email, roleId: "client_admin", status: "active",
-            lastActive: null, type: "portal", companyId: company.id,
-            passwordHash: null, mustChangePassword: true,
-          },
-        });
-        portalInvite = await sendInvitation(pu, { companyName: company.name, invitedBy: a?.email });
-        await logAudit({ action: "portal.invited", actorId: a?.sub, target: pu.email, detail: `${company.name} · ${portalInvite.emailed ? "emailed" : "not emailed"}`, ip: clientIp(req) });
-      }
-    }
+    const asked = "portalEmail" in (req.body ?? {}) ? String((req.body ?? {}).portalEmail ?? "").trim() : company.email;
+    portalInvite = await provisionPortalLogin(company, { email: asked, actorId: a?.sub, actorEmail: a?.email, ip: clientIp(req) });
   }
 
   // Promoting to prospect is the moment somebody says there is something here, which is exactly
@@ -5973,7 +6009,12 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
     // their subscription", so a clash produced a client with no way into the portal and a success
     // message saying otherwise. Found when a staff member's own address was typed as a new client's
     // login. Refusing here, before the company exists, means the save either does all of it or none.
-    const loginEmail = String(body?.email ?? "").trim().toLowerCase();
+    // THE ADDRESS THAT WILL ACTUALLY BE THE LOGIN, which is no longer always the contact's: see
+    // `portalEmail` below. Checking `email` while provisioning `portalEmail` would refuse a perfectly
+    // good client over an address nobody was going to sign in with, and let through the clash.
+    const loginEmail = String(
+      ("portalEmail" in (req.body ?? {}) ? (req.body ?? {}).portalEmail : body?.email) ?? "",
+    ).trim().toLowerCase();
     if (loginEmail.includes("@") && String(body?.lifecycle ?? ACTIVE_CLIENT) === ACTIVE_CLIENT) {
       const taken = await prisma.user.findUnique({ where: { email: loginEmail }, select: { type: true, name: true, companyId: true } });
       if (taken) {
@@ -6038,29 +6079,11 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
     // Not for a lead or a prospect: they have not agreed to anything, and an account that can sign
     // in to an empty portal is a support call at best. The login is provisioned when they become a
     // client, on the lifecycle route.
-    let portalInvite: InviteResult | null = null;
-    const email = company.lifecycle === ACTIVE_CLIENT ? String(company.email || "").toLowerCase() : "";
-    if (email.includes("@")) {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (!existing) {
-        const pu = await prisma.user.create({
-          data: {
-            name: company.contact ?? company.name,
-            email,
-            roleId: "client_admin",
-            status: "active",
-            lastActive: null,
-            type: "portal",
-            companyId: company.id,
-            // No password at all until the invitation link is used — see invitations.ts.
-            passwordHash: null,
-            mustChangePassword: true,
-          },
-        });
-        portalInvite = await sendInvitation(pu, { companyName: company.name, invitedBy: (req as any).auth?.email });
-        await logAudit({ action: "portal.invited", actorId: (req as any).auth?.sub, target: pu.email, detail: `${company.name} · ${portalInvite.emailed ? "emailed" : "not emailed"}`, ip: clientIp(req) });
-      }
-    }
+    // The same choice as the lifecycle route, by the same presence rule — see the note there.
+    const askedPortal = "portalEmail" in (req.body ?? {}) ? String((req.body ?? {}).portalEmail ?? "").trim() : company.email;
+    const portalInvite = company.lifecycle === ACTIVE_CLIENT
+      ? await provisionPortalLogin(company, { email: askedPortal, actorId: (req as any).auth?.sub, actorEmail: (req as any).auth?.email, ip: clientIp(req) })
+      : null;
     // Say what actually happened. A lead announced as an onboarded client is a message the whole
     // office reads and acts on — somebody opens the file expecting signed paperwork.
     const isClient = company.lifecycle === ACTIVE_CLIENT;

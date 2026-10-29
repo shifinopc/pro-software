@@ -29,6 +29,7 @@
  * the permanent secret. Resending is a first-class action for the same reason.
  */
 import crypto from "node:crypto";
+import { logAudit } from "./auth.js";
 import { clientEmailHeld } from "./notify.js";
 import { prisma } from "./db.js";
 import { sendMail } from "./mailer.js";
@@ -154,4 +155,43 @@ export async function sendInvitation(
     console.error(`[invite] could not email ${user.email}: ${error}`);
     return { email: user.email, link, emailed: false, error, expiresAt };
   }
+}
+
+
+/**
+ * GIVE A CLIENT THEIR PORTAL LOGIN — the only place that does.
+ *
+ * This was written out three times: on the create route, on the lifecycle route, and nowhere at all
+ * for the case that actually needed it. The third copy is the new invite route, and rather than add
+ * one the other two now call this.
+ *
+ * WHICH ADDRESS IS THE CALLER'S DECISION, not this function's. A lead arrives with whatever email
+ * somebody had — a personal Gmail, a shared info@, the salesperson's own — and that address becoming
+ * the client's portal administrator by default is how a client ends up administered from an account
+ * they never agreed to. The caller passes the address it was told to use, or null for none.
+ *
+ * An address already belonging to a user is left alone and `null` comes back: a portal login is
+ * never quietly pointed at somebody else's account. Callers that must explain why check first.
+ */
+export async function provisionPortalLogin(
+  company: { id: string; name: string; contact?: string | null },
+  opts: { email?: string | null; actorId?: string | null; actorEmail?: string | null; ip?: string | null } = {},
+): Promise<InviteResult | null> {
+  const email = String(opts.email ?? "").trim().toLowerCase();
+  if (!email.includes("@")) return null;
+  if (await prisma.user.findUnique({ where: { email } })) return null;
+  const user = await prisma.user.create({
+    data: {
+      name: company.contact ?? company.name, email, roleId: "client_admin", status: "active",
+      lastActive: null, type: "portal", companyId: company.id,
+      // No password at all until the invitation link is used.
+      passwordHash: null, mustChangePassword: true,
+    },
+  });
+  const invite = await sendInvitation(user, { companyName: company.name, invitedBy: opts.actorEmail });
+  await logAudit({
+    action: "portal.invited", actorId: opts.actorId ?? null, target: user.email,
+    detail: `${company.name} \u00b7 ${invite.emailed ? "emailed" : "not emailed"}`, ip: opts.ip ?? null,
+  });
+  return invite;
 }

@@ -3042,7 +3042,14 @@
                 <div style="padding:11px 13px;">
                   <div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">PORTAL USERS</div>
                   <div style="display:flex; flex-direction:column; gap:7px; margin-top:9px;">
-                    <sc-for list="{{ cdPortalUsers }}" as="u" hint-placeholder-count="2"><div style="display:flex; align-items:center; gap:9px;"><span style="width:26px; height:26px; border-radius:99px; background:{{ u.avBg }}; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ u.initials }}</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.name }}</div><div style="font-size:9px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.email }}</div></div><span style="font-size:9px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; flex-shrink:0;">{{ u.role }}</span></div></sc-for><sc-if value="{{ cdPortalUsersEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4;">No portal logins yet — use Reset portal password to invite one.</div></sc-if>
+                    <sc-for list="{{ cdPortalUsers }}" as="u" hint-placeholder-count="2"><div style="display:flex; align-items:center; gap:9px;"><span style="width:26px; height:26px; border-radius:99px; background:{{ u.avBg }}; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ u.initials }}</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.name }}</div><div style="font-size:9px; color:#A9A6B4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.email }}</div></div><span style="font-size:9px; font-weight:700; color:#7C00FF; background:#F3E8FF; padding:2px 8px; border-radius:99px; flex-shrink:0;">{{ u.role }}</span></div></sc-for><sc-if value="{{ cdPortalUsersEmpty }}" hint-placeholder-val="{{ false }}">
+                      <!-- It used to say "use Reset portal password to invite one", which answers
+                           "This client has no portal login" and always did. -->
+                      <div style="font-size:11px; color:#A9A6B4; line-height:1.55;">{{ cdNoPortalWhy }}</div>
+                      <sc-if value="{{ cdCanInvitePortal }}" hint-placeholder-val="{{ true }}">
+                        <span onClick="{{ cdInvitePortal }}" style="align-self:flex-start; margin-top:9px; font-size:10px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Invite a portal login</span>
+                      </sc-if>
+                    </sc-if>
                   </div>
                   <div style="display:flex; gap:8px; margin-top:10px;">
                     <button onClick="{{ cdReset }}" style="flex:1; background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 0; border-radius:10px; cursor:pointer;" style-hover="background:#6900D6;">Reset password</button>
@@ -12302,10 +12309,13 @@
               <div><label class="fm-lab">CITY</label><input value="{{ acCity }}" onChange="{{ setAcCity }}" placeholder="e.g. Riyadh" class="fm-inp"></div>
             </div>
             <div class="ldf-col">
-                            <div class="ldf-cap">Contact person<span>also the portal login</span></div>
+                            <div class="ldf-cap">Contact person</div>
               <div><label class="fm-lab">CONTACT PERSON NAME</label><input value="{{ acContact }}" onChange="{{ setAcContact }}" class="fm-inp"></div>
               <div><label class="fm-lab">DESIGNATION</label><input value="{{ acDesignation }}" onChange="{{ setAcDesignation }}" placeholder="e.g. General Manager" class="fm-inp"></div>
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;"><div><label class="fm-lab">MOBILE NUMBER</label><input value="{{ acPhone }}" onChange="{{ setAcPhone }}" inputmode="tel" class="fm-inp"></div><div><label class="fm-lab">MAIL ID (PORTAL LOGIN)</label><input value="{{ acEmail }}" onChange="{{ setAcEmail }}" placeholder="name@company.sa" type="email" class="fm-inp"></div></div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;"><div><label class="fm-lab">MOBILE NUMBER</label><input value="{{ acPhone }}" onChange="{{ setAcPhone }}" inputmode="tel" class="fm-inp"></div><div><label class="fm-lab">MAIL ID</label><input value="{{ acEmail }}" onChange="{{ setAcEmail }}" placeholder="name@company.sa" type="email" class="fm-inp"></div></div>
+              <!-- ASKED, NOT ASSUMED. This used to be the contact's address, silently, with no way
+                   to change it afterwards and no way to decline it. -->
+              <div><label class="fm-lab">PORTAL LOGIN</label><sc-if value="{{ acPortalWanted }}" hint-placeholder-val="{{ true }}"><input value="{{ acPortalEmail }}" onChange="{{ setAcPortalEmail }}" placeholder="who administers their portal" type="email" class="fm-inp"></sc-if><sc-if value="{{ acPortalNone }}" hint-placeholder-val="{{ false }}"><div class="fm-inp" style="display:flex; align-items:center; color:#8C8899; background:#F7F6FA;">Not yet</div></sc-if><div onClick="{{ toggleAcPortalNone }}" class="fm-hint" style="display:flex; align-items:center; gap:7px; cursor:pointer;"><span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ acPortalBd }}; background:{{ acPortalBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><sc-if value="{{ acPortalNone }}" hint-placeholder-val="{{ false }}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></span><span>No portal login yet</span></div><div class="fm-hint">{{ acPortalHint }}</div></div>
                             <div class="ldf-cap">How we will work it</div>
               <div><label class="fm-lab">STATUS</label><div style="position:relative;"><div data-dd onClick="{{ ddAcStatusToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acStatus2Val }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcStatusOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <div><label class="fm-lab">PRO OFFICER</label><div style="position:relative;"><div data-dd onClick="{{ ddAcProToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ acProColor }};">{{ acProVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcProOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcProOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><sc-if value="{{ acProHintShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">{{ acProHint }}</div></sc-if></div>
@@ -14613,6 +14623,47 @@
         <div class="fm-foot" style="justify-content:flex-end;">
           <span onClick="{{ snClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
           <button onClick="{{ snConfirm }}" style="background:#B7791F; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#9C6518;">Reschedule</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ══ INVITE A PORTAL LOGIN ═══════════════════════════════════════════════════════════
+       The first one, for a client who has none. Small on purpose: one address, and their own
+       contacts offered as chips because that is usually who they mean. Never a default — whose
+       account administers a client's portal is the client's decision, and assuming it is what
+       this whole change exists to undo. -->
+  <sc-if value="{{ pinvShow }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ pinvClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:122; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ pinvTitle }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:2px;">They choose their own password from the link — nobody here ever sees it.</div>
+          </div>
+          <div onClick="{{ pinvClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <div>
+            <label class="fm-lab">EMAIL ADDRESS <span class="fm-req">*</span></label>
+            <input value="{{ pinvEmail }}" onInput="{{ setPinvEmail }}" placeholder="who administers their portal" type="email" class="fm-inp">
+            <sc-if value="{{ pinvHasChips }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+                <sc-for list="{{ pinvChips }}" as="c" hint-placeholder-count="2">
+                  <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; padding:5px 11px; border-radius:99px; cursor:pointer; border:1px solid #E4D3FB; background:#F8F4FF; color:#5B21B6;">{{ c.label }}</span>
+                </sc-for>
+              </div>
+            </sc-if>
+            <div class="fm-hint">It must be an address nobody else signs in with — a staff account or another client's login cannot be reused.</div>
+          </div>
+          <sc-if value="{{ pinvErrShow }}" hint-placeholder-val="{{ false }}">
+            <div class="fm-err" style="margin-top:12px;">{{ pinvErr }}</div>
+          </sc-if>
+        </div>
+        <div class="fm-foot">
+          <button onClick="{{ pinvClose }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <div style="flex:1;"></div>
+          <button onClick="{{ pinvSend }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ pinvBtn }}</button>
         </div>
       </div>
     </div>
@@ -25082,9 +25133,69 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         initials: _initials(u7.name || u7.email), avBg: _PU_TONE[i7 % _PU_TONE.length],
       }));
       clDetailApi.cdPortalUsersEmpty = _cdPortalUsers.length === 0;
+      /**
+       * HANDING OUT THE FIRST PORTAL LOGIN, which had no door at all.
+       *
+       * One was created — silently, at the contact's address — the instant a lead became a client,
+       * and that was the only chance. A client who wanted a different administrator, or who had not
+       * decided yet, was stuck: reset-portal-password answers "This client has no portal login" and
+       * resend-invite needs an account that already exists.
+       *
+       * The address is the client's choice, so it is typed rather than taken: their contacts are
+       * offered as chips because that is usually who they mean, never as a default.
+       */
+      clDetailApi.cdCanInvitePortal = canWrite && !!clRow.realId;
+      clDetailApi.cdNoPortalWhy = canWrite
+        ? 'No portal login yet. Invite one at whichever address the client wants their portal run from.'
+        : 'No portal login yet.';
+      clDetailApi.cdInvitePortal = () => this.setState({
+        pinv: { id: clRow.realId, name: clRow.name, email: '' }, pinvErr: '', pinvBusy: false,
+      });
       // The three stats on the card above were literal text — "Yesterday", "3 active", "2FA On" —
       // printed over the same list this count comes from, which frequently said nobody had ever
       // logged in. Counted from the same array so the card cannot contradict itself.
+      (() => {
+        const p8 = this.state.pinv || null;
+        // Their own contacts, as suggestions. A client is usually administered by somebody already
+        // on file, and retyping an address that is already recorded is how a typo gets in.
+        // From state, not `_contactRows`: that one is declared further down this same function, so
+        // reading it here throws before it is initialised — which took the whole client screen with it.
+        const all8 = Array.isArray(this.state.contactsData) ? this.state.contactsData : [];
+        const mine8 = p8 ? all8.filter(c8 => c8.companyId === p8.id && c8.email && !c8.archived) : [];
+        const seen8 = new Set();
+        clDetailApi.pinvShow = !!p8;
+        clDetailApi.pinvTitle = p8 ? 'Portal login for ' + p8.name : '';
+        clDetailApi.pinvEmail = (p8 && p8.email) || '';
+        clDetailApi.setPinvEmail = (e8) => this.setState({ pinv: { ...(this.state.pinv || {}), email: e8.target.value }, pinvErr: '' });
+        clDetailApi.pinvChips = mine8.filter(c8 => { const k8 = String(c8.email).toLowerCase(); if (seen8.has(k8)) return false; seen8.add(k8); return true; })
+          .slice(0, 6).map(c8 => ({
+            label: c8.name ? c8.name + ' · ' + c8.email : c8.email,
+            pick: () => this.setState({ pinv: { ...(this.state.pinv || {}), email: c8.email }, pinvErr: '' }),
+          }));
+        clDetailApi.pinvHasChips = clDetailApi.pinvChips.length > 0;
+        clDetailApi.pinvErr = this.state.pinvErr || '';
+        clDetailApi.pinvErrShow = !!this.state.pinvErr;
+        clDetailApi.pinvBtn = this.state.pinvBusy ? 'Sending\u2026' : 'Send the invitation';
+        clDetailApi.pinvClose = () => this.setState({ pinv: null, pinvErr: '' });
+        clDetailApi.pinvSend = () => {
+          if (this.state.pinvBusy) return;
+          const addr8 = String((this.state.pinv || {}).email || '').trim();
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr8)) return this.setState({ pinvErr: 'Enter the address the client wants their portal run from.' });
+          this.setState({ pinvBusy: true, pinvErr: '' });
+          this._crmFetch('/api/companies/' + p8.id + '/portal-invite', { method: 'POST', body: JSON.stringify({ email: addr8 }) })
+            .then(({ ok: ok8, j: j8 }) => {
+              this.setState({ pinvBusy: false });
+              // The server's refusals NAME what is wrong — whose account the address already is,
+              // or that the record is not a client yet — so they are shown as they come.
+              if (!ok8) return this.setState({ pinvErr: (j8 && j8.error) || 'Could not create that login' });
+              this.setState({ pinv: null, pinvErr: '' });
+              // The link, always: it is the fallback when mail is off, and the only copy that exists.
+              this.setState({ newClientPw: { name: p8.name, email: addr8, link: j8.link, emailed: !!j8.emailed, error: j8.error || '' } });
+              this._opReload && this._opReload('users', 'usersData');
+            })
+            .catch(() => this.setState({ pinvBusy: false, pinvErr: 'Server unreachable — nothing was created' }));
+        };
+      })();
       clDetailApi.cdPortalUserCount = _cdPortalUsers.length
         ? _cdPortalUsers.filter(u7 => u7.status !== 'disabled').length + ' active'
         : 'None yet';
@@ -26693,7 +26804,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ...(this.state.acCrPending ? {} : { acCr: '' }),
         acErr2: '',
       }),
-      setAcEmail: (e) => this.setState({ acEmail: e.target.value, acErr2: '' }),
+      setAcEmail: (e) => this.setState({
+        acEmail: e.target.value, acErr2: '',
+        ...(this.state.acPortalTouched ? {} : { acPortalEmail: e.target.value }),
+      }),
+      acPortalEmail: this.state.acPortalEmail || '',
+      setAcPortalEmail: (e) => this.setState({ acPortalEmail: e.target.value, acPortalTouched: true, acPortalNone: false, acErr2: '' }),
+      acPortalNone: !!this.state.acPortalNone,
+      acPortalWanted: !this.state.acPortalNone,
+      acPortalBd: this.state.acPortalNone ? '#7C00FF' : '#DDD9E6',
+      acPortalBg: this.state.acPortalNone ? '#7C00FF' : '#fff',
+      // Ticking it is the answer "not yet", so the address stops being asked for; untick and the
+      // contact's address comes back unless somebody had already typed their own.
+      toggleAcPortalNone: () => this.setState({
+        acPortalNone: !this.state.acPortalNone, acErr2: '',
+        ...(this.state.acPortalNone || this.state.acPortalTouched ? {} : { acPortalEmail: this.state.acEmail || '' }),
+      }),
+      acPortalHint: this.state.acPortalNone
+        ? 'No login is created. Invite one from their page whenever the client names the address they want.'
+        : (String(this.state.acPortalEmail || '').includes('@')
+          ? 'They are emailed a link to choose their own password. Nobody here ever sees it.'
+          : 'No address, so no login is created — you can invite one from their page later.'),
       setAcPhone: (e) => this.setState({ acPhone: e.target.value, acErr2: '' }),
       setAcContact: (e) => this.setState({ acContact: e.target.value }),
       ...mkDd('ddAcStatus', ['Prospect', 'Onboarding', 'Active', 'Suspended'], this.state.acStatus2 || 'Prospect', (v) => this.setState({ acStatus2: v })),
@@ -26869,7 +27000,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               if (!ok) return this.setState({ acErr2: (j && j.error) || 'Could not save those details — nothing was changed' });
               // The waiver travels with the move, because the move is what refuses a client with no
               // CR. `/details` never writes either field: one owner for one column.
-              return this._setLifecycle(id7, 'client', { cr: (st.acCr || '').trim(), crPending: !!st.acCrPending }, 'acErr2').then(moved7 => {
+              // portalEmail travels with the move, because the move is what provisions the login.
+              // '' is a real answer — no login — and the client's page can hand one out later.
+              return this._setLifecycle(id7, 'client', {
+                cr: (st.acCr || '').trim(), crPending: !!st.acCrPending,
+                portalEmail: st.acPortalNone ? '' : String(st.acPortalEmail || '').trim(),
+              }, 'acErr2').then(moved7 => {
                 if (!moved7) return;
                 // _setLifecycle has already said they are a client, shown the portal invitation and
                 // reloaded the CRM lists. The form closes now rather than after the calls below, so
@@ -26893,6 +27029,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             email: (st.acEmail || '').trim() || null, phone: (st.acPhone || '').trim() || null,
             status: String(st.acStatus2 || 'prospect').toLowerCase(),
             crPending: !!st.acCrPending,
+            portalEmail: st.acPortalNone ? '' : String(st.acPortalEmail || '').trim(),
             ...(grpRow7 ? { groupId: grpRow7.id } : {}),
             customData: { salesRep: (st.acRep && st.acRep !== 'Unassigned') ? st.acRep : null } }) })
           .then(r7 => r7.json().catch(() => ({})).then(j7 => ({ ok: r7.ok, j7 })))
@@ -36701,6 +36838,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // The PRIMARY CONTACT first, the company's flat columns second: those are a mirror of it,
         // and reading the mirror is how a form quietly reverts an edit made on the Contacts screen.
         acEmail: (primary && primary.email) || (l && l.email) || '',
+        // THE PORTAL ADMINISTRATOR'S ADDRESS, which starts as the contact's and is not required to
+        // stay there. A lead arrives with whatever address somebody had — a personal Gmail, the
+        // salesperson's own — and that becoming the client's portal administrator by default is a
+        // decision nobody made. It follows the contact's until somebody types here, like the Arabic
+        // name follows the English.
+        acPortalEmail: (primary && primary.email) || (l && l.email) || '',
+        acPortalTouched: false,
+        acPortalNone: false,
         acPhone: (primary && primary.phone) || (l && l.phone) || '',
         acContact: (primary && primary.name) || (l && l.contact) || '',
         acDesignation: (primary && primary.jobTitle) || (l && l.contactDesignation) || '',
