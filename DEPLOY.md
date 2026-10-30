@@ -58,9 +58,23 @@ it exits non-zero and says so — purge by hand (Cloudflare → ionob.in → Cac
 and then fix the token, rather than carrying on believing the deploy is done.
 
 The token is a Cloudflare **user** API token named *ionob.in cache purge*, with one permission —
-Zone → Cache Purge → Purge on the ionob.in zone — and nothing else. To replace it, Roll it in the
-Cloudflare dashboard and write the new value into `.env`; never paste it at a shell prompt, where it
-lands in the shell's history file.
+Zone → Cache Purge → Purge on the ionob.in zone — and nothing else.
+
+**Rolling it in the dashboard invalidates the copy in `.env`.** That has already cost one deploy:
+the stored value was rolled afterwards, every purge since returned
+`{"code":10000,"message":"Authentication error"}`, and on 30 Oct the edge served the previous
+console for half an hour because the three deploys before it had happened to find an expired cache
+and nobody noticed the purge was failing. If you roll it, replace it the same minute.
+
+To replace it: delete the old `CF_PURGE_TOKEN` line, then append the new value **from a real
+terminal** — `read` with no tty gets EOF, returns non-zero, and an `&&` chain after it does nothing
+at all, silently:
+
+```sh
+ssh -t seo-vps 'read -rsp "token: " t && printf "CF_PURGE_TOKEN=\"%s\"\n" "$t" >> ~/stimespro/.env && echo && ~/stimespro/app/stack/purge-cdn.sh'
+```
+
+Never paste it at a shell prompt as a command — it lands in the shell's history file.
 
 ---
 
