@@ -2250,6 +2250,18 @@ model Disbursement {
   amountMinor   Int
   currency      String  @default("SAR")
   reference     String? // the ministry's own receipt number
+
+  /// WHOSE MONEY IT WAS. "firm" | "client".
+  ///
+  /// Clients sometimes pay a government fee themselves, straight to the ministry. The fee still
+  /// belongs on the job — it is what the renewal cost and the receipt number is the proof it was
+  /// paid — but it is not money this firm is owed, and putting it on their invoice charges them a
+  /// second time for something they have already paid.
+  ///
+  /// NOT the same as `recharge: false`. A fine the firm pays and absorbs is a cost to the firm; a
+  /// fee the client paid is not the firm's money at any point. They read alike on an invoice and
+  /// differently in the accounts, so they are different facts.
+  payer         String  @default("firm")
   paid          Boolean @default(true)
   paidAt        String?
   receiptFileId String? // FileAsset, private

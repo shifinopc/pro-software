@@ -42,6 +42,11 @@ async function pure() {
   ok(parseMoney({ amount: "1" })?.paid === true, "a payment with no paid flag counts as paid");
   ok(parseMoney({ amount: "1", paid: false })?.paid === false, "and says so when it does not");
   ok(parseMoney('{"amount":"7","reference":"R1"}')?.reference === "R1", "a JSON string is understood");
+
+  console.log("whose money it was:");
+  ok(parseMoney({ amount: "1" })?.payer === "firm", "unstated means the firm paid, as it always did");
+  ok(parseMoney({ amount: "1", payer: "client" })?.payer === "client", "and the client can be named");
+  ok(parseMoney({ amount: "1", payer: "nonsense" })?.payer === "firm", "anything else falls back to the firm rather than inventing a payer");
 }
 
 async function engine() {
@@ -100,6 +105,30 @@ async function engine() {
     const all = await prisma.disbursement.findMany({ where: { workflowInstanceId: run!.id } });
     ok(all.length === 1, `completing twice leaves one payment, not two (got ${all.length})`);
     ok(all[0]?.amountMinor === 250000, `and it carries the corrected amount (got ${all[0]?.amountMinor})`);
+
+    // A FEE THE CLIENT PAID THEMSELVES IS RECORDED BUT NEVER BILLABLE.
+    //
+    // This is the one that would cost a client real money if it broke: the fee belongs on the job,
+    // but putting it on their invoice charges them a second time for what they have already paid.
+    await prisma.workflowTask.update({ where: { id: task.id }, data: { status: "active", completedAt: null } });
+    await completeTask(task.id, {
+      actor: "money-capture-check",
+      variables: { permitAmount: { amount: "700", reference: "SELF-1", paidOn: "2026-10-14", paid: true, payer: "client" } },
+    });
+    const theirs = await prisma.disbursement.findFirst({ where: { workflowInstanceId: run!.id } });
+    ok(theirs?.payer === "client", "the row says the client paid it");
+    ok(theirs?.recharge === false, "and it is not billable, without anyone having to remember");
+    ok(theirs?.amountMinor === 70000, "the amount is still recorded in full");
+    ok(theirs?.reference === "SELF-1", "and so is the ministry reference, which is the proof it was paid");
+
+    // Correcting it back must make it billable again, or a mis-tap is permanent.
+    await prisma.workflowTask.update({ where: { id: task.id }, data: { status: "active", completedAt: null } });
+    await completeTask(task.id, {
+      actor: "money-capture-check",
+      variables: { permitAmount: { amount: "700", reference: "SELF-1", paidOn: "2026-10-14", paid: true, payer: "firm" } },
+    });
+    const back = await prisma.disbursement.findFirst({ where: { workflowInstanceId: run!.id } });
+    ok(back?.payer === "firm" && back?.recharge === true, "correcting who paid makes it billable again");
 
     // A step that asks for a payment must refuse an answer that is not one.
     await prisma.workflowTask.update({ where: { id: task.id }, data: { status: "active", completedAt: null } });

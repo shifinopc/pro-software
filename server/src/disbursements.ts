@@ -27,6 +27,8 @@ export type MoneyAnswer = {
   reference?: string;
   paidOn?: string;
   paid?: boolean;
+  /** "firm" | "client" — whose money actually went to the ministry. */
+  payer?: string;
   receiptFileId?: string;
 };
 
@@ -57,6 +59,9 @@ export function parseMoney(raw: unknown): MoneyAnswer | null {
     // Absent means paid: recording a payment is the ordinary case, and a step that does not ask
     // the question should not mark every fee outstanding.
     paid: v.paid === undefined ? true : !!v.paid,
+    // Absent means the firm paid it, because that is what a PRO office does by default and what
+    // every step recorded before this field existed. Only "client" moves it.
+    payer: String(v.payer ?? "firm") === "client" ? "client" : "firm",
     receiptFileId: v.receiptFileId ? String(v.receiptFileId) : undefined,
   };
 }
@@ -110,6 +115,10 @@ export async function recordDisbursements(args: {
       if (!m) continue;
       const amountMinor = minorFromTyped(m.amount);
       if (amountMinor === null) continue; // validated on the way in; here it means "nothing usable"
+      // A fee the client paid straight to the ministry is recorded, because it is what the job cost
+      // and the reference is the proof — but it is not the firm's money, so it must never reach an
+      // invoice. Billing it would charge them a second time for something already paid.
+      const fromClient = m.payer === "client";
       await prisma.disbursement.upsert({
         where: { workflowTaskId_varName: { workflowTaskId: args.taskId, varName: cap.var! } },
         create: {
@@ -118,6 +127,8 @@ export async function recordDisbursements(args: {
           chargeTypeId: cap.chargeTypeId ?? null,
           label: cap.label || cap.var!, varName: cap.var!,
           amountMinor, reference: m.reference ?? null,
+          payer: fromClient ? "client" : "firm",
+          recharge: !fromClient,
           paid: m.paid !== false, paidAt: m.paidOn ?? null,
           receiptFileId: m.receiptFileId ?? null,
           recordedBy: args.actor ?? null, at: nowISO(),
@@ -126,6 +137,12 @@ export async function recordDisbursements(args: {
           chargeTypeId: cap.chargeTypeId ?? null,
           label: cap.label || cap.var!,
           amountMinor, reference: m.reference ?? null,
+          // Correcting WHO paid corrects whether it is billable, in both directions. Leaving it
+          // one-way looked safer and was worse: payer is the only thing that turns `recharge` off,
+          // so a mis-tap on a busy step would have made a real fee unbillable for good, with no
+          // screen anywhere to put it right.
+          payer: fromClient ? "client" : "firm",
+          recharge: !fromClient,
           paid: m.paid !== false, paidAt: m.paidOn ?? null,
           ...(m.receiptFileId ? { receiptFileId: m.receiptFileId } : {}),
         },

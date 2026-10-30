@@ -6388,7 +6388,11 @@ app.get("/api/disbursements", requireAuth, requireStaff, async (req, res) => {
   const rows = await prisma.disbursement.findMany({
     where: {
       ...(companyId ? { companyId } : {}),
-      ...(unbilledOnly ? { recharge: true, invoiceId: null } : {}),
+      // "Unbilled" means not yet on an invoice, NOT "billable". A fee the client paid themselves is
+      // deliberately included: the screen names it so somebody can see it was paid, and it is the
+      // screen — not this query — that keeps it out of the figure the firm chases. Billing it is
+      // impossible either way, because the invoice transaction requires `recharge`.
+      ...(unbilledOnly ? { invoiceId: null } : {}),
     },
     orderBy: { at: "desc" },
     take: 500,

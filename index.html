@@ -4645,6 +4645,9 @@
         <sc-if value="{{ disbUnpaidShow }}" hint-placeholder-val="{{ false }}">
           <div style="border:1px solid #F6E2B8; background:#FEF9EF; border-radius:12px; padding:10px 13px; font-size:11px; color:#8A6A1F;">{{ disbUnpaidLabel }}</div>
         </sc-if>
+        <sc-if value="{{ disbTheirsShow }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #CDD6F7; background:#F4F6FE; border-radius:12px; padding:10px 13px; font-size:11px; color:#3F4AA8;">{{ disbTheirsLabel }}</div>
+        </sc-if>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:flex; flex-direction:column; gap:9px;">
           <sc-for list="{{ disbGroups }}" as="g" hint-placeholder-count="2">
             <div style="border:1px solid #EDEBF2; border-radius:14px; background:#fff; overflow:hidden;">
@@ -15884,6 +15887,12 @@
                       </div>
                       <div onClick="{{ c.m.togglePaid }}" title="Whether this has actually been handed over yet" style="font-size:10px; font-weight:700; text-align:center; padding:9px 6px; border-radius:9px; cursor:pointer; color:{{ c.m.paidFg }}; background:{{ c.m.paidBg }}; border:1px solid {{ c.m.paidBd }};">{{ c.m.paidLabel }}</div>
                     </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                      <div onClick="{{ c.m.togglePayer }}" title="Whose money went to the ministry" style="font-size:10px; font-weight:700; padding:7px 11px; border-radius:9px; cursor:pointer; color:{{ c.m.payerFg }}; background:{{ c.m.payerBg }}; border:1px solid {{ c.m.payerBd }}; flex-shrink:0;">{{ c.m.payerLabel }}</div>
+                      <sc-if value="{{ c.m.payerHint }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:10px; color:#8C8899;">{{ c.m.payerHint }}</span>
+                      </sc-if>
+                    </div>
                     <sc-if value="{{ c.m.showRef }}" hint-placeholder-val="{{ true }}">
                       <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:8px; margin-top:8px;">
                         <input value="{{ c.m.reference }}" onChange="{{ c.m.setReference }}" placeholder="Receipt or reference number" class="fm-inp">
@@ -20518,7 +20527,8 @@ class Component extends DCLogic {
     // WHAT THE FIRM IS OUT OF POCKET. A badge rather than a number on a screen nobody opens:
     // nineteen payments and SAR 37,534 sat unbilled with no way to find out but to go looking.
     const _disbCount = (() => {
-      const r9 = Array.isArray(this.state.disbData) ? this.state.disbData : [];
+      const r9 = (Array.isArray(this.state.disbData) ? this.state.disbData : [])
+        .filter(d => d.payer !== 'client' && d.recharge !== false);
       return r9.length > 0 ? String(r9.length) : '';
     })();
     // ── FINANCE · DISBURSEMENTS ──────────────────────────────────────────────────────────────
@@ -20531,11 +20541,19 @@ class Component extends DCLogic {
     // outstanding but how long it has been, and a client with one ancient fee needs chasing before
     // one with ten from this morning.
     const _disbVals = (() => {
-      const rows7 = Array.isArray(this.state.disbData) ? this.state.disbData : [];
+      // Everything not yet on an invoice arrives here; what the firm CHASES is the part it paid
+      // and can still bill. A fine the firm absorbed (recharge off) is a cost, not a receivable.
+      let rows7 = (Array.isArray(this.state.disbData) ? this.state.disbData : [])
+        .filter(d => d.payer === 'client' || d.recharge !== false);
       const days7 = (iso) => {
         const t7 = Date.parse(String(iso || ''));
         return Number.isFinite(t7) ? Math.max(0, Math.floor((Date.now() - t7) / 86400000)) : null;
       };
+      // Fees the client paid the ministry themselves. Counted and named, never added to what the
+      // firm is owed: that total drives who gets chased, and chasing somebody for their own money
+      // is the mistake this whole distinction exists to prevent.
+      const theirs7 = rows7.filter(d => d.payer === 'client');
+      rows7 = rows7.filter(d => d.payer !== 'client');
       const byClient7 = new Map();
       for (const d7 of rows7) {
         const k7 = d7.companyId || ('__' + (d7.clientName || 'Unknown'));
@@ -20565,6 +20583,10 @@ class Component extends DCLogic {
         disbOldest: groups7.length ? (groups7[0].oldest === 0 ? 'today' : groups7[0].oldest + ' days') : '—',
         // A fee the officer has not actually handed over yet. Billing one is a decision, not an
         // oversight, so it is counted where somebody will see it rather than hidden by a filter.
+        disbTheirsShow: theirs7.length > 0,
+        disbTheirsLabel: (theirs7.length === 1 ? '1 other fee was' : theirs7.length + ' other fees were')
+          + ' paid by the client directly \u00b7 ' + fmtCur(theirs7.reduce((t, d) => t + (d.amountMinor || 0), 0) / 100)
+          + ' \u00b7 recorded on the job, not billable',
         disbUnpaidShow: unpaid7 > 0,
         disbUnpaidLabel: unpaid7 === 1
           ? '1 of these is marked not paid yet — check before billing it on'
@@ -22715,6 +22737,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const co8 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c8 => c8.name === cli8);
         const rows8 = (Array.isArray(this.state.ciDisbData) ? this.state.ciDisbData : [])
           .filter(d8 => co8 && d8.companyId === co8.id)
+          .filter(d8 => d8.payer !== 'client')
           .filter(d8 => !ciLines.some(l8 => l8[3] === d8.id));
         const asLine = (d8) => [
           d8.label + (d8.reference ? ' \u00b7 ' + d8.reference : '') + (d8.job ? ' (' + d8.job + ')' : ''),
@@ -36073,6 +36096,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const v = (typeof val === 'object' && val) ? val : {};
             const patch = (k, x) => { _clearRule(); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: { amount: '', paid: true, ...v, [k]: x } } } }); };
             const isPaid = v.paid !== false;
+            // WHOSE MONEY. Clients sometimes pay the ministry themselves; the fee still belongs on
+            // the job, but it is not ours to re-charge and must never reach their invoice.
+            const byClient = String(v.payer || 'firm') === 'client';
             return {
               amount: v.amount == null ? '' : String(v.amount),
               reference: v.reference == null ? '' : String(v.reference),
@@ -36082,6 +36108,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               paidFg: isPaid ? '#0B7A4B' : '#B8860B',
               paidBd: isPaid ? '#BFEBD6' : '#F6E2B8',
               showRef: isPaid,
+              payerLabel: byClient ? 'Client paid' : 'We paid',
+              payerBg: byClient ? '#EEF2FF' : '#F5EEFF',
+              payerFg: byClient ? '#3F4AA8' : '#3C1470',
+              payerBd: byClient ? '#CDD6F7' : '#E4D9FB',
+              payerHint: byClient ? 'Recorded on the job, never billed on' : '',
+              togglePayer: () => patch('payer', byClient ? 'firm' : 'client'),
               setAmount: (e) => patch('amount', e.target.value),
               setReference: (e) => patch('reference', e.target.value),
               setPaidOn: (e) => patch('paidOn', e.target.value),
