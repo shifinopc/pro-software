@@ -51,10 +51,16 @@ only when initialising an empty data directory), and re-running the command abov
 
 **Skipping the purge.** The console is one ~4 MB document cached at the Cloudflare edge for an
 hour. Without a purge, people keep getting the previous build and reloading does not help them,
-because the reload returns the same cached copy. `purge-cdn.sh` needs `CF_ZONE_ID` and
-`CF_PURGE_TOKEN` in `~/stimespro/.env`; **they are not set today**, so it prints what to do by hand
-(Cloudflare → ionob.in → Caching → Purge Everything) instead of failing silently. Set them and
-this stops being a manual step.
+because the reload returns the same cached copy. `purge-cdn.sh` reads `CF_ZONE_ID` and
+`CF_PURGE_TOKEN` from `~/stimespro/.env`; **both are set since 30 Oct 2026**, so the third line of
+the deploy purges on its own. If it ever reports that they are missing, or that Cloudflare refused,
+it exits non-zero and says so — purge by hand (Cloudflare → ionob.in → Caching → Purge Everything)
+and then fix the token, rather than carrying on believing the deploy is done.
+
+The token is a Cloudflare **user** API token named *ionob.in cache purge*, with one permission —
+Zone → Cache Purge → Purge on the ionob.in zone — and nothing else. To replace it, Roll it in the
+Cloudflare dashboard and write the new value into `.env`; never paste it at a shell prompt, where it
+lands in the shell's history file.
 
 ---
 
