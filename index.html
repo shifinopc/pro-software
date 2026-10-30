@@ -4610,6 +4610,72 @@
           </sc-if>
         </section>
       </div></sc-freeze></sc-if>
+      <sc-if value="{{ showDisbursements }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:12px;" data-screen-label="Disbursements">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; display:flex; align-items:flex-end; justify-content:space-between; gap:11px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px; font-weight:700; color:#7C00FF; letter-spacing:.12em;">FINANCE</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Disbursements</h1>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">Government fees and other money paid out for clients, waiting to be billed on</div>
+          </div>
+        </section>
+        <sc-if value="{{ disbEmpty }}" hint-placeholder-val="{{ false }}">
+          <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; border:1px solid #EDEBF2; border-radius:16px; background:#fff; padding:34px 18px; text-align:center;">
+            <div style="font-size:13px; font-weight:700;">Nothing is waiting to be billed</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:5px;">Every payment an officer has recorded is on an invoice.</div>
+          </section>
+        </sc-if>
+        <sc-if value="{{ disbAny }}" hint-placeholder-val="{{ true }}">
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:10px;">
+          <div style="position:relative; overflow:hidden; border-radius:16px; background:linear-gradient(112deg,#7C00FF,#5B00BC); color:#fff; padding:12px 13px; box-shadow:0 8px 22px rgba(124,0,255,.18);">
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; opacity:.85;">PAID OUT, NOT BILLED</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; margin-top:6px;">{{ disbTotal }}</div>
+            <div style="font-size:11px; opacity:.85; margin-top:3px;">{{ disbCountLabel }} {{ disbClientsLabel }}</div>
+          </div>
+          <div style="border:1px solid #EDEBF2; border-radius:16px; background:#fff; padding:12px 13px;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; color:#A9A6B4;">OLDEST</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; margin-top:6px;">{{ disbOldest }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:3px;">since the firm paid it</div>
+          </div>
+          <div style="border:1px solid #EDEBF2; border-radius:16px; background:#fff; padding:12px 13px;">
+            <div style="font-size:10px; font-weight:700; letter-spacing:.08em; color:#A9A6B4;">CLIENTS</div>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; margin-top:6px;">{{ disbClientsCount }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:3px;">with money outstanding</div>
+          </div>
+        </section>
+        <sc-if value="{{ disbUnpaidShow }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #F6E2B8; background:#FEF9EF; border-radius:12px; padding:10px 13px; font-size:11px; color:#8A6A1F;">{{ disbUnpaidLabel }}</div>
+        </sc-if>
+        <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .14s both; display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ disbGroups }}" as="g" hint-placeholder-count="2">
+            <div style="border:1px solid #EDEBF2; border-radius:14px; background:#fff; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:11px; padding:12px 14px; cursor:pointer;" onClick="{{ g.toggle }}" style-hover="background:#FBFAFE;">
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ g.name }}</div>
+                  <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ g.summary }}</div>
+                </div>
+                <span style="font-size:10px; font-weight:700; padding:4px 9px; border-radius:99px; color:{{ g.ageColor }}; background:{{ g.ageBg }}; flex-shrink:0;">{{ g.age }}</span>
+                <button onClick="{{ g.bill }}" style="background:#7C00FF; color:#fff; border:none; font-size:10px; font-weight:700; padding:7px 13px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="filter:brightness(.95);">Bill these</button>
+              </div>
+              <sc-if value="{{ g.open }}" hint-placeholder-val="{{ false }}">
+                <div style="border-top:1px solid #F3F1F8; padding:4px 14px 11px;">
+                  <sc-for list="{{ g.rows }}" as="d" hint-placeholder-count="2">
+                    <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #F7F6FB; font-size:11px;">
+                      <span style="font-weight:600; min-width:150px; max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.label }}</span>
+                      <sc-if value="{{ d.unpaid }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:9px; font-weight:800; letter-spacing:.06em; color:#B8860B; background:#FEF4E2; padding:2px 7px; border-radius:99px; flex-shrink:0;">NOT PAID YET</span>
+                      </sc-if>
+                      <span style="flex:1; color:#8C8899; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.meta }}</span>
+                      <span style="color:#8C8899; flex-shrink:0;">{{ d.when }}</span>
+                      <span style="font-weight:700; font-variant-numeric:tabular-nums; flex-shrink:0; min-width:92px; text-align:right;">{{ d.amount }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </section>
+        </sc-if>
+      </div></sc-freeze></sc-if>
       <sc-if value="{{ showPayments }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:12px;" data-screen-label="Receipts">
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-end; justify-content:space-between; gap:11px; flex-wrap:wrap;">
           <div>
@@ -17756,6 +17822,7 @@ class Component extends DCLogic {
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
       'Employees': 'Clients & Compliance', 'Renewals': 'Clients & Compliance',
       'Invoices': 'Finance', 'Quotations': 'Finance', 'Receipts': 'Finance', 'Reports': 'Finance',
+      'Disbursements': 'Finance',
       'Service Catalog': 'Configure', 'Plan & Billing': 'Configure', 'Service Packages': 'Masters', 'Country Rules': 'Configure',
       'Document Types': 'Configure', 'Checklist Rules': 'Configure', 'Field Sets': 'Configure', 'Departments': 'Configure', 'Record Sequence': 'Configure', 'Form Builder': 'Configure', 'Print Layout': 'Configure', 'Proposal Templates': 'Configure',
       'Workflow Builder': 'Admin', 'Profile Settings': 'Admin', 'Settings': 'Admin', 'Problem Reports': 'Admin',
@@ -18201,6 +18268,7 @@ class Component extends DCLogic {
       // so the nav badge simply doesn't appear.
       this._bootFetch('/api/error-reports', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && Array.isArray(v.rows)) this.setState({ errReportsData: v.rows, errReportCounts: v.counts || {} }); }).catch(() => {});
       this._load('/api/invoices', 'invoicesData', (v) => this.setState({ invoicesData: v }));
+      this._load('/api/disbursements?unbilled=1', 'disbData', (v) => this.setState({ disbData: v }));
       this._bootFetch('/api/document-types', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ docTypesData: v }); }).catch(() => {});
       // The send-out library: small, and needed by the proposal dialog the moment it opens.
       this._bootFetch('/api/collateral', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ collateralData: v }); }).catch(() => {});
@@ -20376,6 +20444,8 @@ class Component extends DCLogic {
       // Finance split four ways, and Quotations came out of Sales to join them. The case this was
       // built for: an accountant who raises invoices but must not edit the price list.
       'Invoices': 'Invoices', 'Payments': 'Payments', 'Receipts': 'Payments',
+      // Money paid out for a client, which is only ever read on the way to billing it.
+      'Disbursements': 'Invoices',
       'Plan & Billing': 'Plan & Billing', 'Service Catalog': 'Service Catalog',
       'Quotations': 'Quotations', 'Proposal Templates': 'Quotations',
       // Sales split five ways. One module covered nine screens, so the only way to let the front line
@@ -20445,6 +20515,87 @@ class Component extends DCLogic {
     })();
     // Deals still OPEN. Counting the closed ones would make the badge climb every time something is
     // won or lost, which is the opposite of what a number beside "Pipeline" is read as meaning.
+    // WHAT THE FIRM IS OUT OF POCKET. A badge rather than a number on a screen nobody opens:
+    // nineteen payments and SAR 37,534 sat unbilled with no way to find out but to go looking.
+    const _disbCount = (() => {
+      const r9 = Array.isArray(this.state.disbData) ? this.state.disbData : [];
+      return r9.length > 0 ? String(r9.length) : '';
+    })();
+    // ── FINANCE · DISBURSEMENTS ──────────────────────────────────────────────────────────────
+    //
+    // Money the firm paid out on a client's behalf and has not billed on. Grouped by client because
+    // that is how it gets billed: one invoice carries every fee paid for that client, not one
+    // invoice per ministry receipt.
+    //
+    // Sorted by the OLDEST payment in each group. The number that matters is not how much is
+    // outstanding but how long it has been, and a client with one ancient fee needs chasing before
+    // one with ten from this morning.
+    const _disbVals = (() => {
+      const rows7 = Array.isArray(this.state.disbData) ? this.state.disbData : [];
+      const days7 = (iso) => {
+        const t7 = Date.parse(String(iso || ''));
+        return Number.isFinite(t7) ? Math.max(0, Math.floor((Date.now() - t7) / 86400000)) : null;
+      };
+      const byClient7 = new Map();
+      for (const d7 of rows7) {
+        const k7 = d7.companyId || ('__' + (d7.clientName || 'Unknown'));
+        if (!byClient7.has(k7)) byClient7.set(k7, []);
+        byClient7.get(k7).push(d7);
+      }
+      const groups7 = [...byClient7.entries()].map(([k7, list7]) => {
+        const total7 = list7.reduce((t, d) => t + (d.amountMinor || 0), 0);
+        const ages7 = list7.map(d => days7(d.paidAt || d.at)).filter(n => n != null);
+        const oldest7 = ages7.length ? Math.max(...ages7) : 0;
+        return {
+          key: k7, companyId: list7[0].companyId || null, name: list7[0].clientName || 'Unknown client',
+          count: list7.length, totalMinor: total7, oldest: oldest7,
+          list: [...list7].sort((a, b) => String(b.paidAt || b.at).localeCompare(String(a.paidAt || a.at))),
+        };
+      }).sort((a, b) => b.oldest - a.oldest);
+      const grand7 = rows7.reduce((t, d) => t + (d.amountMinor || 0), 0);
+      const unpaid7 = rows7.filter(d => d.paid === false).length;
+      const open7 = this.state.disbOpen || {};
+      return {
+        disbEmpty: rows7.length === 0,
+        disbAny: rows7.length > 0,
+        disbTotal: fmtCur(grand7 / 100),
+        disbCountLabel: rows7.length === 1 ? '1 payment' : rows7.length + ' payments',
+        disbClientsLabel: byClient7.size === 1 ? 'across 1 client' : 'across ' + byClient7.size + ' clients',
+        disbClientsCount: String(byClient7.size),
+        disbOldest: groups7.length ? (groups7[0].oldest === 0 ? 'today' : groups7[0].oldest + ' days') : '—',
+        // A fee the officer has not actually handed over yet. Billing one is a decision, not an
+        // oversight, so it is counted where somebody will see it rather than hidden by a filter.
+        disbUnpaidShow: unpaid7 > 0,
+        disbUnpaidLabel: unpaid7 === 1
+          ? '1 of these is marked not paid yet — check before billing it on'
+          : unpaid7 + ' of these are marked not paid yet — check before billing them on',
+        disbGroups: groups7.map(g7 => ({
+          name: g7.name,
+          summary: g7.count + (g7.count === 1 ? ' payment · ' : ' payments · ') + fmtCur(g7.totalMinor / 100),
+          age: g7.oldest === 0 ? 'today' : g7.oldest === 1 ? '1 day old' : g7.oldest + ' days old',
+          // Over a month unbilled is the thing this screen exists to make visible.
+          ageColor: g7.oldest >= 30 ? '#C0353A' : g7.oldest >= 14 ? '#B8860B' : '#8C8899',
+          ageBg: g7.oldest >= 30 ? '#FEECEC' : g7.oldest >= 14 ? '#FEF4E2' : '#F4F3F7',
+          open: !!open7[g7.key],
+          toggle: () => this.setState({ disbOpen: { ...open7, [g7.key]: !open7[g7.key] } }),
+          // Straight into the form that bills them, with the client already chosen. The payments
+          // themselves are added there rather than here, so one screen owns what goes on an invoice.
+          bill: () => this.setState({
+            active: 'Invoices', activeGroup: 'Finance',
+            createInv: true, ciEditId: null, ciClient: g7.name, ciLines: [['', '1', '']],
+            ciIssued: new Date().toISOString().slice(0, 10), ciDue: '', ciSubject: '', ciNotes: '',
+            ciErr: '', ciNextNo: null, ciDisbData: Array.isArray(this.state.disbData) ? this.state.disbData : [],
+          }),
+          rows: g7.list.map(d7 => ({
+            label: d7.label,
+            amount: fmtCur((d7.amountMinor || 0) / 100),
+            when: d7.paidAt || String(d7.at || '').slice(0, 10) || '—',
+            meta: [d7.reference ? 'ref ' + d7.reference : '', d7.job || ''].filter(Boolean).join(' · ') || '—',
+            unpaid: d7.paid === false,
+          })),
+        })),
+      };
+    })();
     const _dealCount = (() => {
       const cols9 = ((this.state.pipelineData || {}).columns) || [];
       const n9 = cols9.filter(c9 => !c9.stage.isWon && !c9.stage.isLost).reduce((t9, c9) => t9 + c9.count, 0);
@@ -20517,7 +20668,7 @@ class Component extends DCLogic {
       ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
-      ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Receipts', I.card], ['Reports', I.layers]]],
+      ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Disbursements', I.upload, _disbCount], ['Receipts', I.card], ['Reports', I.layers]]],
       ['Configure', I.layers, [['Setup Check', I.shield, _setupBadge], ['Agents', I.agent, _agentBadge], ['Service Catalog', I.layers], ['Plan & Billing', I.stamp], ['Country Rules', I.building], ['Sales Settings', I.stamp], ['Document Types', I.folder], ['Checklist Rules', I.check], ['Field Sets', I.fileText], ['Departments', I.users], ['Record Sequence', I.stamp], ['Form Builder', I.fileText], ['Print Layout', I.invoice], ['Proposal Templates', I.fileText]]],
       // Problem Reports carries a badge of what is still unread — a report nobody looks at is the
       // same as no report at all, and the count is the only thing that makes anyone look.
@@ -22679,6 +22830,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             this.setState({ createInv: false, ciEditId: null });
             this.toast(editing ? 'Draft ' + (j6.number || no6) + ' updated' : 'Draft ' + (j6.number || no6) + ' saved — approve it to issue');
             this._opReload && this._opReload('invoices', 'invoicesData');
+            // The payments this invoice just billed are no longer waiting, so the Disbursements
+            // screen and its nav badge must stop saying they are. A stale "19" is worse than no
+            // badge at all: it sends somebody to a list of work that is already done.
+            this._opReload && this._opReload('disbursements?unbilled=1', 'disbData');
           })
           .catch(() => this.setState({ ciErr: 'Cannot reach the server — the invoice was NOT saved' }));
       },
@@ -30413,6 +30568,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 d9 != null && d9 > 0 ? d9 : 0, _band(d9), Number(v9.amount) || 0, _paidFor(v9.id, v9.number), _owed(v9), v9.promisedDate || ''];
             })];
         } },
+      // What the firm is out of pocket, line by line, so it can be handed to whoever is chasing it
+      // without them working the screen. Ordered oldest first for the same reason the screen is:
+      // the question is how long the money has been out, not how much.
+      { name: 'Disbursements not billed', sub: 'Money paid out for clients and never re-charged', cat: 'Finance', color: '#0E9355', bg: '#E7F8EF',
+        build: () => {
+          const rows9 = Array.isArray(this.state.disbData) ? this.state.disbData : [];
+          const age9 = (iso) => { const t9 = Date.parse(String(iso || '')); return Number.isFinite(t9) ? Math.max(0, Math.floor((Date.now() - t9) / 86400000)) : ''; };
+          return [['Client', 'What it was', 'Amount', 'Paid on', 'Days unbilled', 'Reference', 'Paid?', 'Job'],
+            ...rows9.slice().sort((a9, b9) => String(a9.paidAt || a9.at).localeCompare(String(b9.paidAt || b9.at)))
+              .map(d9 => [d9.clientName || _coName(d9.companyId), d9.label || '', (d9.amountMinor || 0) / 100,
+                d9.paidAt || String(d9.at || '').slice(0, 10), age9(d9.paidAt || d9.at), d9.reference || '',
+                d9.paid === false ? 'Not paid yet' : 'Paid', d9.job || ''])];
+        } },
       { name: 'Payments received', sub: 'Every receipt logged, with method and reference', cat: 'Finance', color: '#0E9355', bg: '#E7F8EF',
         build: () => [['Date', 'Client', 'Invoice', 'Amount', 'Method', 'Reference', 'Notes'],
           ..._rPay.slice().sort((a9, b9) => String(b9.date || '').localeCompare(String(a9.date || '')))
@@ -36865,7 +37033,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const pageFlags = {
       showCompany: act === 'My Company', showApplications: act === 'Applications', showRenewals: act === 'Renewals',
       showEmployees: act === 'Employees', showDocuments: act === 'Documents', showInvoices: act === 'Invoices',
-      showPayments: act === 'Receipts', showAgents: act === 'Agents', showAppointments: act === 'Appointments', showSupport: act === 'Support Center', showServices: act === 'Service Catalog',
+      showPayments: act === 'Receipts', showDisbursements: act === 'Disbursements', ..._disbVals, showAgents: act === 'Agents', showAppointments: act === 'Appointments', showSupport: act === 'Support Center', showServices: act === 'Service Catalog',
       showNotifications: act === 'Notifications', showProfileSettings: act === 'Profile & Settings' || act === 'Profile Settings', showCredentials: act === 'Credentials', showGroup: act === 'Group Overview', showClients: act === 'Clients',
       showWorkflow: act === 'Workflow Builder', showSettings: act === 'Settings' || ['Record Sequence', 'Form Builder', 'Print Layout', 'Proposal Templates'].includes(act),
       showRequests: act === 'Requests Queue', showQuotations: act === 'Quotations',
