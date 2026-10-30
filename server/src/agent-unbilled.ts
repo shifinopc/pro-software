@@ -30,8 +30,18 @@ import { businessToday } from "./dates.js";
 
 export const KEY = "unbilled-work";
 const LOOKBACK_DAYS = 180;
-/** Fee variables the renewal workflows capture when an officer records what the government charged. */
-const GOV_FEE_VARS = ["feeAmount", "mcFee", "premium", "govFee", "governmentFee"];
+/**
+ * WHAT THE OFFICER PAID NOW COMES FROM Disbursement, NOT FROM GUESSING AT NAMES.
+ *
+ * This used to be a list of five variable spellings. The templates used sixteen, and two of the five
+ * in the list were defined in no template at all, so of the twenty-odd amounts officers had actually
+ * recorded this agent could read the seven spelled `feeAmount`. Everything else was billed from the
+ * price list instead, silently, because `captured || svc.govFee` falls back without saying so.
+ *
+ * A money capture files a row. A row is queryable, carries minor units, a reference and a date, and
+ * there can be several on one job -- an Iqama renewal pays the permit, the Jawazat fee, a late
+ * charge and a violation separately, and a single number could only ever hold the first.
+ */
 
 type Line = { name: string; units: number; price: number };
 
@@ -139,17 +149,31 @@ export async function runUnbilled() {
     const v = (run.variables ?? {}) as any;
     if (v._trigger !== "document_expiry") continue;
     const svc = services.find(s => s.workflowId === run.templateId);
-    const captured = GOV_FEE_VARS.map(k => Number(v[k])).find(n => Number.isFinite(n) && n > 0) ?? 0;
+    // Every payment this run recorded and nobody has billed on. Several per job is normal.
+    const paid = await prisma.disbursement.findMany({
+      where: { workflowInstanceId: run.id, recharge: true, invoiceId: null },
+      select: { label: true, amountMinor: true, reference: true },
+    });
+    const capturedMinor = paid.reduce((t, d) => t + d.amountMinor, 0);
+    const who = v.person ? ` (${v.person})` : "";
     const inPlan = svc ? await planHas(run.companyId!, svc.id) : false;
     let lines: Line[] = [];
     let why = "";
-    if (svc && !inPlan) {
-      const gov = captured || svc.govFee;
-      lines = [...(gov ? [{ name: `${svc.name} — government fee${v.person ? ` (${v.person})` : ""}`, units: 1, price: gov }] : []), ...(svc.serviceFee ? [{ name: `${svc.name} — service fee`, units: 1, price: svc.serviceFee }] : [])];
-      why = "The service is not in the client's plan.";
-    } else if (captured) {
-      lines = [{ name: `${v.docType ?? svc?.name ?? "Renewal"} — government fee${v.person ? ` (${v.person})` : ""}`, units: 1, price: captured }];
-      why = svc ? "The service is in the client's plan, but a government fee was recorded on the renewal and has not been re-charged." : "A government fee was recorded on the renewal and has not been re-charged.";
+    if (paid.length) {
+      // One line per payment, named as the step named it. A client querying "what is this 2,587 for"
+      // gets an answer instead of one merged "government fee".
+      lines = paid.map(d => ({ name: `${d.label}${who}${d.reference ? ` · ${d.reference}` : ""}`, units: 1, price: d.amountMinor / 100 }));
+      if (svc && !inPlan && svc.serviceFee) lines.push({ name: `${svc.name} — service fee`, units: 1, price: svc.serviceFee });
+      why = svc && !inPlan
+        ? "The service is not in the client's plan, and the fees paid on it have not been re-charged."
+        : "Fees were paid on this renewal and have not been re-charged.";
+    } else if (svc && !inPlan) {
+      // NOTHING WAS RECORDED. The price list is a guess at what was paid, so it is offered as one:
+      // the old code substituted it silently, which is how a client came to be billed a catalogue
+      // figure while the firm paid something else and nobody could see the difference.
+      lines = [...(svc.govFee ? [{ name: `${svc.name} — government fee (from the price list)${who}`, units: 1, price: svc.govFee }] : []),
+               ...(svc.serviceFee ? [{ name: `${svc.name} — service fee`, units: 1, price: svc.serviceFee }] : [])];
+      why = "The service is not in the client's plan. No fee was recorded on the run, so these come from the price list and should be checked.";
     }
     const total = lines.reduce((s, l) => s + l.price * l.units, 0);
     if (!(total > 0)) continue;
@@ -161,7 +185,9 @@ export async function runUnbilled() {
       companyId: run.companyId!, refType: "workflowInstance", refId: run.id,
       output: { source: "renewal", amount: total, lines, facts: [
         { label: "Renewal", value: run.title }, { label: "In the client's plan", value: svc ? (inPlan ? "Yes" : "No") : "No service linked to this workflow" },
-        ...(captured ? [{ label: "Government fee recorded on the run", value: captured.toLocaleString() }] : []),
+        ...(paid.length
+          ? [{ label: paid.length === 1 ? "Fee recorded by the officer" : `${paid.length} fees recorded by the officer`, value: (capturedMinor / 100).toLocaleString() }]
+          : [{ label: "Fee recorded by the officer", value: "None — the figures above come from the price list" }]),
       ] },
     });
   }

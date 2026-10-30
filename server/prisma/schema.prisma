@@ -2212,6 +2212,65 @@ model Payment {
   @@index([date])
 }
 
+/// MONEY THE FIRM PAID OUT ON A CLIENT'S BEHALF, AS A ROW.
+///
+/// A PRO officer standing at a ministry counter pays the fee and the client is re-charged it later.
+/// The officers were already recording those payments — as loose variables on a workflow run, under
+/// whatever name the template author invented. Sixteen spellings existed for one idea, the re-charge
+/// agent knew five of them, and two of ITS five were defined in no template at all: of roughly twenty
+/// amounts officers had actually recorded, it could read the seven spelled `feeAmount`. The rest were
+/// billed from a price list instead, or not billed. (The other 177 values that look like recorded fees
+/// are `fee`, seeded from DocumentType.defaultFee on expiry-started renewals -- a price list wearing
+/// the same clothes, identical on 162 Iqama runs, and never an observation.)
+///
+/// So the answer gets a row. One per payment, not one per job — an Iqama renewal pays the work
+/// permit, the Jawazat fee, a late charge and a violation separately, and a single `fee` variable
+/// could only ever hold the first of them.
+///
+/// AMOUNTS ARE MINOR UNITS, like Invoice. The captures were whole riyals typed into a free number
+/// field, which is how a document type came to carry a default fee of 65000 — halalas, in a column
+/// the schema calls SAR, displayed as SAR 65,000 and offered as an invoice amount.
+model Disbursement {
+  id         String  @id @default(cuid())
+  companyId  String?
+  clientName String? // display mirror, as elsewhere — the row stays readable if the client is gone
+
+  // Where it came from. A disbursement is always recorded against the work that caused it.
+  workflowInstanceId String?
+  workflowTaskId     String?
+  serviceRequestId   String?
+
+  // What it was. `label` is SNAPSHOTTED from the capture for the same reason the checklist and the
+  // instructions are: editing the template must not retitle a payment someone already recorded.
+  chargeTypeId String?
+  label        String
+  // Which capture produced it, so completing a step twice updates its row instead of adding another.
+  varName      String?
+
+  amountMinor   Int
+  currency      String  @default("SAR")
+  reference     String? // the ministry's own receipt number
+  paid          Boolean @default(true)
+  paidAt        String?
+  receiptFileId String? // FileAsset, private
+
+  /// Whether this is billed on to the client. Defaults to true: it is their money, spent for them.
+  /// A fine the firm absorbs is the exception, and the exception is the one worth a deliberate act.
+  recharge  Boolean @default(true)
+  /// Set when it lands on an invoice. This is what turns "disbursed but never re-charged" from an
+  /// agent's inference into a query.
+  invoiceId String?
+
+  recordedBy String?
+  at         String
+
+  @@unique([workflowTaskId, varName])
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([workflowInstanceId])
+  @@index([chargeTypeId])
+}
+
 model Quotation {
   id            String  @id @default(cuid())
   number        String  @unique

@@ -15784,6 +15784,24 @@
                   <sc-if value="{{ c.isDate }}" hint-placeholder-val="{{ false }}">
                     <input value="{{ c.value }}" onChange="{{ c.set }}" type="date" class="fm-inp">
                   </sc-if>
+                  <sc-if value="{{ c.isMoney }}" hint-placeholder-val="{{ false }}">
+                    <!-- One payment, not four questions. inputmode="decimal" so a phone at a ministry
+                         counter offers the number pad; type stays text because a number input silently
+                         drops what it cannot parse, and a fee typed wrong should be visible, not gone. -->
+                    <div style="display:grid; grid-template-columns:minmax(0,1fr) 118px; gap:8px; align-items:center;">
+                      <div style="position:relative;">
+                        <span style="position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:11px; font-weight:700; color:#A9A6B4; pointer-events:none;">SAR</span>
+                        <input value="{{ c.m.amount }}" onChange="{{ c.m.setAmount }}" inputmode="decimal" placeholder="0.00" class="fm-inp" style="padding-left:42px; font-variant-numeric:tabular-nums;">
+                      </div>
+                      <div onClick="{{ c.m.togglePaid }}" title="Whether this has actually been handed over yet" style="font-size:10px; font-weight:700; text-align:center; padding:9px 6px; border-radius:9px; cursor:pointer; color:{{ c.m.paidFg }}; background:{{ c.m.paidBg }}; border:1px solid {{ c.m.paidBd }};">{{ c.m.paidLabel }}</div>
+                    </div>
+                    <sc-if value="{{ c.m.showRef }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:8px; margin-top:8px;">
+                        <input value="{{ c.m.reference }}" onChange="{{ c.m.setReference }}" placeholder="Receipt or reference number" class="fm-inp">
+                        <input value="{{ c.m.paidOn }}" onChange="{{ c.m.setPaidOn }}" type="date" class="fm-inp">
+                      </div>
+                    </sc-if>
+                  </sc-if>
                   <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ true }}">
                     <input value="{{ c.value }}" onChange="{{ c.set }}" class="fm-inp">
                   </sc-if>
@@ -16327,6 +16345,12 @@
                         <div onClick="{{ fd.remove }}" class="fm-x" title="Remove this field"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                         <sc-if value="{{ fd.isSelect }}" hint-placeholder-val="{{ false }}">
                           <input value="{{ fd.optionText }}" onInput="{{ fd.setOptions }}" placeholder="The choices, comma separated" class="fm-inp" style="grid-column:1 / -1;">
+                        </sc-if>
+                        <sc-if value="{{ fd.isMoney }}" hint-placeholder-val="{{ false }}">
+                          <div style="grid-column:1 / -1; display:flex; align-items:center; gap:8px;">
+                            <div onClick="{{ fd.cycleCharge }}" title="What kind of charge this is on the client's bill" style="font-size:10px; font-weight:700; padding:8px 10px; border-radius:9px; cursor:pointer; color:#3C1470; background:#F5EEFF; white-space:nowrap;">{{ fd.chargeLabel }}</div>
+                            <span class="fm-hint" style="margin:0;">Records one payment: amount, reference, date, paid or not. The variable above still holds the amount.</span>
+                          </div>
                         </sc-if>
                       </div>
                     </sc-for>
@@ -33169,7 +33193,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       wsFieldRows: (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).map((c, i) => {
         const list = () => (Array.isArray(_wsCfg.captures) ? _wsCfg.captures : []).slice();
         const put = (patch) => { const n = list(); n[i] = { ...(n[i] || {}), ...patch }; _wsCfgSet({ captures: n }); };
-        const TYPES = ['text', 'select', 'date', 'number', 'textarea'];
+        const TYPES = ['text', 'select', 'date', 'number', 'textarea', 'money'];
         const t = String((c && c.type) || 'text');
         const opts = (c && c.options) || '';
         return {
@@ -33182,6 +33206,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // few to be worth a searchable dropdown, and this box is already crowded.
           cycleType: () => put({ type: TYPES[(TYPES.indexOf(t) + 1) % TYPES.length] || 'text' }),
           isSelect: t === 'select',
+          // MONEY IS NOT A SIXTH KIND OF NUMBER. It is one question that records a payment — the
+          // amount, the ministry's reference, the date, whether it has actually been handed over.
+          // Those were four separate fields with four invented names and nothing tying them
+          // together, which is why the re-charge agent could read seven of the twenty-odd amounts
+          // officers had recorded.
+          isMoney: t === 'money',
+          chargeLabel: (() => {
+            const l = Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : [];
+            const hit = l.find(ct => ct && ct.id === (c && c.chargeTypeId));
+            return hit ? hit.name : 'No charge type';
+          })(),
+          // Click to cycle, the same control the type uses, for the same reason.
+          cycleCharge: () => {
+            const l = (Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : []).filter(ct => ct && !ct.retired);
+            const ids = [null].concat(l.map(ct => ct.id));
+            const at = ids.indexOf((c && c.chargeTypeId) || null);
+            put({ chargeTypeId: ids[(at + 1) % ids.length] });
+          },
           // OPTIONS ARE A COMMA-SEPARATED STRING, because that is what the engine compares an
           // answer against. An earlier draft of this editor helpfully rewrote them into
           // [{value,label}] objects, which stringify to "[object Object]" — the allowed set becomes
@@ -35735,9 +35777,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })();
       const _capShown = (c) => (!c || !c.var) ? true : _capVis[c.var] !== false;
       // Which questions are still unanswered, counting only the ones on screen.
+      // A money answer is an object, and String({}) is "[object Object]" — truthy, so without this
+      // a payment with no amount in it counts as answered and the step completes recording nothing.
+      const _capAnswered = (c) => {
+        const v = cap[c.var];
+        if (String(c.type) === 'money') return !!String((v && v.amount) == null ? '' : v.amount).trim();
+        return !!String(v == null ? '' : v).trim();
+      };
       const _capsMissing = (selStep.captures || []).filter(_capShown)
         .filter(c => !(c.required === false || c.optional === true))
-        .filter(c => !String(cap[c.var] == null ? '' : cap[c.var]).trim())
+        .filter(c => !_capAnswered(c))
         .map(c => c.label || c.var);
       const _capsOk = _capsMissing.length === 0;
       // ONCE SOMEBODY HAS ASKED TO COMPLETE, the unanswered questions are marked. Until then they
@@ -35755,7 +35804,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // hoisted into a generated class and stops re-evaluating, so a bound border would freeze
           // at whatever it was on first render. An element that appears and disappears cannot.
           ruleErr: _ruleFields.indexOf(c.var) >= 0,
-          isSelect: c.type === 'select', isDate: c.type === 'date', isText: c.type !== 'select' && c.type !== 'date',
+          isSelect: c.type === 'select', isDate: c.type === 'date', isMoney: c.type === 'money',
+          isText: c.type !== 'select' && c.type !== 'date' && c.type !== 'money',
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
           // refused on completion, so the form should say so before the button is pressed.
           req: !(c.required === false || c.optional === true),
@@ -35771,6 +35821,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             };
           }),
           set: (e) => { _clearRule(); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }); },
+          // A money capture holds an object, so each box patches its own key rather than replacing
+          // the answer. `paid` defaults to true: recording a fee you have just handed over is the
+          // ordinary case, and defaulting to unpaid would mark every payment outstanding.
+          m: (() => {
+            const v = (typeof val === 'object' && val) ? val : {};
+            const patch = (k, x) => { _clearRule(); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: { amount: '', paid: true, ...v, [k]: x } } } }); };
+            const isPaid = v.paid !== false;
+            return {
+              amount: v.amount == null ? '' : String(v.amount),
+              reference: v.reference == null ? '' : String(v.reference),
+              paidOn: v.paidOn == null ? '' : String(v.paidOn),
+              paidLabel: isPaid ? 'Paid' : 'Not paid yet',
+              paidBg: isPaid ? '#E7F8F0' : '#FEF4E2',
+              paidFg: isPaid ? '#0B7A4B' : '#B8860B',
+              paidBd: isPaid ? '#BFEBD6' : '#F6E2B8',
+              showRef: isPaid,
+              setAmount: (e) => patch('amount', e.target.value),
+              setReference: (e) => patch('reference', e.target.value),
+              setPaidOn: (e) => patch('paidOn', e.target.value),
+              togglePaid: () => patch('paid', !isPaid),
+            };
+          })(),
         };
       });
       const remH = selStep.slaHours - selStep.elapsedH;

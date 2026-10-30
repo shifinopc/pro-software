@@ -15,6 +15,8 @@ import { figuresForFee } from "./money.js";
 import { unmetPrereqs } from "./jobs.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
+import { MONEY, parseMoney, minorFromTyped, moneyAmountText, recordDisbursements } from "./disbursements.js";
+
 const nowISO = () => new Date().toISOString();
 
 // ── Structured document checklists (items + per-item state + dynamic resolution) ──
@@ -1664,6 +1666,19 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
           throw new Error(`${cap.label || cap.var}: "${raw}" is not one of ${allowed.join(", ")}`);
         }
       }
+
+      // A money answer is refused here for the same reason a bad date is: downstream it becomes a
+      // Disbursement row and then an invoice line, and "two thousand" recorded as a payment is a
+      // figure nobody can re-charge.
+      if (String(cap.type) === MONEY) {
+        const m = parseMoney(raw);
+        if (!m || minorFromTyped(m.amount) === null) {
+          throw new Error(`${cap.label || cap.var}: "${typeof raw === "object" ? (raw as any).amount : raw}" is not an amount`);
+        }
+        if (m.paidOn && isNaN(new Date(String(m.paidOn)).getTime())) {
+          throw new Error(`${cap.label || cap.var}: "${m.paidOn}" is not a valid payment date`);
+        }
+      }
     }
 
     // Cross-field rules, against the run's variables WITH this step's answers applied — a rule about
@@ -1760,12 +1775,33 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   // IMPORTANT: never let a blank capture wipe an existing value (e.g. passportValid set at start
   // must survive completing a step whose empty capture field would otherwise overwrite it).
   const vars: Record<string, any> = (inst.variables && typeof inst.variables === "object") ? inst.variables as any : {};
+  // A money capture's answer is an object; what the RUN carries is the amount inside it, so that
+  // changing a step from `number` to `money` cannot break a decision that reads that variable.
+  const moneyVars = new Set((Array.isArray(task.captures) ? task.captures as any[] : [])
+    .filter(c => c && String(c.type) === MONEY && c.var).map(c => String(c.var)));
   if (opts.variables && typeof opts.variables === "object") {
     for (const [k, v] of Object.entries(opts.variables)) {
+      if (moneyVars.has(k)) {
+        const m = parseMoney(v);
+        const text = m ? moneyAmountText(m) : "";
+        if (text) vars[k] = text;
+        continue;
+      }
       if (v !== undefined && v !== null && String(v).trim() !== "") vars[k] = v;
     }
   }
   (inst as any).variables = vars;
+
+  // File the payments this step recorded. After the merge, so the run already carries the amounts.
+  if (moneyVars.size) {
+    await recordDisbursements({
+      captures: (task.captures as any[]) ?? [],
+      supplied: (opts.variables ?? {}) as Record<string, any>,
+      instanceId: inst.id, taskId: task.id,
+      companyId: inst.companyId ?? null, clientName: inst.clientName ?? null,
+      actor: opts.actor ?? null,
+    });
+  }
 
   // Write what was captured onto the DOCUMENT this step is about.
   //
