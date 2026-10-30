@@ -11619,6 +11619,29 @@
             <div style="position:relative; margin-top:7px;"><div data-dd onClick="{{ ddCiClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ciClientColor }};">{{ ciClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><div style="padding:4px 4px 6px;"><input value="{{ ddCiClientQuery }}" onInput="{{ ddCiClientSetQuery }}" placeholder="{{ ddCiClientPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:11px; background:#FBFAFE; outline:none;"></div><sc-if value="{{ ddCiClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddCiClientOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
             <!-- Approved quotations for the selected client: one click copies the agreed lines in,
                  so the invoice cannot drift from the price the client accepted. -->
+            <sc-if value="{{ ciDisbShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:10px; border:1px solid #CFE9DC; background:#F6FCF9; border-radius:12px; padding:11px 13px;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <div style="flex:1; font-size:10px; font-weight:700; color:#0B7A4B; letter-spacing:.04em;">{{ ciDisbLabel }}</div>
+                  <sc-if value="{{ ciDisbAddAllLabel }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ ciDisbAddAll }}" style="font-size:10px; font-weight:700; color:#0B7A4B; cursor:pointer; flex-shrink:0;" style-hover="text-decoration:underline;">{{ ciDisbAddAllLabel }}</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                  <sc-for list="{{ ciDisb }}" as="cd" hint-placeholder-count="1">
+                    <div style="display:flex; align-items:center; gap:9px; font-size:11px;">
+                      <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40%;">{{ cd.label }}</span>
+                      <sc-if value="{{ cd.unpaid }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:9px; font-weight:800; letter-spacing:.06em; color:#B8860B; background:#FEF4E2; padding:2px 7px; border-radius:99px; flex-shrink:0;">NOT PAID YET</span>
+                      </sc-if>
+                      <span style="flex:1; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ cd.summary }}</span>
+                      <button onClick="{{ cd.add }}" style="background:#fff; color:#0B7A4B; border:1px solid #BFEBD6; font-size:10px; font-weight:700; padding:5px 11px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="background:#E7F8F0;">Add</button>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:9px; color:#7FA893; margin-top:8px;">Adding one puts it on the invoice as a line. It is marked as billed only when the invoice saves.</div>
+              </div>
+            </sc-if>
             <sc-if value="{{ ciQuotesShow }}" hint-placeholder-val="{{ false }}">
               <div style="margin-top:10px; border:1px solid #E4D9FB; background:#FBF9FF; border-radius:12px; padding:11px 13px;">
                 <div style="font-size:10px; font-weight:700; color:#6D5BD0; letter-spacing:.04em;">{{ ciQuotesLabel }}</div>
@@ -22486,7 +22509,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // No client is preselected: the first company in the list is not a sensible default for a bill,
       // and a pre-filled name is exactly the kind of thing that gets saved without being read.
       openCreateInv: () => {
-        this.setState({ createInv: true, ciEditId: null, ciClient: '', ciLines: [['', '1', '']], ciDue: '', ciIssued: new Date().toISOString().slice(0, 10), ciSubject: '', ciNotes: '', ciErr: '', ciCur: sysCurCode, ciVat: null, ciNextNo: null });
+        this.setState({ createInv: true, ciEditId: null, ciClient: '', ciLines: [['', '1', '']], ciDue: '', ciIssued: new Date().toISOString().slice(0, 10), ciSubject: '', ciNotes: '', ciErr: '', ciCur: sysCurCode, ciVat: null, ciNextNo: null, ciDisbData: null });
+        // Money already paid out for these clients and never billed on. Fetched when the form opens
+        // rather than at boot: it is only ever read here, and the console already makes enough calls
+        // on the way in.
+        (() => { const td = localStorage.getItem('stimespro:token'); if (!td) return;
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/disbursements?unbilled=1', { headers: { Authorization: 'Bearer ' + td } })
+            .then(rd => rd.ok ? rd.json() : [])
+            .then(vd => this.setState({ ciDisbData: Array.isArray(vd) ? vd : [] }))
+            .catch(() => this.setState({ ciDisbData: [] })); })();
         // Ask the server for the number: it sees every invoice, including any raised by another
         // user or by the billing job since this session loaded its list.
         const t9 = localStorage.getItem('stimespro:token');
@@ -22515,6 +22546,48 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 : [[q9.service || 'Quoted services', '1', String(q9.amount || '')]];
               this.setState({ ciLines: items9, ciSubject: q9.service || this.state.ciSubject, ciFromQuote: q9.number });
               this.toast('Copied ' + (q9.number || 'the quotation') + ' into this invoice');
+            },
+          })),
+        };
+      })(),
+      // MONEY ALREADY PAID OUT FOR THIS CLIENT.
+      //
+      // An officer pays a ministry fee at the counter and it sits in the client's file until
+      // somebody bills it. Nineteen of them, SAR 37,534, were sitting there the day this was built,
+      // and there was no screen that would have told anyone.
+      //
+      // THE ID RIDES ON THE LINE, as a fourth element the editors preserve and `remove` drops with
+      // the row. So a payment added and then deleted is not stamped as billed, without any separate
+      // bookkeeping that could drift from what the invoice actually says.
+      ...(() => {
+        const cli8 = this.state.ciClient || '';
+        const co8 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c8 => c8.name === cli8);
+        const rows8 = (Array.isArray(this.state.ciDisbData) ? this.state.ciDisbData : [])
+          .filter(d8 => co8 && d8.companyId === co8.id)
+          .filter(d8 => !ciLines.some(l8 => l8[3] === d8.id));
+        const asLine = (d8) => [
+          d8.label + (d8.reference ? ' \u00b7 ' + d8.reference : '') + (d8.job ? ' (' + d8.job + ')' : ''),
+          '1', String((d8.amountMinor || 0) / 100), d8.id,
+        ];
+        const total8 = rows8.reduce((t8, d8) => t8 + (d8.amountMinor || 0), 0);
+        return {
+          ciDisbShow: !!cli8 && rows8.length > 0,
+          ciDisbLabel: (rows8.length === 1 ? '1 payment made for this client' : rows8.length + ' payments made for this client')
+            + ' and not billed on \u00b7 ' + fmtCurAs(ciCur, total8 / 100),
+          ciDisbAddAll: () => {
+            const base8 = ciLines.filter(l8 => String(l8[0]).trim() || String(l8[2]).trim());
+            this.setState({ ciLines: [...base8, ...rows8.map(asLine)] });
+            this.toast('Added ' + rows8.length + ' payment' + (rows8.length === 1 ? '' : 's') + ' to this invoice');
+          },
+          ciDisbAddAllLabel: rows8.length > 1 ? 'Add all ' + rows8.length : '',
+          ciDisb: rows8.map(d8 => ({
+            label: d8.label,
+            summary: fmtCurAs(ciCur, (d8.amountMinor || 0) / 100)
+              + (d8.paidAt ? ' \u00b7 ' + d8.paidAt : '') + (d8.reference ? ' \u00b7 ' + d8.reference : ''),
+            unpaid: d8.paid === false,
+            add: () => {
+              const base8 = ciLines.filter(l8 => String(l8[0]).trim() || String(l8[2]).trim());
+              this.setState({ ciLines: [...base8, asLine(d8)] });
             },
           })),
         };
@@ -22595,7 +22668,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             amount: Math.round(totalMinor / 100), subtotalMinor, vatMinor, totalMinor, vatRateBp,
             currency: ciCur, status: 'draft',
             date: st.ciIssued || new Date().toISOString().slice(0, 10), dueDate: st.ciDue || null,
-            services: desc, items, notes: st.ciNotes || null }) })
+            services: desc, items, notes: st.ciNotes || null,
+            // Only the ids still on a line that survived validation. A payment whose line was
+            // deleted, blanked or priced at nothing is not billed, and must not be marked as if
+            // it were.
+            disbursementIds: valid.map(l => l[3]).filter(Boolean) }) })
           .then(r6 => r6.json().catch(() => ({})).then(j6 => ({ ok: r6.ok, j6 })))
           .then(({ ok, j6 }) => {
             if (!ok) return this.setState({ ciErr: (j6 && j6.error) || 'Could not save the invoice — try again' });

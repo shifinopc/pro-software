@@ -80,7 +80,7 @@ async function activityFor(model: string, data: any): Promise<{ type: string; me
 const PROTECTED_FIELDS: Record<string, string[]> = {
   user: ["passwordHash", "tokenVersion", "resetTokenHash", "resetExpires", "failedLogins", "lockedUntil", "mustChangePassword"],
 };
-const sanitize = (modelName: string, body: any) => {
+export const sanitize = (modelName: string, body: any) => {
   const banned = PROTECTED_FIELDS[modelName];
   if (!banned || !body || typeof body !== "object") return body;
   return Object.fromEntries(Object.entries(body).filter(([k]) => !banned.includes(k)));

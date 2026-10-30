@@ -8,7 +8,7 @@ import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { fail, safeError } from "./errors.js";
 import QRCode from "qrcode";
-import { crud, withLiveCounts, type ScopeFn } from "./crud.js";
+import { crud, withLiveCounts, sanitize, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
 import { workflowRouter } from "./workflow.js";
 import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, INDIVIDUAL, contactProblem, billingAmountProblem } from "./validate.js";
@@ -94,7 +94,7 @@ import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
 import { mountBoot } from "./boot.js";
-import { toIsoDate, DateValueError, businessToday, setBusinessZone } from "./dates.js";
+import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
@@ -6368,6 +6368,93 @@ app.delete("/api/packages/:id", requireAuth, requireStaff, requireWriteRole, asy
     await logAudit({ action: "package.delete", actorId: (req as any).auth?.sub, target: pkg.name, ip: clientIp(req) });
     res.json({ ok: true });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * MONEY PAID OUT THAT NOBODY HAS BILLED ON.
+ *
+ * A money capture files a Disbursement when an officer records a ministry fee. Until it lands on an
+ * invoice it is the firm's money sitting in a client's file, so this is the list somebody works
+ * through: `recharge` on, no invoice yet.
+ *
+ * Its own route rather than the generic CRUD, deliberately. A disbursement is written by completing
+ * the step that paid it, and the only thing anyone needs to do to one afterwards is bill it — a
+ * generic create would be a second way to record a payment with none of the engine's validation
+ * behind it, and a generic delete would quietly lose the only record that the money left.
+ */
+app.get("/api/disbursements", requireAuth, requireStaff, async (req, res) => {
+  const companyId = String(req.query.companyId ?? "").trim();
+  const unbilledOnly = String(req.query.unbilled ?? "") === "1";
+  const rows = await prisma.disbursement.findMany({
+    where: {
+      ...(companyId ? { companyId } : {}),
+      ...(unbilledOnly ? { recharge: true, invoiceId: null } : {}),
+    },
+    orderBy: { at: "desc" },
+    take: 500,
+  });
+  // What the money was FOR, which lives on the run, not on the row. One lookup for the page rather
+  // than one per row: a client with a year of renewals behind them would otherwise be a hundred.
+  const runIds = [...new Set(rows.map(r => r.workflowInstanceId).filter(Boolean))] as string[];
+  const runs = runIds.length
+    ? new Map((await prisma.workflowInstance.findMany({ where: { id: { in: runIds } }, select: { id: true, title: true } })).map(r => [r.id, r.title]))
+    : new Map<string, string>();
+  res.json(rows.map(r => ({ ...r, job: r.workflowInstanceId ? runs.get(r.workflowInstanceId) ?? null : null })));
+});
+
+/**
+ * Raising an invoice that re-charges disbursements.
+ *
+ * Registered BEFORE the generic CRUD so it matches first, and it hands anything without
+ * `disbursementIds` straight on — an ordinary invoice is still the generic router's job.
+ *
+ * WHY IT IS ONE REQUEST AND ONE TRANSACTION. The obvious shape is to create the invoice the normal
+ * way and then stamp the rows in a second call. If that second call fails, the client has been
+ * billed and the payments still read as unbilled, so the next person to work the list bills them
+ * again. Billing a client twice for the same ministry fee is the one failure this feature must not
+ * introduce, so the stamp and the invoice stand or fall together.
+ */
+app.post("/api/invoices", requireAuth, requireStaff, requireWriteRole, async (req, res, next) => {
+  const ids: string[] = Array.isArray(req.body?.disbursementIds) ? req.body.disbursementIds.map(String) : [];
+  // Stripped BEFORE the early return, not after. The form sends the field on every invoice, empty
+  // or not, and an empty one handed to the generic router is an unknown column that Prisma refuses
+  // — so leaving it on took out ordinary invoicing altogether, for a feature that was not in use.
+  delete req.body.disbursementIds;
+  if (!ids.length) return next();
+
+  const dateErr = normalizeDates("invoice", req.body);
+  if (dateErr) return res.status(400).json({ error: dateErr });
+  const err = validate("invoice", req.body, true);
+  if (err) return res.status(400).json({ error: err });
+  if (req.body?.number) {
+    const clash = await prisma.invoice.findFirst({ where: { number: String(req.body.number) }, select: { id: true } });
+    if (clash) return res.status(409).json({ error: `${req.body.number} already exists — reload and try again` });
+  }
+  const data = sanitize("invoice", req.body);
+
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const inv = await tx.invoice.create({ data });
+      // Scoped to this client, still billable, still unbilled. Anything that no longer matches is
+      // the race this guards: someone else invoiced the same payment while this form was open.
+      const { count } = await tx.disbursement.updateMany({
+        where: { id: { in: ids }, companyId: inv.companyId, recharge: true, invoiceId: null },
+        data: { invoiceId: inv.id },
+      });
+      if (count !== ids.length) {
+        throw new Error(`${ids.length - count} of these payments ${ids.length - count === 1 ? "has" : "have"} already been billed on another invoice. Nothing was saved — reopen the form to see what is left.`);
+      }
+      return inv;
+    });
+    logActivity({
+      type: "finance",
+      message: `Draft ${created.number} raised for ${created.clientName ?? "a client"}, re-charging ${ids.length} payment${ids.length === 1 ? "" : "s"}`,
+      user: (req as any).auth?.email,
+    });
+    res.status(201).json(created);
+  } catch (e: any) {
+    res.status(409).json({ error: e?.message ?? "Could not raise the invoice" });
+  }
 });
 
 // Generic CRUD for the remaining entities (staff auth + write-role guard)

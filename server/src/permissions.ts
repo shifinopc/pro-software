@@ -378,6 +378,9 @@ const MODULE_OF: Array<[string, PermModule]> = [
   ["/api/packages", "Plan & Billing"],
   ["/api/service-items", "Service Catalog"],
   ["/api/zatca-qr.svg", "Invoices"],
+  // Money paid out on a client's behalf, waiting to be billed. It is read on the way to raising an
+  // invoice and it is only ever billed, so it belongs to Invoices rather than to a module of its own.
+  ["/api/disbursements", "Invoices"],
   // ── Sales, split five ways ──
   // One "Sales" could not say any of the things a PRO firm actually needs to say: that the front
   // line may look up a client's number but not the deal pipeline, that a junior may triage web
