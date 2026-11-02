@@ -9222,6 +9222,15 @@
                         </div>
                       </sc-for>
                     </div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:11px 2px 1px;">
+                      <span style="font-size:10px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ mlPageLabel }}</span>
+                      <sc-if value="{{ mlPagerShown }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                          <span onClick="{{ mlPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ mlPrevOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                          <span onClick="{{ mlNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ mlNextOp }};" style-hover="background:#F3EFFA;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                        </div>
+                      </sc-if>
+                    </div>
                   </sc-if>
                   <sc-if value="{{ mlEmpty }}" hint-placeholder-val="{{ false }}">
                     <div style="margin-top:13px; font-size:11px; color:#8C8899;">Nothing has been sent in this period.</div>
@@ -34614,7 +34623,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // Failures used to reach console.error on the server and nowhere a human would look. This is
     // where they surface: newest first, with the transport's own words about what went wrong.
     const _ml = this.state.mailLog || null;
-    const _mlRows = (_ml && Array.isArray(_ml.rows) ? _ml.rows : []).slice(0, 40);
+    // FIVE AT A TIME. The log is every message the system considered sending, so a quiet week
+    // is still ~95 rows — and it sits at the bottom of a settings tab, where an unbounded list
+    // pushes everything after it off the screen. The route already returns newest first.
+    const _mlAll = (_ml && Array.isArray(_ml.rows) ? _ml.rows : []);
+    const ML_PER9 = 5;
+    const _mlPages9 = Math.max(1, Math.ceil(_mlAll.length / ML_PER9));
+    // Clamped: a refresh that returns fewer rows must not strand you on a page that is gone.
+    const _mlPage9 = Math.min(Math.max(1, this.state.mlPage || 1), _mlPages9);
+    const _mlFrom9 = (_mlPage9 - 1) * ML_PER9;
+    const _mlRows = _mlAll.slice(_mlFrom9, _mlFrom9 + ML_PER9);
     const _MAIL_TONE = {
       sent: { label: 'SENT', fg: '#0E9355', bg: '#E7F8EF' },
       failed: { label: 'FAILED', fg: '#C23B3B', bg: '#FDECEC' },
@@ -34623,7 +34641,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const mailLogApi = {
       mlLoaded: !!_ml,
       mlHasRows: _mlRows.length > 0,
-      mlEmpty: !!_ml && _mlRows.length === 0,
+      mlEmpty: !!_ml && _mlAll.length === 0,
+      // No numbered strip here, unlike the user list: seven days of mail is ~19 pages and nobody
+      // navigates a delivery log by page number.
+      mlPagerShown: _mlPages9 > 1,
+      mlPageLabel: _mlAll.length
+        ? (_mlFrom9 + 1) + '–' + Math.min(_mlAll.length, _mlFrom9 + ML_PER9) + ' of ' + _mlAll.length
+        : '',
+      mlPrevOp: _mlPage9 > 1 ? '1' : '.35',
+      mlNextOp: _mlPage9 < _mlPages9 ? '1' : '.35',
+      mlPrev: () => { if (_mlPage9 > 1) this.setState({ mlPage: _mlPage9 - 1 }); },
+      mlNext: () => { if (_mlPage9 < _mlPages9) this.setState({ mlPage: _mlPage9 + 1 }); },
       mlSummary: !_ml ? 'Loading…'
         : `${_ml.sent} sent · ${_ml.failed} failed · ${_ml.skipped} not sent — last ${_ml.days} days`,
       mlFailedCount: _ml ? _ml.failed : 0,
@@ -34647,7 +34675,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const t9 = localStorage.getItem('stimespro:token');
         fetch((this._apiBase || 'http://localhost:4100') + '/api/email-log?days=7', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
           .then(r => (r.ok ? r.json() : null))
-          .then(v => { if (v) this.setState({ mailLog: v }); })
+          .then(v => { if (v) this.setState({ mailLog: v, mlPage: 1 }); })
           .catch(() => {});
       },
     };
