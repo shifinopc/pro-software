@@ -74,6 +74,22 @@ jobs:
       - name: Backup retention and logging
         run: bash stack/backup-test.sh
 
+      # THE CHECKS THAT NEED NOTHING. No database, no server, no network — they read index.html,
+      # the schema, or a pure function. They were written one at a time alongside the bugs they
+      # found and then only ran when somebody remembered, which is the same as not having them.
+      #
+      # One step with a loop rather than eleven steps: the log names each script as it runs, and
+      # `set -e` stops at the first failure, so the failing one is the last line printed. Eleven
+      # near-identical YAML blocks buy a nicer step label and cost a page of config.
+      - name: Static checks
+        working-directory: server
+        run: |
+          set -e
+          for f in check-date-fields client-ip-check first-paint-check group-counts-check                    imap-check lead-details-fields-check node-types-check phone-split-check                    render-scope-check signature-check site-lookup-check; do
+            echo "── $f"
+            npx tsx "scripts/$f.ts"
+          done
+
       # SCA. Fails on high or critical only: moderates that need a major upgrade should not block a
       # bug fix, and a gate that cries wolf is a gate people learn to force past.
       - name: Audit dependencies
@@ -146,6 +162,69 @@ jobs:
       - name: Client team
         working-directory: server
         run: npx tsx scripts/probe-client-team.ts
+
+      # The checks that need a database and nothing else. Each makes its own client, user and rows
+      # and deletes them, so they run in any order against an empty schema.
+      - name: Database checks
+        working-directory: server
+        run: |
+          set -e
+          for f in auth-failure-check company-merge-check import-template-check                    lead-export-check lead-import-check money-capture-check; do
+            echo "── $f"
+            npx tsx "scripts/$f.ts"
+          done
+
+      # The two that go through the real routes, because what they guard IS the route: an invoice
+      # and the disbursements it bills standing or falling together, and a quotation that must not
+      # be invoiceable once a revision has replaced it. Both mint their own throwaway user, and
+      # both refuse to run unless DATABASE_URL points at localhost — which here it does.
+      #
+      # The server is started in the background and the job waits for /api/health rather than
+      # sleeping: a fixed sleep is either too short on a slow runner or wasted on a fast one.
+      - name: Start the API
+        working-directory: server
+        run: |
+          npx tsx src/index.ts > /tmp/api.log 2>&1 &
+          API_PID=$!
+          for i in $(seq 1 60); do
+            # THE PROCESS, NOT JUST THE PORT. Waiting on /api/health alone treats "something is
+            # answering on 4100" as "my server started", and a server that was already there
+            # answers just as cheerfully — pointed at a different database. That cost me a
+            # debugging session locally; here it would be a green run that tested nothing.
+            kill -0 "$API_PID" 2>/dev/null || { echo "the API exited while starting:"; cat /tmp/api.log; exit 1; }
+            if curl -fsS http://localhost:4100/api/health > /dev/null 2>&1; then
+              echo "API up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "the API did not answer within 60s:"; cat /tmp/api.log; exit 1
+
+      - name: Route checks
+        working-directory: server
+        run: |
+          set -e
+          for f in disbursement-billing-check quote-convert-check; do
+            echo "── $f"
+            npx tsx "scripts/$f.ts"
+          done
+
+      # What the server said while the checks ran. Printed only on failure — on a green run it is
+      # noise, and on a red one it is usually the answer.
+      - name: API log
+        if: failure()
+        run: cat /tmp/api.log
+
+      # NOT WIRED IN, AND WHY. Five more checks exist and are deliberately left out: each needs
+      # reference data an empty schema does not have, so in CI they fail for the wrong reason.
+      #
+      #   paid-gate-check              wants a workflow template named "Iqama Renewal"
+      #   read-scan-check              wants the document types and their aliases
+      #   probe-deal-checklist         wants the checklist rules
+      #   lifecycle-guard-check        wants a seeded staff user whose role actually resolves
+      #   probe-checklist-vocabulary   crashes partway and leaves its user behind
+      #
+      # The first four come good the day this job seeds a country pack, which is the same thing
+      # the pack probes above are waiting for. The last one is a bug in the check itself.
 
   secrets:
     name: Secret scan
