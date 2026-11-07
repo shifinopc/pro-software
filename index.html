@@ -638,6 +638,31 @@
   }
   /* Below this the three columns are narrower than the fields want to be. Two, then one. */
   @media (max-width:1040px){.ldf-land{flex-wrap:wrap;}.ldf-land > .ldf-col{flex:1 1 44%;}}
+  /* ── THE DOCUMENTS STEP IS NOT A FIELD GRID ──────────────────────────────────────────────
+     It borrowed .ldf-land from the form before it, and .ldf-land flattens its columns with
+     display:contents so every label/field pair becomes a cell in one two-column grid. That is
+     right for thirteen boxes and wrong for this step, whose left column is a running list and
+     whose right one is blocks: two sub-grids, a drop zone, an Add button. Flattened, the drop
+     zone was dealt into the cell beside the dates, "Add this document" was laid inside the 86px
+     label column, and the empty-state sentence wrapped one word per line.
+
+     Two real columns, and the labels go back above their fields (the shared .fm-lab/.fm-inp,
+     which is what every other dialog in here looks like). */
+  .acd-land{display:grid;grid-template-columns:238px minmax(0,1fr);gap:16px;align-items:start;margin-top:12px;}
+  /* A panel, not loose text beside the form: what has been collected so far is a running tally,
+     and it reads as one when it has an edge. */
+  .acd-side{display:flex;flex-direction:column;gap:9px;min-width:0;
+    background:#FBFAFE;border:1px solid #F0EDF6;border-radius:14px;padding:12px;}
+  .acd-main{display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .acd-land .ldf-cap{align-items:center;gap:7px;}
+  .acd-land .ldf-cap::before{content:"";width:5px;height:5px;border-radius:99px;background:#7C00FF;flex-shrink:0;}
+  .acd-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+  /* A class, not the inline style these rows carried, so that they can actually stack: an inline
+     grid-template-columns outranks any media query. */
+  @media (max-width:860px){
+    .acd-land{grid-template-columns:1fr;}
+    .acd-row{grid-template-columns:1fr;}
+  }
 
   .ldf-col{flex:1 1 0;min-width:0;display:grid;gap:9px;align-content:start;}
   .ldf-cap{display:flex;align-items:baseline;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7C00FF;}
@@ -11454,8 +11479,8 @@
           </div>
           <div class="fm-body">
             <sc-if value="{{ edDocErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ edDocErr }}</div></sc-if>
-            <div class="ldf-land ac-land">
-              <div class="ldf-col">
+            <div class="acd-land">
+              <div class="acd-side">
                 <!-- What the reader made of it. Shown rather than silently applied: the fields it
                      filled are on the right, and a "medium" on an expiry is a cue to check the
                      paper, not a verdict. -->
@@ -11481,7 +11506,7 @@
                   </div>
                 </sc-for>
               </div>
-              <div class="ldf-col" style="flex:1.6 1 0;">
+              <div class="acd-main">
                 <div class="ldf-cap">This document</div>
                 <div>
                   <label class="fm-lab">DOCUMENT TYPE</label>
@@ -11499,7 +11524,7 @@
                     </sc-if>
                   </div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                <div class="acd-row">
                   <div><label class="fm-lab">DOCUMENT / CERTIFICATE NUMBER</label><input value="{{ edDocNo }}" onChange="{{ setEdDocNo }}" class="fm-inp"></div>
                   <!-- Picked from the government centres, not typed. The same name has to reach the
                        visit queue, the credential vault and the step picker, and four spellings of
@@ -11522,7 +11547,7 @@
                     </div>
                   </div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                <div class="acd-row">
                   <div><label class="fm-lab">ISSUE DATE</label><input value="{{ edDocIssue }}" onChange="{{ setEdDocIssue }}" type="date" class="fm-inp"></div>
                   <!-- Some of these have no validity period at all — Articles of Association, a
                        ZATCA or VAT certificate. Asking for an expiry invites somebody to invent
@@ -11555,22 +11580,32 @@
                        aim a file at: dropped here the document is read and the boxes above fill
                        themselves, and with nothing to read it is simply how the paper is attached.
 
+                       A ROW, NOT A CENTRED STACK. It used to sit in a narrow column, where centred
+                       was the only thing that fit; at the full width of the step three small things
+                       floating in the middle of 780px read as an empty panel rather than a target.
+
                        TWO ZONES, SWAPPED, rather than one with its colours bound. A style attribute
                        is fixed at the element's first render here — the box kept its idle colours
                        while its own text read "Drop it here" — so the lit state is a different
                        element, which is how every other state in this file is drawn. -->
                   <sc-if value="{{ edDropCold }}" hint-placeholder-val="{{ true }}">
-                    <div onClick="{{ edPickFile }}" style="border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
-                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ edDropNote }}</div>
+                    <div onClick="{{ edPickFile }}" style="display:flex; align-items:center; gap:13px; border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:13px 15px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#F8F5FE;">
+                      <div style="width:38px; height:38px; border-radius:11px; background:#F3EBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg></div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">{{ edDropNote }}</div>
+                      </div>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #E4D9FB; padding:6px 13px; border-radius:99px; flex-shrink:0;">Browse</span>
                     </div>
                   </sc-if>
                   <sc-if value="{{ edDropHot }}" hint-placeholder-val="{{ false }}">
-                    <div style="border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
-                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ edDropNote }}</div>
+                    <div style="display:flex; align-items:center; gap:13px; border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:13px 15px; cursor:pointer;">
+                      <div style="width:38px; height:38px; border-radius:11px; background:#EADBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg></div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ edDropTitle }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">{{ edDropNote }}</div>
+                      </div>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #E4D9FB; padding:6px 13px; border-radius:99px; flex-shrink:0;">Browse</span>
                     </div>
                   </sc-if>
                   <sc-if value="{{ edHasFile }}" hint-placeholder-val="{{ false }}">
@@ -12487,8 +12522,8 @@
           </div>
           <div class="fm-body">
             <sc-if value="{{ acDocErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ acDocErr }}</div></sc-if>
-            <div class="ldf-land ac-land">
-              <div class="ldf-col">
+            <div class="acd-land">
+              <div class="acd-side">
                 <!-- What the reader made of it. Shown rather than silently applied: the fields it
                      filled are on the right, and a "medium" on an expiry is a cue to check the
                      paper, not a verdict. -->
@@ -12517,7 +12552,7 @@
                   </div>
                 </sc-for>
               </div>
-              <div class="ldf-col" style="flex:1.6 1 0;">
+              <div class="acd-main">
                 <div class="ldf-cap">This document</div>
                 <div>
                   <label class="fm-lab">DOCUMENT TYPE</label>
@@ -12535,7 +12570,7 @@
                     </sc-if>
                   </div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                <div class="acd-row">
                   <div><label class="fm-lab">DOCUMENT / CERTIFICATE NUMBER</label><input value="{{ acDocNo }}" onChange="{{ setAcDocNo }}" class="fm-inp"></div>
                   <!-- Picked from the government centres, not typed. The same name has to reach the
                        visit queue, the credential vault and the step picker, and four spellings of
@@ -12558,7 +12593,7 @@
                     </div>
                   </div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+                <div class="acd-row">
                   <div><label class="fm-lab">ISSUE DATE</label><input value="{{ acDocIssue }}" onChange="{{ setAcDocIssue }}" type="date" class="fm-inp"></div>
                   <!-- Some of these have no validity period at all — Articles of Association, a
                        ZATCA or VAT certificate. Asking for an expiry invites somebody to invent
@@ -12591,22 +12626,32 @@
                        aim a file at: dropped here the document is read and the boxes above fill
                        themselves, and with nothing to read it is simply how the paper is attached.
 
+                       A ROW, NOT A CENTRED STACK. It used to sit in a narrow column, where centred
+                       was the only thing that fit; at the full width of the step three small things
+                       floating in the middle of 780px read as an empty panel rather than a target.
+
                        TWO ZONES, SWAPPED, rather than one with its colours bound. A style attribute
                        is fixed at the element's first render here — the box kept its idle colours
                        while its own text read "Drop it here" — so the lit state is a different
                        element, which is how every other state in this file is drawn. -->
                   <sc-if value="{{ acDropCold }}" hint-placeholder-val="{{ true }}">
-                    <div onClick="{{ acPickFile }}" style="border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A78BDB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
-                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ acDropNote }}</div>
+                    <div onClick="{{ acPickFile }}" style="display:flex; align-items:center; gap:13px; border:1.5px dashed #D9CBF2; background:#FBFAFE; border-radius:13px; padding:13px 15px; cursor:pointer;" style-hover="border-color:#C9A2FF; background:#F8F5FE;">
+                      <div style="width:38px; height:38px; border-radius:11px; background:#F3EBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg></div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">{{ acDropNote }}</div>
+                      </div>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #E4D9FB; padding:6px 13px; border-radius:99px; flex-shrink:0;">Browse</span>
                     </div>
                   </sc-if>
                   <sc-if value="{{ acDropHot }}" hint-placeholder-val="{{ false }}">
-                    <div style="border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:16px 14px; text-align:center; cursor:pointer;">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
-                      <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
-                      <div style="font-size:10px; color:#A9A6B4; margin-top:3px; line-height:1.45;">{{ acDropNote }}</div>
+                    <div style="display:flex; align-items:center; gap:13px; border:1.5px dashed #7C00FF; background:#F5EEFF; border-radius:13px; padding:13px 15px; cursor:pointer;">
+                      <div style="width:38px; height:38px; border-radius:11px; background:#EADBFF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg></div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:700; color:#5B21B6;">{{ acDropTitle }}</div>
+                        <div style="font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.45;">{{ acDropNote }}</div>
+                      </div>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; background:#fff; border:1px solid #E4D9FB; padding:6px 13px; border-radius:99px; flex-shrink:0;">Browse</span>
                     </div>
                   </sc-if>
                   <sc-if value="{{ acHasFile }}" hint-placeholder-val="{{ false }}">
