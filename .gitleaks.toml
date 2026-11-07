@@ -5,7 +5,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Values that look like secrets and are not"
 
 # The CI workflow supplies a JWT_SECRET and a CRED_KEY so the API's startup checks pass in a throwaway
@@ -20,3 +20,26 @@ regexes = [
   '''ci-only-not-a-real-secret-value''',
   '''00112233445566778899aabbccddeeff''',
 ]
+
+# THE CONSOLE IS 46,000 LINES OF JAVASCRIPT WHOSE IDENTIFIERS CONTAIN "Api" AND "key".
+#
+# `generic-api-key` fires on <keyword> = <high-entropy value>, and in this file that is ordinary
+# code:
+#
+#   clDetailApi.ovDocsHas  = _ovRows9.length > 0;
+#   const key8             = w8.instanceId || inst8.id || ('step:' + w8.id);
+#
+# Five of those have failed every CI run since 12 October — which is most of why nobody was
+# reading the result any more.
+#
+# NOT a path allowlist. Excusing the whole file would mean a real key pasted into 46,000 lines of
+# JavaScript goes unseen, and that is the single most likely place in this repo for one to land.
+# The discriminator is the right-hand side: a secret committed in JavaScript is a QUOTED LITERAL.
+# This allows an assignment whose value carries no quote at all, in these two files, for this one
+# rule. `apiKey = "sk-live-…"` is still caught here, and nothing is relaxed anywhere else.
+[[allowlists]]
+description = "JavaScript assignments in the console and portal — expressions, not literals"
+targetRules = ["generic-api-key"]
+paths = ['''^(index|portal)\.html$''']
+regexTarget = "match"
+regexes = ['''=\s*[^'"`\n]+$''']
