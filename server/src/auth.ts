@@ -94,8 +94,32 @@ export async function logNotification(entry: { type: string; title: string; mess
     await prisma.notification.create({ data: { type: entry.type, title: entry.title, message: entry.message ?? null, time: "Just now", createdAt: new Date().toISOString(), read: false } });
   } catch { /* non-fatal */ }
 }
-export const clientIp = (req: Request) =>
-  (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+/**
+ * WHO SIGNED IN, FROM WHERE.
+ *
+ * `x-forwarded-for` alone was logging Cloudflare. The chain is client → Cloudflare → Traefik →
+ * here, and Traefik replaces the header rather than appending to it, so the first entry that
+ * reaches this function is the edge that proxied the request. Every `login.success` in the audit
+ * table recorded a Cloudflare datacentre — 162.158.x, 172.70.x — which is the one thing a log of
+ * sign-ins exists to answer and could not.
+ *
+ * `cf-connecting-ip` is set by Cloudflare on every proxied request and carries the real address.
+ * Preferred, then the old header, then the socket, so a deployment without Cloudflare in front —
+ * local, or a direct run — behaves exactly as it did.
+ *
+ * shortcut: this makes the log TRUTHFUL, not trustworthy. The origin still answers direct
+ * connections, so somebody who knows its address can send whatever `cf-connecting-ip` they like
+ * and choose what the audit trail says about them. Closing that is a firewall job — allow 443
+ * from Cloudflare's published ranges only — not something a header check here can do. Upgrade
+ * when the origin is locked down.
+ */
+export const clientIp = (req: Request) => {
+  const first = (v: unknown) => String(v ?? "").split(",")[0].trim() || null;
+  return first(req.headers["cf-connecting-ip"])
+    ?? first(req.headers["x-forwarded-for"])
+    ?? req.socket.remoteAddress
+    ?? null;
+};
 
 // ── Credential vault: AES-256-GCM (iv:tag:ciphertext) ──
 export function encrypt(plain: string): string {
