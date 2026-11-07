@@ -53,7 +53,12 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}
+      # connection_limit: Prisma sizes its pool from the CPU count — on a 2-core box that is five
+      # connections. /api/boot answers eighty-seven lists in one request by running the real routes
+      # in parallel, so those handlers queue on five connections and the same call measured 603ms,
+      # 2.8s and 7.4s on three consecutive runs. The variance was queueing, not the database.
+      # MySQL's own max_connections is 151, so five was self-imposed.
+      DATABASE_URL: mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?connection_limit=15
       # Both REQUIRED — the API refuses to start in production with the dev defaults.
       # CRED_KEY encrypts the client credential vault: change it later and every stored
       # credential becomes permanently unreadable.

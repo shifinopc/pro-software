@@ -44,7 +44,6 @@ export const BOOT_PATHS: string[] = [
   "/api/courier-job-types", "/api/checklist-vocabulary", "/api/custom-objects",
   "/api/record-sequences", "/api/error-reports", "/api/document-types", "/api/collateral",
   "/api/workflow/templates", "/api/workflow/checklist-rules", "/api/workflow/field-sets",
-  "/api/workflow/instances",
   "/api/companies?lifecycle=lead,prospect,lost,churned",
   "/api/contacts", "/api/contacts?includeArchived=1",
   "/api/pipeline", "/api/pipeline-stages", "/api/lead-sources", "/api/lost-reasons",
@@ -56,7 +55,7 @@ export const BOOT_PATHS: string[] = [
   "/api/integrations", "/api/assignable-owners?all=1", "/api/upgrade-requests",
   "/api/activity-log", "/api/packages", "/api/gov-centers",
   "/api/countries", "/api/packs", "/api/packs/installed", "/api/packs/updates",
-  "/api/workforce", "/api/workforce-history?days=90", "/api/setup-check", "/api/groups",
+  "/api/workforce", "/api/setup-check", "/api/groups",
   "/api/service-items", "/api/api-keys", "/api/credentials", "/api/notifications",
   // The rest of what a cold start asks for, found by counting the requests a real sign-in made
   // after the first list was in place: twenty-four were left, and all but the two POSTs below are
@@ -69,12 +68,28 @@ export const BOOT_PATHS: string[] = [
   // first screen showed zeros until everything had arrived — about a second of numbers that look
   // like answers. They are listed as FIRST_PAINT in index.html; putting them back here would have
   // them fetched twice.
-  "/api/employees", "/api/payments", "/api/quotations", "/api/audit",
+  "/api/employees", "/api/payments", "/api/quotations",
   "/api/sales-report", "/api/proposal-templates",
   "/api/workforce-bands", "/api/workforce-band-sets",
   "/api/appointments", "/api/appointment-statuses", "/api/appointment-types",
   "/api/courier-shipments", "/api/courier-statuses",
-  "/api/agents", "/api/agents/connection",
+  "/api/agents/connection",
+
+  // ── NOT IN THE BATCH, AND MEASURED ───────────────────────────────────────────────────────
+  //
+  // The list above was built by counting the requests a real sign-in made, which is the right way
+  // to find them and the wrong way to decide they belong here. Four of them were 1.1 MB of the
+  // 2.05 MB this endpoint answered with, and no screen on the dashboard reads any of them:
+  //
+  //   /api/workflow/instances          475 KB   the runs board, which nobody is looking at yet
+  //   /api/workforce-history?days=90   255 KB   one chart, on one screen
+  //   /api/agents                      240 KB   up to 2,000 agent tasks WITH their output JSON,
+  //                                             so that the nav can show a badge number
+  //   /api/audit                       174 KB   Settings → Audit, and only there
+  //
+  // Leaving them out costs those screens one request each, the first time somebody opens them:
+  // `_bootFetch` falls through to a plain fetch for any path the batch does not carry, which is
+  // exactly what every one of these did before the batch existed.
 ];
 
 type Answer = { status: number; body: unknown };
