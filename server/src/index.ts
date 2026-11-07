@@ -5114,7 +5114,22 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   if (!q) return res.status(404).json({ error: "Quotation not found" });
   const st = String(q.status).toLowerCase();
   if (st === "invoiced") return res.status(409).json({ error: `${q.number} has already been invoiced` });
-  if (st !== "accepted") return res.status(409).json({ error: `${q.number} is ${st} — only a quotation the client accepted can be invoiced` });
+  // ACCEPTING AND INVOICING ARE ONE PRESS, from `sent` onwards.
+  //
+  // `accepted` could only ever be reached from the client's portal — the console had no control
+  // for it at all. So a client who agreed on the phone left the quotation sitting at `sent` for
+  // ever: the invoice button never appeared, the work was never scheduled, and somebody retyped
+  // the figures into a blank invoice with nothing linking the two.
+  //
+  // Invoicing a quotation IS the firm asserting the client accepted it, so this records that too
+  // and runs the delivery the acceptance owes (below). Never from `draft` or `approved`: you
+  // cannot bill for something the client has not been shown.
+  if (st !== "accepted" && st !== "sent") {
+    return res.status(409).json({ error: `${q.number} is ${st} — it has to be with the client before it can be invoiced` });
+  }
+  // A replaced quotation keeps its own status, so without this a superseded `sent` row is
+  // invoiceable at the old price while the client is holding the revision.
+  if (q.supersededAt) return res.status(409).json({ error: `${q.number} was replaced by a newer revision — invoice that one instead` });
   // Read the stored total where there is one: `amount` is whole riyals, so a quotation under SAR 0.50
   // rounds to 0 there and would be refused despite having a real figure.
   const qGross = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
@@ -5148,9 +5163,18 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     }),
     prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } }),
   ]);
-  logActivity({ type: "finance", message: `Invoice ${number} raised from quotation ${q.number}${q.clientName ? ` — ${q.clientName}` : ""}` });
-  await logAudit({ action: "quotation.convert", actorId: a.sub, target: q.id, detail: `${q.number} → ${number}` });
-  res.status(201).json({ invoice });
+  // The acceptance this just recorded owes exactly what the portal's Accept owes: three line items
+  // are three jobs somebody has to go and do, and billing for work nobody was given is how it goes
+  // undone. Deliberately outside the transaction and never allowed to fail the response — the
+  // invoice exists by now, and a template that will not start is a configuration problem.
+  let delivery: Awaited<ReturnType<typeof startDeliveryForQuotation>> | null = null;
+  if (st === "sent") {
+    delivery = await startDeliveryForQuotation(q.id, { actor: a?.email ?? a?.sub })
+      .catch(e => { console.error("delivery failed for", q.number, e); return null; });
+  }
+  logActivity({ type: "finance", message: `Invoice ${number} raised from quotation ${q.number}${st === "sent" ? " (accepted on invoicing)" : ""}${q.clientName ? ` — ${q.clientName}` : ""}` });
+  await logAudit({ action: "quotation.convert", actorId: a.sub, target: q.id, detail: `${q.number} → ${number}${st === "sent" ? " · acceptance recorded" : ""}${delivery?.tasks?.length ? ` · ${delivery.tasks.length} job(s) opened` : ""}` });
+  res.status(201).json({ invoice, accepted: st === "sent", delivery });
 });
 
 // ── Manual SLA escalation ────────────────────────────────────────────

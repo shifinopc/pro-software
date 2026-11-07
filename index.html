@@ -4103,7 +4103,7 @@
                     <sc-if value="{{ q.canEdit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.edit }}" title="Edit — while it is a draft, approved, or sent back for changes" style="font-size:10px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit</span></sc-if>
                     <sc-if value="{{ q.canApprove }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.approve }}" title="Sign this off internally — the client still cannot see it" style="font-size:10px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Approve</span></sc-if>
                     <sc-if value="{{ q.canSend }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.send }}" title="Release it to the client portal" style="font-size:10px; font-weight:700; color:#fff; background:#12B76A; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Send</span></sc-if>
-                    <sc-if value="{{ q.canInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.convert }}" title="Raise a draft invoice from this accepted quotation" style="font-size:10px; font-weight:700; color:#fff; background:#12B76A; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">Invoice</span></sc-if>
+                    <sc-if value="{{ q.canInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.convert }}" title="{{ q.invoiceTitle }}" style="font-size:10px; font-weight:700; color:#fff; background:#12B76A; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.96);">{{ q.invoiceLabel }}</span></sc-if>
                     <!-- Outlined, not filled: revising is a normal part of negotiating, but it is
                          not the thing to reach for first on a quotation that is still out. -->
                     <sc-if value="{{ q.canRevise }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.revise }}" title="The client wants it changed — issue a new version (QT-…-R1) and leave this one as it was sent" style="font-size:10px; font-weight:700; color:#6D5BD0; background:#fff; border:1px solid #D9CCF7; padding:6px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">Revise</span></sc-if>
@@ -11915,7 +11915,7 @@
       <sc-if value="{{ qvCanEdit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Edit</button></sc-if>
       <sc-if value="{{ qvCanApprove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvApprove }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Approve</button></sc-if>
       <sc-if value="{{ qvCanSend }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvSend }}" style="background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Send to client</button></sc-if>
-      <sc-if value="{{ qvCanInvoice }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvInvoice }}" style="background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Raise invoice</button></sc-if>
+      <sc-if value="{{ qvCanInvoice }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvInvoice }}" title="{{ qvInvoiceTitle }}" style="background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">{{ qvInvoiceLabel }}</button></sc-if>
           <div style="flex:1;"></div>
           <button onClick="{{ qvPrint }}" title="Print — or choose “Save as PDF” in the print dialog" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</button>
         </div>
@@ -44137,7 +44137,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // An accepted quotation can be turned into an invoice; QT_ST maps both `approved` and
         // `invoiced` to "Accepted", so the RAW status is what decides which control to show.
         // Only a quotation the CLIENT accepted can be invoiced.
-        canInvoice: canWrite && !!realId && rawSt === 'accepted',
+        // FROM `sent` AS WELL AS `accepted`. Most clients agree by phone, and the console had no
+        // way to record that at all — only the portal could set `accepted`, so the invoice button
+        // never appeared for them. Raising the invoice records the acceptance; the server runs the
+        // delivery it owes. A superseded revision is excluded: its replacement is the live offer.
+        canInvoice: canWrite && !!realId && ['accepted', 'sent'].includes(rawSt) && !(raw0 && raw0.supersededAt),
+        // Said out loud, because pressing it is a claim about what the client did.
+        invoiceLabel: rawSt === 'sent' ? 'Accept & invoice' : 'Invoice',
+        invoiceTitle: rawSt === 'sent'
+          ? 'Record that the client accepted this, open the work, and raise a draft invoice'
+          : 'Raise a draft invoice from this accepted quotation',
         // An "Invoiced ✓" badge in the actions column only repeated the status pill beside it. The
         // useful thing is WHICH invoice it became — that is the one fact the status cannot carry,
         // and it makes the quotation → invoice chain followable.
@@ -44238,17 +44247,40 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         },
         convert: (ev9) => {
           ev9 && ev9.stopPropagation && ev9.stopPropagation();
-          const tok9 = localStorage.getItem('stimespro:token');
-          fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + realId + '/convert', {
-            method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
-            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
-            .then(({ ok, j9 }) => {
-              if (!ok) return this.toast((j9 && j9.error) || 'Could not raise the invoice', 'error');
-              this.toast('Draft ' + ((j9.invoice && j9.invoice.number) || 'invoice') + ' raised — approve it to issue');
-              this._opReload && this._opReload('quotations', 'quotationsData');
-              this._opReload && this._opReload('invoices', 'invoicesData');
-            })
-            .catch(() => this.toast('Cannot reach the server — no invoice was raised', 'error'));
+          const go9 = () => {
+            const tok9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + realId + '/convert', {
+              method: 'POST', headers: { Authorization: 'Bearer ' + tok9 } })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                if (!ok) return this.toast((j9 && j9.error) || 'Could not raise the invoice', 'error');
+                // The jobs are the half nobody expects, so they are the half worth naming.
+                const made9 = (j9 && j9.delivery && Array.isArray(j9.delivery.tasks)) ? j9.delivery.tasks.length : 0;
+                this.toast('Draft ' + ((j9.invoice && j9.invoice.number) || 'invoice') + ' raised — approve it to issue'
+                  + (made9 ? ' · ' + made9 + ' job' + (made9 === 1 ? '' : 's') + ' opened' : ''));
+                this._opReload && this._opReload('quotations', 'quotationsData');
+                this._opReload && this._opReload('invoices', 'invoicesData');
+                // Accepting wins the deal and schedules work, so the boards that show both are stale
+                // the moment this returns.
+                if (j9 && j9.accepted) {
+                  if (this._loadPipeline) this._loadPipeline();
+                  this._opReload && this._opReload('opportunities', 'dealsData');
+                  this._opReload && this._opReload('tasks', 'tasksData');
+                }
+              })
+              .catch(() => this.toast('Cannot reach the server — no invoice was raised', 'error'));
+          };
+          // Coming from `sent`, this press also records that the client said yes and opens the jobs
+          // for the work. Both are hard to undo — the tasks stay even if the status is put back —
+          // so it says what it is about to do rather than doing it quietly.
+          if (rawSt !== 'sent') return go9();
+          const units9 = (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
+            .reduce((a9, it9) => a9 + (Number(it9.units) || 1), 0) || 1;
+          this._confirm('Record that ' + ((raw0 && raw0.clientName) || 'the client') + ' accepted ' + id + '?', {
+            body: 'It is marked accepted, ' + units9 + ' job' + (units9 === 1 ? '' : 's')
+              + ' open for the work it describes, and the invoice is raised as a draft for you to approve.',
+            okLabel: 'Accept & invoice',
+          }).then((ok9) => { if (ok9) go9(); });
         },
         open: () => this.setState({ quoteOpen: id }),
         // Branded print (uploaded header/footer/watermark from Settings → Print Layout).
@@ -44426,6 +44458,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         qvNo: qtViewRow.id, qvClient: qtViewRow.client, qvTitle: qtViewRow.title, qvAmount: qtViewRow.amount,
         qvStatus: qtViewRow.status, qvStBg: qtViewRow.stBg, qvStColor: qtViewRow.stColor, qvWhen: qtViewRow.when,
         qvCanEdit: qtViewRow.canEdit, qvCanApprove: qtViewRow.canApprove, qvCanSend: qtViewRow.canSend, qvCanInvoice: qtViewRow.canInvoice,
+        qvInvoiceLabel: qtViewRow.invoiceLabel === 'Invoice' ? 'Raise invoice' : qtViewRow.invoiceLabel,
+        qvInvoiceTitle: qtViewRow.invoiceTitle,
         closeQtView: () => this.setState({ qtView: null }),
         qvPrint: () => qtViewRow.print(),
         qvEdit: () => { this.setState({ qtView: null }); qtViewRow.edit(); },
