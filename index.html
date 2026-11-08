@@ -17095,6 +17095,61 @@ const MODAL_FLAGS = [
   }
 })();
 
+/**
+ * AND FORMATTING MONEY WAS THE LARGEST SINGLE ITEM LEFT.
+ *
+ * Exactly the cause the date cache above describes, in the other built-in nobody had looked at:
+ * `Number.prototype.toLocaleString` builds a fresh Intl.NumberFormat internally on every call.
+ * One renderVals makes 286 of them — every currency figure on every screen, whether or not that
+ * screen is on display — and priced at that call count in a tight loop it came to 8.8ms. For
+ * comparison, the 1,403 option objects and closures a render allocates cost 0.1ms together, and
+ * the 936 localeCompare calls and 3,611 date parses cost 1.0ms between them. Formatter
+ * construction was not one cost among many; it was most of what was left.
+ *
+ * So the FORMATTERS are pooled rather than the answers. A value cache would miss constantly —
+ * these are money amounts, nearly all distinct — while there are only a handful of distinct
+ * (locale, options) pairs in the whole console. `format()` on a live formatter is ~0.1µs against
+ * ~31µs to build one.
+ *
+ * Anything Intl will not take (NaN, Infinity, a locale it rejects) falls through to the original,
+ * so the output is the real one in every case.
+ */
+(() => {
+  const orig = Number.prototype.toLocaleString;
+  const pool = new Map();
+  Number.prototype.toLocaleString = function (locale, opts) {
+    const n = +this;
+    if (!isFinite(n)) return orig.call(this, locale, opts);
+    // Options are written as literals at every call site, so key order is stable; a different
+    // order would only pool a second identical formatter, never return a wrong answer.
+    const key = (locale === undefined ? '' : String(locale)) + '|' + (opts ? JSON.stringify(opts) : '');
+    let f = pool.get(key);
+    if (f === undefined) {
+      try { f = new Intl.NumberFormat(locale, opts); } catch (e) { f = null; }
+      pool.set(key, f);
+    }
+    return f ? f.format(n) : orig.call(this, locale, opts);
+  };
+  // Cheap self-check against the browser, twice over (miss, then hit) — the same guard the date
+  // cache carries, and for the same reason: a formatter that disagrees would silently restate
+  // every figure in the console.
+  const CHECKS = [
+    [1234.5, [], null], [1234.5, ['en-US'], null], [0, ['en-US'], null], [-98765.4, ['en-GB'], null],
+    [1234.5, ['en-US'], { minimumFractionDigits: 2, maximumFractionDigits: 2 }],
+    [0.005, ['en-US'], { minimumFractionDigits: 2, maximumFractionDigits: 2 }],
+    [1e21, ['en-US'], null], [-0, ['en-US'], null],
+  ];
+  for (const [n, loc, opts] of CHECKS) {
+    const args = opts ? [...loc, opts] : loc;
+    const want = orig.apply(n, args);
+    if (n.toLocaleString(...args) !== want || n.toLocaleString(...args) !== want) {
+      console.error('[number-format-pool] disagrees with the browser on ' + n + ' — pool disabled');
+      Number.prototype.toLocaleString = orig;
+      break;
+    }
+  }
+})();
+
 // Last six months of real totals. This chart was a hardcoded [38,52,44,61,55,72] — six invented
 // bars, drawn identically for every dataset. `rows` are {date, amount}; the current month is the
 // last bar and is highlighted.
@@ -20577,6 +20632,32 @@ class Component extends DCLogic {
       return n9 > 0 ? String(n9) : '';
     })();
     // Deals still OPEN. Counting the closed ones would make the badge climb every time something is
+    // ── SHARED INDEXES ───────────────────────────────────────────────────────────────────────
+    //
+    // Lookups that several screens below each did by scanning a whole list per row. They are built
+    // here, once per render, because the alternative is what this file used to do: `.find()` or
+    // `.filter()` over every country, employee or invoice for every employee or client on screen —
+    // work that multiplies, and that ran on EVERY state change in the whole console, including a
+    // keystroke in the search box on a screen showing none of it.
+    //
+    // First entry wins on a duplicate key, which is what `.find()` did.
+    const _ixCountries = Array.isArray(this.state.countriesData) ? this.state.countriesData : [];
+    const _coByCode = new Map();   // 'SA' -> country row
+    const _coByName = new Map();   // 'Saudi Arabia' -> country row
+    for (const c9 of _ixCountries) {
+      const k9 = String(c9 && c9.code || '').toUpperCase();
+      if (k9 && !_coByCode.has(k9)) _coByCode.set(k9, c9);
+      if (c9 && c9.name != null && !_coByName.has(c9.name)) _coByName.set(c9.name, c9);
+    }
+    // Staff per client, excluding archived — the count beside a client's name on four screens.
+    const _empByCompany = new Map();
+    for (const e9 of (Array.isArray(this.state.employeesData) ? this.state.employeesData : [])) {
+      if (e9 && e9.archived) continue;
+      const a9 = _empByCompany.get(e9 && e9.companyId);
+      a9 ? a9.push(e9) : _empByCompany.set(e9 && e9.companyId, [e9]);
+    }
+    const _empCountOf = (coId) => (_empByCompany.get(coId) || []).length;
+
     // won or lost, which is the opposite of what a number beside "Pipeline" is read as meaning.
     // WHAT THE FIRM IS OUT OF POCKET. A badge rather than a number on a screen nobody opens:
     // nineteen payments and SAR 37,534 sat unbilled with no way to find out but to go looking.
@@ -21806,8 +21887,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const c9 = String(e9.nationality || '').trim();
             if (!c9) return '—';
             if (c9.length !== 2) return c9;
-            const hit9 = (Array.isArray(this.state.countriesData) ? this.state.countriesData : [])
-              .find(x9 => String(x9.code).toUpperCase() === c9.toUpperCase());
+            const hit9 = _coByCode.get(c9.toUpperCase());
             return (hit9 && hit9.name) || c9;
           })(),
           emNatTitle: e9.nationality || 'Not recorded',
@@ -22030,13 +22110,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // timestamp, so they count as already read rather than nagging forever.
     const _nReadAt = (this.state.meUser && this.state.meUser.notifReadAt) || '';
     const _nWhen = (n8) => n8.createdAt || null;
+    // "Now" is a fact about the render, not about each row.
+    //
+    // These two helpers each built their own `new Date()` per call, and the map below called both
+    // AND parsed the timestamp a third time for `ts` — four Date objects and three date parses for
+    // every notification, on every state change anywhere in the console. At a couple of thousand
+    // rows that is the bell's whole cost. Both now take the already-parsed timestamp, and today's
+    // midnight is computed once. A render that straddled midnight used to disagree with itself from
+    // one row to the next; it cannot now.
+    const _nToday8 = (() => { const d8 = new Date(); d8.setHours(0, 0, 0, 0); return d8.getTime(); })();
+    const _nNow8 = Date.now();
     // Group by day from the row's own timestamp; anything unparseable falls into "Earlier".
-    const _nBucket = (iso) => {
-      const t8 = new Date(iso).getTime();
+    const _nBucket = (iso, t8) => {
+      if (t8 == null) t8 = new Date(iso).getTime();
       if (!iso || isNaN(t8)) return 'Earlier';
       const day8 = new Date(t8); day8.setHours(0, 0, 0, 0);
-      const today8 = new Date(); today8.setHours(0, 0, 0, 0);
-      const diff8 = Math.round((today8 - day8) / 86400000);
+      const diff8 = Math.round((_nToday8 - day8.getTime()) / 86400000);
       return diff8 <= 0 ? 'Today' : diff8 === 1 ? 'Yesterday' : 'Earlier';
     };
     /**
@@ -22052,10 +22141,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * Nothing here reads that column any more. The stored string is left alone rather than
      * backfilled — it is not the truth and there is no point making it look like the truth.
      */
-    const _nAgo = (iso) => {
-      const t8 = new Date(iso).getTime();
+    const _nAgo = (iso, t8) => {
+      if (t8 == null) t8 = new Date(iso).getTime();
       if (!iso || isNaN(t8)) return '';
-      const s8 = Math.round((Date.now() - t8) / 1000);
+      const s8 = Math.round((_nNow8 - t8) / 1000);
       // A clock skew or a row written a moment in the future should not read "in -3 seconds".
       if (s8 < 45) return 'Just now';
       const m8 = Math.round(s8 / 60);
@@ -22074,6 +22163,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const p8 = _N_PAL[type8] || pal.slate;
       const title = n8.title || '—';
       const when8 = _nWhen(n8);
+      const t8 = when8 ? new Date(when8).getTime() : NaN;   // parsed once, used three times below
       const unread = !!when8 && !n8.read && !_nRead[n8.id] && (!_nReadAt || when8 > _nReadAt);
       const cta = /document|upload/i.test(title) ? 'Upload' : /invoice|payment/i.test(title) ? 'Pay' : /renew|expir/i.test(title) ? 'Renew' : false;
       const dest = /invoice|payment/i.test(title) ? ['Invoices', 'Finance']
@@ -22082,8 +22172,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       return {
         // Group, sort AND label from the real timestamp. The sort was already fixed here — the
         // label was not, and still read the frozen `time` column. See _nAgo.
-        bucket: _nBucket(when8), ts: (when8 ? new Date(when8).getTime() : 0) || 0,
-        title, meta: [n8.message, _nAgo(when8)].filter(Boolean).join(' · ').slice(0, 90),
+        bucket: _nBucket(when8, t8), ts: (isNaN(t8) ? 0 : t8) || 0,
+        title, meta: [n8.message, _nAgo(when8, t8)].filter(Boolean).join(' · ').slice(0, 90),
         icon: _N_ICON[type8] || I.bell, bg: p8[0], color: p8[1], unread, cta,
         weight: unread ? 700 : 600, rowBg: unread ? '#FCFAFF' : 'transparent',
         destLabel: 'Open ' + dest[0],
@@ -22472,9 +22562,23 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // amount as still owing after a part payment, and Record payment pre-filled the full amount
     // again — so a 2,000 invoice with 1,000 received still asked for 2,000.
     const _payRows = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : [];
-    const _paidFor = (invId, invNo) => _payRows
-      .filter(p9 => (invId && p9.invoiceId === invId) || (!p9.invoiceId && invNo && p9.invoiceNumber === invNo))
-      .reduce((s9, p9) => s9 + _payTotal(p9), 0);
+    // WHAT HAS BEEN PAID AGAINST AN INVOICE, TOTALLED ONCE PER RENDER RATHER THAN PER INVOICE.
+    //
+    // This was a filter+reduce over every payment, and it is asked per invoice — by the invoice
+    // list, the receivables tile and the client-portfolio report — so the cost was invoices ×
+    // payments, on every state change anywhere in the console.
+    //
+    // The rule is unchanged and still has two halves: a payment that names an invoice id belongs to
+    // that invoice, and a payment that names NO id belongs to the invoice with that number. Both can
+    // contribute to the same invoice, so both maps are consulted and added, exactly as the `||` did.
+    const _paidById = new Map(), _paidByNo = new Map();
+    for (const p9 of _payRows) {
+      const amt9 = _payTotal(p9);
+      if (p9.invoiceId) _paidById.set(p9.invoiceId, (_paidById.get(p9.invoiceId) || 0) + amt9);
+      else if (p9.invoiceNumber) _paidByNo.set(p9.invoiceNumber, (_paidByNo.get(p9.invoiceNumber) || 0) + amt9);
+    }
+    const _paidFor = (invId, invNo) =>
+      (invId ? (_paidById.get(invId) || 0) : 0) + (invNo ? (_paidByNo.get(invNo) || 0) : 0);
     const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid', void: 'Void' };
     const invData = this.state.invoicesData;
     const fmtInvDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(+dt) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
@@ -23248,7 +23352,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // WIRED: real client companies (was hardcoded Falcon names). Feeds the company picker used by the
     // request wizard; sample rows only in the unauthenticated design preview.
     const _CD_PAL = [['#F3E8FF', '#7C00FF'], ['#E7F8EF', '#0E9355'], ['#FEF4E2', '#B8860B'], ['#E4F4FD', '#0284C7'], ['#EFEBFF', '#6D5BD0']];
-    const _cdEmpCount = (coId) => (Array.isArray(this.state.employeesData) ? this.state.employeesData : []).filter(e6 => e6.companyId === coId && !e6.archived).length;
+    const _cdEmpCount = _empCountOf;   // see _empByCompany — counted once, not scanned per client
     const companyDefs = ((Array.isArray(this.state.companiesData) && this.state.companiesData.length)
       ? this.state.companiesData.slice(0, 8).map((c6, i6) => {
           const t6 = _CD_PAL[i6 % _CD_PAL.length];
@@ -27633,9 +27737,38 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // The one list, shared with the compliance badge on the client's Employees tab — see
     // _empCardTypes. The last fallback is for a database with no employee document types at all.
     const _edTypeList = _empCardTypes.length ? _empCardTypes : ['Passport', 'Visa', 'Emirates ID', 'Labour Card', 'Medical Certificate'];
-    const employeeDocs = (_edEmps.length ? _edEmps : (_authed ? [] : edDefs.map(([name, role]) => ({ name, role })))).map((e7, i) => {
+    const _edList = _edEmps.length ? _edEmps : (_authed ? [] : edDefs.map(([name, role]) => ({ name, role })));
+    // ONE PASS OVER THE DOCUMENTS, NOT ONE PASS PER PERSON.
+    //
+    // This was `_edAllDocs.filter(...)` inside the map below, which made it one full scan of every
+    // document for every employee — 151 staff × 494 documents = 74,594 comparisons, repeated on
+    // EVERY state change in the whole console, including a keystroke in the search box on a screen
+    // that shows none of this. Same answer, 494 comparisons.
+    //
+    // The matching rule is deliberately unchanged: a document belongs to the employee its
+    // `employeeId` names, or — when it carries none — to everyone of that `person` name. A shared
+    // name claimed the document for both people before and still does; that is a data question, not
+    // a rendering one, so this is not the place to decide it.
+    const _edDocsOf = (() => {
+      const byId = new Map(), byName = new Map();
+      for (const e7 of _edList) {
+        if (e7.id) byId.set(e7.id, e7);
+        if (e7.name) { const a7 = byName.get(e7.name); a7 ? a7.push(e7) : byName.set(e7.name, [e7]); }
+      }
+      // Keyed on the employee OBJECT, so two people of the same name keep separate lists.
+      const out = new Map();
+      const add = (e7, d7) => { const a7 = out.get(e7); a7 ? a7.push(d7) : out.set(e7, [d7]); };
+      for (const d7 of _edAllDocs) {
+        if (d7.employeeId) { const e7 = byId.get(d7.employeeId); if (e7) add(e7, d7); }
+        else for (const e7 of (byName.get(d7.person) || [])) add(e7, d7);
+      }
+      // Document order is preserved, which `find` below depends on: where a person has both an
+      // id-linked and a name-only document of one type, the earlier row still wins.
+      return (e7) => out.get(e7) || [];
+    })();
+    const employeeDocs = _edList.map((e7, i) => {
       const p = avPals[i % avPals.length];
-      const mine = _edAllDocs.filter(d7 => (d7.employeeId && e7.id && d7.employeeId === e7.id) || (!d7.employeeId && d7.person === e7.name));
+      const mine = _edDocsOf(e7);
       const _edMine = _cardTypesFor(e7);
       const docs = (_edMine.length ? _edMine : _edTypeList).map(tn => {
         const d7 = mine.find(x7 => x7.docType === tn);
@@ -29676,6 +29809,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       && (!_cxQ || [r.doc, r.docNo, r.client, r.holder, r.authority].join(' ').toLowerCase().includes(_cxQ)));
     // Grouped by what has to happen next, most urgent first; within a group, soonest first.
     const _cxDocs = Array.isArray(this.state.documentsData) ? this.state.documentsData : [];
+    // `_cxRow` below needs the document behind each compliance row, and used to `find` it — one scan
+    // of every document per row, so the Compliance screen's row list cost rows × documents on every
+    // state change anywhere in the console. Indexed once instead. First row wins on a duplicate id,
+    // which is what `find` did (ids are unique, so this only matters if that ever stops being true).
+    const _cxDocById = new Map();
+    for (const d9 of _cxDocs) if (d9 && d9.id != null && !_cxDocById.has(d9.id)) _cxDocById.set(d9.id, d9);
     const _cxGroupDefs = [
       ['now', 'Needs action now', 'Expired, or never issued', '#C0353A', '#FEECEC', r => r.status === 'Expired' || r.status === 'Missing'],
       ['soon', 'Due in the next 30 days', 'Start these renewals now', '#B8860B', '#FEF4E2', r => r.status === 'Expiring'],
@@ -29683,7 +29822,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ['ok', 'Valid', 'Nothing to do yet', '#0E9355', '#E7F8EF', r => r.status === 'Valid'],
     ];
     const _cxRow = (r) => {
-      const d9 = r._docId ? _cxDocs.find(x9 => x9.id === r._docId) : null;
+      const d9 = r._docId ? (_cxDocById.get(r._docId) || null) : null;
       const cd9 = d9 && d9.customData && typeof d9.customData === 'object' ? d9.customData : {};
       const f9 = String(cd9.filePath || cd9.file || ''); const has9 = f9.startsWith('/');
       const dn9 = Number(r.days);
@@ -29704,7 +29843,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       return { key: key9, title: title9, sub: sub9, fg: fg9, bg: bg9, rows: rows9, count: String(rows9.length), has: rows9.length > 0 };
     }).filter(g9 => g9.has);
     { let i9 = 0; cxGroups.forEach(g9 => { g9.rows = g9.rows.map(r9 => ({ ...r9, cxDelay: (80 + Math.min(i9++, 14) * 55) + 'ms' })); }); }
-    const cCount = (st) => compScoped.filter(r => r.status === st).length;
+    // Counted in one pass. This was a `filter` per status, and it is asked for six tab counts plus
+    // twice more by compScore below — eight scans of the same list to produce eight numbers.
+    const _cxByStatus = new Map();
+    for (const r of compScoped) _cxByStatus.set(r.status, (_cxByStatus.get(r.status) || 0) + 1);
+    const cCount = (st) => _cxByStatus.get(st) || 0;
     const compScore = compScoped.length ? Math.round((cCount('Valid') + cCount('Processing')) / compScoped.length * 100) : 0;
     const complianceTabs = ['All', 'Valid', 'Expiring', 'Expired', 'Missing', 'Processing'].map(k => ({
       label: k, count: k === 'All' ? compScoped.length : cCount(k),
@@ -30384,7 +30527,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           }))
       : [];
     const _govTasks = _govReal ? [..._govPlain, ..._govSteps] : null;
-    const _govCount = (nm, sts) => (_govTasks || []).filter(t2 => t2.govCenter === nm && sts.includes(String(t2.status).toLowerCase())).length;
+    // Four counts per government center, each of which used to scan every task — so twenty-four
+    // scans of the task list to fill a table of six rows. Tallied once by centre and status.
+    const _govTally = new Map();
+    for (const t2 of (_govTasks || [])) {
+      const k2 = t2.govCenter;
+      const m2 = _govTally.get(k2) || new Map();
+      const s2 = String(t2.status).toLowerCase();
+      m2.set(s2, (m2.get(s2) || 0) + 1);
+      _govTally.set(k2, m2);
+    }
+    const _govCount = (nm, sts) => { const m2 = _govTally.get(nm); if (!m2) return 0; let n2 = 0; for (const s2 of sts) n2 += m2.get(s2) || 0; return n2; };
     const govCenterDefs = (Array.isArray(gcData) && gcData.length
       ? gcData.map(g2 => [g2.name, g2.sub || '—', g2.color || '#7C00FF', g2.bg || '#F3E8FF',
           _govCount(g2.name, ['todo', 'blocked']), _govCount(g2.name, ['in_progress', 'review']), _govCount(g2.name, ['done']), _govCount(g2.name, ['rejected']),
@@ -30678,14 +30831,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             (r9.lastClientMsgAt || '').slice(0, 10), (r9.lastStaffMsgAt || '').slice(0, 10)])] },
       { name: 'Client portfolio', sub: 'Per client: staff, documents and money owed', cat: 'Clients', color: '#6D5BD0', bg: '#EFEBFF',
         build: () => [['Client', 'Status', 'City', 'Staff', 'Documents', 'Expiring', 'Overdue docs', 'Outstanding'],
-          ..._rCo.map(c9 => {
-            const staff = _rEmp.filter(e9 => e9.companyId === c9.id && !e9.archived).length;
-            const docs = _rDoc.filter(d9 => d9.companyId === c9.id);
-            const owed = _rInv.filter(v9 => v9.companyId === c9.id && !['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase()))
-              .reduce((s9, v9) => s9 + _owed(v9), 0);
-            return [c9.name, c9.status || '', c9.city || '', staff, docs.length,
-              docs.filter(d9 => d9.status === 'expiring').length, docs.filter(d9 => d9.status === 'overdue').length, owed];
-          })] },
+          ...(() => {
+            // Three scans of three whole lists PER CLIENT is what this was, and `reportList` below
+            // builds every report on every render just to show its row count — so the whole thing
+            // ran on every keystroke anywhere in the console. Grouped in one pass each instead.
+            const staff9 = new Map(), docs9 = new Map(), owed9 = new Map();
+            for (const e9 of _rEmp) if (!e9.archived) staff9.set(e9.companyId, (staff9.get(e9.companyId) || 0) + 1);
+            for (const d9 of _rDoc) {
+              const t9 = docs9.get(d9.companyId) || { n: 0, expiring: 0, overdue: 0 };
+              t9.n++;
+              if (d9.status === 'expiring') t9.expiring++;
+              if (d9.status === 'overdue') t9.overdue++;
+              docs9.set(d9.companyId, t9);
+            }
+            for (const v9 of _rInv) {
+              if (['paid', 'draft', 'void'].includes(String(v9.status || '').toLowerCase())) continue;
+              owed9.set(v9.companyId, (owed9.get(v9.companyId) || 0) + _owed(v9));
+            }
+            const none9 = { n: 0, expiring: 0, overdue: 0 };
+            return _rCo.map(c9 => {
+              const d9 = docs9.get(c9.id) || none9;
+              return [c9.name, c9.status || '', c9.city || '', staff9.get(c9.id) || 0, d9.n, d9.expiring, d9.overdue, owed9.get(c9.id) || 0];
+            });
+          })()] },
     ];
     const reportList = REPORTS.map((r9, i9) => {
       const rows = r9.build();
@@ -30872,7 +31040,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // ZATCA, MHRSD and Qiwa. The real one wins, because the step picker, the Government Centers queue
     // and the credential lookup all read it; a name that is only on this screen means nothing to them.
     const _crCountryCode = (nm9) => {
-      const hit9 = (Array.isArray(this.state.countriesData) ? this.state.countriesData : []).find(c9 => c9.name === nm9);
+      const hit9 = _coByName.get(nm9);
       return hit9 ? hit9.code : null;
     };
     const _crCenters = (nm9) => {
@@ -31668,6 +31836,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         dtnPrereqs: row9[8] || [], dtnErr: '',
       });
     };
+    // How many documents are filed under each type, counted in ONE pass over the documents.
+    // This was a `filter` of every document inside the map below — one full scan per document type,
+    // which on this install is thirty scans of five hundred documents, on every state change
+    // anywhere in the console. It is used only to decide whether a type can be deleted.
+    const _dtUseCount = (() => {
+      const docs9 = Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData
+        : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []);
+      const m9 = new Map();
+      for (const d9 of docs9) m9.set(d9.docType, (m9.get(d9.docType) || 0) + 1);
+      return m9;
+    })();
     const docTypes = dtAllDefs.map((row9, i) => {
       const [name, subject, authority, leadDays, fee, renewable, assignee, fields] = row9;
       const id9 = row9[9];
@@ -31675,8 +31854,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // at would leave those documents naming a type that no longer exists, and every lookup that
       // resolves a document to its type (lead days, subject kind, issuing authority, the renewal
       // prerequisites) would quietly fall back to defaults.
-      const inUse9 = (Array.isArray(this.state.documentsAllData) ? this.state.documentsAllData : (Array.isArray(this.state.documentsData) ? this.state.documentsData : []))
-        .filter(d9 => d9.docType === name).length;
+      const inUse9 = _dtUseCount.get(name) || 0;
       const isSample9 = !id9;
       return {
         name, subject, authority, leadDays, fee, renewable, assignee,
@@ -32195,8 +32373,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // out as "SA SA" and read like a mistake. The name says the same thing on every machine, and
       // the code is still there in the tooltip for anyone who wants it.
       countryLabel: r.country
-        ? (((Array.isArray(this.state.countriesData) ? this.state.countriesData : [])
-            .find(c9 => String(c9.code).toUpperCase() === String(r.country).toUpperCase()) || {}).name || r.country)
+        ? ((_coByCode.get(String(r.country).toUpperCase()) || {}).name || r.country)
         : '',
       countryTitle: r.country ? ('Part of the ' + r.country + ' country rules') : '',
       activeColor: r.active ? '#0E9355' : '#8C8899',
@@ -41290,7 +41467,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // list let a Saudi rule name a UAE document type, which no Saudi client can ever satisfy:
         // the same dangling-reference class the country-pack exporter now refuses to ship. A type
         // with no country is offered everywhere, because that is what an unmarked row means.
-        const _crDocTypesFor9 = (country) => _crDocTypes9All.filter(d => !d.country || !country || d.country === country);
+        // Asked once per rule, and there are far more rules than countries — so the answers are
+        // kept rather than the whole type list re-filtered for each one.
+        const _crDtCache9 = new Map();
+        const _crDocTypesFor9 = (country) => {
+          const k9 = country || '';
+          let v9 = _crDtCache9.get(k9);
+          if (!v9) _crDtCache9.set(k9, v9 = _crDocTypes9All.filter(d => !d.country || !country || d.country === country));
+          return v9;
+        };
 
         // Same operators the resolver understands, in the words somebody reading a rule would use.
         const _OPS9 = [
@@ -41816,7 +42001,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // message pointed at Saudi Arabia whatever the firm had actually set.
       pipCountry: (() => {
         const code9 = ((this.state.orgSet || {}).country || '').toUpperCase();
-        const hit9 = (this.state.countriesData || []).find(c => c.code === code9);
+        const hit9 = _coByCode.get(code9);
         return hit9 ? hit9.name : 'this country';
       })(),
       pipCanAdd: canWrite && _pipeCols.length > 0,
@@ -44102,11 +44287,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted', 'approved'],
       ]));
     const qStatusOf = (id, def) => qs[id] || def;
+    // `quotes` below needs each row's original record and used to `find` it by id — one scan of
+    // every quotation per quotation, so the list cost grew with the square of the count. Indexed.
+    const _qtById = new Map();
+    if (Array.isArray(qtData)) for (const q9 of qtData) if (q9 && q9.id != null && !_qtById.has(q9.id)) _qtById.set(q9.id, q9);
     const qChipMap = { 'Draft': ['#F0EDF6', '#6F6C7A'], 'Approved': ['#EFEBFF', '#6D5BD0'], 'Sent': ['#FEF4E2', '#B8860B'], 'Pending': ['#FEF4E2', '#B8860B'], 'Accepted': ['#E7F8EF', '#0E9355'], 'Invoiced': ['#E4F4FD', '#0284C7'], 'Rejected': ['#FEECEC', '#C0353A'], 'Changes requested': ['#F3E8FF', '#7C00FF'] };
     const quotes = quoteDefs.map(([id, title, meta, items, total, realId, realSt, rawSt], i) => {
       const status = qStatusOf(id, realSt || 'Pending');
       const chip = qChipMap[status];
-      const raw0 = (Array.isArray(qtData) ? qtData : []).find(q9 => q9.id === realId) || null;
+      const raw0 = (realId == null ? null : _qtById.get(realId)) || null;
       const isDraft = rawSt === 'draft';
       // A quotation the client sent back is editable again — that is the entire point of the state.
       const reopened = rawSt === 'changes_requested';
