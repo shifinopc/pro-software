@@ -107,13 +107,18 @@ jobs:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: ci
-          MYSQL_DATABASE: stimespro
+          # NAMED "ciscratch" BECAUSE THE SUITE INSISTS ON IT. suite-seed.ts rewrites document
+          # types, workflow templates and government centers, and most of the 178 scripts in
+          # server/scripts write; several refuse outright to touch a populated database. Both the
+          # seed and the runner check the name as well as the host, so a DATABASE_URL that drifted
+          # towards anything real stops the job instead of reconfiguring it.
+          MYSQL_DATABASE: stimespro_ciscratch
         ports: ["3306:3306"]
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci"
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
-      DATABASE_URL: mysql://root:ci@127.0.0.1:3306/stimespro
+      DATABASE_URL: mysql://root:ci@127.0.0.1:3306/stimespro_ciscratch
       # Present because startup refuses to run without them. Values are throwaway and never leave
       # this container — the point is that the code path is exercised, not that they are secret.
       JWT_SECRET: ci-only-not-a-real-secret-value-0123456789
@@ -136,52 +141,24 @@ jobs:
         working-directory: server
         run: npx prisma db push --skip-generate && npx prisma generate
 
-      # The self-contained probes. Each creates its own country, client and staff, asserts, and
-      # deletes everything it made — so they can run in any order against an empty database.
-      # The pack-dependent ones (upgrade, uninstall, statutory clocks) need a country pack installed
-      # first and are deliberately left out until that is scripted.
-      # Money and permissions go first. They are the two places a mistake is most expensive — every
-      # invoice depends on the arithmetic, and one middleware applies the matrix to every staff route
-      # — and until now neither had a single check. Both are fast: the money probe is pure functions
-      # and the permissions probe only writes the two settings rows, which it puts back.
-      - name: Business dates
+      # THE REFERENCE DATA THE CHECKS ASSUME. A schema with no rows in it is not a system: a check
+      # that walks a pipeline, resolves a document type or asks who the accountant is fails on an
+      # empty table and reads exactly like a broken feature. This installs the blank working system,
+      # then the country pack, then one active staff user per role. See scripts/suite-seed.ts.
+      - name: Seed the suite
         working-directory: server
-        run: npx tsx scripts/probe-dates.ts
-      - name: Invoice arithmetic
-        working-directory: server
-        run: npx tsx scripts/probe-money.ts
-      - name: Permission matrix
-        working-directory: server
-        run: npx tsx scripts/probe-permissions.ts
-      - name: Compliance recompute
-        working-directory: server
-        run: npx tsx scripts/probe-compliance.ts
-      - name: Band schemes
-        working-directory: server
-        run: npx tsx scripts/probe-band-schemes.ts
-      - name: Counting rules
-        working-directory: server
-        run: npx tsx scripts/probe-counting-rules.ts
-      - name: Client team
-        working-directory: server
-        run: npx tsx scripts/probe-client-team.ts
+        run: npx tsx scripts/suite-seed.ts
 
-      # The checks that need a database and nothing else. Each makes its own client, user and rows
-      # and deletes them, so they run in any order against an empty schema.
-      - name: Database checks
-        working-directory: server
-        run: |
-          set -e
-          for f in auth-failure-check company-merge-check import-template-check \
-                   lead-export-check lead-import-check mail-send-check money-capture-check; do
-            echo "── $f"
-            npx tsx "scripts/$f.ts"
-          done
-
-      # The two that go through the real routes, because what they guard IS the route: an invoice
-      # and the disbursements it bills standing or falling together, and a quotation that must not
-      # be invoiceable once a revision has replaced it. Both mint their own throwaway user, and
-      # both refuse to run unless DATABASE_URL points at localhost — which here it does.
+      # THE API COMES UP BEFORE THE SUITE, NOT BETWEEN ITS HALVES.
+      #
+      # Some of these scripts sign in over HTTP and the rest talk to the database directly, so the
+      # tempting shape is two steps with the server started in the middle. That changes the ORDER
+      # the scripts run in, and order is part of the result here: they share one database, several
+      # leave rows behind, and some pass only because an earlier one created what they needed.
+      # `paid-gate-check` wants a workflow template named "Iqama Renewal", fails on a freshly
+      # seeded database, and passes in a full run because something alphabetically before it makes
+      # one. Split the run and that becomes a failure nobody can reproduce. One server, one
+      # sequence, in the order the manifest was measured in.
       #
       # The server is started in the background and the job waits for /api/health rather than
       # sleeping: a fixed sleep is either too short on a slow runner or wasted on a fast one.
@@ -203,14 +180,21 @@ jobs:
           done
           echo "the API did not answer within 60s:"; cat /tmp/api.log; exit 1
 
-      - name: Route checks
+      # EVERY CHECK IN server/scripts, IN ONE SEQUENCE.
+      #
+      # There are 178 scripts in that folder. Each was written beside the bug it found, and then ran
+      # only when somebody remembered — which is the same as not having it. Twenty-one were listed
+      # here by hand, including the seven probes and seven database checks this step replaces; the
+      # rest were a regression suite in everything but the running. What was missing was never the
+      # scripts, it was a database to run them against.
+      #
+      # scripts/suite-manifest.ts decides what must pass, what is quarantined and why, and what is a
+      # tool rather than a check. A script in that folder and in none of those lists fails this step
+      # as UNLISTED, so the default for a new check is that it runs — and a quarantined script that
+      # starts passing is reported, so that list cannot quietly become permanent.
+      - name: Check suite
         working-directory: server
-        run: |
-          set -e
-          for f in disbursement-billing-check quote-convert-check; do
-            echo "── $f"
-            npx tsx "scripts/$f.ts"
-          done
+        run: npx tsx scripts/suite-run.ts
 
       # What the server said while the checks ran. Printed only on failure — on a green run it is
       # noise, and on a red one it is usually the answer.
@@ -218,17 +202,15 @@ jobs:
         if: failure()
         run: cat /tmp/api.log
 
-      # NOT WIRED IN, AND WHY. Five more checks exist and are deliberately left out: each needs
-      # reference data an empty schema does not have, so in CI they fail for the wrong reason.
+      # WHAT IS STILL LEFT OUT now lives in scripts/suite-manifest.ts, next to the scripts, with a
+      # reason against each name — and the runner reports any of them that starts passing, so the
+      # list cannot quietly become a list of things nobody will ever fix.
       #
-      #   paid-gate-check              wants a workflow template named "Iqama Renewal"
-      #   read-scan-check              wants the document types and their aliases
-      #   probe-deal-checklist         wants the checklist rules
-      #   lifecycle-guard-check        wants a seeded staff user whose role actually resolves
-      #   probe-checklist-vocabulary   crashes partway and leaves its user behind
-      #
-      # The first four come good the day this job seeds a country pack, which is the same thing
-      # the pack probes above are waiting for. The last one is a bug in the check itself.
+      # This comment used to name five and predict that four would "come good the day this job seeds
+      # a country pack". Measured against a seeded database, that was wrong for two of them:
+      # paid-gate-check wants a workflow template named exactly "Iqama Renewal", and read-scan-check
+      # wants document-type aliases — neither of which any pack or seed creates. They need named
+      # fixtures, not reference data, and the manifest says so rather than guessing.
 
   secrets:
     name: Secret scan
