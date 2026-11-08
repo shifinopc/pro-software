@@ -775,6 +775,20 @@ model User {
   /// told". The Targets screen shows the first as 0% and the second as a dash, and computes a
   /// payable figure only for the first.
   commissionRateBp   Int?
+  /// WHAT AN HOUR OF THIS PERSON COSTS THE FIRM, in minor units — 6000 = SAR 60.00/hour.
+  ///
+  /// Minor units because this is computed against invoice figures, which are minor units with
+  /// integer arithmetic for the reasons set out in money.ts. A rate in whole riyals multiplied
+  /// into a minor-unit total is the kind of mistake that is only found by someone querying a
+  /// margin that is a hundred times too small.
+  ///
+  /// Null is NOT zero, the same distinction `commissionRateBp` above makes: null means nobody has
+  /// told us what this person costs, and the margin report shows their work as uncosted rather
+  /// than as free. Fully loaded cost, not salary — an officer who costs the firm SAR 60 an hour is
+  /// not an officer paid SAR 60 an hour.
+  ///
+  /// INTERNAL. Never leaves the server for a portal user, and never appears on a document.
+  costPerHourMinor   Int?
   name               String
   email              String  @unique
   passwordHash       String?
@@ -1128,6 +1142,13 @@ model WorkflowTask {
   assigneeId          String?
   assignee            String? // display mirror of assigneeId — see above
   assigneeRole        String? // role gate — who may complete it
+  /// Expected effort for this step, snapshotted from the node exactly as `slaHours` is.
+  ///
+  /// Snapshotted for the same reason: a step somebody is part-way through keeps the brief it was
+  /// given, and re-costing finished work because the template was edited afterwards would rewrite
+  /// history. Null = the step never declared one, which the margin report counts as unknown rather
+  /// than as free.
+  effortMinutes       Int?
   status              String           @default("active") // active | done | approved | rejected | skipped
   priority            String           @default("medium")
   dueDate             String?
@@ -2426,6 +2447,17 @@ model ServiceItem {
   name         String
   govFee       Int     @default(0)
   serviceFee   Int     @default(0)
+  /// HOW MUCH OFFICER TIME THIS CONSUMES, which is not the same question as either field below.
+  ///
+  /// `time` and `sla` are TURNAROUND — how long the client waits, most of it spent waiting on an
+  /// authority. This is EFFORT: how long somebody here is actually working. A licence renewal can
+  /// be "5 working days" of turnaround and forty minutes of effort, and costing it at five days is
+  /// how a firm concludes every client is unprofitable.
+  ///
+  /// Zero means nobody has set one yet, and the margin report says so rather than reporting a
+  /// service as pure profit. For a service bound to a workflow the per-step figures are what count;
+  /// this is the fallback for services that have no workflow, and the number to quote when pricing.
+  effortMinutes Int    @default(0)
   time         String? // "3–5 days"
   sla          String? // "5 working days"
   docs         Int     @default(0)

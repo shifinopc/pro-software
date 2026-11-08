@@ -1033,6 +1033,14 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
                     ? new Date(Date.now() + c.slaHours * 3600_000).toISOString()
                     : null),
             slaHours: typeof c.slaHours === "number" ? c.slaHours : null,
+            // EFFORT, WHICH IS NOT THE SLA. `slaHours` above is how long the CLIENT waits, and most
+            // of that is spent waiting on an authority. This is how long somebody HERE is working.
+            // A licence renewal is routinely five working days of turnaround and forty minutes of
+            // effort, and costing it at five days is how a firm concludes every client loses money.
+            //
+            // Snapshotted for the same reason as everything else on this row: re-costing finished
+            // work because the template was edited afterwards would rewrite history.
+            effortMinutes: typeof c.effortMinutes === "number" && c.effortMinutes > 0 ? c.effortMinutes : null,
             // ON TRACK FROM THE MOMENT IT EXISTS.
             //
             // slaState was only ever written by the hourly escalator, so a task carried null until the

@@ -81,6 +81,7 @@ export const EXPECTED: string[] = [
   "probe-permissions",
   "probe-picklists",
   "probe-pipeline",
+  "profitability-check",
   "probe-portal-queue",
   "probe-probation-cap",
   "probe-quote-chase",

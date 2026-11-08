@@ -111,6 +111,7 @@ import { workforceAll, workforceFor, recordBand, workforceHistory } from "./work
 import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
 import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
+import { clientMargins } from "./profitability.js";
 import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
@@ -2765,6 +2766,44 @@ app.get("/api/team-performance", requireAuth, requireStaff, requireReadRole("sup
     openBreached: report.openBreached,
     periods: await opsPeriodsWithActivity(),
   });
+});
+
+/**
+ * WHICH CLIENTS MAKE MONEY. See src/profitability.ts for how, and for what it cannot see.
+ *
+ * NARROWER THAN THE OTHER REPORTS ON PURPOSE. Team Performance is open to sales and PRO officers
+ * because it is about work; this is about cost, and it is derived from what each colleague's hour
+ * costs the firm. That is not a number an officer should be able to reverse out of a margin, so the
+ * route is the three roles that already see the firm's money. It is staff-only and has no portal
+ * equivalent — a client must never be shown what their account earns.
+ *
+ * `from`/`to` are ISO dates and both optional. Without them this is all-time, which is also the only
+ * mode that counts recurring revenue: apportioning a monthly price across an arbitrary window would
+ * be inventing invoices that were never raised.
+ */
+app.get("/api/profitability", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "accountant"), async (req, res) => {
+  const iso = (v: unknown) => { const s = String(v ?? "").trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined; };
+  const from = iso(req.query.from), to = iso(req.query.to);
+  if (req.query.from && !from) return res.status(400).json({ error: `"${req.query.from}" is not a date — use 2026-08-01` });
+  if (req.query.to && !to) return res.status(400).json({ error: `"${req.query.to}" is not a date — use 2026-08-31` });
+  try {
+    const rows = await clientMargins({ from, to });
+    // The totals the caller would otherwise add up itself and get subtly wrong, plus the honesty
+    // counters rolled up — a margin with three hundred uncosted steps behind it is not a margin.
+    const sum = (k: "revenueMinor" | "passThroughMinor" | "labourMinor" | "marginMinor" | "effortMinutes" | "uncostedSteps" | "uncostedPeople" | "uncostedTasks") =>
+      rows.reduce((n, r) => n + r[k], 0);
+    res.json({
+      rows,
+      totals: {
+        revenueMinor: sum("revenueMinor"), passThroughMinor: sum("passThroughMinor"),
+        labourMinor: sum("labourMinor"), marginMinor: sum("marginMinor"), effortMinutes: sum("effortMinutes"),
+      },
+      uncosted: { steps: sum("uncostedSteps"), people: sum("uncostedPeople"), adhocTasks: sum("uncostedTasks") },
+      range: { from: from ?? null, to: to ?? null, recurringCounted: !from && !to },
+    });
+  } catch (e: any) {
+    fail(res, 500, e, "profitability");
+  }
 });
 
 /**

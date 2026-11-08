@@ -18555,6 +18555,16 @@ class Component extends DCLogic {
         .then(v => { if (v && v.report) this.setState({ salesReportEnv: v, salesReport: v.report, salesPeriods: v.periods || [] }); })
         .catch(() => {});
       this._loadSalesReport();
+      // Margins are read on the Reports screen and nowhere else, so this is NOT in the boot batch —
+      // it is fetched the first time that screen asks for it. 403 for roles that may not see cost.
+      this._loadProfitability = () => {
+        if (this._profitPending || this.state.profitability) return;
+        this._profitPending = true;
+        this._bootFetch('/api/profitability', { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => { this._profitPending = false; if (v) this.setState({ profitability: v }); })
+          .catch(() => { this._profitPending = false; });
+      };
       // The CRM front page. ONE request for all eleven figures rather than eleven requests the
       // screen then adds up — the server already holds every table involved, and a dashboard
       // assembled in the browser is a dashboard that shows six correct numbers and two stale ones
@@ -30854,6 +30864,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               return [c9.name, c9.status || '', c9.city || '', staff9.get(c9.id) || 0, d9.n, d9.expiring, d9.overdue, owed9.get(c9.id) || 0];
             });
           })()] },
+      // WHICH CLIENTS MAKE MONEY. Computed on the server (src/profitability.ts) because it is
+      // derived from what each colleague's hour costs, and that must not reach a browser.
+      //
+      // The last column is the honest one: a margin with uncosted work behind it is not a margin,
+      // so every row says how much of itself it could not see rather than implying precision.
+      { name: 'Client profitability', sub: 'Revenue less government fees and our own time', cat: 'Clients', color: '#0E9355', bg: '#E7F8EF',
+        build: () => {
+          const p9 = this.state.profitability;
+          if (!p9) { if (this._loadProfitability) this._loadProfitability(); return [['Client', 'Revenue', 'Pass-through', 'Our time', 'Margin', 'Margin %', 'Not costed']]; }
+          const m9 = (minor) => fmtCur((Number(minor) || 0) / 100);
+          return [['Client', 'Revenue', 'Pass-through', 'Our time', 'Margin', 'Margin %', 'Not costed'],
+            ...(p9.rows || []).map(r9 => [
+              r9.name, m9(r9.revenueMinor), m9(r9.passThroughMinor), m9(r9.labourMinor), m9(r9.marginMinor),
+              r9.marginPct == null ? '—' : r9.marginPct + '%',
+              [r9.uncostedSteps ? r9.uncostedSteps + ' steps' : '', r9.uncostedPeople ? r9.uncostedPeople + ' no rate' : '',
+               r9.uncostedTasks ? r9.uncostedTasks + ' ad-hoc' : ''].filter(Boolean).join(', ') || '—',
+            ])];
+        } },
     ];
     const reportList = REPORTS.map((r9, i9) => {
       const rows = r9.build();
