@@ -22,6 +22,7 @@ import { prisma } from "../src/db.js";
 import { homeCountry, homeCurrency, homeMarket, homeMarketIsConfigured, DEFAULT_HOME_COUNTRY } from "../src/orgsettings.js";
 import { countryCurrency, SEED_MARKET } from "../src/countries.js";
 import { setupCheck } from "../src/setupcheck.js";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 
@@ -40,9 +41,7 @@ async function loginAsProbeAdmin(): Promise<string | null> {
     const bcrypt = (await import("bcryptjs")).default;
     await prisma.user.deleteMany({ where: { email: "zz-market-admin@example.invalid" } });
     await prisma.user.create({ data: { name: "ZZ Market Admin", email: "zz-market-admin@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash("zz-Throwaway-1!", 10) } });
-    const r = await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "zz-market-admin@example.invalid", password: "zz-Throwaway-1!" }) });
-    const j: any = await r.json();
-    return j?.token ?? null;
+    return await tokenForEmail("zz-market-admin@example.invalid");
   } catch {
     return null;
   }

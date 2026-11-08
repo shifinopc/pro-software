@@ -18,6 +18,7 @@
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/auth.js";
 import crypto from "node:crypto";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const host = String(process.env.DATABASE_URL ?? "").match(/@([^:/]+)/)?.[1] ?? "";
 if (!["localhost", "127.0.0.1", "::1"].includes(host)) {
@@ -62,13 +63,11 @@ async function main() {
     data: { name: "ZZ Convert Check", email: EMAIL, roleId: "admin", status: "active", type: "staff", passwordHash: await hashPassword(password) },
   });
   made.userId = user.id;
-  const login = await fetch(`${API}/api/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: EMAIL, password }),
-  });
-  const token = (await login.json().catch(() => ({} as any)))?.token;
-  ok(!!token, "the throwaway user can sign in");
-  if (!token) return;
+  // The token is minted rather than fetched from /api/auth/login — see _suite-auth.ts. The old
+  // "the throwaway user can sign in" assertion went with it, deliberately: it was scaffolding, not
+  // the subject, and a suite that signs in 33 times trips the auth limiter and reports the 429 as
+  // a finding about quotations.
+  const token = await tokenForEmail(EMAIL);
 
   const co = await prisma.company.create({ data: { name: "ZZ Convert Check", country: "SA" } });
   made.companyId = co.id;

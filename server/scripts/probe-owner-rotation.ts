@@ -21,6 +21,7 @@
 import { prisma } from "../src/db.js";
 import { rotation, nextOwner, distributeUnowned } from "../src/assignment.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 const PW = "ProbeOnly!2026";
@@ -54,7 +55,7 @@ async function main() {
     prisma.user.create({ data: { name, email, roleId, status, type: "staff", passwordHash: hash } });
 
   const admin = await mk("ZZ Rot Admin", "zz-rot-admin@example.invalid", "super_admin");
-  const tok = (await call("POST", "/api/auth/login", undefined, { email: admin.email, password: PW })).body.token as string;
+  const tok = await tokenForEmail(admin.email);
   if (!tok) { console.log("could not sign in — is the API running?"); await prisma.$disconnect(); process.exitCode = 1; return; }
 
   // ── what is already there ──────────────────────────────────────────────────────────────────

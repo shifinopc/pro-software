@@ -18,11 +18,12 @@
  */
 import { prisma } from "../src/db.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 let bad = 0;
 const API = "http://localhost:4100", EMAIL = "c7@example.invalid";
 await prisma.user.deleteMany({ where: { email: EMAIL } });
 await prisma.user.create({ data: { name: "C7", email: EMAIL, roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash("C7!2026", 10) } });
-const tok = (await (await fetch(API + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: EMAIL, password: "C7!2026" }) })).json() as any).token;
+const tok = await tokenForEmail(EMAIL);
 const H = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
 
 // C7 — a parked run says what it is waiting for, and can be resumed on demand

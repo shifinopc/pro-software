@@ -14,6 +14,7 @@
  */
 import { prisma } from "../src/db.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 const EMAIL = "dg-probe@example.invalid";
@@ -38,7 +39,7 @@ async function main() {
   await sweep();
 
   await prisma.user.create({ data: { name: "DG Probe", email: EMAIL, roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await call("POST", "/api/auth/login", "", { email: EMAIL, password: PW })).body.token as string;
+  const tok = await tokenForEmail(EMAIL);
   if (!tok) { console.log("could not sign in — is the API running?"); await sweep(); process.exit(1); }
 
   const C = "ZQ";

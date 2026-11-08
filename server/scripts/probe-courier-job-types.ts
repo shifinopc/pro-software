@@ -19,6 +19,7 @@
 import { prisma } from "../src/db.js";
 import { KINDS } from "../src/packs.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const COUNTRY = "ZJ";
 const BARE = "QJ";
@@ -50,7 +51,7 @@ async function main() {
   await sweep();
 
   const staff = await prisma.user.create({ data: { name: "ZJ Courier Staff", email: "zj-courier@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await call("POST", "/api/auth/login", { email: staff.email, password: PW })).body.token as string;
+  const tok = await tokenForEmail(staff.email);
   if (!tok) { console.log("could not sign in - is the API running?"); process.exit(1); }
 
   console.log(`pack sections carry the list:            ${KINDS.map(k => k.key).includes("courierJobTypes") ? "YES" : "NO"}`);

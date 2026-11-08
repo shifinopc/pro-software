@@ -17,6 +17,7 @@ import { prisma } from "../src/db.js";
 import { salesReport } from "../src/salesreport.js";
 import { KINDS } from "../src/packs.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const COUNTRY = "ZZ";
 const BARE = "QQ"; // a country with nothing configured at all
@@ -52,7 +53,7 @@ async function main() {
   await sweep();
 
   const staff = await prisma.user.create({ data: { name: "ZZ List Staff", email: "zz-lists@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await call("POST", "/api/auth/login", { email: staff.email, password: PW })).body.token as string;
+  const tok = await tokenForEmail(staff.email);
   if (!tok) { console.log("could not sign in — is the API running?"); process.exit(1); }
 
   // ── the packs machinery knows about both ───────────────────────────────────────────────────

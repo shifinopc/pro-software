@@ -123,8 +123,48 @@ app.set("trust proxy", 1); // behind a reverse proxy in prod → correct client 
 app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HSTS. NOT quite JSON-only:
 // /files serves images the console embeds cross-origin, and overrides helmet's CORP for that reason.
 
+/**
+ * THE ONE CASE WHERE THE LOGIN THROTTLE IS WRONG: a check suite against a scratch database.
+ *
+ * 20 attempts per 15 minutes per IP is the right number for a login form and the wrong number for
+ * server/scripts, which holds 33 checks that sign in — each as its own user on purpose, because
+ * several are checking that work reaches the right role. Measured: a full run gave 71 pass / 25
+ * fail and every failure was a sign-in. `probe-suspend-lockout` reported "sign-in: ALLOWED (429)",
+ * a check reading a rate-limit refusal as a successful login, which is worse than failing.
+ *
+ * Most of those now mint their token in process instead (scripts/_suite-auth.ts), so this is
+ * headroom rather than the fix — but a ceiling that silently breaks the suite when somebody adds
+ * the twenty-first sign-in test is a trap worth removing.
+ *
+ * IT TAKES TWO INDEPENDENT CONDITIONS, so turning it on by accident takes two mistakes:
+ *
+ *   1. SUITE_NO_AUTH_LIMIT=1 must be set. Production does not set it; the CI workflow does, where
+ *      it is visible in the file rather than inferred.
+ *   2. DATABASE_URL must be on localhost AND named like a scratch database. Live names host `db`
+ *      and database `stimespro`, so it fails both halves; a local copy of live data is called
+ *      `stimespro_live`, which fails the name. The rule is anchored for the same reason the suite's
+ *      guards are — a plain /(scratch|ci|test)/ substring would have accepted "precision".
+ *
+ * And it says so on startup, because a disabled brute-force control should never be a thing you
+ * have to read the source to discover.
+ */
+const AUTH_LIMIT_OFF = (() => {
+  if (process.env.SUITE_NO_AUTH_LIMIT !== "1") return false;
+  const url = process.env.DATABASE_URL ?? "";
+  if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) return false;
+  const dbName = (url.split("/").pop() ?? "").split("?")[0];
+  // Kept here rather than imported, because production code should not depend on a dev tooling
+  // folder — and pinned to scripts/_scratch-db.ts by scripts/auth-limit-gate-check.ts, so the two
+  // cannot drift apart without the build failing.
+  return /(^|_)(scratch|ci|test)\d*$|scratch\d*$|_(ci|test)_/i.test(dbName);
+})();
+
 // Throttle auth endpoints to blunt brute-force (per IP).
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: "Too many attempts — try again later" } });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Too many attempts — try again later" },
+  skip: () => AUTH_LIMIT_OFF,
+});
 // Generous but bounded: a broken screen can fire several reports in a row, a bot should not.
 /**
  * A ceiling on everything, because only login, reset, invites and intake had one — every other route
@@ -8757,6 +8797,9 @@ process.on("uncaughtException", (err: any) => {
 
 app.listen(port, async () => {
   console.log(`STIMES PRO API (auth enabled) → http://localhost:${port}`);
+  // Loud on purpose. A brute-force control that is off should be visible in the first ten lines of
+  // the log, not discoverable by reading the source.
+  if (AUTH_LIMIT_OFF) console.warn("  ⚠ LOGIN RATE LIMIT DISABLED — SUITE_NO_AUTH_LIMIT=1 against a scratch database. Never set this anywhere real.");
   // BEFORE ANYTHING DATES A RECORD. `today()` answers from the firm's own zone, and it has to be
   // told which one before the first job or request uses it — otherwise the boot tick runs in UTC and
   // dates three hours of the day wrong. Re-primed whenever Settings → General is saved.

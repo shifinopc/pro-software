@@ -21,6 +21,7 @@
 import { prisma } from "../src/db.js";
 import { KINDS } from "../src/packs.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const C = "ZL";
 const PW = "ProbeOnly!2026";
@@ -56,7 +57,7 @@ async function main() {
   await sweep();
 
   const staff = await prisma.user.create({ data: { name: "ZL Ladder Staff", email: EMAIL, roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await call("POST", "/api/auth/login", { email: EMAIL, password: PW })).body.token as string;
+  const tok = await tokenForEmail(EMAIL);
   if (!tok) { console.log("could not sign in - is the API running?"); process.exit(1); }
 
   const kinds = KINDS.map(k => k.key);

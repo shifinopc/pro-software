@@ -18,6 +18,7 @@
 import { prisma } from "../src/db.js";
 import bcrypt from "bcryptjs";
 import { stepsMissingRole } from "../src/workflow-validate.js";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 
@@ -47,9 +48,8 @@ async function main() {
   try {
     await sweep();
     await prisma.user.create({ data: { name: "ZZ WF", email: "zz-wf@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash("zz-Throwaway-1!", 10) } });
-    const lj: any = await (await fetch(`${API}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "zz-wf@example.invalid", password: "zz-Throwaway-1!" }) })).json();
-    if (!lj.token) { console.log("login failed — is the API up?"); return; }
-    const H = { "Content-Type": "application/json", Authorization: "Bearer " + lj.token };
+    const tok = await tokenForEmail("zz-wf@example.invalid");
+    const H = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
 
     // ── only the steps a person works count ───────────────────────────────────────────────────
     const missing = stepsMissingRole(graph([null, null]));

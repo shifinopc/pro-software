@@ -36,27 +36,17 @@ import { spawnSync } from "node:child_process";
 import bcrypt from "bcryptjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isScratchDb, dbNameOf, refusal } from "./_scratch-db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const url = process.env.DATABASE_URL ?? "";
 
-// ── the guard ────────────────────────────────────────────────────────────────────────────────
-if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) {
-  console.error("refusing: DATABASE_URL is not on localhost. This rewrites configuration.");
+// ── the guard ── one rule, in _scratch-db.ts, shared with suite-run and _suite-auth ──────────
+if (!isScratchDb(url)) {
+  console.error(refusal(url, "This wipes and rewrites document types, workflow templates and government centers."));
   process.exit(1);
 }
-const dbName = (url.split("/").pop() ?? "").split("?")[0];
-// Anchored, same rule as suite-run.ts. A plain `/(scratch|ci|test)/` substring match would have
-// accepted a database named "precision" or "practice", and a guard that errs towards permitting is
-// not a guard.
-if (!/(^|_)(scratch|ci|test)$|scratch$|_(ci|test)_/i.test(dbName)) {
-  console.error(
-    `refusing: "${dbName}" does not look like a scratch database.\n` +
-    `  This wipes and rewrites document types, workflow templates and government centers.\n` +
-    `  Name it so it cannot be mistaken for anything else — e.g. stimespro_ciscratch.`
-  );
-  process.exit(1);
-}
+const dbName = dbNameOf(url);
 
 const prisma = new PrismaClient();
 // One command string rather than argv + shell:true — Node 22 deprecates that combination
@@ -79,6 +69,20 @@ async function main() {
   // 2. the country pack. --adopt links what seed-prod already created instead of making a second
   //    copy of every document type under a slightly different name.
   run("country pack", ["tsx", "scripts/install-country-pack.ts", "pack-sa-2026.11.json", "--apply", "--adopt"]);
+
+  // 2b. THE RENEWAL WORKFLOWS, which the pack does not carry and several checks require BY NAME.
+  //
+  // Not a guess: the checks say so themselves. A run without these produced "No workflow template
+  // named \"Iqama Renewal\"", "no template \"Commercial Registration Renewal\"", and three
+  // separate "run add-employee-renewals.ts first" messages. These scripts build those templates
+  // from the specifications in docs/planned-services.js, so they are reference configuration in
+  // exactly the sense this seed exists to provide — they are setup, not tests, which is why they
+  // sit in MIGRATIONS and are invoked here rather than run as part of the suite.
+  //
+  // After the pack, because they attach to document types it installs.
+  run("employee renewals", ["tsx", "scripts/add-employee-renewals.ts"]);
+  run("CR renewal", ["tsx", "scripts/add-cr-renewal.ts"]);
+  run("MISA renewal", ["tsx", "scripts/add-misa-renewal.ts"]);
 
   // 3. somebody in every role. Passwords are a fixed throwaway string: these accounts exist only
   //    inside a database whose name this script insisted on, and the API probes need to sign in as

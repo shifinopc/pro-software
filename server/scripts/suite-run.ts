@@ -35,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { EXPECTED, QUARANTINE, TOOLS, MIGRATIONS, MODULES, API_GROUP } from "./suite-manifest.js";
 import { sweep } from "./suite-sweep.js";
+import { isScratchDb, dbNameOf, refusal } from "./_scratch-db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const serverDir = path.join(here, "..");
@@ -44,15 +45,11 @@ const group = (arg("--group") ?? "all") as "db" | "api" | "all";
 const LIST_ONLY = process.argv.includes("--list");
 
 const url = process.env.DATABASE_URL ?? "";
-const dbName = (url.split("/").pop() ?? "").split("?")[0];
-if (!LIST_ONLY) {
-  if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) { console.error("refusing: DATABASE_URL is not on localhost"); process.exit(1); }
-  // Anchored, not a substring match. `/(scratch|ci|test)/` would have accepted a database called
-  // "precision" or "practice" — and a guard that errs towards permitting is not a guard.
-  if (!/(^|_)(scratch|ci|test)$|scratch$|_(ci|test)_/i.test(dbName)) {
-    console.error(`refusing: "${dbName}" does not look like a scratch database — these scripts write, and several do not clean up.\n  Name it so it cannot be mistaken for anything else, e.g. stimespro_ciscratch.`);
-    process.exit(1);
-  }
+const dbName = dbNameOf(url);
+// One rule, in _scratch-db.ts, shared with suite-seed and _suite-auth.
+if (!LIST_ONLY && !isScratchDb(url)) {
+  console.error(refusal(url, "These scripts write, and several do not clean up after themselves."));
+  process.exit(1);
 }
 
 // The suite's own files are not part of the suite.

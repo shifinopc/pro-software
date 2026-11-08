@@ -13,6 +13,7 @@
 import { prisma } from "../src/db.js";
 import { hashPassword } from "../src/auth.js";
 import crypto from "node:crypto";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const host = String(process.env.DATABASE_URL ?? "").match(/@([^:/]+)/)?.[1] ?? "";
 if (!["localhost", "127.0.0.1", "::1"].includes(host)) {
@@ -52,10 +53,7 @@ try {
     create: { email: EMAIL, name: "ZZ Billing Check", passwordHash: await hashPassword(pw), roleId: "admin", status: "active", type: "staff" },
   });
   made.userId = user.id;
-  const token = (await (await fetch(`${API}/api/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: EMAIL, password: pw }),
-  })).json() as any).token;
+  const token = await tokenForEmail(EMAIL);
   ok(!!token, "signed in as a throwaway account");
   if (!token) throw new Error("no token");
 

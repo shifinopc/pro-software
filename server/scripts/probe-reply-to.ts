@@ -21,6 +21,7 @@ import { prisma } from "../src/db.js";
 import bcrypt from "bcryptjs";
 import { getEmailConfig } from "../src/mailer.js";
 import { renderEmail, emailContext } from "../src/emailshell.js";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 
@@ -35,9 +36,8 @@ async function main() {
   await prisma.user.create({ data: { name: "ZZ Probe Admin", email: "zz-probe-admin@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash("zz-Throwaway-1!", 10) } });
 
   try {
-    const lj: any = await (await fetch(API + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "zz-probe-admin@example.invalid", password: "zz-Throwaway-1!" }) })).json();
-    if (!lj.token) { console.log("login failed — is the API up?"); return; }
-    const H = { "Content-Type": "application/json", Authorization: "Bearer " + lj.token };
+    const tok = await tokenForEmail("zz-probe-admin@example.invalid");
+    const H = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
     const cur: any = await (await fetch(API + "/api/email-config", { headers: H })).json();
     // Sending stays OFF for the whole run so nothing can reach a real inbox.
     const base = { host: cur.host, port: cur.port, secure: cur.secure, user: cur.user, from: cur.from, enabled: false };

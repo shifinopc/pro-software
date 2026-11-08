@@ -85,10 +85,10 @@ jobs:
         working-directory: server
         run: |
           set -e
-          for f in check-date-fields client-ip-check first-paint-check group-counts-check \
-                   imap-check island-minify-check lead-details-fields-check node-types-check \
-                   number-format-pool-check phone-split-check render-scope-check signature-check \
-                   site-lookup-check; do
+          for f in auth-limit-gate-check check-date-fields client-ip-check first-paint-check \
+                   group-counts-check imap-check island-minify-check lead-details-fields-check \
+                   node-types-check number-format-pool-check phone-split-check render-scope-check \
+                   signature-check site-lookup-check; do
             echo "── $f"
             npx tsx "scripts/$f.ts"
           done
@@ -123,6 +123,15 @@ jobs:
       # this container — the point is that the code path is exercised, not that they are secret.
       JWT_SECRET: ci-only-not-a-real-secret-value-0123456789
       CRED_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      # Lifts the 20-sign-ins-per-15-minutes cap on /api/auth/login, for this job only. It takes
+      # BOTH this flag and a localhost DATABASE_URL named like a scratch database, so turning it on
+      # anywhere real needs two independent mistakes — live names host `db` and database
+      # `stimespro` and fails both halves. scripts/auth-limit-gate-check.ts proves that against the
+      # URLs that actually exist, and the API warns loudly on startup whenever it is off.
+      #
+      # Most checks now mint their token in process (scripts/_suite-auth.ts), so this is headroom
+      # rather than the fix: it stops the twenty-first sign-in test silently breaking the suite.
+      SUITE_NO_AUTH_LIMIT: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

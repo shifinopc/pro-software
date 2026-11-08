@@ -15,6 +15,7 @@
 import { prisma } from "../src/db.js";
 import { can, customRoleLabels } from "../src/permissions.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const PW = "ProbeOnly!2026";
 const API = "http://localhost:4100";
@@ -36,7 +37,7 @@ async function main() {
   await sweep();
 
   await prisma.user.create({ data: { name: "ZI Integ", email: EMAIL, roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await call("POST", "/api/auth/login", { email: EMAIL, password: PW })).body.token as string;
+  const tok = await tokenForEmail(EMAIL);
   if (!tok) { console.log("could not sign in - is the API running?"); process.exit(1); }
 
   // ── 1. the two new roles reach the permission engine ───────────────────────────────────────

@@ -17,6 +17,7 @@ import { prisma } from "../src/db.js";
 import { applyStageFollowUp } from "../src/pipeline.js";
 import { logInteraction, openFollowUps } from "../src/interactions.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 const PW = "ProbeOnly!2026";
@@ -49,7 +50,7 @@ async function main() {
   const hash = await bcrypt.hash(PW, 10);
   const admin = await prisma.user.create({ data: { name: "ZZ Stage Admin", email: "zz-stage-admin@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: hash } });
   const owner = await prisma.user.create({ data: { name: "ZZ Deal Owner", email: "zz-stage-owner@example.invalid", roleId: "sales", status: "active", type: "staff", passwordHash: hash } });
-  const tok = (await call("POST", "/api/auth/login", undefined, { email: admin.email, password: PW })).body.token as string;
+  const tok = await tokenForEmail(admin.email);
   if (!tok) { console.log("could not sign in — is the API running?"); await prisma.$disconnect(); process.exitCode = 1; return; }
 
   // ── stages with and without rules, through the real route ──────────────────────────────────

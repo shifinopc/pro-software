@@ -16,6 +16,7 @@ import { prisma } from "../src/db.js";
 import { validateStages, boardFor, statusOf, withMoney } from "../src/pipeline.js";
 import { startDeliveryForQuotation } from "../src/delivery.js";
 import bcrypt from "bcryptjs";
+import { tokenForEmail } from "./_suite-auth.js";
 
 const API = "http://localhost:4100";
 const call = (method: string, p: string, body?: any, tok?: string) =>
@@ -35,7 +36,7 @@ async function main() {
   const fail = (m: string) => { console.log("  ✗ " + m); bad++; };
 
   const staff = await prisma.user.create({ data: { name: "ZZ Pipe Staff", email: "zz-pipe@example.invalid", roleId: "super_admin", status: "active", type: "staff", passwordHash: await bcrypt.hash(PW, 10) } });
-  const tok = (await post("/api/auth/login", { email: staff.email, password: PW })).body.token as string;
+  const tok = await tokenForEmail(staff.email);
   if (!tok) { console.log("could not sign in — is the API running?"); process.exit(1); }
 
   // ── the validator refuses a pipeline that cannot close ─────────────────────────────────────
