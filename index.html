@@ -8757,6 +8757,17 @@
             <sc-if value="{{ setTabUsers }}" hint-placeholder-val="{{ false }}">
               <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px 10px;"><div><span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Team Members</span><div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ setUsersActive }} active · staff sign in to the console, portal users to their company</div></div><button style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;" onClick="{{ openCuNew }}">+ Create user</button></div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:0 15px 11px;">
+                  <div style="display:flex; gap:3px; background:#F8F6FC; border:1px solid #EFEAF7; border-radius:99px; padding:3px;">
+                    <sc-for list="{{ usrTabs }}" as="ut" hint-placeholder-count="3">
+                      <button style="border:1px solid {{ ut.bd }}; background:{{ ut.bg }}; color:{{ ut.color }}; font-family:inherit; font-size:11px; font-weight:600; padding:5px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" onClick="{{ ut.select }}">{{ ut.label }} <span style="font-variant-numeric:tabular-nums; opacity:.65;">{{ ut.count }}</span></button>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:9px; background:#F8F6FC; border:1px solid #EFEAF7; border-radius:10px; padding:7px 10px; width:240px; flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><input value="{{ usrQ }}" onInput="{{ setUsrQ }}" placeholder="Name, email or role…" style="flex:1; border:none; outline:none; font-family:inherit; font-size:11px; background:transparent; min-width:0; color:#1A1523;"></div>
+                </div>
+                <sc-if value="{{ usrEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:26px 15px 30px; text-align:center; font-size:11px; color:#8C8899;">{{ usrEmptyText }}</div>
+                </sc-if>
                 <div style="overflow-x:auto;"><div style="min-width:820px;">
                   <div style="display:grid; grid-template-columns:1.7fr 1fr 84px 100px 110px 130px; gap:10px; padding:8px 15px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>User</span><span>Role</span><span>Type</span><span>Status</span><span>Last active</span><span></span></div>
                   <sc-for list="{{ setUsers }}" as="u" hint-placeholder-count="7">
@@ -34315,12 +34326,34 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * is a fact about the firm, and making it count the ten in front of you would be a quieter
      * kind of wrong.
      */
+    // WHO YOU ARE LOOKING FOR, out of twenty-four across three pages. Staff and portal users are
+    // two different populations sharing one table — a PRO officer and a client's own login have
+    // nothing to do with each other — so the tab is the first cut and the box is the second.
+    //
+    // Filtered here, not fetched: the list is already in memory, and a round trip to narrow
+    // twenty-four rows would be slower than the typing.
+    const _usrTab9 = this.state.usrTab || 'All';
+    const _usrQ9 = (this.state.usrQ || '').trim().toLowerCase();
+    const _usrShown9 = setUsersAll.filter(u9 =>
+      (_usrTab9 === 'All' || u9.type === _usrTab9)
+      && (!_usrQ9 || [u9.name, u9.email, u9.role].join(' ').toLowerCase().includes(_usrQ9)));
+    // Counts are of the WHOLE firm, not of what the search left — a tab that renumbered itself as
+    // you typed would be answering a question nobody asked.
+    const usrTabs = ['All', 'Staff', 'Portal'].map(k9 => ({
+      label: k9 === 'Portal' ? 'Client portal' : k9,
+      count: String(k9 === 'All' ? setUsersAll.length : setUsersAll.filter(u9 => u9.type === k9).length),
+      select: () => this.setState({ usrTab: k9, usrPage: 1 }),
+      color: _usrTab9 === k9 ? '#7C00FF' : '#8C8899',
+      bg: _usrTab9 === k9 ? '#fff' : 'transparent',
+      bd: _usrTab9 === k9 ? '#D9C6F5' : 'transparent',
+    }));
     const USR_PER9 = 10;
-    const _usrPages9 = Math.max(1, Math.ceil(setUsersAll.length / USR_PER9));
-    // Clamped: deleting the last user on page three has to land somewhere that exists.
+    const _usrPages9 = Math.max(1, Math.ceil(_usrShown9.length / USR_PER9));
+    // Clamped: deleting the last user on page three has to land somewhere that exists. Narrowing
+    // the list does the same thing, which is why both the tab and the box reset the page.
     const _usrPage9 = Math.min(Math.max(1, this.state.usrPage || 1), _usrPages9);
     const _usrFrom9 = (_usrPage9 - 1) * USR_PER9;
-    const _usrPaged9 = setUsersAll.slice(_usrFrom9, _usrFrom9 + USR_PER9);
+    const _usrPaged9 = _usrShown9.slice(_usrFrom9, _usrFrom9 + USR_PER9);
     // Create user modal
     const cuRole = this.state.cuRole || 'PRO Officer';
     const cuNewApi = {
@@ -35642,10 +35675,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       }),
       setTabAudit: setTab === 'Audit', setTabBilling: setTab === 'Billing', setTabAutomation: setTab === 'Automation',
       ...genOrgApi, genSave, setUsers: _usrPaged9, setUsersActive, setRoles,
-      usrPageShown: setUsersAll.length > 0,
+      usrTabs,
+      usrQ: this.state.usrQ || '',
+      setUsrQ: (e) => this.setState({ usrQ: e.target.value, usrPage: 1 }),
+      // An empty table with only its headings reads as broken. Say which of the two filters emptied
+      // it, because the way out is different: clear the box, or you are on the wrong tab.
+      usrEmpty: setUsersAll.length > 0 && _usrShown9.length === 0,
+      usrEmptyText: _usrQ9
+        ? 'Nobody matches "' + (this.state.usrQ || '').trim() + '"' + (_usrTab9 === 'All' ? '' : ' in ' + (_usrTab9 === 'Portal' ? 'client portal' : 'staff') + ' users')
+        : 'No ' + (_usrTab9 === 'Portal' ? 'client portal' : 'staff') + ' users yet',
+      usrPageShown: _usrShown9.length > 0,
       usrPagerShown: _usrPages9 > 1,
-      usrPageLabel: setUsersAll.length
-        ? (_usrFrom9 + 1) + '\u2013' + Math.min(setUsersAll.length, _usrFrom9 + USR_PER9) + ' of ' + setUsersAll.length
+      usrPageLabel: _usrShown9.length
+        ? (_usrFrom9 + 1) + '\u2013' + Math.min(_usrShown9.length, _usrFrom9 + USR_PER9) + ' of ' + _usrShown9.length
         : '',
       usrPrevOp: _usrPage9 > 1 ? '1' : '.35',
       usrNextOp: _usrPage9 < _usrPages9 ? '1' : '.35',
