@@ -27,6 +27,7 @@ export const EXPECTED: string[] = [
   "check-date-fields",
   "client-ip-check",
   "company-merge-check",
+  "credential-scope-check",
   "disbursement-billing-check",
   "first-paint-check",
   "group-counts-check",

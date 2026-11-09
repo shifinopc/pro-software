@@ -6248,9 +6248,60 @@ async function filePortalLicence(opts: { companyId: string; govCenter: string; e
 }
 
 // Encrypted credential vault (staff): list without secret, dedicated reveal, encrypt on create
-app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), async (_req, res) => {
+/**
+ * WHO MAY FILE A CLIENT'S PORTAL LOGIN — which is not the same question as who may read one.
+ *
+ * The vault was admin-only on all five routes, and the reason written in permissions.ts is entirely
+ * about READING: a PRO Officer who could list it could reveal any client's password in plaintext.
+ * Nothing in that argument says a PRO officer may not record the Qiwa login for a client they are
+ * already working on — and they are the people who do that work, so the rule blocked the job rather
+ * than the risk. Live had 0 credentials filed, which is what that looks like from the outside.
+ *
+ * So the two powers are now separate. REVEAL and DELETE stay admin-only; add, edit and list open to
+ * PRO officers. The list already strips `password` before it answers, so this hands over labels,
+ * portals and usernames — never a secret.
+ *
+ * SCOPE: NOT SOMEONE ELSE'S CLIENT. `roleOwners.pro_officer` names the officer a client belongs to
+ * when the firm has said so. Refusing everything it does not name would have been the stricter rule
+ * and a useless one: 4 of 189 clients name a PRO officer, so it would have blocked the other 185 and
+ * reproduced the original problem with a politer message. A client that names a DIFFERENT officer is
+ * refused; one that names nobody is open. That tightens by itself as client teams get filled in,
+ * with no second change here.
+ *
+ * roleOwners is a preference elsewhere — a named person who has left is ignored so work cannot
+ * stall. It is read strictly here, because the cost of being wrong is reversed: a stalled task is a
+ * nuisance, and the wrong officer in another client's vault is not.
+ */
+/** Whether this caller may touch THIS client's vault. Admins: always. PRO officers: see above. */
+async function canTouchCompany(req: any, companyId: string | null | undefined): Promise<string | null> {
+  const a = (req as any).auth;
+  const eff = await resolveEffectiveRole(a?.role);
+  if (eff === "super_admin" || eff === "admin") return null;
+  if (eff !== "pro_officer") return "Write access requires admin role";
+  if (!companyId) return "A credential has to belong to a client";
+  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { roleOwners: true, name: true } });
+  if (!co) return "No such client";
+  const owner = ((co.roleOwners ?? {}) as any)?.pro_officer ?? null;
+  if (!owner || owner === a?.sub) return null;
+  return `${co.name} is another PRO officer's client — ask an admin if that is wrong`;
+}
+
+app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), async (req, res) => {
   const creds = await prisma.siteCredential.findMany({ take: 500 }); // hard cap
-  res.json(creds.map(({ password, ...rest }: any) => rest));
+  const a = (req as any).auth;
+  const eff = await resolveEffectiveRole(a?.role);
+  let rows = creds;
+  if (eff !== "super_admin" && eff !== "admin") {
+    // Same rule as the writes, applied to what they can SEE: a client that names another officer is
+    // not theirs to look at either. Done with one query rather than one per row.
+    const cos = await prisma.company.findMany({ select: { id: true, roleOwners: true } });
+    const mine = new Set(cos.filter(c => {
+      const owner = ((c.roleOwners ?? {}) as any)?.pro_officer ?? null;
+      return !owner || owner === a?.sub;
+    }).map(c => c.id));
+    rows = creds.filter(c => c.companyId && mine.has(c.companyId));
+  }
+  res.json(rows.map(({ password, ...rest }: any) => rest));
 });
 app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireHuman, async (req, res) => {
   const a = (req as any).auth;
@@ -6264,7 +6315,9 @@ async function coName(companyId?: string | null): Promise<string> {
   if (!companyId) return "";
   try { const c = await prisma.company.findUnique({ where: { id: companyId } }); return c?.name ?? ""; } catch { return ""; }
 }
-app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+// requireWriteRole is NOT used on this one or the edit below: it is admin-only, and canTouchCompany
+// is what gates them now. Delete and reveal keep it.
+app.post("/api/credentials", requireAuth, requireStaff, async (req, res) => {
   try {
     // NAMED, not spread. The body used to go into Prisma whole, so anything the model happened to
     // have a column for could be set by whoever called this — and licenceExpiry, which is not a
@@ -6275,6 +6328,8 @@ app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async 
     if (!companyId) return res.status(400).json({ error: "companyId is required" });
     if (!await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } }))
       return res.status(400).json({ error: "No such client" });
+    const refusedNew = await canTouchCompany(req, companyId);
+    if (refusedNew) return res.status(403).json({ error: refusedNew });
     const created = await prisma.siteCredential.create({ data: {
       companyId,
       label: String(b.label ?? "").trim(),
@@ -6299,8 +6354,14 @@ app.post("/api/credentials", requireAuth, requireStaff, requireWriteRole, async 
     res.status(400).json({ error: e.message });
   }
 });
-app.put("/api/credentials/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.put("/api/credentials/:id", requireAuth, requireStaff, async (req, res) => {
   try {
+    // The client is read off the ROW, not the body — otherwise an edit could move a credential to a
+    // client the caller may touch, and the check would be asking about the wrong one.
+    const existing = await prisma.siteCredential.findUnique({ where: { id: req.params.id }, select: { companyId: true } });
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    const refusedEdit = await canTouchCompany(req, existing.companyId);
+    if (refusedEdit) return res.status(403).json({ error: refusedEdit });
     // A credential does not change hands. companyId is deliberately absent from this list: a single
     // PUT used to move one client's government login onto another client, and the audit line that
     // followed recorded the NEW owner, so the trail did not show that it had happened.
