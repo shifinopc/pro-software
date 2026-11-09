@@ -3105,7 +3105,7 @@
                       </div>
                       <div style="display:flex; gap:8px; margin-top:11px;">
                         <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">USERNAME</div><div style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.user }}</div></div><span onClick="{{ c.copyUser }}" title="Copy" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">Copy</span></div>
-                        <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">PASSWORD</div><div style="font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;">{{ c.passShown }}</div></div><span onClick="{{ c.reveal }}" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">{{ c.revealLabel }}</span></div>
+                        <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">PASSWORD</div><div style="font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;">{{ c.passShown }}</div></div><sc-if value="{{ cdCanManageCreds }}" hint-placeholder-val="{{ true }}"><span onClick="{{ c.reveal }}" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">{{ c.revealLabel }}</span></sc-if></div>
                       </div>
                       <div style="display:flex; gap:7px; margin-top:11px;">
                         <button onClick="{{ c.openSite }}" style="flex:1; background:#F5EEFF; color:#7C00FF; border:none; font-size:10px; font-weight:700; padding:8px 0; border-radius:9px; cursor:pointer;" style-hover="background:#EBDBFF;">{{ c.openLabel }} ↗</button>
@@ -26753,7 +26753,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         };
       });
       clDetailApi.cdCredsEmpty = _cdCredRows.length === 0;
-      clDetailApi.cdCanManageCreds = canWrite;
+      // REVEAL AND DELETE, NOT ADD AND EDIT — the vault's two halves have different gates now.
+      //
+      // `canWrite` is the permission grid's answer for the Clients module, and PRO Officer holds
+      // Edit there, so this used to show both controls to an officer the server then refused. The
+      // vault is deliberately OUTSIDE that grid (see permissions.ts): a PRO officer may file a
+      // client's portal login but may not read one back or destroy one, so neither control is
+      // theirs however the grid is ticked.
+      //
+      // Unauthenticated is the design preview, and a null role is a `me` that has not landed yet —
+      // showing a control a moment early beats blanking every control on every load, which is the
+      // same trade `_mayDo` above makes.
+      clDetailApi.cdCanManageCreds = !_authed || _meRole === null || _meRole === 'admin' || _meRole === 'super_admin';
       // Which authorities exist, for tagging a login with the portal it opens. Declared above every
       // use: a const read before its own line throws and blanks the console.
       const _CC_NO_PORTAL = 'Not a government portal';
