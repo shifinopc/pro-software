@@ -166,6 +166,7 @@ export const TOOLS: string[] = [
   // and its super_admin is a real person whose password hash cannot be recovered once overwritten.
   "dev-user",
   "import-employees",
+  "try-business-setup",
   "try-self-approval",
   "install-country-pack",
   "install-pack-kinds",
