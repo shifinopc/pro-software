@@ -1170,6 +1170,13 @@ model WorkflowTask {
   captures            Json? // [{ var, label, type, options? }] — variables the completer must set
   outcome             String? // approval: approve|reject ; task with branches: chosen key
   completedBy         String?
+  /// WHO, as an id rather than a name. `completedBy` is a display name, and the segregation rule
+  /// that stops the doer approving their own gate has to compare people, not strings: rename a
+  /// member of staff — fixing a typo is enough — and a name comparison silently stops matching,
+  /// which turns the control off in the one direction that matters. Null on rows written before
+  /// this column existed, and on steps completed by a script rather than a person, so the guard
+  /// falls back to the name for those.
+  completedById       String?
   completedAt         String?
   createdAt           String? // when the step became active — for SLA elapsed calc
   // SLA escalation bookkeeping. `slaState` is the last state the escalator ACTED on, so it only fires

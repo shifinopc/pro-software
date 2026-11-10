@@ -364,6 +364,36 @@ function nextTargets(g: Graph, nodeId: string, key?: string | null, blankFallbac
   return (uncond.length ? uncond : edges).map(e => e.to);
 }
 
+/**
+ * THE WORK A GATE IS CERTIFYING — every task node upstream of an approval, back to the previous one.
+ *
+ * Walks against the edges and stops at any other approval node, because those steps were already
+ * certified by THEIR gate and are not this one's responsibility. Taking only the immediate
+ * predecessor would be easier and wrong: a stage is usually several task nodes chained, so someone
+ * who did the first four of five steps could still approve the gate that covers them.
+ *
+ * The frontier is deduplicated, so a graph that loops back on itself (every rework path in the
+ * business-setup flow does) terminates instead of walking forever.
+ */
+function workCertifiedBy(g: Graph, approvalNodeId: string): string[] {
+  const seen = new Set<string>([approvalNodeId]);
+  const work: string[] = [];
+  let frontier = g.edges.filter(e => e.to === approvalNodeId).map(e => e.from);
+  while (frontier.length) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const n = getNode(g, id);
+      if (!n || n.type === "approval") continue;
+      if (n.type === "task") work.push(id);
+      for (const e of g.edges) if (e.to === id) next.push(e.from);
+    }
+    frontier = next;
+  }
+  return work;
+}
+
 // Evaluate a decision node's branches against the instance variables → returns a branch key ("else" if none match).
 function evalDecision(node: Node, vars: Record<string, any>): string {
   const branches: any[] = Array.isArray(node.config?.branches) ? node.config.branches : [];
@@ -1509,7 +1539,7 @@ export async function resumeDueDelays(): Promise<{ waiting: number; resumed: num
   return out;
 }
 
-export async function completeTask(taskId: string, opts: { actor?: string; outcome?: string; checklist?: any; variables?: any }) {
+export async function completeTask(taskId: string, opts: { actor?: string; actorId?: string; outcome?: string; checklist?: any; variables?: any }) {
   // Sanitised ONCE, here, and `opts` rebound to the clean object — a dozen places downstream read
   // `opts.variables`, and filtering at each of them is a rule that holds only until somebody adds
   // the thirteenth.
@@ -1534,6 +1564,36 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   {
     const v = await evalVerifyRule(task);
     if (v && !v.ok) throw new Error(v.why);
+  }
+
+  // THE PERSON WHO DOES THE WORK NEVER APPROVES THEIR OWN GATE.
+  //
+  // mayActOnTask already guards WHO may touch a step — the right role, the right team, and a lead
+  // may cover their own discipline. What it cannot see is that the person reaching for Approve is
+  // the same one who completed the steps that approval certifies, and that is the entire content of
+  // the rule. Without this, every gate in a workflow is a signature rather than a control.
+  //
+  // No override, including for admins, and the refusal is deliberate: a run that stalls because the
+  // only available approver did the work is the control working. Reassign the gate; do not wave it
+  // through. (Same stance as the document gate above — a check any one officer can bypass is not a
+  // check.) In a small team this WILL stall runs, which is the cost of the rule, not a defect.
+  //
+  // Identified by id where there is one, falling back to the display name only for rows written
+  // before completedById existed. There is no exemption for scripts either: a probe that walks a
+  // run containing a gate has to complete the work and the approval as two different actors, the
+  // same as the people it is standing in for, and the refusal below says so plainly.
+  if (task.nodeType === "approval") {
+    const certifies = workCertifiedBy(g, task.nodeId);
+    const who: any[] = [];
+    if (opts.actorId) who.push({ completedById: opts.actorId });
+    if (opts.actor) who.push({ completedById: null, completedBy: opts.actor });
+    if (certifies.length && who.length) {
+      const own = await prisma.workflowTask.findFirst({
+        where: { instanceId: inst.id, nodeId: { in: certifies }, status: { not: "active" }, OR: who },
+        select: { title: true },
+      });
+      if (own) throw new Error(`You completed "${own.title}", so this approval has to come from somebody else.`);
+    }
   }
 
   // Reject nonsense dates at the boundary rather than letting them through.
@@ -1947,7 +2007,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; outco
   const finalStatus = task.nodeType === "approval" ? (opts.outcome === "reject" ? "rejected" : "approved") : "done";
   await prisma.workflowTask.update({
     where: { id: taskId },
-    data: { status: finalStatus, outcome: opts.outcome ?? null, completedBy: opts.actor ?? null, completedAt: nowISO(),
+    data: { status: finalStatus, outcome: opts.outcome ?? null, completedBy: opts.actor ?? null, completedById: opts.actorId ?? null, completedAt: nowISO(),
              checklist: Array.isArray(opts.checklist) ? opts.checklist : task.checklist as any },
   });
   // The reviewer's note is the reason for the decision — the one thing an audit actually wants to
@@ -2793,7 +2853,9 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
         if (checklistState && typeof checklistState === "object") await prisma.workflowTask.update({ where: { id: task.id }, data: { checklistState: state } });
       }
     }
-    const inst = await completeTask(req.params.id, { actor: me?.name ?? a.sub, outcome, checklist, variables });
+    // actorId is what the segregation guard compares; actor stays the display name everything else
+    // already reads. Never let this call omit the id — that is the identity the control runs on.
+    const inst = await completeTask(req.params.id, { actor: me?.name ?? a.sub, actorId: a.sub, outcome, checklist, variables });
     await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${task.title} (${task.id})`, detail: outcome ?? undefined });
     res.json(inst);
   } catch (e: any) {
