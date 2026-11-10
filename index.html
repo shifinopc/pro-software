@@ -18342,11 +18342,37 @@ class Component extends DCLogic {
           // why, and anything they were typing is still on the screen to copy. The countdown is
           // started once — later 401s from the same dead session must not restart it.
           if (!this._expiredTimer) {
+            // WHICH token died. The countdown used to run to zero no matter what happened in the
+            // meantime, and signing in is something that happens in the meantime: the banner sends
+            // you to the sign-in screen, you sign in inside the twelve seconds, and the timer then
+            // deletes the token you just earned and bounces you back. The second attempt worked
+            // only because that bounce reloads the page and takes the timer with it — which is why
+            // it read as "the first login after a timeout never sticks".
+            //
+            // Compared on every tick rather than cancelled from the login path: it then also covers
+            // signing in from another tab, and a login path added later cannot forget to call it.
+            let dead9 = null;
+            try { dead9 = localStorage.getItem('stimespro:token'); } catch (e8) {}
+            this._expiredFor = dead9;
             this._expiredTimer = setInterval(() => {
+              let now9 = null;
+              try { now9 = localStorage.getItem('stimespro:token'); } catch (e8) {}
+              // A DIFFERENT token, not merely a missing one. Somebody signing in replaces it, and
+              // the countdown must stand down. The token going away instead means they are signed
+              // out — a logout in another tab — and then the countdown is exactly right to run on
+              // and put this screen on the sign-in page rather than leave it showing stale data.
+              if (now9 && now9 !== this._expiredFor) {
+                clearInterval(this._expiredTimer);
+                this._expiredTimer = null;
+                this._expiredFor = null;
+                this.setState({ authExpired: false, authExpiredIn: 0 });
+                return;
+              }
               const left9 = Math.max(0, 12 - Math.round((Date.now() - (this._expiredAt || Date.now())) / 1000));
               this.setState({ authExpiredIn: left9 });
               if (left9 <= 0) {
                 clearInterval(this._expiredTimer);
+                this._expiredTimer = null;
                 try { localStorage.removeItem('stimespro:token'); } catch (e8) {}
                 location.href = '/dashboard';
               }
