@@ -29,6 +29,7 @@ export const EXPECTED: string[] = [
   "company-merge-check",
   "credential-scope-check",
   "disbursement-billing-check",
+  "finance-guards-check",
   "first-paint-check",
   "group-counts-check",
   "imap-check",
@@ -158,6 +159,9 @@ export const QUARANTINE: { name: string; why: string }[] = [
 /** Not checks — they take arguments and do work. They print usage and exit non-zero forever. */
 export const TOOLS: string[] = [
   "add-staff-user",
+  // Mints a throwaway staff login for local testing, because the local database is a copy of live
+  // and its super_admin is a real person whose password hash cannot be recovered once overwritten.
+  "dev-user",
   "import-employees",
   "install-country-pack",
   "install-pack-kinds",

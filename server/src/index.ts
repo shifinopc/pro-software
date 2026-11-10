@@ -264,8 +264,12 @@ app.use(cors((req, cb) => {
   // fetched. Cross-origin JavaScript sees only a handful of response headers unless the server says
   // otherwise, so the proposal arrived as "proposal.docx" instead of "QT-344-Acme Trading.docx" —
   // the server had named it correctly and the browser simply would not hand the name over.
+  // maxAge: the console is on a different origin from the API, so every call with an Authorization
+  // header is preceded by its own OPTIONS round trip — seven of them before the dashboard's first
+  // data arrived, because nothing told the browser it could reuse the answer. A day is the most
+  // Firefox will keep; Chrome caps itself at two hours regardless.
   if (!origin || sameOrigin || allowedOrigins.includes(origin))
-    return cb(null, { origin: true, credentials: true, exposedHeaders: ["Content-Disposition", "X-Proposal-Format"] });
+    return cb(null, { origin: true, credentials: true, maxAge: 86400, exposedHeaders: ["Content-Disposition", "X-Proposal-Format"] });
   cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
 /**
@@ -5315,6 +5319,29 @@ app.post("/api/sla/escalate", requireAuth, requireStaff, requireWriteRole, async
 // That is what makes the draft stage safe to edit: nothing has been sent, nothing is owed, and the
 // client has not been told about it. Approval is the single moment the bill becomes real, so it is
 // also the only place the "you have been invoiced" email goes out.
+/**
+ * The seller details a VAT invoice must carry, and which of them are missing.
+ *
+ * Read from the settings row rather than trusted from the browser. The console has had these fields
+ * in Settings → General all along, but on live the `org` row did not exist at all, so every invoice
+ * approved so far printed no seller VAT number and no ZATCA QR — and the gap was invisible unless
+ * somebody opened Settings. The print band accepts `orgName` where `legalName` is unset, so either
+ * satisfies the name.
+ *
+ * Both spellings of each key are accepted because the codebase already disagrees with itself:
+ * proposal.ts reads `org.vat`/`org.cr` while the console writes `vatNumber`/`crNumber`. A gate that
+ * knew only one spelling could be satisfied without satisfying the document it is protecting.
+ */
+async function missingTaxIdentity(): Promise<string[]> {
+  const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }).catch(() => null))?.value as any) ?? {};
+  const has = (...keys: string[]) => keys.some((k) => String(org[k] ?? "").trim() !== "");
+  const missing: string[] = [];
+  if (!has("legalName", "orgName")) missing.push("legal name");
+  if (!has("vatNumber", "vat")) missing.push("VAT registration number");
+  if (!has("crNumber", "cr")) missing.push("CR number");
+  return missing;
+}
+
 app.post("/api/invoices/:id/approve", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const inv = await prisma.invoice.findUnique({ where: { id: req.params.id } });
@@ -5325,6 +5352,23 @@ app.post("/api/invoices/:id/approve", requireAuth, requireStaff, requireWriteRol
     return res.status(400).json({ error: "Set a client before approving this invoice" });
   if (!(Number(inv.amount) > 0))
     return res.status(400).json({ error: "An invoice with no amount cannot be approved" });
+  // A SAUDI TAX INVOICE CARRIES THE SELLER'S IDENTITY, OR IT IS NOT ONE. Approving is the moment the
+  // document becomes something the client is sent, so it is the moment to refuse — a soft flag on a
+  // Setup Check page nobody opens is how an instance ends up having issued invoices that are not
+  // valid tax invoices, with no way to put it right afterwards except void and reissue.
+  //
+  // Only VAT-bearing invoices are gated. A zero-VAT document is not a tax invoice, and a firm that
+  // is not VAT-registered must still be able to bill.
+  if ((inv.vatMinor ?? 0) > 0 || (inv.vatRateBp ?? 0) > 0) {
+    const missing = await missingTaxIdentity();
+    if (missing.length)
+      // Kept under 140 characters: the console's payment and invoice toasts slice the server's
+      // message at that length, and a refusal truncated before the instruction is just a refusal.
+      return res.status(409).json({
+        error: `A VAT invoice needs the firm's tax identity — set ${missing.join(", ")} in Settings → General.`,
+        missingTaxIdentity: missing,
+      });
+  }
   // Conditional update, not a plain update: read-then-write leaves a window where two clicks both
   // pass the check above and the client is emailed the same invoice twice. Only the request that
   // actually flips the row out of `draft` goes on to notify.
@@ -6492,6 +6536,34 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
       : { error: "A positive amount is required" });
   const settled = alreadyMinor + amtMinor >= owedMinor;
 
+  // A SECOND CLICK IS NOT A SECOND PAYMENT. Nothing here stopped two identical submissions creating
+  // two Payment rows and over-booking the cash. The `settle` path is self-limiting — the second call
+  // finds the balance closed and is refused above — but an explicit amount was not, and a slow
+  // response is exactly when someone clicks again.
+  //
+  // Matched on the figures a duplicate submit repeats byte for byte, and refused rather than
+  // silently returned: if it really is a second payment of the same amount on the same day, the
+  // reference is what tells the two apart, and saying so is more use than guessing.
+  //
+  // shortcut: scoped to the same business date because Payment has no created-at column to window
+  // on. Give it one, and key off a client-supplied idempotency token, if a caller ever needs to
+  // retry safely across a date boundary.
+  const dupe = await prisma.payment.findFirst({
+    where: {
+      invoiceId: inv.id,
+      amountMinor: amtMinor,
+      date: date ? String(date) : businessToday(),
+      reference: reference ? String(reference) : null,
+    },
+    select: { number: true },
+  });
+  if (dupe)
+    return res.status(409).json({
+      error: `${(amtMinor / 100).toFixed(2)} is already recorded against ${inv.number} on that date.`
+        + ` Add a reference if this is a separate payment.`,
+      duplicateOf: dupe.number,
+    });
+
   // Outside the transaction: it reads the payments table, and deriving it inside would be reading
   // the same rows the transaction is about to write to.
   const receiptNo = await nextNumber("receipt");
@@ -6770,6 +6842,17 @@ app.post("/api/error-reports", reportLimiter, async (req, res) => {
   }
   try {
     const kind = ["not_found", "crash", "manual"].includes(String(b.kind)) ? String(b.kind) : "manual";
+    // NOT OUR CRASH. A browser extension throws inside the page and the global error handler cannot
+    // tell whose code it was, so Problem Reports filled with other people's bugs and each one also
+    // emailed the staff — which is how the queue stopped being read, and how the oldest report sat
+    // unopened for 27 days claiming a crash on /quotations that was a password manager's.
+    //
+    // Dropped only when EVERY frame carrying a URL is extension code: one app frame anywhere means
+    // our code is on the stack and the report is kept, however it was triggered.
+    const frames = String(b.detail ?? "").match(/\b[a-z][a-z0-9+.-]*:\/\/[^\s)]+/gi) ?? [];
+    if (kind === "crash" && frames.length
+        && frames.every((f) => /^(chrome|moz|safari-web|ms-browser)-extension:\/\//i.test(f)))
+      return res.status(202).json({ ok: true, ignored: "browser extension" });
     const row = await prisma.errorReport.create({
       data: {
         kind, app: String(b.app) === "portal" ? "portal" : "console",

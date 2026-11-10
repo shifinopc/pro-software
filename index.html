@@ -17963,6 +17963,31 @@ class Component extends DCLogic {
     const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const bySlug = {};
     Object.keys(NAVG).concat(EXTRA).forEach(l => { bySlug[slug(l)] = l; });
+    // document.title was empty on every screen, so every tab, bookmark and history entry in this app
+    // was unlabelled — indistinguishable from each other and from the portal.
+    //
+    // Hooked onto the history API instead of onto each navigation. Six separate places push a path
+    // (the setState wrapper, _goClient, _goRecord, the hash migration, the deep-link branch, the
+    // signed-out rewrite) and each would have had to remember; patching the two methods they all go
+    // through, plus popstate for the back button, covers every route that exists or gets added.
+    if (!history.__stTitleHooked) {
+      const titleNow = () => {
+        const m = SCREEN_PATH.exec(location.pathname || '');
+        const label = (m && bySlug[m[1]]) || '';
+        // The second segment is the open record or tab (/clients/acme-trading/documents). It is a
+        // slug, so it reads as a name only after the dashes come out.
+        const open = m && m[2] ? m[2].replace(/-/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase()) : '';
+        return [open, label, 'STIMES PRO'].filter(Boolean).join(' · ');
+      };
+      const applyTitle = () => { try { document.title = titleNow(); } catch (e) { /* title is cosmetic */ } };
+      ['pushState', 'replaceState'].forEach(fn => {
+        const orig = history[fn].bind(history);
+        history[fn] = function () { orig.apply(null, arguments); applyTitle(); };
+      });
+      window.addEventListener('popstate', applyTitle);
+      history.__stTitleHooked = true;
+      applyTitle();
+    }
     this._routeApply = () => {
       const path0 = location.pathname || '';
       // /reset?token=… is the password-reset deep link from the email — it is handled by the auth
