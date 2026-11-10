@@ -118,7 +118,11 @@ function graph() {
     { id: "sb_package", type: "decision", label: "Package = Trading?",
       config: { branches: [{ var: "packageType", op: "eq", value: "trading", key: "trading" }] } },
     work("sb_trading", "Trading route — confirm current MISA conditions, open the two companies, prove presence"),
-    work("sb_summary", "Route summary and any extra cost agreed in writing"),
+    work("sb_summary", "Route summary and any extra cost agreed in writing", {
+      // "any extra cost agreed in writing" names a number, and this is the only place in the case it
+      // can be agreed. Zero is a real answer — it means the quoted scope held.
+      captures: [{ var: "extraCost", label: "Extra cost agreed", type: "money" }],
+    }),
     gate("g2", "G2 — Operations Manager approves the route"),
 
     // ── Phase 1, as chart 4 actually draws it ────────────────────────────────────────────────
@@ -139,15 +143,25 @@ function graph() {
     work("p1_fix", "Client corrects and re-uploads"),
     work("p1_sign", "Sign the resolution, POA and GM letter"),
     work("p1_notarise", "Notarise in the home country", {
-      // The fork below reads this. Captured from the parent's country, by the person who can see it.
-      captures: [{ var: "apostille", label: "Is the parent in an Apostille (Hague) country?", type: "select", options: ["yes", "no"] }],
+      captures: [
+        { var: "notaryRef", label: "Notary reference", type: "text" },
+        // The fork below reads this. Captured from the parent's country, by the person who can see it.
+        { var: "apostille", label: "Is the parent in an Apostille (Hague) country?", type: "select", options: ["yes", "no"] },
+      ],
     }),
     {
       id: "p1_route", type: "decision", label: "Apostille country?",
       config: { branches: [{ var: "apostille", op: "eq", value: "yes", key: "apostille" }] },
     },
-    work("p1_apostille", "Apostille in the home country"),
-    work("p1_legalise", "Home MOFA, then the Saudi Embassy", { govCenter: "Saudi Embassy" }),
+    // The two routes out of the fork each end in an attestation with its own reference. Different
+    // variables, because which route a case took is a fact worth being able to read back.
+    work("p1_apostille", "Apostille in the home country", {
+      captures: [{ var: "apostilleRef", label: "Apostille certificate number", type: "text" }],
+    }),
+    work("p1_legalise", "Home MOFA, then the Saudi Embassy", {
+      govCenter: "Saudi Embassy",
+      captures: [{ var: "embassyRef", label: "Saudi Embassy attestation reference", type: "text" }],
+    }),
     work("p1_courier", "Courier the originals to KSA, log the AWB", {
       captures: [
         { var: "awb", label: "Airway bill number", type: "text" },
@@ -155,7 +169,10 @@ function graph() {
       ],
       instructions: "These are irreplaceable attested originals. The AWB is the only way to find them again.",
     }),
-    work("p1_saudi_mofa", "Saudi MOFA authentication, if needed", { govCenter: "Saudi MOFA" }),
+    work("p1_saudi_mofa", "Saudi MOFA authentication, if needed", {
+      govCenter: "Saudi MOFA",
+      captures: [{ var: "saudiMofaRef", label: "Saudi MOFA attestation reference", type: "text" }],
+    }),
     work("p1_translate", "Arabic translation and proofread", { checklist: PACK, requireVerification: true }),
     gate("g3", "G3 — QA approves the full document pack"),
     work("p1_redo", "Fix the mismatch and redo the step"),
@@ -164,18 +181,47 @@ function graph() {
     work("p2_datasheet", "Client approves the data sheet in the portal", {
       instructions: "This is the sheet G4 checks the CR against, so it is the moment to get every spelling right.",
     }),
-    work("p2_tradename", "Trade name reservation", { govCenter: "Saudi Business Center" }),
+    work("p2_tradename", "Trade name reservation", {
+      govCenter: "Saudi Business Center",
+      // A reservation EXPIRES, and the CR has to be filed before it does. A step that recorded only
+      // "done" left the one date that can kill the application nowhere at all.
+      captures: [
+        { var: "tradeName", label: "Reserved trade name", type: "text" },
+        { var: "tradeNameExpiry", label: "Reservation expires", type: "date" },
+      ],
+    }),
     work("p2_misa", "MISA investment licence application", {
       govCenter: "MISA",
       instructions: "Outcome 'query' if MISA come back with one — it must be answered within 2 working days.",
+      captures: [{ var: "misaAppNo", label: "MISA application number", type: "text" }],
     }),
     work("p2_query", "Answer the MISA query — within 2 working days", { govCenter: "MISA" }),
     work("p2_fee", "Pay the government fee", {
-      captures: [{ var: "govFee", label: "Government fee paid (SAR)", type: "text" }],
+      // `money`, not text. A government fee IS a disbursement: the money type records it in minor
+      // units with its ministry reference and whether it is rechargeable, so it reaches the client's
+      // bill instead of sitting in a free-text box where 650 and 65000 look the same.
+      captures: [{ var: "govFee", label: "Government fee", type: "money" }],
     }),
-    work("p2_licence", "Investment licence issued", { govCenter: "MISA" }),
-    work("p2_aoa", "Articles of Association drafted, signed and approved"),
-    work("p2_cr", "CR application — CR issued", { govCenter: "Saudi Business Center" }),
+    work("p2_licence", "Investment licence issued", {
+      govCenter: "MISA",
+      captures: [
+        { var: "misaLicenceNo", label: "Investment licence number", type: "text" },
+        { var: "misaLicenceExpiry", label: "Licence expires", type: "date" },
+      ],
+    }),
+    work("p2_aoa", "Articles of Association drafted, signed and approved", {
+      captures: [{ var: "aoaRef", label: "Notarised AoA reference", type: "text" }],
+    }),
+    work("p2_cr", "CR application — CR issued", {
+      govCenter: "Saudi Business Center",
+      // THE NUMBER THE WHOLE CASE EXISTS TO PRODUCE, and G4 is the gate that checks it against the
+      // data sheet. It was not recorded anywhere, so the gate was asking somebody to compare a
+      // number the system had never been told.
+      captures: [
+        { var: "crNumber", label: "CR number", type: "text" },
+        { var: "crExpiry", label: "CR expires", type: "date" },
+      ],
+    }),
 
     // ── Managers and Iqama transfer (chart 6) — after the CR, before G4 ─────────────────────
     work("m_confirm", "Confirm the managers named on the CR", {
@@ -183,24 +229,47 @@ function graph() {
     }),
     { id: "m_route", type: "decision", label: "Manager already in KSA?",
       config: { branches: [{ var: "managerInKsa", op: "eq", value: "yes", key: "inksa" }] } },
-    work("m_visa", "New work visa via the PRO team"),
+    work("m_visa", "New work visa via the PRO team", {
+      captures: [{ var: "visaNo", label: "Visa number", type: "text" }],
+    }),
     work("m_files", "Open the Qiwa, GOSI and Muqeem files", {
       govCenter: "Qiwa",
       instructions: "The company files must be open before any transfer request — Qiwa refuses it otherwise.",
+      captures: [{ var: "unifiedNo", label: "Unified establishment number (700)", type: "text" }],
     }),
-    work("m_nitaqat", "Check the Nitaqat band and medical insurance"),
+    work("m_nitaqat", "Check the Nitaqat band and medical insurance", {
+      // The band decides whether a transfer is even allowed, so it is a fact about the company, not
+      // a tick. Recorded as the ladder's own words rather than a yes/no.
+      captures: [{ var: "nitaqatBand", label: "Nitaqat band", type: "select", options: ["Platinum", "High Green", "Medium Green", "Low Green", "Yellow", "Red"] }],
+    }),
     work("m_transfer", "Employment contract and the Qiwa transfer request", {
       govCenter: "Qiwa",
       instructions: "Outcome 'blocked' if the previous employer withholds consent.",
+      captures: [{ var: "qiwaRequestNo", label: "Qiwa transfer request number", type: "text" }],
     }),
     work("m_resolve", "Operations Manager resolves the employer consent"),
-    work("m_fees", "Pay the fees, manager accepts the contract"),
-    work("m_iqama", "Iqama updated and GOSI registration", { govCenter: "Muqeem" }),
+    work("m_fees", "Pay the fees, manager accepts the contract", {
+      captures: [{ var: "transferFee", label: "Transfer fees", type: "money" }],
+    }),
+    work("m_iqama", "Iqama updated and GOSI registration", {
+      govCenter: "Muqeem",
+      // The expiry is what every later renewal case keys off. Losing it here means finding it again
+      // in Muqeem a year from now.
+      captures: [
+        { var: "iqamaNo", label: "Iqama number", type: "text" },
+        { var: "iqamaExpiry", label: "Iqama expires", type: "date" },
+      ],
+    }),
     work("m_qa", "QA verifies the Iqama"),
 
     gate("g4", "G4 — CR matches the data sheet, managers transferred"),
-    work("p2_correct", "Raise a correction with the authority", { govCenter: "Saudi Business Center" }),
-    work("p2_balance", "Balance paid and Operations Manager sign-off"),
+    work("p2_correct", "Raise a correction with the authority", {
+      govCenter: "Saudi Business Center",
+      captures: [{ var: "correctionRef", label: "Correction reference", type: "text" }],
+    }),
+    work("p2_balance", "Balance paid and Operations Manager sign-off", {
+      captures: [{ var: "balanceInvoice", label: "Balance invoice number", type: "text" }],
+    }),
     work("p2_deliver", "Deliver the CR to the client"),
 
     work("p3", "PRO Lead accepts the handoff — setup case closed"),
