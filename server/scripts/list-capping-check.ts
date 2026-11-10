@@ -30,14 +30,20 @@ const src = fs.readFileSync(file, "utf8");
 let bad = 0;
 const fail = (m: string) => { console.log("  FAIL  " + m); bad++; };
 const ok = (m: string) => console.log("  ok    " + m);
-const has = (needle: string, what: string) =>
-  src.includes(needle) ? ok(what) : fail(`${what} — not found: ${JSON.stringify(needle.slice(0, 70))}`);
+// The audit trail is the one list the SERVER pages, so two of its assertions read the route.
+const SERVER = fs.readFileSync(path.join(import.meta.dirname, "../src/index.ts"), "utf8");
+const has = (needle: string, what: string, where: string = src) =>
+  where.includes(needle) ? ok(what) : fail(`${what} — not found: ${JSON.stringify(needle.slice(0, 70))}`);
 
 console.log("the shared pager");
-has("const _pager9 = (prefix, all, per, stateKey) =>", "_pager9 is defined once, at the top of renderVals");
+has("const _pager9 = (prefix, all, per, stateKey, serverTotal) =>", "_pager9 is defined once, at the top of renderVals");
 // The clamp is what stops "page 7 of a list that now has 2 pages" rendering empty.
 has("Math.min(Math.max(1, this.state[stateKey] || 1), pages9)", "the page is clamped to the range that exists");
-has("return { slice: all.slice(from9, from9 + per)", "it returns a slice, not the whole array");
+has("slice: serverTotal == null ? all.slice(from9, from9 + per) : all", "it slices, unless the server already did");
+// One chip per page is fine at 16 pages and unusable at 255, which is what the audit trail has
+// now that it pages its real 3,307 rows. First, last and two either side — nine chips at most.
+has("for (let i9 = page9 - 2; i9 <= page9 + 2; i9++)", "the page chips are a window, not one per page");
+has("chips9.push({ n: '…'", "with inert gaps where pages are skipped");
 
 console.log("\nflat lists use it");
 for (const [call, label] of [
@@ -92,10 +98,17 @@ for (const [needle, label] of [
 
 console.log("\nthe audit trail pages, and its export still covers everything");
 // 13 a page, because the trail is append-only and the screen used to render every row at once.
-has("_pager9('aud', _auditHits9, 13, 'auditPage')", "the audit trail is paged at 13");
+has("_pager9('aud', _auditHits9, 13, 'auditPage', _fromServer9 ? _auditResp9.total : null)", "the audit trail is paged at 13, on the server's own total");
+// The whole point of the server paging: the route used to answer `take: 200`, so "total" was a cap
+// wearing a total's clothes and nothing older than the newest 200 rows could be reached at all.
+has("skip: (page - 1) * per, take: per", "the route pages with skip/take rather than capping", SERVER);
+has("const total = await prisma.audit.count({ where })", "and counts the whole filtered table", SERVER);
 // The one thing a page size must NOT change. An export that silently shrank to the visible page
 // would still be called "audit-log-<date>.csv", and nobody opening it would know what was missing.
-has("_auditAll9.map(a9 => [a9.at, a9.action", "Export writes every filtered row, not the page on screen");
+has("'/api/audit?all=1&cat=' + encodeURIComponent(auditFilter)", "Export asks the server for every filtered row, not the page on screen");
+// Handing over a file that looks complete and is not is the one failure an audit export must not
+// have, so a failed fetch says so instead of quietly writing out the 13 rows in hand.
+has("Could not read the trail — export cancelled", "and refuses rather than exporting a partial file");
 
 console.log(bad ? `\n${bad} problem(s)` : "\nall good");
 process.exit(bad ? 1 : 0);

@@ -5997,7 +5997,9 @@ function AuditScreen() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    (async () => { try { const d = await api.get("/api/audit"); if (Array.isArray(d)) setRows(d); } catch { /* keep empty */ } finally { setLoading(false); } })();
+    // /api/audit pages now and answers { rows, total, … }; `all=1` is the whole trail, which is
+    // what this screen's own search box expects. The Array branch is the pre-paging shape.
+    (async () => { try { const d: any = await api.get("/api/audit?all=1"); const list = Array.isArray(d) ? d : (d?.rows ?? []); setRows(list); } catch { /* keep empty */ } finally { setLoading(false); } })();
   }, []);
 
   const filtered = rows.filter(a =>

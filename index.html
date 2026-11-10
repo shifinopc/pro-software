@@ -18471,7 +18471,6 @@ class Component extends DCLogic {
         .catch(() => {});
       this._bootFetch('/api/settings/perms', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ permGrid: v }); }).catch(() => {});
       this._bootFetch('/api/auth/me', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && v.email) this.setState({ meUser: v, profileName: v.name || this.state.profileName, sContact: v.name || this.state.sContact, sEmail: v.email || this.state.sEmail, sPhone: v.phone != null ? v.phone : this.state.sPhone }); }).catch(() => {});
-      this._load('/api/audit', 'auditData', (v) => this.setState({ auditData: v }));
       this._bootFetch('/api/settings/notifRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifRulesState: v }); }).catch(() => {});
       this._bootFetch('/api/settings/notifDigest', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ notifDigestState: v }); }).catch(() => {});
       this._bootFetch('/api/email-log?days=7', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v) this.setState({ mailLog: v }); }).catch(() => {});
@@ -20408,8 +20407,12 @@ class Component extends DCLogic {
      * the eight existing lists already do — or page 7 of a list that now has two pages shows empty.
      * The clamp below keeps that honest anyway.
      */
-    const _pager9 = (prefix, all, per, stateKey) => {
-      const total9 = all.length;
+    // `serverTotal` is for a list the SERVER paged: `all` is then already the page, and the total
+    // is the one the server counted rather than what happens to be in hand. Everything else about
+    // the pager — the label, the chips, prev/next, the clamp — is identical either way, which is
+    // the whole reason it takes a parameter instead of a second pager.
+    const _pager9 = (prefix, all, per, stateKey, serverTotal) => {
+      const total9 = serverTotal == null ? all.length : serverTotal;
       const pages9 = Math.max(1, Math.ceil(total9 / per));
       const page9 = Math.min(Math.max(1, this.state[stateKey] || 1), pages9);
       const from9 = (page9 - 1) * per;
@@ -20419,19 +20422,57 @@ class Component extends DCLogic {
         : '';
       api9[prefix + 'PageShown'] = total9 > 0;
       api9[prefix + 'PagerShown'] = pages9 > 1;
-      api9[prefix + 'Pages'] = Array.from({ length: pages9 }, (_, i9) => i9 + 1).map(n9 => ({
-        n: String(n9),
-        color: n9 === page9 ? '#fff' : '#6F6C7A',
-        bg: n9 === page9 ? '#7C00FF' : '#fff',
-        bd: n9 === page9 ? '#7C00FF' : '#EDEBF2',
-        pick: () => this.setState({ [stateKey]: n9 }),
-      }));
+      // A WINDOW, not every page. This drew one chip per page, which was fine while the biggest
+      // list was a few pages and stopped being fine the moment the audit trail started paging its
+      // real 3,307 rows: 255 numbered boxes, wrapped over nine lines, is not navigation. First,
+      // last, and two either side of where you are — never more than nine chips however long the
+      // list gets. The gaps are inert: no border, no background, nothing to click.
+      const want9 = { 1: true, [pages9]: true };
+      for (let i9 = page9 - 2; i9 <= page9 + 2; i9++) if (i9 >= 1 && i9 <= pages9) want9[i9] = true;
+      const nums9 = Object.keys(want9).map(Number).sort((a9, b9) => a9 - b9);
+      const chips9 = [];
+      let prev9 = 0;
+      for (const n9 of nums9) {
+        if (prev9 && n9 - prev9 > 1) chips9.push({ n: '…', color: '#A9A6B4', bg: 'transparent', bd: 'transparent', pick: () => {} });
+        chips9.push({
+          n: String(n9),
+          color: n9 === page9 ? '#fff' : '#6F6C7A',
+          bg: n9 === page9 ? '#7C00FF' : '#fff',
+          bd: n9 === page9 ? '#7C00FF' : '#EDEBF2',
+          pick: () => this.setState({ [stateKey]: n9 }),
+        });
+        prev9 = n9;
+      }
+      api9[prefix + 'Pages'] = chips9;
       api9[prefix + 'PrevOp'] = page9 > 1 ? '1' : '.35';
       api9[prefix + 'NextOp'] = page9 < pages9 ? '1' : '.35';
       api9[prefix + 'Prev'] = () => { if (page9 > 1) this.setState({ [stateKey]: page9 - 1 }); };
       api9[prefix + 'Next'] = () => { if (page9 < pages9) this.setState({ [stateKey]: page9 + 1 }); };
-      return { slice: all.slice(from9, from9 + per), api: api9, page: page9, pages: pages9, total: total9 };
+      return { slice: serverTotal == null ? all.slice(from9, from9 + per) : all, api: api9, page: page9, pages: pages9, total: total9 };
     };
+
+    // ── The audit trail, one page at a time — see server/src/index.ts ──
+    //
+    // NOT LOADED AT BOOT any more. It was 174 KB on every single sign-in for a screen that only an
+    // admin opens, and only occasionally; server/src/boot.ts says so in as many words about why it
+    // is kept out of the boot batch. Now the screen asks for the page it is showing, when it opens.
+    //
+    // Keyed by "<filter>|<page>": re-rendering must not refetch, but changing either must.
+    if (!this._auditLoad) {
+      this._auditLoad = (cat9, page9) => {
+        const key9 = cat9 + '|' + page9;
+        if (this._auditKey === key9) return;
+        this._auditKey = key9;
+        this._bootFetch('/api/audit?cat=' + encodeURIComponent(cat9) + '&page=' + page9 + '&per=13', {
+          headers: { Authorization: 'Bearer ' + (localStorage.getItem('stimespro:token') || '') },
+        })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          // An answer for a key nobody is on any more is dropped: two quick page clicks can land
+          // out of order, and the slower one would otherwise overwrite the page being looked at.
+          .then(v9 => { if (v9 && this._auditKey === key9) this.setState({ auditData: v9 }); })
+          .catch(() => {});
+      };
+    }
 
     // ── A client's CRs (main + sub), loaded per client on first use — see server/src/establishments.ts ──
     if (!this._crLoad) {
@@ -35409,27 +35450,31 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ['Active sessions', 'Invalidate every issued session token, on every device', 'Sign out everywhere', '#C0353A', '#FEECEC', _logoutAll],
       ['API keys', _keys.length + ' active key' + (_keys.length === 1 ? '' : 's') + ' · created keys are shown once', 'Manage', '#7C00FF', '#F3E8FF', apiKeysModalApi.openKeysModal],
     ].map(([label, sub, tag, tagColor, tagBg, act]) => ({ label, sub, tag, tagColor, tagBg, act: act || (() => {}) }));
-    // Audit Trail — WIRED to GET /api/audit (loaded in componentDidMount → state.auditData).
+    // Audit Trail — GET /api/audit, ONE PAGE AT A TIME. The server filters, counts and slices; see
+    // the note on the route for why, and `this._auditLoad` above for when the request goes out.
     const auditFilter = this.state.auditFilter || 'All';
-    // action prefix → category + chip colours
-    const auditCat = (action) => {
-      const a = String(action || '');
-      if (a.startsWith('login') || a.startsWith('password') || a.includes('login_as')) return ['Auth', a.includes('fail') || a.includes('lock') || a.includes('login_as') ? '#C0353A' : '#0E9355', a.includes('fail') || a.includes('lock') || a.includes('login_as') ? '#FEECEC' : '#E7F8EF'];
-      if (a.startsWith('user')) return ['Users', '#0284C7', '#E4F4FD'];
-      if (a.startsWith('role') || a.startsWith('perm') || a.startsWith('settings')) return ['Roles', '#7C00FF', '#F3E8FF'];
-      if (a.includes('credential')) return ['Credentials', '#B8860B', '#FEF4E2'];
-      if (a.startsWith('workflow')) return ['Workflow', '#6D5BD0', '#EFEBFF'];
-      return ['System', '#6F6C7A', '#F3F1F7'];
-    };
+    const auditPage = Math.max(1, this.state.auditPage || 1);
+    // Ask for the page about to be drawn. The loader is keyed, so re-rendering does not refetch and
+    // nothing is requested until somebody actually opens the tab.
+    if (_authed && setTab === 'Audit') this._auditLoad(auditFilter, auditPage);
+    // WHICH CATEGORY a row belongs to is the server's answer now — it has to be, because the server
+    // is what paged by it, and a second copy of the prefix rules here is a second copy that drifts.
+    // The colour is still ours: Auth splits red/green on the action itself, which no filter needs.
+    const AUD_COLOR9 = { Users: ['#0284C7', '#E4F4FD'], Roles: ['#7C00FF', '#F3E8FF'], Credentials: ['#B8860B', '#FEF4E2'], Workflow: ['#6D5BD0', '#EFEBFF'], System: ['#6F6C7A', '#F3F1F7'] };
+    const _auditColor9 = (cat9, action9) => (cat9 === 'Auth'
+      ? (/fail|lock|login_as/.test(String(action9 || '')) ? ['#C0353A', '#FEECEC'] : ['#0E9355', '#E7F8EF'])
+      : (AUD_COLOR9[cat9] || AUD_COLOR9.System));
     // Resolve actor to a human-readable name/email: prefer the stored email, else map the raw
     // actorId through the loaded users, else fall back to "System" — never surface a bare internal id.
     const _userById = {};
     (Array.isArray(this.state.usersData) ? this.state.usersData : []).forEach(u => { if (u.id) _userById[u.id] = u.email || u.name; });
     const _auditActor = (r) => r.actorEmail || _userById[r.actorId] || (r.actorId ? 'System (' + String(r.actorId).slice(-6) + ')' : 'System');
-    const auditRaw = (Array.isArray(this.state.auditData) && this.state.auditData.length
-      ? this.state.auditData.map(r => {
-          const [cat, color, bg] = auditCat(r.action);
-          return [r.action, _auditActor(r), r.target || '—', r.detail || '', r.ip || '—', r.at || '', cat, color, bg];
+    const _auditResp9 = (this.state.auditData && !Array.isArray(this.state.auditData)) ? this.state.auditData : null;
+    const _fromServer9 = _authed && !!_auditResp9 && Array.isArray(_auditResp9.rows);
+    const auditRaw = (_fromServer9
+      ? _auditResp9.rows.map(r => {
+          const [color, bg] = _auditColor9(r.cat, r.action);
+          return [r.action, _auditActor(r), r.target || '—', r.detail || '', r.ip || '—', r.at || '', r.cat, color, bg];
         })
       : (_authed ? [] : [
         ['role.permissions.update', 'rashid@stimespro.ae', 'PRO Officer role', 'Finance → edit enabled', '92.104.14.3', 'Today 10:42', 'Roles', '#7C00FF', '#F3E8FF'],
@@ -35439,22 +35484,41 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ['cron.compliance_recompute', 'system', 'All clients', '86 documents rescored', '—', '2 days ago 02:00', 'System', '#6F6C7A', '#F3F1F7'],
       ]));
     const _auditRow9 = ([action, actor, target, detail, ip, at, cat, color, bg]) => ({ action, actor, target, detail, ip, at, cat, color, bg });
-    const _auditHits9 = auditRaw.filter(a => auditFilter === 'All' || a[6] === auditFilter);
-    // 13 a page. The trail is append-only and grows without limit — this screen was rendering every
-    // row the API returned, and a busy day is thousands of them.
-    const _audPage9 = _pager9('aud', _auditHits9, 13, 'auditPage');
+    // The server already filtered and sliced a real page. Only the signed-out sample rows, which
+    // never went near the server, still need filtering here.
+    const _auditHits9 = _fromServer9 ? auditRaw : auditRaw.filter(a => auditFilter === 'All' || a[6] === auditFilter);
+    // 13 a page, counted by the server across the WHOLE table rather than across what arrived.
+    const _audPage9 = _pager9('aud', _auditHits9, 13, 'auditPage', _fromServer9 ? _auditResp9.total : null);
     const auditLog = _audPage9.slice.map(_auditRow9);
-    // Export stays the WHOLE filtered trail, not the page you happen to be looking at. A CSV of 13
-    // rows that claims to be the audit log is worse than no export at all.
-    const _auditAll9 = _auditHits9.map(_auditRow9);
-    // "Export" was a button with no handler. It saves the rows currently shown as a CSV.
-    const auditExport = () => {
+    const _auditCsv9 = (rows9) => {
       const q9 = (v9) => '"' + String(v9 == null ? '' : v9).replace(/"/g, '""') + '"';
       const csv9 = [['When', 'Action', 'Category', 'Actor', 'Target', 'Detail', 'IP'].map(q9).join(',')]
-        .concat(_auditAll9.map(a9 => [a9.at, a9.action, a9.cat, a9.actor, a9.target, a9.detail, a9.ip].map(q9).join(','))).join('\r\n');
+        .concat(rows9.map(a9 => [a9.at, a9.action, a9.cat, a9.actor, a9.target, a9.detail, a9.ip].map(q9).join(','))).join('\r\n');
       const u9 = URL.createObjectURL(new Blob(['\ufeff' + csv9], { type: 'text/csv;charset=utf-8' }));
       const a9 = document.createElement('a'); a9.href = u9; a9.download = 'audit-log-' + new Date().toISOString().slice(0, 10) + (auditFilter !== 'All' ? '-' + auditFilter.toLowerCase() : '') + '.csv';
       document.body.appendChild(a9); a9.click(); a9.remove(); setTimeout(() => URL.revokeObjectURL(u9), 30000);
+      this.toast(rows9.length + ' row' + (rows9.length === 1 ? '' : 's') + ' exported');
+    };
+    // Export is the WHOLE filtered trail, not the page on screen — a CSV of 13 rows called
+    // audit-log-<date>.csv is worse than no export at all — so it asks the server for `all=1`
+    // instead of writing out whatever this page happens to be holding.
+    const auditExport = () => {
+      if (!_fromServer9) return _auditCsv9(_auditHits9.map(_auditRow9));
+      this._bootFetch('/api/audit?all=1&cat=' + encodeURIComponent(auditFilter), {
+        headers: { Authorization: 'Bearer ' + (localStorage.getItem('stimespro:token') || '') },
+      })
+        .then(r9 => (r9.ok ? r9.json() : null))
+        .then(v9 => {
+          // Quietly falling back to the page on screen would hand over a file that looks complete
+          // and is not. An audit export that is wrong is worse than one that did not happen.
+          if (!v9 || !Array.isArray(v9.rows)) return this.toast('Could not read the trail — export cancelled');
+          if (v9.truncated) this.toast('Export capped at ' + v9.rows.length + ' of ' + v9.total + ' rows');
+          _auditCsv9(v9.rows.map(r9 => {
+            const [color9, bg9] = _auditColor9(r9.cat, r9.action);
+            return _auditRow9([r9.action, _auditActor(r9), r9.target || '—', r9.detail || '', r9.ip || '—', r9.at || '', r9.cat, color9, bg9]);
+          }));
+        })
+        .catch(() => this.toast('Could not read the trail — export cancelled'));
     };
     const auditFilters = ['All', 'Auth', 'Users', 'Roles', 'Credentials', 'Workflow', 'System'].map(k => ({
       // Back to page 1 with the filter, or picking "Auth" on page 9 lands you on an empty screen.

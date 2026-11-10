@@ -118,6 +118,7 @@ import {
   resolveEffectiveRole,
   encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
+import { auditCatOf, auditWhereFor } from "./audit-cats.js";
 
 const app = express();
 app.set("trust proxy", 1); // behind a reverse proxy in prod → correct client IPs + rate limiting
@@ -1042,10 +1043,40 @@ app.post("/api/auth/reset-password", resetLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Audit log (staff only)
-app.get("/api/audit", requireAuth, requireStaff, async (_req, res) => {
-  const rows = await prisma.audit.findMany({ orderBy: { at: "desc" }, take: 200 });
-  res.json(rows);
+// ── Audit log (staff only) ──────────────────────────────────────────────────────────────────────
+//
+// This used to be `take: 200` with no paging, and the console rendered all 200 in one list. The
+// trail is append-only and never pruned — 3,300 rows in its first three months — so the cap was not
+// a page size, it was a ceiling: everything older than the newest 200 existed in the table and no
+// screen could reach it, the export included.
+//
+// The category rules — the filter chips — live in src/audit-cats.ts, written once as Prisma filters
+// and evaluated in memory by the same code, so the SQL that pages and the label that is shown can
+// never drift apart. See that file for why the order of them matters.
+//
+// shortcut: `all=1` (the CSV export) reads every matching row in one query, capped here. At ~950
+// rows a month that is years away; revisit by streaming the CSV if the table ever approaches it.
+const AUDIT_EXPORT_MAX: number = 20000;
+
+app.get("/api/audit", requireAuth, requireStaff, async (req, res) => {
+  const cat = String(req.query.cat ?? "All");
+  const where = auditWhereFor(cat);
+  const wantsAll = String(req.query.all ?? "") === "1";
+  const per = Math.min(Math.max(parseInt(String(req.query.per ?? "13"), 10) || 13, 1), 200);
+  const total = await prisma.audit.count({ where });
+  const pages = Math.max(1, Math.ceil(total / per));
+  // Clamped, so a stale page number from the client lands on the last page instead of an empty one.
+  const page = Math.min(Math.max(parseInt(String(req.query.page ?? "1"), 10) || 1, 1), pages);
+  const rows = await prisma.audit.findMany({
+    where,
+    orderBy: { at: "desc" },
+    ...(wantsAll ? { take: AUDIT_EXPORT_MAX } : { skip: (page - 1) * per, take: per }),
+  });
+  res.json({
+    rows: rows.map(r => ({ ...r, cat: auditCatOf(r.action) })),
+    total, pages, per, page: wantsAll ? 1 : page,
+    truncated: wantsAll && total > AUDIT_EXPORT_MAX,
+  });
 });
 
 // The signed-in user's OWN recent audit trail (any role — self-scoped, safe fields only).
