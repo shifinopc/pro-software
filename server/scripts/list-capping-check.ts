@@ -87,7 +87,15 @@ for (const [needle, label] of [
   ["docSort: k9, docPage: 1", "a documents sort"],
   ["docQ: ev9 && ev9.target ? ev9.target.value : '', docPage: 1", "the documents search box"],
   ["docScope: 'company', docTab: k9, docFolder: null, docPage: 1", "a documents tab"],
+  ["auditFilter: k, auditPage: 1", "an audit trail filter"],
 ] as const) has(needle, label);
+
+console.log("\nthe audit trail pages, and its export still covers everything");
+// 13 a page, because the trail is append-only and the screen used to render every row at once.
+has("_pager9('aud', _auditHits9, 13, 'auditPage')", "the audit trail is paged at 13");
+// The one thing a page size must NOT change. An export that silently shrank to the visible page
+// would still be called "audit-log-<date>.csv", and nobody opening it would know what was missing.
+has("_auditAll9.map(a9 => [a9.at, a9.action", "Export writes every filtered row, not the page on screen");
 
 console.log(bad ? `\n${bad} problem(s)` : "\nall good");
 process.exit(bad ? 1 : 0);

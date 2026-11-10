@@ -9545,6 +9545,20 @@
                     </div>
                   </sc-for>
                 </div></div>
+                <sc-if value="{{ audPageShown }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:11px 0 0; border-top:1px solid #F0EDF6; margin-top:4px;">
+                    <span style="font-size:11px; color:#8C8899; font-variant-numeric:tabular-nums;">{{ audPageLabel }}</span>
+                    <sc-if value="{{ audPagerShown }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <span onClick="{{ audPrev }}" title="Previous page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ audPrevOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"></path></svg></span>
+                        <sc-for list="{{ audPages }}" as="p" hint-placeholder-count="2">
+                          <span onClick="{{ p.pick }}" style="min-width:28px; height:28px; padding:0 8px; box-sizing:border-box; border-radius:8px; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.color }}; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; cursor:pointer; font-variant-numeric:tabular-nums;" style-hover="border-color:#7C00FF;">{{ p.n }}</span>
+                        </sc-for>
+                        <span onClick="{{ audNext }}" title="Next page" style="width:28px; height:28px; border-radius:8px; border:1px solid #EDEBF2; display:flex; align-items:center; justify-content:center; cursor:pointer; opacity:{{ audNextOp }};" style-hover="border-color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"></path></svg></span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
               </div>
             </sc-if>
             <sc-if value="{{ setTabBilling }}" hint-placeholder-val="{{ false }}">
@@ -35424,18 +35438,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ['user.invite', 'rashid@stimespro.ae', 'yusuf@stimespro.ae', 'Role: PRO Officer', '92.104.14.3', 'Yesterday 16:30', 'Users', '#0284C7', '#E4F4FD'],
         ['cron.compliance_recompute', 'system', 'All clients', '86 documents rescored', '—', '2 days ago 02:00', 'System', '#6F6C7A', '#F3F1F7'],
       ]));
-    const auditLog = auditRaw.filter(a => auditFilter === 'All' || a[6] === auditFilter).map(([action, actor, target, detail, ip, at, cat, color, bg]) => ({ action, actor, target, detail, ip, at, cat, color, bg }));
+    const _auditRow9 = ([action, actor, target, detail, ip, at, cat, color, bg]) => ({ action, actor, target, detail, ip, at, cat, color, bg });
+    const _auditHits9 = auditRaw.filter(a => auditFilter === 'All' || a[6] === auditFilter);
+    // 13 a page. The trail is append-only and grows without limit — this screen was rendering every
+    // row the API returned, and a busy day is thousands of them.
+    const _audPage9 = _pager9('aud', _auditHits9, 13, 'auditPage');
+    const auditLog = _audPage9.slice.map(_auditRow9);
+    // Export stays the WHOLE filtered trail, not the page you happen to be looking at. A CSV of 13
+    // rows that claims to be the audit log is worse than no export at all.
+    const _auditAll9 = _auditHits9.map(_auditRow9);
     // "Export" was a button with no handler. It saves the rows currently shown as a CSV.
     const auditExport = () => {
       const q9 = (v9) => '"' + String(v9 == null ? '' : v9).replace(/"/g, '""') + '"';
       const csv9 = [['When', 'Action', 'Category', 'Actor', 'Target', 'Detail', 'IP'].map(q9).join(',')]
-        .concat(auditLog.map(a9 => [a9.at, a9.action, a9.cat, a9.actor, a9.target, a9.detail, a9.ip].map(q9).join(','))).join('\r\n');
+        .concat(_auditAll9.map(a9 => [a9.at, a9.action, a9.cat, a9.actor, a9.target, a9.detail, a9.ip].map(q9).join(','))).join('\r\n');
       const u9 = URL.createObjectURL(new Blob(['\ufeff' + csv9], { type: 'text/csv;charset=utf-8' }));
       const a9 = document.createElement('a'); a9.href = u9; a9.download = 'audit-log-' + new Date().toISOString().slice(0, 10) + (auditFilter !== 'All' ? '-' + auditFilter.toLowerCase() : '') + '.csv';
       document.body.appendChild(a9); a9.click(); a9.remove(); setTimeout(() => URL.revokeObjectURL(u9), 30000);
     };
     const auditFilters = ['All', 'Auth', 'Users', 'Roles', 'Credentials', 'Workflow', 'System'].map(k => ({
-      label: k, select: () => this.setState({ auditFilter: k }),
+      // Back to page 1 with the filter, or picking "Auth" on page 9 lands you on an empty screen.
+      label: k, select: () => this.setState({ auditFilter: k, auditPage: 1 }),
       color: auditFilter === k ? '#fff' : '#6F6C7A', bg: auditFilter === k ? '#7C00FF' : '#fff', border: auditFilter === k ? '#7C00FF' : '#EDEBF2',
     }));
     // Configure builders — sub-views
@@ -35926,7 +35949,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       covHasGaps: !!(_cov9 && _cov9.ungoverned.length),
       covGapCount: _cov9 ? (_cov9.ungoverned.length + ' route' + (_cov9.ungoverned.length === 1 ? '' : 's') + ' no module governs') : '',
       covUngoverned: _cov9 ? _cov9.ungoverned.map(p => ({ path: p })) : [],
-      ...dialogApi, ...stateBannerApi, setNotifRules, ...notifDigestApi, ...notifHoldApi, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, ...mailLogApi, ...autoRulesApi, auditLog, auditFilters, auditExport, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
+      ...dialogApi, ...stateBannerApi, setNotifRules, ...notifDigestApi, ...notifHoldApi, securityItems, secPolicyRows, secPolDirty, secPolSave, ...apiKeysModalApi, ...problemReportsApi, ...emailApi, ...mailLogApi, ...autoRulesApi, auditLog, auditFilters, auditExport, ..._audPage9.api, ...profileSessionsApi, ...configBuildersApi, ...recordSeqApi, ...cuNewApi, ...credResultApi, ...editUserApi, ...crNewApi, ...impersonateApi,
     };
 
     // SLA Monitor
