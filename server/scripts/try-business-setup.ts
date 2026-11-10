@@ -4,10 +4,16 @@
  *   npx tsx scripts/try-business-setup.ts            build it and start one case
  *   npx tsx scripts/try-business-setup.ts --delete   remove every trace
  *
- * Built from "Business Setup Workflow — Visual Flowcharts" (9 Nov 2026): six stages, five gates,
- * Standard route. The first cut collapsed each stage into a single step, which proved the ladder
- * and nothing else — chart 4 alone has eight steps, two branches and two rework loops inside the
- * one box it drew. PHASE 1 IS NOW BUILT PROPERLY, as the shape every other stage should take.
+ * Built from "Business Setup Workflow — Visual Flowcharts" (9 Nov 2026): all six stages and all
+ * five gates, every chart, as drawn. The first cut collapsed each stage into a single step, which
+ * proved the ladder and nothing else — chart 4 alone has eight steps, two branches and two rework
+ * loops inside the one box it drew.
+ *
+ * 44 steps, 5 gates, 4 decision forks and 8 rework loops. Every loop the charts draw is wired,
+ * because the loops are the difference between a process and a picture of one: an advance that has
+ * not arrived, a QA check that finds gaps, a route whose cost is not agreed, a pack the client must
+ * correct, a MISA query, an employer withholding consent, a CR that does not match the data sheet.
+ * A straight line through the happy path would have silently dropped all eight.
  *
  * What a faithful stage uses, all of it already in the engine:
  *   · checklists per step, each item received / verified / rejected with a file against it
@@ -56,6 +62,15 @@ const work = (id: string, label: string, config: any = {}) =>
 const gate = (id: string, label: string) =>
   ({ id, type: "approval", label, config: { assignee: REVIEWER } });
 
+/** What onboarding has to have on file before G1 can pass. */
+const KYC = [
+  "Passport copies — every shareholder and the GM",
+  "Proof of address for each shareholder",
+  "Sanctions and PEP screening result",
+  "Signed power of attorney",
+  "Signed engagement letter",
+];
+
 /** The pack chart 4 asks a foreign parent for. Each one is received, then verified, on its own. */
 const PACK = [
   "Board resolution to incorporate in KSA",
@@ -70,13 +85,40 @@ function graph() {
   const nodes: any[] = [
     { id: "start", type: "start", label: "Start" },
 
-    work("s0", "Stage 0 — Closed-Won: raise the 50% advance invoice"),
+    // ── Stage 0 — the advance (chart 2, upper half) ─────────────────────────────────────────
+    work("s0_case", "Case created — raise the 50% advance invoice", {
+      captures: [{ var: "advanceInvoice", label: "Advance invoice number", type: "text" }],
+    }),
     gate("g0", "G0 — Finance confirms the 50% advance"),
+    work("s0_chase", "Chase the advance — day 3, 7 and 14", {
+      instructions: "Invoice {advanceInvoice}. Nothing in Stage A starts until Finance has matched the money to the bank.",
+    }),
 
-    work("sa", "Stage A — Onboarding: team, WhatsApp group, portal, kick-off call, KYC"),
+    // ── Stage A — onboarding (chart 2, lower half) ──────────────────────────────────────────
+    work("sa_team", "Assign the Account Manager and the Setup Executive"),
+    work("sa_access", "Create the WhatsApp group and the client portal access"),
+    work("sa_call", "Onboarding call — share the minutes within 24 hours"),
+    work("sa_kyc", "KYC, passports, screening and the signed POA", { checklist: KYC, requireVerification: true }),
     gate("g1", "G1 — QA checks onboarding, client confirms kick-off"),
+    work("sa_gaps", "Fix the gaps with the client"),
 
-    work("sb", "Stage B — Structuring: choose the route and agree any extra cost"),
+    // ── Stage B — structuring (chart 3) ─────────────────────────────────────────────────────
+    work("sb_assess", "Assess the parent and the package", {
+      instructions: "Suitable means the parent exists, is in good standing, AND has the audited financials MISA needs — all three.",
+      captures: [
+        { var: "suitableParent", label: "Suitable foreign parent?", type: "select", options: ["yes", "no"] },
+        { var: "packageType", label: "Package", type: "select", options: ["standard", "trading"] },
+      ],
+    }),
+    { id: "sb_parent", type: "decision", label: "Suitable foreign parent?",
+      config: { branches: [{ var: "suitableParent", op: "eq", value: "yes", key: "suitable" }] } },
+    work("sb_acquisition", "Acquisition route — choose the country, acquire or incorporate, adopt its documents", {
+      instructions: "Its documents become the parent documents, so Phase 1 runs again for that company. Not yet modelled as its own case.",
+    }),
+    { id: "sb_package", type: "decision", label: "Package = Trading?",
+      config: { branches: [{ var: "packageType", op: "eq", value: "trading", key: "trading" }] } },
+    work("sb_trading", "Trading route — confirm current MISA conditions, open the two companies, prove presence"),
+    work("sb_summary", "Route summary and any extra cost agreed in writing"),
     gate("g2", "G2 — Operations Manager approves the route"),
 
     // ── Phase 1, as chart 4 actually draws it ────────────────────────────────────────────────
@@ -118,18 +160,78 @@ function graph() {
     gate("g3", "G3 — QA approves the full document pack"),
     work("p1_redo", "Fix the mismatch and redo the step"),
 
-    work("p2", "Phase 2 — Licence to CR: trade name, MISA licence, AoA, CR issued"),
-    gate("g4", "G4 — CR matches the data sheet, balance paid, delivered"),
+    // ── Phase 2 — licence to CR (chart 5) ───────────────────────────────────────────────────
+    work("p2_datasheet", "Client approves the data sheet in the portal", {
+      instructions: "This is the sheet G4 checks the CR against, so it is the moment to get every spelling right.",
+    }),
+    work("p2_tradename", "Trade name reservation", { govCenter: "Saudi Business Center" }),
+    work("p2_misa", "MISA investment licence application", {
+      govCenter: "MISA",
+      instructions: "Outcome 'query' if MISA come back with one — it must be answered within 2 working days.",
+    }),
+    work("p2_query", "Answer the MISA query — within 2 working days", { govCenter: "MISA" }),
+    work("p2_fee", "Pay the government fee", {
+      captures: [{ var: "govFee", label: "Government fee paid (SAR)", type: "text" }],
+    }),
+    work("p2_licence", "Investment licence issued", { govCenter: "MISA" }),
+    work("p2_aoa", "Articles of Association drafted, signed and approved"),
+    work("p2_cr", "CR application — CR issued", { govCenter: "Saudi Business Center" }),
 
-    work("p3", "Phase 3 — PRO Lead accepts the handoff, setup case closed"),
+    // ── Managers and Iqama transfer (chart 6) — after the CR, before G4 ─────────────────────
+    work("m_confirm", "Confirm the managers named on the CR", {
+      captures: [{ var: "managerInKsa", label: "Is the manager already in KSA?", type: "select", options: ["yes", "no"] }],
+    }),
+    { id: "m_route", type: "decision", label: "Manager already in KSA?",
+      config: { branches: [{ var: "managerInKsa", op: "eq", value: "yes", key: "inksa" }] } },
+    work("m_visa", "New work visa via the PRO team"),
+    work("m_files", "Open the Qiwa, GOSI and Muqeem files", {
+      govCenter: "Qiwa",
+      instructions: "The company files must be open before any transfer request — Qiwa refuses it otherwise.",
+    }),
+    work("m_nitaqat", "Check the Nitaqat band and medical insurance"),
+    work("m_transfer", "Employment contract and the Qiwa transfer request", {
+      govCenter: "Qiwa",
+      instructions: "Outcome 'blocked' if the previous employer withholds consent.",
+    }),
+    work("m_resolve", "Operations Manager resolves the employer consent"),
+    work("m_fees", "Pay the fees, manager accepts the contract"),
+    work("m_iqama", "Iqama updated and GOSI registration", { govCenter: "Muqeem" }),
+    work("m_qa", "QA verifies the Iqama"),
+
+    gate("g4", "G4 — CR matches the data sheet, managers transferred"),
+    work("p2_correct", "Raise a correction with the authority", { govCenter: "Saudi Business Center" }),
+    work("p2_balance", "Balance paid and Operations Manager sign-off"),
+    work("p2_deliver", "Deliver the CR to the client"),
+
+    work("p3", "PRO Lead accepts the handoff — setup case closed"),
     { id: "end", type: "end", label: "Setup complete — handed to PRO" },
   ];
 
   const edges: any[] = [
-    { from: "start", to: "s0" },
-    { from: "s0", to: "g0" }, { from: "g0", to: "sa", condition: "approve" },
-    { from: "sa", to: "g1" }, { from: "g1", to: "sb", condition: "approve" },
-    { from: "sb", to: "g2" }, { from: "g2", to: "p1_ask", condition: "approve" },
+    { from: "start", to: "s0_case" },
+    { from: "s0_case", to: "g0" },
+    { from: "g0", to: "sa_team", condition: "approve" },
+    { from: "g0", to: "s0_chase", condition: "reject" },      // not in the bank yet — chase, re-check
+    { from: "s0_chase", to: "g0" },
+
+    { from: "sa_team", to: "sa_access" },
+    { from: "sa_access", to: "sa_call" },
+    { from: "sa_call", to: "sa_kyc" },
+    { from: "sa_kyc", to: "g1" },
+    { from: "g1", to: "sb_assess", condition: "approve" },
+    { from: "g1", to: "sa_gaps", condition: "reject" },
+    { from: "sa_gaps", to: "sa_kyc" },                        // re-submit
+
+    { from: "sb_assess", to: "sb_parent" },
+    { from: "sb_parent", to: "sb_package", condition: "suitable" },
+    { from: "sb_parent", to: "sb_acquisition", condition: "else" },
+    { from: "sb_acquisition", to: "sb_package" },             // the chart rejoins here
+    { from: "sb_package", to: "sb_trading", condition: "trading" },
+    { from: "sb_package", to: "sb_summary", condition: "else" },
+    { from: "sb_trading", to: "sb_summary" },
+    { from: "sb_summary", to: "g2" },
+    { from: "g2", to: "p1_ask", condition: "approve" },
+    { from: "g2", to: "sb_summary", condition: "reject" },    // re-agree the route and its cost
 
     { from: "p1_ask", to: "p1_upload" },
     { from: "p1_upload", to: "p1_precheck" },
@@ -145,11 +247,38 @@ function graph() {
     { from: "p1_courier", to: "p1_saudi_mofa" },
     { from: "p1_saudi_mofa", to: "p1_translate" },
     { from: "p1_translate", to: "g3" },
-    { from: "g3", to: "p2", condition: "approve" },
+    { from: "g3", to: "p2_datasheet", condition: "approve" },
     { from: "g3", to: "p1_redo", condition: "reject" },        // rejection has somewhere to go
     { from: "p1_redo", to: "p1_translate" },
 
-    { from: "p2", to: "g4" }, { from: "g4", to: "p3", condition: "approve" },
+    { from: "p2_datasheet", to: "p2_tradename" },
+    { from: "p2_tradename", to: "p2_misa" },
+    { from: "p2_misa", to: "p2_fee", condition: "clear" },
+    { from: "p2_misa", to: "p2_query", condition: "query" },
+    { from: "p2_query", to: "p2_misa" },                       // answered — back to the application
+    { from: "p2_fee", to: "p2_licence" },
+    { from: "p2_licence", to: "p2_aoa" },
+    { from: "p2_aoa", to: "p2_cr" },
+
+    { from: "p2_cr", to: "m_confirm" },
+    { from: "m_confirm", to: "m_route" },
+    { from: "m_route", to: "m_files", condition: "inksa" },
+    { from: "m_route", to: "m_visa", condition: "else" },
+    { from: "m_visa", to: "m_files" },
+    { from: "m_files", to: "m_nitaqat" },
+    { from: "m_nitaqat", to: "m_transfer" },
+    { from: "m_transfer", to: "m_fees", condition: "consent" },
+    { from: "m_transfer", to: "m_resolve", condition: "blocked" },
+    { from: "m_resolve", to: "m_transfer" },                   // retry the transfer request
+    { from: "m_fees", to: "m_iqama" },
+    { from: "m_iqama", to: "m_qa" },
+    { from: "m_qa", to: "g4" },
+
+    { from: "g4", to: "p2_balance", condition: "approve" },
+    { from: "g4", to: "p2_correct", condition: "reject" },
+    { from: "p2_correct", to: "p2_cr" },                       // reissue the CR
+    { from: "p2_balance", to: "p2_deliver" },
+    { from: "p2_deliver", to: "p3" },
     { from: "p3", to: "end" },
   ];
 
@@ -206,12 +335,16 @@ async function main() {
   const steps = g.nodes.filter((n: any) => n.type === "task").length;
   const gates = g.nodes.filter((n: any) => n.type === "approval").length;
   const forks = g.nodes.filter((n: any) => n.type === "decision").length;
-  const loops = g.edges.filter((e: any) => ["p1_fix", "p1_redo"].includes(e.from)).length;
+  // A rework edge is one that goes BACKWARDS — to a node declared earlier than its source. That is
+  // what a loop is, and counting them by name would miss the next one somebody adds.
+  const order = new Map(g.nodes.map((n: any, i: number) => [n.id, i]));
+  const loops = g.edges.filter((e: any) => (order.get(e.to) ?? 0) <= (order.get(e.from) ?? 0));
+  const withList = (k: string) => g.nodes.filter((n: any) => n.config?.[k]).length;
 
   console.log(`
-Built: ${steps} steps, ${gates} gates, ${forks} decision fork, ${loops} rework loops.
-Phase 1 is the fully-built stage: ${g.nodes.filter((n: any) => n.id.startsWith("p1_")).length} nodes, checklists on 4 of them,
-captures for the apostille answer, the AWB and the carrier, and two paths to KSA.
+Built: ${steps} steps, ${gates} gates, ${forks} decision forks, ${loops.length} rework loops.
+  checklists on ${withList("checklist")} steps, captures on ${withList("captures")}, ${withList("govCenter")} named to an authority
+  loops back: ${loops.map((e: any) => `${e.from}→${e.to}`).join(", ")}
 
 Case started: "${TAG} — Acme Holdings KSA"
 Waiting at:   ${open?.title ?? "(nothing open?)"}
