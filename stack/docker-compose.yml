@@ -58,12 +58,25 @@ services:
       # in parallel, so those handlers queue on five connections and the same call measured 603ms,
       # 2.8s and 7.4s on three consecutive runs. The variance was queueing, not the database.
       # MySQL's own max_connections is 151, so five was self-imposed.
-      DATABASE_URL: mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}?connection_limit=15
+      # Guarded for the same reason as the two secrets below: without the env file this became
+      # mysql://:@db:3306/ and the API failed on connect instead of saying what was missing.
+      DATABASE_URL: mysql://${DB_USER:?set DB_USER}:${DB_PASSWORD:?set DB_PASSWORD}@db:3306/${DB_NAME:?set DB_NAME}?connection_limit=15
       # Both REQUIRED — the API refuses to start in production with the dev defaults.
       # CRED_KEY encrypts the client credential vault: change it later and every stored
       # credential becomes permanently unreadable.
-      JWT_SECRET: ${JWT_SECRET}
-      CRED_KEY: ${CRED_KEY}
+      #
+      # `:?` SO COMPOSE REFUSES RATHER THAN SUBSTITUTING A BLANK. The secrets live in
+      # ~/stimespro/.env, one directory ABOVE this file, and compose only auto-reads a .env from its
+      # own project directory — so `docker compose up -d` run from here, the obvious way, saw
+      # neither. It warned once, substituted empty strings, started the container, and the API then
+      # exited on its own guard: the site goes down and the only clue is a line in the API log,
+      # several steps away from the command that caused it. A missing secret now stops compose
+      # before anything is touched, naming the variable.
+      #
+      # The box also has app/stack/.env symlinked to ../../.env so the obvious command just works.
+      # This guard is for the day that link is missing — a fresh clone, a rebuilt box.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (it lives in ~/stimespro/.env — see README)}
+      CRED_KEY: ${CRED_KEY:?set CRED_KEY (it lives in ~/stimespro/.env — see README)}
       # Used to build links in outbound email, so these must be the public URLs.
       CONSOLE_URL: https://pro.ionob.in
       PORTAL_URL: https://cp.ionob.in
