@@ -36605,7 +36605,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // refused on completion, so the form should say so before the button is pressed.
           req: !(c.required === false || c.optional === true),
           value: val,
-          options: (c.options || '').split(',').filter(Boolean).map(o => {
+          // String(): the builder writes options as a comma string, but a template loaded from
+          // anywhere else can hold an array — and an array here used to throw and white-screen the
+          // whole page, not just this field. String(['yes','no']) is 'yes,no', so both shapes work.
+          options: String(c.options || '').split(',').map(o => o.trim()).filter(Boolean).map(o => {
             const on = String(val) === String(o);
             return {
               o: _capWords(o),
