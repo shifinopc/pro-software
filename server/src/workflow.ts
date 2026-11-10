@@ -359,9 +359,22 @@ function nextTargets(g: Graph, nodeId: string, key?: string | null, blankFallbac
     const fallback = edges.filter(e => conds.includes(e.condition as any));
     return fallback.map(e => e.to);
   }
-  // no key → unconditional edges (or all, if none are marked unconditional)
+  // no key → the unconditional edges, which MAY be several: parallel branches are a real thing and
+  // fanning out across them is correct.
   const uncond = edges.filter(e => !e.condition);
-  return (uncond.length ? uncond : edges).map(e => e.to);
+  if (uncond.length) return uncond.map(e => e.to);
+  // …but when every edge is conditional and nobody said which branch, this used to return ALL of
+  // them, and a step wired `ok` / `fix` opened BOTH: the client asked to correct the documents while
+  // the same documents were being signed. Mutually exclusive branches taken simultaneously is not a
+  // fallback, it is two runs wearing one run's clothes, and it is silent.
+  const fallback = edges.filter(e => e.condition === "else" || e.condition === "default");
+  if (fallback.length) return fallback.map(e => e.to);
+  // One conditional edge and no key is unambiguous — there is only one way out.
+  if (edges.length <= 1) return edges.map(e => e.to);
+  const node = getNode(g, nodeId);
+  throw new Error(
+    `"${node?.label ?? nodeId}" branches ${edges.map(e => `"${e.condition}"`).join(" / ")} and no outcome was given. ` +
+    `Complete it with one of those outcomes, or wire a default edge.`);
 }
 
 /**
@@ -2004,6 +2017,16 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
     logActivity({ type: "alert", message: `⚠ "${task.title}" completed but its document could not be updated — ${String(e?.message ?? e).slice(0, 160)}` });
   }
 
+  // WHERE IT GOES IS DECIDED BEFORE IT IS MARKED DONE. nextTargets refuses to route a branch nobody
+  // chose, and a refusal AFTER the status write closes the step with nothing opened — the run is
+  // then stranded, which is a worse failure than the silent fan-out that refusal replaced. Deciding
+  // first means the refusal leaves the step exactly as it was, open and completable.
+  const _rejecting = task.nodeType === "approval" && opts.outcome === "reject";
+  const _targets = _rejecting
+    // Reject must NEVER fall through to a bare unconditional (approve) edge — blankFallback=false.
+    ? nextTargets(g, task.nodeId, "reject", false)
+    : nextTargets(g, task.nodeId, task.nodeType === "approval" ? "approve" : (opts.outcome || null));
+
   const finalStatus = task.nodeType === "approval" ? (opts.outcome === "reject" ? "rejected" : "approved") : "done";
   await prisma.workflowTask.update({
     where: { id: taskId },
@@ -2016,19 +2039,12 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
   const _note = String((opts.variables as any)?.decisionNote ?? "").trim();
   await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: `${task.nodeType}.${finalStatus}`, detail: _note ? `${task.title} — ${_note}` : task.title, actor: opts.actor ?? null, at: nowISO() } });
 
-  // Route: approvals branch on approve/reject; tasks branch on outcome if the graph wires one.
-  if (task.nodeType === "approval" && opts.outcome === "reject") {
-    // Reject must NEVER fall through to a bare unconditional (approve) edge — blankFallback=false.
-    const targets = nextTargets(g, task.nodeId, "reject", false);
-    if (targets.length) {
-      await runFrontier(inst, g, targets);
-    } else {
-      // No reject branch authored → terminate the run as rejected rather than continue or stall.
-      await finalizeInstance(inst, "rejected", task.nodeId, "Rejected");
-    }
+  // Route to the targets worked out above, before this step was closed.
+  if (_rejecting && !_targets.length) {
+    // No reject branch authored → terminate the run as rejected rather than continue or stall.
+    await finalizeInstance(inst, "rejected", task.nodeId, "Rejected");
   } else {
-    const key = task.nodeType === "approval" ? "approve" : (opts.outcome || null);
-    await runFrontier(inst, g, nextTargets(g, task.nodeId, key));
+    await runFrontier(inst, g, _targets);
   }
 
   // Safety net: never leave a "running" instance with no open task (a zombie). If routing produced
@@ -2625,12 +2641,33 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
               template: { select: { name: true } } },
   });
   const imap = Object.fromEntries(insts.map(i => [i.id, i]));
+  // THE WAYS OUT OF A STEP. A task node can be wired to branch — "ok" / "fix", "clear" / "query",
+  // "consent" / "blocked" — and the drawer had one button, so the officer could not say which
+  // happened and the engine was handed no outcome at all. Sending the branch names with the step is
+  // what lets the screen offer them; without this, half of every rework loop is unreachable.
+  // Only the named branches: "else"/"default"/blank are the ordinary way on, which is the plain
+  // Complete button, not a choice to put in front of somebody.
+  const tpls = await prisma.workflowTemplate.findMany({
+    where: { id: { in: [...new Set(insts.map(i => i.templateId).filter(Boolean))] as string[] } },
+    select: { id: true, graph: true },
+  });
+  const gmap = Object.fromEntries(tpls.map(t => [t.id, t.graph as any]));
+  const outcomesFor = (t: any): string[] => {
+    if (t.nodeType === "approval") return []; // approvals already have Approve / Reject
+    const g = gmap[(imap[t.instanceId] as any)?.templateId];
+    if (!g || !Array.isArray(g.edges)) return [];
+    const named = g.edges
+      .filter((e: any) => e.from === t.nodeId && e.condition && !["else", "default"].includes(e.condition))
+      .map((e: any) => String(e.condition));
+    return [...new Set<string>(named)];
+  };
   res.json(mine.map(t => {
     const inst = imap[t.instanceId] as any;
     const v = (inst?.variables && typeof inst.variables === "object") ? inst.variables : {};
     const subject = String(v.applicant ?? v.employee ?? v.person ?? "").trim() || null;
-    return { ...t, instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject,
-                                      templateId: inst.templateId, workflow: inst.template?.name ?? null } : undefined };
+    return { ...t, outcomes: outcomesFor(t),
+             instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject,
+                                templateId: inst.templateId, workflow: inst.template?.name ?? null } : undefined };
   }));
 });
 /**

@@ -16045,7 +16045,20 @@
                    this; I bound a colour anyway. An element that appears and disappears cannot
                    freeze. -->
               <sc-if value="{{ wdCompleteReady }}" hint-placeholder-val="{{ true }}">
-                <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">{{ wdCompleteLabel }}</button>
+                <!-- A STEP THAT CAN END TWO WAYS NEEDS TWO BUTTONS. One button sent no outcome at
+                     all, which left the engine to guess and left every rework branch — the client
+                     correcting a document, an employer withholding consent — with no way to be
+                     chosen by the person who is looking at it. -->
+                <sc-if value="{{ wdHasOutcomes }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <sc-for list="{{ wdOutcomes }}" as="o" hint-placeholder-count="2">
+                      <button onClick="{{ o.pick }}" style="flex:1; min-width:120px; background:{{ o.bg }}; color:{{ o.color }}; border:1px solid {{ o.bd }}; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer;" style-hover="filter:brightness(.96);">{{ o.label }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ wdNoOutcomes }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ completeStep }}" style="width:100%; margin-top:10px; background:#7C00FF; color:#fff; border:none; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="filter:brightness(.96);">{{ wdCompleteLabel }}</button>
+                </sc-if>
               </sc-if>
               <!-- A BLOCKED BUTTON THAT ANSWERS WHEN PRESSED. It used to be `cursor:not-allowed`
                    with no handler, so pressing it did nothing at all and the only explanation was a
@@ -36357,6 +36370,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // anything follows it — the rows alone cannot answer that, because the step after
           // this one does not exist until this one is finished.
           nodeId: t2.nodeId || null,
+          // The named branches out of this step, if it has any — "ok"/"fix", "consent"/"blocked".
+          // Each becomes its own button, because a step that can end two ways and offers one button
+          // can only ever be finished one way.
+          outcomes: Array.isArray(t2.outcomes) ? t2.outcomes : [],
           // Needed to find the CASE behind the step: with the case row no longer listed separately,
           // its deadline has to travel with the step or it disappears from the queue entirely.
           instanceId: t2.instanceId || (t2.instance && t2.instance.id) || null,
@@ -36819,6 +36836,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // open it and there was literally nothing there, and no way to move the workflow on.
         // Approvals are excluded because they finish through Approve / Reject instead.
         wdCanCompleteStep: selStep.kind !== 'approval',
+        wdOutcomeKeys: Array.isArray(selStep.outcomes) ? selStep.outcomes : [],
         // Every question the form is actually asking has an answer. The server has always refused an
         // incomplete step; the button did not, so the officer filled what they could, pressed it, and
         // was told no. Hidden fields are not counted — they were never asked.
@@ -36876,7 +36894,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         wdSlaColor: !_capsOk ? '#B8860B' : !_hasSla9 ? '#8C8899' : remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
         closeWorkDrawer: () => (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })),
         // WIRED: real steps complete through the engine (checklist state + captured variables included).
-        completeStep: () => {
+        // `outcome9` is the branch the officer picked, for a step wired to end more than one way.
+        // Left out for an ordinary step, which has exactly one way on.
+        //
+        // STRING ONLY. The plain button is wired `onClick="{{ completeStep }}"`, so it calls this
+        // with the click EVENT, and an event in the request body is a circular structure that
+        // JSON.stringify throws on — which took the whole screen down rather than failing the one
+        // request. A branch key is a string; anything else is the event and means "no outcome".
+        completeStep: (outcome9) => {
+          const oc9 = typeof outcome9 === 'string' && outcome9 ? outcome9 : null;
           if (!(selStep.kind === 'approval' || gateOk)) return;
           if (!_capsOk) return;
           if (selStep._real) {
@@ -36887,7 +36913,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const shown2 = new Set((selStep.captures || []).filter(_capShown).map(c2 => c2.var));
             const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (shown2.has(k2) && v2 && String(v2).trim()) vars2[k2] = v2; });
             const t2 = localStorage.getItem('stimespro:token');
-            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2 }) })
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2, ...(oc9 ? { outcome: oc9 } : {}) }) })
               .then(r2 => r2.ok ? (this.toast('Step completed — workflow advanced'), this._afterStepDone(selStep.instanceId, selStep.id)) : r2.json().then(j2 => {
                 // A cross-field refusal is held on the form, against the fields it names. Everything
                 // else stays a toast, because there is nothing on screen to point at.
@@ -37323,6 +37349,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       drawerApi = {
         ...drawerApi,
         wdCompleteLabel: moreAhead9 ? 'Complete step' : 'Complete task',
+        // ONE BUTTON PER WAY OUT, for a step the graph wires to end more than one way. The branch
+        // names come from whoever drew the workflow ("ok" / "fix", "consent" / "blocked"), so they
+        // are shown as written rather than translated into something this screen invented.
+        wdHasOutcomes: ((drawerApi.wdOutcomeKeys || []).length > 0),
+        wdNoOutcomes: ((drawerApi.wdOutcomeKeys || []).length === 0),
+        wdOutcomes: (drawerApi.wdOutcomeKeys || []).map((k9, i9) => ({
+          label: String(k9).charAt(0).toUpperCase() + String(k9).slice(1),
+          // The first branch is the way the step normally goes, so it keeps the primary colour and
+          // the others are quieter. A rework path should not look like the thing to press.
+          bg: i9 === 0 ? '#7C00FF' : '#fff',
+          color: i9 === 0 ? '#fff' : '#4B4757',
+          bd: i9 === 0 ? '#7C00FF' : '#DDD9E6',
+          pick: () => drawerApi.completeStep(k9),
+        })),
         wdAdvancing: !!this.state.wdAdvancing,
         wdAdvancingTitle: this.state.wdAdvancingLast ? 'Task complete' : 'Step completed',
         wdAdvancingNote: this.state.wdAdvancingLast ? 'Every step of this run is done.' : 'Opening the next step of this run…',
