@@ -17,8 +17,6 @@
 import { prisma } from "../src/db.js";
 import { startInstance, completeTask } from "../src/workflow.js";
 import { parseMoney, minorFromTyped } from "../src/disbursements.js";
-import fs from "node:fs";
-import path from "node:path";
 
 let failures = 0;
 const ok = (cond: boolean, what: string) => {
@@ -150,23 +148,8 @@ async function engine() {
   }
 }
 
-/**
- * A `select` capture's options are a comma string when the builder writes them and an array when a
- * template is loaded from anywhere else — a seed, an import, a script. The drawer used to call
- * .split on them directly, so one array white-screened the WHOLE My Tasks page, not just the field.
- * Checked as text because the drawer is one block of a 46,000-line single-file app, and nothing
- * below it runs once it throws.
- */
-function renderer() {
-  console.log("\nhow a select capture's options are read:");
-  const src = fs.readFileSync(path.join(import.meta.dirname, "../../index.html"), "utf8");
-  ok(src.includes("options: String(c.options || '').split(',')"),
-     "the task drawer coerces options before splitting, so an array cannot white-screen the page");
-}
-
 await pure();
 await engine();
-renderer();
 await prisma.$disconnect();
 console.log(failures ? `\n${failures} failed` : "\nall good");
 process.exit(failures ? 1 : 0);

@@ -107,6 +107,7 @@ export const EXPECTED: string[] = [
   "quote-convert-check",
   "self-approval-check",
   "session-expiry-check",
+  "task-drawer-check",
   "render-scope-check",
   "signature-check",
   "site-lookup-check",

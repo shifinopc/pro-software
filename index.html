@@ -36652,7 +36652,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           })(),
         };
       });
-      const remH = selStep.slaHours - selStep.elapsedH;
+      // No SLA on the step means no deadline to be late against — the same rule the list applies.
+      // Without the guard `null - elapsedH` is a small negative number, which rounds to 0 and had
+      // every step with no SLA announcing itself "0h over SLA" in red from the moment it opened.
+      const _hasSla9 = Number(selStep.slaHours) > 0;
+      const remH = _hasSla9 ? selStep.slaHours - selStep.elapsedH : null;
+      const _slaLabel9 = !_hasSla9 ? 'No SLA'
+        : remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA'
+        : Math.round(remH) + 'h to SLA';
       drawerApi = {
         showWorkDrawer: true, wdKind: selStep.kind, wdIsApproval: selStep.kind === 'approval',
         wdTitle: selStep.title, wdClient: selStep.client, wdRelated: selStep.related, wdRole: selStep.role,
@@ -36769,16 +36776,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // A workflow step has its own next step — the graph decides it — so there is nothing to
         // suggest here, and the section stays closed rather than opening onto nothing.
         wdOnApprove: selStep.onApprove, wdOnReject: selStep.onReject,
-        wdSlaText: remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA',
+        wdSlaText: _slaLabel9,
         // The gate note describes the CHECKLIST gate, so it is only meaningful when there is one —
         // on a step without a checklist it would claim "All required documents ready" about a step
         // that never asked for any.
         wdFootNote: (!_capsOk
           ? (_capsMissing.length === 1 ? 'Still needed: ' + _capsMissing[0] : 'Still needed: ' + _capsMissing.join(', '))
           : '')
-          || (remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA' : Math.round(remH) + 'h to SLA')
+          || _slaLabel9
           + ((selStep.checklist || []).length ? ' · ' + (gateOk ? 'All required documents ready' : 'Complete blocked — required docs not ready') : ''),
-        wdSlaColor: !_capsOk ? '#B8860B' : remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
+        // Grey for a step with no SLA: nothing is wrong, so nothing should look urgent.
+        wdSlaColor: !_capsOk ? '#B8860B' : !_hasSla9 ? '#8C8899' : remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
         closeWorkDrawer: () => (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })),
         // WIRED: real steps complete through the engine (checklist state + captured variables included).
         completeStep: () => {
