@@ -718,6 +718,16 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
               await log("document.renewed", nodeId, `${docType} → ${expiry || "?"} (no. ${number || "—"})`);
               logActivity({ type: "compliance", message: `${docType} renewed for ${existing.person} — new expiry ${expiry || "?"}${inst.clientName ? ` (${inst.clientName})` : ""}` });
             }
+          } else if (c.renewOnlyIfExists) {
+            // A SYNC STEP MUST NOT INVENT A RECORD.
+            //
+            // A CR renewal also re-dates the Chamber of Commerce certificate and the SPL (Saudi Post)
+            // address certificate — the same dates, no separate process. But a client who holds no
+            // such document ON FILE would otherwise have one created here, carrying the CR's dates,
+            // no number and no scan: today that is 7 CR holders and 0 of each, so the first renewals
+            // would have filed 14 documents nobody entered. Updating what exists is the whole job;
+            // when there is nothing to update this says so in the run's own log and moves on.
+            await log("issue_document.skipped", nodeId, `${docType}: nothing on file for this client, so nothing to re-date`);
           } else {
             // Subject scope is a property of the DOCUMENT TYPE — read it from the DB (authoritative),
             // falling back to the process var, then "employee". A manually-started run won't set
@@ -1656,6 +1666,29 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
         detail: `${task.title}: ignored ${foreign.join(", ")} — this step does not collect them`,
         actor: "engine", at: nowISO(),
       } }).catch(() => {});
+    }
+    // A MONEY CAPTURE MUST ANSWER THE RULE THAT GUARDS IT.
+    //
+    // These fees were once two fields — `jawazatAmount` plus a `jawazatPaid` dropdown — and were
+    // replaced by a single money capture that carries the paid flag inside itself. The RULES were
+    // left pointing at the old name, and a money answer collapses to just its amount on the run
+    // (the flag becomes a Disbursement), so `jawazatPaid` stopped being written at all: the rule
+    // could never hold and "Payment for Jawazat" refused to complete no matter what was filled in,
+    // with a message about an unpaid fee that was in fact marked paid. Four rules across three
+    // steps — the work permit fee, the Jawazat fee, the late charge and the violation — were
+    // stranded that way, and only the older snapshots that still carry the dropdown could finish.
+    //
+    // The pairing is the convention that replacement followed, not a guess: a money field named
+    // <thing>Amount is the answer to <thing>Paid. A step still declaring the old dropdown keeps the
+    // person's own answer, so those open snapshots are untouched.
+    for (const cap of caps0) {
+      if (!cap?.var || String(cap.type) !== MONEY) continue;
+      const pair = /^(.*)Amount$/.exec(String(cap.var));
+      if (!pair) continue;
+      const name = `${pair[1]}Paid`;
+      if (name in supplied) continue;
+      const money = parseMoney(supplied[String(cap.var)]);
+      if (money) supplied[name] = money.paid === false ? "unpaid" : "paid";
     }
     opts = { ...opts, variables: supplied } as any;
     if (foreign.length) {

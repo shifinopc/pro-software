@@ -6152,7 +6152,15 @@ app.post("/api/companies", requireAuth, requireStaff, requireWriteRole, async (r
     // drops out of anything that filters by one — which is the whole point of having the column.
     // `contacts` is a relation, not a column — it arrives from the Add-client form as the people to
     // create alongside the company, and Prisma rejects it inside `data`.
-    const { contacts: incomingContacts, ...body } = req.body ?? {};
+    //
+    // `portalEmail` is not a column either. It is read further down, off `req.body`, to decide which
+    // address becomes the portal login — but it was never taken OUT of the spread, so every save
+    // reached prisma.company.create carrying it and came back
+    // "Unknown argument `portalEmail`". The form sends the key on every save, empty or not, so
+    // CREATING A CLIENT FROM THE CONSOLE FAILED OUTRIGHT — a 400 and a wall of Prisma text under a
+    // form that had just been filled in correctly. Read from req.body below, so dropping it here
+    // changes nothing about the login it provisions.
+    const { contacts: incomingContacts, portalEmail: _portalEmail, ...body } = req.body ?? {};
 
     // The same rule as the edit route. Creating was the looser of the two, which is backwards — a
     // bad address typed once at creation is the one that never gets looked at again.
