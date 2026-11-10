@@ -35,6 +35,7 @@ export const EXPECTED: string[] = [
   "imap-check",
   "import-template-check",
   "island-minify-check",
+  "list-capping-check",
   "lead-details-fields-check",
   "lead-export-check",
   "lead-import-check",
