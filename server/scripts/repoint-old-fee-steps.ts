@@ -24,11 +24,9 @@
  * money-paid-rule-check covers.
  */
 import { prisma } from "../src/db.js";
+import { assertTarget } from "./_live-guard.js";
 
-if (!/@localhost|@127\.0\.0\.1/.test(process.env.DATABASE_URL ?? "")) {
-  console.error("refusing to run against a database that is not local");
-  process.exit(1);
-}
+assertTarget("repoint-old-fee-steps");
 const APPLY = process.argv.includes("--apply");
 
 /** The shape being retired: a paid/unpaid dropdown, or an amount that is still a bare number. */

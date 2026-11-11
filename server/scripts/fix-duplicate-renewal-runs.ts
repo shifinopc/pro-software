@@ -21,7 +21,9 @@
  * re-pointed at the survivor so the next tick does not raise a third.
  */
 import { prisma } from "../src/db.js";
+import { assertTarget } from "./_live-guard.js";
 
+assertTarget("fix-duplicate-renewal-runs");
 const APPLY = process.argv.includes("--apply");
 const nowISO = () => new Date().toISOString();
 
