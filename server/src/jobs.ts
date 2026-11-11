@@ -334,6 +334,14 @@ export async function startPeriodicRuns(): Promise<PeriodicResult> {
 }
 
 
+/**
+ * The value a document carries between "this pass is taking it" and "here is the run".
+ * Written as `pending:<iso>` so the release sweep can tell a claim that is seconds old from one
+ * abandoned by a crash, and so it can never be mistaken for a workflow instance id.
+ */
+const PENDING = "pending:";
+const isPendingClaim = (v: string) => v.startsWith(PENDING);
+
 /** `onlyCompanyId` scopes a pass to one client — for tests that must not start renewals on real data. */
 export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalResult> {
   const out: RenewalResult = { considered: 0, started: 0, released: 0, skipped: 0, skippedExiting: 0, held: 0, details: [] };
@@ -342,6 +350,16 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
   // a stuck pointer would block that document from ever auto-renewing again.
   const inFlight = await prisma.document.findMany({ where: { NOT: { renewalRunId: null }, ...(onlyCompanyId ? { companyId: onlyCompanyId } : {}) } });
   for (const d of inFlight) {
+    // A claim taken seconds ago by a pass that has not finished creating the run yet. Releasing it
+    // here would hand the same document to this pass as well, which is the race this marker exists
+    // to close. Only let go once it is clearly abandoned — a crash between claim and run.
+    if (isPendingClaim(d.renewalRunId!)) {
+      const at = Date.parse(d.renewalRunId!.slice(PENDING.length));
+      if (Number.isFinite(at) && Date.now() - at < 10 * 60_000) continue;
+      await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: null } });
+      out.released++;
+      continue;
+    }
     const run = await prisma.workflowInstance.findUnique({ where: { id: d.renewalRunId! } });
     if (!run || run.status !== "running") {
       await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: null } });
@@ -413,6 +431,21 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
         continue;
       }
 
+      // CLAIM THE DOCUMENT BEFORE STARTING THE RUN, AND ONLY IF NOBODY ELSE HAS.
+      //
+      // The claim used to be written AFTER the run existed, which leaves a window where two passes
+      // both see an unclaimed document and both start a renewal. `tickInFlight` closes that inside
+      // one process; it does nothing across two, and a restart overlaps them by design — the old
+      // process finishes its tick while the new one runs its boot tick. On 13 October that produced
+      // SEVENTY employees with two open Iqama renewals each, raised 2m25s apart, and the second
+      // claim overwrote the first so the run holding the real work was orphaned from its document.
+      //
+      // `updateMany` with the null in the WHERE is a compare-and-swap: InnoDB serialises the two,
+      // one gets count 1 and the other count 0. Whoever loses skips the document, which is correct —
+      // somebody else is already renewing it.
+      const mark = `${PENDING}${new Date().toISOString()}`;
+      const claimed = await prisma.document.updateMany({ where: { id: d.id, renewalRunId: null }, data: { renewalRunId: mark } });
+      if (!claimed.count) { out.skipped++; continue; } // another pass got there first
       try {
         // Hand the engine everything issue_document needs to RENEW (not re-issue): documentId makes it
         // archive old→new into history[] instead of creating a duplicate document.
@@ -432,7 +465,7 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
           // silently dropped on every renewal this job has ever started.
           engineVariables: { _trigger: "document_expiry", _autoStarted: nowISO() },
         });
-        // Claim the document immediately so the next tick skips it.
+        // Turn the pending marker into the real claim now that the run exists.
         await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: run!.id } });
         out.started++;
         out.details.push(`${docType} — ${d.person} (${daysLeft}d)`);
@@ -447,7 +480,18 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
         if (first) await notifyDocumentExpiring({ companyId: d.companyId, docType, person: d.person, expiryDate: d.expiryDate, daysLeft });
         logActivity({ type: "task", message: `Auto-renewal started: ${docType} — ${d.person} (${tpl.name})` });
       } catch (e: any) {
-        // A broken template must not stall every other document behind it.
+        // ALREADY RUNNING FOR THIS SUBJECT. startInstance refuses it, and the right answer is to
+        // adopt the open run rather than retry for ever: that is what a document whose claim was
+        // lost looks like, and without this the job would raise the same refusal every hour.
+        if (e?.duplicate?.id) {
+          await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: e.duplicate.id } });
+          out.skipped++;
+          out.details.push(`ALREADY OPEN ${docType} — ${d.person}: adopted "${e.duplicate.title}"`);
+          continue;
+        }
+        // A broken template must not stall every other document behind it. Let the claim go, or the
+        // document is frozen out of renewal by a failure that may be nothing to do with it.
+        await prisma.document.updateMany({ where: { id: d.id, renewalRunId: mark }, data: { renewalRunId: null } });
         out.skipped++;
         out.details.push(`FAILED ${docType} — ${d.person}: ${e?.message ?? e}`);
       }

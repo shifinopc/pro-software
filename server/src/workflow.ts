@@ -1258,7 +1258,45 @@ export async function describeTemplate(templateId: string): Promise<{
  *
  * Trusted keys therefore go in separately, after sanitisation, and never from a request body.
  */
-export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any; engineVariables?: Record<string, any> }) {
+/**
+ * IS THIS RENEWAL ALREADY UNDER WAY FOR THE SAME SUBJECT?
+ *
+ * The expiry job has always deduplicated, by stamping `Document.renewalRunId` and only ever looking
+ * at documents where that is null. Every OTHER way a run can start — the New task dialog, a service
+ * binding, accepting a client request — went straight to `startInstance`, which asked nothing. Two
+ * Baladiya renewals for one client, raised half an hour apart, sat in the same officer's queue with
+ * no way to tell from either one that the other existed. Nothing links them, so both get worked.
+ *
+ * SUBJECT, NOT CLIENT. One client has seventy-two Iqamas running at once and every one of them is
+ * correct, so the comparison is the person the run is about:
+ *
+ *   employee named  → the same employee
+ *   otherwise       → the same client, and the same CR where both runs name one
+ *
+ * A missing CR matches any CR deliberately: a hand-started run names none, so requiring an exact
+ * match would let a manual run sit alongside the automatic one for the very same licence. Two
+ * runs that each name a DIFFERENT branch are genuinely two renewals and are left alone.
+ *
+ * Only `running` counts. A finished renewal is history and must never block the next one.
+ */
+export async function openDuplicateRun(templateId: string, vars: Record<string, any>, companyId: string | null) {
+  const empId = vars?.employeeId ? String(vars.employeeId) : null;
+  const estId = vars?.establishmentId ? String(vars.establishmentId) : null;
+  if (!empId && !companyId) return null; // nothing identifies a subject — nothing to compare
+  const open = await prisma.workflowInstance.findMany({
+    where: { templateId, status: "running", ...(empId ? {} : { companyId }) },
+    select: { id: true, title: true, startedAt: true, variables: true },
+  });
+  return open.find(r => {
+    const v: any = (r.variables && typeof r.variables === "object") ? r.variables : {};
+    const e = v.employeeId ? String(v.employeeId) : null;
+    if (empId || e) return e === empId;
+    const est = v.establishmentId ? String(v.establishmentId) : null;
+    return !est || !estId || est === estId;
+  }) ?? null;
+}
+
+export async function startInstance(templateId: string, opts: { title?: string; companyId?: string | null; clientName?: string | null; variables?: any; engineVariables?: Record<string, any>; force?: boolean }) {
   const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId } });
   if (!tpl) throw new Error("Template not found");
   // A retired template must not start new work. Hiding it from the lists is not enough: a service
@@ -1268,6 +1306,17 @@ export async function startInstance(templateId: string, opts: { title?: string; 
   if (tpl.retired) throw new Error(`"${tpl.name}" has been retired and cannot start new work`);
   const g = asGraph(tpl.graph);
   if (!g.nodes.length) throw new Error("This workflow has no steps yet");
+  // Refused rather than merged: which of the two is the real one, and what happens to the answers
+  // already given on the other, is a judgement nobody has made yet. `force` is how a caller says
+  // the second one is deliberate — the console asks before sending it.
+  if (!opts.force) {
+    const dup = await openDuplicateRun(templateId, { ...(opts.variables ?? {}), ...(opts.engineVariables ?? {}) }, opts.companyId ?? null);
+    if (dup) {
+      const err: any = new Error(`"${tpl.name}" is already running for this subject — "${dup.title}", started ${String(dup.startedAt ?? "").slice(0, 10)}.`);
+      err.duplicate = { id: dup.id, title: dup.title, startedAt: dup.startedAt };
+      throw err;
+    }
+  }
   const inst = await prisma.workflowInstance.create({
     data: {
       templateId,
@@ -2501,11 +2550,16 @@ R.delete("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (r
 // Instances (run-time)
 R.post("/instances", requireAuth, requireStaff, async (req, res) => {
   try {
-    const { templateId, title, companyId, clientName, variables } = req.body ?? {};
+    const { templateId, title, companyId, clientName, variables, force } = req.body ?? {};
     if (!templateId) return res.status(400).json({ error: "templateId is required" });
-    const inst = await startInstance(templateId, { title, companyId, clientName, variables });
+    const inst = await startInstance(templateId, { title, companyId, clientName, variables, force: !!force });
     res.status(201).json(inst);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
+  } catch (e: any) {
+    // 409 carries the run already open, so the console can name it and offer to start another
+    // anyway. A plain 400 gave the officer a sentence and no way past it.
+    if (e?.duplicate) return res.status(409).json({ error: e.message, duplicate: e.duplicate });
+    res.status(400).json({ error: e.message });
+  }
 });
 R.get("/instances", requireAuth, requireStaff, async (req, res) => {
   const where: any = {};

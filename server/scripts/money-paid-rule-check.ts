@@ -114,6 +114,76 @@ try {
 } finally {
   await sweep();
 }
-await prisma.$disconnect();
+
+/**
+ * AND THE QUESTION IS GONE FROM THE FORM.
+ *
+ * The money field carried a "Paid" chip: a state badge that looked like a button, beside a second
+ * chip answering a different question (whose money it was), with nothing but a tooltip to tell them
+ * apart — and it read "Paid" on an empty form, because recording a fee you have just handed over is
+ * the ordinary case. Recording the fee IS paying it, so the chip is gone and the amount takes the
+ * whole row. The ENGINE still understands an unpaid answer, which is what the cases above cover;
+ * nothing in the console sends one any more.
+ */
+console.log("\nand the console no longer asks a question it always answered the same way:");
+{
+  const ui = (await import("node:fs")).readFileSync(
+    (await import("node:path")).join(import.meta.dirname, "../../index.html"), "utf8");
+  // Anchored on the property names, not the bare words: `disbUnpaidLabel` (the disbursement list's
+// own banner, nothing to do with this field) contains "paidLabel" and flagged correct code.
+ok(!/togglePaid|\bpaidLabel/.test(ui), "the Paid toggle and its label are gone from the money field");
+  ok(!/showRef/.test(ui), "…and the receipt box is no longer gated behind it");
+  ok(ui.includes('onBlur="{{ c.m.setReference }}" placeholder="Receipt or reference number"'),
+    "the receipt and date row is always on screen");
+  ok(ui.includes("{ amount: '', paid: true, ...cur9, [k]: x }"),
+    "every money answer still carries paid:true, so the rules that ask stay satisfiable");
+}
+
+/**
+ * AND THE QUESTION THAT REMAINS IS ASKED AS ONE.
+ *
+ * Whether the client paid the ministry themselves is a real distinction — the firm is either out of
+ * pocket and billing it on, or it is not — but it was a single chip reading "We paid", which is the
+ * same trap the paid/unpaid toggle was: a badge that is really a button, with its second option
+ * nowhere on screen. Both answers are on screen now, in the pills every other choice on this form
+ * uses, and the billing consequence is printed under whichever is picked.
+ */
+console.log("\nand whose money paid is asked as a question, with both answers on screen:");
+{
+  const ui = (await import("node:fs")).readFileSync(
+    (await import("node:path")).join(import.meta.dirname, "../../index.html"), "utf8");
+  ok(!/togglePayer/.test(ui), "the one-chip toggle is gone");
+  ok(ui.includes("WHOSE MONEY PAID THE MINISTRY?"), "…replaced by a labelled question");
+  ok(ui.includes('>We paid it</span>') && ui.includes('>The client paid it direct</span>'),
+    "…with both answers visible, so neither reads as a status badge");
+  ok(ui.includes("pickFirm: () => patch('payer', 'firm')") && ui.includes("pickClient: () => patch('payer', 'client')"),
+    "…each setting the payer outright rather than flipping whatever it was");
+  ok(/billable to the client/.test(ui) && /never billed on to them/.test(ui),
+    "…and the consequence is spelled out, which is the part the officer actually needs");
+}
+
+/**
+ * AND NO OPEN STEP IS STILL ASKING THE OLD FOUR.
+ *
+ * A task snapshots its questions when it is created, so the template changing months ago left 78
+ * open steps — 70 of them work permits — still showing the paid/unpaid dropdown this file is about.
+ * scripts/repoint-old-fee-steps.ts brings them onto the money field; this is what says it stayed
+ * done, and would catch a run started from a template that had been edited back.
+ */
+console.log("\nand no step anybody is holding still asks the retired paid/unpaid question:");
+{
+  const stillOld = await prisma.workflowTask.findMany({
+    where: { status: "active", instance: { status: "running" } },
+    select: { title: true, captures: true },
+  });
+  const bad9 = stillOld.filter(t => Array.isArray(t.captures) && (t.captures as any[]).some((c: any) =>
+    (String(c?.type) === "select" && /paid$/i.test(String(c?.var ?? "")))
+    || (String(c?.type) === "number" && /amount$/i.test(String(c?.var ?? "")))));
+  ok(bad9.length === 0, bad9.length
+    ? `${bad9.length} open task(s) still on the old shape, e.g. "${bad9[0].title}" — run scripts/repoint-old-fee-steps.ts --apply`
+    : "every open fee step is on the one money field");
+  await prisma.$disconnect();
+}
+
 console.log(bad ? `\n${bad} failed` : "\nall good");
 process.exit(bad ? 1 : 0);

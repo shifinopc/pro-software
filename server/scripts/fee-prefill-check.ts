@@ -97,7 +97,11 @@ ok(Object.keys(load(step({ termVar: undefined }), {})._rateFill9("permitTerm", "
 ok(load(step(), {})._rateAmt9(9700, "later") === null, "a term that is not a number prices nothing");
 
 console.log("\nthe screen is actually wired to it:");
-ok(ui.includes("[c.var]: o, ..._rateFill9(c.var, o)"), "picking an option fills the fee in the same write");
+ok(ui.includes("const fill9 = _rateFill9(c.var, o);") && ui.includes("[c.var]: o, ...fill9"),
+  "picking an option fills the fee in the same write");
+// The fill is computed once and then read twice - once for the answer, once to decide whether the
+// amount box has to be re-mounted to show it. Computing it twice would be two different objects.
+ok((ui.match(/_rateFill9\(c\.var, o\)/g) || []).length === 1, "...and is computed once, not once per reader");
 ok(ui.includes("fd.cycleTerm"), "the step builder can name the term field");
 ok(ui.includes("fd.setAnnualFee"), "…and carries the yearly rate");
 
