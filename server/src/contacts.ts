@@ -20,6 +20,7 @@
  * here instead, in a transaction: clear, then set.
  */
 import { prisma } from "./db.js";
+import { waNumber } from "./whatsapp.js";
 
 /** Contacts that count: not archived. Oldest first, which is the order primary is inherited in. */
 const live = (companyId: string) =>
@@ -75,10 +76,39 @@ export async function setPrimaryContact(companyId: string, contactId: string) {
  * mirror stays empty until somebody remembers to press a button, and the company looks contactless
  * while a contact is sitting right there.
  */
+/**
+ * ONE WHATSAPP NUMBER, ONE CLIENT.
+ *
+ * A number is the only thing identifying somebody who messages us — there is no password on a
+ * WhatsApp chat. If the same number is on two clients' contact lists, then "who is this?" has two
+ * answers, and anything that picks one is picking at random between two companies' private files.
+ *
+ * So it is refused at the point of entry, naming the other client, because the person typing it is
+ * the only one who knows which of the two is right. Archived contacts are ignored: a number freed
+ * up by somebody leaving is a number that can be used again.
+ */
+export async function assertWhatsAppFree(whatsapp: string | null | undefined, exceptContactId?: string) {
+  const digits = waNumber(whatsapp);
+  if (!digits) return;
+  const rows = await prisma.contact.findMany({
+    where: { archived: false, whatsapp: { not: null }, ...(exceptContactId ? { id: { not: exceptContactId } } : {}) },
+    select: { id: true, name: true, whatsapp: true, company: { select: { name: true } } },
+  });
+  // Compared on DIGITS: the same phone is written three ways across three screens, and an exact
+  // string match would let every one of them through.
+  const clash = rows.find(r => waNumber(r.whatsapp) === digits);
+  if (clash) {
+    throw new Error(
+      `That WhatsApp number is already on ${clash.name} at ${clash.company?.name ?? "another client"}. ` +
+      `A number can only belong to one client — messages from it would otherwise be answered about the wrong company.`);
+  }
+}
+
 export async function addContact(companyId: string, data: {
   name: string; jobTitle?: string | null; email?: string | null; phone?: string | null;
   whatsapp?: string | null; notes?: string | null; isPrimary?: boolean; userId?: string | null;
 }) {
+  await assertWhatsAppFree(data.whatsapp);
   const existing = await live(companyId);
   const first = existing.length === 0;
   const wantsPrimary = first || !!data.isPrimary;
@@ -107,6 +137,8 @@ export async function editContact(contactId: string, data: Record<string, any>) 
   const before = await prisma.contact.findUnique({ where: { id: contactId } });
   if (!before) throw new Error("No such contact");
   const { isPrimary, companyId: _ignored, id: _id, ...rest } = data;
+  // `undefined` means "leave it alone", which is not a change and needs no check.
+  if (rest.whatsapp !== undefined) await assertWhatsAppFree(rest.whatsapp, contactId);
 
   await prisma.contact.update({
     where: { id: contactId },

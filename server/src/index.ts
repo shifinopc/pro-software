@@ -17,6 +17,7 @@ import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryC
 import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics } from "./pipeline.js";
 import { crmDashboard } from "./crmdashboard.js";
 import { recordLifecycle, lifecycleAnalytics, campaignPerformance } from "./lifecycle.js";
+import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
 import { openFollowUps, historyFor, logInteraction, closeFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
 import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
 import { opsReport, opsPeriodsWithActivity } from "./opsreport.js";
@@ -360,11 +361,18 @@ const BIG_BODY = [
   /^\/api\/leads\/import$/,                                      // spreadsheet, base64
   /^\/api\/portal\/service-requests\/[^/]+\/attachments$/,
 ];
-const bigJson = express.json({ limit: "36mb" });
+// The RAW bytes are kept on the request. Meta signs what it sent, byte for byte, and a body that
+// has been parsed and re-serialised hashes to something else — key order, spacing, unicode escapes.
+// Costs nothing: it is the same buffer express already had in hand.
+const keepRaw = (req: any, _res: any, buf: Buffer) => { req.rawBody = buf; };
+const bigJson = express.json({ limit: "36mb", verify: keepRaw });
 // 2 MB, not 1: a workflow template is a graph, and a print layout carries every field on the
 // document. Both are comfortably inside this, and neither is a lever for filling memory.
-const normalJson = express.json({ limit: "2mb" });
+const normalJson = express.json({ limit: "2mb", verify: keepRaw });
 app.use((req, res, next) => (BIG_BODY.some(re => re.test(req.path)) ? bigJson : normalJson)(req, res, next));
+
+// WhatsApp posts here from the open internet; the module checks Meta's signature on every call.
+mountWhatsAppWebhook(app);
 
 // ── Public ──
 // Opening the API's own port in a browser is a thing people do when something is not working, and

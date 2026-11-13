@@ -2095,6 +2095,32 @@ model WorkflowLog {
 }
 
 // Org-wide settings (console Settings → General etc.) — one JSON row per area, keyed ("org", …).
+// Every WhatsApp message, both directions.
+//
+// Outbound so that "who told the client that date" has an answer, and inbound because a client's
+// message is what opens the 24-hour window Meta allows free text in — the window is a FACT about
+// this table, not a flag somebody sets.
+//
+// `body` is what a person would read, even for a template: the template name and three loose
+// parameters tell whoever opens this log nothing about what was actually said.
+model WhatsAppMessage {
+  id        String  @id @default(cuid())
+  direction String // out | in
+  waId      String // the client's number, digits only, country code included
+  body      String  @db.Text
+  kind      String? // what it was about: renewal_due | invoice_due | reply | ...
+  status    String  @default("sent") // sent | skipped | failed | received
+  error     String? @db.Text
+  messageId String? // Meta's id, for matching delivery receipts back
+  companyId String?
+  contactId String?
+  at        String
+
+  @@index([waId, direction, at])
+  @@index([companyId, at])
+  @@index([at])
+}
+
 model AppSetting {
   key   String @id
   value Json

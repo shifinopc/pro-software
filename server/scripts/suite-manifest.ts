@@ -121,6 +121,9 @@ export const EXPECTED: string[] = [
   "capture-typing-check",
   "render-gate-check",
   "crash-reporter-check",
+  "whatsapp-check",
+  "whatsapp-webhook-check",
+  "probe-setup-handover",
   "render-scope-check",
   "signature-check",
   "site-lookup-check",
@@ -177,6 +180,7 @@ export const QUARANTINE: { name: string; why: string }[] = [
 export const TOOLS: string[] = [
   "fix-duplicate-renewal-runs",
   "repoint-old-fee-steps",
+  "whatsapp-send-test",
   "render-map",
   "add-staff-user",
   // Mints a throwaway staff login for local testing, because the local database is a copy of live

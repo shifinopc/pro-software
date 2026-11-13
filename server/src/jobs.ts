@@ -319,7 +319,9 @@ export async function startPeriodicRuns(): Promise<PeriodicResult> {
       try {
         await startInstance(tpl.id, {
           title, companyId, clientName: co.name,
-          variables: { period: key, periodBasis: every, _trigger: "recurring", _period: key, _autoStarted: nowISO() },
+          variables: { period: key, periodBasis: every },
+          // See delivery.ts: underscore keys are the engine's, and reach a run only this way.
+          engineVariables: { _trigger: "recurring", _period: key, _autoStarted: nowISO() },
         });
         out.started++;
         out.details.push(`${svc.name} — ${co.name} (${key})`);

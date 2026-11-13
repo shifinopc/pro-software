@@ -119,7 +119,12 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
             title: `${svc.name} — ${q.clientName ?? "Client"}`,
             companyId: q.companyId ?? null,
             clientName: q.clientName ?? null,
-            variables: { serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number, _trigger: "quotation_accepted", _autoStarted: nowISO() },
+            variables: { serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number },
+            // `engineVariables`, NOT `variables`: callerVariables() drops every key beginning with
+            // an underscore, because those are the engine's own. Passed as caller variables these
+            // were accepted, silently discarded, and the run was then left with no record of why
+            // it exists — on a workflow whose whole point is that somebody can reconstruct it.
+            engineVariables: { _trigger: "quotation_accepted", _autoStarted: nowISO() },
           });
           runId = run?.id ?? null;
           if (runId) {
@@ -338,8 +343,9 @@ export async function acceptServiceRequest(
           serviceId: svc.id, serviceName: svc.name,
           requestId: rq.id, requestNumber: rq.number ?? null,
           ...(svc.docType ? { docType: svc.docType } : {}),
-          _trigger: "request_intake", _acceptedAt: nowISO(),
         },
+        // See above: underscore keys are the engine's, and reach a run only this way.
+        engineVariables: { _trigger: "request_intake", _acceptedAt: nowISO() },
       });
       runId = run?.id ?? null;
       if (runId) {
