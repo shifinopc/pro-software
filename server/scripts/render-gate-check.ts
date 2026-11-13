@@ -75,8 +75,15 @@ const MODAL_FLAGS: string[] = (() => {
   return [...src.slice(a, src.indexOf("];", a)).matchAll(/'([A-Za-z0-9_]+)'/g)].map(m => m[1]);
 })();
 
-/** Three pairs that are only misindented — checked by hand, the pairing is right. */
-const KNOWN_INDENT = new Set(["2200-2207", "7680-7772", "15223-15346"]);
+/**
+ * Three pairs that are only misindented — checked by hand, the pairing is right.
+ *
+ * Keyed by the FLAG, not by line number: the first version listed line pairs and broke the day a
+ * comment was added near the top of the file, reporting three "problems" that were the same three
+ * known ones twenty-three lines lower. A check that cries wolf after an unrelated edit gets
+ * ignored, which is the one thing it cannot afford to be.
+ */
+const KNOWN_INDENT = new Set(["govCentersEmpty", "r.open", "upgReady"]);
 
 type Region = { kind: "screen" | "modal"; name: string; from: number; to: number };
 const regions: Region[] = [];
@@ -86,7 +93,7 @@ const balance: string[] = [];
   // bracket on the same line drops those opens and mispairs every region after them.
   const TAG = /<sc-if\b|<\/sc-if>/g;
   const NAME = /<sc-if value="\{\{\s*([A-Za-z0-9_.]+)\s*\}\}"/;
-  const stack: { kind: "screen" | "modal" | null; name: string; from: number; indent: number; alone: boolean }[] = [];
+  const stack: { kind: "screen" | "modal" | null; name: string; flag: string; from: number; indent: number; alone: boolean }[] = [];
   for (let i = 0; i < TPL_END; i++) {
     const line = lines[i];
     const indent = line.length - line.trimStart().length;
@@ -97,7 +104,7 @@ const balance: string[] = [];
         // Both alone on their lines and indented differently: the pairing is almost certainly wrong,
         // which is how a modal came to swallow the three that followed it.
         if (top.alone && line.trim() === "</sc-if>" && top.indent !== indent
-            && !KNOWN_INDENT.has(`${top.from}-${i + 1}`)) {
+            && !KNOWN_INDENT.has(top.flag)) {
           balance.push(`<sc-if> at index.html:${top.from} (indent ${top.indent}) is closed at :${i + 1} (indent ${indent})`);
         }
         if (top.kind) regions.push({ kind: top.kind, name: top.name, from: top.from, to: i + 1 });
@@ -106,9 +113,9 @@ const balance: string[] = [];
       const flag = NAME.exec(lines.slice(i, i + 3).join(" ").slice(m.index))?.[1] ?? "";
       const label = /data-screen-label="([^"]+)"/.exec(lines.slice(i, i + 2).join(" "))?.[1];
       const alone = line.trimStart().startsWith("<sc-if") && m.index === indent;
-      stack.push(label ? { kind: "screen", name: label, from: i + 1, indent, alone }
-        : MODAL_FLAGS.includes(flag) ? { kind: "modal", name: flag, from: i + 1, indent, alone }
-        : { kind: null, name: "", from: i + 1, indent, alone });
+      stack.push(label ? { kind: "screen", name: label, flag, from: i + 1, indent, alone }
+        : MODAL_FLAGS.includes(flag) ? { kind: "modal", name: flag, flag, from: i + 1, indent, alone }
+        : { kind: null, name: "", flag, from: i + 1, indent, alone });
     }
   }
   if (stack.length) balance.push(`${stack.length} <sc-if> left open, first at index.html:${stack[0].from}`);

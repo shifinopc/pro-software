@@ -105,14 +105,37 @@
     wrap.appendChild(card);
     document.body.appendChild(wrap);
   }
+  /**
+   * AN EXTENSION'S ERROR IS NOT THIS APP'S CRASH.
+   *
+   * A content script runs in the page's own world, so when one throws, the page is what
+   * window.onerror reports — and this handler then put a CRASH CARD over the console and filed a
+   * problem report, about code nobody here wrote and nobody here can fix.
+   *
+   * It happened: "Cannot read properties of undefined (reading 'M_ID')" on /quotations, every
+   * frame of its stack inside chrome-extension://…/executors/200.js. An administrator saw the
+   * console appear to break, and reported it. Nothing in this product was involved.
+   *
+   * The old guard only skipped RESOURCE errors (a 404 on an image), which is a different thing —
+   * those have an element as the target. This reads where the code came from instead, which is
+   * the only part that answers "is this ours".
+   */
+  var EXT_RE = /(?:chrome|moz|safari-web|safari|ms-browser|webkit-masked-url)[-:]/;
+  function notOurs(stack, filename) {
+    // Only skip when something actually names an extension. An error with no stack at all is
+    // still reported: losing a real crash is far worse than one spurious card.
+    return EXT_RE.test(String(filename || '')) || EXT_RE.test(String(stack || ''));
+  }
   window.addEventListener('error', function (e) {
     if (!e || !e.message) return;
-    // Asset 404s and extension noise are not app crashes.
+    // Asset 404s are not app crashes: a failed <img> or <script> arrives with the element as target.
     if (e.target && e.target !== window && e.target.tagName) return;
+    if (notOurs(e.error && e.error.stack, e.filename)) return;
     overlay(e.message, e.error && e.error.stack);
   });
   window.addEventListener('unhandledrejection', function (e) {
     var r = e && e.reason;
+    if (notOurs(r && r.stack, '')) return;
     overlay((r && r.message) || String(r), r && r.stack);
   });
 })();

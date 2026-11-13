@@ -120,6 +120,7 @@ export const EXPECTED: string[] = [
   "search-debounce-check",
   "capture-typing-check",
   "render-gate-check",
+  "crash-reporter-check",
   "render-scope-check",
   "signature-check",
   "site-lookup-check",
