@@ -88,7 +88,7 @@ jobs:
           for f in auth-limit-gate-check check-date-fields client-ip-check first-paint-check \
                    group-counts-check imap-check island-minify-check lead-details-fields-check \
                    node-types-check number-format-pool-check phone-split-check render-scope-check \
-                   signature-check site-lookup-check; do
+                   signature-check site-lookup-check fast-fields-check quotation-typing-check \n                   scripts-parse-check; do
             echo "── $f"
             npx tsx "scripts/$f.ts"
           done
@@ -204,6 +204,35 @@ jobs:
       - name: Check suite
         working-directory: server
         run: npx tsx scripts/suite-run.ts
+
+      # THE ONLY THING THAT RUNS THE FRONT END.
+      #
+      # Everything above this line checks the server. The console is 48,000 lines in which the
+      # markup names its values as plain text, so `tsc` cannot see them and `vite build` does not
+      # read them — a mistake there builds cleanly and ships a blank page. That happened: one
+      # `const` used above its declaration rendered the whole app as a single error string, caught
+      # only because somebody opened a browser.
+      #
+      # It serves the BUILT files, not the dev server, so what is exercised is what would deploy.
+      # Credentials are the seeded suite admin, whose password suite-seed prints and never leaves
+      # this container.
+      - name: Smoke test the console
+        env:
+          BASE: http://localhost:4173
+          SMOKE_API: http://localhost:4100
+          SMOKE_EMAIL: suite-admin@local.test
+          SMOKE_PASSWORD: suite-seed-not-a-real-login
+        run: |
+          set -e
+          npx vite build
+          npx playwright install --with-deps chromium
+          npx vite preview --port 4173 --strictPort &
+          # No wait-on: a curl loop is three lines and one dependency fewer.
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null "$BASE/dashboard" && break
+            sleep 1
+          done
+          node scripts/smoke.mjs
 
       # What the server said while the checks ran. Printed only on failure — on a green run it is
       # noise, and on a red one it is usually the answer.

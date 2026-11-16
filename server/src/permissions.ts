@@ -491,6 +491,26 @@ export type Coverage = {
   modules: Array<{ module: PermModule; routes: number }>;
   ungoverned: string[];
   exempt: number;
+  /**
+   * ROUTES THAT ANSWER WITHOUT A TOKEN — the app's actual public surface.
+   *
+   * Not the same thing as `exemptPaths` below, and the difference has already misled one reader.
+   * `exemptPaths` means "the staff permission grid does not judge this", which is true of every
+   * `/api/portal` route because a client is not staff — they still have to sign in. THIS list is
+   * the one where nobody has to: no `requireAuth` anywhere on the way in.
+   *
+   * Derived from the router, so it cannot be out of date. Pinned by scripts/route-review-check.ts.
+   */
+  openPaths: string[];
+  /**
+   * WHICH routes need no sign-in, not just how many.
+   *
+   * The count alone was enough for the panel, which only says "N exempt". It is not enough to
+   * review: this is the list of everything on the public internet that answers without a token,
+   * and the one list where a mistake is immediately somebody else's problem. Named so a check can
+   * pin it — see scripts/route-review-check.ts.
+   */
+  exemptPaths: string[];
   total: number;
 };
 
@@ -518,6 +538,13 @@ function mountPathOf(layer: any): string {
 export function coverageOf(stack: any[]): Coverage {
   const seen = new Set<string>();
   const paths: string[] = [];
+  /**
+   * Where `requireAuth` is mounted. `app.use("/api/x", requireAuth, …)` registers it as its own
+   * layer against that path rather than as a parent of the handler, so the only way to tell whether
+   * a route is behind it is to collect the mount points and compare prefixes afterwards.
+   */
+  const authMounts: string[] = [];
+  const openPaths: string[] = [];
   // DESCENDS INTO MOUNTED ROUTERS, which it did not before.
   //
   // Every generic collection — appointments, document types, government centers, payments — is an
@@ -537,7 +564,14 @@ export function coverageOf(stack: any[]): Coverage {
         if (seen.has(full)) continue;
         seen.add(full);
         paths.push(full);
+        const ownGuards: any[] = layer.route?.stack ?? [];
+        if (ownGuards.some(g => g?.name === "requireAuth" || g?.handle?.name === "requireAuth")) {
+          authMounts.push(full);
+        }
         continue;
+      }
+      if (layer?.name === "requireAuth" || layer?.handle?.name === "requireAuth") {
+        authMounts.push(prefix + mountPathOf(layer));
       }
       const child = layer?.handle?.stack;
       if (Array.isArray(child)) walk(child, prefix + mountPathOf(layer));
@@ -546,17 +580,26 @@ export function coverageOf(stack: any[]): Coverage {
   walk(stack ?? [], "");
   const counts = new Map<PermModule, number>();
   const ungoverned: string[] = [];
+  const exemptPaths: string[] = [];
   let exempt = 0;
   for (const p of paths) {
-    if (isExempt(p)) { exempt++; continue; }
+    if (isExempt(p)) { exempt++; exemptPaths.push(p); continue; }
     const m = moduleOf(p);
     if (m) counts.set(m, (counts.get(m) ?? 0) + 1);
     else ungoverned.push(p);
   }
+  // Compared after the walk, because a mount can be registered before or after the routes under it.
+  for (const p of paths) {
+    if (!authMounts.some(m => m === "" || p === m || p.startsWith(m.endsWith("/") ? m : m + "/"))) {
+      openPaths.push(p);
+    }
+  }
   return {
     modules: MODULES.map(m => ({ module: m, routes: counts.get(m) ?? 0 })),
+    openPaths: openPaths.sort(),
     ungoverned: ungoverned.sort(),
     exempt,
+    exemptPaths: exemptPaths.sort(),
     total: paths.length,
   };
 }
