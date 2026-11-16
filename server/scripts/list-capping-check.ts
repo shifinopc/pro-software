@@ -91,7 +91,10 @@ for (const [needle, label] of [
   ["rnKind: k9, rnPage: 1", "a renewals kind tab"],
   ["rnSort: k9, rnPage: 1", "a renewals sort"],
   ["docSort: k9, docPage: 1", "a documents sort"],
-  ["docQ: ev9 && ev9.target ? ev9.target.value : '', docPage: 1", "the documents search box"],
+  // The search handler now buffers the value and debounces the state write, so the event
+  // expression that used to be inline has moved out of this line. What matters is unchanged and
+  // is what is matched: setting the query also returns to page 1.
+  ["docQ: _v9, docPage: 1", "the documents search box"],
   ["docScope: 'company', docTab: k9, docFolder: null, docPage: 1", "a documents tab"],
   ["auditFilter: k, auditPage: 1", "an audit trail filter"],
 ] as const) has(needle, label);

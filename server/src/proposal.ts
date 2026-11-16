@@ -332,15 +332,68 @@ export async function proposalData(
   const totalMinor = netMinor;
   const subtotalMinor = netMinor;
 
+  /**
+   * PROFESSIONAL FEES AND GOVERNMENT FEES ARE BILLED AT DIFFERENT STAGES.
+   *
+   * The firm's own terms say so in as many words: "50% of Professional Fees upon signing", "100% of
+   * Government Fees upon approval of the MISA Licence". Those are percentages of two DIFFERENT
+   * subtotals, so a schedule computed off the grand total bills the wrong money at every stage —
+   * on the quotation that prompted this, 50% of the total was 30% more than 50% of the fees.
+   *
+   * The only thing that can tell the two apart is the line's own `kind`, which is why it exists.
+   * A line with no `kind` counts as professional: every quotation written before the field existed
+   * was quoting fees, and "100% of professional fees" is the honest reading of an unmarked line.
+   */
+  const kindMinor = (want: string) => rawItems.reduce((a, raw) => {
+    if (String(raw?.kind ?? "prof") !== want) return a;
+    return a + Math.round(Number(raw?.price ?? 0) * 100) * (Number(raw?.units ?? raw?.qty ?? 1) || 1);
+  }, 0);
+  const profMinor = kindMinor("prof");
+  const govMinor = kindMinor("gov");
+  /**
+   * AND A THIRD: THE FOREIGN COMPANY ITSELF.
+   *
+   * A Saudi entity with a foreign parent often needs that parent acquired or incorporated first,
+   * and the firm's own quotations have always carried it as its own line - "Indian Company
+   * takeover", "Company Acquire Oman", "US Company Formation" - at SAR 10,000 to 16,000, beside a
+   * separate professional fee. It is neither: not the firm's Saudi fee, and not a Saudi ministry
+   * charge, and the firm's terms bill it on its own schedule ("100% for Foreign Company
+   * Incorporation") because the money leaves for a foreign agent before the Saudi work starts.
+   *
+   * Folding it into the professional fees would bill it at 50/30/20 - on a real quotation of
+   * 15,000 fees + 16,000 acquisition, 50% on signing collects 15,500 where the terms ask for
+   * 16,000 + 7,500. Wrong at every stage, and short exactly when the foreign agent must be paid.
+   */
+  const foreignMinor = kindMinor("foreign");
+  /**
+   * With no lines at all there is nothing to split, so every basis falls back to the total — a
+   * quotation carrying only a figure still prints a schedule that foots up to it. With lines, a
+   * basis of zero is a true answer and is printed as zero rather than quietly becoming the total.
+   */
+  const baseFor = (basis: string) => {
+    if (!rawItems.length) return totalMinor;
+    if (basis === "gov") return govMinor;
+    if (basis === "foreign") return foreignMinor;
+    if (basis === "prof") return profMinor;
+    return totalMinor;
+  };
+  const OF_LABEL: Record<string, string> = {
+    prof: "Professional Fees", gov: "Government Fees", foreign: "Foreign Company Fees", total: "",
+  };
+
   // A proposal with no schedule recorded still has to print terms, and "all of it, on signing" is
   // the honest reading of no schedule — not a blank page where the payment terms should be.
   const rawMs: any[] = Array.isArray(q.milestones) ? (q.milestones as any[]) : [];
-  const milestones = (rawMs.length ? rawMs : [{ label: "upon signing", pct: 100 }]).map(m => {
+  const milestones = (rawMs.length ? rawMs : [{ label: "upon signing", pct: 100, basis: "total" }]).map((m, i) => {
     const pct = Number(m.pct ?? 0);
-    const amountMinor = m.amountMinor != null ? Number(m.amountMinor) : Math.round(totalMinor * (pct / 100));
+    const basis = String(m.basis ?? "total");
+    // A stored amount still wins, for a stage agreed as a flat sum rather than a percentage.
+    const amountMinor = m.amountMinor != null ? Number(m.amountMinor) : Math.round(baseFor(basis) * (pct / 100));
     return {
+      "milestone.no": String(i + 1),
       "milestone.label": String(m.label ?? ""),
       "milestone.pct": pct ? String(pct) : "",
+      "milestone.of": OF_LABEL[basis] ?? "",
       "milestone.amount": money(amountMinor),
     };
   });
@@ -375,6 +428,12 @@ export async function proposalData(
     "total.gross": money(grossMinor),
     "total.words": amountInWords(totalMinor, currency),
     "total.currency": currency,
+
+    // The two subtotals the schedule above is computed from, so a template can show the split it
+    // bills against instead of leaving the reader to add the lines up themselves.
+    "fees.professional": money(profMinor),
+    "fees.foreign": money(foreignMinor),
+    "fees.government": money(govMinor),
 
     items,
     milestones,

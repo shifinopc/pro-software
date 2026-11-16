@@ -22,7 +22,13 @@ const ok = (cond: boolean, what: string) => { console.log(`${cond ? "  ok  " : "
 const ui = fs.readFileSync(path.join(import.meta.dirname, "../../index.html"), "utf8");
 
 console.log("the workflow search box does not write state on every character:");
-ok(ui.includes('<input sc-camel-default-value="{{ ntKindQuery }}" onChange="{{ setNtKindQuery }}"'),
+// On the tag rather than on one literal string: data-seed-val now sits between these two
+// attributes, and the old adjacency match called a correct field broken.
+const ntTag = (() => {
+  const at = ui.indexOf('sc-camel-default-value="{{ ntKindQuery }}"');
+  return at < 0 ? "" : ui.slice(ui.lastIndexOf("<", at), ui.indexOf(">", at) + 1);
+})();
+ok(!!ntTag && ntTag.includes('onChange="{{ setNtKindQuery }}"') && !/\svalue="\{\{/.test(ntTag),
   "it is seeded, not controlled — so typing only touches the DOM");
 // The space matters: `sc-camel-default-value` ENDS in `value`, so an unanchored match flags the
 // very attribute this check just approved. Caught by this check failing on correct code.

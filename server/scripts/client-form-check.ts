@@ -39,14 +39,42 @@ ok(ui.includes("portalEmail: st.acPortalNone ? '' : String(st.acPortalEmail || '
 console.log("\nthe form's fields commit on leaving, not on every character:");
 const FIELDS = ["acCName", "acActivity", "acVat", "acGosi", "acMol", "acChamber", "acShortAddr", "acBuilding",
   "acStreet", "acSecondary", "acDistrict", "acPostal", "acCity", "acContact", "acDesignation", "acPhone", "acEmail"];
+/**
+ * Matched on the TAG, not on one literal string.
+ *
+ * This used to look for `sc-camel-default-value="{{ x }}" onBlur="{{ setX }}"` with the two
+ * attributes adjacent, and went red the day a third attribute was added between them —
+ * reporting that seventeen fields had stopped committing on blur when every one of them still
+ * did. A check that fails for a reason it is not about is worse than no check.
+ */
+const tagFor = (binding: string) => {
+  const at = ui.indexOf(`sc-camel-default-value="{{ ${binding} }}"`);
+  if (at < 0) return "";
+  return ui.slice(ui.lastIndexOf("<", at), ui.indexOf(">", at) + 1);
+};
 for (const f of FIELDS) {
   const setter = "setAc" + f.slice(2);
-  ok(ui.includes(`sc-camel-default-value="{{ ${f} }}" onBlur="{{ ${setter} }}"`), `${f} is seeded and commits on blur`);
+  const tag = tagFor(f);
+  ok(!!tag && tag.includes(`onBlur="{{ ${setter} }}"`), `${f} is seeded and commits on blur`);
 }
 
-console.log("\nand the four that something else fills are deliberately still live:");
-// Each of these is written while the form is open — by another field's blur, a mirror, or a toggle —
-// and a seeded-once field would show a stale value over the state that had already changed.
+/**
+ * THE FOUR THAT SOMETHING ELSE FILLS.
+ *
+ * Each is written while the form is open — by another field's blur, by a mirror, or by a toggle —
+ * so a box that took its value once at mount would sit there showing something the record no
+ * longer says, and the form saves what the boxes contain.
+ *
+ * This check used to demand they stay CONTROLLED, which was the only protection available at the
+ * time and cost a whole-app render per keystroke. There is a better one now: every fast field
+ * publishes `data-seed-val`, and `_reseedFast` copies that back into every such box after each
+ * render, skipping only the one being typed into. So the rule is no longer "stay controlled" but
+ * "be covered by the reseed" — which is what is checked here.
+ *
+ * Verified by hand on the hardest of them before this was changed: typing a company name and
+ * leaving the field still fills the Arabic name, and the box and the state agree afterwards.
+ */
+console.log("\nand the four that something else fills are covered by the reseed:");
 for (const [f, why] of [
   ["acNameAr", "filled by the company name's blur (the Arabic suggestion)"],
   ["acPortalEmail", "mirrored from the e-mail field"],
@@ -54,7 +82,12 @@ for (const [f, why] of [
   ["acMisa", "cleared when the company type stops being foreign"],
 ] as const) {
   const setter = "setAc" + f.slice(2);
-  ok(ui.includes(`value="{{ ${f} }}" onChange="{{ ${setter} }}"`), `${f} stays controlled — ${why}`);
+  const tag = tagFor(f);
+  const controlled = ui.includes(`value="{{ ${f} }}" onChange="{{ ${setter} }}"`);
+  // Either protection is acceptable. What is NOT acceptable is seeded with no data-seed-val: that
+  // is a box nothing can correct, on a field something else writes to.
+  ok(controlled || (!!tag && tag.includes(`data-seed-val="{{ ${f} }}"`)),
+    `${f} cannot go stale — ${why}`);
 }
 
 console.log("\nand nothing is left half-converted:");
