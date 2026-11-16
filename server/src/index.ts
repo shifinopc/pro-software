@@ -148,6 +148,12 @@ app.use(helmet({ contentSecurityPolicy: false })); // security headers incl. HST
  *      `stimespro_live`, which fails the name. The rule is anchored for the same reason the suite's
  *      guards are — a plain /(scratch|ci|test)/ substring would have accepted "precision".
  *
+ * IT COVERS THE RESET LIMITER TOO (five an hour, per IP). probe-invitations spends about six on
+ * one run — setting the first password, proving the link is single-use, proving an expired one is
+ * refused, proving the fallback link works — so it could not be run twice in an hour, and the
+ * second run reported the invitation flow as broken when it had merely been throttled. Those
+ * failures read like an account-takeover hole, which is an expensive way to find out.
+ *
  * And it says so on startup, because a disabled brute-force control should never be a thing you
  * have to read the source to discover.
  */
@@ -212,7 +218,7 @@ const apiLimiter = rateLimit({
 });
 
 const reportLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: "Too many reports — try again later" } });
-const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: "Too many requests — try again later" } });
+const resetLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false, skip: () => AUTH_LIMIT_OFF, message: { error: "Too many requests — try again later" } });
 /**
  * Resending an invitation is NOT the same risk as the reset flow above, and must not share its cap.
  *
@@ -9029,7 +9035,7 @@ app.listen(port, async () => {
   console.log(`STIMES PRO API (auth enabled) → http://localhost:${port}`);
   // Loud on purpose. A brute-force control that is off should be visible in the first ten lines of
   // the log, not discoverable by reading the source.
-  if (AUTH_LIMIT_OFF) console.warn("  ⚠ LOGIN RATE LIMIT DISABLED — SUITE_NO_AUTH_LIMIT=1 against a scratch database. Never set this anywhere real.");
+  if (AUTH_LIMIT_OFF) console.warn("  ⚠ LOGIN AND PASSWORD-RESET RATE LIMITS DISABLED — SUITE_NO_AUTH_LIMIT=1 against a scratch database. Never set this anywhere real.");
   // BEFORE ANYTHING DATES A RECORD. `today()` answers from the firm's own zone, and it has to be
   // told which one before the first job or request uses it — otherwise the boot tick runs in UTC and
   // dates three hours of the day wrong. Re-primed whenever Settings → General is saved.

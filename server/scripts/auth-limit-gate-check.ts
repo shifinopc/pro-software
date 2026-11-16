@@ -52,8 +52,19 @@ if (!/skip:\s*\(\)\s*=>\s*AUTH_LIMIT_OFF/.test(src)) fail("authLimiter does not 
 else ok("authLimiter consults it");
 
 // And it must announce itself: a disabled control that logs nothing is the dangerous kind.
-if (!/LOGIN RATE LIMIT DISABLED/.test(src)) fail("startup no longer warns when the limit is off");
+// Matched loosely on purpose — the wording gained "AND PASSWORD-RESET" when the exemption grew to
+// cover that limiter too, and a check that pins the exact sentence turns an honest clarification
+// into a failure.
+if (!/RATE LIMITS? DISABLED/.test(src)) fail("startup no longer warns when the limit is off");
 else ok("startup warns loudly when it is off");
+
+// The reset limiter shares the exemption, so it must share the guard rather than be skipped some
+// other way. probe-invitations spends about six of its five-an-hour budget on one run, so without
+// this it could not be run twice in an hour — and the second run reported the invitation flow as
+// broken when it had only been throttled.
+if (!/const resetLimiter[^\n]*skip:\s*\(\)\s*=>\s*AUTH_LIMIT_OFF/.test(src)) {
+  fail("resetLimiter does not consult AUTH_LIMIT_OFF — it is either unguarded or exempted another way");
+} else ok("resetLimiter consults the same guard");
 
 // THE TWO COPIES OF THE NAME RULE MUST AGREE.
 //

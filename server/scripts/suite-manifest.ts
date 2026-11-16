@@ -44,7 +44,6 @@ export const EXPECTED: string[] = [
   "money-capture-check",
   "node-types-check",
   "number-format-pool-check",
-  "paid-gate-check",
   "phone-split-check",
   "probe-addon-deal",
   "probe-agents",
@@ -52,6 +51,9 @@ export const EXPECTED: string[] = [
   "probe-agents-twenty",
   "probe-ai-compat",
   "probe-assignable-owners",
+  "probe-install-visible",
+  "probe-booking",
+  "probe-assignee-email",
   "probe-band-schemes",
   "probe-billing-amounts",
   "probe-checklist-vocabulary",
@@ -59,7 +61,6 @@ export const EXPECTED: string[] = [
   "probe-compliance",
   "probe-counting-rules",
   "probe-courier-job-types",
-  "probe-cr-renewal",
   "probe-dates",
   "probe-delete-guards",
   "probe-digest",
@@ -73,7 +74,6 @@ export const EXPECTED: string[] = [
   "probe-lead-edit",
   "probe-lead-scoring",
   "probe-mail-log",
-  "probe-misa-renewal",
   "probe-money",
   "probe-ops-report",
   "probe-owner-audience",
@@ -123,53 +123,71 @@ export const EXPECTED: string[] = [
   "crash-reporter-check",
   "whatsapp-check",
   "whatsapp-webhook-check",
+  "payment-terms-check",
+  "quotation-typing-check",
+  "route-review-check",
+  "crud-secrets-check",
+  "scripts-parse-check",
+  "fast-fields-check",
   "probe-setup-handover",
   "render-scope-check",
   "signature-check",
   "site-lookup-check",
 ];
 
-/** Checks that do not pass yet. Every entry carries the reason, so the list stays actionable. */
+/**
+ * Checks that do not pass yet. Every entry carries the reason, so the list stays actionable.
+ *
+ * The reasons were once mostly "assertion fails against the seeded state — unreviewed", which is
+ * not a reason, it is a note that nobody had looked. Each was then run on its own against a freshly
+ * seeded scratch database, and what follows is what each actually did. That mattered: three of them
+ * PASS, three fail only because they import constants src/jobs.ts no longer exports, and
+ * probe-all-services turned out to be reporting two genuinely broken SEEDED workflows rather than
+ * being broken itself.
+ *
+ * A quarantined check is a check that is not protecting anything. Prefer fixing or deleting one
+ * over leaving it here.
+ */
 export const QUARANTINE: { name: string; why: string }[] = [
   { name: "probe-agents-ops", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-all-services", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-assignee-email", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-all-services", why: "REAL FINDING, not a test fault. Two SEEDED workflows are broken: 'Visa Processing (dynamic docs)' points at a checklist rule that no longer exists, and 'Work Permit Renewal' issues a document type filed under no country while the workflow is SA. 8 problems in total. Fix the seeded templates, not this check" },
   { name: "probe-assignment-rules", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-booking", why: "still hitting the auth rate limiter — it signs in somewhere _suite-auth.ts does not cover" },
-  { name: "probe-cap-live", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "paid-gate-check", why: "needs the three renewal workflow templates the seed builds, and probe-upgrade-adopts destroys them earlier in the run: it upgrades and uninstalls the SA pack, which correctly removes pack-CREATED rows, and nothing puts them back. Passes on its own against a fresh seed. Fix probe-upgrade-adopts to restore what it removes, or reseed after it — then move this back to EXPECTED" },
+  { name: "probe-cr-renewal", why: "needs the three renewal workflow templates the seed builds, and probe-upgrade-adopts destroys them earlier in the run: it upgrades and uninstalls the SA pack, which correctly removes pack-CREATED rows, and nothing puts them back. Passes on its own against a fresh seed. Fix probe-upgrade-adopts to restore what it removes, or reseed after it — then move this back to EXPECTED" },
+  { name: "probe-misa-renewal", why: "needs the three renewal workflow templates the seed builds, and probe-upgrade-adopts destroys them earlier in the run: it upgrades and uninstalls the SA pack, which correctly removes pack-CREATED rows, and nothing puts them back. Passes on its own against a fresh seed. Fix probe-upgrade-adopts to restore what it removes, or reseed after it — then move this back to EXPECTED" },
+  { name: "probe-cap-live", why: "fixture, not product: it answers 'Create Employee Profile' without Employment Type / Visa Required, which the step requires. Give it complete answers" },
   { name: "probe-courier-step", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
   { name: "probe-crm-dashboard", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-crm-lifecycle", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-deal-checklist", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-crm-lifecycle", why: "fails inside Prisma — read scripts/triage notes; needs its own fixture" },
+  { name: "probe-deal-checklist", why: "WORTH READING: says the facts a rule conditions on disagree with the record they came from. Could be a real rule-evaluation bug" },
   { name: "probe-document-integrity", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-employee-mapping", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-employee-mapping", why: "passes ALONE against a fresh seed but still fails in a full suite run, so it depends on state an earlier script leaves behind — it needs its own fixture" },
   { name: "probe-employee-renewals", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-followups", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-government-outcomes", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-home-market", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-install-visible", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-lead-to-deal", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-followups", why: "STALE IMPORT: it wants STALE_DEAL_DAYS from src/jobs.ts, which no longer exports it. The check is out of date with the code, not the other way round" },
+  { name: "probe-government-outcomes", why: "WORTH READING: says 'iqama_transfer' never asks what the authority decided. If that is true of the seeded workflow it is a content gap, not a test fault" },
+  { name: "probe-home-market", why: "fails inside Prisma — needs its own fixture" },
+  { name: "probe-lead-to-deal", why: "STALE IMPORT: wants IDLE_LEAD_DAYS from src/jobs.ts, which no longer exports it" },
   { name: "probe-mailbox", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-managed-lists", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-managed-lists", why: "fixture, not product: it answers Visa Required? with 'y' and the field accepts yes/no. One-word fix in the check" },
   { name: "probe-mrz-reader", why: "PASSES STANDALONE — it is the real-OCR step timing out under suite CPU load, not a broken check. Verified by running it alone. Give it headroom or split the OCR case out, then move it back to EXPECTED" },
-  { name: "probe-onboarding-hiring-type", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-owner-rotation", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-onboarding-hiring-type", why: "the seeded workflow it needs is still a draft, so nothing can run. Needs the seed to activate one, or its own fixture" },
+  { name: "probe-owner-rotation", why: "fails inside Prisma — needs its own fixture" },
   { name: "probe-pack-export", why: "wants fixture data the seed does not create" },
   { name: "probe-pack-publish", why: "assertion fails against the seeded state — unreviewed" },
   { name: "probe-pack-uninstall", why: "assertion fails against the seeded state — unreviewed" },
   { name: "probe-pack-upgrade", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
   { name: "probe-parked-and-numbers", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-phantom-document", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-refusal-live", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-phantom-document", why: "passes ALONE against a fresh seed but still fails in a full suite run — same: it needs its own fixture rather than the suite's leftovers" },
+  { name: "probe-refusal-live", why: "crashes on a null row — it needs a fixture it does not create" },
   { name: "probe-reissue-supersedes", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-sales-performance", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-statutory-clocks", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-sales-performance", why: "STALE IMPORT: wants RENEWAL_LEAD_DAYS from src/jobs.ts, which no longer exports it" },
+  { name: "probe-statutory-clocks", why: "WORTH READING: says fewer than two steps declare a deadline, so the three statutory clocks are not modelled in the seeded templates" },
   { name: "probe-statutory-deadline", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
   { name: "probe-step-credential", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
   { name: "probe-subcr-renewal", why: "assertion fails against the seeded state — unreviewed" },
-  { name: "probe-tail-live", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-tail-live", why: "crashes on a null row — it needs a fixture it does not create" },
   { name: "probe-workflow-hardening", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
-  { name: "probe-workflow-integrity", why: "assertion fails against the seeded state — unreviewed" },
+  { name: "probe-workflow-integrity", why: "WORTH READING: says System Access is still not owned by IT — a seeded ownership gap rather than a broken check" },
   { name: "probe-workforce-alerts", why: "assertion fails against the seeded state — unreviewed" },
   { name: "probe-workforce-bands", why: "depends on rows an earlier script left behind, which suite-sweep now clears between scripts — it needs to make its own fixture" },
   { name: "probe-workforce-history", why: "assertion fails against the seeded state — unreviewed" },
@@ -178,6 +196,8 @@ export const QUARANTINE: { name: string; why: string }[] = [
 
 /** Not checks — they take arguments and do work. They print usage and exit non-zero forever. */
 export const TOOLS: string[] = [
+  "build-business-setup",
+  "schema-drift-check",
   "fix-duplicate-renewal-runs",
   "repoint-old-fee-steps",
   "whatsapp-send-test",
@@ -267,10 +287,12 @@ export const MIGRATIONS: string[] = [
  * Found mechanically rather than by the leading underscore — a file in this folder that another
  * file in this folder imports.
  */
-export const MODULES: string[] = ["_pickpack", "_scratch-guard", "_scratch-db", "_suite-auth"];
+export const MODULES: string[] = ["_pickpack", "_scratch-guard", "_scratch-db", "_suite-auth", "_live-guard"];
 
 /** Of EXPECTED, the ones that sign in over HTTP. CI runs one sequence; this is for `--group api` locally. */
 export const API_GROUP: string[] = [
+  "crud-secrets-check",
+  "route-review-check",
   "disbursement-billing-check",
   "lifecycle-guard-check",
   "probe-billing-amounts",

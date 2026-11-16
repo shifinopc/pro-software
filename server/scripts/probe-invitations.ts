@@ -27,7 +27,14 @@ async function sweep() {
   const cos = await prisma.company.findMany({ where: { name: { startsWith: "ZZ " } }, select: { id: true } });
   const ids = cos.map(c => c.id);
   if (ids.length) {
+    // Establishments FIRST. Creating a company brings its main establishment with it, and this
+    // sweep did not know about them — so the company could not be deleted, the NEXT run died in
+    // its own cleanup before testing anything, and every assertion after the first reported
+    // failure. It read like an account-takeover hole ("the link is reusable", "an expired
+    // invitation still worked") when the probe had simply never got as far as trying.
+    await prisma.establishment.deleteMany({ where: { companyId: { in: ids } } }).catch(() => {});
     await prisma.contact.deleteMany({ where: { companyId: { in: ids } } });
+    await prisma.user.deleteMany({ where: { companyId: { in: ids } } });
     await prisma.company.deleteMany({ where: { id: { in: ids } } });
   }
 }

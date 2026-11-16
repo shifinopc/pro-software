@@ -25,12 +25,19 @@ const TAG = "ZZ duplicate-run-check";
 
 async function sweep() {
   const ids = (await prisma.workflowTemplate.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map(t => t.id);
-  if (!ids.length) return;
+  if (ids.length) {
   const rids = (await prisma.workflowInstance.findMany({ where: { templateId: { in: ids } }, select: { id: true } })).map(r => r.id);
   await prisma.workflowTask.deleteMany({ where: { instanceId: { in: rids } } });
   await prisma.workflowLog.deleteMany({ where: { instanceId: { in: rids } } }).catch(() => {});
   await prisma.workflowInstance.deleteMany({ where: { id: { in: rids } } });
   await prisma.workflowTemplate.deleteMany({ where: { id: { in: ids } } });
+  }
+  const cos = (await prisma.company.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map(c => c.id);
+  if (cos.length) {
+    await prisma.establishment.deleteMany({ where: { companyId: { in: cos } } }).catch(() => {});
+    await prisma.contact.deleteMany({ where: { companyId: { in: cos } } }).catch(() => {});
+    await prisma.company.deleteMany({ where: { id: { in: cos } } });
+  }
 }
 
 /** Start a run; returns "" when it went through, or the refusal with its duplicate payload. */
@@ -45,8 +52,12 @@ try {
     nodes: [{ id: "start", type: "start", label: "Start" }, { id: "t", type: "task", label: "Do it" }, { id: "end", type: "end", label: "Done" }],
     edges: [{ from: "start", to: "t" }, { from: "t", to: "end" }],
   } } } as any);
-  const [coA, coB, coC] = await prisma.company.findMany({ take: 3, select: { id: true } });
-  if (!coA || !coB || !coC) throw new Error("needs three companies in the database to tell client-scoped runs apart");
+  // Its own three, not the first three it finds. Borrowing meant this check could not run on a
+  // freshly seeded database at all, and where companies DID exist it was starting workflow runs
+  // against real client records to make its point.
+  const [coA, coB, coC] = await Promise.all(
+    ["A", "B", "C"].map(n => prisma.company.create({ data: { name: `${TAG} Co ${n}` } as any })),
+  );
 
   console.log("a second renewal of the same thing for the same client is refused:");
   ok(!(await start(tpl.id, coA.id, {})).blocked, "the first one starts");

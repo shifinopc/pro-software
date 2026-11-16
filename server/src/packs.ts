@@ -275,9 +275,22 @@ export async function applyInstall(pack: Pack, opts: { adopt?: boolean } = {}): 
     }
     if (opts.adopt) {
       for (const a of kp.adopt) {
-        // Only provenance. packModified: true says plainly that this row does not match the pack, so a
-        // future upgrade offers a diff rather than overwriting somebody's work.
-        await model.update({ where: { id: a.existingId }, data: { packKey: a.row.key, packVersion: pack.version, packModified: true } });
+        /**
+         * Provenance — AND the country, which this did not set.
+         *
+         * `country` is how the whole module decides which pack a row belongs to: installedPacks
+         * skips any row without one, and planUninstall selects on it. An adopted row therefore got
+         * a packKey but stayed invisible, which had three visible consequences:
+         *
+         *   · Country Rules under-counted the pack (38 rows where 47 were managed)
+         *   · it reported "0 edited by you" while nine of the firm's own rows were adopted —
+         *     telling somebody an uninstall is clean when their work is attached to it
+         *   · uninstall never saw them, so they kept a packKey pointing at a pack that was gone
+         *
+         * packModified: true still says plainly that the row does not match the pack, so a future
+         * upgrade offers a diff rather than overwriting somebody's work.
+         */
+        await model.update({ where: { id: a.existingId }, data: { country, packKey: a.row.key, packVersion: pack.version, packModified: true } });
         adopted++;
       }
     }
