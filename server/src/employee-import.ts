@@ -53,12 +53,111 @@ const ALIAS: Record<string, string> = {
   commercial_registration: "cr_number", "commercial registration": "cr_number",
 };
 
-/** The columns the template offers, in order. */
-export const IMPORT_COLUMNS = [
+/** The person's own columns. The document ones are not here — see `cardDocColumns`. */
+export const IMPORT_PERSON_COLUMNS = [
   "full_name", "nationality", "gov_id", "cr_number", "gender", "date_of_birth", "role", "job_category",
   "employment_type", "department", "joining_date", "salary_monthly",
-  "passport_number", "passport_expiry", "iqama_expiry", "work_permit_expiry", "health_insurance_expiry",
 ];
+
+/**
+ * WHICH DOCUMENTS A FILE CAN CARRY — READ FROM THE EMPLOYEE CARD, NOT WRITTEN HERE.
+ *
+ * It used to be four types hardcoded below: passport, iqama, work permit, health insurance. The
+ * card an employee is MEASURED against is configuration — the `onEmployeeCard` switch on each
+ * document type — and it had grown a fifth, the Qiwa Employment Contract. So every imported
+ * employee arrived one document short of complete with no column to supply it, and the only way
+ * to close the gap was to upload the contract by hand, one person at a time.
+ *
+ * Reading the card instead means the two cannot disagree: tick a type onto the card and its column
+ * appears in the template; untick it and the column goes. The column name is the type's own name
+ * in snake case, which leaves the four that already existed spelled exactly as they were, so files
+ * people already have keep importing.
+ *
+ * A `_number` column is offered only where the type declares a field whose purpose is `number` —
+ * today the passport alone. Iqama numbers come from `gov_id`, and a type like the Qiwa contract
+ * keeps its contract number as one of its own fields, which this importer does not write: it
+ * creates a document with a number and an expiry, and anything further is captured on upload.
+ */
+export type DocColumn = { type: string; col: string; numberCol: string | null };
+
+export const colName = (typeName: string) =>
+  typeName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+
+export async function cardDocColumns(): Promise<DocColumn[]> {
+  const rows = await prisma.documentType.findMany({
+    where: { onEmployeeCard: true, retired: false },
+    select: { name: true, cardOrder: true, fields: true, subjectKind: true },
+    orderBy: [{ cardOrder: "asc" }, { name: "asc" }],
+  });
+  return rows
+    .filter(r => (r.subjectKind ?? "employee") === "employee")
+    .map(r => {
+      const fields = Array.isArray(r.fields) ? (r.fields as any[]) : [];
+      const hasNumber = fields.some(f => String(f?.purpose ?? "") === "number");
+      const col = colName(r.name);
+      return { type: r.name, col, numberCol: hasNumber ? `${col}_number` : null };
+    });
+}
+
+/** The columns the template offers, in order: the person, then a pair per card document. */
+export async function importColumns(): Promise<string[]> {
+  const docs = await cardDocColumns();
+  const out = [...IMPORT_PERSON_COLUMNS];
+  for (const d of docs) {
+    if (d.numberCol) out.push(d.numberCol);
+    out.push(`${d.col}_expiry`);
+  }
+  return out;
+}
+
+/**
+ * THE FILE THE TEMPLATE BUTTON HANDS OUT — BUILT HERE, WHERE THE IMPORTER LIVES.
+ *
+ * The console used to write this CSV itself from its own copy of the headings, which is two lists
+ * in two files describing one contract. There is a check script whose whole job is to catch them
+ * drifting; the cheaper answer is to have one list. The server reads the file, so the server
+ * offers the file.
+ *
+ * Three example rows, because the mistakes worth pre-empting are visible only in examples: dates
+ * are DD/MM/YYYY (the one that silently moves a birthday four months), a Saudi national carries no
+ * iqama or work permit, and a client with sub CRs gets one row per CR so the column is filled the
+ * way the importer reads it.
+ */
+export async function employeeImportTemplateCsv(companyId?: string): Promise<string> {
+  const cols = await importColumns();
+  const docs = await cardDocColumns();
+  const ests = companyId
+    ? await prisma.establishment.findMany({ where: { companyId, status: "active" }, select: { crNumber: true }, orderBy: { crNumber: "asc" } })
+    : [];
+
+  // Expiries spread across the examples so no two columns look copied from one another.
+  const docDates = ["20/11/2026", "31/12/2026", "09/05/2027", "14/02/2028", "03/04/2030"];
+  const person = (base: Record<string, string>, withResidency: boolean, i: number): Record<string, string> => {
+    const row: Record<string, string> = { ...base };
+    docs.forEach((d, j) => {
+      // A Saudi national holds no iqama and no work permit; leaving them blank in an example is
+      // how somebody learns that without reading a manual.
+      const residency = /iqama|work permit|exit|re-entry/i.test(d.type);
+      row[`${d.col}_expiry`] = (!withResidency && residency) ? "" : docDates[(i + j) % docDates.length];
+      if (d.numberCol) row[d.numberCol] = withResidency || !/passport/i.test(d.type) ? (i === 1 ? "" : ["Z1234567", "", "P7654321"][i] ?? "") : "";
+    });
+    return row;
+  };
+
+  const people = [
+    person({ full_name: "Mohammed Rahman", nationality: "India", gov_id: "2123456789", gender: "male", date_of_birth: "06/10/1994", role: "Electrician", job_category: "skilled", employment_type: "full_time", department: "Maintenance", joining_date: "01/03/2024", salary_monthly: "3500" }, true, 0),
+    person({ full_name: "Abdullah Al Harbi", nationality: "Saudi", gov_id: "1098765432", gender: "male", date_of_birth: "14/02/1990", role: "Accountant", job_category: "high skilled", employment_type: "full_time", department: "Finance", joining_date: "15/01/2023", salary_monthly: "9000" }, false, 1),
+    person({ full_name: "Maria Santos", nationality: "Philippines", gov_id: "2234567890", gender: "female", date_of_birth: "22/07/1992", role: "Receptionist", job_category: "basic skilled", employment_type: "full_time", department: "Admin", joining_date: "10/05/2025", salary_monthly: "3000" }, true, 2),
+  ];
+
+  const crs = ests.map(e => e.crNumber).filter(Boolean) as string[];
+  const rows: Record<string, string>[] = (crs.length ? crs.slice(0, 3) : [""]).map((cr, i) => ({ ...people[i % people.length], cr_number: cr }));
+
+  const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const body = rows.map(r => cols.map(c => cell(r[c] ?? "")).join(",")).join("\n");
+  // The BOM is what makes Excel read it as UTF-8; without it an Arabic name arrives as mojibake.
+  return `\ufeff${cols.join(",")}\n${body}\n`;
+}
 
 const MAX_ROWS = 2000;
 
@@ -152,6 +251,9 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
   // typo or the wrong client's file than a CR worth creating from a spreadsheet.
   const hasCrColumn = col("cr_number") >= 0;
   const ests = await prisma.establishment.findMany({ where: { companyId: co.id }, select: { id: true, crNumber: true, kind: true, status: true, name: true, city: true } });
+  // Read once for the whole file rather than per row: it is one query either way, and a file of
+  // three hundred people should not ask the database three hundred times what the card holds.
+  const docCols = await cardDocColumns();
   const mainCr = ests.find(e => e.kind === "main" && e.status === "active") ?? null;
   const knownCrs = ests.filter(e => e.status === "active").map(e => e.crNumber).join(", ") || "none added yet";
   const byGov = new Map(existing.filter(e => e.govId).map(e => [e.govId!, e]));
@@ -250,12 +352,9 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
     if (joined.why) warnings.push({ row: line, name, what: `joining date left empty — ${joined.why}` });
 
     const docs: PlannedDoc[] = [];
-    for (const [type, numCol, expCol] of [
-      ["Passport", "passport_number", "passport_expiry"],
-      ["Iqama", null, "iqama_expiry"],
-      ["Work Permit", null, "work_permit_expiry"],
-      ["Health Insurance", null, "health_insurance_expiry"],
-    ] as [string, string | null, string][]) {
+    for (const { type, col, numberCol } of docCols) {
+      const numCol = numberCol;
+      const expCol = `${col}_expiry`;
       const rawExp = at(r, expCol);
       if (!rawExp || isNone(rawExp)) continue;
       const e = isoDate(rawExp);

@@ -3,89 +3,78 @@
  *
  *   npx tsx scripts/import-template-check.ts      (local database; writes nothing)
  *
- * The Employees tab offers Template and Import side by side, and they are built from two different
- * lists in two different files: the console writes the CSV from its own `head9`, and the server
- * reads it against `IMPORT_COLUMNS` and the aliases. Nothing connects them — `IMPORT_COLUMNS` is
- * exported for the purpose and imported by nobody.
+ * This used to compare two lists of headings — one in the console, one here — because the Template
+ * button built the CSV in the browser while the server read it. They could disagree, and the way
+ * you found out was filling in three hundred people and being told the file has no "nationality"
+ * column. The server now builds the file it reads, so that drift is gone by construction, and this
+ * check guards what replaced it:
  *
- * They agree today. The failure when they stop is the expensive kind: somebody downloads the
- * template, fills in three hundred people, and is told the file has no "nationality" column. The
- * work is already done by then, and the person who did it has no way to tell whose fault it is.
- *
- * So this reads the SHIPPED template out of index.html — not a copy of it — and does two things:
- * compares its headings to the server's list, and then feeds the exact file the button produces to
- * the real planner. Headings that line up are not enough; the example rows have to survive the
- * parsing too, which is what a person discovers by pressing Import on the file they were given.
+ *   · the headings cover every document type on the employee card, which is configuration and can
+ *     change after this code was written — the whole reason the Qiwa contract was unimportable
+ *   · the exact file the button hands out still survives the real planner
+ *   · the console has not grown a second copy of the headings again
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { IMPORT_COLUMNS, planEmployeeImport } from "../src/employee-import.js";
+import { planEmployeeImport, employeeImportTemplateCsv, cardDocColumns, importColumns } from "../src/employee-import.js";
 import { prisma } from "../src/db.js";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const html = fs.readFileSync(path.join(here, "..", "..", "index.html"), "utf8");
-
-const grab = (marker: string) => {
-  const from = html.indexOf(marker);
-  if (from < 0) return null;
-  const open = html.indexOf("[", from);
-  let depth = 0, i = open;
-  for (; i < html.length; i++) {
-    if (html[i] === "[") depth++;
-    else if (html[i] === "]") { depth--; if (!depth) break; }
-  }
-  // eslint-disable-next-line no-eval
-  return eval(html.slice(open, i + 1)) as any[];
-};
-
-const head = grab("const head9 = [") as string[] | null;
-const people = grab("const people9 = [") as string[][] | null;
-if (!head || !people) { console.error("Could not find the template's headings or example rows in index.html — this check needs updating."); process.exit(2); }
 
 let bad = 0;
 const fail = (m: string) => { console.log("  FAIL  " + m); bad++; };
 
-// 1. The two lists.
-const missing = IMPORT_COLUMNS.filter(c => !head.includes(c));
-const extra = head.filter(c => !IMPORT_COLUMNS.includes(c));
-if (!missing.length && !extra.length && head.join() === IMPORT_COLUMNS.join())
-  console.log(`  ok    the template's ${head.length} headings match IMPORT_COLUMNS, in order`);
-else {
-  for (const c of missing) fail(`IMPORT_COLUMNS has "${c}" and the downloaded template does not offer it`);
-  for (const c of extra) fail(`the template offers "${c}" and IMPORT_COLUMNS does not list it`);
-  if (!missing.length && !extra.length) fail(`same headings, different order:\n          template: ${head.join(", ")}\n          server:   ${IMPORT_COLUMNS.join(", ")}`);
-}
-
-// 2. The file itself, through the real planner. cr_number is filled in by the console per client;
-//    blank is the documented meaning of "the main CR", so the plain template is what is tested.
-const rows = people.map(p => [...p.slice(0, 3), "", ...p.slice(3)]);
-const csv = [head, ...rows].map(r => r.map(v => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)).join(",")).join("\n") + "\n";
-
 const co = await prisma.company.findFirst({ where: { lifecycle: "client" }, select: { id: true, name: true } });
-if (!co) { console.log("  ..    no client on this database to plan against; headings were still checked"); }
-else {
-  try {
-    const plan = await planEmployeeImport(co.id, csv);
-    const names = plan.preview.map(p => p.name);
-    if (plan.preview.length === people.length) console.log(`  ok    all ${people.length} example rows parse (${names.join(", ")})`);
-    else fail(`${plan.preview.length} of ${people.length} example rows parsed — ${names.join(", ") || "none"}`);
+if (!co) { console.error("no client on this database to build a template for."); process.exit(2); }
 
-    // The nationality column is written as a word, and has to come back as a code.
-    const unresolved = plan.preview.filter(p => !/^[A-Z]{2}$/.test(String(p.nationality ?? "")));
-    if (!unresolved.length) console.log(`  ok    every nationality resolves to a code (${[...new Set(plan.preview.map(p => p.nationality))].join(", ")})`);
-    else fail(`nationality not resolved for: ${unresolved.map(p => `${p.name} → "${p.nationality}"`).join("; ")}`);
+const csv = await employeeImportTemplateCsv(co.id);
+const head = csv.replace(/^﻿/, "").split("\n")[0].split(",");
+const cols = await importColumns();
+const docs = await cardDocColumns();
 
-    // The expiry columns are the point of the file; a template whose documents are silently ignored
-    // teaches people to leave them blank.
-    if (plan.documents > 0) console.log(`  ok    the example rows plan ${plan.documents} documents from their expiry columns`);
-    else fail("no documents planned — the passport / iqama / permit / insurance columns are being ignored");
+console.log(`template for ${co.name}: ${head.length} headings, ${csv.trim().split("\n").length - 1} example rows\n`);
 
-    if (plan.errors?.length) fail(`the planner reported: ${plan.errors.map((e: any) => e.message ?? e).join(" · ")}`);
-  } catch (e: any) {
-    fail(`the planner rejected the template outright: ${e?.message ?? e}`);
-  }
+// 1. Every document the card measures can be filled in by the file.
+for (const d of docs) {
+  if (head.includes(`${d.col}_expiry`)) console.log(`  ok    ${d.type} — column "${d.col}_expiry"`);
+  else fail(`${d.type} is on the employee card and the template offers no "${d.col}_expiry" column`);
+  if (d.numberCol && !head.includes(d.numberCol)) fail(`${d.type} declares a number field and the template offers no "${d.numberCol}"`);
 }
+if (head.join() !== cols.join()) fail(`the file's headings are not importColumns():\n          file:   ${head.join(", ")}\n          server: ${cols.join(", ")}`);
+
+// 2. The file itself, through the real planner.
+try {
+  const plan = await planEmployeeImport(co.id, csv);
+  const rows = csv.trim().split("\n").length - 1;
+  if (plan.preview.length === rows) console.log(`\n  ok    all ${rows} example rows parse (${plan.preview.map(p => p.name).join(", ")})`);
+  else fail(`${plan.preview.length} of ${rows} example rows parsed`);
+
+  const unresolved = plan.preview.filter(p => !/^[A-Z]{2}$/.test(String(p.nationality ?? "")));
+  if (!unresolved.length) console.log(`  ok    every nationality resolves to a code (${[...new Set(plan.preview.map(p => p.nationality))].join(", ")})`);
+  else fail(`nationality not resolved for: ${unresolved.map(p => `${p.name} → "${p.nationality}"`).join("; ")}`);
+
+  // Documents are the point of the file. Counted per type, because "some documents were planned"
+  // was true on the day the Qiwa contract silently had no column at all.
+  // From `rows`, the planned records themselves — `preview` is a trimmed view that carries only a
+  // count of documents, which is the number that stayed reassuringly non-zero while the Qiwa
+  // contract had no column at all.
+  const planned = new Set<string>();
+  for (const p of (plan as any).rows ?? []) for (const d of (p.docs ?? [])) planned.add(d.docType);
+  for (const d of docs) {
+    if (planned.has(d.type)) console.log(`  ok    ${d.type} documents are planned from the file`);
+    else fail(`no ${d.type} planned — its column is in the file and the importer ignored it`);
+  }
+  if (plan.errors?.length) fail(`the planner reported: ${plan.errors.map((e: any) => e.message ?? e).join(" · ")}`);
+} catch (e: any) {
+  fail(`the planner rejected the template outright: ${e?.message ?? e}`);
+}
+
+// 3. The second list must not come back.
+const html = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "index.html"), "utf8");
+const i = html.indexOf("this._eiTemplateFor");
+const eiBlock = i < 0 ? "" : html.slice(i, i + 2400);
+if (!eiBlock) fail("could not find _eiTemplateFor in index.html — this check needs updating");
+else if (/employees\/import-template/.test(eiBlock)) console.log("\n  ok    the console downloads the server's template rather than building one");
+else fail("the console is building the CSV itself again — that is the drift this check exists to prevent");
 
 console.log(bad ? `\n${bad} wrong.` : "\nin order.");
 await prisma.$disconnect();

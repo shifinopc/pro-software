@@ -37,7 +37,7 @@ import { syncMailbox, saveConnection, scanLeads, dismissalDigest, accessTokenFor
          replyTimes } from "./mailbox.js";
 import { authorizeUrl, exchangeCode, providerConfigured, providerFor } from "./mailproviders.js";
 import { verifyImap, credBlob, hostFor, needsAppPassword } from "./imap.js";
-import { planEmployeeImport, applyEmployeeImport } from "./employee-import.js";
+import { planEmployeeImport, applyEmployeeImport, employeeImportTemplateCsv } from "./employee-import.js";
 import { planLeadImport, applyLeadImport, leadImportTemplateCsv, xlsxToCsv } from "./lead-import.js";
 import { planMerge, applyMerge } from "./company-merge.js";
 import { parseSignature } from "./signature.js";
@@ -4530,6 +4530,27 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
  *
  * The rules themselves live in employee-import.ts, shared with the command-line script.
  */
+/**
+ * THE TEMPLATE, BUILT BY THE SIDE THAT READS IT.
+ *
+ * The console used to write this CSV from its own copy of the headings — two lists, two files, one
+ * contract, and a check script whose job was to notice when they stopped agreeing. The failure it
+ * guarded against is the expensive kind: somebody fills in three hundred people and is told the
+ * file has no "nationality" column. One list removes the possibility rather than reporting it.
+ *
+ * Scoped to the client so the example rows can name that client's own CRs.
+ */
+app.get("/api/companies/:id/employees/import-template", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const co = await prisma.company.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+    if (!co) return res.status(404).json({ error: "That client no longer exists" });
+    const slug = co.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="employee-import-template${slug ? "-" + slug : ""}.csv"`);
+    res.send(await employeeImportTemplateCsv(co.id));
+  } catch (e: any) { return fail(res, 400, e, "employees.import-template"); }
+});
+
 app.post("/api/companies/:id/employees/import", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   try {

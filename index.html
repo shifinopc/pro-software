@@ -24263,23 +24263,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // most and the one nobody sees until a birthday has moved four months. A client with sub CRs gets one
     // example row per CR, so the CR column is filled in the way the importer reads it.
     this._eiTemplateFor = this._eiTemplateFor || ((coId9, coName9) => {
-      const head9 = ['full_name', 'nationality', 'gov_id', 'cr_number', 'gender', 'date_of_birth', 'role', 'job_category', 'employment_type', 'department', 'joining_date', 'salary_monthly', 'passport_number', 'passport_expiry', 'iqama_expiry', 'work_permit_expiry', 'health_insurance_expiry'];
-      const crs9 = coId9 ? this._crRows(coId9).filter(e9 => e9.status === 'active') : [];
-      const people9 = [
-        ['Mohammed Rahman', 'India', '2123456789', 'male', '06/10/1994', 'Electrician', 'skilled', 'full_time', 'Maintenance', '01/03/2024', '3500', 'Z1234567', '15/08/2031', '20/11/2026', '20/11/2026', '31/12/2026'],
-        ['Abdullah Al Harbi', 'Saudi', '1098765432', 'male', '14/02/1990', 'Accountant', 'high skilled', 'full_time', 'Finance', '15/01/2023', '9000', '', '', '', '', '31/12/2026'],
-        ['Maria Santos', 'Philippines', '2234567890', 'female', '22/07/1992', 'Receptionist', 'basic skilled', 'full_time', 'Admin', '10/05/2025', '3000', 'P7654321', '03/04/2030', '09/05/2027', '09/05/2027', '31/12/2026'],
-      ];
-      const rows9 = (crs9.length ? crs9.slice(0, 3) : [null]).map((cr9, i9) => { const p9 = people9[i9 % people9.length]; return [...p9.slice(0, 3), cr9 ? cr9.crNumber : '', ...p9.slice(3)]; });
-      const csv9 = (v9) => (/[",\n]/.test(v9) ? '"' + String(v9).replace(/"/g, '""') + '"' : v9);
-      const blob9 = new Blob(['\uFEFF' + [head9, ...rows9].map(r9 => r9.map(csv9).join(',')).join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
-      const slug9 = String(coName9 || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      const a9 = document.createElement('a');
-      a9.href = URL.createObjectURL(blob9);
-      a9.download = 'employee-import-template' + (slug9 ? '-' + slug9 : '') + '.csv';
-      document.body.appendChild(a9); a9.click(); a9.remove();
-      setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
-      this.toast && this.toast('Template downloaded — dates are DD/MM/YYYY' + (crs9.length > 1 ? ', and each row names its CR' : ''));
+      // ASKS THE SERVER FOR IT. The headings used to be written here as well as there, which is one
+      // contract described in two files: the console offered a column the importer did not read, or
+      // the importer required one the console never offered, and either way somebody found out
+      // after filling in three hundred people. The side that READS the file now writes it, document
+      // columns and all, so the two cannot disagree — and the document columns follow the employee
+      // card, so a type ticked onto the card arrives with a column of its own.
+      if (!coId9) return this.toast && this.toast('Pick a client first — the template names their CRs', 'warn');
+      const tok9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + coId9 + '/employees/import-template',
+        { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+        .then(r9 => { if (!r9.ok) throw new Error('HTTP ' + r9.status); return r9.blob(); })
+        .then(b9 => {
+          const slug9 = String(coName9 || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          const a9 = document.createElement('a');
+          a9.href = URL.createObjectURL(b9);
+          a9.download = 'employee-import-template' + (slug9 ? '-' + slug9 : '') + '.csv';
+          document.body.appendChild(a9); a9.click(); a9.remove();
+          setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+          this.toast && this.toast('Template downloaded — dates are DD/MM/YYYY');
+        })
+        .catch(() => this.toast && this.toast('Could not build the template — the server did not answer', 'error'));
     });
     // -- IMPORT LEADS --
     // The same contract as the employee import above: the server reads the file and says what it
