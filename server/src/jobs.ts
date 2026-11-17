@@ -280,6 +280,25 @@ export async function startPeriodicRuns(): Promise<PeriodicResult> {
 
     const key = periodKey(now, every);
 
+    // NOT BEFORE THIS PERIOD.
+    //
+    // `opensOnDay` says which day of a month the work can start on; it cannot say which month to
+    // begin in, and the two get confused. A workflow switched on mid-month opens that month's case
+    // at once — correct for a filing whose window is still open, wrong for one introduced after its
+    // own deadline has passed, which arrives already late and asks somebody to close a case for
+    // work nobody was ever going to do.
+    //
+    // `startFrom` is the period to begin at, written the way the key is: "2026-12" monthly,
+    // "2026-Q1" quarterly. Both forms sort lexicographically within their own shape, which is why
+    // this is a string comparison and not a date one. It needs no undoing: once the first period
+    // arrives the test stops mattering, so nobody has to remember to come back and clear it.
+    const startFrom = String(cfg.startFrom ?? "").trim();
+    if (startFrom && key < startFrom) {
+      out.skipped++;
+      out.details.push(`${tpl.name}: starts ${startFrom}, this period is ${key}`);
+      continue;
+    }
+
     // Entitlement: the service this template delivers, and the clients who hold it.
     const svc = await prisma.serviceItem.findFirst({ where: { workflowId: tpl.id, retired: false } });
     if (!svc) { out.skipped++; out.details.push(`${tpl.name}: no service points at it — inert`); continue; }
