@@ -31,7 +31,7 @@ async function sweep() {
 }
 
 /** One quotation, its values rendered as the proposal would print them. */
-async function render(items: any[], milestones: any[] | null, companyId: string) {
+async function render(items: any[], milestones: any[] | null, companyId: string, templateTokens?: string[]) {
   const lines = items.reduce((a, it) => a + Math.round(Number(it.price) * 100) * (Number(it.units ?? 1)), 0);
   const q = await prisma.quotation.create({
     data: {
@@ -42,7 +42,7 @@ async function render(items: any[], milestones: any[] | null, companyId: string)
       date: new Date().toISOString().slice(0, 10),
     },
   });
-  const v: any = await proposalData(q.id);
+  const v: any = await proposalData(q.id, undefined, templateTokens);
   return { q, v };
 }
 
@@ -182,6 +182,46 @@ try {
       [{ name: "Fee", price: 10000, units: 1, kind: "prof" }],
       [{ label: "Fixed", pct: 0, basis: "prof", amountMinor: 250000 }], co.id);
     ok(num(v.milestones[0]["milestone.amount"]) === 2500, "a stage agreed as a flat amount keeps it");
+  }
+
+  /**
+   * WHICH FEE A STAGE BILLS, ON THE PAGE.
+   *
+   * Every template in use prints a stage as amount + label, so two stages at the same milestone
+   * against different fees read as the same sentence twice with different money on a document
+   * somebody signs. The base is folded into the label unless the template places it itself.
+   */
+  {
+    const lines = [
+      { name: "Fee", price: 10000, units: 1, kind: "prof" },
+      { name: "Gov", price: 4000, units: 1, kind: "gov" },
+    ];
+    const same = [
+      { label: "Upon approval of the MISA Licence", pct: 30, basis: "prof" },
+      { label: "Upon approval of the MISA Licence", pct: 100, basis: "gov" },
+    ];
+
+    const { v } = await render(lines, same, co.id);
+    const [a, b] = v.milestones.map((m: any) => m["milestone.label"]);
+    ok(a !== b, `two stages at one milestone against different fees read differently (${a} / ${b})`);
+    ok(a.includes("Professional Fees"), "the professional stage names its fee");
+    ok(b.includes("Government Fees"), "the government stage names its fee");
+    ok(num(v.milestones[0]["milestone.amount"]) === 3000 && num(v.milestones[1]["milestone.amount"]) === 4000,
+      "and the amounts still come off their own base, not the total");
+
+    // A template that asks for {{milestone.of}} places it itself, so folding would print it twice.
+    const { v: v2 } = await render(lines, same, co.id, ["milestone.label", "milestone.of"]);
+    ok(v2.milestones[0]["milestone.label"] === "Upon approval of the MISA Licence",
+      "a template that asks for milestone.of gets the label untouched");
+    ok(v2.milestones[0]["milestone.of"] === "Professional Fees", "and the fee in its own token");
+
+    // The whole quotation has no base to name — which is every proposal written before schedules.
+    const { v: v3 } = await render(lines, [{ label: "upon signing", pct: 100, basis: "total" }], co.id);
+    ok(v3.milestones[0]["milestone.label"] === "upon signing",
+      "a stage against the whole quotation keeps the label it was given");
+    const { v: v4 } = await render(lines, null, co.id);
+    ok(v4.milestones[0]["milestone.label"] === "upon signing",
+      "and so does the no-schedule fallback, so old proposals render unchanged");
   }
 } finally {
   await sweep();

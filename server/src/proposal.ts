@@ -241,6 +241,13 @@ const fmtLong = (iso?: string | null) => {
 export async function proposalData(
   quotationId: string,
   overrides?: { presentedBy?: string | null; date?: string | null; validUntil?: string | null },
+  /**
+   * Tokens the chosen template actually asks for, so a stage can say which fee it bills.
+   *
+   * Left out, the base is folded into the label — the safe default, because every template in
+   * existence uses {{milestone.label}} and none of them uses {{milestone.of}}.
+   */
+  templateTokens?: string[],
 ): Promise<Record<string, unknown> | null> {
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return null;
@@ -381,19 +388,36 @@ export async function proposalData(
     prof: "Professional Fees", gov: "Government Fees", foreign: "Foreign Company Fees", total: "",
   };
 
-  // A proposal with no schedule recorded still has to print terms, and "all of it, on signing" is
-  // the honest reading of no schedule — not a blank page where the payment terms should be.
+  /**
+   * WHICH FEE A STAGE BILLS HAS TO SURVIVE ONTO THE PAGE.
+   *
+   * Every template in use prints a stage as amount + label and nothing else, so two stages at the
+   * same milestone against different fees came out as the same sentence twice:
+   *
+   *     SAR 3,000.00/- Upon approval of the MISA Licence      <- 30% of professional fees
+   *     SAR 4,000.00/- Upon approval of the MISA Licence      <- 100% of government fees
+   *
+   * Identical wording, different money, on a document somebody signs. The base is therefore folded
+   * into the label unless the template asks for {{milestone.of}} and places it itself.
+   *
+   * Only the base, never the percentage: one template already prints "({{milestone.pct}}%)" and
+   * would say it twice. A stage against the whole quotation has no base to name, so its label is
+   * untouched — which is also every proposal written before schedules existed.
+   */
+  const ofInTemplate = Array.isArray(templateTokens) && templateTokens.includes("milestone.of");
   const rawMs: any[] = Array.isArray(q.milestones) ? (q.milestones as any[]) : [];
   const milestones = (rawMs.length ? rawMs : [{ label: "upon signing", pct: 100, basis: "total" }]).map((m, i) => {
     const pct = Number(m.pct ?? 0);
     const basis = String(m.basis ?? "total");
     // A stored amount still wins, for a stage agreed as a flat sum rather than a percentage.
     const amountMinor = m.amountMinor != null ? Number(m.amountMinor) : Math.round(baseFor(basis) * (pct / 100));
+    const of = OF_LABEL[basis] ?? "";
+    const label = String(m.label ?? "");
     return {
       "milestone.no": String(i + 1),
-      "milestone.label": String(m.label ?? ""),
+      "milestone.label": of && !ofInTemplate ? `${label} (${of})` : label,
       "milestone.pct": pct ? String(pct) : "",
-      "milestone.of": OF_LABEL[basis] ?? "",
+      "milestone.of": of,
       "milestone.amount": money(amountMinor),
     };
   });

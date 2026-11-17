@@ -7147,6 +7147,16 @@ app.post("/api/documents/:id/renew", requireAuth, requireStaff, requireWriteRole
 const TEMPLATE_DIR = path.resolve(process.cwd(), "uploads-private");
 
 /**
+ * The tokens a template recorded at upload, as plain strings.
+ *
+ * Read by proposalData to decide whether the document places {{milestone.of}} itself or wants the
+ * fee folded into the stage's label. An old row holding null, or anything that is not a list of
+ * strings, means "asks for nothing" — which is the folding case, and the safe one.
+ */
+const templateTokens = (t: unknown): string[] =>
+  Array.isArray(t) ? t.filter((x): x is string => typeof x === "string") : [];
+
+/**
  * RENDERED PROPOSALS, KEPT FOR A FEW MINUTES.
  *
  * Converting one takes about four seconds of LibreOffice, and the dialog asks for the same document
@@ -7314,7 +7324,9 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     const cacheKey = crypto.createHash("sha256").update(JSON.stringify([
       q.id, q.number, q.clientName, q.service, q.status, q.date, q.validUntil,
       q.createdByName, q.totalMinor, q.subtotalMinor, q.vatMinor, q.amount, q.items, q.milestones ?? null,
-      tpl.id, st.size, st.mtimeMs, tpl.params ?? null, wantPdf,
+      // tokens as well as params: they decide whether a stage's fee is folded into its label, so
+      // two renders of the same quotation and template can legitimately differ on them alone.
+      tpl.id, st.size, st.mtimeMs, tpl.params ?? null, tpl.tokens ?? null, wantPdf,
       String(req.query.presentedBy ?? ""), String(req.query.date ?? ""), String(req.query.validUntil ?? ""),
     ])).digest("hex");
 
@@ -7325,7 +7337,7 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
       presentedBy: String(req.query.presentedBy ?? "") || null,
       date: String(req.query.date ?? "") || null,
       validUntil: String(req.query.validUntil ?? "") || null,
-    });
+    }, templateTokens(tpl.tokens));
     if (!cached && !data) return res.status(404).json({ error: "Quotation not found" });
 
     // `?format=pdf` for the preview, and for anybody who would rather send something the client
@@ -7428,7 +7440,7 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     if (wantDate && wantDate !== q.date) typed.date = wantDate;
     if (wantValid && wantValid !== q.validUntil) typed.validUntil = wantValid;
 
-    const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid });
+    const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid }, templateTokens(tpl.tokens));
     if (!data) return res.status(404).json({ error: "Quotation not found" });
     const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
     // PDF by default when the firm can make one: a client who receives a .docx can edit the offer,
