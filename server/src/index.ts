@@ -7157,6 +7157,22 @@ const templateTokens = (t: unknown): string[] =>
   Array.isArray(t) ? t.filter((x): x is string => typeof x === "string") : [];
 
 /**
+ * The stages of the payment term set a template is configured with.
+ *
+ * Empty for a template with none, which leaves the schedule to the quotation itself. Resolved by
+ * id at render time rather than copied onto the template, so correcting a set's wording corrects
+ * every proposal that has not gone out yet — the point of having sets at all.
+ */
+async function templateStages(termSetId: string | null | undefined): Promise<any[]> {
+  if (!termSetId) return [];
+  const row = await prisma.appSetting.findUnique({ where: { key: "paymentTerms" } });
+  const sets = (row?.value as any)?.sets;
+  if (!Array.isArray(sets)) return [];
+  const set = sets.find((s: any) => s && s.id === termSetId);
+  return Array.isArray(set?.rows) ? set.rows : [];
+}
+
+/**
  * RENDERED PROPOSALS, KEPT FOR A FEW MINUTES.
  *
  * Converting one takes about four seconds of LibreOffice, and the dialog asks for the same document
@@ -7253,6 +7269,11 @@ app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRo
     data.name = name;
   }
   if (req.body?.appliesTo !== undefined) data.appliesTo = parseAppliesTo(req.body.appliesTo);
+  // Empty string clears it — "no terms configured", which falls back to the full amount on signing.
+  if (req.body?.termSetId !== undefined) {
+    const v = String(req.body.termSetId ?? "").trim();
+    data.termSetId = v || null;
+  }
   if (req.body?.params !== undefined) {
     const v = req.body.params;
     if (!v || typeof v !== "object" || Array.isArray(v)) return res.status(400).json({ error: "params must be an object" });
@@ -7318,6 +7339,8 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
     if (!fs.existsSync(file)) return res.status(410).json({ error: "The template file is missing from the server" });
 
     const wantPdf = String(req.query.format ?? "").toLowerCase() === "pdf";
+    // The schedule this template sells on, used when the quotation has none of its own.
+    const tplStages = await templateStages(tpl.termSetId);
     // Everything that can change the bytes. `updatedAt` on the quotation covers an edited line or a
     // changed total; the template file's size and mtime cover its .docx being replaced on disk.
     const st = fs.statSync(file);
@@ -7326,7 +7349,8 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
       q.createdByName, q.totalMinor, q.subtotalMinor, q.vatMinor, q.amount, q.items, q.milestones ?? null,
       // tokens as well as params: they decide whether a stage's fee is folded into its label, so
       // two renders of the same quotation and template can legitimately differ on them alone.
-      tpl.id, st.size, st.mtimeMs, tpl.params ?? null, tpl.tokens ?? null, wantPdf,
+      // The resolved stages, not just the id: editing a set's wording has to reach the preview.
+      tpl.id, st.size, st.mtimeMs, tpl.params ?? null, tpl.tokens ?? null, tplStages, wantPdf,
       String(req.query.presentedBy ?? ""), String(req.query.date ?? ""), String(req.query.validUntil ?? ""),
     ])).digest("hex");
 
@@ -7337,7 +7361,7 @@ app.get("/api/quotations/:id/proposal", requireAuth, requireStaff, async (req, r
       presentedBy: String(req.query.presentedBy ?? "") || null,
       date: String(req.query.date ?? "") || null,
       validUntil: String(req.query.validUntil ?? "") || null,
-    }, templateTokens(tpl.tokens));
+    }, templateTokens(tpl.tokens), tplStages);
     if (!cached && !data) return res.status(404).json({ error: "Quotation not found" });
 
     // `?format=pdf` for the preview, and for anybody who would rather send something the client
@@ -7440,7 +7464,8 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     if (wantDate && wantDate !== q.date) typed.date = wantDate;
     if (wantValid && wantValid !== q.validUntil) typed.validUntil = wantValid;
 
-    const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid }, templateTokens(tpl.tokens));
+    const data = await proposalData(q.id, { presentedBy, date: wantDate, validUntil: wantValid },
+      templateTokens(tpl.tokens), await templateStages(tpl.termSetId));
     if (!data) return res.status(404).json({ error: "Quotation not found" });
     const docx = await renderDocx(fs.readFileSync(file), { ...data, ...paramTokens(tpl.params) });
     // PDF by default when the firm can make one: a client who receives a .docx can edit the offer,

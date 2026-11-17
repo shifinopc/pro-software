@@ -31,7 +31,7 @@ async function sweep() {
 }
 
 /** One quotation, its values rendered as the proposal would print them. */
-async function render(items: any[], milestones: any[] | null, companyId: string, templateTokens?: string[]) {
+async function render(items: any[], milestones: any[] | null, companyId: string, templateTokens?: string[], templateStages?: any[]) {
   const lines = items.reduce((a, it) => a + Math.round(Number(it.price) * 100) * (Number(it.units ?? 1)), 0);
   const q = await prisma.quotation.create({
     data: {
@@ -42,7 +42,7 @@ async function render(items: any[], milestones: any[] | null, companyId: string,
       date: new Date().toISOString().slice(0, 10),
     },
   });
-  const v: any = await proposalData(q.id, undefined, templateTokens);
+  const v: any = await proposalData(q.id, undefined, templateTokens, templateStages);
   return { q, v };
 }
 
@@ -222,6 +222,52 @@ try {
     const { v: v4 } = await render(lines, null, co.id);
     ok(v4.milestones[0]["milestone.label"] === "upon signing",
       "and so does the no-schedule fallback, so old proposals render unchanged");
+  }
+
+  /**
+   * TERMS CONFIGURED ON THE TEMPLATE, because they belong to the kind of work being sold.
+   */
+  console.log("\nthe schedule a template sells on:");
+  {
+    const setRows = [
+      { label: "Upon signing", pct: 50, basis: "prof" },
+      { label: "On licence approval", pct: 30, basis: "prof" },
+      { label: "On licence approval", pct: 100, basis: "gov" },
+      { label: "On completion", pct: 20, basis: "prof" },
+    ];
+    const profAndGov = [
+      { name: "Fee", price: 10000, units: 1, kind: "prof" },
+      { name: "Gov", price: 4000, units: 1, kind: "gov" },
+    ];
+    const profOnly = [{ name: "Fee", price: 28000, units: 1, kind: "prof" }];
+
+    // A quotation with no stages of its own takes the template's.
+    const { v } = await render(profAndGov, null, co.id, [], setRows);
+    ok(v.milestones.length === 4, `the template's four stages are printed (got ${v.milestones.length})`);
+    const sum = v.milestones.reduce((a: number, m: any) => a + num(m["milestone.amount"]), 0);
+    ok(sum === 14000, `and they foot up to the quotation's net total, 14,000 (got ${sum})`);
+
+    // A quotation that names its own keeps them: a default must not replace a negotiated term.
+    const { v: own } = await render(profAndGov, [{ label: "All of it", pct: 100, basis: "total" }], co.id, [], setRows);
+    ok(own.milestones.length === 1 && own.milestones[0]["milestone.label"] === "All of it",
+      "a quotation's own schedule overrides the template's");
+
+    // The template meets a deal with no government fees: that stage is dropped, not printed as 0.
+    const { v: noGov } = await render(profOnly, null, co.id, [], setRows);
+    ok(noGov.milestones.length === 3, `a template stage billing a fee the deal lacks is dropped (got ${noGov.milestones.length})`);
+    ok(!noGov.milestones.some((m: any) => num(m["milestone.amount"]) === 0), "so no SAR 0.00 line reaches the client");
+    const sum2 = noGov.milestones.reduce((a: number, m: any) => a + num(m["milestone.amount"]), 0);
+    ok(sum2 === 28000, `and the rest still foot up to the whole 28,000 (got ${sum2})`);
+
+    // But a zero the quotation itself names is somebody's own arithmetic — show it.
+    const { v: ownZero } = await render(profOnly, [{ label: "Gov", pct: 100, basis: "gov" }], co.id);
+    ok(ownZero.milestones.length === 1 && num(ownZero.milestones[0]["milestone.amount"]) === 0,
+      "a zero stage the quotation names is kept, so the mistake stays visible");
+
+    // Every template stage comes to nothing: still say what the client owes.
+    const { v: allZero } = await render(profOnly, null, co.id, [], [{ label: "Gov", pct: 100, basis: "gov" }]);
+    ok(allZero.milestones.length === 1 && num(allZero.milestones[0]["milestone.amount"]) === 28000,
+      "a template whose every stage came to nothing falls back to the full amount, never a blank section");
   }
 } finally {
   await sweep();

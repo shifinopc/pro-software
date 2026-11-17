@@ -248,6 +248,8 @@ export async function proposalData(
    * existence uses {{milestone.label}} and none of them uses {{milestone.of}}.
    */
   templateTokens?: string[],
+  /** The stage rows configured on the chosen template, used when the quotation has none of its own. */
+  templateStages?: any[],
 ): Promise<Record<string, unknown> | null> {
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return null;
@@ -405,12 +407,36 @@ export async function proposalData(
    * untouched — which is also every proposal written before schedules existed.
    */
   const ofInTemplate = Array.isArray(templateTokens) && templateTokens.includes("milestone.of");
+  const amountOf = (m: any) => m.amountMinor != null
+    ? Number(m.amountMinor)
+    : Math.round(baseFor(String(m.basis ?? "total")) * (Number(m.pct ?? 0) / 100));
+
+  /**
+   * WHOSE SCHEDULE THIS IS: the quotation's, else the template's, else the whole amount.
+   *
+   * Terms belong to the kind of work being sold — business setup is billed 50/30/20 with the
+   * government fees on licence approval, a PRO retainer is not — so they are configured once on
+   * the proposal template. A quotation that was given its own stages keeps them: somebody typed
+   * those for this deal, and a default must never quietly replace a negotiated term.
+   *
+   * A TEMPLATE's stage billing a fee the quotation does not carry is dropped rather than printed
+   * as SAR 0.00. The template is a general rule meeting a particular deal, and "100% of Government
+   * Fees — SAR 0.00" on a client's offer reads as a mistake. A stage the quotation itself names is
+   * never dropped: a zero there is somebody's own arithmetic, and hiding it would hide the error.
+   */
   const rawMs: any[] = Array.isArray(q.milestones) ? (q.milestones as any[]) : [];
-  const milestones = (rawMs.length ? rawMs : [{ label: "upon signing", pct: 100, basis: "total" }]).map((m, i) => {
+  const tplMs: any[] = Array.isArray(templateStages) ? templateStages : [];
+  const fromTemplate = !rawMs.length && tplMs.length > 0;
+  const chosen = rawMs.length ? rawMs : (fromTemplate ? tplMs.filter(m => amountOf(m) > 0) : []);
+  // Never an empty payment-terms section: no schedule at all, or a template whose every stage came
+  // to nothing, still has to say what the client owes.
+  const source = chosen.length ? chosen : [{ label: "upon signing", pct: 100, basis: "total" }];
+
+  const milestones = source.map((m, i) => {
     const pct = Number(m.pct ?? 0);
     const basis = String(m.basis ?? "total");
     // A stored amount still wins, for a stage agreed as a flat sum rather than a percentage.
-    const amountMinor = m.amountMinor != null ? Number(m.amountMinor) : Math.round(baseFor(basis) * (pct / 100));
+    const amountMinor = amountOf(m);
     const of = OF_LABEL[basis] ?? "";
     const label = String(m.label ?? "");
     return {

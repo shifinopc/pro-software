@@ -9089,6 +9089,26 @@
                           <!-- What kind of work this proposal is for. Typed by the firm, because the
                                kinds of work it sells are not knowable in advance. -->
                           <input sc-camel-default-value="{{ t.appliesTo }}" data-seed-val="{{ t.appliesTo }}" onBlur="{{ t.setAppliesTo }}" onBlur="{{ t.saveAppliesTo }}" placeholder="Used for… e.g. business setup, MISA, CR" style="margin-top:7px; width:100%; max-width:420px; border:1px solid #F0EDF6; border-radius:9px; padding:7px 10px; font-size:11px; background:#FBFAFD; font-family:inherit; color:#1A1523;" style-focus="background:#fff; border-color:#7C00FF;">
+                          <!-- HOW THIS KIND OF PROPOSAL IS BILLED. The terms belong to the work
+                               being sold, not to each deal, so they are chosen once here and used
+                               on every quotation that does not set its own. -->
+                          <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">PAYMENT TERMS</span>
+                            <div style="position:relative;">
+                              <div onClick="{{ t.termSetToggle }}" style="border:1px solid #DDD9E6; border-radius:99px; padding:6px 11px; font-size:11px; background:#fff; display:flex; align-items:center; gap:7px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                                <span style="color:#1A1523; font-weight:600;">{{ t.termSetLabel }}</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                              </div>
+                              <sc-if value="{{ t.termSetOpen }}" hint-placeholder-val="{{ false }}">
+                                <div data-dd class="qc-dd">
+                                  <sc-for list="{{ t.termSetOpts }}" as="o" hint-placeholder-count="2">
+                                    <div onClick="{{ o.pick }}" class="fm-opt"><span>{{ o.label }}</span><span style="font-size:9px; color:#A9A6B4; flex:0 0 auto;">{{ o.meta }}</span></div>
+                                  </sc-for>
+                                </div>
+                              </sc-if>
+                            </div>
+                          </div>
+                          <div style="margin-top:4px; font-size:10px; color:#A9A6B4; line-height:1.5; max-width:560px;">{{ t.termSetHint }}</div>
                           <!-- The template's OWN numbers. Shown only when the document asks for
                                them, because a box for a value no document uses is a question
                                nobody can answer. -->
@@ -34796,6 +34816,37 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           this._savePropTpl(t8.id, { appliesTo: v8 }, 'Saved what ' + t8.name + ' is used for');
         },
         makeDefault: () => this._savePropTpl(t8.id, { isDefault: true }, t8.name + ' is now the default'),
+        // WHICH SCHEDULE THIS KIND OF PROPOSAL IS SOLD ON. Business setup is billed 50/30/20 with
+        // the government fees on licence approval; a PRO retainer is not. Configured here because
+        // the terms belong to the work, not to each deal — a quotation given its own stages wins.
+        termSetLabel: (() => {
+          const s8 = _ptSets.find(x8 => x8 && x8.id === t8.termSetId);
+          return s8 ? (s8.name || 'Untitled set') : 'Full amount on signing';
+        })(),
+        termSetOpen: this.state.openDd === ('tplTerms_' + t8.id),
+        termSetToggle: () => this.setState({
+          openDd: this.state.openDd === ('tplTerms_' + t8.id) ? null : ('tplTerms_' + t8.id),
+        }),
+        termSetOpts: [{ id: '', name: 'Full amount on signing', rows: null }]
+          .concat(_ptSets.filter(s8 => s8 && s8.id))
+          .map(s8 => ({
+            label: s8.name || 'Untitled set',
+            meta: s8.rows ? (s8.rows.length + ' stage' + (s8.rows.length === 1 ? '' : 's')) : 'no stages',
+            pick: () => {
+              this.setState({ openDd: null });
+              this._savePropTpl(t8.id, { termSetId: s8.id },
+                s8.id ? t8.name + ' is billed on ' + (s8.name || 'that set')
+                      : t8.name + ' asks for the full amount on signing');
+            },
+          })),
+        termSetHint: (() => {
+          const s8 = _ptSets.find(x8 => x8 && x8.id === t8.termSetId);
+          if (!s8) return 'No schedule — the client is asked for the whole amount when they sign.';
+          const n8 = (s8.rows || []).length;
+          return n8 + ' stage' + (n8 === 1 ? '' : 's')
+            + ' · used on any quotation that has none of its own. A stage billing a fee the quotation'
+            + ' does not carry is left off the document.';
+        })(),
         // Every param.* the DOCUMENT asks for, whether or not a value has been saved for it — the
         // ones with nothing behind them are exactly the ones worth seeing, since they are what
         // prints as a gap in a sentence.
