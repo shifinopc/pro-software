@@ -55,10 +55,12 @@ export interface DeliveryResult {
   runs: number;
   unmatched: string[];
   failures: string[];
+  /** Lines that got a task but no run, because another line on the same quotation already does that work. */
+  absorbed: string[];
 }
 
 export async function startDeliveryForQuotation(quotationId: string, opts: { actor?: string } = {}): Promise<DeliveryResult> {
-  const empty: DeliveryResult = { started: false, tasks: [], runs: 0, unmatched: [], failures: [] };
+  const empty: DeliveryResult = { started: false, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [] };
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return { ...empty, reason: "Quotation not found" };
 
@@ -85,7 +87,25 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     select: { id: true, name: true, sla: true, time: true, docType: true, workflowId: true },
   });
 
-  const out: DeliveryResult = { started: true, tasks: [], runs: 0, unmatched: [], failures: [] };
+  const out: DeliveryResult = { started: true, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [] };
+
+  // WORK A SISTER LINE ALREADY CONTAINS.
+  //
+  // Business Setup decides for itself how many companies a structure needs — a trading client with
+  // nothing in hand opens three acquisition lanes inside its own case. Quote "Business Setup" and
+  // "Company Acquisition" together, as a quotation naming both the setup and its fee quite
+  // reasonably does, and the client gets the lanes AND a separate acquisition case for the same
+  // company: two officers buying one business, two sets of gates, and a duplicate on every report
+  // that counts open cases.
+  //
+  // The line still becomes a task, because it is work the client is paying for and somebody has to
+  // see it. What it does not get is a second process. By name rather than by id: the templates are
+  // installed per environment, so an id here would be right on this database and silently wrong on
+  // the next one.
+  const CONTAINS: Record<string, string[]> = { "business setup": ["company acquisition"] };
+  const lineServices = lines.map(l => matchService(l.name, services)).filter(Boolean) as { name: string }[];
+  const absorbedBy = (svcName: string) => lineServices.find(other =>
+    (CONTAINS[other.name.trim().toLowerCase()] ?? []).includes(svcName.trim().toLowerCase()))?.name ?? null;
 
   for (const line of lines) {
     const svc = matchService(line.name, services);
@@ -113,7 +133,16 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
       });
 
       let runId: string | null = null;
-      if (svc?.workflowId) {
+      const absorber = svc ? absorbedBy(svc.name) : null;
+      if (svc?.workflowId && absorber) {
+        out.absorbed.push(`${svc.name} (already part of ${absorber} on this quotation)`);
+        await prisma.task.update({ where: { id: task.id }, data: {
+          docType: task.docType,
+          // Said on the task itself, where the officer who picks it up will read it, rather than
+          // only in a delivery result nobody keeps.
+          title: `${title} — billed here, done inside the ${absorber} case`,
+        } });
+      } else if (svc?.workflowId) {
         try {
           const run = await startInstance(svc.workflowId, {
             title: `${svc.name} — ${q.clientName ?? "Client"}`,

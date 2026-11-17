@@ -15858,6 +15858,28 @@
     </div>
   </sc-if>
 
+  <!-- WHO TAKES THIS STEP — its own modal, and OUTSIDE the drawer on purpose.
+       The drawer sheet is `fm-rise`, which animates a transform, and a transformed ancestor becomes
+       the containing block for anything `position:fixed` inside it. Left where it was, this overlay
+       would be measured against the sheet and clipped by it rather than covering the window. Here it
+       is a sibling of the drawer, above it at z-index 520. -->
+  <sc-if value="{{ wdDelegateOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ toggleDelegate }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:520; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .15s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-rise" style="width:340px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); overflow:hidden;">
+        <div style="padding:15px 16px 12px;">
+          <div style="font-size:13.5px; font-weight:700; letter-spacing:-.01em; color:#15111D;">Hand this step to</div>
+          <div style="font-size:11px; color:#8C8899; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ wdDelegateStep }}</div>
+        </div>
+        <div style="padding:0 10px; max-height:46vh; overflow:auto;">
+          <sc-for list="{{ wdDelegateOptions }}" as="d" hint-placeholder-count="3"><div onClick="{{ d.pick }}" style="display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:9px; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:24px; height:24px; border-radius:99px; background:#EFEBF7; color:#5B4BA8; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ d.initials }}</span><span style="font-size:12px; font-weight:600; color:#2E2937;">{{ d.name }}</span></div></sc-for>
+        </div>
+        <div style="padding:11px 14px 13px; border-top:1px solid #F1EEF7; margin-top:9px;">
+          <button onClick="{{ toggleDelegate }}" style="width:100%; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:11px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- My Tasks detail drawer -->
   <sc-if value="{{ showWorkDrawer }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .2s ease both;">
@@ -15915,30 +15937,36 @@
                  squashes this to a 4px sliver with its three 72px cells overflowing out of it. The
                  pills it replaced were text and carried their own min-content height; a grid does
                  not, so it has to say it. -->
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #F1EEF7; border-radius:16px; overflow:hidden; flex-shrink:0; animation:stagIn .45s ease .18s both;">
-              <div style="padding:13px 10px; border-right:1px solid #F1EEF7;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">PRIORITY</div><div style="font-size:11px; font-weight:700; color:{{ wdPrColor }}; margin-top:5px;">{{ wdPriority }}</div></div>
-              <div style="padding:13px 10px; border-right:1px solid #F1EEF7;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">DUE</div><div style="font-size:11px; font-weight:700; color:{{ wdDueColor }}; margin-top:5px;">{{ wdDue }}</div></div>
-              <div style="padding:13px 10px;"><div style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#A9A6B4;">OWNER ROLE</div><div style="font-size:11px; font-weight:700; color:#3E3949; margin-top:5px;">{{ wdRole }}</div></div>
-            </div>
-            <div style="display:flex; align-items:center; gap:0; margin-top:11px; flex-shrink:0; animation:stagIn .45s ease .22s both;">
-              <sc-for list="{{ wdStepper }}" as="s" hint-placeholder-count="3">
-                <div style="display:flex; align-items:center; flex:1;">
-                  <span style="width:9px; height:9px; border-radius:99px; background:{{ s.dot }}; flex-shrink:0; animation:{{ s.anim }};"></span>
-                  <span style="font-size:10px; font-weight:700; color:#57525F; margin-left:7px; white-space:nowrap;">{{ s.label }}</span>
-                  <div style="flex:1; height:1px; background:#EDE9F5; margin:0 9px;"></div>
-                </div>
-              </sc-for>
+            <!-- THE FACTS, ON ONE LINE.
+                 They were a bordered three-cell grid — three labels in 9px caps over three values —
+                 and under it a To do / In progress / Done stepper. Between them they took 120px of
+                 the top of the sheet to say "medium, due the 1st, fasil owns it", while the step
+                 that is actually live was pushed below the fold. The stepper went entirely: the
+                 process list underneath names the live step, which is the same fact said precisely
+                 instead of in three buckets. -->
+            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0 9px; font-size:11px; color:#8C8899; flex-shrink:0; animation:stagIn .45s ease .18s both;">
+              <span style="font-weight:700; color:{{ wdPrColor }};">{{ wdPriority }}</span>
+              <span style="width:3px; height:3px; border-radius:99px; background:#D6D1E0;"></span>
+              <span>Due <span style="font-weight:700; color:{{ wdDueColor }};">{{ wdDue }}</span></span>
+              <span style="width:3px; height:3px; border-radius:99px; background:#D6D1E0;"></span>
+              <span>Owner <span style="font-weight:650; color:#3E3949;">{{ wdRole }}</span></span>
             </div>
             <sc-if value="{{ wdBlockedShow }}" hint-placeholder-val="{{ false }}">
               <div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:12px; padding:12px 10px;"><div style="font-size:11px; font-weight:700; color:#C0353A;">⛔ Parked — waiting on prerequisite</div><div style="font-size:11px; color:#8A6D1F; margin-top:3px; color:#C0353A;">{{ wdBlocked }}</div><button onClick="{{ wdResume }}" style="margin-top:10px; background:#C0353A; color:#fff; border:none; font-size:11px; font-weight:700; padding:8px 10px; border-radius:99px; cursor:pointer;" style-hover="filter:brightness(.92);">Check prerequisite</button></div>
             </sc-if>
+            <!-- Only when there is something here that is NOT this task's own workflow run. The run
+                 had a card of its own reading "Workflow run attached — Workflow instance that
+                 launched this task", directly above the list of that run's steps, with a "View
+                 workflow" link beside it. Three ways to reach one thing, one of which was a heading
+                 for a section with a single row in it. -->
+            <sc-if value="{{ wdLinkedShow }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:9px; font-weight:800; color:#A9A6B4; letter-spacing:.14em; margin-top:15px; animation:stagIn .45s ease .26s both;">LINKED RECORDS</div>
             <div style="display:flex; flex-direction:column; margin-top:6px; animation:stagIn .45s ease .3s both;">
               <sc-if value="{{ wdCompShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid #F4F1F9; transition:padding-left .2s;" style-hover="padding-left:6px;"><span style="width:34px; height:34px; border-radius:12px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0;">🛡</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:650; color:#15111D;">{{ wdComp }}</div><div style="font-size:10px; color:#9A96A6; margin-top:2px;">Compliance document — renews when this task closes</div></div></div></sc-if>
-              <sc-if value="{{ wdWfShow }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openWorkflowRun }}" title="Show this run's steps" style="display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid #F4F1F9; cursor:pointer; transition:padding-left .2s;" style-hover="padding-left:6px;"><span style="width:34px; height:34px; border-radius:12px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0;">⚙</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:650; color:#15111D;">{{ wdWf }}</div><div style="font-size:10px; color:#9A96A6; margin-top:2px;">Workflow instance that launched this task</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C9C4D6" stroke-width="2.2" stroke-linecap="round" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"></path></svg></div></sc-if>
               <sc-if value="{{ wdEmpShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid #F4F1F9; transition:padding-left .2s;" style-hover="padding-left:6px;"><span style="width:34px; height:34px; border-radius:12px; background:#EDF2FF; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0;">👤</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:650; color:#15111D;">{{ wdEmp }}</div><div style="font-size:10px; color:#9A96A6; margin-top:2px;">Applicant / subject employee</div></div></div></sc-if>
               <sc-if value="{{ wdDocShow }}" hint-placeholder-val="{{ false }}"><div style="display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid #F4F1F9; transition:padding-left .2s;" style-hover="padding-left:6px;"><span style="width:34px; height:34px; border-radius:12px; background:#F3F1F7; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0;">📄</span><div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:650; color:#15111D;">{{ wdDocType }}</div><div style="font-size:10px; color:#9A96A6; margin-top:2px;">Document type</div></div></div></sc-if>
             </div>
+            </sc-if>
             <sc-if value="{{ wdHasStages }}" hint-placeholder-val="{{ false }}">
               <div style="display:flex; align-items:center; gap:9px; margin-top:15px; animation:stagIn .45s ease .34s both;">
                 <span style="font-size:12px; font-weight:700; color:#15111D; letter-spacing:-.02em;">Process</span>
@@ -15958,70 +15986,82 @@
                    on that side. A round marker with one straight edge, on the only element in the
                    drawer that is meant to draw the eye.
                    The steps sit in a plain column now; the sheet does the scrolling, as specified. -->
-              <div style="display:flex; flex-direction:column; margin-top:11px;">
-                <sc-for data-wf-stages="true" list="{{ wdStages }}" as="s" hint-placeholder-count="5">
-                  <!-- A STEP IS A CARD WITH A TOKEN BESIDE IT, per the handoff: done is filled and
-                       quiet, the live one is raised and outlined in the accent, everything ahead is
-                       a dashed outline with its number. The rail is drawn between them, green as far
-                       as the work has got and faint after it, so progress is legible without reading
-                       a word. -->
-                  <div style="display:flex; gap:12px; animation:{{ s.rowAnim }};">
-                    <div style="display:flex; flex-direction:column; align-items:center; width:26px; flex-shrink:0;">
-                      <sc-if value="{{ s.tlDone }}" hint-placeholder-val="{{ true }}">
-                        <span style="width:26px; height:26px; border-radius:99px; background:#12B76A; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 3px 8px rgba(18,183,106,.28); animation:popIn .4s cubic-bezier(.34,1.56,.64,1) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
-                      </sc-if>
-                      <sc-if value="{{ s.tlCurrent }}" hint-placeholder-val="{{ false }}">
-                        <span style="width:26px; height:26px; border-radius:99px; background:linear-gradient(140deg,#9333EA,#7C00FF); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 4px 12px rgba(124,0,255,.35); animation:pulseRing 2s ease-out infinite;"><span style="width:7px; height:7px; border-radius:99px; background:#fff;"></span></span>
-                      </sc-if>
-                      <sc-if value="{{ s.tlFuture }}" hint-placeholder-val="{{ false }}">
-                        <span style="width:26px; height:26px; border-radius:99px; background:#F5F3F9; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:9px; font-weight:800; color:#B3AEBF;">{{ s.stepNo }}</span>
-                      </sc-if>
-                      <sc-if value="{{ s.notLast }}" hint-placeholder-val="{{ true }}">
-                        <div style="flex:1; width:2px; min-height:16px; margin:5px 0; background:{{ s.railColor }}; opacity:{{ s.railOpacity }}; transform-origin:top; animation:{{ s.railAnim }};"></div>
-                      </sc-if>
+              <!-- NOW / NEXT / EARLIER.
+                   One flat column gave the step due today the same size as one finished last
+                   Tuesday, and read as 43 interchangeable rows. The drawer is opened to answer
+                   three questions — what am I meant to do, what comes after it, what has happened
+                   — so it answers them in that order and gives the space to the first. -->
+              <div style="display:flex; flex-direction:column; margin-top:10px;">
+
+                <!-- WHAT I AM MEANT TO DO. The brief was always on the step and never shown here:
+                     the officer had to open the step to find out what it asks of them. -->
+                <sc-for list="{{ wdNowRows }}" as="s" hint-placeholder-count="1">
+                  <div style="border:1px solid #EADDFB; background:#FCFAFF; border-radius:14px; padding:12px 13px; margin-bottom:4px; animation:stagIn .4s ease .1s both;">
+                    <div style="display:flex; align-items:center; gap:7px;">
+                      <span style="width:7px; height:7px; border-radius:99px; background:#7C00FF; flex-shrink:0; animation:pulseBadge 1.6s ease-in-out infinite;"></span>
+                      <span style="font-size:9px; font-weight:800; letter-spacing:.11em; color:#7C00FF;">NOW</span>
+                      <div style="flex:1;"></div>
+                      <span style="font-size:10px; font-weight:700; color:{{ s.slaColor }}; flex-shrink:0;">{{ s.slaText }}</span>
                     </div>
-                    <div style="flex:1; min-width:0; background:{{ s.cardBg }}; border:{{ s.cardBorder }}; box-shadow:{{ s.cardShadow }}; border-radius:14px; padding:12px 10px; margin-bottom:4px; transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-2px); box-shadow:0 8px 22px rgba(38,7,77,.1);">
-                      <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:12px; font-weight:650; letter-spacing:-.015em; color:{{ s.titleColor }}; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.ic }} {{ s.label }}</span>
-                        <div style="flex:1;"></div>
-                        <sc-if value="{{ s.tlCurrent }}" hint-placeholder-val="{{ false }}">
-                          <span style="flex-shrink:0; display:inline-flex; align-items:center; gap:5px; font-size:9px; font-weight:800; letter-spacing:.08em; color:#7C00FF; background:#F6EDFF; padding:3px 7px; border-radius:6px;"><span style="width:4px; height:4px; border-radius:99px; background:#7C00FF; animation:pulseBadge 1.4s ease-in-out infinite;"></span>LIVE</span>
-                        </sc-if>
-                      </div>
-                      <div style="display:flex; align-items:center; gap:7px; margin-top:6px;">
-                        <sc-if value="{{ s.hasWho }}" hint-placeholder-val="{{ true }}">
-                          <span style="width:20px; height:20px; border-radius:99px; background:{{ s.avBg }}; color:{{ s.avFg }}; font-size:8.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ s.initials }}</span>
-                        </sc-if>
-                        <span style="font-size:10px; font-weight:600; color:{{ s.metaColor }}; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.who }}</span>
-                        <span style="width:3px; height:3px; border-radius:99px; background:#DCD7E8; flex-shrink:0;"></span>
-                        <span style="font-size:10px; color:{{ s.metaColor }}; flex-shrink:0;">{{ s.when }}</span>
-                      </div>
-                      <sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:7px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if>
-                      <sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:7px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if>
-                    </div>
+                    <div style="font-size:14.5px; font-weight:700; letter-spacing:-.02em; line-height:1.3; color:#15111D; margin-top:8px;">{{ s.label }}</div>
+                    <div style="font-size:11px; color:#6F6C7A; margin-top:5px;">{{ s.meta }}</div>
+                    <sc-if value="{{ s.hasInstr }}" hint-placeholder-val="{{ true }}">
+                      <div style="font-size:11.5px; color:#4B4757; line-height:1.55; margin-top:10px; padding-top:10px; border-top:1px solid #F0E7FB;">{{ s.instr }}</div>
+                    </sc-if>
+                    <sc-if value="{{ s.warn }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#8A6D1F; background:#FEF9EF; border:1px solid #F6E3BC; border-radius:8px; padding:5px 8px; margin-top:7px; line-height:1.45;">{{ s.warnWhy }}</div></sc-if>
+                    <sc-if value="{{ s.statShow }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ s.statLines }}" as="k" hint-placeholder-count="1"><div style="font-size:10px; color:{{ k.statColor }}; background:{{ k.statBg }}; border:1px solid {{ k.statBorder }}; border-radius:8px; padding:5px 8px; margin-top:7px; line-height:1.45; font-weight:600;">⚖ {{ k.text }}</div></sc-for></sc-if>
                   </div>
                 </sc-for>
+
+                <!-- WHAT COMES AFTER IT. Three, not thirty: past the third the answer stops being
+                     useful and starts being a scroll. -->
+                <sc-if value="{{ wdNextShow }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:9px; font-weight:800; letter-spacing:.12em; color:#B3AEBF; margin:13px 0 3px 2px;">NEXT</div>
+                  <sc-for list="{{ wdNextRows }}" as="s" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:center; gap:10px; padding:5px 2px;">
+                      <span style="width:13px; height:13px; border-radius:99px; background:#fff; border:1.5px solid #E7E3F0; flex-shrink:0;"></span>
+                      <span style="font-size:12px; color:#8C8899; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.label }}</span>
+                    </div>
+                  </sc-for>
+                </sc-if>
+
+                <!-- WHAT HAS HAPPENED. One line until asked for: it is the record, not the work. -->
+                <sc-if value="{{ wdEarlierShow }}" hint-placeholder-val="{{ true }}">
+                  <div onClick="{{ toggleWdTl }}" style="display:flex; align-items:center; gap:8px; margin-top:13px; padding:7px 2px; border-top:1px solid #F4F1F9; cursor:pointer; user-select:none;">
+                    <span style="width:14px; height:14px; border-radius:99px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+                    <span style="font-size:11px; font-weight:650; color:#6F6C7A;">{{ wdEarlierLabel }}</span>
+                    <div style="flex:1;"></div>
+                    <span style="font-size:10.5px; font-weight:700; color:#7C00FF;">{{ wdTlToggleLabel }}</span>
+                  </div>
+                  <sc-if value="{{ wdTlAll }}" hint-placeholder-val="{{ false }}">
+                    <sc-for list="{{ wdEarlierRows }}" as="s" hint-placeholder-count="3">
+                      <div style="display:flex; align-items:baseline; gap:10px; padding:4px 2px 4px 24px;">
+                        <span style="font-size:11.5px; color:#57525F; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.label }}</span>
+                        <div style="flex:1;"></div>
+                        <span style="font-size:10px; color:#A9A6B4; flex-shrink:0; max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ s.meta }}</span>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                </sc-if>
+              </div>
               </div>
             </sc-if>
             <sc-if value="{{ wdDelegatedTo }}" hint-placeholder-val="{{ false }}"><div style="margin:11px 15px 0; background:#E7F8EF; border:1px solid #A6E5C3; border-radius:11px; padding:10px 13px; font-size:11px; font-weight:600; color:#0E6B40;">✓ Reassigned to {{ wdDelegatedTo }} · logged to activity</div></sc-if>
-            <sc-if value="{{ wdDelegateOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="margin:11px 15px 0; border:1px solid #EDEBF2; border-radius:12px; padding:12px 10px;">
-                <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">REASSIGN TO</div>
-                <div style="display:flex; flex-direction:column; gap:5px; margin-top:9px;">
-                  <sc-for list="{{ wdDelegateOptions }}" as="d" hint-placeholder-count="3"><div onClick="{{ d.pick }}" style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:26px; height:26px; border-radius:99px; background:#26074D; color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ d.initials }}</span><span style="font-size:11px; font-weight:600;">{{ d.name }}</span></div></sc-for>
-                </div>
-              </div>
-            </sc-if>
             <!-- Bottom padding is 20px, matching the drawer body's own, and it has to be stated HERE
                  rather than inherited. The body's `padding:13px 15px` sits in normal flow; this row
                  is sticky to bottom:0 of the SCROLL CONTAINER, which has no padding of its own — so
                  when it pins, the body's bottom padding is below it and does nothing, and the 4px
                  that used to be here was the entire gap between the buttons and the panel edge. -->
-            <!-- Full-bleed via negative margins, so the frosted bar meets both edges of the sheet
-                 while the body keeps its 28px gutter. Bottom padding is stated here rather than
-                 inherited: this row is sticky to the SCROLL CONTAINER, which has no padding, so the
-                 body's own bottom padding sits below it and does nothing. -->
-            <div style="display:flex; gap:10px; margin:15px -28px 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:11px 18px 13px; border-top:1px solid #F1EEF7; z-index:2;">
+            <!-- Full-bleed via negative margins, so the frosted bar meets both edges of the sheet,
+                 NO NEGATIVE MARGIN. This row's parent is the SHEET, not the scrolling body, so it
+                 is already full width — the -28px it used to carry pushed it 28px PAST each edge,
+                 where overflow:hidden and the sheet's 20px corner radius sliced the corner off the
+                 Delegate button. Its padding alone sets the gutter, and it is the body's 20px so
+                 the buttons line up with the card above them.
+                 Bottom padding is stated here rather than inherited: this row is sticky to the
+                 SCROLL CONTAINER, which has no padding, so the body's own sits below it and does
+                 nothing. -->
+            <div style="display:flex; gap:10px; margin:14px 0 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:12px 20px 16px; border-top:1px solid #F1EEF7; z-index:2;">
               <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer; transition:border-color .2s, color .2s;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
               <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
               <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
@@ -16031,6 +16071,18 @@
               <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.5; position:relative; overflow:hidden; background:#15111D; color:#fff; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer; box-shadow:0 8px 22px rgba(21,17,29,.24); transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-1px); box-shadow:0 12px 28px rgba(21,17,29,.3);"><span style="position:absolute; top:0; bottom:0; left:0; width:32%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0)); animation:sweep 3.2s ease-in-out 1s infinite; pointer-events:none;"></span><span style="position:relative;">Mark done</span></button></sc-if>
             </div>
           </sc-if>
+          <!-- THE STEP'S OWN GUTTER, AND ITS OWN SCROLL.
+               These sections are not inside `.fm-body` — they are direct children of the sheet,
+               which has no padding and `overflow:hidden`. Two faults came out of that, and they
+               looked unrelated: every section ran edge to edge while the button above sat at 20px,
+               AND a step with more than a screenful of fields was simply cut off at the sheet's
+               90vh with nothing to scroll. The drawer's real scroller, `.fm-body`, renders 23px
+               tall and empty on a step, because none of this is inside it.
+               So this wrapper is both: the 20px gutter, and the scrolling box. `min-height:0` is
+               what makes it scroll rather than grow — a flex child's default `min-height:auto`
+               refuses to shrink below its content, which is exactly how the overflow escaped the
+               sheet in the first place. -->
+          <div style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 20px 18px;">
           <!-- Workflow step detail -->
           <!-- What the person is meant to do. Snapshotted onto the step when it was created, so it is
                the brief they were actually given, not whatever the template says today. -->
@@ -16240,6 +16292,7 @@
               <sc-if value="{{ wdCompleteHeld }}" hint-placeholder-val="{{ false }}">
                 <button onClick="{{ wdHeldPoke }}" title="{{ wdHeldWhy }}" style="width:100%; margin-top:10px; background:#F3F1F7; color:#8C8899; border:1px dashed #D8D3E3; font-size:12px; font-weight:700; padding:12px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#C0353A; color:#C0353A;">{{ wdHeldLabel }}</button>
               </sc-if>
+          </div>
             </div>
           </sc-if>
         </div>
@@ -28564,7 +28617,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (!_udCo) return this.setState({ udError: 'Choose the client this document belongs to' });
         // Resolved from the LABEL the officer picked, which carries the code — never from the bare
         // name, which two people can share.
-        const emp8 = udIsEmployee ? _udEmpRows.find(e8 => _empLabel(e8) === st.udEmployee) : null;
+        const emp8 = udIsEmployee ? (_udEmpRows.find(e8 => _empLabel(e8) === st.udEmployee)
+          // A caller that seeded the plain name is still understood — but only when exactly one
+          // employee of this client bears it. Two people of one name is precisely the case this
+          // must refuse to guess at, which is why the label carries the code in the first place.
+          || (_udEmpRows.filter(e8 => e8.name === st.udEmployee).length === 1
+            ? _udEmpRows.find(e8 => e8.name === st.udEmployee)
+            : null)) : null;
         if (udIsEmployee && !emp8) return this.setState({ udError: 'Select an employee of ' + _udCo.name });
         const days8 = Math.round((new Date(st.udExpiry).getTime() - Date.now()) / 86400000);
         const status8 = isNaN(days8) ? 'valid' : days8 < 0 ? 'overdue' : days8 <= 30 ? 'expiring' : 'valid';
@@ -28627,7 +28686,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         udModal: true, udError: '', udFile: '', udFileObj: null, udNumber: '', udExpiry: '',
         udClient: co7 ? co7.name : null,
         udType: docLabel || '',
-        udEmployee: ep.name,
+        // THE LABEL, NOT THE NAME.
+        //
+        // The dialog resolves the employee by `name . code . role` — the string the dropdown writes —
+        // so seeding the bare name left it resolving to nobody: the field showed the right person,
+        // the banner said "Select an employee of <client>", and Upload refused until you opened the
+        // dropdown and picked the person who was already in the box.
+        udEmployee: (() => {
+          const row7 = (Array.isArray(this.state.employeesData) ? this.state.employeesData : [])
+            .find(e7 => (ep.id && e7.id === ep.id) || (e7.name === ep.name && (!co7 || e7.companyId === co7.id)));
+          return row7 ? [row7.name, row7.code, row7.role].filter(Boolean).join(' · ') : ep.name;
+        })(),
       });
       if (!co7) this.toast('Could not resolve this employee\'s client — pick it in the dialog', 'warn');
     };
@@ -37502,6 +37571,35 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // so a step configured without one rendered a drawer with no sections and no action at all:
         // open it and there was literally nothing there, and no way to move the workflow on.
         // Approvals are excluded because they finish through Approve / Reject instead.
+        // DELEGATE, ON A STEP.
+        //
+        // The action bar is shared by both halves of this drawer, so a workflow step has always
+        // drawn a Delegate button — and this branch never defined `toggleDelegate`, so the button
+        // was bound to nothing and clicking it did exactly nothing, with no error to notice.
+        //
+        // Handing on a STEP is not handing on the task: it goes through the workflow reassign
+        // route, which is also the route that clears the step's role gate, so the person named here
+        // can act on it whatever role they hold.
+        wdDelegateOpen: !!this.state.wdDelegate,
+        wdDelegateStep: selStep.title + (selStep.related ? ' · ' + selStep.related : ''),
+        wdDelegatedTo: this.state.wdDelegatedTo || false,
+        toggleDelegate: () => this.setState({ wdDelegate: !this.state.wdDelegate }),
+        wdDelegateOptions: (realStaffNames || []).map(n => ({
+          name: n, initials: n.slice(0, 2).toUpperCase(),
+          pick: () => {
+            this.setState({ wdDelegatedTo: n, wdDelegate: false });
+            const tok9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/reassign', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+              body: JSON.stringify({ assignee: n }),
+            }).then(r9 => {
+              if (!r9.ok) return this.toast('Could not hand this step over', 'warn');
+              this.toast(selStep.title + ' → ' + n);
+              this._reloadMyWork && this._reloadMyWork();
+            }).catch(() => this.toast('Server unreachable — the step was NOT handed over', 'warn'));
+          },
+        })),
         wdCanCompleteStep: selStep.kind !== 'approval',
         wdOutcomeKeys: Array.isArray(selStep.outcomes) ? selStep.outcomes : [],
         // Every question the form is actually asking has an answer. The server has always refused an
@@ -37622,7 +37720,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         wdTitle: selPlain.title, wdClient: selPlain.client, wdRelated: selPlain.wf || selPlain.comp || selPlain.docType || '—', wdRole: selPlain.assignee,
         wdDue: selPlain.due, wdDueColor: selPlain.dueColor, wdPriority: selPlain.priority, wdPrBg: selPlain.prBg, wdPrColor: selPlain.prColor,
         wdDocType: selPlain.docType, wdDocShow: selPlain.docTypeShow, wdCompShow: selPlain.compShow, wdComp: selPlain.comp,
-        wdWfShow: selPlain.wfShow, wdWf: selPlain.wf, wdBlockedShow: selPlain.blockedShow, wdBlocked: selPlain.blocked,
+        wdWfShow: selPlain.wfShow, wdWf: selPlain.wf,
+        // Anything linked that is not this task's own run — the run has the whole process list.
+        wdLinkedShow: !!(selPlain.compShow || selPlain.empShow || selPlain.docTypeShow), wdBlockedShow: selPlain.blockedShow, wdBlocked: selPlain.blocked,
         wdStepper: steps.map(s => ({ label: s, active: s === selPlain.status, done: steps.indexOf(s) < steps.indexOf(selPlain.status),
           dot: s === selPlain.status ? '#7C00FF' : steps.indexOf(s) < steps.indexOf(selPlain.status) ? '#12B76A' : '#D8D3E3',
           anim: s === selPlain.status ? 'pulseBadge 1.4s ease-in-out infinite' : 'none' })),
@@ -37655,7 +37755,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         })(),
         // WIRED: real run steps (template graph order + WorkflowTask states) when the run detail has
         // loaded; a small placeholder while loading; nothing invented.
-        wdStages: (selPlain.wfShow ? (() => {
+        ...(() => {
+        const rows9 = (selPlain.wfShow ? (() => {
           const run2 = (this.state.wfRunFor === selId) ? this.state.wfRunDetail : null;
           // The placeholder needs the timeline's own flags too. Without tlFuture it matched none of
           // the three markers and drew a row with an empty marker column — a loading state that
@@ -37688,6 +37789,51 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             else { ranIds2[l2.nodeId] = true; ranAt2[l2.nodeId] = l2.at || ranAt2[l2.nodeId]; }
           });
           const IC2 = { start: '🚀', trigger: '🚀', task: '📝', approval: '✅', decision: '🔀', notify: '🔔', issue_document: '📄', charge_fee: '🧾', delay: '⏳', webhook: '🔗', end: '📦' };
+
+          // WHAT ACTUALLY COMES NEXT, which is not the next three rows of the drawing.
+          //
+          // "Next" was the following three nodes in graph order, and on a branching workflow that is
+          // a different thing entirely: a service company needing no acquisitions sat on "Send the
+          // document checklist" with the three SPA steps listed under it as what was coming - work
+          // its own decisions had already ruled out. A list of what will not happen is worse than
+          // no list at all.
+          //
+          // So walk FORWARD from the live step along the edges, and at a decision take the branch
+          // the engine already took (the run log records one line per decided node). A decision not
+          // yet reached has no answer, so every branch out of it is offered: "it could go either
+          // way" is true, where naming one would be a guess.
+          const activeId2 = (tasks2.find(t3 => t3.status === 'active') || {}).nodeId || null;
+          const decided2 = {};
+          (Array.isArray(run2.logs) ? run2.logs : []).forEach(l2 => {
+            if (l2 && l2.action === 'decision' && l2.nodeId) decided2[l2.nodeId] = String(l2.detail || '').split('→').pop().trim();
+          });
+          const ENGINE2 = { decision: 1, split: 1, parallel_split: 1, join: 1, parallel_join: 1, start: 1, trigger: 1, end: 1 };
+          const forward2 = (() => {
+            const out = [], seen = {};
+            let frontier = activeId2 ? [activeId2] : [];
+            for (let hop = 0; hop < 60 && out.length < 3 && frontier.length; hop++) {
+              const nextF = [];
+              for (const id of frontier) {
+                const node9 = nodes2.find(n => n.id === id);
+                const outs9 = edges2.filter(e => e.from === id);
+                let take9 = outs9;
+                if (node9 && node9.type === 'decision' && decided2[id]) {
+                  const m9 = outs9.filter(e => (e.condition || '') === decided2[id]);
+                  take9 = m9.length ? m9 : outs9.filter(e => !e.condition || e.condition === 'else');
+                }
+                for (const e of take9) {
+                  if (seen[e.to]) continue;
+                  seen[e.to] = 1;
+                  const nn9 = nodes2.find(n => n.id === e.to);
+                  if (!nn9) continue;
+                  nextF.push(nn9.id);
+                  if (!ENGINE2[nn9.type] && out.length < 3) out.push(nn9.id);
+                }
+              }
+              frontier = nextF;
+            }
+            return out;
+          })();
           const fmtAt2 = (a2) => { if (!a2) return '—'; const d3 = new Date(a2); return isNaN(+d3) ? a2 : d3.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
           return order2.map((n2, ix2) => {
             const wt2 = tasks2.filter(t3 => t3.nodeId === n2.id).sort((a2, b2) => String(b2.createdAt || '').localeCompare(String(a2.createdAt || '')))[0];
@@ -37735,12 +37881,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               ...(() => {
                 const st3 = cur2 ? 'cur' : (done2 && !rej2 && !engSkip2) ? 'done' : 'pend';
                 const card = {
-                  done: { bg: '#F9F8FC', border: '1px solid transparent', shadow: 'none', title: '#2E2937', meta: '#9A96A6', avBg: '#E7F8EF', avFg: '#0E9355' },
-                  cur:  { bg: '#fff', border: '1px solid #EADDFB', shadow: '0 8px 24px rgba(38,7,77,.09)', title: '#15111D', meta: '#6F6C7A', avBg: '#F0E4FF', avFg: '#7C00FF' },
+                  // A band behind every finished step made the column read as stripes and gave the
+                  // done rows more presence than the live one. The tick is the status; only the step
+                  // in hand is tinted, so the eye lands on the one row that can be acted on.
+                  done: { bg: 'transparent', border: '1px solid transparent', shadow: 'none', title: '#2E2937', meta: '#9A96A6', avBg: '#E7F8EF', avFg: '#0E9355' },
+                  cur:  { bg: '#FAF4FF', border: '1px solid #EADDFB', shadow: 'none', title: '#15111D', meta: '#6F6C7A', avBg: '#F0E4FF', avFg: '#7C00FF' },
                   pend: { bg: 'transparent', border: '1px dashed #EDE9F5', shadow: 'none', title: '#B3AEBF', meta: '#B6B1C2', avBg: '#F3F1F7', avFg: '#A9A6B4' },
                 }[st3];
                 return {
                   cardBg: card.bg, cardBorder: card.border, cardShadow: card.shadow,
+                  // The live step is the only one set in bold: on one-line rows weight carries the
+                  // emphasis that a raised card used to, and finished work recedes without greying
+                  // out the thing people came to read.
+                  titleWeight: st3 === 'cur' ? '750' : st3 === 'done' ? '600' : '500',
                   titleColor: card.title, metaColor: card.meta, avBg: card.avBg, avFg: card.avFg,
                   // Zero-padded, because the pending token carries a number rather than a dot and
                   // "5" beside "12" in a 26px circle sits off-centre against its neighbours.
@@ -37770,6 +37923,26 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               })(),
               hasWho: !!(engSkip2 ? false : cur2 ? (wt2 && (wt2.assignee || wt2.assigneeRole)) : done2 ? (wt2 && wt2.completedBy) : false),
               warn: engSkip2, warnWhy: engSkip2 ? skipWhy2[n2.id] : '',
+              // The node TYPE, kept so the list can drop what nobody can act on. A decision, a
+              // parallel split and the merge that closes it are how the engine thinks; drawn as
+              // steps they read as work, and an officer looking at "Companies this structure needs"
+              // cannot tell that it is already behind them and was never theirs to do.
+              ntype: n2.type,
+              // Where this node sits on the path ahead: 0, 1, 2 for the next three, -1 for anything
+              // the run cannot reach from here.
+              nextRank: forward2.indexOf(n2.id),
+              // The brief, for the step that is live. It was always on the task; the drawer simply
+              // never showed it, so the officer had to open the step to find out what it asks for.
+              instr: String((wt2 && wt2.instructions) || (n2.config && n2.config.instructions) || ''),
+              // Time left on this step's own clock, which is not the case's.
+              ...(() => {
+                if (!wt2 || !wt2.slaHours || !cur2) return { slaText: '', slaColor: '#8C8899' };
+                const el9 = wt2.createdAt ? (Date.now() - new Date(wt2.createdAt).getTime()) / 36e5 : 0;
+                const rem9 = Number(wt2.slaHours) - el9;
+                return rem9 < 0
+                  ? { slaText: Math.round(Math.abs(rem9)) + 'h over SLA', slaColor: '#C0353A' }
+                  : { slaText: Math.round(rem9) + 'h to SLA', slaColor: rem9 < 24 ? '#B8860B' : '#0E9355' };
+              })(),
               // THE DEADLINE THE LAW SETS, which is not the one this office set itself. It reads
               // differently from the SLA on purpose — an SLA slipping is a conversation, and these
               // are a fine, a blocked file, or in the GOSI case something that can no longer be done
@@ -37807,7 +37980,51 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // lower or the ring sits on top of it. Row height stays the same for every row — varying it
           // was what threw the column out of rhythm.
           lineTop: s.current ? '20px' : '17px',
-        })).map((s, i, a) => ({ ...s, notLast: i < a.length - 1 })),
+        }))
+          // NOT EVERY NODE IS A STEP.
+          //
+          // A decision, a parallel split and the merge that closes it are how the engine gets from
+          // one piece of work to the next. In the officer's list they read as work: on a trading
+          // case "Parent company already held?", "Companies this structure needs" and three
+          // "... in place" rows sat among the real steps, and not one of them can be done by
+          // anybody. Start and end markers go too — the title already says what the case is.
+          .filter(s => ['decision', 'split', 'parallel_split', 'join', 'parallel_join', 'start', 'trigger', 'end'].indexOf(s.ntype) < 0)
+          .map((s, i, a) => ({
+            ...s, notLast: i < a.length - 1,
+            // Who and when on one line. Both were already here; they cost a second row, an avatar
+            // and a bullet to say what fits in six words. A step nobody has reached has neither.
+            meta: s.tlFuture ? '' : (s.who && s.who !== '\u2014' ? s.who + ' \u00b7 ' : '') + s.when,
+            hasInstr: !!(s.instr && s.tlCurrent),
+          }));
+
+        // NOW, NEXT, EARLIER — the three questions somebody opens this drawer to answer, in that
+        // order. The flat list answered none of them: it put the step due today in the middle of a
+        // scroll, between work that is finished and work that cannot start, every row the same
+        // size, while the two buttons at the foot of the sheet act on the live step alone.
+        const cur9 = rows9.findIndex(s => s.tlCurrent);
+        // A step the ENGINE dropped is not "earlier": nothing moves until somebody looks at it, so
+        // it stays beside the live step instead of going into a fold.
+        const warned9 = rows9.filter(s => s.warn && !s.tlCurrent);
+        const next9 = rows9.filter(s => s.nextRank >= 0 && !s.warn).sort((a, b) => a.nextRank - b.nextRank).slice(0, 3);
+        const done9 = rows9.filter(s => s.tlDone);
+        return {
+          wdStages: rows9,
+          // EVERY live step, not the first one found. A trading case opens three acquisition lanes
+          // at once and the drawer showed one of them, so two thirds of the open work was invisible
+          // on the screen whose whole job is to say what is happening now.
+          wdNowRows: rows9.filter(s => s.tlCurrent).concat(warned9),
+          wdNextRows: next9,
+          // With several steps live, "next" is one of the cards already on screen. Asserting a
+          // single successor there would be picking one lane's future and calling it the case's.
+          wdNextShow: next9.length > 0 && rows9.filter(s => s.tlCurrent).length < 2,
+          wdEarlierRows: done9,
+          wdEarlierShow: done9.length > 0,
+          wdEarlierLabel: done9.length + (done9.length === 1 ? ' step done earlier' : ' steps done earlier'),
+          wdTlAll: !!this.state.wdShowAll,
+          wdTlToggleLabel: this.state.wdShowAll ? 'Hide' : 'Show',
+          toggleWdTl: () => this.setState({ wdShowAll: !this.state.wdShowAll }),
+        };
+        })(),
         // WIRED: Resume clears the park (server auto-resumes too when the prerequisite is met).
         // Resume used to clear the park unconditionally — one PUT of blockedBy:null, no questions.
         //
@@ -37890,7 +38107,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // empty list there. Stated in both places rather than inferred from a list that is undefined
         // in one of them.
         wdDelegateOpen: !!this.state.wdDelegate,
+        // Out of the drawer, the modal has to carry its own context: "hand this step to" with no
+        // step named is a question about nothing.
+        wdDelegateStep: (() => {
+          const run8 = (this.state.wfRunFor === selId) ? this.state.wfRunDetail : null;
+          const live8 = run8 && Array.isArray(run8.tasks) ? run8.tasks.find(t8 => t8.status === 'active') : null;
+          return (live8 && live8.title) || selPlain.title || '';
+        })(),
         wdDelegatedTo: this.state.wdDelegatedTo || false,
+        // Opened as a modal of its own rather than a panel at the foot of the sheet: inline, it
+        // rendered below the fold behind a sticky action bar, so the button looked like it had done
+        // nothing. A modal needs no scrolling into view and cannot be covered by the bar.
         toggleDelegate: () => this.setState({ wdDelegate: !this.state.wdDelegate }),
         // WIRED: delegate to a real staff member (persists the assignee), mark done persists status.
         wdDelegateOptions: (realStaffNames || (_authed ? [] : ['Rashid', 'Aisha', 'Omar', 'Sara'])).filter(n => n !== selPlain.assignee).map(n => ({

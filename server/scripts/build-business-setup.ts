@@ -40,6 +40,8 @@ const SVC_NAME = "Business Setup";
  * permission — a QA Reviewer who cannot approve is a gate nobody can open, and that would be
  * discovered on a real case rather than here.
  */
+// Reference only since the collapse below — kept because it is what the chart asks for, and the
+// day the firm staffs these it is the list to install.
 const ROLES = [
   { id: "account_manager", label: "Account Manager", base: "PRO Officer", color: "#7C00FF", desc: "Owns the client relationship through the setup" },
   { id: "setup_exec", label: "Setup Executive", base: "PRO Officer", color: "#0284C7", desc: "Does the document and government work" },
@@ -49,20 +51,78 @@ const ROLES = [
 ];
 // Finance is the built-in `accountant`, which somebody already holds. BD is the built-in `sales`.
 
+/**
+ * THE CHART'S FIVE ROLES, MAPPED ONTO THE ONES THIS FIRM ACTUALLY STAFFS.
+ *
+ * The chart was drawn for a bigger firm than the one running it. Here there is one Admin, one
+ * Accountant and three PRO Officers — and `User.roleId` holds exactly ONE role, so no one person
+ * can be QA Reviewer, Operations Manager and PRO Lead at once. Three of the five ladders could
+ * never be staffed at all, and an APPROVAL on an unstaffed role does not queue politely: nothing
+ * can clear it and the run stops there.
+ *
+ * So the ladder collapses onto who exists. The controls survive the collapse: no gate is approved
+ * by the role that did the work in front of it (checked below), and the engine still refuses an
+ * approval from the PERSON who did the work it certifies. Give these roles real holders and the
+ * map can be unwound a line at a time.
+ */
+const ROLE_MAP: Record<string, string> = {
+  account_manager: "pro_officer",
+  setup_exec: "pro_officer",
+  qa_reviewer: "admin",
+  ops_manager: "admin",
+  pro_lead: "admin",
+};
+const real = (role: string) => ROLE_MAP[role] ?? role;
+
 type N = { id: string; type: string; label: string; config?: any };
 type E = { from: string; to: string; condition?: string };
 
 const task = (id: string, label: string, role: string, slaHours: number, instructions: string, captures: any[] = [], checklist: string[] = []): N => ({
   id, type: "task", label,
   config: {
-    assigneeRole: role, slaHours, instructions,
+    assigneeRole: real(role), slaHours, instructions,
     ...(captures.length ? { captures } : {}),
     // Required items block completion, which is what "the checklist must be 100%" means in the chart.
     ...(checklist.length ? { checklist: checklist.map(label => ({ key: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"), label, required: true })) } : {}),
   },
 });
 const gate = (id: string, label: string, role: string, slaHours: number, instructions: string): N =>
-  ({ id, type: "approval", label, config: { approverRole: role, assigneeRole: role, slaHours, instructions } });
+  ({ id, type: "approval", label, config: { approverRole: real(role), assigneeRole: real(role), slaHours, instructions } });
+
+/** A branch point. First matching branch wins; anything else falls to the "else" wire. */
+const decision = (id: string, label: string, branches: any[]): N => ({ id, type: "decision", label, config: { branches } });
+/** A decision with nothing to decide: where a lane's two paths meet so the join sees ONE edge. */
+const funnel = (id: string, label: string): N => ({ id, type: "decision", label, config: { branches: [] } });
+
+/**
+ * One company bought rather than formed: find it, check it, pay for it, own it.
+ *
+ * Variables are prefixed per lane. Three lanes writing `targetName` would be three answers in one
+ * box, and the last one to finish would be the only one anybody could read afterwards.
+ */
+const acquireLane = (p: string, what: string): N[] => [
+  task(`${p}_find`, `Find a ${what} to acquire`, "setup_exec", 240,
+    `Identify a ${what} that fits the structure and is clean enough to buy. Record what it is before any money is discussed.`,
+    [text(`${p}Name`, "Target company"), text(`${p}Cr`, "Registration number"), text(`${p}Country`, "Country of registration")]),
+  task(`${p}_dd`, `Due diligence — ${what}`, "setup_exec", 120,
+    "Check what you are buying. An inherited liability becomes the client's on the day ownership transfers, and it is not recoverable afterwards.",
+    [pick(`${p}DdOutcome`, "Diligence outcome", "clear,issues")],
+    ["Ownership chain verified", "No outstanding liabilities or disputes", "Licences and filings current", "Audited financials obtained"]),
+  task(`${p}_spa`, `Agree the price and sign the SPA — ${what}`, "setup_exec", 168,
+    "Price agreed and the share purchase agreement signed by both sides. Nothing is paid before diligence came back clear.",
+    [money(`${p}Price`, "Agreed price"), date(`${p}SpaOn`, "SPA signed on")]),
+  task(`${p}_transfer`, `Transfer ownership — ${what}`, "setup_exec", 240,
+    "Ownership moved and the registry updated. The case cannot use a company the client does not legally own yet.",
+    [date(`${p}TransferredOn`, "Ownership transferred on")],
+    ["Registry updated", "Transfer documents on file"]),
+];
+/** The lane's internal wiring, ending on its funnel. */
+const laneEdges = (p: string): E[] => [
+  { from: `${p}_find`, to: `${p}_dd` },
+  { from: `${p}_dd`, to: `${p}_spa` },
+  { from: `${p}_spa`, to: `${p}_transfer` },
+  { from: `${p}_transfer`, to: `${p}_ready` },
+];
 
 const text = (v: string, label: string, required = true) => ({ var: v, label, type: "text", required });
 const date = (v: string, label: string, required = true) => ({ var: v, label, type: "date", required });
@@ -91,9 +151,19 @@ const nodes: N[] = [
     "Finance only. Approve once the 50% advance is in the bank and matched to this client. Reject to send it back for chasing — onboarding cannot start until this is approved."),
 
   // ── Stage A · onboarding ───────────────────────────────────────────────────────────────────
-  task("assign", "Assign the team", "ops_manager", 24,
-    "Name the Account Manager and the Setup Executive for this case.",
-    [text("accountManager", "Account Manager"), text("setupExec", "Setup Executive")]),
+  /*
+   * THERE IS NO "ASSIGN THE TEAM" STEP, and that is deliberate — the same lesson as Stage 0 above.
+   *
+   * The chart has a step where a manager names the Account Manager and the Setup Executive, and it
+   * was built as two required text boxes. Nothing in the system ever read either one: two names were
+   * typed onto the run and the next step still went to nobody, which is worse than not asking,
+   * because it looks like the assignment has been made.
+   *
+   * Assignment is not an event in the case, it is a FACT ABOUT THE CLIENT — `Company.roleOwners`,
+   * which is what `pickAssignee` reads to send each step to a person. It is set once on the client
+   * record and holds for every case that client ever has. A step that asks for it again each time
+   * is a reminder with no output, so the run goes straight from the advance to the onboarding work.
+   */
   task("access", "WhatsApp group and portal access", "account_manager", 24,
     "Create the group and send the portal invitation.",
     [pick("groupCreated", "WhatsApp group created?", "yes,no"), date("portalInviteOn", "Portal invite sent on")]),
@@ -109,16 +179,81 @@ const nodes: N[] = [
     "Check the onboarding checklist is genuinely complete and the client has confirmed kick-off. Not the person who collected it."),
 
   // ── Stage B · the route ────────────────────────────────────────────────────────────────────
-  task("parent", "Check the parent company", "account_manager", 72,
-    "Does the client have a foreign parent Saudi will accept: it exists, it is in good standing, and it has the audited financials MISA asks for?",
-    [pick("suitableParent", "Suitable foreign parent?", "yes,no"), text("parentCountry", "Parent country"), pick("goodStanding", "In good standing?", "yes,no")],
+  /**
+   * THE THREE ANSWERS THE ROUTE IS MADE OF.
+   *
+   * The rule the firm works to: a SERVICE company needs one parent. A TRADING company needs one
+   * parent AND two shell companies. Whatever the client does not already have must be acquired
+   * first, and the setup cannot proceed until it is.
+   *
+   * It used to be one dropdown — `routeChosen`, four options, filled in by whoever was looking —
+   * and the branch it implied was a sentence on G2 telling the approver to reject the case and
+   * raise the rest by hand. Asked as three facts instead, the arithmetic is the system's: required
+   * is 1 parent (+ 2 shells for trading), missing is required minus held, and the decisions below
+   * open exactly that much work. Nobody has to remember the rule at eleven at night.
+   */
+  task("parent", "Check the structure and the parent company", "account_manager", 72,
+    "What is the client setting up, and what do they already hold? A service company needs one parent. A trading company needs a parent and two shell companies. Anything missing is acquired before the licence route starts, so answer from documents, not from what the client says they can get.",
+    [
+      pick("companyType", "Company type", "service,trading"),
+      pick("suitableParent", "Suitable foreign parent?", "yes,no"),
+      text("parentCountry", "Parent country", false),
+      pick("goodStanding", "In good standing?", "yes,no"),
+      // Trading only. Left optional so a service case is not made to answer it — the shell lanes
+      // below test companyType FIRST, so a blank here can never be read as "none available".
+      pick("shellsAvailable", "Shell companies already held (trading only)", "0,1,2", false),
+    ],
     ["Parent company CR", "Audited financials"]),
   task("route", "Route summary and cost", "account_manager", 48,
-    "Write the route down and get the extra cost agreed IN WRITING before G2. A cost agreed on a call is a dispute later.",
+    "Write the route down and get the extra cost agreed IN WRITING before G2 — including one acquisition fee per company that has to be bought. A cost agreed on a call is a dispute later.",
     [pick("routeChosen", "Route", "standard,acquisition,trading,acquisition_and_trading"), money("extraCost", "Extra cost agreed"), date("costAgreedOn", "Client agreed in writing on")],
     ["Signed cost approval"]),
   gate("g2", "G2 — Operations Manager approves the route", "ops_manager", 48,
-    "Approve the route and the cost. Only the Standard route is built in this workflow today — if the route is Acquisition or Trading, reject and raise it separately."),
+    "Approve the route and the cost. Approving here releases any acquisitions the structure needs, so the money is signed off BEFORE a target is approached — reject if the acquisition fees are not agreed in writing."),
+
+  /**
+   * ── Stage B2 · the companies the structure requires ──────────────────────────────────────
+   *
+   * Three lanes, run at the same time: the parent, shell 1, shell 2. Each lane asks first whether
+   * that company is already held and skips itself if it is, so a service client with a parent walks
+   * through all three in one tick and never sees a step.
+   *
+   * WHY THREE FIXED LANES AND NOT A LOOP. The engine cannot fan a branch out over a list — the
+   * reason this whole route was left unbuilt the first time. It does not need to: the rule fixes
+   * the count at one parent and two shells, never more, so what looked like fan-out is three
+   * ordinary branches drawn once.
+   *
+   * WHY EACH LANE ENDS IN A FUNNEL. A join waits for one arrival per EDGE pointing at it. Wire both
+   * a lane's skip and its acquired path straight into the join and the join wants four arrivals from
+   * three lanes and the case stops there forever. The funnel is a decision with no branches: both
+   * paths meet on it, and it offers the join a single edge.
+   */
+  { id: "struct_split", type: "parallel_split", label: "Companies this structure needs" },
+
+  decision("d_parent", "Parent company already held?", [
+    { var: "suitableParent", op: "eq", value: "yes", key: "skip" },
+  ]),
+  ...acquireLane("acqp", "parent company"),
+  funnel("acqp_ready", "Parent company in place"),
+
+  // companyType FIRST in both shell lanes: a service case leaves `shellsAvailable` blank, and a
+  // blank read as a number is NaN, which is not >= 1 — so without this the engine would send every
+  // service client off to buy two shell companies they do not need.
+  decision("d_shell1", "First shell company already held?", [
+    { var: "companyType", op: "eq", value: "service", key: "skip" },
+    { var: "shellsAvailable", op: "gte", value: 1, key: "skip" },
+  ]),
+  ...acquireLane("acqs1", "first shell company"),
+  funnel("acqs1_ready", "First shell company in place"),
+
+  decision("d_shell2", "Second shell company already held?", [
+    { var: "companyType", op: "eq", value: "service", key: "skip" },
+    { var: "shellsAvailable", op: "gte", value: 2, key: "skip" },
+  ]),
+  ...acquireLane("acqs2", "second shell company"),
+  funnel("acqs2_ready", "Second shell company in place"),
+
+  { id: "struct_join", type: "parallel_join", label: "Structure complete" },
 
   // ── Phase 1 · documents and attestation ────────────────────────────────────────────────────
   task("checklist_sent", "Send the document checklist", "account_manager", 24,
@@ -209,10 +344,9 @@ const nodes: N[] = [
 
 const edges: E[] = [
   { from: "start", to: "g0" },
-  { from: "g0", to: "assign", condition: "approve" },
+  { from: "g0", to: "access", condition: "approve" },
   { from: "g0", to: "chase", condition: "reject" },
   { from: "chase", to: "g0" },
-  { from: "assign", to: "access" },
   { from: "access", to: "call" },
   { from: "call", to: "kyc" },
   { from: "kyc", to: "g1" },
@@ -220,8 +354,27 @@ const edges: E[] = [
   { from: "g1", to: "kyc", condition: "reject" },
   { from: "parent", to: "route" },
   { from: "route", to: "g2" },
-  { from: "g2", to: "checklist_sent", condition: "approve" },
+  { from: "g2", to: "struct_split", condition: "approve" },
   { from: "g2", to: "route", condition: "reject" },
+
+  // The three lanes. Each decision has exactly two ways out — skip to the lane's funnel, or walk
+  // the lane — and each lane reaches the join through ONE edge, which is what the join counts.
+  { from: "struct_split", to: "d_parent" },
+  { from: "struct_split", to: "d_shell1" },
+  { from: "struct_split", to: "d_shell2" },
+  { from: "d_parent", to: "acqp_ready", condition: "skip" },
+  { from: "d_parent", to: "acqp_find", condition: "else" },
+  { from: "d_shell1", to: "acqs1_ready", condition: "skip" },
+  { from: "d_shell1", to: "acqs1_find", condition: "else" },
+  { from: "d_shell2", to: "acqs2_ready", condition: "skip" },
+  { from: "d_shell2", to: "acqs2_find", condition: "else" },
+  ...laneEdges("acqp"),
+  ...laneEdges("acqs1"),
+  ...laneEdges("acqs2"),
+  { from: "acqp_ready", to: "struct_join" },
+  { from: "acqs1_ready", to: "struct_join" },
+  { from: "acqs2_ready", to: "struct_join" },
+  { from: "struct_join", to: "checklist_sent" },
   { from: "checklist_sent", to: "upload" },
   { from: "upload", to: "precheck" },
   { from: "precheck", to: "sign" },
@@ -261,6 +414,56 @@ for (const n of nodes) {
   console.log(`  ${n.type === "approval" ? "GATE " : "step "}${String(n.label).padEnd(44)} ${r}`);
 }
 
+/**
+ * ── DOES THE STRUCTURE BRANCH DO WHAT THE RULE SAYS? ────────────────────────────────────────────
+ *
+ * The rule in one line: a service company needs a parent; a trading company needs a parent and two
+ * shells; whatever is not held is acquired. Six cases cover it, and they are asserted here rather
+ * than discovered on a client, because a wrong branch does not look like a bug — it looks like an
+ * officer being asked to buy two companies nobody needs, and they will do it.
+ *
+ * This repeats the engine's own comparison deliberately: a copy that drifts fails loudly here,
+ * whereas importing the engine would make this agree with itself by construction and prove nothing.
+ */
+const branchKey = (branches: any[], vars: Record<string, any>): string => {
+  for (const b of branches) {
+    const l = vars[b.var], r = b.value;
+    const ok = b.op === "eq" ? String(l) === String(r) : b.op === "gte" ? Number(l) >= Number(r) : false;
+    if (ok) return b.key;
+  }
+  return "else";
+};
+const lanesOpened = (vars: Record<string, any>) =>
+  ["d_parent", "d_shell1", "d_shell2"]
+    .filter(id => branchKey(nodes.find(n => n.id === id)!.config.branches, vars) !== "skip").length;
+
+const CASES: [string, Record<string, any>, number][] = [
+  ["service, has a parent", { companyType: "service", suitableParent: "yes" }, 0],
+  ["service, no parent", { companyType: "service", suitableParent: "no" }, 1],
+  ["trading, parent + 2 shells", { companyType: "trading", suitableParent: "yes", shellsAvailable: "2" }, 0],
+  ["trading, parent + 1 shell", { companyType: "trading", suitableParent: "yes", shellsAvailable: "1" }, 1],
+  ["trading, parent only", { companyType: "trading", suitableParent: "yes", shellsAvailable: "0" }, 2],
+  ["trading, nothing held", { companyType: "trading", suitableParent: "no", shellsAvailable: "0" }, 3],
+  // Unanswered on a trading case must mean "none", never "all there": asking for work that turns
+  // out to be unnecessary is recoverable, skipping a company the licence needs is not.
+  ["trading, shells left blank", { companyType: "trading", suitableParent: "yes" }, 2],
+];
+let bad = 0;
+console.log("\nacquisitions the branch opens:");
+for (const [name, vars, want] of CASES) {
+  const got = lanesOpened(vars);
+  if (got !== want) bad++;
+  console.log(`  ${got === want ? "ok  " : "FAIL"} ${name.padEnd(28)} ${got} (expected ${want})`);
+}
+
+// A join waits for one arrival per edge pointing at it, so a miscounted lane hangs the case with no
+// error anywhere. Asserted because it is invisible until a real client is stuck in it.
+const joinIn = edges.filter(e => e.to === "struct_join").length;
+if (joinIn !== 3) { console.log(`  FAIL struct_join has ${joinIn} incoming edges, not 3 — the case would hang there`); bad++; }
+const ids = new Set(nodes.map(n => n.id));
+for (const e of edges) if (!ids.has(e.from) || !ids.has(e.to)) { console.log(`  FAIL edge ${e.from} → ${e.to} points at a node that does not exist`); bad++; }
+if (bad) { console.error(`\n${bad} check(s) failed — refusing to write this template.`); process.exit(1); }
+
 // Nobody signs off their own work: the engine enforces it per PERSON, but a template that gives a
 // gate the same role as the step before it guarantees a stall. Checked here, while it can be fixed.
 const clash = gates.filter(g => {
@@ -271,21 +474,28 @@ console.log(clash.length
   ? `\n!! ${clash.length} gate(s) approved by the same role that did the work: ${clash.map(g => g.label).join(", ")}`
   : `\nno gate is approved by the role that did the work in front of it`);
 
+// ── is every role on this template actually held by somebody? ──────────────────────────────────
+//
+// The check the first version did not do. It INSTALLED five new roles and nobody noticed that no
+// user held any of them, so a real case opened and every step waited on an empty desk. A role with
+// no holder is not a staffing detail, it is a stall — so it is reported here, before the template
+// is written, and a dry run reports it too.
+const used = [...new Set(nodes.map(n => n.config?.approverRole ?? n.config?.assigneeRole).filter(Boolean) as string[])];
+console.log("\nwho holds each role on this template:");
+let unheld = 0;
+for (const r of used.sort()) {
+  const holders = await prisma.user.findMany({ where: { roleId: r, status: "active", type: "staff" }, select: { name: true } });
+  const steps = nodes.filter(n => (n.config?.approverRole ?? n.config?.assigneeRole) === r);
+  const gatesOn = steps.filter(n => n.type === "approval").length;
+  if (!holders.length) unheld++;
+  console.log(`  ${r.padEnd(14)} ${String(steps.length).padStart(2)} step${steps.length === 1 ? " " : "s"}${gatesOn ? ` (${gatesOn} gate${gatesOn === 1 ? "" : "s"})` : ""}  ${holders.length ? holders.map(h => h.name).join(", ") : "!! NOBODY — these steps will wait on an empty desk"}`);
+}
+if (unheld) console.log(`!! ${unheld} role(s) have no holder. Assign someone, or map the role onto one that is staffed in ROLE_MAP above.`);
+
 if (!APPLY) {
   console.log("\ndry run — nothing written. Add --apply.");
   process.exit(0);
 }
-
-// ── roles ──────────────────────────────────────────────────────────────────────────────────────
-const row = await prisma.appSetting.findUnique({ where: { key: "roles" } });
-const existing: any[] = Array.isArray(row?.value) ? (row!.value as any[]) : [];
-const byId = new Map(existing.map(r => [String(r.id), r]));
-let added = 0;
-for (const r of ROLES) if (!byId.has(r.id)) { byId.set(r.id, r); added++; }
-await prisma.appSetting.upsert({
-  where: { key: "roles" }, update: { value: [...byId.values()] as any }, create: { key: "roles", value: [...byId.values()] as any },
-});
-console.log(`\nroles: ${added} added, ${ROLES.length - added} already there`);
 
 // ── template ───────────────────────────────────────────────────────────────────────────────────
 const prior = await prisma.workflowTemplate.findFirst({ where: { name: TPL_NAME } });

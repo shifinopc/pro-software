@@ -119,9 +119,15 @@ export function validateGraph(graph: any, tpl?: { trigger?: string | null; trigg
 
     if (n.type === "decision") {
       const branches: any[] = Array.isArray(c.branches) ? c.branches : [];
-      if (!branches.length) {
-        out.push({ level: "warning", nodeId: n.id, node: nameOf(n), message: `"${nameOf(n)}" has no conditions set, so it will not branch — every run takes the same path.` });
-      } else {
+      // A conditionless decision with ONE way out is not a broken branch, it is a merge: the point
+      // where a branch that was taken and a branch that was skipped come back together. The engine
+      // has no merge node, and a join cannot serve — it waits for one arrival per incoming edge, so
+      // wiring both paths into it hangs the run. Warning about these buried the real problems in
+      // noise. What is genuinely wrong is a decision with no conditions and SEVERAL ways out: that
+      // one silently takes every path at once.
+      if (!branches.length && outEdges(n.id).length > 1) {
+        out.push({ level: "warning", nodeId: n.id, node: nameOf(n), message: `"${nameOf(n)}" has ${outEdges(n.id).length} connections leaving it but no conditions to choose between them, so every run takes the same path.` });
+      } else if (branches.length) {
         const conds = new Set(outEdges(n.id).map(e => e.condition ?? ""));
         for (const b of branches) {
           if (!b?.var) out.push({ level: "warning", nodeId: n.id, node: nameOf(n), message: `A condition on "${nameOf(n)}" has no variable to test, so it can never be true.` });
