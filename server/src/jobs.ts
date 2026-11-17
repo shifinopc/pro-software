@@ -422,12 +422,40 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
     // document type for one client can be told apart, and the CR travels with the run.
     const ests = await prisma.establishment.findMany({ where: { companyId: { in: [...new Set(docs.filter(x => !x.employeeId).map(x => x.companyId))] } } });
 
+    /**
+     * DOCUMENTS THAT EXPIRE TOGETHER, RENEWED TOGETHER.
+     *
+     * A work permit and an Iqama are one trip to Qiwa, and the permit usually runs out first. With
+     * the trigger reading only the Iqama, the permit could expire weeks before anything opened —
+     * the employee unable to work, and the system reporting nothing wrong, because the document it
+     * was watching still had sixty days on it.
+     *
+     * `companions` names the other types that belong to the same renewal. The one that expires
+     * SOONEST sets the clock: whichever crosses the lead time first opens the case, and the case
+     * covers both. The companion is claimed as well, so nothing else picks it up and the compliance
+     * view shows it as being dealt with rather than quietly overdue.
+     */
+    const companionTypes: string[] = Array.isArray(cfg.companions) ? cfg.companions.map((x: any) => String(x).trim()).filter(Boolean) : [];
+    const empIds = [...new Set(docs.map(x => x.employeeId).filter(Boolean))] as string[];
+    const companionDocs = companionTypes.length && empIds.length
+      ? await prisma.document.findMany({
+          where: { docType: { in: companionTypes }, employeeId: { in: empIds }, supersededAt: null, NOT: { expiryDate: null } },
+          select: { id: true, docType: true, expiryDate: true, employeeId: true, renewalRunId: true },
+        })
+      : [];
+
     for (const d of docs) {
       const exp = parseDate(d.expiryDate);
       if (exp === null) continue;
       if (d.employeeId && leaving.has(d.employeeId)) { out.skippedExiting++; continue; }
-      const daysLeft = daysUntil(exp);
-      if (daysLeft > lead) continue; // hasn't crossed its lead time yet
+      // The soonest date among this document and its companions. `sort()` on ISO dates is a date
+      // comparison, which is why these are read as strings rather than parsed.
+      const mates = d.employeeId ? companionDocs.filter(c => c.employeeId === d.employeeId) : [];
+      const soonest = [{ docType, expiryDate: d.expiryDate as string }, ...mates.map(m => ({ docType: m.docType, expiryDate: m.expiryDate as string }))]
+        .sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)))[0];
+      const drivenBy = soonest.docType !== docType ? soonest : null;
+      const daysLeft = daysUntil(parseDate(soonest.expiryDate) ?? exp);
+      if (daysLeft > lead) continue; // nothing here has crossed its lead time yet
       out.considered++;
 
       // Renewal prerequisites. This path used to ignore them entirely: the gate lived only on the
@@ -473,13 +501,34 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
         const mine = d.employeeId ? [] : ests.filter(e => e.companyId === d.companyId);
         const est = mine.length > 1 ? (d.establishmentId ? mine.find(e => e.id === d.establishmentId) : mine.find(e => e.kind === "main")) ?? null : null;
         const run = await startInstance(tpl.id, {
-          title: `${docType} renewal — ${d.person}${est ? ` · ${crLabel(est)}` : ""}`,
+          // Named on the case, because a renewal that opened sixty days early for a reason the
+          // officer cannot see reads as the scheduler misfiring.
+          title: `${docType} renewal — ${d.person}${est ? ` · ${crLabel(est)}` : ""}${drivenBy ? ` · ${drivenBy.docType.toLowerCase()} expires first` : ""}`,
           companyId: d.companyId,
           clientName: d.company?.name ?? null,
           variables: {
             documentId: d.id, docType, person: d.person, employeeId: d.employeeId ?? null,
             ...(d.employeeId ? {} : { establishmentId: d.establishmentId ?? null, establishmentCr: est?.crNumber ?? null }),
             currentExpiry: d.expiryDate, currentNumber: d.docNumber ?? null,
+            // What else this case has to cover, and which date actually opened it.
+            ...(mates.length ? { companions: mates.map(m => ({ docType: m.docType, expiryDate: m.expiryDate })) } : {}),
+            // THE COMPANION'S OWN ROW, BY ID.
+            //
+            // `issue_document` renews a companion through `documentIdVar` — the Iqama template's
+            // Work Permit step reads `workPermitDocId`. With nothing setting it, the step falls
+            // back to finding the live document of that type for the employee, which is right until
+            // somebody has two Work Permit rows on file; then "the live one" is whichever comes
+            // back first, and the renewal supersedes the wrong record.
+            //
+            // The id is in hand here, so it is passed: "Work Permit" becomes `workPermitDocId`,
+            // which is the naming the templates already use.
+            ...Object.fromEntries(mates.map(m => [
+              m.docType.replace(/[^A-Za-z0-9 ]/g, " ").trim().split(/\s+/)
+                .map((w, i) => (i ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()))
+                .join("") + "DocId",
+              m.id,
+            ])),
+            ...(drivenBy ? { drivenBy: drivenBy.docType, drivenByExpiry: drivenBy.expiryDate } : {}),
             fee: dt?.defaultFee ?? null,
           },
           // Not in `variables` above: that path strips underscore keys, so these were being set and
@@ -488,6 +537,15 @@ export async function triggerRenewals(onlyCompanyId?: string): Promise<RenewalRe
         });
         // Turn the pending marker into the real claim now that the run exists.
         await prisma.document.update({ where: { id: d.id }, data: { renewalRunId: run!.id } });
+        // The companion is part of THIS renewal now. Claimed only when it is itself inside the lead
+        // time: a permit with a year left is not being renewed today, and swallowing it would hide
+        // it from the job that should pick it up when its own time comes.
+        for (const m of mates) {
+          if (m.renewalRunId) continue;
+          const mExp = parseDate(m.expiryDate);
+          if (!mExp || daysUntil(mExp) > lead) continue;
+          await prisma.document.updateMany({ where: { id: m.id, renewalRunId: null }, data: { renewalRunId: run!.id } });
+        }
         out.started++;
         out.details.push(`${docType} — ${d.person} (${daysLeft}d)`);
         const first = await notifyOnce(`renewal:${run!.id}`, {

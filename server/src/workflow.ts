@@ -2781,19 +2781,62 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
   if (!task) return res.status(404).json({ error: "Task not found" });
   if (!task.govCenter) return res.json({ portal: null, found: false });
 
-  const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId }, select: { companyId: true } });
+  const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId }, select: { companyId: true, variables: true } });
   if (!inst?.companyId) return res.json({ portal: task.govCenter, found: false, reason: "This run is not attached to a client, so there is no vault to look in." });
 
-  const cred = await prisma.siteCredential.findFirst({
+  /**
+   * WHICH LOGIN, when a client has several for one portal.
+   *
+   * Each CR has its own Qiwa, Muqeem and GOSI registration, usually under a different Nafath
+   * holder, so a client with three establishments has three Qiwa logins that are not
+   * interchangeable. This used to be `findFirst` — one of them, in whatever order the database
+   * felt like, with nothing on screen saying the others existed. The wrong login on a government
+   * portal is a failed submission and sometimes a lockout.
+   *
+   * The run usually knows which CR it is about: `establishmentId` is already on its variables and
+   * is what the duplicate-run guard reads. So the step's own CR wins; a login filed against the
+   * client as a whole (NULL) is the fallback, because that is what a main-CR or non-per-CR portal
+   * looks like. Only when neither narrows it to one does this refuse to choose — and then it says
+   * so and hands the officer the list, which is the one honest answer.
+   */
+  const vars: any = (inst.variables && typeof inst.variables === "object") ? inst.variables : {};
+  const runCr = vars.establishmentId ? String(vars.establishmentId) : null;
+  const all = await prisma.siteCredential.findMany({
     where: { companyId: inst.companyId, govCenter: task.govCenter },
-    select: { id: true, label: true, url: true, username: true },
+    select: { id: true, label: true, url: true, username: true, nafath: true, nafathId: true, establishmentId: true,
+              establishment: { select: { crNumber: true, name: true } } },
+    orderBy: { label: "asc" },
   });
-  if (!cred) return res.json({ portal: task.govCenter, found: false, licence: await portalLicence(inst.companyId, task.govCenter), reason: `No ${task.govCenter} login is stored for this client.` });
+  const forThisCr = runCr ? all.filter(c => c.establishmentId === runCr) : [];
+  const clientWide = all.filter(c => !c.establishmentId);
+  const shortlist = forThisCr.length ? forThisCr : (clientWide.length ? clientWide : all);
+  const cred = shortlist.length === 1 ? shortlist[0] : null;
 
-  // Reveal is admin-only, exactly as the vault screen is. Told plainly rather than shown a button
-  // that returns 403.
+  const asChoice = (c: typeof all[number]) => ({
+    id: c.id, label: c.label, username: c.username, nafath: c.nafath,
+    cr: c.establishment ? [c.establishment.crNumber, c.establishment.name].filter(Boolean).join(" · ") : "the client as a whole",
+  });
+
+  if (!all.length) return res.json({ portal: task.govCenter, found: false, licence: await portalLicence(inst.companyId, task.govCenter), reason: `No ${task.govCenter} login is in this client's vault yet.` });
+
+  if (!cred) return res.json({
+    portal: task.govCenter, found: false, ambiguous: true,
+    choices: shortlist.map(asChoice),
+    licence: await portalLicence(inst.companyId, task.govCenter),
+    reason: `${shortlist.length} ${task.govCenter} logins are on file for this client${runCr ? " and this CR" : ""}. Pick the one this step is for — they are different registrations, not copies.`,
+  });
+
   const canReveal = a?.role === "admin" || a?.role === "super_admin";
-  res.json({ portal: task.govCenter, found: true, ...cred, licence: await portalLicence(inst.companyId, task.govCenter), canReveal });
+  // The CR is named on the panel even when there is only one login: "which account am I in" is the
+  // question an officer asks after a submission goes to the wrong establishment, and by then the
+  // answer is expensive.
+  const { establishment, establishmentId, ...rest } = cred;
+  res.json({
+    portal: task.govCenter, found: true, ...rest,
+    cr: establishment ? [establishment.crNumber, establishment.name].filter(Boolean).join(" · ") : null,
+    alternatives: all.length - 1,
+    licence: await portalLicence(inst.companyId, task.govCenter), canReveal,
+  });
 });
 
 /**

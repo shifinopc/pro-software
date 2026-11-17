@@ -961,6 +961,22 @@ model SiteCredential {
   govCenter String?
 
   @@index([govCenter])
+
+  /// WHICH CR THIS LOGIN BELONGS TO.
+  ///
+  /// A client is not one account per portal. Each establishment has its own Qiwa, Muqeem and GOSI
+  /// registration, usually under a different Nafath holder, so a client with three CRs has three
+  /// Qiwa logins that are not interchangeable. Without this column they were three rows nothing
+  /// could tell apart, and every reader took `findFirst` - one of them, arbitrarily, with no sign
+  /// the others existed. On a government portal the wrong login is a failed submission and
+  /// sometimes a lockout, which is not a thing to settle by row order.
+  ///
+  /// NULL means the client as a whole: the main CR, or a portal that is not per-establishment at
+  /// all. That is the common case and stays the default, so every existing row keeps its meaning.
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+  establishmentId String?
+
+  @@index([establishmentId])
 }
 
 model Activity {
@@ -2905,6 +2921,9 @@ model Establishment {
 
   @@index([companyId])
   @@index([crNumber])
+
+  /// The portal logins registered to this CR. See SiteCredential.establishmentId.
+  credentials SiteCredential[]
 }
 
 model DocumentSuggestion {

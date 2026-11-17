@@ -6459,6 +6459,21 @@ async function coName(companyId?: string | null): Promise<string> {
 }
 // requireWriteRole is NOT used on this one or the edit below: it is admin-only, and canTouchCompany
 // is what gates them now. Delete and reveal keep it.
+/**
+ * The CR a credential is being filed under, or null for the client as a whole.
+ *
+ * Refuses an establishment belonging to somebody else rather than storing it: the vault would then
+ * show a login that no case can ever resolve to, which looks like a missing credential rather than
+ * a misfiled one.
+ */
+async function crOf(companyId: string, raw: unknown): Promise<string | null> {
+  const id = String(raw ?? "").trim();
+  if (!id) return null;
+  const est = await prisma.establishment.findUnique({ where: { id }, select: { companyId: true } });
+  if (!est || est.companyId !== companyId) throw new Error("That CR does not belong to this client");
+  return id;
+}
+
 app.post("/api/credentials", requireAuth, requireStaff, async (req, res) => {
   try {
     // NAMED, not spread. The body used to go into Prisma whole, so anything the model happened to
@@ -6484,6 +6499,10 @@ app.post("/api/credentials", requireAuth, requireStaff, async (req, res) => {
       // that decrypts a password keeps working without learning about a second shape.
       nafath: b.nafath === true,
       nafathId: b.nafathId ? String(b.nafathId).trim() : null,
+      // WHICH CR, checked against this client's own. A credential filed under another client's
+      // establishment would be invisible to every reader that resolves by the run's CR, and
+      // visible in the vault as if it were fine.
+      establishmentId: await crOf(companyId, b.establishmentId),
       password: encrypt(b.nafath === true ? "" : String(password ?? "")),
     } });
     if (licenceExpiry && created.govCenter) await filePortalLicence({ companyId: created.companyId, govCenter: created.govCenter, expiry: String(licenceExpiry), actorId: (req as any).auth?.sub });
@@ -6517,6 +6536,7 @@ app.put("/api/credentials/:id", requireAuth, requireStaff, async (req, res) => {
     if (b.govCenter !== undefined) data.govCenter = b.govCenter ? String(b.govCenter).trim() : null;
     if (b.nafath !== undefined) data.nafath = b.nafath === true;
     if (b.nafathId !== undefined) data.nafathId = b.nafathId ? String(b.nafathId).trim() : null;
+    if (b.establishmentId !== undefined) data.establishmentId = await crOf(existing.companyId, b.establishmentId);
     // Only re-encrypt when a new password is actually provided (blank = keep existing) — and a
     // credential switched to Nafath drops the one it had, because it is no longer how anybody signs
     // in and a kept secret is a secret still worth stealing.
