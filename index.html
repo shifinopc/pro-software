@@ -7172,6 +7172,90 @@
       <!-- ══ TEAM PERFORMANCE ══════════════════════════════════════════════════
            The operations answer to Targets & Forecast. Same shape, different unit: that screen counts
            money and this one counts work, which is why the two are not tabs of one thing. -->
+      <!-- CLIENT WORK: what was done for each client, between two dates.
+           The officer-wise view of the same data is Team Performance, next door. This one answers
+           the question a client asks and an invoice needs, which is why tasks and steps stay in
+           separate columns: one Iqama renewal is a single task and eleven steps, and a blended
+           number would make a nine-step renewal look like a phone call. -->
+      <sc-if value="{{ showClientWork }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:14px; padding:22px 28px 30px;">
+        <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <div style="font-size:10px; font-weight:800; letter-spacing:.14em; color:#A9A6B4;">PRO OPERATIONS</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Client Work</h1>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">{{ cwCaption }}</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+            <sc-for list="{{ cwShortcuts }}" as="s" hint-placeholder-count="2">
+              <button onClick="{{ s.pick }}" style="background:{{ s.bg }}; color:{{ s.fg }}; border:1px solid {{ s.bd }}; font-size:11px; font-weight:650; padding:7px 12px; border-radius:99px; cursor:pointer;">{{ s.label }}</button>
+            </sc-for>
+            <input value="{{ cwFrom }}" onChange="{{ setCwFrom }}" type="date" style="font-size:11px; padding:6px 9px; border:1px solid #E7E3F0; border-radius:9px; color:#3E3949;" />
+            <span style="font-size:11px; color:#A9A6B4;">to</span>
+            <input value="{{ cwTo }}" onChange="{{ setCwTo }}" type="date" style="font-size:11px; padding:6px 9px; border:1px solid #E7E3F0; border-radius:9px; color:#3E3949;" />
+            <button onClick="{{ cwExport }}" style="background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:7px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Export</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ cwError }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:12px; padding:12px 14px; font-size:11.5px; color:#8C2226;">{{ cwError }}</div>
+        </sc-if>
+        <sc-if value="{{ cwLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px; color:#8C8899;">Counting…</div>
+        </sc-if>
+        <sc-if value="{{ cwEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed #E7E3F0; border-radius:14px; padding:26px; text-align:center;">
+            <div style="font-size:13px; font-weight:650; color:#3E3949;">Nothing was completed in this period</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:5px;">Clients with no completed work are left out rather than listed as zero.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ cwHasRows }}" hint-placeholder-val="{{ true }}">
+          <div style="border:1px solid #F1EEF7; border-radius:16px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#FBFAFE; border-bottom:1px solid #F1EEF7; font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4;">
+              <span style="flex:1;">CLIENT</span>
+              <span style="width:70px; text-align:right;">TASKS</span>
+              <span style="width:70px; text-align:right;">STEPS</span>
+              <span style="width:90px; text-align:right;">CASES CLOSED</span>
+              <span style="width:80px; text-align:right;">OPEN NOW</span>
+            </div>
+            <sc-for list="{{ cwRows }}" as="r" hint-placeholder-count="4">
+              <div onClick="{{ r.open }}" style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid #F7F5FB; cursor:pointer; background:{{ r.bg }};" style-hover="background:#FBFAFE;">
+                <span style="flex:1; font-size:12.5px; font-weight:600; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.client }}</span>
+                <span style="width:70px; text-align:right; font-size:12px; color:#3E3949;">{{ r.tasks }}</span>
+                <span style="width:70px; text-align:right; font-size:12px; color:#3E3949;">{{ r.steps }}</span>
+                <span style="width:90px; text-align:right; font-size:12px; font-weight:700; color:#0E9355;">{{ r.casesClosed }}</span>
+                <span style="width:80px; text-align:right; font-size:12px; color:{{ r.openColor }};">{{ r.openNow }}</span>
+              </div>
+              <sc-if value="{{ r.isOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:4px 14px 14px 22px; background:#FCFBFE; border-bottom:1px solid #F7F5FB;">
+                  <sc-if value="{{ r.itemsLoading }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:8px 0;">Fetching the items…</div></sc-if>
+                  <sc-for list="{{ r.items }}" as="i" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:baseline; gap:10px; padding:4px 0;">
+                      <span style="font-size:10px; color:#A9A6B4; width:72px; flex-shrink:0;">{{ i.when }}</span>
+                      <span style="font-size:9px; font-weight:800; letter-spacing:.08em; color:{{ i.kindColor }}; width:40px; flex-shrink:0;">{{ i.kind }}</span>
+                      <span style="font-size:11.5px; color:#3E3949; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ i.title }}</span>
+                      <div style="flex:1;"></div>
+                      <span style="font-size:10px; color:#A9A6B4; flex-shrink:0; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ i.caseTitle }}</span>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button onClick="{{ r.summary }}" style="background:#fff; color:#7C00FF; border:1px solid #EADDFB; font-size:11px; font-weight:650; padding:7px 13px; border-radius:99px; cursor:pointer;">Summary for the client</button>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; background:#FBFAFE; font-size:12px; font-weight:700; color:#2E2937;">
+              <span style="flex:1;">{{ cwTotalLabel }}</span>
+              <span style="width:70px; text-align:right;">{{ cwTotalTasks }}</span>
+              <span style="width:70px; text-align:right;">{{ cwTotalSteps }}</span>
+              <span style="width:90px; text-align:right;">{{ cwTotalClosed }}</span>
+              <span style="width:80px; text-align:right;">{{ cwTotalOpen }}</span>
+            </div>
+          </div>
+          <div style="font-size:10.5px; color:#A9A6B4;">A task and a workflow step are different units, so they are counted apart: one renewal is a single task and eleven steps. "Open now" is today, not the period.</div>
+        </sc-if>
+      </div></sc-freeze></sc-if>
+
       <sc-if value="{{ showTeamPerf }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:12px;" data-screen-label="Team Performance">
 
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; position:relative; z-index:20; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
@@ -18306,6 +18390,7 @@ class Component extends DCLogic {
       'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure', 'Agents': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
+      'Client Work': 'Operations',
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
       'Employees': 'Clients & Compliance', 'Renewals': 'Clients & Compliance',
       'Invoices': 'Finance', 'Quotations': 'Finance', 'Receipts': 'Finance', 'Reports': 'Finance',
@@ -18945,6 +19030,36 @@ class Component extends DCLogic {
        */
       // Remembers the month, so a save reloads the month being looked at rather than snapping back
       // to today — the same trap the sales strip had.
+      /**
+       * WHAT WAS DONE FOR EACH CLIENT, between two dates.
+       *
+       * One request for the table; the detail of a single client is a second request made only
+       * when somebody opens that row, because a month of steps for 188 clients is a page nobody
+       * asked for. Month and range are the same endpoint - the screen sends dates either way.
+       */
+      this._loadCW = (from, to) => {
+        const q = from && to ? ('?from=' + from + '&to=' + to) : '';
+        this.setState({ cwLoading: true, cwError: '' });
+        return this._bootFetch('/api/reports/client-work' + q, { headers: hdr })
+          .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, j })).catch(() => ({ ok: false, status: r.status, j: null })))
+          .then(({ ok, status, j }) => {
+            if (ok && j && Array.isArray(j.rows)) return this.setState({ cwData: j, cwError: '', cwLoading: false });
+            this.setState({
+              cwLoading: false,
+              cwError: status === 403
+                ? 'Your role cannot read this screen. An administrator can change that in Settings.'
+                : (j && j.error) || 'That did not load. Try again in a moment.',
+            });
+          })
+          .catch(() => this.setState({ cwLoading: false, cwError: 'Server unreachable.' }));
+      };
+      this._loadCWDetail = (companyId, from, to) => {
+        this.setState({ cwOpenId: companyId, cwItems: null });
+        return this._bootFetch('/api/reports/client-work/' + companyId + '?from=' + from + '&to=' + to, { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(j => this.setState({ cwItems: (j && j.items) || [] }))
+          .catch(() => this.setState({ cwItems: [] }));
+      };
       this._loadTP = (period) => {
         if (period) this._tpPeriod = period;
         const p = period || this._tpPeriod || '';
@@ -21120,7 +21235,7 @@ class Component extends DCLogic {
     // needs to know; the grid itself comes from the server that enforces it, so a hidden item and a
     // 403 can no longer disagree.
     const _SCREEN_MODULE = {
-      'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks',
+      'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks', 'Client Work': 'Tasks',
       'Approvals': 'Approvals', 'SLA Monitor': 'SLA Monitor', 'Activity Timeline': 'Activity Log',
       'Clients': 'Clients', 'Employees': 'Clients', 'Requests Queue': 'Clients', 'Client Groups': 'Clients',
       // Compliance split five ways: the officer who files documents is not necessarily the one
@@ -21391,7 +21506,7 @@ class Component extends DCLogic {
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
       ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers]]],
-      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers]]],
+      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers], ['Client Work', I.fileText]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Disbursements', I.upload, _disbCount], ['Receipts', I.card], ['Reports', I.layers]]],
@@ -38705,6 +38820,111 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // One screen, two mount points — the kind is read from which of them is active.
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
       showTeamPerf: act === 'Team Performance',
+      showClientWork: act === 'Client Work',
+      /**
+       * CLIENT WORK — the values behind the screen.
+       *
+       * The range is the only state: a month is two dates, so "this month" and "last month" are
+       * buttons that set them rather than a second mode with its own code path. Opened without a
+       * range, it asks for the current month and the server fills in the dates.
+       */
+      ...(() => {
+        const st9 = this.state;
+        const pad9 = (n9) => String(n9).padStart(2, '0');
+        const monthRange9 = (back9) => {
+          const d9 = new Date();
+          const y9 = d9.getUTCFullYear(), m9 = d9.getUTCMonth() - back9;
+          const first9 = new Date(Date.UTC(y9, m9, 1)), last9 = new Date(Date.UTC(y9, m9 + 1, 0));
+          return [first9.toISOString().slice(0, 10), last9.toISOString().slice(0, 10)];
+        };
+        const from9 = st9.cwFrom || monthRange9(0)[0];
+        const to9 = st9.cwTo || monthRange9(0)[1];
+        // Asked for once when the screen is opened, and again whenever the range changes — keyed on
+        // the range itself, because a flag would have to be cleared by every path that moves it.
+        const key9 = from9 + '..' + to9;
+        if (act === 'Client Work' && this._cwKey !== key9 && !st9.cwLoading) {
+          this._cwKey = key9;
+          if (this._loadCW) setTimeout(() => this._loadCW(from9, to9), 0);
+        }
+        const D9 = st9.cwData || null;
+        const rows9 = (D9 && Array.isArray(D9.rows)) ? D9.rows : [];
+        const setRange9 = (f9, t9) => this.setState({ cwFrom: f9, cwTo: t9, cwOpenId: null, cwItems: null });
+        const sameAs9 = (pair9) => pair9[0] === from9 && pair9[1] === to9;
+        const shortcut9 = (label9, pair9) => ({
+          label: label9,
+          bg: sameAs9(pair9) ? '#7C00FF' : '#fff',
+          fg: sameAs9(pair9) ? '#fff' : '#3E3949',
+          bd: sameAs9(pair9) ? '#7C00FF' : '#E7E3F0',
+          pick: () => setRange9(pair9[0], pair9[1]),
+        });
+        const niceDay9 = (s9) => {
+          const d9 = new Date(String(s9) + 'T00:00:00Z');
+          return isNaN(d9) ? String(s9) : d9.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+        };
+        const items9 = Array.isArray(st9.cwItems) ? st9.cwItems : null;
+        return {
+          cwFrom: from9, cwTo: to9,
+          setCwFrom: (e9) => setRange9(e9.target.value, to9),
+          setCwTo: (e9) => setRange9(from9, e9.target.value),
+          cwShortcuts: [shortcut9('This month', monthRange9(0)), shortcut9('Last month', monthRange9(1))],
+          cwCaption: 'Completed between ' + niceDay9(from9) + ' and ' + niceDay9(to9) + ' · tasks and workflow steps, per client',
+          cwLoading: !!st9.cwLoading,
+          cwError: st9.cwError || false,
+          cwHasRows: rows9.length > 0,
+          cwEmpty: !st9.cwLoading && !st9.cwError && !!D9 && rows9.length === 0,
+          cwRows: rows9.map(r9 => ({
+            client: r9.client, tasks: r9.tasks, steps: r9.steps, casesClosed: r9.casesClosed, openNow: r9.openNow,
+            bg: st9.cwOpenId === r9.companyId ? '#FBFAFE' : '#fff',
+            openColor: r9.openNow > 0 ? '#B8860B' : '#A9A6B4',
+            isOpen: st9.cwOpenId === r9.companyId,
+            itemsLoading: st9.cwOpenId === r9.companyId && items9 === null,
+            items: st9.cwOpenId === r9.companyId && items9 ? items9.map(i9 => ({
+              when: niceDay9(String(i9.completedAt).slice(0, 10)),
+              kind: i9.kind === 'step' ? 'STEP' : 'TASK',
+              kindColor: i9.kind === 'step' ? '#7C00FF' : '#0E9355',
+              title: i9.title,
+              caseTitle: i9.caseTitle || '',
+            })) : [],
+            // Clicking the open row closes it, which is what a reader expects of a disclosure.
+            open: () => (st9.cwOpenId === r9.companyId
+              ? this.setState({ cwOpenId: null, cwItems: null })
+              : this._loadCWDetail && this._loadCWDetail(r9.companyId, from9, to9)),
+            summary: () => {
+              const tok9 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/reports/client-work/' + r9.companyId + '/summary?from=' + from9 + '&to=' + to9,
+                { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+                .then(x9 => (x9.ok ? x9.json() : null))
+                .then(j9 => {
+                  if (!j9) return this.toast('Could not build that summary', 'error');
+                  // Shown rather than sent: what goes to a client is the firm's words, and a button
+                  // that emails on one click is how the wrong month reaches the wrong person.
+                  this.setState({ cwSummary: j9 });
+                })
+                .catch(() => this.toast('Server unreachable', 'error'));
+            },
+          })),
+          cwTotalLabel: rows9.length + (rows9.length === 1 ? ' client' : ' clients'),
+          cwTotalTasks: rows9.reduce((a9, r9) => a9 + r9.tasks, 0),
+          cwTotalSteps: rows9.reduce((a9, r9) => a9 + r9.steps, 0),
+          cwTotalClosed: rows9.reduce((a9, r9) => a9 + r9.casesClosed, 0),
+          cwTotalOpen: rows9.reduce((a9, r9) => a9 + r9.openNow, 0),
+          cwExport: () => {
+            const tok9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/reports/client-work.xlsx?from=' + from9 + '&to=' + to9,
+              { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+              .then(x9 => { if (!x9.ok) throw new Error(String(x9.status)); return x9.blob(); })
+              .then(b9 => {
+                const a9 = document.createElement('a');
+                a9.href = URL.createObjectURL(b9);
+                a9.download = 'client-work-' + from9 + '-to-' + to9 + '.xlsx';
+                document.body.appendChild(a9); a9.click(); a9.remove();
+                setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+                this.toast && this.toast('Exported ' + rows9.length + ' client' + (rows9.length === 1 ? '' : 's'));
+              })
+              .catch(() => this.toast && this.toast('Could not export that', 'error'));
+          },
+        };
+      })(),
       showChecklistRules: act === 'Checklist Rules',
       showFieldSets: act === 'Field Sets',
       showInbox: act === 'Inbox',

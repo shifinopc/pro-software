@@ -94,6 +94,7 @@ import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
+import { clientWork, clientWorkItems, clientWorkSummary } from "./clientwork.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
@@ -4553,6 +4554,93 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
  * they are called, and which role they hold. No email, no phone, no money. Active staff only —
  * an invited-but-never-signed-in account is fine in an admin screen and wrong as an assignee.
  */
+/**
+ * The period a report covers, from the query.
+ *
+ * `from`/`to` are the only inputs; `month=2026-11` is sugar that expands to the same pair, so there
+ * is one range to reason about. Defaults to the current month, which is what somebody opening the
+ * screen on the 3rd almost always wants.
+ */
+function reportRange(req: any): { from: string; to: string } {
+  const iso = (v: unknown) => { const s = String(v ?? "").trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; };
+  const month = String(req.query.month ?? "").trim();
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split("-").map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, "0")}` };
+  }
+  const now = new Date();
+  const ym = now.toISOString().slice(0, 7);
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  const from = iso(req.query.from) ?? `${ym}-01`;
+  const to = iso(req.query.to) ?? `${ym}-${String(lastDay).padStart(2, "0")}`;
+  if (to < from) throw new Error("The end of the range is before its start");
+  return { from, to };
+}
+
+/**
+ * WHAT WAS DONE FOR EACH CLIENT, BETWEEN TWO DATES.
+ *
+ * One range, not a month mode and a date mode: a month is a pair of dates, and a second code path
+ * for it is a second thing to keep correct. The caller picks the dates; "this month" is a button,
+ * not an endpoint.
+ */
+app.get("/api/reports/client-work", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const companyId = req.query.companyId ? String(req.query.companyId) : null;
+    res.json({ from, to, rows: await clientWork({ from, to, companyId }) });
+  } catch (e: any) { return fail(res, 400, e, "reports.client-work"); }
+});
+
+/** The items behind one client's row — which ones, not how many. */
+app.get("/api/reports/client-work/:companyId", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const co = await prisma.company.findUnique({ where: { id: req.params.companyId }, select: { name: true } });
+    if (!co) return res.status(404).json({ error: "That client no longer exists" });
+    res.json({ client: co.name, from, to, items: await clientWorkItems({ from, to, companyId: req.params.companyId }) });
+  } catch (e: any) { return fail(res, 400, e, "reports.client-work.detail"); }
+});
+
+/** The same month written for the client: cases, not a stranger's checklist of steps. */
+app.get("/api/reports/client-work/:companyId/summary", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const co = await prisma.company.findUnique({ where: { id: req.params.companyId }, select: { name: true } });
+    if (!co) return res.status(404).json({ error: "That client no longer exists" });
+    res.json({ client: co.name, from, to, ...await clientWorkSummary({ from, to, companyId: req.params.companyId }) });
+  } catch (e: any) { return fail(res, 400, e, "reports.client-work.summary"); }
+});
+
+/** The same rows as a workbook, the way leads and employees already export. */
+app.get("/api/reports/client-work.xlsx", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const rows = await clientWork({ from, to, companyId: req.query.companyId ? String(req.query.companyId) : null });
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(`Work ${from} to ${to}`.slice(0, 31));
+    ws.columns = [
+      { header: "Client", key: "client", width: 42 },
+      { header: "Tasks completed", key: "tasks", width: 18 },
+      { header: "Workflow steps completed", key: "steps", width: 26 },
+      { header: "Cases closed", key: "casesClosed", width: 16 },
+      { header: "Open now", key: "openNow", width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    rows.forEach(r => ws.addRow(r));
+    // The dates are in the file as well as the filename: a sheet pasted into an email loses its
+    // name, and a count with no period on it is a number nobody can check.
+    ws.addRow([]);
+    ws.addRow([`Completed between ${from} and ${to} inclusive · "Open now" is as at ${new Date().toISOString().slice(0, 10)}`]);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="client-work-${from}-to-${to}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e: any) { return fail(res, 500, e, "reports.client-work.xlsx"); }
+});
+
 app.get("/api/staff-directory", requireAuth, requireStaff, async (_req, res) => {
   try {
     const rows = await prisma.user.findMany({
