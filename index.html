@@ -18724,6 +18724,13 @@ class Component extends DCLogic {
       // `orgSet` that meant invoices printing with no seller name at all.
       this._bootFetch('/api/settings/org', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ orgSet: v }); }).catch(() => {});
       this._load('/api/users', 'usersData', (v) => this.setState({ usersData: v }));
+      // WHO WORK CAN BE GIVEN TO, for everyone who has work to give.
+      //
+      // /api/users is admin-only — it carries teammate email, phone, cost and commission — and
+      // every assignee picker was built from it. For a PRO officer, an accountant or a sales user
+      // it answered 403 in silence, so "New task" offered a Case owner list of one ("Unassigned")
+      // and Delegate offered nobody. The system looked as though it had forgotten its own staff.
+      this._load('/api/staff-directory', 'staffDirData', (v) => this.setState({ staffDirData: v }));
       // The resolved matrix, from the server. Presets used to live only in this file, so the
       // screen could draw a grid the backend had never heard of — which is exactly how it ended
       // up showing 11 modules while the enforcement knew 12.
@@ -21062,12 +21069,18 @@ class Component extends DCLogic {
     // split on spaces instead of stripping the parenthetical the way this one always has.
     const _initials = (name) => String(name || '').replace(/\([^)]*\)/g, ' ').split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w)).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
     const realClientNames = (Array.isArray(this.state.companiesData) && this.state.companiesData.length) ? this.state.companiesData.map(c2 => c2.name) : null;
-    const realStaffNames = (Array.isArray(this.state.usersData) && this.state.usersData.length) ? this.state.usersData.filter(u => u.type !== 'portal').map(u => u.name) : null;
+    // The admin list where it is readable, the directory everywhere else. Admins keep the fuller
+    // list because screens other than the pickers read it; nobody else needs — or gets — more than
+    // a name and a role.
+    const _peopleSrc = (Array.isArray(this.state.usersData) && this.state.usersData.length)
+      ? this.state.usersData
+      : (Array.isArray(this.state.staffDirData) ? this.state.staffDirData : []);
+    const realStaffNames = _peopleSrc.length ? _peopleSrc.filter(u => u.type !== 'portal').map(u => u.name) : null;
     // Staff who can actually be given work: signed-up and not disabled. `realStaffNames` includes
     // invited-but-never-signed-in accounts, which are fine to list in admin screens and wrong to
     // offer as an assignee.
-    const realActiveStaff = (Array.isArray(this.state.usersData) && this.state.usersData.length)
-      ? this.state.usersData.filter(u => u.type !== 'portal' && u.status === 'active').map(u => u.name) : null;
+    const realActiveStaff = _peopleSrc.length
+      ? _peopleSrc.filter(u => u.type !== 'portal' && u.status === 'active').map(u => u.name) : null;
     const realWfNames = (Array.isArray(this.state.wfTemplates) && this.state.wfTemplates.length) ? this.state.wfTemplates.filter(t => t.active !== false).map(t => t.name) : null;
     const score = this.props.complianceScore ?? 87;
     const status = this.props.companyStatus ?? 'Active';

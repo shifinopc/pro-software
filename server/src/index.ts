@@ -4540,6 +4540,30 @@ app.post("/api/documents/:id/supersede", requireAuth, requireStaff, requireWrite
  *
  * Scoped to the client so the example rows can name that client's own CRs.
  */
+/**
+ * WHO WORK CAN BE GIVEN TO — READABLE BY EVERYONE WHO HAS WORK TO GIVE.
+ *
+ * `/api/users` is admin-only, and rightly: it carries teammate PII — email, phone, cost per hour,
+ * commission rate. But the console built every assignee picker from it, so a PRO officer, an
+ * accountant or a sales user opening "New task" was shown a Case owner list containing one entry,
+ * "Unassigned", and the Delegate list was empty for the same reason. The 403 was silent; what the
+ * officer saw was a system that had apparently forgotten its own staff.
+ *
+ * So the picker gets its own list, with nothing on it a picker does not need: who they are, what
+ * they are called, and which role they hold. No email, no phone, no money. Active staff only —
+ * an invited-but-never-signed-in account is fine in an admin screen and wrong as an assignee.
+ */
+app.get("/api/staff-directory", requireAuth, requireStaff, async (_req, res) => {
+  try {
+    const rows = await prisma.user.findMany({
+      where: { type: "staff", status: "active" },
+      select: { id: true, name: true, roleId: true },
+      orderBy: { name: "asc" },
+    });
+    res.json(rows.map(r => ({ ...r, type: "staff", status: "active" })));
+  } catch (e: any) { return fail(res, 400, e, "staff.directory"); }
+});
+
 app.get("/api/companies/:id/employees/import-template", requireAuth, requireStaff, async (req, res) => {
   try {
     const co = await prisma.company.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
