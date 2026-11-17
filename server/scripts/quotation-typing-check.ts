@@ -101,5 +101,26 @@ ok(submit.includes("_qcHarvest()"), "saving reads the boxes, not the state behin
 const applySet = html.slice(html.indexOf("qcTermSetOpts:"), html.indexOf("qcTermSetOpts:") + 900);
 ok(applySet.includes("_qcEdit9"), "applying a saved set keeps the lines that are being typed");
 
+/**
+ * OPENING A QUOTATION MUST NOT RE-RATE ITS VAT.
+ *
+ * `qcVat: null` fell through to QC_VAT_OPTS[0] — "15% — KSA standard" — so opening a zero-rated
+ * quotation showed 15% and Save wrote 15%. A SAR 28,000 offer became SAR 32,200 because somebody
+ * opened it. The dialog has no other memory of the stored rate, so seeding it IS the fix, and a
+ * future edit here that drops back to null would restore the bug silently.
+ */
+// Sliced to where the setState call actually closes, not a guessed character count — the first
+// version of this check used 2200 and the line it guards sat at 2201.
+const oeStart = html.indexOf("const openEditQuote");
+const oeEnd = html.indexOf("\n    });", oeStart);
+const openEdit = oeStart >= 0 && oeEnd > oeStart ? html.slice(oeStart, oeEnd) : "";
+ok(openEdit.length > 100, `the quotation edit seeder is still called openEditQuote (read ${openEdit.length} chars)`);
+// Comments stripped first: the fix documents the bug by quoting it, and a check that fires on the
+// explanation of what it guards is a check nobody will keep.
+const openEditCode = openEdit.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+ok(!/\bqcVat:\s*null\b/.test(openEditCode), "opening a quotation does not reset its VAT rate to the default");
+ok(/qcVat:\s*QC_VAT_OPTS\.find\(/.test(openEdit) && /vatRateBp/.test(openEdit),
+  "it seeds the VAT selector from the rate the quotation was written at");
+
 console.log(bad ? `\n${bad} failed` : "\nall good");
 process.exit(bad ? 1 : 0);

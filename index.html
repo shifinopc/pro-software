@@ -45860,7 +45860,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         .map(m9 => [String(m9.label == null ? '' : m9.label), String(m9.pct == null ? '' : m9.pct), m9.basis || 'total']),
       qcValid: raw9.validUntil || '', qcSubject: raw9.service || '', qcNotes: raw9.notes || '', qcErr: '',
       qcIssued: raw9.date || new Date().toISOString().slice(0, 10),
-      qcCur: raw9.currency || sysCurCode, qcVat: null, qcNextNo: null,
+      qcCur: raw9.currency || sysCurCode, qcNextNo: null,
+      /**
+       * THE RATE THIS QUOTATION WAS WRITTEN AT, not the house default.
+       *
+       * This was `qcVat: null`, and null falls through to QC_VAT_OPTS[0] — "15% — KSA standard".
+       * So opening a zero-rated quotation showed 15%, and Save wrote 15%: SAR 28,000 became
+       * SAR 32,200 on a document a client had been quoted, with nothing on screen admitting it.
+       * The invoice dialog already read the stored rate; only this one did not.
+       *
+       * A stored rate that matches no option (an old row, a rate since retired) still falls back
+       * to the default rather than inventing one, but that is now the rare case and not every edit.
+       */
+      qcVat: QC_VAT_OPTS.find(o9 => parseInt(o9) === Math.round((Number(raw9.vatRateBp) || 0) / 100)) || null,
     });
     // One submit for both buttons and for both create and edit — the only difference is the status
     // it lands in and whether it POSTs or PUTs.
