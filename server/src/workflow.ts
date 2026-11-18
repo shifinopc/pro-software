@@ -2812,8 +2812,18 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
   const shortlist = forThisCr.length ? forThisCr : (clientWide.length ? clientWide : all);
   const cred = shortlist.length === 1 ? shortlist[0] : null;
 
+  // WHAT MAKES TWO OF THESE DIFFERENT, which is the whole point of handing over a list.
+  //
+  // The CR separates them when there is one. When there is not - two logins filed against the
+  // client as a whole, or a client with a single CR - the discriminator is whose login it is: the
+  // username, or on a Nafath login the national ID, because a Nafath row has no username and the
+  // label is the portal's own name on every row for that portal. Without these the list was two
+  // identical lines, which leaves the officer no better off than the arbitrary pick it replaced.
+  //
+  // `url` rides along so a login the officer has just identified can be used in place, instead of
+  // sending them to the vault to find the row they already have on screen.
   const asChoice = (c: typeof all[number]) => ({
-    id: c.id, label: c.label, username: c.username, nafath: c.nafath,
+    id: c.id, label: c.label, username: c.username, nafath: c.nafath, nafathId: c.nafathId, url: c.url,
     cr: c.establishment ? [c.establishment.crNumber, c.establishment.name].filter(Boolean).join(" · ") : "the client as a whole",
   });
 
@@ -2822,6 +2832,8 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
   if (!cred) return res.json({
     portal: task.govCenter, found: false, ambiguous: true,
     choices: shortlist.map(asChoice),
+    // The picked choice renders as the found panel, reveal and all, so it needs the same answer.
+    canReveal: a?.role === "admin" || a?.role === "super_admin",
     licence: await portalLicence(inst.companyId, task.govCenter),
     reason: `${shortlist.length} ${task.govCenter} logins are on file for this client${runCr ? " and this CR" : ""}. Pick the one this step is for — they are different registrations, not copies.`,
   });

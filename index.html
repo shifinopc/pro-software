@@ -3126,10 +3126,10 @@
                     <div style="border:1px solid #EDEBF2; border-radius:14px; padding:10px 10px; transition:border-color .15s, box-shadow .15s;" style-hover="border-color:#DDD1F5; box-shadow:0 6px 18px rgba(124,0,255,.07);">
                       <div style="display:flex; align-items:center; gap:11px;">
                         <div style="width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#7C00FF,#A855F7); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initial }}</div>
-                        <div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px;"><span style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.label }}</span><sc-if value="{{ c.changedByClient }}" hint-placeholder-val="{{ false }}"><span title="Client changed this in the portal" style="font-size:8.5px; font-weight:800; color:#fff; background:#0EA5E9; padding:2px 7px; border-radius:99px; animation:pulseBadge 2.2s ease-in-out infinite;">CLIENT UPDATED</span></sc-if><sc-if value="{{ c.licShow }}" hint-placeholder-val="{{ false }}"><span title="The client's licence to use this portal, tracked as a company document. The login keeps working until the licence behind it lapses." style="font-size:8.5px; font-weight:700; color:{{ c.licFg }}; background:{{ c.licBg }}; padding:2px 7px; border-radius:99px; white-space:nowrap;">{{ c.licText }}</span></sc-if></div><div style="font-size:10px; color:#A9A6B4;">{{ c.domain }} · updated {{ c.updated }}</div></div>
+                        <div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px;"><span style="font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.label }}</span><sc-if value="{{ c.changedByClient }}" hint-placeholder-val="{{ false }}"><span title="Client changed this in the portal" style="font-size:8.5px; font-weight:800; color:#fff; background:#0EA5E9; padding:2px 7px; border-radius:99px; animation:pulseBadge 2.2s ease-in-out infinite;">CLIENT UPDATED</span></sc-if><sc-if value="{{ c.licShow }}" hint-placeholder-val="{{ false }}"><span title="The client's licence to use this portal, tracked as a company document. The login keeps working until the licence behind it lapses." style="font-size:8.5px; font-weight:700; color:{{ c.licFg }}; background:{{ c.licBg }}; padding:2px 7px; border-radius:99px; white-space:nowrap;">{{ c.licText }}</span></sc-if><sc-if value="{{ c.crShow }}" hint-placeholder-val="{{ false }}"><span title="The CR this login is registered under. Each establishment has its own portal registration — they are not interchangeable." style="font-size:8.5px; font-weight:700; color:#5B21B6; background:#F5EEFF; padding:2px 7px; border-radius:99px; white-space:nowrap;">{{ c.crTag }}</span></sc-if></div><div style="font-size:10px; color:#A9A6B4;">{{ c.domain }} · updated {{ c.updated }}</div></div>
                       </div>
                       <div style="display:flex; gap:8px; margin-top:11px;">
-                        <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">USERNAME</div><div style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.user }}</div></div><span onClick="{{ c.copyUser }}" title="Copy" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">Copy</span></div>
+                        <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">{{ c.userLabel }}</div><div style="font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.user }}</div></div><span onClick="{{ c.copyUser }}" title="Copy" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">Copy</span></div>
                         <div style="flex:1; background:#F8F5FD; border-radius:9px; padding:8px 11px; display:flex; align-items:center; gap:8px;"><div style="flex:1; min-width:0;"><div style="font-size:8.5px; font-weight:700; color:#A9A6B4;">PASSWORD</div><div style="font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;">{{ c.passShown }}</div></div><sc-if value="{{ cdCanManageCreds }}" hint-placeholder-val="{{ true }}"><span onClick="{{ c.reveal }}" style="font-size:9px; font-weight:700; color:#7C00FF; cursor:pointer;">{{ c.revealLabel }}</span></sc-if></div>
                       </div>
                       <div style="display:flex; gap:7px; margin-top:11px;">
@@ -12682,6 +12682,24 @@
                 <div style="font-size:10px; color:#A9A6B4; margin-top:6px;">{{ ccLicHint }}</div>
               </div>
             </sc-if>
+
+            <!-- WHICH CR THIS LOGIN IS REGISTERED UNDER. Each establishment has its own Qiwa, Muqeem
+                 and GOSI registration, usually under a different Nafath holder, so a client with
+                 three CRs has three logins per portal that are not interchangeable — and the wrong
+                 one is a failed submission, sometimes a lockout. Only asked when the client has
+                 more than one; the main CR is what a login filed against the client as a whole
+                 means, which is why it is the default. -->
+            <sc-if value="{{ ccCrShow }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px;">
+                <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">REGISTERED UNDER</span>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <sc-for list="{{ ccCrChips }}" as="c" hint-placeholder-count="2">
+                    <span onClick="{{ c.pick }}" style="font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; border:1px solid {{ c.border }}; background:{{ c.bg }}; color:{{ c.color }}; white-space:nowrap;">{{ c.label }}</span>
+                  </sc-for>
+                </div>
+                <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">Each CR has its own registration on a government portal. A step for one establishment is pointed at that CR&rsquo;s login, not another&rsquo;s.</div>
+              </div>
+            </sc-if>
           </div>
 
           <!-- RIGHT · what it is called, and what to type into it -->
@@ -16263,13 +16281,29 @@
               <sc-if value="{{ wdCredMissing }}" hint-placeholder-val="{{ false }}">
                 <div style="font-size:11px; color:#8C8899; line-height:1.5;">{{ wdCredWhy }}</div>
               </sc-if>
+              <!-- SEVERAL LOGINS FOR THIS PORTAL. Different registrations, not copies, so the
+                   officer picks one and the choice is named on the panel afterwards. -->
+              <sc-if value="{{ wdCredAmbiguous }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; flex-direction:column; gap:7px; margin-top:10px;">
+                  <sc-for list="{{ wdCredChoices }}" as="h" hint-placeholder-count="2">
+                    <div onClick="{{ h.use }}" style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #EDEBF2; border-radius:10px; padding:9px 11px; cursor:pointer;" style-hover="border-color:#C9A2FF;">
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; font-weight:700; color:#1A1523; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ h.who }}</div>
+                        <div style="font-size:9.5px; color:#A9A6B4; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ h.cr }}</div>
+                      </div>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; flex-shrink:0;">Use this</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
               <sc-if value="{{ wdCredFound }}" hint-placeholder-val="{{ true }}">
                 <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
                   <span style="font-size:11px; font-weight:700; color:#1A1523;">{{ wdCredLabel }}</span>
+                  <sc-if value="{{ wdCredCrShow }}" hint-placeholder-val="{{ false }}"><span title="The CR this login is registered under" style="font-size:8.5px; font-weight:700; color:#5B21B6; background:#F5EEFF; padding:2px 7px; border-radius:99px; white-space:nowrap;">{{ wdCredCr }}</span></sc-if>
                   <span onClick="{{ wdCredOpenUrl }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Open portal ↗</span>
                 </div>
                 <div style="display:flex; gap:14px; margin-top:9px; flex-wrap:wrap;">
-                  <div><div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">USERNAME</div><div style="font-size:11px; font-weight:600; margin-top:2px; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ wdCredUser }}</div></div>
+                  <div><div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">{{ wdCredUserLabel }}</div><div style="font-size:11px; font-weight:600; margin-top:2px; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ wdCredUser }}</div></div>
                   <sc-if value="{{ wdCredHasSecret }}" hint-placeholder-val="{{ false }}">
                     <div><div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">PASSWORD</div><div style="font-size:11px; font-weight:600; margin-top:2px; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ wdCredSecret }}</div></div>
                   </sc-if>
@@ -16283,6 +16317,9 @@
                 </sc-if>
                 <sc-if value="{{ wdCredNoPermission }}" hint-placeholder-val="{{ false }}">
                   <div style="font-size:10px; color:#A9A6B4; margin-top:10px;">The password is stored. Only an admin can reveal it — ask one to open it for you.</div>
+                </sc-if>
+                <sc-if value="{{ wdCredNafath }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:10px;">No password is kept: enter this number on the portal and the login is approved in the Nafath app on the holder&rsquo;s phone.</div>
                 </sc-if>
               </sc-if>
             </div>
@@ -27525,12 +27562,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         return { tracked: true, missing: false, type: doc7.docType, expiry: doc7.expiryDate, days: days7,
           state: days7 == null ? 'unknown' : days7 < 0 ? 'expired' : days7 <= lead7 ? 'expiring' : 'valid' };
       };
+      const _crIsMultiCred = this._crMulti(clRow.realId);
       clDetailApi.cdCreds = _cdCredRows.map((c7) => {
         const url = c7.url || '';
         const domain = String(url).replace(/^https?:\/\//, '').split('/')[0] || '—';
         const shown = cdCredReveal[c7.id];
     return {
-          label: c7.label, domain, user: c7.username || '—', notes: c7.notes || '', url, initial: (c7.label || '?')[0].toUpperCase(),
+          label: c7.label, domain, notes: c7.notes || '', url, initial: (c7.label || '?')[0].toUpperCase(),
+          // WHOSE LOGIN THIS IS. The label is the portal's name, so every row for one portal reads
+          // the same; a client with two Qiwa logins had two identical rows. A Nafath login has no
+          // username at all, and its national ID is what distinguishes it — not a secret, it is on
+          // the Iqama, and useless without the holder's phone.
+          userLabel: c7.nafath ? 'NAFATH ID' : 'USERNAME',
+          user: c7.username || (c7.nafath && c7.nafathId ? c7.nafathId : '—'),
+          // WHICH CR, shown only when the client has more than one — otherwise it is noise on every
+          // row. Null is the main CR, the same meaning it carries on documents and employees.
+          crShow: _crIsMultiCred, crTag: _crIsMultiCred ? this._crLabel(this._crOf(clRow.realId, c7.establishmentId)) : '',
           ...(() => {
             const L7 = _licFor(c7.govCenter);
             if (!L7) return { licShow: false, licText: '', licBg: '', licFg: '' };
@@ -27565,7 +27612,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // would read as "none recorded", and saving would then look like it had erased it.
             const L7 = _licFor(c7.govCenter);
             this.setState({ cdCredModal: true, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id,
-              ccNafath: c7.nafath === true, ccNafathId: c7.nafathId || '',
+              ccNafath: c7.nafath === true, ccNafathId: c7.nafathId || '', ccEst: c7.establishmentId || null,
               ccPortal: c7.govCenter || _CC_NO_PORTAL, ccLicExpiry: (L7 && !L7.missing && L7.expiry) ? String(L7.expiry).slice(0, 10) : '' });
           },
           copyUser: () => { try { navigator.clipboard && navigator.clipboard.writeText(c7.username || ''); } catch (e) {} this.toast('Username copied'); },
@@ -27606,7 +27653,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // The button said "Add credential" while the heading above it said "Edit credential" — the
       // same dialog telling you two different things about what the click will do.
       clDetailApi.cdCredSave = this.state.ccEditId ? 'Save changes' : 'Add credential';
-      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '', ccNafath: false, ccNafathId: '' });
+      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '', ccNafath: false, ccNafathId: '', ccEst: null });
+      // Offered only when there is a choice to make. One CR means every login is the client's, which
+      // is what a null establishment already says.
+      clDetailApi.ccCrShow = !!this.state.cdCredModal && _crIsMultiCred;
+      clDetailApi.ccCrChips = this.state.cdCredModal
+        ? this._crChips(clRow.realId, this.state.ccEst, (v9) => this.setState({ ccEst: v9, ccErr: '' })) : [];
       clDetailApi.closeCdCred = () => this.setState({ cdCredModal: false, ccEditId: null, ccLicExpiry: '' });
       // Which authority this login is for. Optional — plenty of client logins are not a government
       // portal at all — but when it IS set, the step doing work at that authority can point at it.
@@ -27749,6 +27801,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // Which authority this login belongs to. Declared here rather than guessed from the label,
           // so a step that names a portal can point straight at it — see the step drawer.
           govCenter: (st.ccPortal && st.ccPortal !== _CC_NO_PORTAL) ? st.ccPortal : null,
+          // WHICH CR this registration belongs to. Null is the main CR — the same meaning it has on
+          // every other record — and the server refuses an establishment belonging to someone else.
+          establishmentId: this._crValid(clRow.realId, st.ccEst),
           // Typed here, filed as the client's licence document for this portal — the only place an
           // expiry drives anything in this system.
           ...((st.ccLicExpiry || '').trim() && clDetailApi.ccLicAsk ? { licenceExpiry: st.ccLicExpiry.trim() } : {}),
@@ -37721,25 +37776,58 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const c9 = (this.state.wdVerifyFor === selId) ? this.state.wdCred : null;
           const shown9 = (this.state.wdCredShownFor === selId) ? (this.state.wdCredShown || '') : '';
           if (!c9 || !c9.portal) return { wdCredShow: false };
+          /**
+           * WHEN THE SERVER WILL NOT CHOOSE.
+           *
+           * A client is not one account per portal: each CR has its own registration, usually under
+           * a different Nafath holder, and two logins can sit against the client as a whole. The
+           * resolver narrows by the run's CR and refuses to guess past that, handing over the list.
+           * This panel used to drop that list and render "no login found", which reads as an empty
+           * vault when it holds exactly the login the officer needs.
+           *
+           * A picked choice becomes the panel, reveal and all, so identifying the right login and
+           * using it are one action rather than a trip to the vault.
+           */
+          const pick9 = (this.state.wdCredPickFor === selId) ? (this.state.wdCredPick || null) : null;
+          const cur9 = c9.found ? c9 : pick9;
+          const who9 = (x9) => x9.username
+            || (x9.nafath && x9.nafathId ? x9.nafathId + ' \u00b7 Nafath'
+              : x9.nafath ? 'Nafath, no number recorded' : 'no username recorded');
           return {
             wdCredShow: true,
             wdCredTitle: String(c9.portal).toUpperCase() + ' LOGIN',
-            wdCredFound: !!c9.found,
-            wdCredMissing: !c9.found,
+            wdCredFound: !!cur9,
+            wdCredMissing: !cur9,
             wdCredWhy: c9.reason || '',
-            wdCredLabel: c9.label || '',
-            wdCredUser: c9.username || 'no username recorded',
-            wdCredUrl: c9.url || '',
-            wdCredOpenUrl: () => c9.url && window.open(c9.url, '_blank', 'noopener'),
+            wdCredAmbiguous: !cur9 && !!c9.ambiguous,
+            wdCredChoices: (!cur9 && Array.isArray(c9.choices) ? c9.choices : []).map(x9 => ({
+              label: x9.label || '', cr: x9.cr || '', who: who9(x9),
+              use: () => this.setState({ wdCredPick: x9, wdCredPickFor: selId, wdCredShown: '' }),
+            })),
+            // The CR is named on the panel even when there was only one login: "which account am I
+            // in" is the question asked after a submission lands on the wrong establishment, and by
+            // then the answer is expensive.
+            wdCredCrShow: !!(cur9 && cur9.cr),
+            wdCredCr: (cur9 && cur9.cr) || '',
+            wdCredLabel: (cur9 && cur9.label) || '',
+            wdCredUser: cur9 ? who9(cur9) : '',
+            wdCredUserLabel: (cur9 && cur9.nafath) ? 'NAFATH ID' : 'USERNAME',
+            wdCredUrl: (cur9 && cur9.url) || '',
+            wdCredOpenUrl: () => cur9 && cur9.url && window.open(cur9.url, '_blank', 'noopener'),
             // Shown once, in place, and never written to state beyond this drawer.
             wdCredSecret: shown9,
             wdCredHasSecret: !!shown9,
             // A PRO officer is told it exists and who to ask, rather than given a button that 403s.
-            wdCredCanReveal: !!c9.canReveal && !shown9,
-            wdCredNoPermission: !c9.canReveal,
+            // There is nothing to reveal on a Nafath login — no password is kept, because the
+            // login is approved in the app on the holder's phone. Offering the button spent an
+            // audited admin reveal to display an empty string.
+            wdCredCanReveal: !!(cur9 && c9.canReveal && !cur9.nafath) && !shown9,
+            wdCredNafath: !!(cur9 && cur9.nafath),
+            wdCredNoPermission: !!cur9 && !cur9.nafath && !c9.canReveal,
             reveal: () => {
+              if (!cur9) return;
               const t9 = localStorage.getItem('stimespro:token');
-              fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + c9.id + '/reveal', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + cur9.id + '/reveal', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
                 .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
                 .then(({ ok, j9 }) => ok
                   ? this.setState({ wdCredShown: j9.password, wdCredShownFor: selId })
