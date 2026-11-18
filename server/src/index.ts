@@ -580,9 +580,15 @@ app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req,
 /**
  * Name somebody — or nobody — for one role on one client.
  *
- * `moveOpen` also moves that client's OPEN steps for the role. Off by default: reassigning live work
- * as a side effect of setting a preference takes a task off somebody's list while they are looking at
- * it. The count comes back either way, so the console can offer it as a separate, informed choice.
+ * OPEN WORK FOLLOWS THE OWNER. This used to leave live steps where they were and offer the move as
+ * a separate choice, on the reasoning that reassigning work as a side effect takes a task off
+ * somebody's list while they are looking at it. In practice the setting is used for a HANDOVER, and
+ * a handover that leaves twenty live steps on the previous officer's list is not one — the client
+ * screen then names an officer who is not doing the client's work. The count still comes back, so
+ * the console can say how much moved.
+ *
+ * Steps DELEGATED to a named person are untouched: delegation clears `assigneeRole`, so they do not
+ * match. That is the per-step override, and a client-level setting does not get to overrule it.
  */
 app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
@@ -609,13 +615,13 @@ app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requi
     if (userId) map[role] = userId; else delete map[role];
     await prisma.company.update({ where: { id: companyId }, data: { roleOwners: map } });
 
-    // Work already open for this client and this role. Reported always, moved only on request.
+    // Work already open for this client and this role, moved with it.
     const open = await prisma.workflowTask.findMany({
       where: { status: "active", assigneeRole: role, instance: { companyId } },
-      select: { id: true, title: true },
+      select: { id: true },
     });
     let moved = 0;
-    if (req.body?.moveOpen && userId && name) {
+    if (userId && name && open.length) {
       await prisma.workflowTask.updateMany({ where: { id: { in: open.map(t => t.id) } }, data: { assignee: name, assigneeId: userId } });
       moved = open.length;
     }

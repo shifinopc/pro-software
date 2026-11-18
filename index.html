@@ -2810,13 +2810,6 @@
                         <div class="fm-hint" style="color:#B8860B; margin:-2px 0 8px;">{{ r.staleNote }}</div>
                       </sc-if>
                     </sc-for>
-                    <sc-if value="{{ cdTeamMoveAsk }}" hint-placeholder-val="{{ false }}">
-                      <div style="margin-top:10px; background:#F5EEFF; border:1px solid #E4D4FA; border-radius:12px; padding:11px 10px; font-size:11px; color:#5B21B6; line-height:1.55; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <span style="flex:1; min-width:200px;">{{ cdTeamMoveNote }}</span>
-                        <span onClick="{{ cdTeamMoveYes }}" style="font-weight:700; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Move them</span>
-                        <span onClick="{{ cdTeamMoveNo }}" style="font-weight:600; color:#8C8899; cursor:pointer; white-space:nowrap;" style-hover="color:#7C00FF;">Leave them</span>
-                      </div>
-                    </sc-if>
                   </sc-if>
 
                   </div>
@@ -20097,23 +20090,22 @@ class Component extends DCLogic {
      * still eligible, and how much open work there is, are both the server's to know, and a screen
      * that guesses either would be confidently wrong exactly when it matters.
      */
-    this._setRoleOwner = (companyId, role, userId, name, clientName, moveOpen) => {
+    this._setRoleOwner = (companyId, role, userId, name, clientName) => {
       const t2 = localStorage.getItem('stimespro:token');
-      this.setState({ cdTeamOpen: null, ...(moveOpen ? { cdTeamMove: null } : {}) });
+      this.setState({ cdTeamOpen: null });
       fetch(API + '/api/companies/' + companyId + '/role-owners/' + role, { method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
-        body: JSON.stringify({ userId: userId || '', ...(moveOpen ? { moveOpen: true } : {}) }) })
+        body: JSON.stringify({ userId: userId || '' }) })
         .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
         .then(({ ok, j }) => {
           if (!ok) return this.toast((j && j.error) || 'That could not be saved', 'error');
+          // SAY WHAT MOVED. The open steps go with the role now, so the message has to report it:
+          // live work changing hands silently is how somebody finds a task gone from their list
+          // with no explanation.
           this.toast(userId
-            ? (moveOpen && j.moved ? (j.moved + ' open step' + (j.moved === 1 ? '' : 's') + ' moved to ' + name) : (name + ' now handles ' + String(role).replace(/_/g, ' ') + ' work for ' + clientName))
+            ? (name + ' now handles ' + String(role).replace(/_/g, ' ') + ' work for ' + clientName
+               + (j.moved ? ' — ' + j.moved + ' open step' + (j.moved === 1 ? '' : 's') + ' moved to them' : ''))
             : ('Back to whoever is free for ' + String(role).replace(/_/g, ' ') + ' work'));
-          // Only worth asking when there IS open work and somebody new was named.
-          this.setState({
-            cdTeam: { ...(this.state.cdTeam || {}) },
-            cdTeamMove: (!moveOpen && userId && j.openTasks) ? { companyId, role, ownerId: userId, ownerName: name, openTasks: j.openTasks } : null,
-          });
           delete (this.state.cdTeam || {})[companyId];
           this.setState({ cdTeam: { ...(this.state.cdTeam || {}) } });
           // The PRO officer column on the Clients list is resolved onto the COMPANY row, so without
@@ -26858,17 +26850,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             }),
           };
         });
-        // Offered after the change, never done as part of it: reassigning live work as a side effect
-        // takes a task off somebody's list while they are looking at it.
-        const ask9 = this.state.cdTeamMove || null;
-        clDetailApi.cdTeamMoveAsk = !!(ask9 && ask9.companyId === clRow.realId);
-        clDetailApi.cdTeamMoveNote = ask9
-          ? (ask9.openTasks + ' open step' + (ask9.openTasks === 1 ? '' : 's') + ' for this client '
-             + (ask9.openTasks === 1 ? 'is' : 'are') + ' still with whoever had ' + (ask9.openTasks === 1 ? 'it' : 'them')
-             + '. New work goes to ' + ask9.ownerName + ' either way.')
-          : '';
-        clDetailApi.cdTeamMoveYes = () => this._setRoleOwner(ask9.companyId, ask9.role, ask9.ownerId, ask9.ownerName, clRow.name, true);
-        clDetailApi.cdTeamMoveNo = () => this.setState({ cdTeamMove: null });
       })();
 
       // ── The people at this client ──
