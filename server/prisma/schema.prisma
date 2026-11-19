@@ -1125,6 +1125,16 @@ model WorkflowTemplate {
   triggerConfig Json? // { docType, days } etc.
   entityType    String             @default("generic") // visa | company_formation | ...
   graph         Json               @default("{\"nodes\":[],\"edges\":[]}")
+  /// SHARED WORK IS USUALLY A PROPERTY OF THE CASE, not of the client.
+  ///
+  /// The same client has routine PRO work that belongs to their own officer — an iqama renewal, a
+  /// licence — and a Business Setup whose thirty-eight steps are picked up by whoever is free. The
+  /// per-client switch cannot express that: it is one answer for everything that client runs.
+  ///
+  /// Set here, every run of THIS workflow queues its steps, for every client, while their renewals
+  /// keep going to the officer named on them. ORed with Company.queueWork, which stays for the
+  /// client whose work really is all shared.
+  queueWork     Boolean            @default(false)
   version       Int                @default(1)
   active        Boolean            @default(false)
   createdAt     String?

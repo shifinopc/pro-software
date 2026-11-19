@@ -8668,6 +8668,17 @@
               <div style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:{{ wfActiveColor }};"><span style="width:7px; height:7px; border-radius:99px; background:{{ wfActiveDot }};"></span>{{ wfActiveLabel }}
                 <div onClick="{{ wfToggleActive }}" title="Toggle Active / Draft" style="width:38px; height:22px; border-radius:99px; background:{{ wfToggleBg }}; position:relative; cursor:pointer; transition:background .15s;"><span style="position:absolute; top:2.5px; left:{{ wfKnobLeft }}; width:17px; height:17px; border-radius:99px; background:#fff; transition:left .15s;"></span></div>
               </div>
+              <!-- WHO THE STEPS BELONG TO, for this KIND of case rather than for a client.
+                   The same client has routine work that belongs to their own officer and a Business
+                   Setup that a team picks up between them; a per-client setting cannot say both. -->
+              <div onClick="{{ wfToggleQueue }}" title="{{ wfQueueTitle }}" style="display:flex; align-items:center; gap:7px; cursor:pointer; padding:5px 10px; border-radius:99px; background:{{ wfQueueChipBg }}; border:1px solid {{ wfQueueChipBd }};">
+                <span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ wfQueueBd }}; background:{{ wfQueueBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <sc-if value="{{ wfQueueWork }}" hint-placeholder-val="{{ false }}">
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                  </sc-if>
+                </span>
+                <span style="font-size:10px; font-weight:700; color:{{ wfQueueFg }}; white-space:nowrap;">Shared work</span>
+              </div>
               <!-- What makes this workflow start. Until now the trigger was fixed at creation and the
                    document-type binding could not be set at all, so a workflow you built yourself
                    could never fire on its own. -->
@@ -33582,6 +33593,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // PERSISTS via PUT (was a hardcoded, always-green, no-op switch — a Draft template could never be
     // activated from the UI). Only orderable/active templates surface in the New-task workflow picker.
     const _wfCanvasActive = !!(_wfCanvasTpl && _wfCanvasTpl.active);
+    const _wfCanvasQueue = !!(_wfCanvasTpl && _wfCanvasTpl.queueWork);
     const wfToggleActive = () => {
       const tpl = _wfCanvasTpl || (Array.isArray(wfTpls) && wfTpls[0]);
       if (!tpl || !tpl.id) return this.toast('Select one of your workflows first', 'error');
@@ -33738,6 +33750,34 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ? 'Trigger: ' + (_WF_TRIG_LABEL[_wfCanvasTpl.trigger] || _wfCanvasTpl.trigger || 'Manual') + ' · Entity: ' + (_wfCanvasTpl.entityType || 'generic') + ' · ' + ((wfCanvasGraph && Array.isArray(wfCanvasGraph.nodes)) ? wfCanvasGraph.nodes.length : 0) + ' steps'
         : 'Trigger: Manual / staff-initiated · Entity: visa · 6 steps',
       wfToggleActive,
+      // Steps of THIS workflow go to the role's queue for every client, instead of to the officer
+      // named on each one. The client-level switch stays for the client whose work is all shared;
+      // either is enough, which is what lets one client have both.
+      wfQueueWork: _wfCanvasQueue,
+      wfQueueBd: _wfCanvasQueue ? '#7C00FF' : '#C9C4D6',
+      wfQueueBg: _wfCanvasQueue ? '#7C00FF' : 'transparent',
+      wfQueueFg: _wfCanvasQueue ? '#7C00FF' : '#8C8899',
+      wfQueueChipBg: _wfCanvasQueue ? '#F5EEFF' : 'transparent',
+      wfQueueChipBd: _wfCanvasQueue ? '#E4D3FB' : '#E7E3F0',
+      wfQueueTitle: _wfCanvasQueue
+        ? 'Every step of this workflow waits in its role’s queue for whoever picks it up. Click to send them to the officer named on each client instead.'
+        : 'Steps go to the officer named on each client. Click to share them — the whole team sees each step and claims the ones they take.',
+      wfToggleQueue: () => {
+        const tpl = _wfCanvasTpl || (Array.isArray(wfTpls) && wfTpls[0]);
+        if (!tpl || !tpl.id) return this.toast('Select one of your workflows first', 'error');
+        const next = !tpl.queueWork;
+        const API = this._apiBase || 'http://localhost:4100';
+        const tok = localStorage.getItem('stimespro:token');
+        fetch(API + '/api/workflow/templates/' + tpl.id, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify({ queueWork: next }) })
+          .then(r => { if (!r.ok) return r.json().then(j => this.toast(j.error || 'Could not update', 'error')).catch(() => this.toast('Could not update'));
+            // Only NEW steps follow this. Said out loud because the opposite is the obvious guess,
+            // and somebody turning it on mid-case needs to know the open steps did not move.
+            this.toast(next
+              ? 'Steps of this workflow go to the role queue now — open steps stay where they are'
+              : 'Steps of this workflow go to the officer named on each client again');
+            this._reloadWorkflows && this._reloadWorkflows(); })
+          .catch(() => this.toast('Server unreachable'));
+      },
       wfActiveLabel: _wfCanvasActive ? 'Active' : 'Draft',
       wfActiveColor: _wfCanvasActive ? '#0E9355' : '#8C8899',
       wfActiveDot: _wfCanvasActive ? '#12B76A' : '#C6BEDA',

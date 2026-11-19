@@ -123,10 +123,30 @@ export async function clientRoleOwner(companyId: string | null | undefined, role
   }).catch(() => null);
 }
 
+/**
+ * Is this step's work shared — the client's, this workflow's, or neither?
+ *
+ * TWO FLAGS, because they answer different questions. A client can be run entirely by a shared
+ * desk (Company.queueWork), and a KIND OF CASE can be shared for everybody
+ * (WorkflowTemplate.queueWork) — Business Setup is thirty-eight steps nobody runs alone, while the
+ * same client's iqama renewals still belong to the officer named on them. Either one is enough.
+ */
+export async function workIsShared(companyId?: string | null, templateId?: string | null): Promise<boolean> {
+  if (templateId) {
+    const tpl = await prisma.workflowTemplate.findUnique({ where: { id: String(templateId) }, select: { queueWork: true } }).catch(() => null);
+    if (tpl?.queueWork) return true;
+  }
+  if (companyId) {
+    const co = await prisma.company.findUnique({ where: { id: String(companyId) }, select: { queueWork: true } }).catch(() => null);
+    if (co?.queueWork) return true;
+  }
+  return false;
+}
+
 export async function pickAssignee(
   role: string,
   /** What the step is about, so a routing rule can say who is right for it rather than who is free. */
-  facts?: import("./routing.js").RoutingFacts & { companyId?: string | null },
+  facts?: import("./routing.js").RoutingFacts & { companyId?: string | null; templateId?: string | null },
 ): Promise<{ id: string; name: string; email: string; why?: string } | null> {
   // A routing rule refines this decision; it never invents one. Nothing matching falls through to
   // the client's own officer below, which is where the answer normally comes from.
@@ -163,6 +183,11 @@ export async function pickAssignee(
   //
   // OUTSIDE the routing block on purpose. It reads a fact about the client, not a rule, so a caller
   // that passes no routing facts — the job that re-tries orphaned steps — must still honour it.
+  // SHARED WORK SKIPS THE OWNER, AND ONLY THE OWNER. A routing rule above still wins: "MISA
+  // filings go to Fahad" is a deliberate statement about a kind of work, and sharing the rest of
+  // the case is no reason to overrule it.
+  if (await workIsShared(facts?.companyId, facts?.templateId)) return null;
+
   const owner = await clientRoleOwner(facts?.companyId, role);
   return owner ? { ...owner, why: `this client's ${role.replace(/_/g, " ")}` } : null;
 }
@@ -1019,6 +1044,9 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // The step's own facts, so a rule can route on the authority it is done at or the country
         // the run belongs to rather than only on who happens to be free this minute.
         const picked = role ? await pickAssignee(role, {
+          // Which workflow this is, so a case that is shared for every client — Business Setup —
+          // queues its steps while that client's renewals still go to their own officer.
+          templateId: inst.templateId ?? null,
           govCenter: (typeof c.govCenter === "string" && c.govCenter.trim()) ? c.govCenter.trim() : null,
           country: typeof vars.country === "string" ? vars.country : null,
           service: typeof vars.service === "string" ? vars.service : null,
@@ -1043,11 +1071,9 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           // DELIBERATE IS NOT BROKEN. A client set to shared work has no owner on its steps ON
           // PURPOSE, so the log says which it is and no alert is raised — an alert per step on a
           // thirty-eight step run is how a channel gets muted and the real ones stop being read.
-          const shared = inst.companyId
-            ? !!(await prisma.company.findUnique({ where: { id: inst.companyId }, select: { queueWork: true } }).catch(() => null))?.queueWork
-            : false;
+          const shared = await workIsShared(inst.companyId, inst.templateId);
           const why = shared
-            ? `${inst.clientName ?? "this client"} is set to shared work, so it is in the ${role.replace(/_/g, " ")} queue for whoever picks it up`
+            ? `this work is shared, so it is in the ${role.replace(/_/g, " ")} queue for whoever picks it up`
             : anyone === 0
               ? `nobody holds the role "${role}" on this installation`
               : `no ${role.replace(/_/g, " ")} is named on ${inst.clientName ?? "this client"}, so it is waiting in the ${role.replace(/_/g, " ")} queue`;
@@ -2422,8 +2448,11 @@ async function openTasksOf(templateId: string) {
 
 R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
-    const { name, description, trigger, triggerConfig, entityType, graph, active, version, country } = req.body ?? {};
+    const { name, description, trigger, triggerConfig, entityType, graph, active, version, country, queueWork } = req.body ?? {};
     const data: any = {};
+    // Keyed on PRESENCE, like every other field here: a caller that does not mention it leaves the
+    // setting alone rather than quietly turning it off.
+    if (queueWork !== undefined) data.queueWork = !!queueWork;
     if (name !== undefined) data.name = String(name).trim();
     if (description !== undefined) data.description = description;
     if (trigger !== undefined) data.trigger = trigger;
