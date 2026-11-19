@@ -2811,6 +2811,22 @@
                         <div class="fm-hint" style="color:#B8860B; margin:-2px 0 8px;">{{ r.staleNote }}</div>
                       </sc-if>
                     </sc-for>
+                    <!-- OWNING THE CLIENT AND DOING THE STEPS ARE TWO DIFFERENT THINGS.
+                         Naming an officer above hands them every step of every run. A Business
+                         Setup is thirty-eight steps that whoever is free picks up, never the same
+                         officer twice - and the only way to get that used to be naming nobody,
+                         which threw away who owns the relationship as well. -->
+                    <div onClick="{{ cdQueueToggle }}" class="fm-hint" style="display:flex; align-items:flex-start; gap:7px; cursor:pointer; margin-top:4px;">
+                      <span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ cdQueueBd }}; background:{{ cdQueueBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px;">
+                        <sc-if value="{{ cdQueueWork }}" hint-placeholder-val="{{ false }}">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                        </sc-if>
+                      </span>
+                      <span>Share the work &mdash; steps go to the queue, not to the people named above</span>
+                    </div>
+                    <sc-if value="{{ cdQueueWork }}" hint-placeholder-val="{{ false }}">
+                      <div class="fm-hint" style="margin:4px 0 0 20px;">Every holder of the role sees each step and claims the ones they take. The names above still say who owns this client.</div>
+                    </sc-if>
                   </sc-if>
 
                   </div>
@@ -6350,6 +6366,16 @@
           </div>
           <span onClick="{{ scRefresh }}" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Check again</span>
         </section>
+
+        <sc-if value="{{ scLoading }}" hint-placeholder-val="{{ false }}">
+          <section class="pg-card" style="padding:26px 16px; text-align:center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.4" stroke-linecap="round">
+              <path d="M12 3a9 9 0 1 0 9 9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/></path>
+            </svg>
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700; margin-top:9px;">Checking the setup</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">Reading clients, services, rules and workflows to find what is missing.</div>
+          </section>
+        </sc-if>
 
         <sc-if value="{{ scAllClear }}" hint-placeholder-val="{{ false }}">
           <section class="pg-card" style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .07s both; padding:28px 15px; text-align:center;">
@@ -12120,19 +12146,26 @@
                      own that appears rather than a sixth control every line carries. It prints on
                      the client's copy and travels to the officer's task, so it is not a note. -->
                 <sc-if value="{{ l.needsCountry }}" hint-placeholder-val="{{ false }}">
-                  <div data-dd style="position:relative; display:flex; align-items:center; gap:8px; padding:0 0 2px 2px;">
+                  <div data-dd style="display:flex; align-items:center; gap:8px; padding:0 0 2px 2px;">
                     <span style="font-size:9px; font-weight:800; letter-spacing:.05em; color:#A9A6B4;">COUNTRY</span>
-                    <span onClick="{{ l.cdToggle }}" title="Where the company is acquired or formed" style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; color:{{ l.countryFg }}; background:#FCFBFE; border:1px solid #DDD9E6; border-radius:99px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#7C00FF;">
-                      {{ l.countryLabel }}
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    <!-- The panel hangs off THE PILL, not off the row: `.qc-dd` is left:0 right:0 of
+                         whatever is positioned above it, so anchoring it to the row meant nudging it
+                         across by the width of the word COUNTRY and having it stretch to the far
+                         edge. A wrapper puts it under the thing it belongs to and survives the label
+                         being reworded. -->
+                    <span style="position:relative; display:inline-flex;">
+                      <span onClick="{{ l.cdToggle }}" title="Where the company is acquired or formed" style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; color:{{ l.countryFg }}; background:#FCFBFE; border:1px solid #DDD9E6; border-radius:99px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                        {{ l.countryLabel }}
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                      </span>
+                      <sc-if value="{{ l.cdOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd class="qc-dd" style="min-width:170px;">
+                          <sc-for list="{{ l.countryOpts }}" as="c" hint-placeholder-count="8">
+                            <div onClick="{{ c.pick }}" class="fm-opt" style="font-weight:{{ c.weight }}; color:{{ c.color }};"><span>{{ c.label }}</span></div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
                     </span>
-                    <sc-if value="{{ l.cdOpen }}" hint-placeholder-val="{{ false }}">
-                      <div data-dd class="qc-dd" style="left:66px;">
-                        <sc-for list="{{ l.countryOpts }}" as="c" hint-placeholder-count="8">
-                          <div onClick="{{ c.pick }}" class="fm-opt" style="font-weight:{{ c.weight }}; color:{{ c.color }};"><span>{{ c.label }}</span></div>
-                        </sc-for>
-                      </div>
-                    </sc-if>
                   </div>
                 </sc-if>
                 </div>
@@ -20100,6 +20133,34 @@ class Component extends DCLogic {
         .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     };
     /**
+     * Shared work on or off for one client: the owners stay named, the steps go to the queue.
+     *
+     * Drops the cached team row so the panel re-reads it, for the same reason _setRoleOwner does:
+     * how much work moved is the server's to know, and a count guessed here would be wrong exactly
+     * when somebody is checking it.
+     */
+    this._setQueueWork = (companyId, on, clientName) => {
+      const t2 = localStorage.getItem('stimespro:token');
+      fetch(API + '/api/companies/' + companyId + '/queue-work', { method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) },
+        body: JSON.stringify({ on: !!on }) })
+        .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, j })))
+        .then(({ ok, j }) => {
+          if (!ok) return this.toast((j && j.error) || 'That could not be saved', 'error');
+          // SAY WHAT MOVED. Turning this on takes steps off somebody's list, and work changing
+          // hands silently is how an officer finds a task gone with no explanation.
+          this.toast(on
+            ? ('Work for ' + clientName + ' goes to the queue now'
+               + (j.released ? ' — ' + j.released + ' open step' + (j.released === 1 ? '' : 's') + ' returned to it' : ''))
+            : ('Work for ' + clientName + ' goes to the people named on the client again'));
+          const q9 = { ...(this.state.cdQueue || {}) }; q9[companyId] = !!on;
+          const team9 = { ...(this.state.cdTeam || {}) }; delete team9[companyId];
+          this.setState({ cdQueue: q9, cdTeam: team9 });
+          this._opReload && this._opReload('tasks', 'tasksData');
+        })
+        .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
+    /**
      * Name somebody — or nobody — for one role on one client.
      *
      * Re-reads the row from the server afterwards rather than patching state: whether the person is
@@ -26845,12 +26906,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/role-owners',
             { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
             .then(r9 => (r9.ok ? r9.json() : null))
-            .then(j9 => { this.state.cdTeamLoading = false; if (j9 && j9.roles) this.setState({ cdTeam: { ...(this.state.cdTeam || {}), [clRow.realId]: j9.roles } }); })
+            .then(j9 => { this.state.cdTeamLoading = false; if (j9 && j9.roles) this.setState({
+              cdTeam: { ...(this.state.cdTeam || {}), [clRow.realId]: j9.roles },
+              cdQueue: { ...(this.state.cdQueue || {}), [clRow.realId]: !!j9.queueWork },
+            }); })
             .catch(() => { this.state.cdTeamLoading = false; });
         }
         const rows9 = Array.isArray(team9) ? team9 : [];
         const pretty9 = (r9) => String(r9 || '').replace(/_/g, ' ').replace(/\b\w/g, c9 => c9.toUpperCase());
         clDetailApi.cdHasTeam = rows9.length > 0;
+        const q9 = !!((this.state.cdQueue || {})[clRow.realId]);
+        clDetailApi.cdQueueWork = q9;
+        clDetailApi.cdQueueBd = q9 ? '#7C00FF' : '#DDD9E6';
+        clDetailApi.cdQueueBg = q9 ? '#7C00FF' : '#fff';
+        clDetailApi.cdQueueToggle = () => this._setQueueWork(clRow.realId, !q9, clRow.name);
         clDetailApi.cdTeam = rows9.map(r9 => {
           const openKey9 = clRow.realId + ':' + r9.role;
           const on9 = this.state.cdTeamOpen === openKey9;
@@ -32009,12 +32078,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const deptList = _deptSaved || (_authed ? [] : DEPT_SEED);
     const _deptCount = (nm9) => (Array.isArray(this.state.employeesData) ? this.state.employeesData : [])
       .filter(e9 => !e9.archived && ((e9.customData && e9.customData.department) || '') === nm9).length;
-    const _deptSave = (items9, msg9) => {
-      const t9 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/settings/departments', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) }, body: JSON.stringify({ items: items9 }) })
-        .then(r9 => { if (!r9.ok) return this.toast('Could not save departments', 'error'); this.setState({ deptData: { items: items9 } }); if (msg9) this.toast(msg9); })
-        .catch(() => this.toast('Server unreachable', 'error'));
+    /**
+     * A NAME LIST KEPT IN ONE AppSetting — departments, the countries a company can be acquired in,
+     * and whatever is next. Each one had written out its own copy of this: same PUT, same token,
+     * same toast, same state shape, differing only in the key and the wording of the failure.
+     */
+    const _saveSettingList9 = (key9, stateKey9, items9, msg9, fail9) => {
+      const tk9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/settings/' + key9, { method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(tk9 ? { Authorization: 'Bearer ' + tk9 } : {}) },
+        body: JSON.stringify({ items: items9 }) })
+        .then(r9 => { if (!r9.ok) return this.toast(fail9, 'error');
+          this.setState({ [stateKey9]: { items: items9 } }); if (msg9) this.toast(msg9); })
+        .catch(() => this.toast('Server unreachable — nothing was saved', 'error'));
     };
+    const _deptSave = (items9, msg9) => _saveSettingList9('departments', 'deptData', items9, msg9, 'Could not save departments');
     const departmentsApi = {
       deptRows: deptList.map((nm9, i9) => {
         const n9 = _deptCount(nm9);
@@ -40183,6 +40261,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           ? 'Everything this screen checks is set up'
           : _sc.totals.broken + ' broken · ' + _sc.totals.degraded + ' degraded · ' + _sc.totals.incomplete + ' incomplete',
       scAllClear: !!_sc && _sc.findings.length === 0,
+      // NOTHING ON SCREEN IS NOT AN ANSWER. The audit walks most of the database and takes several
+      // seconds; until it answered, this screen was a heading over empty space — indistinguishable
+      // from a clean setup, or from a page that had failed. Keyed on "no reply yet" rather than a
+      // request flag, so "Check again" (which leaves the old findings up) does not blank them.
+      scLoading: !_sc,
       scRefresh: () => { if (this._loadSetupCheck) this._loadSetupCheck(); this.toast('Checked again'); },
       scGroups: ['broken', 'degraded', 'incomplete'].map(sev => {
         const tone = _scTone[sev];
@@ -46420,32 +46503,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ? this.state.acqCountryData.items.map(x9 => String(x9 || '').trim()).filter(Boolean) : null;
       return (saved9 && saved9.length) ? saved9 : ACQ_COUNTRY_SEED9;
     })();
-    const _acqCountriesSave9 = (items9, msg9) => {
-      const t9 = localStorage.getItem('stimespro:token');
-      fetch((this._apiBase || 'http://localhost:4100') + '/api/settings/acquisitionCountries', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
-        body: JSON.stringify({ items: items9 }) })
-        .then(r9 => { if (!r9.ok) return this.toast('Could not save the country list', 'error');
-          this.setState({ acqCountryData: { items: items9 } }); if (msg9) this.toast(msg9); })
-        .catch(() => this.toast('Server unreachable — the list was not saved', 'error'));
-    };
-    const _qcKindMinor = (want) => qcLines.reduce((a9, l9) => {
-      if (_qcKindOf(l9[3]) !== want) return a9;
-      return a9 + Math.round((parseFloat(l9[1]) || 0) * Math.round((parseFloat(l9[2]) || 0) * 100));
-    }, 0);
-    const qcProfMinor = _qcKindMinor('prof');
-    const qcGovMinor = _qcKindMinor('gov');
-    /**
-     * THE FOREIGN COMPANY IS A THIRD KIND, not a professional fee.
-     *
-     * Seven of the firm's own quotations carry one - "Indian Company takeover", "Company Acquire
-     * Oman", "US Company Formation" - at 10,000 to 16,000 beside a separate professional fee, and
-     * the terms bill it 100% up front because it leaves for a foreign agent before the Saudi work
-     * begins. Marked as a professional fee it would be billed at 50/30/20 instead, which on
-     * 15,000 + 16,000 collects 15,500 on signing where the terms ask for 23,500.
-     */
-    const qcForeignMinor = _qcKindMinor('foreign');
-    const qcNetMinor = Math.round(qcSubtotalN * 100);
+    const _acqCountriesSave9 = (items9, msg9) => _saveSettingList9('acquisitionCountries', 'acqCountryData', items9, msg9, 'Could not save the country list');
     // Saved sets live in one AppSetting, the same shape and the same place as the role list.
     const _payTermSets = (() => {
       const v9 = this.state.payTermSets;
@@ -46519,26 +46577,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const QC_BASIS = ['prof', 'gov', 'foreign', 'total'];
     const _qcBasisOf = (bb) => (QC_BASIS.indexOf(bb) >= 0 ? bb : 'total');
     // label, background, text, border, what it is a percentage OF, and its name in the summary.
+    //
+    // THE FOREIGN COMPANY IS A THIRD KIND, not a professional fee. Seven of the firm's own
+    // quotations carry one - "Indian Company takeover", "Company Acquire Oman", "US Company
+    // Formation" - at 10,000 to 16,000 beside a separate professional fee, and the terms bill it
+    // 100% up front because it leaves for a foreign agent before the Saudi work begins. Marked as
+    // a professional fee it would be billed at 50/30/20 instead, which on 15,000 + 16,000 collects
+    // 15,500 on signing where the terms ask for 23,500.
     const QC_BASIS_LOOK = {
       prof: ['FEES', '#F7F3FD', '#7C00FF', '#E6DAFB', 'the professional fees', 'Professional fees'],
       gov: ['GOV', '#FFF7E6', '#B4690E', '#F3D8A6', 'the government fees', 'Government fees'],
       foreign: ['ACQ', '#EAF4FF', '#1667B8', '#C3DDF7', 'the foreign company fees', 'Foreign company'],
       total: ['TOTAL', '#F2F4F7', '#4B4458', '#E0E2E7', 'the whole quotation', 'Whole quotation'],
-    };
-    const _qcBaseMinor = (bb) => {
-      const k9 = _qcBasisOf(bb);
-      // With no priced line yet there is nothing to split, so every basis shows against the total -
-      // otherwise a set applied before the lines are typed reads as "SAR 0.00" at every stage and
-      // looks broken. Once lines exist, a basis of zero is a true answer and is shown as zero.
-      if (!qcNetMinor) return 0;
-      if (k9 === 'gov') return qcGovMinor;
-      if (k9 === 'foreign') return qcForeignMinor;
-      // Straight through, with no "nothing marked professional? use the total" fallback. Every line
-      // is one of the three kinds, so the three always sum to the net - and the fallback made the
-      // dialog disagree with the renderer, which has never had one, on a quotation that is all
-      // government or all foreign. A base of zero is a true answer.
-      if (k9 === 'prof') return qcProfMinor;
-      return qcNetMinor;
     };
     // Next number = highest issued + 1 (server-confirmed), not `339 + how many exist` — a count
     // repeats itself the moment anything is deleted.
@@ -47104,7 +47154,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         remove: () => _qcEdit9(h => ({ qcLines: h.lines.length > 1 ? h.lines.filter((_, j) => j !== i) : h.lines, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes })),
       })),
       // ── PAYMENT TERMS ────────────────────────────────────────────────────────────────────
-      qcTermsAny: qcTerms.length > 0,
       qcTermsEmpty: qcTerms.length === 0,
       qcTermsEmptyNote: _payTermSets.length
         ? 'No stages \u2014 the client is asked for the full amount on signing. Apply a saved set above, or add stages.'
