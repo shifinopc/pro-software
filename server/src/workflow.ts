@@ -105,7 +105,12 @@ export async function resolveStaffByName(name: string | null | undefined): Promi
 export async function clientRoleOwner(companyId: string | null | undefined, role: string):
   Promise<{ id: string; name: string; email: string } | null> {
   if (!companyId || !role) return null;
-  const co = await prisma.company.findUnique({ where: { id: String(companyId) }, select: { roleOwners: true } }).catch(() => null);
+  const co = await prisma.company.findUnique({ where: { id: String(companyId) }, select: { roleOwners: true, queueWork: true } }).catch(() => null);
+  // SHARED WORK IS A CHOICE, not a missing officer. With this set the client still has an owner on
+  // record — the relationship, the person the client asks for — but the steps go to the role's
+  // queue for whoever picks them up. Business Setup is thirty-eight steps and no firm runs them all
+  // through one officer; the only way to get that before was to name nobody at all.
+  if (co?.queueWork) return null;
   const map: any = (co?.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners : {};
   const userId = String(map[role] ?? "").trim();
   if (!userId) return null;
@@ -1035,11 +1040,19 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           // staffing problem that did not exist — and the fix it implied (hire someone) was not the
           // fix it needed (name the officer on the client).
           const anyone = await prisma.user.count({ where: { roleId: role, status: "active", type: "staff" } });
-          const why = anyone === 0
-            ? `nobody holds the role "${role}" on this installation`
-            : `no ${role.replace(/_/g, " ")} is named on ${inst.clientName ?? "this client"}, so it is waiting in the ${role.replace(/_/g, " ")} queue`;
+          // DELIBERATE IS NOT BROKEN. A client set to shared work has no owner on its steps ON
+          // PURPOSE, so the log says which it is and no alert is raised — an alert per step on a
+          // thirty-eight step run is how a channel gets muted and the real ones stop being read.
+          const shared = inst.companyId
+            ? !!(await prisma.company.findUnique({ where: { id: inst.companyId }, select: { queueWork: true } }).catch(() => null))?.queueWork
+            : false;
+          const why = shared
+            ? `${inst.clientName ?? "this client"} is set to shared work, so it is in the ${role.replace(/_/g, " ")} queue for whoever picks it up`
+            : anyone === 0
+              ? `nobody holds the role "${role}" on this installation`
+              : `no ${role.replace(/_/g, " ")} is named on ${inst.clientName ?? "this client"}, so it is waiting in the ${role.replace(/_/g, " ")} queue`;
           await log("step.unassigned", nodeId, `${node.label ?? nodeId}: ${why}`);
-          logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — ${why}${inst.clientName ? ` (${inst.clientName})` : ""}` });
+          if (!shared) logActivity({ type: "alert", message: `⚠ "${node.label ?? nodeId}" has no owner — ${why}${inst.clientName ? ` (${inst.clientName})` : ""}` });
         }
         // WHY THIS LANDED ON THEM. routing.ts states the principle — an assignment engine nobody can
         // interrogate is one people stop trusting the first time it surprises them — and then this

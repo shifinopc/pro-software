@@ -532,7 +532,7 @@ app.put("/api/companies/:id/establishments/:eid", requireAuth, requireStaff, req
 });
 app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req, res) => {
   try {
-    const co = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true, name: true, roleOwners: true } });
+    const co = await prisma.company.findUnique({ where: { id: String(req.params.id) }, select: { id: true, name: true, roleOwners: true, queueWork: true } });
     if (!co) return res.status(404).json({ error: "No such client" });
 
     const templates = await prisma.workflowTemplate.findMany({ where: { active: true, retired: false }, select: { graph: true } });
@@ -574,7 +574,7 @@ app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req,
         stale: !!(chosenId && !chosen),
       };
     });
-    res.json({ companyId: co.id, roles: out });
+    res.json({ companyId: co.id, queueWork: !!co.queueWork, roles: out });
   } catch (e: any) {
     fail(res, 400, e, req.path);
   }
@@ -593,12 +593,62 @@ app.get("/api/companies/:id/role-owners", requireAuth, requireStaff, async (req,
  * Steps DELEGATED to a named person are untouched: delegation clears `assigneeRole`, so they do not
  * match. That is the per-step override, and a client-level setting does not get to overrule it.
  */
+/**
+ * SHARED WORK: the client keeps an owner, the steps go to the queue.
+ *
+ * Naming an officer hands them every step of every run for that client, which is right for a client
+ * one person carries and wrong for a case like Business Setup — thirty-eight steps that different
+ * officers pick up as they come free, never the same two the same way. The only way to get that was
+ * to name nobody, which also threw away who owns the relationship. This separates the two.
+ *
+ * TURNING IT ON RELEASES WORK ALREADY SITTING WITH THE OWNERS, or the setting would change nothing
+ * about the case in front of you and read as broken. Only steps held by the named owner of their
+ * own role are released: a step DELEGATED to somebody (no `assigneeRole`) is a per-step decision
+ * this must not overrule, and a step another officer is holding is theirs.
+ *
+ * Turning it off does NOT sweep the queue back onto the owners. Work somebody has claimed is work
+ * they are doing, and the switch is about where NEW steps go.
+ */
+app.put("/api/companies/:id/queue-work", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  try {
+    const companyId = String(req.params.id);
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, roleOwners: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+    const on = req.body?.on === true;
+    await prisma.company.update({ where: { id: companyId }, data: { queueWork: on } });
+
+    let released = 0;
+    if (on) {
+      const map: any = (co.roleOwners && typeof co.roleOwners === "object") ? co.roleOwners : {};
+      const owned = Object.entries(map)
+        .map(([role, uid]) => ({ role, uid: String(uid ?? "").trim() }))
+        .filter(x => x.uid);
+      for (const { role, uid } of owned) {
+        const r = await prisma.workflowTask.updateMany({
+          where: { status: "active", assigneeRole: role, assigneeId: uid, instance: { companyId } },
+          data: { assignee: null, assigneeId: null },
+        });
+        released += r.count;
+      }
+    }
+
+    await logAudit({
+      action: on ? "client.queue_work_on" : "client.queue_work_off",
+      actorId: a?.sub, target: co.name,
+      detail: on ? `shared work${released ? ` · ${released} open step(s) returned to the queue` : ""}` : "work goes to the named owners again",
+      ip: clientIp(req),
+    });
+    res.json({ ok: true, queueWork: on, released });
+  } catch (e: any) { res.status(400).json({ error: e?.message ?? "Could not change that" }); }
+});
+
 app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   try {
     const companyId = String(req.params.id);
     const role = String(req.params.role).trim();
-    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, roleOwners: true } });
+    const co = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, roleOwners: true, queueWork: true } });
     if (!co) return res.status(404).json({ error: "No such client" });
     if (!role) return res.status(400).json({ error: "No role given" });
 
@@ -624,7 +674,10 @@ app.put("/api/companies/:id/role-owners/:role", requireAuth, requireStaff, requi
       select: { id: true },
     });
     let moved = 0;
-    if (userId && name && open.length) {
+    // NOT ON A SHARED CLIENT. There the owner is a record of the relationship and the steps belong
+    // to the queue on purpose, so sweeping them onto the person just named would undo the setting
+    // in the act of using it.
+    if (userId && name && open.length && !co.queueWork) {
       await prisma.workflowTask.updateMany({ where: { id: { in: open.map(t => t.id) } }, data: { assignee: name, assigneeId: userId } });
       moved = open.length;
     }

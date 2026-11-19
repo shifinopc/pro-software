@@ -116,11 +116,12 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     if (!svc) out.unmatched.push(line.name);
     // Units are quantities of the same service (3 × Iqama Renewal), so they get their own tasks —
     // one row per thing an officer has to actually go and do.
+    // IN THE TITLE, not only in a variable. Whoever picks this up off a queue sees the title and
+    // nothing else, and "Company Acquisition" without the country is not a job anybody can start.
+    // Outside the per-unit loop: it is a property of the line, not of the copy being made.
+    const where = line.country ? ` — ${line.country}` : "";
     for (let i = 0; i < line.units; i++) {
       const suffix = line.units > 1 ? ` (${i + 1}/${line.units})` : "";
-      // IN THE TITLE, not only in a variable. Whoever picks this up off a queue sees the title and
-      // nothing else, and "Company Acquisition" without the country is not a job anybody can start.
-      const where = line.country ? ` — ${line.country}` : "";
       const title = `${svc?.name ?? line.name}${where}${suffix} — ${q.clientName ?? "Client"}`;
       const task = await prisma.task.create({
         data: {
