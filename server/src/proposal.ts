@@ -445,6 +445,15 @@ export async function proposalData(
       "milestone.pct": pct ? String(pct) : "",
       "milestone.of": of,
       "milestone.amount": money(amountMinor),
+      // WHAT THE STAGE ASKS FOR, as the firm wants it printed: the percentage, not the money.
+      //
+      // The amount is derivable from the total and the percentage is not — "50% of professional
+      // fees" survives a renegotiated figure, where "SAR 30,000/-" has to be re-agreed with it.
+      // Both templates printed the money, one of them twice over ("SAR 30,000/- (50%)").
+      //
+      // Falls back to the amount for a stage agreed as a flat sum, which has no percentage to
+      // print: an empty share would leave a line reading only "Upon signing of the agreement".
+      "milestone.share": pct ? `${pct}%` : `SAR ${money(amountMinor)}/-`,
     };
   });
 
