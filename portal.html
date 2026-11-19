@@ -6,6 +6,7 @@
 <!-- Serve React / ReactDOM / Babel from local /vendor instead of unpkg.com (offline-safe). -->
 <script>window.__resources=Object.assign(window.__resources||{},{'https://unpkg.com/react@18.3.1/umd/react.production.min.js':'/vendor/react.production.min.js','https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js':'/vendor/react-dom.production.min.js','https://unpkg.com/@babel/standalone@7.29.0/babel.min.js':'/vendor/babel.min.js'});</script>
 <script src="/support.js"></script>
+<script src="/login-why.js"></script>
 <script>
 (function () {
   var APP = "portal";
@@ -4603,9 +4604,20 @@ class Component extends DCLogic {
         // WIRED: real authentication against the STIMES PRO API (portal user accounts).
         const API = window.STIMES_API || 'http://localhost:4100';
         fetch(API + '/api/auth/portal-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: s.lPass }) })
-          .then((r) => r.json().catch(() => ({})).then((d) => ({ ok: r.ok, d: d })))
-          .then(({ ok, d }) => {
-            if (!ok || !d.token) return this.setState({ lError: (d && d.error) || 'Invalid credentials — check your email and password' });
+          .then((r) => r.json().catch(() => ({})).then((d) => ({ ok: r.ok, st: r.status, reset: r.headers.get('ratelimit-reset'), d: d })))
+          .then(({ ok, st, reset, d }) => {
+            // WHAT WENT WRONG IS NOT ALWAYS THE PASSWORD.
+            //
+            // Every failure here read as "Invalid credentials", so three separate faults wore the
+            // same face: a database the API could not reach (500), a rate limit already spent on
+            // earlier attempts (429), and an actually wrong password (401). Hours went into the
+            // first two being retyped as though they were the third.
+            //
+            // A 5xx is the server's own fault and worth saying so plainly. A 429 already arrives
+            // with the server's words; what it lacks is WHEN, and the standard RateLimit-Reset
+            // header carries that — "try again later" with no duration is the vagueness that makes
+            // somebody keep pressing, which is what spends the limit in the first place.
+            if (!ok || !d.token) return this.setState({ lError: _loginWhy9(st, reset, d, 'Invalid credentials — check your email and password') });
             // Their own credentials, their own session — anything left over from staff viewing this
             // portal no longer describes who is holding it.
             try { localStorage.setItem('stimespro:portalToken', d.token); localStorage.removeItem('stimespro:portalImpersonate'); } catch (e) {}

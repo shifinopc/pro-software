@@ -7,6 +7,7 @@
      party runtime dependency). The Make runtime reads window.__resources[cdnUrl] → local URL. -->
 <script>window.__resources=Object.assign(window.__resources||{},{'https://unpkg.com/react@18.3.1/umd/react.production.min.js':'/vendor/react.production.min.js','https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js':'/vendor/react-dom.production.min.js','https://unpkg.com/@babel/standalone@7.29.0/babel.min.js':'/vendor/babel.min.js'});</script>
 <script src="/support.js"></script>
+<script src="/login-why.js"></script>
 <script>
 (function () {
   var APP = "console";
@@ -12069,6 +12070,10 @@
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addQcLine }}" title="{{ addQcLineHint }}" style="font-size:11px; font-weight:700; color:{{ qcAddColor }}; cursor:{{ qcAddCursor }};">+ Add item</span></div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
               <sc-for list="{{ qcLineRows }}" as="l" hint-placeholder-count="1">
+                <!-- One LINE is now two rows: the charge, and under it the country when the charge
+                     is one that has one. This column wrapper is what keeps the pair together as a
+                     single item of the list above. -->
+                <div style="display:flex; flex-direction:column; gap:5px;">
                 <div style="display:flex; gap:6px; align-items:center;">
                   <!-- TYPE OR PICK. Chips under every row meant four extra shapes per line, and a
                        quotation with five lines carried twenty of them — the suggestions were louder
@@ -12109,6 +12114,28 @@
                   <div onClick="{{ l.kindToggle }}" title="{{ l.kindHint }}" style="flex-shrink:0; width:42px; text-align:center; font-size:9px; font-weight:800; letter-spacing:.03em; padding:9px 0; border-radius:8px; cursor:pointer; background:{{ l.kindBg }}; color:{{ l.kindFg }}; border:1px solid {{ l.kindBd }};">{{ l.kindLabel }}</div>
                   <div onClick="{{ l.remove }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
+                <!-- WHERE THE COMPANY IS BOUGHT OR FORMED.
+
+                     Only on the lines that have a country at all, which is why it is a row of its
+                     own that appears rather than a sixth control every line carries. It prints on
+                     the client's copy and travels to the officer's task, so it is not a note. -->
+                <sc-if value="{{ l.needsCountry }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd style="position:relative; display:flex; align-items:center; gap:8px; padding:0 0 2px 2px;">
+                    <span style="font-size:9px; font-weight:800; letter-spacing:.05em; color:#A9A6B4;">COUNTRY</span>
+                    <span onClick="{{ l.cdToggle }}" title="Where the company is acquired or formed" style="display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; color:{{ l.countryFg }}; background:#FCFBFE; border:1px solid #DDD9E6; border-radius:99px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#7C00FF;">
+                      {{ l.countryLabel }}
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                    </span>
+                    <sc-if value="{{ l.cdOpen }}" hint-placeholder-val="{{ false }}">
+                      <div data-dd class="qc-dd" style="left:66px;">
+                        <sc-for list="{{ l.countryOpts }}" as="c" hint-placeholder-count="8">
+                          <div onClick="{{ c.pick }}" class="fm-opt" style="font-weight:{{ c.weight }}; color:{{ c.color }};"><span>{{ c.label }}</span></div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                </div>
               </sc-for>
             </div>
             <!-- PAYMENT TERMS - WHEN each part of this quotation falls due, and against WHICH
@@ -12146,24 +12173,10 @@
                   <!-- Cycles fees -> government -> whole total, the same one-click shape as the line
                        chip above, so the two read as the same idea. -->
                   <div onClick="{{ t.basisCycle }}" title="{{ t.basisHint }}" style="flex-shrink:0; width:54px; text-align:center; font-size:9px; font-weight:800; letter-spacing:.03em; padding:9px 0; border-radius:8px; cursor:pointer; background:{{ t.basisBg }}; color:{{ t.basisFg }}; border:1px solid {{ t.basisBd }};">{{ t.basisLabel }}</div>
-                  <div style="flex-shrink:0; width:92px; text-align:right; font-family:ui-monospace,monospace; font-size:10px; font-weight:700; color:{{ t.amtColor }};">{{ t.amount }}</div>
                   <div onClick="{{ t.remove }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
               </sc-for>
             </div>
-            <!-- WHAT IS ACTUALLY SCHEDULED, against what. A schedule that bills 80% of the fees is
-                 a real and legal thing to send, so this reports rather than refuses - but it has to
-                 be impossible to send one BY ACCIDENT, which is what an unchecked percentage box is. -->
-            <sc-if value="{{ qcTermsAny }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:8px; display:flex; flex-direction:column; gap:3px; background:{{ qcTermsSumBg }}; border:1px solid {{ qcTermsSumBd }}; border-radius:10px; padding:8px 10px;">
-                <sc-for list="{{ qcTermsSumRows }}" as="s" hint-placeholder-count="1">
-                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:10px;">
-                    <span style="color:{{ s.color }}; font-weight:700;">{{ s.what }}</span>
-                    <span style="font-family:ui-monospace,monospace; color:{{ s.color }};">{{ s.detail }}</span>
-                  </div>
-                </sc-for>
-              </div>
-            </sc-if>
             </div>
             </div>
           </div>
@@ -19004,6 +19017,9 @@ class Component extends DCLogic {
       this._bootFetch('/api/collateral', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ collateralData: v }); }).catch(() => {});
       this._bootFetch('/api/settings/countryRules', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ countryRulesData: v }); }).catch(() => {});
       this._bootFetch('/api/settings/departments', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ deptData: v }); }).catch(() => {});
+      // Countries a company can be acquired or formed in. A setting rather than a hard-coded list:
+      // which markets the firm sells is a business decision that changes without a release.
+      this._bootFetch('/api/settings/acquisitionCountries', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ acqCountryData: v }); }).catch(() => {});
       this._load('/api/companies', 'companiesData', (v) => this.setState({ companiesData: v }));
       this._load('/api/proposal-templates', 'propTemplates', (v) => this.setState({ propTemplates: v }));
       // Leads and prospects, asked for explicitly. /api/companies defaults to CLIENTS ONLY so that
@@ -23128,10 +23144,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const API = this._apiBase || 'http://localhost:4100';
         this.setState({ lBusy: true, lError: '' });
         fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: s.lPass }) })
-          .then(r => r.json().then(j => ({ ok: r.ok, j })))
-          .then(({ ok, j }) => {
+          // `.catch(() => ({}))`: a 500 from Express is an HTML error page, and parsing it threw —
+          // so the one failure that most needed explaining fell through to the generic "Server
+          // unreachable", which is what a pulled network cable says too.
+          .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, st: r.status, reset: r.headers.get('ratelimit-reset'), j })))
+          .then(({ ok, st, reset, j }) => {
             this.setState({ lBusy: false });
-            if (!ok) return this.setState({ lError: j.error || 'Invalid credentials' });
+            // WHAT WENT WRONG IS NOT ALWAYS THE PASSWORD.
+            //
+            // Every failure here read as "Invalid credentials", so three separate faults wore the
+            // same face: a database the API could not reach (500), a rate limit already spent on
+            // earlier attempts (429), and an actually wrong password (401). Hours went into the
+            // first two being retyped as though they were the third.
+            //
+            // A 5xx is the server's own fault and worth saying so plainly. A 429 already arrives
+            // with the server's words; what it lacks is WHEN, and the standard RateLimit-Reset
+            // header carries that — "try again later" with no duration is the vagueness that makes
+            // somebody keep pressing, which is what spends the limit in the first place.
+            if (!ok) return this.setState({ lError: _loginWhy9(st, reset, j) });
             if (j.token) localStorage.setItem('stimespro:token', j.token);
             if (j.user) localStorage.setItem('stimespro:user', JSON.stringify(j.user));
             // SIGNING IN ENDS ANY VIEW-AS. This wrote the new token straight over an impersonated
@@ -46058,7 +46088,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const lines = (Array.isArray(q2.items) ? q2.items : [])
         .filter(it => String(it && it.name || '').trim())
         .map(it => [
-          String(it.name).trim() + ((Number(it.units) || 1) !== 1 ? ' × ' + (Number(it.units) || 1) : ''),
+          // WHICH COUNTRY, on the client's copy. "Company Acquisition" for SAR 40,000 says nothing
+          // about what was agreed; the country is the thing being bought.
+          String(it.name).trim() + (it.country ? ' — ' + String(it.country).trim() : '')
+            + ((Number(it.units) || 1) !== 1 ? ' × ' + (Number(it.units) || 1) : ''),
           fmtCur((Number(it.units) || 1) * (Number(it.price) || 0)),
         ]);
       if (!lines.length) lines.push([q2.service || 'Service', fmtCur(q2.subtotalMinor != null ? q2.subtotalMinor / 100 : q2.amount)]);
@@ -46281,14 +46314,49 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // Coming from `sent`, this press also records that the client said yes and opens the jobs
           // for the work. Both are hard to undo — the tasks stay even if the status is put back —
           // so it says what it is about to do rather than doing it quietly.
-          if (rawSt !== 'sent') return go9();
-          const units9 = (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
-            .reduce((a9, it9) => a9 + (Number(it9.units) || 1), 0) || 1;
-          this._confirm('Record that ' + ((raw0 && raw0.clientName) || 'the client') + ' accepted ' + id + '?', {
-            body: 'It is marked accepted, ' + units9 + ' job' + (units9 === 1 ? '' : 's')
-              + ' open for the work it describes, and the invoice is raised as a draft for you to approve.',
-            okLabel: 'Accept & invoice',
-          }).then((ok9) => { if (ok9) go9(); });
+          const ask9 = () => {
+            if (rawSt !== 'sent') return go9();
+            const units9 = (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
+              .reduce((a9, it9) => a9 + (Number(it9.units) || 1), 0) || 1;
+            this._confirm('Record that ' + ((raw0 && raw0.clientName) || 'the client') + ' accepted ' + id + '?', {
+              body: 'It is marked accepted, ' + units9 + ' job' + (units9 === 1 ? '' : 's')
+                + ' open for the work it describes, and the invoice is raised as a draft for you to approve.',
+              okLabel: 'Accept & invoice',
+            }).then((ok9) => { if (ok9) go9(); });
+          };
+          // NOT A CLIENT YET — ASKED HERE, not reported afterwards.
+          //
+          // Invoicing schedules the work (see startDeliveryForQuotation), and the company it is
+          // scheduled for may still be a lead: no CR, no portal login, nothing on the client screen
+          // while officers run its case. The server already raises a notice when that happens, but a
+          // notice is a thing you read later, and "later" is how a company ends up three months into
+          // a setup still filed as a lead. This is the moment it becomes true, so this is where it
+          // is asked.
+          //
+          // Both answers are legitimate, which is why it is a choice and not a block. Business setup
+          // is sold to companies that do not legally exist yet — "no CR yet" on the client form is
+          // the answer for those — but a quotation can also be invoiced for someone who genuinely
+          // is not becoming a client, and refusing that would be inventing a rule the firm does not
+          // have. Cancelling does nothing at all.
+          //
+          // `_leadRows` IS the test: /api/companies returns clients only, and leads/prospects come
+          // from the separate lifecycle fetch. A quotation whose company is in neither (no
+          // companyId, or a list that has not loaded) falls through and invoices as before — a
+          // missing list must not start inventing prompts.
+          const lead9 = (raw0 && raw0.companyId) ? _leadRows.find(c9 => c9.id === raw0.companyId) : null;
+          if (!lead9) return ask9();
+          const mine9 = _contactRows.filter(c9 => c9.companyId === lead9.id);
+          this._choice(lead9.name + ' is still a ' + (lead9.lifecycle || 'lead') + ', not a client', [
+            { label: 'Convert to client first', value: 'convert',
+              desc: 'Opens the client form filled in from this record. Tick "no CR yet" if we are the ones setting this company up. Come back and invoice after.' },
+            { label: 'Invoice without converting', value: 'invoice',
+              desc: 'The work starts and the invoice is raised, but they get no portal login and no client record until somebody converts them.' },
+          ], { body: 'Invoicing opens the jobs for this work. They can be invoiced either way — this is about whether anyone can see it.' })
+            .then((pick9) => {
+              if (pick9 === 'invoice') return ask9();
+              // The same form "Won — turn into a client" opens, seeded the same way.
+              if (pick9 === 'convert') this.setState(_acSeed9(lead9, mine9.find(c9 => c9.isPrimary) || mine9[0] || null));
+            });
         },
         open: () => this.setState({ quoteOpen: id }),
         // Branded print (uploaded header/footer/watermark from Settings → Print Layout).
@@ -46324,6 +46392,43 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      */
     const QC_KINDS = ['prof', 'gov', 'foreign'];
     const _qcKindOf = (kk) => (QC_KINDS.indexOf(kk) >= 0 ? kk : 'prof');
+    /**
+     * WHICH KIND A NAMED LINE IS, GUESSED FROM ITS NAME.
+     *
+     * Only ever a DEFAULT, applied the moment somebody picks a line from the catalogue — the badge
+     * stays one click from being changed, and a line typed by hand is not touched at all. Every
+     * quotation used to open on FEE whatever it was for, so an acquisition had to be remembered and
+     * clicked twice, and a government fee that nobody clicked was billed as the firm's own revenue
+     * by whichever stage charges professional fees.
+     *
+     * By name because that is all the catalogue holds: `ChargeType` has a name and a colour and no
+     * notion of what kind of money it is. The honest version of this is a setting on each line item
+     * — worth doing when somebody renames "Government Fees" and quietly loses the default.
+     */
+    const _qcKindFromName9 = (nm) => {
+      const s9 = String(nm || '').toLowerCase();
+      if (/acquisit|acquir/.test(s9)) return 'foreign';
+      if (/govern|govt|ministry|municipal|authority fee/.test(s9)) return 'gov';
+      return 'prof';
+    };
+    // Acquiring or forming a company happens somewhere, and which somewhere decides the paperwork,
+    // the cost and who does it. Asked on the line, because one quotation can carry two of them.
+    const _qcNeedsCountry9 = (nm) => /acquisit|acquir|formation|incorporat/i.test(String(nm || ''));
+    const ACQ_COUNTRY_SEED9 = ['India', 'Oman', 'UK', 'UAE', 'Bahrain', 'Pakistan', 'USA', 'Canada'];
+    const _acqCountries9 = (() => {
+      const saved9 = this.state.acqCountryData && Array.isArray(this.state.acqCountryData.items)
+        ? this.state.acqCountryData.items.map(x9 => String(x9 || '').trim()).filter(Boolean) : null;
+      return (saved9 && saved9.length) ? saved9 : ACQ_COUNTRY_SEED9;
+    })();
+    const _acqCountriesSave9 = (items9, msg9) => {
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/settings/acquisitionCountries', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+        body: JSON.stringify({ items: items9 }) })
+        .then(r9 => { if (!r9.ok) return this.toast('Could not save the country list', 'error');
+          this.setState({ acqCountryData: { items: items9 } }); if (msg9) this.toast(msg9); })
+        .catch(() => this.toast('Server unreachable — the list was not saved', 'error'));
+    };
     const _qcKindMinor = (want) => qcLines.reduce((a9, l9) => {
       if (_qcKindOf(l9[3]) !== want) return a9;
       return a9 + Math.round((parseFloat(l9[1]) || 0) * Math.round((parseFloat(l9[2]) || 0) * 100));
@@ -46381,7 +46486,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       return {
         // Only when the counts agree: mid-render the boxes and the rows can disagree, and guessing
         // which row a stray box belongs to is how the wrong line gets the wrong price.
-        lines: d9.length === cur9.lines.length ? cur9.lines.map((r9, i9) => [d9[i9], u9[i9], p9[i9], r9[3]]) : cur9.lines,
+        // The three TYPED values come off the boxes; everything after them is state the boxes do
+        // not hold and must be carried over, or a structural change — adding a line, deleting one —
+        // silently drops it. `r9.slice(3)` rather than a list of indices so the next thing a line
+        // learns to remember is not lost the same way: kind was index 3, the country is index 4.
+        lines: d9.length === cur9.lines.length ? cur9.lines.map((r9, i9) => [d9[i9], u9[i9], p9[i9], ...r9.slice(3)]) : cur9.lines,
         terms: tl9.length === cur9.terms.length ? cur9.terms.map((r9, i9) => [tl9[i9], tp9[i9], r9[2]]) : cur9.terms,
         subject: sub9 ? sub9.value : cur9.subject,
         notes: not9 ? not9.value : cur9.notes,
@@ -46476,7 +46585,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // row simply stopped belonging to anybody, and every count by company quietly lost it.
       qcClientId: raw9.companyId || null,
       qcLines: (Array.isArray(raw9.items) && raw9.items.length ? raw9.items : [{ name: '', units: 1, price: '' }])
-        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind)]),
+        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || '')]),
       // The schedule as stored. A quotation written before this existed has none, which is not the
       // same as an empty one and prints the same either way.
       qcTerms: (Array.isArray(raw9.milestones) ? raw9.milestones : [])
@@ -46546,7 +46655,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         validUntil: st.qcValid || null, notes: st.qcNotes || null,
         // The per-line breakdown used to be collapsed into `amount` + a service string and lost —
         // the client saw only a total. Stored like Invoice.items so the quote prints in full.
-        items: valid.map(l5 => ({ name: String(l5[0]).trim(), units: parseFloat(l5[1]) || 1, price: parseFloat(l5[2]) || 0, kind: _qcKindOf(l5[3]) })),
+        // `country` only where the line is one that has one — an empty key on every professional
+        // fee is noise in a document that is read by people.
+        items: valid.map(l5 => {
+          const it5 = { name: String(l5[0]).trim(), units: parseFloat(l5[1]) || 1, price: parseFloat(l5[2]) || 0, kind: _qcKindOf(l5[3]) };
+          if (_qcNeedsCountry9(it5.name) && String(l5[4] || '').trim()) it5.country = String(l5[4]).trim();
+          return it5;
+        }),
         // PERCENTAGES AND THEIR BASE, never the computed money.
         //
         // The amount is derived from the lines at print time, so a quotation whose prices are
@@ -46896,8 +47011,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 label: o.name,
                 weight: on ? '700' : '500',
                 color: on ? '#7C00FF' : '#1A1523',
-                // One line is one charge, so picking replaces whatever was there.
-                pick: () => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][0] = o.name; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes, openDd: null }; }),
+                // One line is one charge, so picking replaces whatever was there — and with it the
+                // two things that are properties of WHICH charge this is: what kind of money it is,
+                // and, on an acquisition or formation, nothing yet about where. A country left over
+                // from a previous choice is cleared rather than carried onto an unrelated line.
+                pick: () => _qcEdit9(h => {
+                  const a = h.lines.map(x => [...x]);
+                  if (a[i]) {
+                    a[i][0] = o.name;
+                    a[i][3] = _qcKindFromName9(o.name);
+                    if (!_qcNeedsCountry9(o.name)) a[i][4] = '';
+                  }
+                  return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes, openDd: null };
+                }),
               };
             }),
             ddNone: !_chargeList.length || !hits9.length,
@@ -46908,6 +47034,52 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         })(),
         setUnits: (e) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][1] = e.target.value; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes }; }),
         setPrice: (e) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][2] = e.target.value; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes }; }),
+        // ── WHERE, on the lines where where is the whole job ─────────────────────────────
+        //
+        // Shown only for acquisition and formation, because every other line has no country to
+        // have. A second row rather than another box on the first: the row is already five
+        // controls wide and a quotation is usually read at dialog width.
+        //
+        // The last option edits the list itself. A country the firm starts selling should not need
+        // a release, and a separate settings screen for eight words is a screen nobody finds.
+        ...(() => {
+          const cid9 = 'qccountry-' + i;
+          const open9 = this.state.openDd === cid9;
+          const cur9 = String(l[4] || '');
+          const set9 = (v9) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][4] = v9; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes, openDd: null }; });
+          return {
+            needsCountry: _qcNeedsCountry9(l[0]),
+            countryLabel: cur9 || 'Choose a country…',
+            countryFg: cur9 ? '#1A1523' : '#A9A6B4',
+            cdOpen: open9,
+            cdToggle: () => this.setState({ openDd: open9 ? null : cid9 }),
+            countryOpts: [
+              ..._acqCountries9.map(nm9 => ({
+                label: nm9,
+                weight: nm9 === cur9 ? '700' : '500',
+                color: nm9 === cur9 ? '#7C00FF' : '#1A1523',
+                pick: () => set9(nm9),
+              })),
+              {
+                label: 'Edit this list…', weight: '600', color: '#8C8899',
+                pick: () => {
+                  this.setState({ openDd: null });
+                  this._prompt('Countries offered on acquisition and formation lines', _acqCountries9.join(String.fromCharCode(10)), {
+                    multiline: true, okLabel: 'Save list',
+                    body: 'One per line. Removing one here does not change quotations already written.',
+                  }).then((v9) => {
+                    if (v9 == null) return;
+                    const next9 = String(v9).split(String.fromCharCode(10)).map(x9 => x9.trim()).filter(Boolean);
+                    // An empty list would leave the dropdown with nothing in it and no way back to
+                    // this editor, so it falls back to the ones we shipped with.
+                    if (!next9.length) return this.toast('The list cannot be empty', 'error');
+                    _acqCountriesSave9(next9, 'Country list saved');
+                  });
+                },
+              },
+            ],
+          };
+        })(),
         // ── professional fee or government fee ────────────────────────────────────────────
         // Unmarked means professional, which is why FEE is the resting state and GOV is the one
         // you have to press for. Government fees are money the firm collects and passes on, so
@@ -46955,7 +47127,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       qcTermRows: qcTerms.map((t9, i9) => {
         const of9 = _qcBasisOf(t9[2]);
         const pct9 = parseFloat(t9[1]) || 0;
-        const baseMinor9 = _qcBaseMinor(of9);
         return {
           label: t9[0], pct: t9[1],
           basisLabel: QC_BASIS_LOOK[of9][0],
@@ -46969,44 +47140,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             if (a9[i9]) a9[i9][2] = QC_BASIS[(QC_BASIS.indexOf(of9) + 1) % QC_BASIS.length];
             return { qcTerms: a9, qcLines: h.lines, qcSubject: h.subject, qcNotes: h.notes };
           }),
-          amount: fmtCurAs(qcCur, Math.round(baseMinor9 * pct9 / 100) / 100),
-          // Greyed when the base it bills is empty: 30% of government fees on a quotation with no
-          // government fee line is SAR 0.00, and saying so quietly is better than looking priced.
-          amtColor: (pct9 && baseMinor9) ? '#1A1523' : '#C9C4D6',
           setLabel: (e) => _qcEdit9(h => { const a9 = h.terms.map(x => [...x]); if (a9[i9]) a9[i9][0] = e.target.value; return { qcTerms: a9, qcLines: h.lines, qcSubject: h.subject, qcNotes: h.notes }; }),
           setPct: (e) => _qcEdit9(h => { const a9 = h.terms.map(x => [...x]); if (a9[i9]) a9[i9][1] = e.target.value; return { qcTerms: a9, qcLines: h.lines, qcSubject: h.subject, qcNotes: h.notes }; }),
           remove: () => _qcEdit9(h => ({ qcTerms: h.terms.filter((_, j9) => j9 !== i9), qcLines: h.lines, qcSubject: h.subject, qcNotes: h.notes })),
         };
       }),
-      /**
-       * WHAT THIS SCHEDULE ACTUALLY ASKS FOR, per subtotal it touches.
-       *
-       * The failure this exists to catch: four stages reading 50 / 30 / 100 / 20 are correct terms
-       * only because the 100 is of a DIFFERENT base. Totalled naively they come to 200%, and
-       * totalled per base they come to 100% and 100% - and nothing on screen could tell the two
-       * apart, so a genuine mistake and a correct schedule looked identical.
-       */
-      ...(() => {
-        const touched9 = QC_BASIS.filter(k9 => qcTerms.some(t9 => _qcBasisOf(t9[2]) === k9));
-        const rows9 = touched9.map(k9 => {
-          const sum9 = qcTerms.reduce((a9, t9) => a9 + (_qcBasisOf(t9[2]) === k9 ? (parseFloat(t9[1]) || 0) : 0), 0);
-          const base9 = _qcBaseMinor(k9);
-          const off9 = Math.abs(sum9 - 100) > 0.01;
-          const name9 = QC_BASIS_LOOK[k9][5];
-          return {
-            what: name9 + (off9 ? '  \u2014  ' + (sum9 > 100 ? 'over-billed' : 'not fully billed') : ''),
-            detail: Math.round(sum9 * 100) / 100 + '% of ' + fmtCurAs(qcCur, base9 / 100)
-              + (off9 ? '   \u2192  ' + fmtCurAs(qcCur, Math.round(base9 * (sum9 - 100) / 100) / 100) : ''),
-            color: off9 ? '#B4320A' : '#0E9355',
-          };
-        });
-        const bad9 = rows9.some(r9 => r9.color !== '#0E9355');
-        return {
-          qcTermsSumRows: rows9,
-          qcTermsSumBg: bad9 ? '#FEF6F3' : '#EFFBF4',
-          qcTermsSumBd: bad9 ? '#F6D3C6' : '#BFEBD2',
-        };
-      })(),
       // Same guard as the invoice: no stacking blank rows — but judged on what is in the boxes
       // now, not on what was in them at the last render.
       addQcLine: () => {
@@ -47014,7 +47152,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (h9.lines.some(l9 => !String(l9[0]).trim() && !String(l9[2]).trim())) {
           return this.toast('Fill the empty line before adding another');
         }
-        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
       // Always offered. Greying it from render-time state meant it looked disabled for exactly as
       // long as somebody was typing the row that would enable it — the refusal is a toast now.

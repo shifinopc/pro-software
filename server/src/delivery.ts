@@ -78,9 +78,13 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
 
   const items = Array.isArray(q.items) ? (q.items as any[]) : [];
   // A quotation written as a single service with no line breakdown still deserves its task.
-  const lines: { name: string; units: number }[] = items.length
-    ? items.map((it: any) => ({ name: String(it?.name ?? "").trim(), units: Number(it?.units) > 0 ? Number(it.units) : 1 })).filter(l => l.name)
-    : (q.service ? [{ name: String(q.service).trim(), units: 1 }] : []);
+  // `country` rides along with the line. On an acquisition or a formation it is the country the
+  // company is being bought or incorporated IN, which decides nearly everything about the work —
+  // and until now it was agreed on the quotation and then written down nowhere the officer doing
+  // the job could read it.
+  const lines: { name: string; units: number; country: string }[] = items.length
+    ? items.map((it: any) => ({ name: String(it?.name ?? "").trim(), units: Number(it?.units) > 0 ? Number(it.units) : 1, country: String(it?.country ?? "").trim() })).filter(l => l.name)
+    : (q.service ? [{ name: String(q.service).trim(), units: 1, country: "" }] : []);
   if (!lines.length) return { ...empty, reason: "That quotation has no line items to deliver" };
 
   const services = await prisma.serviceItem.findMany({
@@ -114,7 +118,10 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     // one row per thing an officer has to actually go and do.
     for (let i = 0; i < line.units; i++) {
       const suffix = line.units > 1 ? ` (${i + 1}/${line.units})` : "";
-      const title = `${svc?.name ?? line.name}${suffix} — ${q.clientName ?? "Client"}`;
+      // IN THE TITLE, not only in a variable. Whoever picks this up off a queue sees the title and
+      // nothing else, and "Company Acquisition" without the country is not a job anybody can start.
+      const where = line.country ? ` — ${line.country}` : "";
+      const title = `${svc?.name ?? line.name}${where}${suffix} — ${q.clientName ?? "Client"}`;
       const task = await prisma.task.create({
         data: {
           ref: await nextNumber("task"),
@@ -145,10 +152,10 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
       } else if (svc?.workflowId) {
         try {
           const run = await startInstance(svc.workflowId, {
-            title: `${svc.name} — ${q.clientName ?? "Client"}`,
+            title: `${svc.name}${where} — ${q.clientName ?? "Client"}`,
             companyId: q.companyId ?? null,
             clientName: q.clientName ?? null,
-            variables: { serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number },
+            variables: { serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number, ...(line.country ? { country: line.country } : {}) },
             // `engineVariables`, NOT `variables`: callerVariables() drops every key beginning with
             // an underscore, because those are the engine's own. Passed as caller variables these
             // were accepted, silently discarded, and the run was then left with no record of why

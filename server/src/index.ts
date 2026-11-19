@@ -278,7 +278,10 @@ app.use(cors((req, cb) => {
   // data arrived, because nothing told the browser it could reuse the answer. A day is the most
   // Firefox will keep; Chrome caps itself at two hours regardless.
   if (!origin || sameOrigin || allowedOrigins.includes(origin))
-    return cb(null, { origin: true, credentials: true, maxAge: 86400, exposedHeaders: ["Content-Disposition", "X-Proposal-Format"] });
+    // RateLimit-Reset is exposed for the same reason: the login screen tells somebody HOW LONG they
+    // are locked out for, and without this the browser hands it a null and the message degrades to
+    // "later" — which is what makes people keep pressing, spending the limit they are waiting on.
+    return cb(null, { origin: true, credentials: true, maxAge: 86400, exposedHeaders: ["Content-Disposition", "X-Proposal-Format", "RateLimit-Reset", "Retry-After"] });
   cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
 /**

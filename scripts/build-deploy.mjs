@@ -34,7 +34,10 @@ inject("index.html");
 inject("portal.html");
 
 // Shared web-root assets both front-ends need.
-const SHARED = ["assets", "vendor", "support.js", "stimes-icon.svg", "stimes-logo.svg", "stimes-logo-white.svg", "uploads"];
+// An ALLOWLIST, so a new file in public/ reaches dist/ and stops there. login-why.js is loaded
+// by a <script src> in both front ends: leave it out and the tag 404s, `_loginWhy9` is
+// undefined, and every failed sign-in throws instead of explaining itself.
+const SHARED = ["assets", "vendor", "support.js", "login-why.js", "stimes-icon.svg", "stimes-logo.svg", "stimes-logo-white.svg", "uploads"];
 const stageShared = (dir) => SHARED.forEach((a) => { const s = join(dist, a); if (existsSync(s)) cpSync(s, join(dir, a), { recursive: true }); });
 
 // 2a. Console → serves index.html
