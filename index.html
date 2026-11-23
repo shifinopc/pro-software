@@ -35739,9 +35739,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         fetch(API4 + '/api/upload', { method: 'POST', headers: H4, body: JSON.stringify({ kind: kind2, name: f2.name, data: rd2.result }) })
           .then(r2 => r2.json()).then(j2 => {
             if (!j2.path) return this.toast(j2.error || 'Upload failed', 'error');
-            const next2 = { ...(this.state.orgSet || {}), [key2]: j2.path };
+            // ALSO CARRY WHATEVER IS TYPED BUT NOT YET SAVED. This PUT writes the whole blob, so a
+            // logo uploaded after filling in the legal name and address used to throw those fields
+            // away - typed, gone, no error.
+            const next2 = { ...(this.state.orgSet || {}), ...(this.state.orgDraft || {}), [key2]: j2.path };
             fetch(API4 + '/api/settings/org', { method: 'PUT', headers: H4, body: JSON.stringify(next2) })
-              .then(rr2 => { if (rr2.ok) { this.setState({ orgSet: next2 }); this.toast('Logo uploaded'); } else this.toast('Uploaded, but could not save the setting'); })
+              .then(rr2 => { if (rr2.ok) { this.setState({ orgSet: next2, orgDraft: {} }); this.toast('Logo uploaded'); } else this.toast('Uploaded, but could not save the setting'); })
               .catch(() => this.toast('Uploaded, but could not save the setting'));
           }).catch(() => this.toast('Server unreachable'));
       };
