@@ -211,10 +211,18 @@ export function clientReportPdf(a: ClientReportInput): Promise<Buffer> {
   };
 
   const section = (text: string) => {
-    // A small square of the accent colour, then the label. Cheaper than a rule and easier to find.
-    doc.rect(left, doc.y + 1.5, 3, 9).fill(INK.accent);
+    // A small bar of the accent colour, then the label.
+    //
+    // ALIGNED TO TWO THINGS, BOTH DELIBERATE. The label starts at left + PAD, which is exactly where
+    // the column headings and every cell below it start, so the heading and the table read off one
+    // edge. And the bar spans the capitals rather than the line box: a 9pt line is ~10.8pt tall
+    // while its capitals are ~6.4pt, so a bar the height of the line overhangs the text at both
+    // ends, which is what made this look crooked.
     font(true, 9, INK.brand);
-    doc.text(text.toUpperCase(), left + 9, doc.y, { width: full - 9, characterSpacing: 0.8 });
+    const capTop = doc.y + (doc.currentLineHeight() - 6.4) / 2;
+    doc.rect(left, capTop, 2.5, 6.4).fill(INK.accent);
+    font(true, 9, INK.brand);
+    doc.text(text.toUpperCase(), left + PAD, doc.y, { width: full - PAD, characterSpacing: 0.8 });
     doc.y += 6;
   };
 
