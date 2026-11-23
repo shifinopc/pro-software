@@ -17937,16 +17937,45 @@ class Component extends DCLogic {
         box = box.parentElement;
       }
       const t = trigger.getBoundingClientRect();
-      const b = (box && box !== document.body)
-        ? box.getBoundingClientRect()
-        : { top: 0, bottom: window.innerHeight };
+      // ESCAPE THE CLIPPING BOX INSTEAD OF SHRINKING TO FIT IT.
+      //
+      // `.fm-body` scrolls, so an absolutely-positioned panel inside a dialog is CUT at the
+      // dialog's edge: open a client list near the bottom of a form and you get three and a half
+      // rows with the fourth sliced through, whatever this function does about height. Capping to
+      // the room was the old answer and it is the wrong one - the room is the bug.
+      //
+      // A fixed panel is laid out against the viewport and paints over the footer and the page, so
+      // the list is the length of the list. Two things make that safe here:
+      //
+      //  · THE COORDINATES ARE CORRECTED BY MEASUREMENT. `position:fixed` resolves against the
+      //    nearest ancestor with a transform, and every dialog has one - popIn ends on
+      //    `scale(1)` with `both`, so the computed transform stays a matrix forever. Writing
+      //    viewport numbers into `top`/`left` would land the panel somewhere else entirely. So the
+      //    panel is placed, measured, and moved by the difference - which is right under any
+      //    containing block without this code having to know which one it is.
+      //  · IT FOLLOWS THE FIELD. Scrolling a fixed panel's own dialog would otherwise leave it
+      //    behind; the listener installed in componentDidMount re-runs this on any scroll.
+      const inBox = !!(box && box !== document.body);
+      if (inBox) { dd.style.position = 'fixed'; dd.style.width = Math.round(t.width) + 'px'; dd.style.right = 'auto'; }
+      const b = inBox
+        ? { top: 0, bottom: window.innerHeight }
+        : ((box && box !== document.body)
+            ? box.getBoundingClientRect()
+            : { top: 0, bottom: window.innerHeight });
       const below = b.bottom - t.bottom - GAP;
       const above = t.top - b.top - GAP;
       const up = below < Math.min(MAX, MIN) && above > below;
       dd.classList.toggle('fm-dd-up', up);
       // Written on every pass, both sides, so the markup's own anchor never leaks back in.
-      dd.style.top = up ? 'auto' : 'calc(100% + ' + GAP + 'px)';
-      dd.style.bottom = up ? 'calc(100% + ' + GAP + 'px)' : 'auto';
+      // `calc(100% + gap)` is relative to the WRAPPER and means nothing once the panel is fixed, so
+      // a fixed panel gets real pixels and an absolute one keeps the percentage it always had.
+      if (inBox) {
+        dd.style.bottom = 'auto';
+        dd.style.top = Math.round(up ? t.top - GAP : t.bottom + GAP) + 'px';
+      } else {
+        dd.style.top = up ? 'auto' : 'calc(100% + ' + GAP + 'px)';
+        dd.style.bottom = up ? 'calc(100% + ' + GAP + 'px)' : 'auto';
+      }
       dd.style.marginTop = '0';
       dd.style.marginBottom = '0';
       const room = Math.floor(up ? above : below);
@@ -17971,6 +18000,20 @@ class Component extends DCLogic {
       // unaffected.
       dd.style.overflowY = 'auto';
       dd.style.overscrollBehavior = 'contain';
+      if (inBox) {
+        // Opening upward: the panel hangs from its own height, which is only known now.
+        if (up) {
+          const h = Math.min(dd.scrollHeight, parseFloat(dd.style.maxHeight) || MAX);
+          dd.style.top = Math.round(t.top - GAP - h) + 'px';
+        }
+        // The measured correction. One pass is enough: the delta is the containing block's own
+        // offset, which does not move because we moved the panel.
+        const r = dd.getBoundingClientRect();
+        const wantTop = up ? (t.top - GAP - r.height) : (t.bottom + GAP);
+        const dx = t.left - r.left, dy = wantTop - r.top;
+        if (Math.abs(dx) > 0.5) dd.style.left = Math.round(parseFloat(dd.style.left || '0') + dx) + 'px';
+        if (Math.abs(dy) > 0.5) dd.style.top = Math.round(parseFloat(dd.style.top || '0') + dy) + 'px';
+      }
       // A LAST RESORT, not the usual path: move the field when the room is unusable.
       //
       // Scrolling the dialog to clear the footer wins the panel its room back, but it also moves
@@ -17997,7 +18040,9 @@ class Component extends DCLogic {
       // also all the behaviour that was ever wanted: if the field still has no room after being
       // moved once, moving it again is not going to find any.
       const NUDGE_BELOW = 72;
-      if (room < NUDGE_BELOW && dd.scrollHeight > room && !dd.dataset.ddNudged && box && box !== document.body) {
+      // Only for a panel still trapped in a scrolling box - which, now that dialog panels are
+      // fixed, means none of them. Kept for any panel that is absolute inside a scroller.
+      if (!inBox && room < NUDGE_BELOW && dd.scrollHeight > room && !dd.dataset.ddNudged && box && box !== document.body) {
         const want = MIN - room;
         const max = box.scrollHeight - box.clientHeight;
         const next = Math.max(0, Math.min(max, box.scrollTop + (up ? -want : want)));
@@ -18073,6 +18118,17 @@ class Component extends DCLogic {
     }
   }
   componentDidMount() {
+    // A FIXED PANEL DOES NOT MOVE WITH ITS FIELD, so anything that moves the field has to re-place
+    // it: scrolling the dialog, scrolling the page behind it, or resizing. Capture phase, because a
+    // scroll inside .fm-body does not bubble. Throttled to a frame, and it does nothing at all
+    // unless a panel is actually open.
+    this._ddFollow = () => {
+      if (!this.state || !this.state.openDd || this._ddFollowQueued) return;
+      this._ddFollowQueued = true;
+      requestAnimationFrame(() => { this._ddFollowQueued = false; this._placeDropdowns(); });
+    };
+    window.addEventListener('scroll', this._ddFollow, true);
+    window.addEventListener('resize', this._ddFollow);
 
     // ── In-app confirm / prompt ──────────────────────────────────────────
     // Replaces window.confirm and window.prompt. Both resolve on a real choice and NEVER return a
