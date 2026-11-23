@@ -142,8 +142,13 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
 
       let runId: string | null = null;
       const absorber = svc ? absorbedBy(svc.name) : null;
-      if (svc?.workflowId && absorber) {
-        out.absorbed.push(`${svc.name} (already part of ${absorber} on this quotation)`);
+      // NOT `svc?.workflowId && absorber`. Company Acquisition is retired and its service binding is
+      // cleared, so it has no workflow of its own any more - and the note saying where the work is
+      // actually done is MORE useful then, not less. Tying it to the binding meant the line that
+      // keeps nothing but a note lost the note.
+      if (absorber) {
+        // `absorber` is only ever set from a matched service, so svc is non-null here.
+        out.absorbed.push(`${svc!.name} (already part of ${absorber} on this quotation)`);
         await prisma.task.update({ where: { id: task.id }, data: {
           docType: task.docType,
           // Said on the task itself, where the officer who picks it up will read it, rather than
