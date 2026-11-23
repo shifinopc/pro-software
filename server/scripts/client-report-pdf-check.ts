@@ -65,11 +65,12 @@ function textOf(pdf: Buffer): string {
   if (pdf.subarray(0, 5).toString() !== "%PDF-") throw new Error("FAIL: not a PDF");
   if (pages(pdf) !== 1) throw new Error(`FAIL: expected 1 page for this content, got ${pages(pdf)}`);
 
-  // An empty settings row must not print an invented company, and must say so instead.
+  // An empty settings row prints no company at all - not an invented one, and not a staff note.
   const bare = await clientReportPdf({ org: {}, ...DATA });
   const text = textOf(bare);
   if (text.includes("STIMES PRO Business Services")) throw new Error("FAIL: invented a company name");
-  if (!/Settings/.test(text)) throw new Error("FAIL: no prompt to set the letterhead");
+  // The client must never see a note aimed at our own staff.
+  if (/Settings/.test(text)) throw new Error("FAIL: printed an internal instruction on a client document");
 
   // Many rows must paginate rather than run off the page.
   const many = await clientReportPdf({
