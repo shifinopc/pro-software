@@ -304,13 +304,21 @@ export function clientReportHtml(a: {
   const td = (v: unknown, ink = "", right = false) =>
     `<td${right ? ' align="right"' : ""} style="padding:3.4mm 4mm; border-bottom:.5pt solid #E8E4F0;">`
     + (ink ? `<span style="${ink}">${esc(v)}</span>` : esc(v)) + "</td>";
-  // A LIGHT BAND, NOT A DARK ONE. White text on the dark purple band printed black: LibreOffice
-  // drops `fo:color` from a header cell (confirmed in its own flat-ODF output - the paragraph style
-  // keeps the size and the weight and loses the colour), whichever of <th>, <td>, a span, a <b>,
-  // bgcolor on the row or bgcolor on the cell it is written with. Dark ink on a pale band needs no
-  // colour to survive, because dark ink is the default.
+  // NO FILL BEHIND THE HEADER, BY NECESSITY.
+  //
+  // Two things cannot be had here. White text on a dark band prints black: LibreOffice drops
+  // `fo:color` from a header cell - confirmed in its own flat-ODF output, where the paragraph style
+  // keeps the size and the weight and loses the colour - with <th>, <td>, a span, a <b>, bgcolor on
+  // the row or bgcolor on the cell. And a cell's text cannot be centred in its band: the paragraph
+  // inside carries Writer's "Text body" space-below, which padding-top, valign="middle" and
+  // margin:0 on an explicit <p> all failed to balance, so a filled band always had its label stuck
+  // to the top edge with dead space beneath.
+  //
+  // So the header is bold caps over a 1.5pt rule, with the space below the label as its padding.
+  // That is a table heading in its own right, and nothing about it depends on what the converter
+  // chooses to keep.
   const head = (cols: [string, string][]) => `<tr>${cols.map(([t, w]) =>
-    `<td width="${w}" bgcolor="#F0E9FC" style="padding-top:2.6mm; padding-bottom:2.6mm; padding-left:4mm; padding-right:4mm; border-bottom:1pt solid #26074D;">`
+    `<td width="${w}" style="padding-bottom:2.2mm; padding-left:4mm; padding-right:4mm; border-bottom:1.5pt solid #26074D;">`
     + `<span style="font-size:8pt; font-weight:bold; letter-spacing:.06em;">${esc(t.toUpperCase())}</span></td>`).join("")}</tr>`;
   // The section heading carries a bar of its own colour so the eye finds it without a bigger font.
   const title = (text: string) =>
