@@ -98,7 +98,7 @@ import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
 import { clientWork, clientWorkItems, clientWorkSummary, clientReportDetail } from "./clientwork.js";
-import { clientReportHtml } from "./clientwork.js";
+import { clientReportPdf } from "./client-report-pdf.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
@@ -108,7 +108,7 @@ import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invit
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
-import { tokensIn, renderDocx, proposalData, docxToPdf, htmlToPdf, paramTokens } from "./proposal.js";
+import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -4689,12 +4689,12 @@ app.get("/api/reports/client-work/:companyId/summary.pdf", requireAuth, requireS
     const D = await clientReportDetail({ from, to, companyId: req.params.companyId });
     // The same row the proposal and the invoice band read their letterhead from.
     const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
-    const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    const pdf = await htmlToPdf(clientReportHtml({ org, client: co.name, from, to, S, D, esc, logoImg: orgLogoImg(org) }));
-    // The converter is not on every machine - a developer box without LibreOffice must say so
-    // rather than hand back an empty tab.
-    if (!pdf) return res.status(503).json({ error: "The PDF converter is not available on this server" });
+    const pdf = await clientReportPdf({
+      org, client: co.name, from, to,
+      totals: S.totals, completed: D.completed, pending: D.pending,
+      logo: orgLogoRaster(org),
+    });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${co.name.replace(/[^a-z0-9]+/gi, "-")}-${from}-to-${to}.pdf"`);
     res.send(pdf);
@@ -8926,22 +8926,18 @@ if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 const PRIVATE_FILES_DIR = path.resolve(process.cwd(), "uploads-private");
 
 /**
- * The org logo as an inline <img>, or "" when there isn't one.
+ * The org logo's bytes, for a format pdfkit can place, or null.
  *
- * Inlined rather than linked because LibreOffice converts documents with no session, and the
- * console is a different origin anyway - `<img src="/files/...">` is a broken image at best.
+ * PNG and JPEG only: pdfkit cannot draw an SVG, and a logo uploaded as one simply does not appear
+ * on this report. The invoice band and the portal still show it, because a browser can.
  */
-function orgLogoImg(org: any): string {
+function orgLogoRaster(org: any): Buffer | null {
   const logoPath = String(org?.logoUrl ?? "");
-  if (!logoPath.startsWith("/files/")) return "";
+  if (!logoPath.startsWith("/files/")) return null;
+  if (!/\.(png|jpe?g)$/i.test(logoPath)) return null;
   try {
-    const file = path.join(FILES_DIR, path.basename(logoPath));
-    const bytes = fs.readFileSync(file);
-    const ext = path.extname(file).toLowerCase();
-    const mime = ext === ".png" ? "image/png" : ext === ".svg" ? "image/svg+xml"
-      : ext === ".webp" ? "image/webp" : "image/jpeg";
-    return `<img src="data:${mime};base64,${bytes.toString("base64")}" height="54">`;
-  } catch { return ""; } // a logo since deleted prints no logo, not a broken document
+    return fs.readFileSync(path.join(FILES_DIR, path.basename(logoPath)));
+  } catch { return null; } // a logo since deleted prints no logo, not a broken report
 }
 if (!fs.existsSync(PRIVATE_FILES_DIR)) fs.mkdirSync(PRIVATE_FILES_DIR, { recursive: true });
 
