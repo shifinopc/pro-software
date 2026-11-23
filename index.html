@@ -12160,6 +12160,22 @@
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VAT</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddQcVatToggle }}" style="border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE; cursor:pointer; display:flex; align-items:center; gap:8px;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddQcVatVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddQcVatOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:10px; box-shadow:0 10px 28px rgba(38,7,77,.16); padding:4px; z-index:30;"><sc-for list="{{ ddQcVatOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 10px; border-radius:7px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
             </div>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SERVICE / SUBJECT</div><input sc-camel-default-value="{{ qcSubject }}" data-seed-val="{{ qcSubject }}" onBlur="{{ setQcSubject }}" data-qcf="subject" maxlength="120" placeholder="e.g. Labour card renewal × 3" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
+            <!-- WHAT THIS SELLS, as opposed to what it charges for. The subject above is written for
+                 the client to read; this is the catalogue service that becomes one case when the
+                 quotation is accepted. Left unset, the quotation bills and opens nothing. -->
+            <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">DELIVERS <span style="font-weight:600; color:#C4C0CE;">· opens one case on acceptance</span></div>
+              <div style="position:relative; margin-top:5px;">
+                <div data-dd onClick="{{ ddQcServiceToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; color:#1A1523; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddQcServiceValue }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                <sc-if value="{{ ddQcServiceOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:220px; overflow-y:auto;">
+                    <sc-for list="{{ ddQcServiceOptions }}" as="o" hint-placeholder-count="3">
+                      <div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="font-size:9px; color:{{ qcSellsHintColor }}; margin-top:4px;">{{ qcSellsHint }}</div>
+            </div>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ qcNotes }}" data-seed-val="{{ qcNotes }}" onBlur="{{ setQcNotes }}" data-qcf="notes" placeholder="Printed on the quotation. Terms &amp; footer come from Print Layout." rows="4" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
             </div>
             <div style="min-width:0;">
@@ -46951,10 +46967,23 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const qcVatSel = this.state.qcVat || QC_VAT_OPTS[0];
     const qcVatRate = parseInt(qcVatSel) || 0;
     const qcCur = sysCurCode; // system setting, like the invoice
+    // ── What this quotation delivers ──
+    // A service with a workflow becomes a case; one without becomes a single task. Said out loud in
+    // the dialog, because "opens one case" and "opens a task" are different promises to the officer
+    // who picks it up, and the difference is invisible otherwise.
+    const _qcSellAll = (Array.isArray(this.state.serviceItemsData) ? this.state.serviceItemsData : [])
+      .filter(s9 => s9 && !s9.retired);
+    const _qcSellOptions = _qcSellAll.map(s9 => ({ value: s9.id, label: s9.name }));
+    const _qcSellSel = _qcSellAll.find(s9 => s9.id === this.state.qcServiceId) || null;
+    const _qcSellHint = !_qcSellSel
+      ? 'No case will be opened — the fees will be billed and nobody will be given the work.'
+      : (_qcSellSel.workflowId
+          ? 'Opens one "' + _qcSellSel.name + '" case on acceptance, with its steps inside it.'
+          : '"' + _qcSellSel.name + '" has no workflow, so this opens a single task.');
     const _qcEditing = !!this.state.qcEditId;
     const openCreateQuote = () => {
       this.setState({ createQuote: true, qcEditId: null, qcEditNo: null, qcClient: qcDefaultClient, qcClientId: null, qcLines: [['', '1', '']],
-        qcValid: '', qcSubject: '', qcNotes: '', qcErr: '', qcIssued: new Date().toISOString().slice(0, 10),
+        qcValid: '', qcSubject: '', qcNotes: '', qcErr: '', qcServiceId: null, qcIssued: new Date().toISOString().slice(0, 10),
         // No schedule by default. A pre-filled one would be a commitment nobody chose, and the
         // proposal already prints "the full amount on signing" when there is none.
         qcTerms: [],
@@ -46986,6 +47015,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       qcTerms: (Array.isArray(raw9.milestones) ? raw9.milestones : [])
         .map(m9 => [String(m9.label == null ? '' : m9.label), String(m9.pct == null ? '' : m9.pct), m9.basis || 'total']),
       qcValid: raw9.validUntil || '', qcSubject: raw9.service || '', qcNotes: raw9.notes || '', qcErr: '',
+      qcServiceId: raw9.serviceItemId || null,
       qcIssued: raw9.date || new Date().toISOString().slice(0, 10),
       qcCur: raw9.currency || sysCurCode, qcNextNo: null,
       /**
@@ -47045,6 +47075,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const body9 = {
         number: _qcEditing ? (st.qcEditNo || qcAutoNo) : qcAutoNo,
         companyId: companyId5, clientName: client, service, amount: total,
+        // null, not "", when nothing is chosen: the column is nullable and "" is not a service id.
+        serviceItemId: this.state.qcServiceId || null,
         subtotalMinor: qSubtotalMinor, vatMinor: qVatMinor, totalMinor: qTotalMinor, vatRateBp: qVatRateBp,
         status: status9, date: st.qcIssued || new Date().toISOString().slice(0, 10),
         validUntil: st.qcValid || null, notes: st.qcNotes || null,
@@ -47366,6 +47398,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ddQcVatVal: qcVatSel,
       qcAutoNo: _qcEditing ? (this.state.qcEditNo || qcAutoNo) : qcAutoNo,
       qcTitle: _qcEditing ? 'Edit quotation' : 'Create quotation',
+      // The catalogue, as {value,label} so two services with the same name cannot be confused.
+      // Retired rows are filtered: offering one would start a case the engine then refuses.
+      ...mkDd('ddQcService', _qcSellOptions, this.state.qcServiceId || null, (id9) => this.setState({ qcServiceId: id9 || null }), 'Nothing — bills only, opens no case'),
+      ddQcServiceValue: _qcSellSel ? _qcSellSel.name : 'Nothing — bills only, opens no case',
+      qcSellsHint: _qcSellHint,
+      qcSellsHintColor: _qcSellSel ? '#0E9355' : '#B8860B',
       qcSaveLabel: 'Save',
       // Same two-step shape as the invoice: saving always produces a DRAFT, and a separate action
       // sends it. One button that both saves and sends gives no chance to re-read it first.

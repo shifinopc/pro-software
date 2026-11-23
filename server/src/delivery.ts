@@ -57,10 +57,12 @@ export interface DeliveryResult {
   failures: string[];
   /** Lines that got a task but no run, because another line on the same quotation already does that work. */
   absorbed: string[];
+  /** Money lines: billed, and deliberately given no task at all. */
+  billed: string[];
 }
 
 export async function startDeliveryForQuotation(quotationId: string, opts: { actor?: string } = {}): Promise<DeliveryResult> {
-  const empty: DeliveryResult = { started: false, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [] };
+  const empty: DeliveryResult = { started: false, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [], billed: [] };
   const q = await prisma.quotation.findUnique({ where: { id: quotationId } });
   if (!q) return { ...empty, reason: "Quotation not found" };
 
@@ -82,16 +84,40 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   // company is being bought or incorporated IN, which decides nearly everything about the work —
   // and until now it was agreed on the quotation and then written down nowhere the officer doing
   // the job could read it.
-  const lines: { name: string; units: number; country: string }[] = items.length
-    ? items.map((it: any) => ({ name: String(it?.name ?? "").trim(), units: Number(it?.units) > 0 ? Number(it.units) : 1, country: String(it?.country ?? "").trim() })).filter(l => l.name)
-    : (q.service ? [{ name: String(q.service).trim(), units: 1, country: "" }] : []);
-  if (!lines.length) return { ...empty, reason: "That quotation has no line items to deliver" };
+  const lines: { name: string; units: number; country: string; kind: string }[] = items.length
+    ? items.map((it: any) => ({
+        name: String(it?.name ?? "").trim(),
+        units: Number(it?.units) > 0 ? Number(it.units) : 1,
+        country: String(it?.country ?? "").trim(),
+        kind: String(it?.kind ?? "").trim().toLowerCase(),
+      })).filter(l => l.name)
+    : (q.service ? [{ name: String(q.service).trim(), units: 1, country: "", kind: "" }] : []);
 
   const services = await prisma.serviceItem.findMany({
     select: { id: true, name: true, sla: true, time: true, docType: true, workflowId: true },
   });
 
-  const out: DeliveryResult = { started: true, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [] };
+  /**
+   * WHAT THE QUOTATION SELLS, as opposed to what it charges for.
+   *
+   * A quotation for a business setup is commonly written as two money lines - professional fees and
+   * government fees - and nothing else. Read line by line that is a quotation for no work at all: it
+   * produced two clerical to-dos nobody could act on and started no case, so the setup existed only
+   * as the words in the subject line. Seven of forty-one quotations were shaped exactly that way.
+   *
+   * `serviceItemId` is the quotation saying which process it is selling. It becomes one case and one
+   * task; the steps live inside the case, which is where the people doing the work already look.
+   * Added as a line rather than handled separately so it goes through the same matching, the same
+   * absorb rule and the same failure handling as any other - and skipped when a real line already
+   * names it, because then the line is the sale.
+   */
+  const sold = q.serviceItemId ? services.find(s2 => s2.id === q.serviceItemId) ?? null : null;
+  if (sold && !lines.some(l => matchService(l.name, services)?.id === sold.id)) {
+    lines.unshift({ name: sold.name, units: 1, country: "", kind: "service" });
+  }
+  if (!lines.length) return { ...empty, reason: "That quotation has no line items to deliver" };
+
+  const out: DeliveryResult = { started: true, tasks: [], runs: 0, unmatched: [], failures: [], absorbed: [], billed: [] };
 
   // WORK A SISTER LINE ALREADY CONTAINS.
   //
@@ -112,6 +138,10 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     (CONTAINS[other.name.trim().toLowerCase()] ?? []).includes(svcName.trim().toLowerCase()))?.name ?? null;
 
   for (const line of lines) {
+    // MONEY IS NOT WORK. "Professional Fees" and "Government Fees" are what the client pays, and the
+    // invoice already carries them; as tasks they were unassigned to-dos that no officer could do
+    // anything with and nobody ever closed. The quotation already says which lines these are.
+    if (line.kind === "prof" || line.kind === "gov") { out.billed.push(line.name); continue; }
     const svc = matchService(line.name, services);
     if (!svc) out.unmatched.push(line.name);
     // Units are quantities of the same service (3 × Iqama Renewal), so they get their own tasks —
