@@ -297,18 +297,26 @@ export function clientReportHtml(a: {
   // LibreOffice's HTML import understands table attributes and simple inline styles, and ignores
   // most of a stylesheet's layout. So the banding, the widths and the rules are written on the
   // elements themselves - a class that only works in a browser is a document that prints plain.
+  const gap = (pt: number) => `<p style="font-size:${pt}pt;">&nbsp;</p>`;
   const row = (i: number, cells: string[]) =>
     `<tr${i % 2 ? ' bgcolor="#FAF8FE"' : ""}>${cells.join("")}</tr>`;
   // `ink` goes on a span INSIDE the cell: LibreOffice ignores colour and weight written on a <td>.
   const td = (v: unknown, ink = "", right = false) =>
-    `<td${right ? ' align="right"' : ""} style="padding:2.6mm 3mm; border-bottom:.5pt solid #E4E0EE;">`
+    `<td${right ? ' align="right"' : ""} style="padding:3.4mm 4mm; border-bottom:.5pt solid #E8E4F0;">`
     + (ink ? `<span style="${ink}">${esc(v)}</span>` : esc(v)) + "</td>";
-  const head = (cols: [string, string][]) => `<tr bgcolor="#26074D">${cols.map(([t, w]) =>
-    `<th width="${w}" style="padding:2.4mm 3mm; text-align:left; font-size:7.5pt; color:#FFFFFF;">${esc(t)}</th>`).join("")}</tr>`;
-  const title = (text: string) => `<table width="100%" cellspacing="0" cellpadding="0"><tr><td `
-    + `style="padding:6mm 0 1.8mm; font-size:8pt; font-weight:bold; letter-spacing:.09em; color:#6F6C7A;">${esc(text)}</td></tr></table>`;
+  // A LIGHT BAND, NOT A DARK ONE. White text on the dark purple band printed black: LibreOffice
+  // drops `fo:color` from a header cell (confirmed in its own flat-ODF output - the paragraph style
+  // keeps the size and the weight and loses the colour), whichever of <th>, <td>, a span, a <b>,
+  // bgcolor on the row or bgcolor on the cell it is written with. Dark ink on a pale band needs no
+  // colour to survive, because dark ink is the default.
+  const head = (cols: [string, string][]) => `<tr>${cols.map(([t, w]) =>
+    `<td width="${w}" bgcolor="#F0E9FC" style="padding-top:2.6mm; padding-bottom:2.6mm; padding-left:4mm; padding-right:4mm; border-bottom:1pt solid #26074D;">`
+    + `<span style="font-size:8pt; font-weight:bold; letter-spacing:.06em;">${esc(t.toUpperCase())}</span></td>`).join("")}</tr>`;
+  // The section heading carries a bar of its own colour so the eye finds it without a bigger font.
+  const title = (text: string) =>
+    `<p><span style="font-size:9.5pt; font-weight:bold; letter-spacing:.07em; color:#26074D;">${esc(text.toUpperCase())}</span></p>`;
   const empty = (n: number, text: string) =>
-    `<tr><td colspan="${n}" style="padding:3mm; color:#6F6C7A; font-size:8.5pt;">${esc(text)}</td></tr>`;
+    `<tr><td colspan="${n}" style="padding:4mm;"><span style="color:#6F6C7A; font-size:8.5pt;">${esc(text)}</span></td></tr>`;
 
   const doneRows = a.D.completed.map((l, i) => row(i, [
     td(l.person ?? l.caseTitle, "font-weight:bold;"),
@@ -346,18 +354,23 @@ export function clientReportHtml(a: {
       </td></tr>
     </table>
 
-    ${title("COMPLETED IN THIS PERIOD")}
+    ${gap(9)}
+    ${title("Completed in this period")}
     <table width="100%" cellspacing="0" cellpadding="0">
       ${head([["Who", "22%"], ["Document", "9%"], ["Before", "15%"], ["After", "15%"], ["Work done", "29%"], ["Done", "10%"]])}
       ${doneRows}
     </table>
 
-    ${title("STILL PENDING")}
+    ${gap(9)}
+    ${title("Still pending")}
     <table width="100%" cellspacing="0" cellpadding="0">
       ${head([["Who", "26%"], ["Document", "10%"], ["On file now", "20%"], ["Waiting on", "32%"], ["Since", "12%"]])}
       ${pendRows}
     </table>
 
-    <p style="color:#6F6C7A; font-size:8pt; padding-top:5mm;">${a.S.totals.cases} case(s) &middot; ${a.S.totals.casesClosed} completed &middot; ${a.S.totals.steps} steps closed &middot; ${a.S.totals.tasks} separate tasks</p>
+    ${gap(7)}
+    <table width="100%" cellspacing="0" cellpadding="0"><tr><td bgcolor="#F7F4FD" align="center" style="padding:3mm;">
+      <span style="color:#4B4757; font-size:8.5pt;">${a.S.totals.cases} case(s) &middot; ${a.S.totals.casesClosed} completed &middot; ${a.S.totals.steps} steps closed &middot; ${a.S.totals.tasks} separate tasks</span>
+    </td></tr></table>
   </body></html>`;
 }
