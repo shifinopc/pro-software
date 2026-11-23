@@ -98,6 +98,7 @@ import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
 import { clientWork, clientWorkItems, clientWorkSummary, clientReportDetail } from "./clientwork.js";
+import type { ReportLine } from "./clientwork.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
@@ -4685,38 +4686,13 @@ app.get("/api/reports/client-work/:companyId/summary.pdf", requireAuth, requireS
     const co = await prisma.company.findUnique({ where: { id: req.params.companyId }, select: { name: true } });
     if (!co) return res.status(404).json({ error: "No such client" });
     const S = await clientWorkSummary({ from, to, companyId: req.params.companyId });
-    // The same row the proposal reads its letterhead name from.
+    const D = await clientReportDetail({ from, to, companyId: req.params.companyId });
+    // The same row the proposal and the invoice band read their letterhead from.
     const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
-    const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    const rows = [
-      ...S.cases.map(c => [c.title, String(c.steps), dmy(String(c.last ?? "").slice(0, 10)), c.finished ? "Completed" : "In progress"]),
-      ...S.tasks.map(k => [k.title, "—", dmy(String(k.completedAt ?? "").slice(0, 10)), "Completed"]),
-    ];
-    if (!rows.length) rows.push(["No work was completed in this period.", "", "", ""]);
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(co.name)}</title><style>
-      @page { size: A4 landscape; margin: 14mm; }
-      body { font-family: Arial, sans-serif; color: #1A1523; font-size: 10pt; }
-      h1 { font-size: 15pt; margin: 0 0 2mm; }
-      .sub { color: #6F6C7A; font-size: 9pt; margin: 0 0 6mm; }
-      table { width: 100%; border-collapse: collapse; }
-      th { text-align: left; font-size: 8pt; letter-spacing: .04em; text-transform: uppercase;
-           color: #6F6C7A; border-bottom: 1.5pt solid #26074D; padding: 0 3mm 2mm 0; }
-      td { padding: 2.5mm 3mm 2.5mm 0; border-bottom: .5pt solid #DDD9E6; vertical-align: top; }
-      td.n, th.n { text-align: right; padding-right: 0; }
-      .foot { margin-top: 6mm; color: #6F6C7A; font-size: 8.5pt; }
-    </style></head><body>
-      <h1>${esc(org.legalName || org.orgName || "STIMES PRO")}</h1>
-      <p class="sub">${esc(co.name)} &mdash; work completed ${esc(dmy(from))} to ${esc(dmy(to))}</p>
-      <table><thead><tr><th>Case</th><th class="n">Steps</th><th class="n">Last activity</th><th class="n">Status</th></tr></thead><tbody>
-      ${rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td><td class="n">${esc(r[3])}</td></tr>`).join("")}
-      </tbody></table>
-      <p class="foot">${S.totals.cases} case(s) &middot; ${S.totals.casesClosed} completed &middot; ${S.totals.steps} steps &middot; ${S.totals.tasks} separate tasks</p>
-    </body></html>`;
-
-    const pdf = await htmlToPdf(html);
-    // The converter is not on every machine — a developer box without LibreOffice must say so
+    const pdf = await htmlToPdf(clientReportHtml({ org, client: co.name, from, to, S, D, esc }));
+    // The converter is not on every machine - a developer box without LibreOffice must say so
     // rather than hand back an empty tab.
     if (!pdf) return res.status(503).json({ error: "The PDF converter is not available on this server" });
     res.setHeader("Content-Type", "application/pdf");
@@ -4724,6 +4700,105 @@ app.get("/api/reports/client-work/:companyId/summary.pdf", requireAuth, requireS
     res.send(pdf);
   } catch (e: any) { return fail(res, 400, e, "reports.client-work.summary-pdf"); }
 });
+
+/**
+ * The client's copy, as it is printed.
+ *
+ * TWO THINGS HERE ARE NOT STYLE CHOICES.
+ *
+ * 1. THE BODY MUST START WITH A TABLE. LibreOffice's HTML import swallows the first block element
+ *    of the body and replaces it with a page break, so a document that opened with `<h1>Firm</h1>`
+ *    printed a blank first page and no firm name at all - which is exactly what shipped. Starting
+ *    with the letterhead table costs nothing and converts correctly. Measured in the live image: a
+ *    body opening with <p> or <div> gives 2 pages with the first element gone, one opening with
+ *    <table> gives 1 page with everything on it.
+ * 2. NOTHING IS INVENTED. A blank letterhead field prints blank. Name, address, VAT, CR, phone,
+ *    email and logo all come from Settings -> General, and a report carrying a company name or tax
+ *    number nobody configured is worse than a gap someone notices.
+ */
+function clientReportHtml(a: {
+  org: any; client: string; from: string; to: string;
+  S: { totals: { cases: number; casesClosed: number; steps: number; tasks: number } };
+  D: { completed: ReportLine[]; pending: ReportLine[] };
+  esc: (v: unknown) => string;
+}): string {
+  const { org, esc } = a;
+  const firm = String(org.legalName ?? org.orgName ?? "").trim();
+  const idLines = [
+    String(org.address ?? "").trim(),
+    [org.vatNumber || org.vat ? "VAT " + (org.vatNumber || org.vat) : "",
+     org.crNumber || org.cr ? "CR " + (org.crNumber || org.cr) : ""].filter(Boolean).join(" · "),
+    [String(org.phone ?? "").trim(), String(org.email ?? "").trim()].filter(Boolean).join(" · "),
+  ].filter(Boolean);
+
+  // The logo is read off disk and inlined. LibreOffice converts with no session and the console is
+  // a different origin, so `<img src="/files/...">` would be a broken image at best.
+  let logoImg = "";
+  const logoPath = String(org.logoUrl ?? "");
+  if (logoPath.startsWith("/files/")) {
+    try {
+      const file = path.join(FILES_DIR, path.basename(logoPath));
+      const bytes = fs.readFileSync(file);
+      const ext = path.extname(file).toLowerCase();
+      const mime = ext === ".png" ? "image/png" : ext === ".svg" ? "image/svg+xml"
+        : ext === ".webp" ? "image/webp" : "image/jpeg";
+      logoImg = `<img src="data:${mime};base64,${bytes.toString("base64")}" style="height:52px;">`;
+    } catch { /* a logo since deleted prints no logo, not a broken document */ }
+  }
+
+  const cell = (v: unknown) => `<td>${esc(v)}</td>`;
+  const day = (v: string | null) => (v ? dmy(String(v).slice(0, 10)) : "—");
+  const pair = (n: string | null, e: string | null) =>
+    [n, e ? dmy(String(e).slice(0, 10)) : ""].filter(Boolean).join(" · ") || "—";
+
+  const doneRows = a.D.completed.map(l => `<tr>${cell(l.person ?? l.caseTitle)}${cell(l.docType ?? "—")}`
+    + `${cell(pair(l.beforeNumber, l.beforeExpiry))}<td class="ok">${esc(pair(l.afterNumber, l.afterExpiry))}</td>`
+    + `${cell(l.detail)}<td class="n">${esc(day(l.at))}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="none">Nothing was completed in this period.</td></tr>`;
+
+  const pendRows = a.D.pending.map(l => `<tr>${cell(l.person ?? l.caseTitle)}${cell(l.docType ?? "—")}`
+    + `${cell(pair(l.beforeNumber, l.beforeExpiry))}<td class="wait">${esc(l.detail)}</td>`
+    + `<td class="n">${esc(day(l.at))}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="none">Nothing is open for this client.</td></tr>`;
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(a.client)}</title><style>
+    @page { size: A4 landscape; margin: 12mm; }
+    body { font-family: Arial, sans-serif; color: #1A1523; font-size: 9.5pt; }
+    table { width: 100%; border-collapse: collapse; }
+    .lh td { vertical-align: top; padding: 0 0 4mm; border-bottom: 1.5pt solid #26074D; }
+    .firm { font-size: 14pt; font-weight: bold; }
+    .id { color: #4B4757; font-size: 8.5pt; line-height: 1.5; }
+    .doc { text-align: right; font-size: 8.5pt; color: #4B4757; }
+    .doc .t { font-size: 11pt; color: #1A1523; font-weight: bold; }
+    .sec { font-size: 8pt; font-weight: bold; letter-spacing: .08em; color: #6F6C7A; margin: 6mm 0 1.5mm; }
+    th { text-align: left; font-size: 7.5pt; letter-spacing: .05em; color: #6F6C7A;
+         border-bottom: .75pt solid #26074D; padding: 0 3mm 1.5mm 0; }
+    td { padding: 2mm 3mm 2mm 0; border-bottom: .5pt solid #DDD9E6; vertical-align: top; }
+    td.n, th.n { text-align: right; padding-right: 0; }
+    .ok { color: #0E9355; }
+    .wait { color: #B8860B; }
+    .none { color: #6F6C7A; }
+    .foot { color: #6F6C7A; font-size: 8pt; margin-top: 5mm; }
+  </style></head><body>
+    <table class="lh"><tr>
+      ${logoImg ? `<td style="width:62px;">${logoImg}</td>` : ""}
+      <td><div class="firm">${esc(firm)}</div>${idLines.length
+        ? `<div class="id">${idLines.map(esc).join("<br>")}</div>`
+        : (firm ? "" : `<div class="id">Add your letterhead in Settings &rarr; General</div>`)}</td>
+      <td class="doc"><div class="t">Client work report</div>${esc(a.client)}<br>${esc(dmy(a.from))} to ${esc(dmy(a.to))}</td>
+    </tr></table>
+
+    <p class="sec">COMPLETED IN THIS PERIOD</p>
+    <table><thead><tr><th>Who</th><th>Document</th><th>Before</th><th>After</th><th>Work done</th><th class="n">Done</th></tr></thead>
+    <tbody>${doneRows}</tbody></table>
+
+    <p class="sec">STILL PENDING</p>
+    <table><thead><tr><th>Who</th><th>Document</th><th>On file now</th><th>Waiting on</th><th class="n">Since</th></tr></thead>
+    <tbody>${pendRows}</tbody></table>
+
+    <p class="foot">${a.S.totals.cases} case(s) &middot; ${a.S.totals.casesClosed} completed &middot; ${a.S.totals.steps} steps closed &middot; ${a.S.totals.tasks} separate tasks</p>
+  </body></html>`;
+}
 
 /** The client-facing detail: what changed in the period, and what is still open. */
 app.get("/api/reports/client-work/:companyId/detail", requireAuth, requireStaff, async (req, res) => {
