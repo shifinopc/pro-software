@@ -164,17 +164,39 @@ const MAX_ROWS = 2000;
 /** A cell that means "there is none", as opposed to one nobody filled in. */
 const isNone = (v: string) => /^(no insurance|none|n\/a|na|nil|-)$/i.test(v.trim());
 
-/** DD/MM/YYYY — the only format offered, because guessing between it and MM/DD is how a birthday moves. */
-function isoDate(raw: string): { iso: string | null; why?: string } {
+/**
+ * WHICH CENTURY A TWO-DIGIT YEAR MEANS.
+ *
+ * Day and month order is never guessed — DD/MM, stated on the template, because guessing between
+ * that and MM/DD is how a birthday moves. The century is a different question: "19-02-92" and
+ * "07-06-27" are both unambiguous to a person and neither says 19 or 20.
+ *
+ * NEAREST TO TODAY, then corrected by what the field is. 92 is 1992 and not 2092 because 1992 is
+ * closer; 27 is 2027 and not 1927 for the same reason. That rule alone gets expiry dates right and
+ * gets one kind of birthday wrong — somebody born in 1968 would arrive as 2068 — so a field that
+ * can only be in the past says so and the year drops a century. A joining date is left on the
+ * nearest rule: a contract starting next month is as ordinary as one from last year.
+ */
+function twoDigitYear(yy: number, era: "past" | "any"): number {
+  const now = new Date().getFullYear();
+  const cands = [1900 + yy, 2000 + yy, 2100 + yy];
+  let year = cands.reduce((best, c) => (Math.abs(c - now) < Math.abs(best - now) ? c : best), cands[0]);
+  if (era === "past" && year > now) year -= 100;
+  return year;
+}
+
+/** DD/MM/YYYY or DD/MM/YY — separated by / . or -, and ISO straight through. */
+export function isoDate(raw: string, era: "past" | "any" = "any"): { iso: string | null; why?: string } {
   const v = String(raw ?? "").trim();
   if (!v || isNone(v)) return { iso: null };
-  const m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  const m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
   if (m) {
     const [, d, mo, y] = m;
     const day = Number(d), mon = Number(mo);
     if (mon < 1 || mon > 12) return { iso: null, why: `"${v}" has no month ${mon} — dates are DD/MM/YYYY` };
     if (day < 1 || day > 31) return { iso: null, why: `"${v}" has no day ${day}` };
-    return { iso: `${y}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}` };
+    const year = y.length === 2 ? twoDigitYear(Number(y), era) : Number(y);
+    return { iso: `${year}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}` };
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { iso: v };
   return { iso: null, why: `cannot read the date "${v}" — use DD/MM/YYYY` };
@@ -333,7 +355,8 @@ export async function planEmployeeImport(companyId: string, csvText: string): Pr
       claimed.add(matchId);
     }
 
-    const dob = isoDate(at(r, "date_of_birth"));
+    // "past": a birthday cannot be in the future, which is what decides 68 → 1968 rather than 2068.
+    const dob = isoDate(at(r, "date_of_birth"), "past");
     if (dob.why) warnings.push({ row: line, name, what: `date of birth left empty — ${dob.why}` });
 
     const salaryRaw = at(r, "salary_monthly").replace(/,/g, "");
