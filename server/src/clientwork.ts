@@ -333,20 +333,17 @@ export function clientReportHtml(a: {
     table { width: 100%; border-collapse: collapse; }
     p { margin: 0; }
   </style></head><body>
-    <table width="100%" cellspacing="0" cellpadding="0"><tr>
-      ${logoImg ? `<td width="70" valign="top" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">${logoImg}</td>` : ""}
-      <td valign="top" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">
-        <p style="font-size:14pt; font-weight:bold; color:#26074D;">${esc(firm)}</p>
-        ${idLines.length
-          ? idLines.map(l => `<p style="font-size:8.5pt; color:#4B4757; padding-top:1mm;">${esc(l)}</p>`).join("")
-          : (firm ? "" : `<p style="font-size:8.5pt; color:#B8860B; padding-top:1mm;">Add your letterhead in Settings &rarr; General</p>`)}
-      </td>
-      <td width="34%" valign="top" align="right" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">
+    <table width="100%" cellspacing="0" cellpadding="0">
+      ${logoImg ? `<tr><td align="center" style="padding-bottom:2mm;">${logoImg}</td></tr>` : ""}
+      <tr><td align="center"><p style="font-size:15pt; font-weight:bold; color:#26074D;">${esc(firm)}</p></td></tr>
+      ${idLines.length
+        ? idLines.map(l => `<tr><td align="center"><p style="font-size:8.5pt; color:#4B4757; padding-top:1mm;">${esc(l)}</p></td></tr>`).join("")
+        : (firm ? "" : `<tr><td align="center"><p style="font-size:8.5pt; color:#B8860B; padding-top:1mm;">Add your letterhead in Settings &rarr; General</p></td></tr>`)}
+      <tr><td align="center" style="padding-top:4mm; border-bottom:1.5pt solid #26074D;">
         <p style="font-size:7.5pt; letter-spacing:.1em; color:#6F6C7A;">CLIENT WORK REPORT</p>
         <p style="font-size:12pt; font-weight:bold; padding-top:1.5mm;">${esc(a.client)}</p>
-        <p style="font-size:8.5pt; color:#4B4757; padding-top:1mm;">${esc(dmy(a.from))} to ${esc(dmy(a.to))}</p>
-      </td>
-    </tr>
+        <p style="font-size:8.5pt; color:#4B4757; padding:1mm 0 3.5mm;">${esc(dmy(a.from))} to ${esc(dmy(a.to))}</p>
+      </td></tr>
     </table>
 
     ${title("COMPLETED IN THIS PERIOD")}
