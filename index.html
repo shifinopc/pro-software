@@ -2346,6 +2346,22 @@
                 </div>
                 <div style="flex:1;"></div>
                 <sc-if value="{{ clFocusOn }}" hint-placeholder-val="{{ false }}"><span onClick="{{ clClearFocus }}" style="font-size:11px; color:#7C00FF; cursor:pointer;">Clear filters</span></sc-if>
+                <!-- WHICH PRODUCT THEY CAME FOR. Beside the search box rather than as another
+                     status chip: the chips are one ladder (Active, Prospect, Suspended) and the
+                     product is a different question entirely. -->
+                <div class="pill-selwrap" style="flex-shrink:0;">
+                  <div data-dd data-open="{{ ddClProdOpen }}" onClick="{{ ddClProdToggle }}" class="pill-sel">
+                    <span>{{ ddClProdLabel }}</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                  </div>
+                  <sc-if value="{{ ddClProdOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" class="pill-dd">
+                      <sc-for list="{{ ddClProdOptions }}" as="o" hint-placeholder-count="5">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
                 <div style="position:relative; width:180px; flex-shrink:0; margin:9px 0;">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.2" stroke-linecap="round" style="position:absolute; left:11px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
                   <input sc-camel-default-value="{{ clSearch }}" data-seed-val="{{ clSearch }}" onInput="{{ setClSearch }}" placeholder="Search clients…" autocomplete="off" style="width:100%; box-sizing:border-box; background:#F8F6FC; border:1px solid #EFEAF7; border-radius:10px; padding:7px 12px 7px 34px; font-size:11px; font-family:inherit; color:#18151F; outline:none;" style-focus="background:#fff; border-color:#C9A2FF; box-shadow:0 0 0 3px rgba(124,0,255,.10);">
@@ -2361,15 +2377,15 @@
                    against a box that never moves while the PAGE carried it away. Ten columns fit
                    a laptop; below that they narrow, which is the lesser evil. -->
               <div class="cl-scroll"><div class="cl-rows">
-              <div style="position:sticky; top:0; z-index:3; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) 90px minmax(0,.9fr) minmax(0,1fr) 56px minmax(0,.95fr) minmax(0,1fr) 92px 16px; gap:8px; padding:10px 14px 8px; background:#FBF9FE; border-bottom:1px solid #EFEAF7; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">
-                <span>Client</span><span>CR</span><span>City</span><span>Industry</span><span>PRO officer</span><span style="text-align:right;">Staff</span><span>Nationalisation</span><span>Documents</span><span>Status</span><span></span>
+              <div style="position:sticky; top:0; z-index:3; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) 90px minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1fr) 56px minmax(0,.95fr) minmax(0,1fr) 92px 16px; gap:8px; padding:10px 14px 8px; background:#FBF9FE; border-bottom:1px solid #EFEAF7; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em;">
+                <span>Client</span><span>CR</span><span>City</span><span>Industry</span><span>Product</span><span>PRO officer</span><span style="text-align:right;">Staff</span><span>Nationalisation</span><span>Documents</span><span>Status</span><span></span>
               </div>
               <sc-for list="{{ clients }}" as="c" hint-placeholder-count="6">
                 <!-- One line per client, the same shape Leads and Contacts use: plain text in
                      columns, no pills. The facts that were stacked under the name — CR, city,
                      industry — are columns now, which is what makes them comparable down the page
                      rather than readable one row at a time. -->
-                <div onClick="{{ c.open }}" title="{{ c.suspTitle }}" class="cl-row tbl-row" style="animation:clRowIn .6s cubic-bezier(.22,1,.36,1) both; animation-delay:{{ c.rowDelay }}; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) 90px minmax(0,.9fr) minmax(0,1fr) 56px minmax(0,.95fr) minmax(0,1fr) 92px 16px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px; cursor:pointer; background:{{ c.rowBg }}; box-shadow:{{ c.rowAccent }};" style-hover="background:#FAF7FE;">
+                <div onClick="{{ c.open }}" title="{{ c.suspTitle }}" class="cl-row tbl-row" style="animation:clRowIn .6s cubic-bezier(.22,1,.36,1) both; animation-delay:{{ c.rowDelay }}; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,.8fr) 90px minmax(0,.9fr) minmax(0,1.1fr) minmax(0,1fr) 56px minmax(0,.95fr) minmax(0,1fr) 92px 16px; gap:8px; align-items:center; padding:7px 14px; border-bottom:1px solid #F6F3FA; font-size:11px; cursor:pointer; background:{{ c.rowBg }}; box-shadow:{{ c.rowAccent }};" style-hover="background:#FAF7FE;">
                   <div style="display:flex; align-items:center; gap:9px; min-width:0;">
                     <span style="width:22px; height:22px; border-radius:7px; background:{{ c.avBg }}; color:{{ c.avFg }}; font-family:'Space Grotesk',sans-serif; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ c.initials }}</span>
                     <span style="font-weight:600; color:#18151F; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</span>
@@ -2377,6 +2393,16 @@
                   <span title="{{ c.crLabel }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;">{{ c.crLabel }}</span>
                   <span title="{{ c.city }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.city }}</span>
                   <span title="{{ c.industry }}" style="min-width:0; color:#6F6C7A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.industry }}</span>
+                  <!-- WHAT THEY CAME FOR, one chip per product. Colour so a page of clients can be
+                       read DOWN this column rather than across each row, and because a client
+                       wanting two things is exactly what plain text made hardest to see. -->
+                  <span title="{{ c.productsTitle }}" style="display:flex; align-items:center; gap:4px; min-width:0; overflow:hidden;">
+                    <sc-for list="{{ c.products }}" as="p" hint-placeholder-count="1">
+                      <span style="font-size:9.5px; font-weight:700; color:{{ p.fg }}; background:{{ p.bg }}; border:1px solid {{ p.bd }}; padding:2px 7px; border-radius:99px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.label }}</span>
+                    </sc-for>
+                    <sc-if value="{{ c.hasMoreProducts }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px; font-weight:700; color:#8C8899; white-space:nowrap;">+{{ c.moreProducts }}</span></sc-if>
+                    <sc-if value="{{ c.noProducts }}" hint-placeholder-val="{{ false }}"><span style="color:#C9C6D3;">&mdash;</span></sc-if>
+                  </span>
                   <!-- The colour and weight are the officer's own: amber where the name on file is
                        no longer an active PRO officer, grey where nobody is named at all. -->
                   <span title="{{ c.proTitle }}" style="min-width:0; color:{{ c.proColor }}; font-weight:{{ c.proWeight }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.pro }}</span>
@@ -12674,6 +12700,28 @@
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COUNTRY</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcCountryToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ecCountryColor }};"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddEcCountryVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcCountryOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcCountryOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Decides which country&#39;s rules and thresholds apply.</div></div>
           <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CITY</div><input sc-camel-default-value="{{ ecCity }}" data-seed-val="{{ ecCity }}" onBlur="{{ setEcCity }}" placeholder="Riyadh" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
           <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">INDUSTRY</div><input sc-camel-default-value="{{ ecIndustry }}" data-seed-val="{{ ecIndustry }}" onBlur="{{ setEcIndustry }}" placeholder="Construction" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Suggests which nationalisation bands apply.</div></div>
+          <!-- WHAT THEY BUY FROM US, as against what they do for a living, which is Industry above.
+               Captured on the lead and then frozen: there was nowhere to change it once they became
+               a client, so a client who later took on VAT work could not be recorded as doing so. -->
+          <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PRODUCT</div>
+            <div data-dd style="position:relative; margin-top:6px;">
+              <input sc-camel-default-value="{{ ecService }}" data-seed-val="{{ ecService }}" onBlur="{{ setEcService }}" placeholder="What are they buying?" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 32px 10px 13px; font-size:12px; background:#FCFBFE;">
+              <span onClick="{{ ecSvcToggle }}" title="Pick the services they take" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </span>
+              <sc-if value="{{ ecSvcOpen }}" hint-placeholder-val="{{ false }}">
+                <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:200px; overflow-y:auto;">
+                  <sc-for list="{{ ecSvcOptions }}" as="o" hint-placeholder-count="4">
+                    <div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
+                  </sc-for>
+                  <sc-if value="{{ ecSvcEmpty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+            <div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Pick as many as apply, or type your own. Shows on the Clients list and can be filtered there.</div>
+          </div>
         </div>
         <sc-if value="{{ ecErrShow }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:10px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ ecErr }}</div>
@@ -12865,6 +12913,28 @@
                    to change it afterwards and no way to decline it. -->
               <div><label class="fm-lab">PORTAL LOGIN</label><sc-if value="{{ acPortalWanted }}" hint-placeholder-val="{{ true }}"><input sc-camel-default-value="{{ acPortalEmail }}" data-seed-val="{{ acPortalEmail }}" onBlur="{{ setAcPortalEmail }}" placeholder="who administers their portal" type="email" class="fm-inp"></sc-if><sc-if value="{{ acPortalNone }}" hint-placeholder-val="{{ false }}"><div class="fm-inp" style="display:flex; align-items:center; color:#8C8899; background:#F7F6FA;">Not yet</div></sc-if><div onClick="{{ toggleAcPortalNone }}" class="fm-hint" style="display:flex; align-items:center; gap:7px; cursor:pointer;"><span style="width:13px; height:13px; border-radius:4px; border:1.5px solid {{ acPortalBd }}; background:{{ acPortalBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><sc-if value="{{ acPortalNone }}" hint-placeholder-val="{{ false }}"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></span><span>No portal login yet</span></div><div class="fm-hint">{{ acPortalHint }}</div></div>
                             <div class="ldf-cap">How we will work it</div>
+              <!-- WHICH PRODUCT THEY BOUGHT. Same control and same storage as the lead form's, so
+                   a product recorded while pitching survives becoming a client and the Clients
+                   list can colour and filter on one format. -->
+              <div><label class="fm-lab">PRODUCT</label>
+                <div data-dd style="position:relative;">
+                  <input sc-camel-default-value="{{ acService }}" data-seed-val="{{ acService }}" onBlur="{{ setAcService }}" placeholder="What are they buying?" class="fm-inp" style="padding-right:30px;">
+                  <span onClick="{{ acSvcToggle }}" title="Pick the services they take" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                  </span>
+                  <sc-if value="{{ acSvcOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;">
+                      <sc-for list="{{ acSvcOptions }}" as="o" hint-placeholder-count="4">
+                        <div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
+                      </sc-for>
+                      <sc-if value="{{ acSvcEmpty }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
+                <div class="fm-hint">Pick as many as apply, or type your own.</div>
+              </div>
               <div><label class="fm-lab">STATUS</label><div style="position:relative;"><div data-dd onClick="{{ ddAcStatusToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acStatus2Val }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcStatusOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
               <div><label class="fm-lab">PRO OFFICER</label><div style="position:relative;"><div data-dd onClick="{{ ddAcProToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ acProColor }};">{{ acProVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcProOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcProOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><sc-if value="{{ acProHintShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">{{ acProHint }}</div></sc-if></div>
               <div><label class="fm-lab">SALES REP</label><div style="position:relative;"><div data-dd onClick="{{ ddAcRepToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ acRepVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddAcRepOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddAcRepOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
@@ -25786,6 +25856,47 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // the list tuple — which several screens and the design-mode fixtures index by position — does
     // not have to grow a column for it.
     const _crPending9 = new Set((Array.isArray(coData) ? coData : []).filter(c9 => c9.crPending).map(c9 => c9.id));
+    // What each client came for. By id for the same reason as the line above: the list tuple is
+    // indexed by position in several places and by the design fixtures, so it does not grow.
+    const _svcOf9 = new Map((Array.isArray(coData) ? coData : []).map(c9 => [c9.id, c9.service || '']));
+    // Its own splitter rather than the shared `_parts9`: that one is declared with the Leads block
+    // further down this function, and reading a const before its line throws — the clients list
+    // renders first, so it cannot borrow it.
+    const _svcParts9 = (v9) => String(v9 || '').split(',').map(x9 => x9.trim()).filter(Boolean);
+    /**
+     * A COLOUR PER PRODUCT, so a page of clients can be read down rather than across.
+     *
+     * The product's own colour when somebody has set one — the Product list carries `color`/`bg`
+     * columns — else one picked from a fixed palette by hashing the NAME. Hashing, not position:
+     * a list reordered or a product retired must not repaint every other chip, which is what makes
+     * the colour worth recognising in the first place.
+     */
+    const PROD_INK9 = [
+      ['#7C00FF', '#F5EEFF', '#E4D3FB'], ['#0E9355', '#E7F8EF', '#BFE9D4'],
+      ['#B4690E', '#FFF7E6', '#F3D8A6'], ['#1667B8', '#EAF4FF', '#C3DDF7'],
+      ['#C0353A', '#FEECEC', '#FBD5D5'], ['#6B4BA8', '#F1EEFB', '#DCD4F3'],
+      ['#0E7490', '#E6F7FA', '#BCE7F0'], ['#A3156B', '#FDEAF4', '#F6CCE2'],
+      ['#4B5563', '#F1F3F6', '#DDE1E8'], ['#8A6D00', '#FBF6E0', '#EEE2AD'],
+    ];
+    const _prodList9 = (Array.isArray(this.state.productsData) ? this.state.productsData : []);
+    const _prodChip9 = (nm9) => {
+      const key9 = nm9.toLowerCase();
+      const known9 = _prodList9.find(p9 => String(p9.name || '').trim().toLowerCase() === key9);
+      if (known9 && known9.color && known9.bg) return { label: nm9, fg: known9.color, bg: known9.bg, bd: known9.bg };
+      // BY POSITION IN THE PRODUCT LIST for anything on it, so the handful of products a firm
+      // actually sells get a different colour each — hashing the name collided PRO with VAT on the
+      // first six-colour palette, which is the one thing the colour is there to prevent.
+      // Hashing is the fallback for a value somebody typed past the list, where there is no
+      // position to use and a stable-but-arbitrary colour is the best available.
+      const at9 = known9 ? _prodList9.indexOf(known9) : -1;
+      if (at9 >= 0) { const [f9, b9, d9] = PROD_INK9[at9 % PROD_INK9.length]; return { label: nm9, fg: f9, bg: b9, bd: d9 }; }
+      let h9 = 0;
+      for (let i9 = 0; i9 < nm9.length; i9++) h9 = (h9 * 31 + nm9.charCodeAt(i9)) >>> 0;
+      const [fg9, bg9, bd9] = PROD_INK9[h9 % PROD_INK9.length];
+      return { label: nm9, fg: fg9, bg: bg9, bd: bd9 };
+    };
+    const CL_NO_PROD9 = '\u0000not-set'; // the same sentinel idea as the Leads filter
+    const _clProd9 = this.state.clProduct || '';
     const clSearch = (this.state.clSearch || '').toLowerCase();
     const clArchived = this.state.clArchivedMap || {};
     const allClients = [...(this.state.createdClients || []), ...clDefs].map((c, i) => {
@@ -25797,6 +25908,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // list SHOWS: a dash means nobody filled it in, and that is a different thing from a
         // registration that does not exist yet.
         crPending: _crPending9.has(realId),
+        // One chip per product. A client wanting two things shows two, which is the case the
+        // single-value column this replaces could not show at all.
+        // TWO CHIPS AND A COUNT. Three products in a column this width shrink to "Aud… P… V…",
+        // which is colour without a word to attach it to. The full list is on the row's tooltip.
+        products: _svcParts9(_svcOf9.get(realId)).slice(0, 2).map(_prodChip9),
+        moreProducts: Math.max(0, _svcParts9(_svcOf9.get(realId)).length - 2),
+        hasMoreProducts: _svcParts9(_svcOf9.get(realId)).length > 2,
+        hasProducts: _svcParts9(_svcOf9.get(realId)).length > 0,
+        noProducts: _svcParts9(_svcOf9.get(realId)).length === 0,
+        productsTitle: _svcParts9(_svcOf9.get(realId)).join(', '),
+        productList: _svcParts9(_svcOf9.get(realId)),
         crLabel: (cr && cr !== '—') ? cr : (_crPending9.has(realId) ? 'CR pending' : '—'),
         // The owner id, so the detail panel can show and change it. Everything else on this row is
         // a rendered string; this one has to stay an id, because it is what gets written back.
@@ -25916,6 +26038,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const clSort = this.state.clSort || 'newest';
     const clVisible = allClients.filter(c => !c.archived
       && (clFilter === 'All' || c.status === clFilter)
+      // MEMBERSHIP, not equality — "Company Formation, PRO" is one client wanting two things, and
+      // comparing the whole string would hide it from both of the filters it belongs under.
+      // "Not set" is a choice of its own: finding the clients nobody has recorded a product for is
+      // the first thing this filter gets opened for.
+      && (!_clProd9
+        || (_clProd9 === CL_NO_PROD9
+          ? c.productList.length === 0
+          : c.productList.some(p9 => p9.toLowerCase() === _clProd9.toLowerCase())))
       && (!clFocus || (clFocus === 'attention' ? c.overdue > 0 : clFocus === 'expiring' ? c.expiring > 0 : clFocus === 'suspended' ? c.status === 'Suspended' : true))
       && (!clSearch || c.name.toLowerCase().includes(clSearch) || c.cr.toLowerCase().includes(clSearch) || c.industry.toLowerCase().includes(clSearch)
         || String(c.city || '').toLowerCase().includes(clSearch) || String(c.pro || '').toLowerCase().includes(clSearch)))
@@ -27622,6 +27752,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const cdCopied = this.state.cdCredCopied;
       // Passwords are NEVER in the list payload — revealing fetches one on demand and is audited
       // server-side (action credential.reveal).
+      // WHO MAY READ A PASSWORD, as the server decides it: the reveal route is admin-only, and a
+      // PRO officer who presses anything that needs one gets a 403. A UI hint, not the gate — the
+      // server is still the gate, and a custom role is resolved there, not here.
+      const _canReveal9 = _meRole === 'admin' || _meRole === 'super_admin' || _meRole === null;
       const _cdReveal = (row7) => {
         if (cdCredReveal[row7.id]) return this.setState({ cdCredReveal: { ...cdCredReveal, [row7.id]: false } });
         if (cdCredPass[row7.id]) return this.setState({ cdCredReveal: { ...cdCredReveal, [row7.id]: true } });
@@ -27692,6 +27826,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           reveal: () => _cdReveal(c7),
           openSite: () => {
             const go = (pw) => { try { if (pw) navigator.clipboard && navigator.clipboard.writeText(pw); } catch (e) {} if (url) window.open(url, '_blank', 'noopener'); this.setState({ cdCredCopied: c7.id }); };
+            // SAY IT RATHER THAN FAIL QUIETLY. This button fetches the password, copies it, and
+            // opens the portal. For anybody who may not read passwords the fetch 403s, the catch
+            // ran go('') and the portal opened with an empty clipboard and the label still saying
+            // "Copied ✓" — the button appeared to work and did half its job in silence. Opening
+            // the portal is still worth doing, so it still opens; the copy is named as the part
+            // that did not happen.
+            if (!_canReveal9) {
+              if (url) window.open(url, '_blank', 'noopener');
+              return this.toast('Portal opened — the password is not yours to copy, ask an admin', 'error');
+            }
             if (cdCredPass[c7.id]) return go(cdCredPass[c7.id]);
             const t7 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + c7.id + '/reveal', { headers: t7 ? { Authorization: 'Bearer ' + t7 } : {} })
@@ -27934,6 +28078,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const grp9 = (Array.isArray(this.state.groupsData) ? this.state.groupsData : [])
               .find(g9 => g9.id === raw9.groupId);
             return { ecCountry: raw9.country || '', ecCity: raw9.city || '', ecIndustry: raw9.industry || '',
+                     ecService: raw9.service || '',
                      ecCr: raw9.cr || '', ecGroup: (grp9 && grp9.name) || 'None',
                      // WITHOUT THIS THERE IS NO WAY OUT OF "Individual". A client the firm has just
                      // formed a company for holds a CR and is still recorded as a person, and every
@@ -27957,6 +28102,34 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ddEcGroupVal: this.state.ecGroup || 'None',
       ecGroupColor: (this.state.ecGroup && this.state.ecGroup !== 'None') ? '#26074D' : '#8C8899',
       setEcIndustry: (e) => this.setState({ ecIndustry: e.target.value, ecErr: '' }),
+      setEcService: (e) => this.setState({ ecService: e.target.value, ecErr: '' }),
+      ecService: this.state.ecService || '',
+      ...(() => {
+        // Type or pick several, the same control and the same storage as the lead form — one
+        // comma-separated string in Company.service, so the Clients column and its filter read one
+        // format wherever the answer was typed.
+        const open7 = this.state.openDd === 'ec-service';
+        const cur7 = String(this.state.ecService || '').split(',').map(x7 => x7.trim()).filter(Boolean);
+        const on7 = cur7.map(x7 => x7.toLowerCase());
+        const list7 = (Array.isArray(this.state.productsData) ? this.state.productsData : []).filter(p7 => !p7.retired);
+        return {
+          ecSvcOpen: open7,
+          ecSvcToggle: () => this.setState({ openDd: open7 ? null : 'ec-service' }),
+          ecSvcEmpty: list7.length === 0,
+          ecSvcOptions: list7.map(o7 => {
+            const nm7 = String(o7.name || '').trim();
+            const picked7 = on7.includes(nm7.toLowerCase());
+            return {
+              label: nm7, mark: picked7 ? '✓' : '',
+              weight: picked7 ? '700' : '500', color: picked7 ? '#7C00FF' : '#1A1523',
+              // Does not close on a pick: choosing three should not be three journeys.
+              pick: () => this.setState({ ecService: (picked7
+                ? cur7.filter(x7 => x7.trim().toLowerCase() !== nm7.toLowerCase())
+                : [...cur7, nm7]).join(', '), ecErr: '' }),
+            };
+          }),
+        };
+      })(),
       ecCity: this.state.ecCity || '', ecIndustry: this.state.ecIndustry || '',
       // A country is a CODE chosen from the server's list, never typed: "Saudi", "KSA" and "SA" are
       // one country to a person and three to every count in this system.
@@ -27999,6 +28172,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             country: (st9.ecCountry || '').trim() || null,
             city: (st9.ecCity || '').trim() || null,
             industry: (st9.ecIndustry || '').trim() || null,
+            service: (st9.ecService || '').trim() || null,
             cr: (st9.ecCr || '').trim() || null,
             companyType: (st9.ecType || '').trim() || null,
             // Sent as an id, and null clears it. The picker deals in names because that is what a
@@ -28074,6 +28248,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       clNext: () => { if (_clPage9 < _clPageCount9) this.setState({ clPage: _clPage9 + 1 }); },
       clFocusOn: !!clFocus || !!clSearch,
       clClearFocus: () => this.setState({ clFocus: null, clSearch: '', clPage: 1 }), clUpgradeShow: clUpgrades.length > 0, showClientList: !clRow,
+      // Same shape as the Leads product filter, including "Not set" last: it is the biggest group
+      // on a list where most clients predate the Product field, and first is where the eye lands.
+      ...mkDdSearch('ddClProd', [
+        { value: '', label: 'All products' },
+        ...(Array.isArray(this.state.productsData) ? this.state.productsData : [])
+          .filter(p9 => !p9.retired)
+          .map(p9 => ({ value: String(p9.name || '').trim(), label: String(p9.name || '').trim() }))
+          .filter(o9 => o9.value),
+        { value: CL_NO_PROD9, label: 'Not set' },
+      ], _clProd9, (v9) => this.setState({ clProduct: v9, clPage: 1 })),
       clSearch: this.state.clSearch || '', setClSearch: (e) => { const _v9 = e && e.target ? e.target.value : ''; this._deb('setClSearch', 220, () => this.setState({ clSearch: _v9, clPage: 1 })); },
       clientsEmpty: clVisible.length === 0,
       ...clDetailApi, ...editClientApi,
@@ -28345,6 +28529,35 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         };
       })(),
       acActivity: this.state.acActivity || '',
+      acService: this.state.acService || '',
+      setAcService: (e) => this.setState({ acService: e.target.value }),
+      ...(() => {
+        // Type or pick several, exactly as the lead form does — same storage (a comma-separated
+        // string in Company.service), so the Clients list column and its filter read one format.
+        const open8 = this.state.openDd === 'ac-service';
+        const cur8 = String(this.state.acService || '').split(',').map(x8 => x8.trim()).filter(Boolean);
+        const on8 = cur8.map(x8 => x8.toLowerCase());
+        const list8 = (Array.isArray(this.state.productsData) ? this.state.productsData : []).filter(p8 => !p8.retired);
+        return {
+          acSvcOpen: open8,
+          acSvcToggle: () => this.setState({ openDd: open8 ? null : 'ac-service' }),
+          acSvcEmpty: list8.length === 0,
+          acSvcOptions: list8.map(o8 => {
+            const nm8 = String(o8.name || '').trim();
+            const picked8 = on8.includes(nm8.toLowerCase());
+            return {
+              label: nm8,
+              mark: picked8 ? '✓' : '',
+              weight: picked8 ? '700' : '500',
+              color: picked8 ? '#7C00FF' : '#1A1523',
+              // Picking does not close the menu: choosing three should not be three journeys.
+              pick: () => this.setState({ acService: (picked8
+                ? cur8.filter(x8 => x8.trim().toLowerCase() !== nm8.toLowerCase())
+                : [...cur8, nm8]).join(', ') }),
+            };
+          }),
+        };
+      })(),
       acVat: this.state.acVat || '',
       acGosi: this.state.acGosi || '',
       acMol: this.state.acMol || '',
@@ -28613,6 +28826,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               postalCode: (st.acPostal || '').trim() || null, city: (st.acCity || '').trim() || null,
               companyType: (st.acType || '').trim() || null, misaLicense: (st.acMisa || '').trim() || null,
               contactDesignation: (st.acDesignation || '').trim() || null,
+              service: (st.acService || '').trim() || null,
               status: String(st.acStatus2 || 'prospect').toLowerCase(),
               groupId: grpRow7 ? grpRow7.id : null,
               ownerId: st.acRep === 'Unassigned' ? null : (pick7 ? pick7.id : (st.acOwnerWas || null)),
@@ -39577,6 +39791,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         acErr2: '',
         acType: (l && l.companyType) || 'Saudi Company',
         acActivity: (l && l.mainActivity) || '',
+        // WHAT THEY CAME FOR, carried through the conversion. It was captured on the lead and then
+        // had nowhere to live: the client form never asked, so the answer froze at whatever the
+        // lead said and a client who later took on VAT work could not be recorded as doing so.
+        acService: (l && l.service) || '',
         acVat: (l && l.vatNumber) || '',
         acGosi: (l && l.gosiNumber) || '',
         acMol: (l && l.molId) || '',
@@ -44643,7 +44861,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           key: 'product', path: 'products', draftKey: 'ssProdDraft', errKey: 'ssProdErr',
           title: 'Products', sub: 'What the firm sells',
           placeholder: 'e.g. Company Formation', live: _productList,
-          starter: ['Company Formation', 'PRO', 'VAT', 'Auditing'],
+          starter: ['Company Formation', 'PRO', 'VAT', 'Auditing', 'Other'],
           emptyNote: 'No products set up. The Product box on a lead is then a free text box, and "which service converts best" splits one answer across every spelling of it.',
           hint: 'These fill the Product box on a lead in one press, and the sales router can route on it. Anything else can still be typed.',
         },
