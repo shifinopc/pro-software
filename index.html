@@ -12705,14 +12705,14 @@
                a client, so a client who later took on VAT work could not be recorded as doing so. -->
           <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PRODUCT</div>
             <div data-dd style="position:relative; margin-top:6px;">
-              <input sc-camel-default-value="{{ ecService }}" data-seed-val="{{ ecService }}" onBlur="{{ setEcService }}" placeholder="What are they buying?" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 32px 10px 13px; font-size:12px; background:#FCFBFE;">
-              <span onClick="{{ ecSvcToggle }}" title="Pick the services they take" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex;">
+              <span onClick="{{ ecSvcToggle }}" title="Pick the services they take" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex; z-index:1;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
               </span>
+              <input sc-camel-default-value="{{ ecService }}" data-seed-val="{{ ecService }}" onBlur="{{ setEcService }}" placeholder="What are they buying?" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 32px 10px 13px; font-size:12px; background:#FCFBFE;">
               <sc-if value="{{ ecSvcOpen }}" hint-placeholder-val="{{ false }}">
-                <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30; max-height:200px; overflow-y:auto;">
+                <div data-dd data-hidescroll="true" class="fm-dd">
                   <sc-for list="{{ ecSvcOptions }}" as="o" hint-placeholder-count="4">
-                    <div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
+                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span style="flex:0 0 12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
                   </sc-for>
                   <sc-if value="{{ ecSvcEmpty }}" hint-placeholder-val="{{ false }}">
                     <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
@@ -12918,14 +12918,26 @@
                    list can colour and filter on one format. -->
               <div><label class="fm-lab">PRODUCT</label>
                 <div data-dd style="position:relative;">
-                  <input sc-camel-default-value="{{ acService }}" data-seed-val="{{ acService }}" onBlur="{{ setAcService }}" placeholder="What are they buying?" class="fm-inp" style="padding-right:30px;">
-                  <span onClick="{{ acSvcToggle }}" title="Pick the services they take" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex;">
+                  <!-- CHEVRON FIRST, INPUT SECOND. _placeDropdowns() takes the panel's previous
+                       sibling as the field it hangs off, and the chevron is absolutely positioned
+                       and vertically centred — measuring from it left half a field's height of
+                       room that is not there, so the list was capped eleven pixels too tall and
+                       its last option sat under the dialog's edge. Order here is DOM order only;
+                       the chevron is positioned, so nothing moves on screen. -->
+                  <span onClick="{{ acSvcToggle }}" title="Pick the services they take" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex; z-index:1;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
                   </span>
+                  <input sc-camel-default-value="{{ acService }}" data-seed-val="{{ acService }}" onBlur="{{ setAcService }}" placeholder="What are they buying?" class="fm-inp" style="padding-right:30px;">
                   <sc-if value="{{ acSvcOpen }}" hint-placeholder-val="{{ false }}">
-                    <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;">
+                    <!-- `.fm-dd`, not a hand-rolled panel: _placeDropdowns() flips any `[data-dd]`
+                         it finds above its field when the dialog has no room below, and caps it to
+                         the room there is. A panel that declares its own absolute position gets
+                         placed too, but without the class it has no max-height and no overflow
+                         rule — so near the bottom of a tall form its options ran under the footer
+                         and could not be clicked. -->
+                    <div data-dd data-hidescroll="true" class="fm-dd">
                       <sc-for list="{{ acSvcOptions }}" as="o" hint-placeholder-count="4">
-                        <div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; cursor:pointer;" style-hover="background:#F7F3FD;"><span style="width:12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span style="flex:0 0 12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
                       </sc-for>
                       <sc-if value="{{ acSvcEmpty }}" hint-placeholder-val="{{ false }}">
                         <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
@@ -13363,7 +13375,7 @@
   <!-- Upload document modal -->
   <sc-if value="{{ showUploadModal }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeUpload }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:460px; padding:17px 18px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; max-height:90vh; overflow-y:auto;">
+      <div onClick="{{ stopClick }}" data-hidescroll="true" style="background:#fff; border-radius:20px; width:100%; max-width:820px; padding:17px 18px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; max-height:90vh; overflow-y:auto;">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Upload document</span>
           <div onClick="{{ closeUpload }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;">
@@ -13373,6 +13385,12 @@
         <sc-if value="{{ udError }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ udError }}</div>
         </sc-if>
+        <!-- TWO COLUMNS, because this form asks two different questions: WHOSE document this
+             is on the left, and WHAT it says on the right. Stacked, its eleven fields ran
+             past the bottom of the screen and the file picker — the one control that makes
+             this an upload at all — sat below the fold. -->
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 18px; align-items:start;">
+          <div style="min-width:0;">
         <div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-top:11px;">CLIENT *</div>
         <div style="position:relative; margin-top:6px;">
           <div data-dd onClick="{{ ddUdClientToggle }}" style="width:100%; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ udClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
@@ -13413,6 +13431,8 @@
                 </sc-if>
               </div>
         </sc-if>
+          </div>
+          <div style="min-width:0;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
           <div><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">{{ udNumberLabel }}</div><input sc-camel-default-value="{{ udNumber }}" data-seed-val="{{ udNumber }}" onBlur="{{ setUdNumber }}" placeholder="{{ udNumberPh }}" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
           <div><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">{{ udExpiryLabel }}</div><input value="{{ udExpiry }}" onChange="{{ setUdExpiry }}" type="date" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
@@ -13446,6 +13466,8 @@
           <span style="font-size:11px; font-weight:600; color:{{ udFileColor }}; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ udFileLabel }}</span>
           <input type="file" onChange="{{ setUdFile }}" style="display:none;">
         </label>
+          </div>
+        </div>
         <div style="display:flex; align-items:center; gap:10px; margin-top:12px;">
           <span style="flex:1; font-size:11px; color:#A9A6B4;">Verified by Compliance before it counts</span>
           <button onClick="{{ closeUpload }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
@@ -26265,7 +26287,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         (d9.employeeId && emp9.id && d9.employeeId === emp9.id) || (!d9.employeeId && d9.person === emp9.name));
       const missing9 = [], bad9 = [], soon9 = [];
       for (const tn9 of _cardTypesFor(emp9)) {
-        const d9 = mine9.find(x9 => x9.docType === tn9);
+        // THE LATEST ONE, which is what the Iqama Expiry column shows. A renewal filed without
+        // retiring the document it replaces leaves two live records, and `.find` took whichever
+        // came first — so a person whose column read "2027-12-01" was badged Non-compliant off an
+        // Iqama that expired in 2026. Two readers of one fact must not disagree.
+        const d9 = mine9.filter(x9 => x9.docType === tn9)
+          .sort((p9, q9) => String(q9.expiryDate || '').localeCompare(String(p9.expiryDate || '')))[0];
         if (!d9) { missing9.push(tn9); continue; }
         const st9 = String(d9.status || 'valid').toLowerCase();
         if (st9 === 'overdue' || st9 === 'expired') bad9.push(tn9);
@@ -29030,11 +29057,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     });
     // ---- Upload document modal (type-driven fields) ----
     const companyTypes = ['Trade License', 'Establishment Card', 'VAT Certificate', 'Ejari Contract'];
+    // NO STAR ON ANY OF THEM. The number was required for most types, which refuses a document the
+    // firm is holding in its hand because the number is on a page nobody has scanned yet. The file
+    // and its expiry are what the system actually works from — the renewal chase, the compliance
+    // badge, the client's portal — and none of them need the number.
     const numberLabels = {
-      'Trade License': ['LICENSE NUMBER *', 'TL-000000'], 'Establishment Card': ['CARD NUMBER *', 'EC-00000'],
-      'VAT Certificate': ['TRN NUMBER *', '100000000000000'], 'Ejari Contract': ['CONTRACT NUMBER *', 'EJ-0000000'],
-      'Passport': ['PASSPORT NUMBER *', 'P0000000'], 'Visa': ['VISA FILE NUMBER *', '000/0000/000000'],
-      'Emirates ID': ['EID NUMBER *', '784-XXXX-XXXXXXX-X'], 'Labour Card': ['CARD NUMBER *', '00000000'],
+      'Trade License': ['LICENSE NUMBER', 'TL-000000'], 'Establishment Card': ['CARD NUMBER', 'EC-00000'],
+      'VAT Certificate': ['TRN NUMBER', '100000000000000'], 'Ejari Contract': ['CONTRACT NUMBER', 'EJ-0000000'],
+      'Passport': ['PASSPORT NUMBER', 'P0000000'], 'Visa': ['VISA FILE NUMBER', '000/0000/000000'],
+      'Emirates ID': ['EID NUMBER', '784-XXXX-XXXXXXX-X'], 'Labour Card': ['CARD NUMBER', '00000000'],
       'Medical Certificate': ['REFERENCE NO.', 'Optional'],
     };
     // The picker used to offer Object.keys(numberLabels) — nine names baked into this file. It ignored
@@ -29057,7 +29088,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _udExtraDefs = _arExtraDefs(_udTypeRow);
     const udIsEmployee = _udTypeRow ? (_udTypeRow.subjectKind || 'employee') !== 'company' : companyTypes.indexOf(udType) < 0;
     const udFileName = this.state.udFile || '';
-    const _udNumLabel = (numberLabels[udType] || ['DOCUMENT NUMBER *', ''])[0];
+    const _udNumLabel = (numberLabels[udType] || ['DOCUMENT NUMBER', ''])[0];
     // The dialog now asks who the document belongs to, instead of borrowing the top CLIENT filter and
     // refusing to work until you went and changed it. Filing a document is not a filtering action, and
     // making the two the same thing meant you could not upload for one client while looking at another
@@ -29152,7 +29183,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // `udType !== 'Medical Certificate'`, which stopped meaning anything once the list came from
         // configured types — every type added since was silently forced to carry a number.
         if (!udType) return this.setState({ udError: 'Choose the document type' });
-        if (/\*\s*$/.test(_udNumLabel) && !(st.udNumber || '').trim()) return this.setState({ udError: 'Document number is required' });
         if (!st.udExpiry) return this.setState({ udError: 'Expiry date is required' });
         const missing8 = _udExtraDefs.filter(f8 => f8.required && !String((st.udExtra || {})[_udExtraKey(f8)] || '').trim());
         if (missing8.length) return this.setState({ udError: missing8[0].label + ' is required' });
