@@ -26282,17 +26282,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * to show those as a green tick for the same reason — reporting an undated permit as compliant
      * is a false assurance, and this badge is read faster and trusted harder than the card is.
      */
+    /**
+     * THE DOCUMENT A PERSON IS ACTUALLY ON, of one type — the LATEST expiry.
+     *
+     * A renewal filed without retiring the record it replaces leaves two live documents of one
+     * type, and every reader has to resolve that the same way or the screen contradicts itself.
+     * It already did: the Iqama Expiry column sorted and showed 2027-12-01 while the compliance
+     * badge and the employee card each took whichever `.find` reached first and reported an Iqama
+     * that expired in 2026. One definition, used by all of them.
+     */
+    const _latestDocOf9 = (docs9, typeName9) => (docs9 || [])
+      .filter(d9 => d9.docType === typeName9)
+      .sort((p9, q9) => String(q9.expiryDate || '').localeCompare(String(p9.expiryDate || '')))[0] || null;
     const _empCompliance = (emp9, allDocs9) => {
       const mine9 = (allDocs9 || []).filter(d9 =>
         (d9.employeeId && emp9.id && d9.employeeId === emp9.id) || (!d9.employeeId && d9.person === emp9.name));
       const missing9 = [], bad9 = [], soon9 = [];
       for (const tn9 of _cardTypesFor(emp9)) {
-        // THE LATEST ONE, which is what the Iqama Expiry column shows. A renewal filed without
-        // retiring the document it replaces leaves two live records, and `.find` took whichever
-        // came first — so a person whose column read "2027-12-01" was badged Non-compliant off an
-        // Iqama that expired in 2026. Two readers of one fact must not disagree.
-        const d9 = mine9.filter(x9 => x9.docType === tn9)
-          .sort((p9, q9) => String(q9.expiryDate || '').localeCompare(String(p9.expiryDate || '')))[0];
+        const d9 = _latestDocOf9(mine9, tn9);
         if (!d9) { missing9.push(tn9); continue; }
         const st9 = String(d9.status || 'valid').toLowerCase();
         if (st9 === 'overdue' || st9 === 'expired') bad9.push(tn9);
@@ -29021,7 +29028,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const mine = _edDocsOf(e7);
       const _edMine = _cardTypesFor(e7);
       const docs = (_edMine.length ? _edMine : _edTypeList).map(tn => {
-        const d7 = mine.find(x7 => x7.docType === tn);
+        // The newest of its type, like the column and the badge — see _latestDocOf9. This showed
+        // the stale half of a duplicate: a card reading "Iqama · Expired 2026-10-14 · 4/5" for
+        // somebody whose list row said 2027-12-01 and carried no badge at all.
+        const d7 = _latestDocOf9(mine, tn);
         if (!d7) return { label: tn, kind: 'miss', tip: 'Not on file' };
         const st = String(d7.status || 'valid').toLowerCase();
         // 'unknown' = we hold the document but no expiry date. It must NOT render as a green tick:
