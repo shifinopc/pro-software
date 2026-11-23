@@ -24,7 +24,7 @@ if (!/@(localhost|127\.0\.0\.1)[:/]/.test(url)) {
 }
 
 const prisma = new PrismaClient();
-const made: { companyId?: string; quotationId?: string } = {};
+const made: { companyId?: string; quotationId?: string; companyId2?: string; quotationId2?: string } = {};
 
 const ok = (cond: boolean, what: string) => {
   if (!cond) throw new Error("FAIL: " + what);
@@ -63,25 +63,46 @@ const ok = (cond: boolean, what: string) => {
   ok(res.tasks[0].title.startsWith(svc.name), `the task is the sale: "${res.tasks[0].title}"`);
   ok(!!res.tasks[0].workflowInstanceId, "the task is bound to its case");
 
+  // 3. A line the sold case already contains gets no row of its own.
+  const co2 = await prisma.company.create({ data: { name: `ZZ Delivery Check B ${Date.now()}`, status: "active" } });
+  made.companyId2 = co2.id;
+  const q2 = await prisma.quotation.create({
+    data: {
+      number: `ZZ-CHK-B-${Date.now()}`,
+      companyId: co2.id, clientName: co2.name, service: "New business", serviceItemId: svc.id, status: "sent",
+      items: [
+        { name: "Professional Fees", units: 1, price: 12000, kind: "prof" },
+        { name: "Company Acquisition", units: 1, price: 40000, kind: "foreign", country: "Oman" },
+        { name: "Company Acquisition", units: 1, price: 40000, kind: "foreign", country: "UK" },
+      ],
+    },
+  });
+  made.quotationId2 = q2.id;
+  const res2 = await startDeliveryForQuotation(q2.id, { actor: "delivery-rules-check" });
+  console.log(`  delivery B: ${res2.tasks.length} task(s), ${res2.runs} case(s), absorbed: ${res2.absorbed.length}`);
+  ok(res2.tasks.length === 1, "three acquisition-and-fee lines still make exactly one row");
+  ok(res2.runs === 1, "and exactly one case");
+  ok(res2.absorbed.length === 2, "both acquisition lines reported as absorbed into the case");
+
   console.log("PASS");
 })().catch((e) => { console.error(String(e?.message ?? e)); process.exitCode = 1; })
   .finally(async () => {
     // Reverse order, and never leave a case running on a client that is about to be deleted.
-    if (made.quotationId) {
-      const tasks = await prisma.task.findMany({ where: { quotationId: made.quotationId }, select: { id: true, workflowInstanceId: true } });
+    for (const qid of [made.quotationId, made.quotationId2].filter(Boolean) as string[]) {
+      const tasks = await prisma.task.findMany({ where: { quotationId: qid }, select: { id: true, workflowInstanceId: true } });
       const runIds = tasks.map(t => t.workflowInstanceId).filter(Boolean) as string[];
-      await prisma.task.deleteMany({ where: { quotationId: made.quotationId } });
+      await prisma.task.deleteMany({ where: { quotationId: qid } });
       for (const id of runIds) {
         await prisma.workflowTask.deleteMany({ where: { instanceId: id } });
         await prisma.workflowLog.deleteMany({ where: { instanceId: id } });
         await prisma.workflowInstance.deleteMany({ where: { id } });
       }
-      await prisma.quotation.deleteMany({ where: { id: made.quotationId } });
+      await prisma.quotation.deleteMany({ where: { id: qid } });
     }
-    if (made.companyId) {
-      await prisma.opportunity.deleteMany({ where: { companyId: made.companyId } }).catch(() => {});
+    for (const cid of [made.companyId, made.companyId2].filter(Boolean) as string[]) {
+      await prisma.opportunity.deleteMany({ where: { companyId: cid } }).catch(() => {});
       await prisma.activity.deleteMany({ where: { message: { contains: "ZZ Delivery Check" } } }).catch(() => {});
-      await prisma.company.deleteMany({ where: { id: made.companyId } });
+      await prisma.company.deleteMany({ where: { id: cid } });
     }
     console.log("cleaned up");
     await prisma.$disconnect();

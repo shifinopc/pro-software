@@ -128,8 +128,11 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   // company: two officers buying one business, two sets of gates, and a duplicate on every report
   // that counts open cases.
   //
-  // The line still becomes a task, because it is work the client is paying for and somebody has to
-  // see it. What it does not get is a second process. By name rather than by id: the templates are
+  // It gets NO ROW. It used to get a task carrying a note saying where the work really happened,
+  // which was the wrong compromise: a quotation naming three acquisitions produced three rows
+  // nobody could act on beside the one case that actually contains all three - five rows for one
+  // sale, counting the fees. The case is the row, its lanes are the steps, and `absorbed` below is
+  // what reports the lines that folded into it. By name rather than by id: the templates are
   // installed per environment, so an id here would be right on this database and silently wrong on
   // the next one.
   const CONTAINS: Record<string, string[]> = { "business setup": ["company acquisition"] };
@@ -143,6 +146,13 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     // anything with and nobody ever closed. The quotation already says which lines these are.
     if (line.kind === "prof" || line.kind === "gov") { out.billed.push(line.name); continue; }
     const svc = matchService(line.name, services);
+    // Work another line on this quotation already contains - an acquisition inside a Business Setup.
+    // Checked before the task is created, which is the whole point: no row, no note, no duplicate.
+    const contained = svc ? absorbedBy(svc.name) : null;
+    if (contained) {
+      out.absorbed.push(`${svc!.name} (already part of ${contained} on this quotation)`);
+      continue;
+    }
     if (!svc) out.unmatched.push(line.name);
     // Units are quantities of the same service (3 × Iqama Renewal), so they get their own tasks —
     // one row per thing an officer has to actually go and do.
@@ -171,21 +181,7 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
       });
 
       let runId: string | null = null;
-      const absorber = svc ? absorbedBy(svc.name) : null;
-      // NOT `svc?.workflowId && absorber`. Company Acquisition is retired and its service binding is
-      // cleared, so it has no workflow of its own any more - and the note saying where the work is
-      // actually done is MORE useful then, not less. Tying it to the binding meant the line that
-      // keeps nothing but a note lost the note.
-      if (absorber) {
-        // `absorber` is only ever set from a matched service, so svc is non-null here.
-        out.absorbed.push(`${svc!.name} (already part of ${absorber} on this quotation)`);
-        await prisma.task.update({ where: { id: task.id }, data: {
-          docType: task.docType,
-          // Said on the task itself, where the officer who picks it up will read it, rather than
-          // only in a delivery result nobody keeps.
-          title: `${title} — billed here, done inside the ${absorber} case`,
-        } });
-      } else if (svc?.workflowId) {
+      if (svc?.workflowId) {
         try {
           const run = await startInstance(svc.workflowId, {
             title: `${svc.name}${where} — ${q.clientName ?? "Client"}`,
