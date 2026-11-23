@@ -20,6 +20,7 @@
  * next completion, and keeping it true would cost a write on every step anyone finishes.
  */
 import { prisma } from "./db.js";
+import { dmy } from "./dates.js";
 
 export interface ClientWorkRow {
   companyId: string;
@@ -255,4 +256,111 @@ export async function clientReportDetail(opts: { from: string; to: string; compa
 
   const bySubject = (a: ReportLine, b: ReportLine) => (a.person ?? "").localeCompare(b.person ?? "") || a.caseTitle.localeCompare(b.caseTitle);
   return { completed: completed.sort(bySubject), pending: pending.sort(bySubject) };
+}
+
+/**
+ * The client's copy, as it is printed.
+ *
+ * TWO THINGS HERE ARE NOT STYLE CHOICES.
+ *
+ * 1. THE BODY MUST START WITH A TABLE. LibreOffice's HTML import swallows the first block element
+ *    of the body and replaces it with a page break, so a document that opened with `<h1>Firm</h1>`
+ *    printed a blank first page and no firm name at all - which is exactly what shipped. Starting
+ *    with the letterhead table costs nothing and converts correctly. Measured in the live image: a
+ *    body opening with <p> or <div> gives 2 pages with the first element gone, one opening with
+ *    <table> gives 1 page with everything on it.
+ * 2. NOTHING IS INVENTED. A blank letterhead field prints blank. Name, address, VAT, CR, phone,
+ *    email and logo all come from Settings -> General, and a report carrying a company name or tax
+ *    number nobody configured is worse than a gap someone notices.
+ */
+export function clientReportHtml(a: {
+  org: any; client: string; from: string; to: string;
+  S: { totals: { cases: number; casesClosed: number; steps: number; tasks: number } };
+  D: { completed: ReportLine[]; pending: ReportLine[] };
+  esc: (v: unknown) => string;
+  /** A ready <img> tag, or "" - index.ts reads the file, this file does not know the uploads folder. */
+  logoImg: string;
+}): string {
+  const { org, esc, logoImg } = a;
+  const firm = String(org.legalName ?? org.orgName ?? "").trim();
+  const idLines = [
+    String(org.address ?? "").trim(),
+    [org.vatNumber || org.vat ? "VAT " + (org.vatNumber || org.vat) : "",
+     org.crNumber || org.cr ? "CR " + (org.crNumber || org.cr) : ""].filter(Boolean).join("  ·  "),
+    [String(org.phone ?? "").trim(), String(org.email ?? "").trim()].filter(Boolean).join("  ·  "),
+  ].filter(Boolean);
+
+  const day = (v: string | null) => (v ? dmy(String(v).slice(0, 10)) : "—");
+  const pair = (n: string | null, e: string | null) =>
+    [n, e ? dmy(String(e).slice(0, 10)) : ""].filter(Boolean).join("  ·  ") || "—";
+
+  // LibreOffice's HTML import understands table attributes and simple inline styles, and ignores
+  // most of a stylesheet's layout. So the banding, the widths and the rules are written on the
+  // elements themselves - a class that only works in a browser is a document that prints plain.
+  const row = (i: number, cells: string[]) =>
+    `<tr${i % 2 ? ' bgcolor="#FAF8FE"' : ""}>${cells.join("")}</tr>`;
+  // `ink` goes on a span INSIDE the cell: LibreOffice ignores colour and weight written on a <td>.
+  const td = (v: unknown, ink = "", right = false) =>
+    `<td${right ? ' align="right"' : ""} style="padding:2.6mm 3mm; border-bottom:.5pt solid #E4E0EE;">`
+    + (ink ? `<span style="${ink}">${esc(v)}</span>` : esc(v)) + "</td>";
+  const head = (cols: [string, string][]) => `<tr bgcolor="#26074D">${cols.map(([t, w]) =>
+    `<th width="${w}" style="padding:2.4mm 3mm; text-align:left; font-size:7.5pt; color:#FFFFFF;">${esc(t)}</th>`).join("")}</tr>`;
+  const title = (text: string) => `<table width="100%" cellspacing="0" cellpadding="0"><tr><td `
+    + `style="padding:6mm 0 1.8mm; font-size:8pt; font-weight:bold; letter-spacing:.09em; color:#6F6C7A;">${esc(text)}</td></tr></table>`;
+  const empty = (n: number, text: string) =>
+    `<tr><td colspan="${n}" style="padding:3mm; color:#6F6C7A; font-size:8.5pt;">${esc(text)}</td></tr>`;
+
+  const doneRows = a.D.completed.map((l, i) => row(i, [
+    td(l.person ?? l.caseTitle, "font-weight:bold;"),
+    td(l.docType ?? "—"),
+    td(pair(l.beforeNumber, l.beforeExpiry)),
+    td(pair(l.afterNumber, l.afterExpiry), "color:#0E9355; font-weight:bold;"),
+    td(l.detail),
+    td(day(l.at), "", true),
+  ])).join("") || empty(6, "Nothing was completed in this period.");
+
+  const pendRows = a.D.pending.map((l, i) => row(i, [
+    td(l.person ?? l.caseTitle, "font-weight:bold;"),
+    td(l.docType ?? "—"),
+    td(pair(l.beforeNumber, l.beforeExpiry)),
+    td(l.detail, "color:#B8860B;"),
+    td(day(l.at), "", true),
+  ])).join("") || empty(5, "Nothing is open for this client.");
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(a.client)}</title><style>
+    @page { size: A4 landscape; margin: 12mm; }
+    body { font-family: Arial, sans-serif; color: #1A1523; font-size: 9pt; }
+    table { width: 100%; border-collapse: collapse; }
+    p { margin: 0; }
+  </style></head><body>
+    <table width="100%" cellspacing="0" cellpadding="0"><tr>
+      ${logoImg ? `<td width="70" valign="top" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">${logoImg}</td>` : ""}
+      <td valign="top" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">
+        <p style="font-size:14pt; font-weight:bold; color:#26074D;">${esc(firm)}</p>
+        ${idLines.length
+          ? idLines.map(l => `<p style="font-size:8.5pt; color:#4B4757; padding-top:1mm;">${esc(l)}</p>`).join("")
+          : (firm ? "" : `<p style="font-size:8.5pt; color:#B8860B; padding-top:1mm;">Add your letterhead in Settings &rarr; General</p>`)}
+      </td>
+      <td width="34%" valign="top" align="right" style="padding-bottom:3.5mm; border-bottom:1.5pt solid #26074D;">
+        <p style="font-size:7.5pt; letter-spacing:.1em; color:#6F6C7A;">CLIENT WORK REPORT</p>
+        <p style="font-size:12pt; font-weight:bold; padding-top:1.5mm;">${esc(a.client)}</p>
+        <p style="font-size:8.5pt; color:#4B4757; padding-top:1mm;">${esc(dmy(a.from))} to ${esc(dmy(a.to))}</p>
+      </td>
+    </tr>
+    </table>
+
+    ${title("COMPLETED IN THIS PERIOD")}
+    <table width="100%" cellspacing="0" cellpadding="0">
+      ${head([["Who", "22%"], ["Document", "9%"], ["Before", "15%"], ["After", "15%"], ["Work done", "29%"], ["Done", "10%"]])}
+      ${doneRows}
+    </table>
+
+    ${title("STILL PENDING")}
+    <table width="100%" cellspacing="0" cellpadding="0">
+      ${head([["Who", "26%"], ["Document", "10%"], ["On file now", "20%"], ["Waiting on", "32%"], ["Since", "12%"]])}
+      ${pendRows}
+    </table>
+
+    <p style="color:#6F6C7A; font-size:8pt; padding-top:5mm;">${a.S.totals.cases} case(s) &middot; ${a.S.totals.casesClosed} completed &middot; ${a.S.totals.steps} steps closed &middot; ${a.S.totals.tasks} separate tasks</p>
+  </body></html>`;
 }
