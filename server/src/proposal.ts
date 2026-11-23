@@ -105,13 +105,26 @@ async function resetProfile(dir: string): Promise<void> {
  * still be able to download the .docx, which is what it did before this existed.
  */
 export async function docxToPdf(docx: Buffer): Promise<Buffer | null> {
-  const next = converting.then(() => convertOnce(docx, true));
+  const next = converting.then(() => convertOnce(docx, true, "docx"));
   // The queue must survive a failure, or one bad conversion wedges every one after it.
   converting = next.catch(() => {});
   return next;
 }
 
-async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | null> {
+/**
+ * The same converter, given HTML instead of a .docx.
+ *
+ * A printable page is a table, and LibreOffice reads HTML directly — so a report does not need to
+ * be built as a Word document first just to come out as a PDF. Landscape and margins come from the
+ * page's own `@page` rule.
+ */
+export async function htmlToPdf(html: string): Promise<Buffer | null> {
+  const next = converting.then(() => convertOnce(Buffer.from(html, "utf8"), true, "html"));
+  converting = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+async function convertOnce(docx: Buffer, mayRetry: boolean, ext: "docx" | "html" = "docx"): Promise<Buffer | null> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const fs = await import("node:fs/promises");
@@ -127,7 +140,7 @@ async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | nu
   await fs.mkdir(profile, { recursive: true }).catch(() => {});
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "proposal-"));
-  const src = path.join(dir, "in.docx");
+  const src = path.join(dir, `in.${ext}`);
   try {
     await fs.writeFile(src, docx);
     let lastErr: any = null;
@@ -153,7 +166,7 @@ async function convertOnce(docx: Buffer, mayRetry: boolean): Promise<Buffer | nu
       console.warn("[proposal] conversion failed; rebuilding the LibreOffice profile and retrying once:",
                    lastErr?.message ?? lastErr);
       await resetProfile(profile);
-      return convertOnce(docx, false);
+      return convertOnce(docx, false, ext);
     }
     if (lastErr && lastErr.code !== "ENOENT") {
       console.error("[proposal] could not convert to PDF:", lastErr?.message ?? lastErr);
@@ -215,7 +228,8 @@ const fmtDots = (iso?: string | null) => {
   const d = new Date(String(iso) + (String(iso).length === 10 ? "T00:00:00Z" : ""));
   if (isNaN(+d)) return String(iso);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getUTCDate())}. ${p(d.getUTCMonth() + 1)}. ${d.getUTCFullYear()}`;
+  // dd-mm-yyyy, the one shape the whole product reads dates in.
+  return `${p(d.getUTCDate())}-${p(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
 };
 const fmtLong = (iso?: string | null) => {
   if (!iso) return "";

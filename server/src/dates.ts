@@ -67,6 +67,19 @@ export function businessToday(at: Date | number = Date.now()): string {
 /** Midnight at the start of a `YYYY-MM-DD`, as a timestamp. The one way to turn a day into a number. */
 export const dayStart = (iso: string): number => Date.parse(iso.slice(0, 10) + "T00:00:00Z");
 
+/**
+ * A STORED DATE WRITTEN INTO A SENTENCE SOMEBODY READS: "2027-06-10" becomes "10-06-2027".
+ *
+ * The prototype patch below covers everything formatted through Intl; this covers the other
+ * half — an ISO column interpolated straight into an activity line or a notification. Returns
+ * the input untouched when it is not a date, because a message is not the place to discover one.
+ */
+export const dmy = (iso: unknown): string => {
+  const s = String(iso ?? "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+};
+
 /** `iso` moved by whole days, still `YYYY-MM-DD`. Day arithmetic stays in UTC so it cannot drift. */
 export const addDays = (iso: string, n: number): string =>
   new Date(dayStart(iso) + n * 86_400_000).toISOString().slice(0, 10);
@@ -211,4 +224,37 @@ export function normalizeDates(model: string, data: any): string | null {
 function label(field: string): string {
   const spaced = field.replace(/([A-Z])/g, " $1").toLowerCase().trim();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * ONE FORMAT ON THE WAY OUT, TOO: dd-mm-yyyy.
+ *
+ * The module above settles what goes INTO the database. This settles what a person reads — a
+ * morning brief, a chaser note, a renewal warning, an email — because those were written with
+ * `toLocaleDateString("en-GB", …)` in a dozen modules and came out as "18 Nov 2026", "Tue 18 Nov",
+ * "18 November". The firm reads Saudi and Indian paperwork all day and dd-mm-yyyy means the same
+ * thing on both; the English month names did not.
+ *
+ * Patched on the prototype rather than in each module for the same reason the console does it:
+ * there are too many call sites to find them all, and a module added next month would quietly go
+ * back to the old shape.
+ *
+ * ONLY when the caller asked for a DAY. "November 2026" as a period heading, or "Tue" as a column
+ * label, names no date to read off a document and is left alone.
+ */
+export function useDayMonthYearEverywhere(): void {
+  const orig = Date.prototype.toLocaleDateString;
+  if ((orig as any).__dmy) return;
+  const patched = function (this: Date, locale?: any, opts?: any) {
+    if (opts && opts.day && isFinite(+this)) {
+      const utc = opts.timeZone === "UTC";
+      const p = (n: number) => String(n).padStart(2, "0");
+      return utc
+        ? `${p(this.getUTCDate())}-${p(this.getUTCMonth() + 1)}-${this.getUTCFullYear()}`
+        : `${p(this.getDate())}-${p(this.getMonth() + 1)}-${this.getFullYear()}`;
+    }
+    return orig.call(this, locale, opts);
+  };
+  (patched as any).__dmy = true;
+  Date.prototype.toLocaleDateString = patched as any;
 }

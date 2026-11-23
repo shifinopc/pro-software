@@ -161,3 +161,98 @@ export async function clientWorkSummary(opts: { from: string; to: string; compan
     totals: { cases: byCase.size, casesClosed: closed.length, steps: items.filter(i => i.kind === "step").length, tasks: loose.length },
   };
 }
+
+/**
+ * THE CLIENT-FACING REPORT: what changed in the period, and what is still open.
+ *
+ * The summary above counts work; this names it. A client reading "4 steps" learns nothing about
+ * their own paperwork — what they want is "the Iqama that said 2026-11-01 now says 2027-12-01",
+ * and, for anything unfinished, what it still says today.
+ *
+ * BEFORE comes from the run's own variables, not from history. A renewal run records
+ * `currentNumber` and `currentExpiry` when it starts — the state of the document it was raised
+ * about — so the before/after pair survives even when the new document is filed by hand without
+ * retiring the old one, which is how most of them are filed today. AFTER is the document as it
+ * stands now. They are equal while nothing has been replaced yet, and that is a true answer.
+ */
+export interface ReportLine {
+  caseTitle: string;
+  person: string | null;
+  docType: string | null;
+  beforeNumber: string | null;
+  beforeExpiry: string | null;
+  afterNumber: string | null;
+  afterExpiry: string | null;
+  /** Completed: when it finished. Pending: when the case started. */
+  at: string | null;
+  /** Completed: the steps closed in the period. Pending: the step it is sitting on. */
+  detail: string;
+}
+
+const varsOf = (v: unknown): Record<string, any> => (v && typeof v === "object" ? v as any : {});
+const str = (v: unknown) => { const s = String(v ?? "").trim(); return s || null; };
+
+export async function clientReportDetail(opts: { from: string; to: string; companyId: string }) {
+  const range = bounds(opts.from, opts.to);
+
+  // Every run of this client's that either finished in the range or is still open. One query; the
+  // two sections are the same rows split by status, so a case cannot appear in both or in neither.
+  const runs = await prisma.workflowInstance.findMany({
+    where: {
+      companyId: opts.companyId,
+      OR: [{ status: "completed", completedAt: range }, { status: { notIn: ["completed", "cancelled"] } }],
+    },
+    select: { id: true, title: true, status: true, variables: true, startedAt: true, completedAt: true },
+  });
+
+  // The documents those runs are about, read as they stand NOW — the "after" half of the pair.
+  const docIds = runs.map(r => str(varsOf(r.variables).documentId)).filter(Boolean) as string[];
+  const docs = docIds.length
+    ? await prisma.document.findMany({ where: { id: { in: docIds } }, select: { id: true, docNumber: true, expiryDate: true } })
+    : [];
+  const docById = new Map(docs.map(d => [d.id, d]));
+
+  // Steps: the ones closed in the period for the completed half, and whichever step is open now for
+  // the pending half. Both in one pass, because a run needs only its own.
+  const steps = await prisma.workflowTask.findMany({
+    where: { instanceId: { in: runs.map(r => r.id) } },
+    select: { instanceId: true, title: true, status: true, completedAt: true },
+    orderBy: { completedAt: "asc" },
+  });
+  const byRun = new Map<string, typeof steps>();
+  for (const s of steps) { const a = byRun.get(s.instanceId) ?? []; a.push(s); byRun.set(s.instanceId, a); }
+
+  const lineOf = (r: typeof runs[number], detail: string, at: string | null): ReportLine => {
+    const v = varsOf(r.variables);
+    const d = str(v.documentId) ? docById.get(String(v.documentId)) : null;
+    return {
+      caseTitle: r.title, person: str(v.person), docType: str(v.docType),
+      beforeNumber: str(v.currentNumber), beforeExpiry: str(v.currentExpiry),
+      afterNumber: d ? str(d.docNumber) : null, afterExpiry: d ? str(d.expiryDate) : null,
+      at, detail,
+    };
+  };
+
+  const inRange = (iso: string | null | undefined) =>
+    !!iso && String(iso) >= range.gte && String(iso) <= range.lte;
+
+  const completed: ReportLine[] = [];
+  const pending: ReportLine[] = [];
+  for (const r of runs) {
+    const mine = byRun.get(r.id) ?? [];
+    if (r.status === "completed") {
+      const done = mine.filter(s => ["done", "approved"].includes(String(s.status)) && inRange(s.completedAt));
+      completed.push(lineOf(r, done.length ? done.map(s => s.title).join(", ") : "Case closed", r.completedAt ?? null));
+      continue;
+    }
+    // STILL OPEN, BUT IT MAY HAVE MOVED IN THE PERIOD. A case that took three steps this month and
+    // is not finished belongs in both halves: the client was told what was done, and what is left.
+    const done = mine.filter(s => ["done", "approved"].includes(String(s.status)) && inRange(s.completedAt));
+    if (done.length) completed.push(lineOf(r, done.map(s => s.title).join(", "), done[done.length - 1].completedAt ?? null));
+    const waiting = mine.find(s => String(s.status) === "active");
+    pending.push(lineOf(r, waiting ? "Waiting on: " + waiting.title : "Not started", r.startedAt ?? null));
+  }
+
+  const bySubject = (a: ReportLine, b: ReportLine) => (a.person ?? "").localeCompare(b.person ?? "") || a.caseTitle.localeCompare(b.caseTitle);
+  return { completed: completed.sort(bySubject), pending: pending.sort(bySubject) };
+}

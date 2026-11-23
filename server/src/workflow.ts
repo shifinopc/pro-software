@@ -2747,8 +2747,20 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   // Default (broad) is used by the Approvals queue: admins see everything + unassigned open work is visible.
   const personal = req.query.scope === "personal";
   const mine = tasks.filter(t =>
-    (t.assigneeRole && t.assigneeRole === a.role) ||
-    (t.assignee && me?.name && t.assignee === me.name) ||
+    // THE ROLE CLAUSE IS FOR THE QUEUE, NOT FOR THE RECORD.
+    //
+    // Unclaimed work addressed to my role is mine to pick up, so it belongs in my pending list.
+    // Finished work is a different claim: "Completed · 3" on a screen called My Tasks says I did
+    // those three. It was listing every step anyone of my role had closed — an officer opened his
+    // own completed list and read a colleague's afternoon back to himself.
+    //
+    // So on the completed view, only what I closed, or what was mine when it closed. `completedBy`
+    // is the one that answers "who did it"; `assignee` covers steps closed before that was stamped.
+    (wantDone
+      ? ((t.completedBy && me?.name && t.completedBy === me.name) ||
+         (t.assignee && me?.name && t.assignee === me.name))
+      : (t.assigneeRole && t.assigneeRole === a.role) ||
+        (t.assignee && me?.name && t.assignee === me.name)) ||
     // Oversight only widens the QUEUE. On the completed view it would answer "everything the firm
     // has closed" to someone asking what they themselves got through, which is a different question
     // and a much longer list.

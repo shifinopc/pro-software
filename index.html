@@ -7227,7 +7227,7 @@
         <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
           <div style="min-width:0;">
             <div style="font-size:10px; font-weight:800; letter-spacing:.14em; color:#A9A6B4;">PRO OPERATIONS</div>
-            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Client Work</h1>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Client Report</h1>
             <div style="font-size:11px; color:#8C8899; margin-top:4px;">{{ cwCaption }}</div>
           </div>
           <div style="flex:1;"></div>
@@ -7284,6 +7284,39 @@
                       <span style="font-size:10px; color:#A9A6B4; flex-shrink:0; max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ i.caseTitle }}</span>
                     </div>
                   </sc-for>
+                  <!-- WHAT CHANGED IN THE PERIOD, then what is still open. Two headed tables,
+                       because a client reads the first for progress and the second for what they
+                       are still waiting on, and one undifferentiated list answers neither. -->
+                  <sc-if value="{{ r.cwDoneAny }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin:14px 0 6px;">COMPLETED IN THIS PERIOD</div>
+                    <div style="display:grid; grid-template-columns:minmax(0,1.2fr) 96px minmax(0,1fr) minmax(0,1fr) 78px; gap:10px; align-items:baseline;font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase; padding:0 0 5px; border-bottom:1px solid #EFEAF7;">
+                      <span>Who</span><span>Document</span><span>Before</span><span>After</span><span style="text-align:right;">Done</span>
+                    </div>
+                    <sc-for list="{{ r.cwDone }}" as="d" hint-placeholder-count="2">
+                      <div style="display:grid; grid-template-columns:minmax(0,1.2fr) 96px minmax(0,1fr) minmax(0,1fr) 78px; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid #F7F5FB;">
+                        <span style="font-size:11.5px; font-weight:600; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.person }}</span>
+                        <span style="font-size:10.5px; color:#6F6C7A;">{{ d.docType }}</span>
+                        <span style="font-size:10.5px; color:#8C8899; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ d.before }}</span>
+                        <span style="font-size:10.5px; color:#0E9355; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ d.after }}</span>
+                        <span style="font-size:10px; color:#A9A6B4; text-align:right;">{{ d.at }}</span>
+                      </div>
+                    </sc-for>
+                  </sc-if>
+                  <sc-if value="{{ r.cwPendAny }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin:14px 0 6px;">STILL PENDING</div>
+                    <div style="display:grid; grid-template-columns:minmax(0,1.2fr) 96px minmax(0,1fr) minmax(0,1.1fr) 78px; gap:10px; align-items:baseline;font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase; padding:0 0 5px; border-bottom:1px solid #EFEAF7;">
+                      <span>Who</span><span>Document</span><span>On file now</span><span>Waiting on</span><span style="text-align:right;">Since</span>
+                    </div>
+                    <sc-for list="{{ r.cwPend }}" as="p" hint-placeholder-count="2">
+                      <div style="display:grid; grid-template-columns:minmax(0,1.2fr) 96px minmax(0,1fr) minmax(0,1.1fr) 78px; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid #F7F5FB;">
+                        <span style="font-size:11.5px; font-weight:600; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.person }}</span>
+                        <span style="font-size:10.5px; color:#6F6C7A;">{{ p.docType }}</span>
+                        <span style="font-size:10.5px; color:#8C8899; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ p.before }}</span>
+                        <span style="font-size:10.5px; color:#B8860B; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.detail }}</span>
+                        <span style="font-size:10px; color:#A9A6B4; text-align:right;">{{ p.at }}</span>
+                      </div>
+                    </sc-for>
+                  </sc-if>
                   <div style="display:flex; gap:8px; margin-top:10px;">
                     <button onClick="{{ r.summary }}" style="background:#fff; color:#7C00FF; border:1px solid #EADDFB; font-size:11px; font-weight:650; padding:7px 13px; border-radius:99px; cursor:pointer;">Summary for the client</button>
                   </div>
@@ -16107,61 +16140,6 @@
        the containing block for anything `position:fixed` inside it. Left where it was, this overlay
        would be measured against the sheet and clipped by it rather than covering the window. Here it
        is a sibling of the drawer, above it at z-index 520. -->
-  <!-- THE CLIENT-FACING SUMMARY of a month's work. A panel rather than a send button: what goes
-       to a client is the firm's own words, and one click that emails is how the wrong month
-       reaches the wrong person. Copy hands over the text and stops there. -->
-  <sc-if value="{{ cwSumOpen }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeCwSum }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:520; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .15s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-rise" style="width:470px; max-width:94vw; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); display:flex; flex-direction:column; max-height:86vh;">
-        <div style="padding:16px 18px 13px; border-bottom:1px solid #F1EEF7; flex-shrink:0;">
-          <div style="font-size:9.5px; font-weight:800; letter-spacing:.14em; color:#A9A6B4;">SUMMARY FOR THE CLIENT</div>
-          <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:700; letter-spacing:-.02em; color:#15111D; margin-top:5px;">{{ cwSumClient }}</div>
-          <div style="font-size:11px; color:#8C8899; margin-top:3px;">{{ cwSumRange }}</div>
-        </div>
-        <div style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:14px 18px 16px;">
-          <sc-if value="{{ cwSumEmpty }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:11.5px; color:#8C8899; padding:10px 0;">Nothing was completed for this client in this period.</div>
-          </sc-if>
-          <!-- A TABLE, because this is read as a statement of work and a statement is compared
-               down its columns. It was a list of sentences, and the LAST ACTIVITY date the server
-               already computes was not shown at all — the one column a client actually asks about
-               ("when did you do this?"). Header row and figures right-aligned, like every other
-               table here. -->
-          <sc-if value="{{ cwSumHasCases }}" hint-placeholder-val="{{ true }}">
-            <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin-bottom:7px;">CASES</div>
-            <div style="display:grid; grid-template-columns:minmax(0,1fr) 68px 92px 86px; gap:10px; align-items:baseline; padding:0 0 6px; border-bottom:1px solid #EFEAF7; font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase;">
-              <span>Case</span><span style="text-align:right;">Steps</span><span style="text-align:right;">Last activity</span><span style="text-align:right;">Status</span>
-            </div>
-            <sc-for list="{{ cwSumCases }}" as="c" hint-placeholder-count="3">
-              <div style="display:grid; grid-template-columns:minmax(0,1fr) 68px 92px 86px; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid #F7F5FB;">
-                <span style="font-size:12.5px; font-weight:600; color:#2E2937; min-width:0;">{{ c.title }}</span>
-                <span style="font-size:10.5px; color:#6F6C7A; text-align:right;">{{ c.steps }}</span>
-                <span style="font-size:10.5px; color:#6F6C7A; text-align:right; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ c.last }}</span>
-                <span style="font-size:10.5px; font-weight:700; color:{{ c.stateColor }}; text-align:right;">{{ c.state }}</span>
-              </div>
-            </sc-for>
-          </sc-if>
-          <sc-if value="{{ cwSumHasTasks }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin:15px 0 7px;">ALSO COMPLETED</div>
-            <div style="display:grid; grid-template-columns:minmax(0,1fr) 92px; gap:10px; align-items:baseline; padding:0 0 6px; border-bottom:1px solid #EFEAF7; font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase;">
-              <span>Task</span><span style="text-align:right;">Completed</span>
-            </div>
-            <sc-for list="{{ cwSumTasks }}" as="k" hint-placeholder-count="2">
-              <div style="display:grid; grid-template-columns:minmax(0,1fr) 92px; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid #F7F5FB;">
-                <span style="font-size:12px; color:#3E3949; min-width:0;">{{ k.title }}</span>
-                <span style="font-size:10.5px; color:#6F6C7A; text-align:right; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ k.when }}</span>
-              </div>
-            </sc-for>
-          </sc-if>
-          <div style="font-size:10.5px; color:#A9A6B4; margin-top:14px;">{{ cwSumFoot }}</div>
-        </div>
-        <div style="display:flex; gap:8px; padding:12px 18px 15px; border-top:1px solid #F1EEF7; flex-shrink:0;">
-          <button onClick="{{ copyCwSum }}" style="flex:1; background:#7C00FF; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:11px 0; border-radius:99px; cursor:pointer;">Copy as text</button>
-          <button onClick="{{ closeCwSum }}" style="background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11.5px; font-weight:650; padding:11px 18px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Close</button>
-        </div>
-      </div>
-    </div>
-  </sc-if>
 
   <sc-if value="{{ wdDelegateOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ toggleDelegate }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(3px); z-index:520; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .15s ease both;">
@@ -17692,6 +17670,27 @@ const MODAL_FLAGS = [
  * Dropping the whole cache at the cap is deliberate: these are pure values, so losing them costs
  * one re-format, and a bounded Map is not worth the code.
  */
+/**
+ * A STORED DATE READ OUT LOUD: "2027-12-01" becomes "01-12-2027".
+ *
+ * Global, because the dates that reach a screen without going through Intl are plain ISO strings
+ * off the database — a document's expiry, a case's before/after — and those were the only places
+ * the app ever showed a reader a raw column value.
+ *
+ * Anything it cannot parse comes back unchanged: a half-typed box is the person's own text and is
+ * not this function's to correct.
+ */
+window._dmy9 = function (v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  const d = new Date(s);
+  if (isNaN(+d)) return s;
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getUTCDate()) + '-' + p(d.getUTCMonth() + 1) + '-' + d.getUTCFullYear();
+};
+
 (() => {
   const CAP = 5000;
   for (const name of ['toLocaleDateString', 'toLocaleTimeString', 'toLocaleString']) {
@@ -17700,6 +17699,20 @@ const MODAL_FLAGS = [
     Date.prototype[name] = function (locale, opts) {
       const t = +this;
       if (!isFinite(t)) return orig.call(this, locale, opts);
+      // ONE DATE FORMAT, EVERYWHERE: dd-mm-yyyy. The firm reads Saudi and Indian paperwork all day
+      // and "06-10-1994" means one thing on both; "6 Oct" and "Oct 6" are two shapes of the same
+      // fact and the reader has to decide which. Applied HERE because every screen already goes
+      // through this wrapper — the alternative was editing fifty-odd call sites and missing some.
+      //
+      // Only when the caller asked for a DAY. A month axis ("Nov") or a period heading ("November
+      // 2026") names no day and is not a date to be read off a document.
+      if (name === 'toLocaleDateString' && opts && opts.day) {
+        const utc = opts.timeZone === 'UTC';
+        const p = (n) => String(n).padStart(2, '0');
+        return utc
+          ? p(this.getUTCDate()) + '-' + p(this.getUTCMonth() + 1) + '-' + this.getUTCFullYear()
+          : p(this.getDate()) + '-' + p(this.getMonth() + 1) + '-' + this.getFullYear();
+      }
       const key = t + '|' + (locale || '') + '|' + (opts ? JSON.stringify(opts) : '');
       let v = cache.get(key);
       if (v === undefined) {
@@ -17711,7 +17724,9 @@ const MODAL_FLAGS = [
     };
     // Cheap self-check: a cached answer must equal the real one, twice over (miss, then hit).
     const d = new Date(1700000000000);
-    for (const args of [[], ['en-GB'], ['en-GB', { day: '2-digit', month: 'short' }]]) {
+    // Day-bearing options are deliberately NOT the browser's answer any more — see above — so the
+    // check uses arguments this wrapper passes straight through.
+    for (const args of [[], ['en-GB'], ['en-GB', { month: 'short' }]]) {
       const want = orig.apply(d, args);
       if (d[name](...args) !== want || d[name](...args) !== want) {
         console.error('[date-cache] ' + name + ' disagrees with the browser — cache disabled');
@@ -18625,7 +18640,7 @@ class Component extends DCLogic {
       'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure', 'Agents': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
-      'Client Work': 'Operations',
+      'Client Report': 'Operations',
       'Clients': 'Clients & Compliance', 'Compliance': 'Clients & Compliance', 'Documents': 'Clients & Compliance',
       'Employees': 'Clients & Compliance', 'Renewals': 'Clients & Compliance',
       'Invoices': 'Finance', 'Quotations': 'Finance', 'Receipts': 'Finance', 'Reports': 'Finance',
@@ -19292,7 +19307,14 @@ class Component extends DCLogic {
           .catch(() => this.setState({ cwLoading: false, cwError: 'Server unreachable.' }));
       };
       this._loadCWDetail = (companyId, from, to) => {
-        this.setState({ cwOpenId: companyId, cwItems: null });
+        this.setState({ cwOpenId: companyId, cwItems: null, cwLines: null });
+        // TWO REQUESTS, deliberately. The item list answers "what did you do"; the detail answers
+        // "what changed, and what is still open" — the two halves a client actually reads. Failing
+        // one must not blank the other, so they settle separately.
+        this._bootFetch('/api/reports/client-work/' + companyId + '/detail?from=' + from + '&to=' + to, { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(j => this.setState({ cwLines: j || { completed: [], pending: [] } }))
+          .catch(() => this.setState({ cwLines: { completed: [], pending: [] } }));
         return this._bootFetch('/api/reports/client-work/' + companyId + '?from=' + from + '&to=' + to, { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
           .then(j => this.setState({ cwItems: (j && j.items) || [] }))
@@ -19301,8 +19323,8 @@ class Component extends DCLogic {
       this._loadCWSummary = (companyId, from, to) => {
         return this._bootFetch('/api/reports/client-work/' + companyId + '/summary?from=' + from + '&to=' + to, { headers: hdr })
           .then(r => (r.ok ? r.json() : null))
-          .then(j => (j ? this.setState({ cwSummary: j }) : this.toast('Could not build that summary', 'error')))
-          .catch(() => this.toast('Server unreachable', 'error'));
+          .then(j => { if (!j) { this.toast('Could not build that summary', 'error'); return null; } return j; })
+          .catch(() => { this.toast('Server unreachable', 'error'); return null; });
       };
       this._loadTP = (period) => {
         if (period) this._tpPeriod = period;
@@ -20888,46 +20910,54 @@ class Component extends DCLogic {
     // (as this first did) insets the content twice, which is why the content sat in the middle of a
     // huge white border. With @page at 0, Chrome's "Default" margin setting adds nothing of its own
     // and the margin configured in Settings → Print Layout is the only one that applies.
+    /**
+     * PUT HTML ON PAPER. The host element, the @page rule, the image wait, the cleanup and the
+     * never-stuck-in-print-mode timeout — all of it is the same whatever is being printed, and it
+     * was welded to the invoice/quotation builder. Pulled out so a second kind of document (a
+     * client's work summary) can be printed without a second copy of this.
+     */
+    this._printHtml = (body, css, L) => {
+      L = L || {};
+      const old = document.getElementById('doc-print-host');
+      if (old) old.remove();
+      const host = document.createElement('div');
+      host.id = 'doc-print-host';
+      host.className = 'print-root';
+      host.innerHTML = '<style>' + (css || '') + '</style>' + body;
+      document.body.appendChild(host);
+
+      const style = document.createElement('style');
+      style.id = 'doc-print-page';
+      style.textContent = '@page{size:' + (L.pageSize || 'A4') + ';margin:0}'
+        + '#doc-print-host{padding:' + (L.margin ?? 0) + 'mm !important}';
+      document.head.appendChild(style);
+
+      const cleanup = () => {
+        document.body.classList.remove('printing-doc');
+        const h = document.getElementById('doc-print-host'); if (h) h.remove();
+        const s = document.getElementById('doc-print-page'); if (s) s.remove();
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      setTimeout(cleanup, 60000);
+
+      const imgs = Array.prototype.slice.call(host.querySelectorAll('img'));
+      const pending = imgs.filter(i => !i.complete);
+      const go = () => {
+        document.body.classList.add('printing-doc');
+        setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
+      };
+      if (!pending.length) return go();
+      let left = pending.length, done = false;
+      const tick = () => { if (--left <= 0 && !done) { done = true; go(); } };
+      pending.forEach(i => { i.addEventListener('load', tick); i.addEventListener('error', tick); });
+      setTimeout(() => { if (!done) { done = true; go(); } }, 2500);
+    };
     this._printDocDirect = (kind, doc0) => {
       this._prepareDoc(kind, doc0).then(doc => {
         const built = this._docHtml(kind, doc);
         const L = built.layout;
-        const old = document.getElementById('doc-print-host');
-        if (old) old.remove();
-        const host = document.createElement('div');
-        host.id = 'doc-print-host';
-        host.className = 'print-root';
-        host.innerHTML = '<style>' + built.css + '</style>' + built.body;
-        document.body.appendChild(host);
-
-        const style = document.createElement('style');
-        style.id = 'doc-print-page';
-        style.textContent = '@page{size:' + (L.pageSize || 'A4') + ';margin:0}'
-          + '#doc-print-host{padding:' + (L.margin ?? 0) + 'mm !important}';
-        document.head.appendChild(style);
-
-        const cleanup = () => {
-          document.body.classList.remove('printing-doc');
-          const h = document.getElementById('doc-print-host'); if (h) h.remove();
-          const s = document.getElementById('doc-print-page'); if (s) s.remove();
-          window.removeEventListener('afterprint', cleanup);
-        };
-        window.addEventListener('afterprint', cleanup);
-        setTimeout(cleanup, 60000); // never leave the app stuck in print mode
-
-        // Wait for the letterhead / QR images, or the first print can come out with blanks where they
-        // should be. Resolves either way — a missing image must not block the dialog.
-        const imgs = Array.prototype.slice.call(host.querySelectorAll('img'));
-        const pending = imgs.filter(i => !i.complete);
-        const go = () => {
-          document.body.classList.add('printing-doc');
-          setTimeout(() => { try { window.print(); } catch (e) { cleanup(); } }, 60);
-        };
-        if (!pending.length) return go();
-        let left = pending.length, done = false;
-        const tick = () => { if (--left <= 0 && !done) { done = true; go(); } };
-        pending.forEach(i => { i.addEventListener('load', tick); i.addEventListener('error', tick); });
-        setTimeout(() => { if (!done) { done = true; go(); } }, 2500);
+        return this._printHtml(built.body, built.css, L);
       });
     };
     this._hydrateAuthed();
@@ -21506,7 +21536,7 @@ class Component extends DCLogic {
     // needs to know; the grid itself comes from the server that enforces it, so a hidden item and a
     // 403 can no longer disagree.
     const _SCREEN_MODULE = {
-      'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks', 'Client Work': 'Tasks',
+      'My Tasks': 'Tasks', 'Task List': 'Tasks', 'Team Performance': 'Tasks', 'Client Report': 'Tasks',
       'Approvals': 'Approvals', 'SLA Monitor': 'SLA Monitor', 'Activity Timeline': 'Activity Log',
       'Clients': 'Clients', 'Employees': 'Clients', 'Requests Queue': 'Clients', 'Client Groups': 'Clients',
       // Compliance split five ways: the officer who files documents is not necessarily the one
@@ -21777,7 +21807,7 @@ class Component extends DCLogic {
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
       ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers]]],
-      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers], ['Client Work', I.fileText]]],
+      ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers], ['Client Report', I.fileText]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
       ['Finance', I.invoice, [['Quotations', I.stamp], ['Invoices', I.invoice], ['Disbursements', I.upload, _disbCount], ['Receipts', I.card], ['Reports', I.layers]]],
@@ -24984,7 +25014,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const edits9 = Object.keys(j.changed || {});
             this.setState({ sdBusy: false, sdStep: 'done', sdResult: {
               title: (d9.docType || 'Document') + ' added',
-              msg: (d9.docType || 'The document') + ' for ' + (d9.person || 'this client') + (d9.expiryDate ? ', expiring ' + d9.expiryDate : '') + ', is now tracked for renewal.'
+              msg: (d9.docType || 'The document') + ' for ' + (d9.person || 'this client') + (d9.expiryDate ? ', expiring ' + _dmy9(d9.expiryDate) : '') + ', is now tracked for renewal.'
                 + (j.superseded ? ' The older record was kept as history.' : '')
                 + (edits9.length ? ' Your corrections to ' + edits9.join(', ') + ' were recorded.' : ''),
             } });
@@ -25056,11 +25086,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               .filter(x9 => String(x9.expiryDate || '') > String(d9.expiryDate || ''))
               .sort((p9, q9) => String(q9.expiryDate || '').localeCompare(String(p9.expiryDate || '')))[0] || null;
             return {
-              type: d9.docType || '—', expiry: d9.expiryDate || 'no expiry', status: d9.status || '—', color: t9[0], bg: t9[1],
+              type: d9.docType || '—', expiry: d9.expiryDate ? _dmy9(d9.expiryDate) : 'no expiry', status: d9.status || '—', color: t9[0], bg: t9[1],
               // Only the OLDER of a pair offers to step down; retiring the newer one would leave the
               // stale record as the authoritative one.
               canSupersede: !!newer9,
-              supersedeNote: newer9 ? ('replaced by the ' + d9.docType + ' expiring ' + newer9.expiryDate) : '',
+              supersedeNote: newer9 ? ('replaced by the ' + d9.docType + ' expiring ' + _dmy9(newer9.expiryDate)) : '',
               supersede: () => this._supersedeDoc(d9.id, newer9 && newer9.id, d9.docType),
             };
           }),
@@ -25082,7 +25112,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               const cur9 = row9.type ? mine9.filter(x9 => x9.docType === row9.type) : [];
               if (!cur9.length) return false;
               const newest9 = cur9.sort((p9, q9) => String(q9.expiryDate || '').localeCompare(String(p9.expiryDate || '')))[0];
-              return 'Replaces the current ' + row9.type + ' (expires ' + (newest9.expiryDate || 'no expiry') + ') — it will be retired, not deleted.';
+              return 'Replaces the current ' + row9.type + ' (expires ' + (newest9.expiryDate ? _dmy9(newest9.expiryDate) : 'no expiry') + ') — it will be retired, not deleted.';
             })(),
             setExpiry: (ev9) => { const n9 = [...pend9]; n9[i9] = { ...n9[i9], expiry: ev9.target.value }; this.setState({ eeNewDocs: n9 }); },
             remove: () => this.setState({ eeNewDocs: pend9.filter((_x, j9) => j9 !== i9) }),
@@ -25280,7 +25310,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             type: d9.typeName,
             // MAIN or SUB answers "which branch", which is not a question a car has. For a type a
             // client holds several of, the badge is what tells them apart — the plate, or nothing.
-            meta: [d9.docNumber, d9.issuingAuthority, d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · '),
+            meta: [d9.docNumber, d9.issuingAuthority, d9.expiryDate ? 'expires ' + _dmy9(d9.expiryDate) : null, d9.fileName].filter(Boolean).join(' · '),
             remove: () => this.setState({ eDocs: docs9.filter((_, k9) => k9 !== i9) }),
           })),
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
@@ -26370,7 +26400,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const t9 = new Date(v9).getTime();
       if (isNaN(t9)) return { text: String(v9), color: '#4B4757' };
       const d9 = Math.round((t9 - Date.now()) / 86400000);
-      return { text: String(v9), color: d9 < 0 ? '#C0353A' : d9 <= 30 ? '#B8860B' : '#4B4757' };
+      // A stored date is ISO; a read one is dd-mm-yyyy. Printing the column raw was the one place
+      // the app showed somebody a database value.
+      return { text: _dmy9(v9), color: d9 < 0 ? '#C0353A' : d9 <= 30 ? '#B8860B' : '#4B4757' };
     };
     const clRow = clSel != null ? allClients[clSel] : null;
     const clTab = this.state.clientTab || 'Overview';
@@ -28480,7 +28512,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             crBadge: d9.repeat ? String((d9.extra && (d9.extra.plate || d9.extra.vehicle)) || '').toUpperCase() : d9.estKey ? 'SUB' : 'MAIN',
             crColor: d9.repeat ? '#0E7490' : d9.estKey ? '#B8860B' : '#5B21B6',
             crBg: d9.repeat ? '#E3F5F9' : d9.estKey ? '#FEF4E2' : '#F5EEFF',
-            meta: [d9.docNumber, d9.repeat ? null : crLabel9(d9), d9.expiryDate ? 'expires ' + d9.expiryDate : null, d9.fileName].filter(Boolean).join(' · '),
+            meta: [d9.docNumber, d9.repeat ? null : crLabel9(d9), d9.expiryDate ? 'expires ' + _dmy9(d9.expiryDate) : null, d9.fileName].filter(Boolean).join(' · '),
             remove: () => this.setState({ acDocs: docs9.filter((_, k9) => k9 !== i9) }),
           })),
           // The drop zone says what it is holding, so a file picked and then forgotten is visible.
@@ -31162,7 +31194,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         cxPrevClick: (e9) => { if (e9 && e9.stopPropagation) e9.stopPropagation(); if (has9) this._openFile(f9, cd9.fileName || (r.doc + (r.docNo && r.docNo !== '—' ? ' ' + r.docNo : ''))); },
         cxKindBg: r.kind === 'Company' ? '#F3EBFF' : '#EEEBFF', cxKindFg: r.kind === 'Company' ? '#6D28D9' : '#4F46E5', cxPreview: () => has9 && this._openFile(f9, cd9.fileName || (r.doc + (r.docNo && r.docNo !== '—' ? ' ' + r.docNo : ''))),
         cxLife: life9 + '%', cxLifeColor: r.status === 'Expired' || r.status === 'Missing' ? '#E5484D' : r.status === 'Expiring' ? '#F59E0B' : r.status === 'Processing' ? '#8B5CF6' : '#12B76A',
-        cxNo: r.docNo && r.docNo !== '—' ? r.docNo : 'No number', cxSubLine: [r.authority && r.authority !== '—' ? r.authority : '', r.expiry && r.expiry !== '—' ? 'expires ' + r.expiry : ''].filter(Boolean).join(' · ') };
+        cxNo: r.docNo && r.docNo !== '—' ? r.docNo : 'No number', cxSubLine: [r.authority && r.authority !== '—' ? r.authority : '', r.expiry && r.expiry !== '—' ? 'expires ' + _dmy9(r.expiry) : ''].filter(Boolean).join(' · ') };
     };
     /**
      * CAPPED PER GROUP, NOT PAGED. This screen was the heaviest in the app — 14,890 DOM nodes and
@@ -36542,7 +36574,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       name: k2.name, prefix: k2.prefix + '…',
       // What the key can do belongs first: it is the thing you check when deciding to revoke it.
       meta: [k2.scope === 'write' ? 'read & write' : 'read only',
-        k2.createdAt ? 'created ' + String(k2.createdAt).slice(0, 10) : null,
+        k2.createdAt ? 'created ' + _dmy9(k2.createdAt) : null,
         k2.lastUsedAt ? 'last used ' + String(k2.lastUsedAt).slice(0, 10) : 'never used'].filter(Boolean).join(' · '),
       revoke: () => skRevoke(k2),
     }));
@@ -39076,7 +39108,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ['done', 'Completed', _mtDoneTasks.length + (_mtDoneRaw ? _mtDoneSteps.length : 0)],
       ].map(([k, label, n]) => ({
         label: label + ' · ' + n,
-        select: () => this.setState({ mtMode: k }),
+        // FETCHED ONCE PER PAGE LOAD was the bug: nothing cleared `myDoneData`, so the Completed
+        // tab answered with whatever it had read earlier in this session. Finish a step and come
+        // back — "Nothing finished yet". Start viewing as somebody else and it keeps the previous
+        // person's answer, which is how an impersonated officer was shown an empty list belonging
+        // to the admin who opened the tab before them. Opening the tab asks again.
+        select: () => this.setState({ mtMode: k, ...(k === 'done' ? { myDoneData: null } : {}) }),
         color: mtMode === k ? '#7C00FF' : '#8C8899',
         bg: mtMode === k ? '#fff' : 'transparent',
         shadow: mtMode === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
@@ -39353,7 +39390,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // One screen, two mount points — the kind is read from which of them is active.
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
       showTeamPerf: act === 'Team Performance',
-      showClientWork: act === 'Client Work',
+      showClientWork: act === 'Client Report',
       /**
        * CLIENT WORK — the values behind the screen.
        *
@@ -39375,13 +39412,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // Asked for once when the screen is opened, and again whenever the range changes — keyed on
         // the range itself, because a flag would have to be cleared by every path that moves it.
         const key9 = from9 + '..' + to9;
-        if (act === 'Client Work' && this._cwKey !== key9 && !st9.cwLoading) {
+        if (act === 'Client Report' && this._cwKey !== key9 && !st9.cwLoading) {
           this._cwKey = key9;
           if (this._loadCW) setTimeout(() => this._loadCW(from9, to9), 0);
         }
         const D9 = st9.cwData || null;
         const rows9 = (D9 && Array.isArray(D9.rows)) ? D9.rows : [];
-        const setRange9 = (f9, t9) => this.setState({ cwFrom: f9, cwTo: t9, cwOpenId: null, cwItems: null });
+        const setRange9 = (f9, t9) => this.setState({ cwFrom: f9, cwTo: t9, cwOpenId: null, cwItems: null, cwLines: null });
         const sameAs9 = (pair9) => pair9[0] === from9 && pair9[1] === to9;
         const shortcut9 = (label9, pair9) => ({
           label: label9,
@@ -39390,10 +39427,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           bd: sameAs9(pair9) ? '#7C00FF' : '#E7E3F0',
           pick: () => setRange9(pair9[0], pair9[1]),
         });
-        const niceDay9 = (s9) => {
-          const d9 = new Date(String(s9) + 'T00:00:00Z');
-          return isNaN(d9) ? String(s9) : d9.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' });
-        };
+        const niceDay9 = (s9) => _dmy9(s9);
         const items9 = Array.isArray(st9.cwItems) ? st9.cwItems : null;
         return {
           cwFrom: from9, cwTo: to9,
@@ -39418,73 +39452,66 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               title: i9.title,
               caseTitle: i9.caseTitle || '',
             })) : [],
+            // WHAT CHANGED, AND WHAT IS STILL OPEN. The before/after pair comes from the case
+            // itself: a renewal records the number and expiry it was raised about, so "2026-11-01
+            // became 2027-12-01" survives even when the new document was filed without retiring
+            // the old one. Equal values mean nothing has been replaced yet, which is a true answer
+            // and a useful one.
+            ...(() => {
+              const L9 = (st9.cwOpenId === r9.companyId && st9.cwLines) ? st9.cwLines : null;
+              const line9 = (x9) => ({
+                person: x9.person || x9.caseTitle,
+                docType: x9.docType || '—',
+                // dd-mm-yyyy like everything else. These are ISO off the database and were the
+                // last place the report showed a reader a stored value.
+                before: [x9.beforeNumber, x9.beforeExpiry && _dmy9(x9.beforeExpiry)].filter(Boolean).join(' · ') || '—',
+                after: [x9.afterNumber, x9.afterExpiry && _dmy9(x9.afterExpiry)].filter(Boolean).join(' · ') || '—',
+                changed: !!(x9.afterExpiry && x9.beforeExpiry && x9.afterExpiry !== x9.beforeExpiry),
+                detail: x9.detail || '',
+                at: x9.at ? niceDay9(String(x9.at).slice(0, 10)) : '—',
+              });
+              return {
+                cwDone: L9 ? L9.completed.map(line9) : [],
+                cwDoneAny: !!(L9 && L9.completed.length),
+                cwPend: L9 ? L9.pending.map(line9) : [],
+                cwPendAny: !!(L9 && L9.pending.length),
+              };
+            })(),
             // Clicking the open row closes it, which is what a reader expects of a disclosure.
             open: () => (st9.cwOpenId === r9.companyId
               ? this.setState({ cwOpenId: null, cwItems: null })
               : this._loadCWDetail && this._loadCWDetail(r9.companyId, from9, to9)),
             // Shown rather than sent: what goes to a client is the firm's own words, and a button
             // that emails on one click is how the wrong month reaches the wrong person.
-            summary: () => this._loadCWSummary && this._loadCWSummary(r9.companyId, from9, to9),
+            // A REAL PDF, NOT A PRINT DIALOG. The browser can only reach "Save as PDF" through
+            // the print sheet — a printer to choose, settings to ignore — for a document whose
+            // whole purpose is to be attached to an email. The server renders it instead and this
+            // opens the finished file, so the tab shows the PDF viewer and nothing else.
+            //
+            // Fetched rather than linked: the tab would carry no Authorization header, and the
+            // route is staff-only.
+            summary: () => {
+              const tok9 = localStorage.getItem('stimespro:token');
+              this.toast('Building the PDF…');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/reports/client-work/' + r9.companyId
+                    + '/summary.pdf?from=' + from9 + '&to=' + to9,
+                    { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+                .then(res9 => (res9.ok ? res9.blob() : res9.json().then(j9 => Promise.reject(j9 && j9.error))))
+                .then(b9 => {
+                  const u9 = URL.createObjectURL(b9);
+                  const w9 = window.open(u9, '_blank');
+                  if (!w9) this.toast('Allow pop-ups for this site to open the PDF', 'error');
+                  // Revoked late: the new tab has to finish reading it first.
+                  setTimeout(() => URL.revokeObjectURL(u9), 60000);
+                })
+                .catch(e9 => this.toast(typeof e9 === 'string' ? e9 : 'Could not build that PDF', 'error'));
+            },
           })),
           cwTotalLabel: rows9.length + (rows9.length === 1 ? ' client' : ' clients'),
           cwTotalTasks: rows9.reduce((a9, r9) => a9 + r9.tasks, 0),
           cwTotalSteps: rows9.reduce((a9, r9) => a9 + r9.steps, 0),
           cwTotalClosed: rows9.reduce((a9, r9) => a9 + r9.casesClosed, 0),
           cwTotalOpen: rows9.reduce((a9, r9) => a9 + r9.openNow, 0),
-          /**
-           * THE SUMMARY PANEL - the same month, written for the client rather than for the firm.
-           *
-           * Steps are rolled up under their case because a client reading "Payment for Jawazat,
-           * Check Traffic Violations, Renew Iqama..." sees a stranger's checklist, where "Iqama
-           * renewal - Ahmed, 11 steps, done" is the thing they asked for. The plain text is built
-           * from the same rows the panel shows, so what is copied is what was read.
-           */
-          cwSumOpen: !!st9.cwSummary,
-          cwSumClient: (st9.cwSummary && st9.cwSummary.client) || 'This client',
-          cwSumRange: niceDay9(from9) + ' to ' + niceDay9(to9),
-          cwSumHasCases: !!(st9.cwSummary && st9.cwSummary.cases && st9.cwSummary.cases.length),
-          cwSumCases: ((st9.cwSummary && st9.cwSummary.cases) || []).map(c9 => ({
-            title: c9.title,
-            // Bare numbers in a column that is headed "Steps" — "3 steps" in a table repeats its
-            // own header on every row.
-            steps: String(c9.steps),
-            last: niceDay9(String(c9.last || '').slice(0, 10)),
-            state: c9.finished ? 'Completed' : 'In progress',
-            stateColor: c9.finished ? '#0E9355' : '#B8860B',
-          })),
-          cwSumHasTasks: !!(st9.cwSummary && st9.cwSummary.tasks && st9.cwSummary.tasks.length),
-          cwSumTasks: ((st9.cwSummary && st9.cwSummary.tasks) || []).map(k9 => ({
-            title: k9.title,
-            when: niceDay9(String(k9.completedAt).slice(0, 10)),
-          })),
-          cwSumEmpty: !!(st9.cwSummary && !st9.cwSummary.cases.length && !st9.cwSummary.tasks.length),
-          cwSumFoot: st9.cwSummary
-            ? (st9.cwSummary.totals.cases + ' case' + (st9.cwSummary.totals.cases === 1 ? '' : 's')
-               + ' - ' + st9.cwSummary.totals.casesClosed + ' completed - '
-               + st9.cwSummary.totals.steps + ' steps - ' + st9.cwSummary.totals.tasks + ' separate tasks')
-            : '',
-          closeCwSum: () => this.setState({ cwSummary: null }),
-          copyCwSum: () => {
-            const S9 = st9.cwSummary;
-            if (!S9) return;
-            const L9 = [(S9.client || 'Client') + ' - work completed ' + niceDay9(from9) + ' to ' + niceDay9(to9), ''];
-            if (S9.cases.length) {
-              S9.cases.forEach(c9 => L9.push('- ' + c9.title + ' - ' + c9.steps + ' step'
-                + (c9.steps === 1 ? '' : 's') + ', last ' + niceDay9(String(c9.last || '').slice(0, 10))
-                + (c9.finished ? ', completed' : ', in progress')));
-              L9.push('');
-            }
-            if (S9.tasks.length) {
-              L9.push('Also completed:');
-              S9.tasks.forEach(k9 => L9.push('- ' + k9.title + ' - ' + niceDay9(String(k9.completedAt).slice(0, 10))));
-              L9.push('');
-            }
-            if (!S9.cases.length && !S9.tasks.length) L9.push('No work was completed in this period.');
-            try {
-              navigator.clipboard.writeText(L9.join('\n'));
-              this.toast('Summary copied - paste it into your own email');
-            } catch (e) { this.toast('Could not copy that', 'error'); }
-          },
           cwExport: () => {
             const tok9 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/reports/client-work.xlsx?from=' + from9 + '&to=' + to9,
@@ -39493,7 +39520,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               .then(b9 => {
                 const a9 = document.createElement('a');
                 a9.href = URL.createObjectURL(b9);
-                a9.download = 'client-work-' + from9 + '-to-' + to9 + '.xlsx';
+                a9.download = 'client-report-' + from9 + '-to-' + to9 + '.xlsx';
                 document.body.appendChild(a9); a9.click(); a9.remove();
                 setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
                 this.toast && this.toast('Exported ' + rows9.length + ' client' + (rows9.length === 1 ? '' : 's'));
@@ -46499,7 +46526,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       return lines;
     };
     const quoteDefs = (Array.isArray(qtData)
-      ? _newestFirst9(qtData).map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + q2.date) : '', q2.validUntil ? 'expires ' + q2.validUntil : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
+      ? _newestFirst9(qtData).map(q2 => [q2.number || q2.id, (q2.service || 'Quotation'), [q2.date ? ((['draft','approved'].includes(q2.status) ? 'Created ' : 'Sent ') + _dmy9(q2.date)) : '', q2.validUntil ? 'expires ' + _dmy9(q2.validUntil) : ''].filter(Boolean).join(' · ') || '—', _qtBreakdown(q2), fmtCur(q2.totalMinor != null ? q2.totalMinor / 100 : q2.amount), q2.id, QT_ST[String(q2.status).toLowerCase()] || 'Pending', String(q2.status || '').toLowerCase()])
       : (_authed ? [] : [
         ['QT-338', 'Labour card renewal × 3', 'Sent 15 Jul · expires 22 Jul', [['MOHRE fees × 3', 'AED 1,800']], 'AED 2,000', null, 'Pending', 'sent'],
         ['QT-331', 'Emirates ID renewal — A. Khan', 'Sent 08 Jul', [['ICP fee', 'AED 370']], 'AED 420', null, 'Accepted', 'approved'],
@@ -46535,8 +46562,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // puts the document in front of you with both choices, instead of silently filling the
         // downloads folder.
         proposal: () => this._openProposal(realId, id, cli0, raw0),
-        when: (raw0 && raw0.date) ? ((['draft', 'approved'].includes(rawSt) ? 'created ' : 'sent ') + raw0.date) : '—',
-        validLabel: (raw0 && raw0.validUntil) ? 'valid to ' + raw0.validUntil : '',
+        when: (raw0 && raw0.date) ? ((['draft', 'approved'].includes(rawSt) ? 'created ' : 'sent ') + _dmy9(raw0.date)) : '—',
+        validLabel: (raw0 && raw0.validUntil) ? 'valid to ' + _dmy9(raw0.validUntil) : '',
         hasValid: !!(raw0 && raw0.validUntil),
         // What the client asked for, shown where staff will actually see it.
         clientNote: (raw0 && raw0.clientNote) ? 'Client asked: ' + raw0.clientNote : '',

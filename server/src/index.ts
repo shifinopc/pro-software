@@ -1,4 +1,7 @@
 import "dotenv/config";
+// Before anything formats a date for a person to read. See dates.ts.
+import { useDayMonthYearEverywhere, dmy } from "./dates.js";
+useDayMonthYearEverywhere();
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -94,7 +97,7 @@ import { bookingPage } from "./bookingpage.js";
 import { siteForKey, receiveEnquiry } from "./webintake.js";
 import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
-import { clientWork, clientWorkItems, clientWorkSummary } from "./clientwork.js";
+import { clientWork, clientWorkItems, clientWorkSummary, clientReportDetail } from "./clientwork.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
@@ -104,7 +107,7 @@ import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invit
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
 import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
-import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
+import { tokensIn, renderDocx, proposalData, docxToPdf, htmlToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
@@ -4666,6 +4669,72 @@ app.get("/api/reports/client-work/:companyId", requireAuth, requireStaff, async 
 });
 
 /** The same month written for the client: cases, not a stranger's checklist of steps. */
+/**
+ * THE CLIENT'S OWN COPY, AS A PDF.
+ *
+ * Printing from the browser meant a print dialog, a printer to choose and "Save as PDF" buried in
+ * it — for a document whose whole purpose is to be attached to an email. LibreOffice is already in
+ * this image for proposals and reads HTML directly, so the server returns a finished PDF and the
+ * browser just shows it.
+ *
+ * Landscape, because the table is wide and the alternative is a column of wrapped text.
+ */
+app.get("/api/reports/client-work/:companyId/summary.pdf", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const co = await prisma.company.findUnique({ where: { id: req.params.companyId }, select: { name: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+    const S = await clientWorkSummary({ from, to, companyId: req.params.companyId });
+    // The same row the proposal reads its letterhead name from.
+    const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
+    const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    const rows = [
+      ...S.cases.map(c => [c.title, String(c.steps), dmy(String(c.last ?? "").slice(0, 10)), c.finished ? "Completed" : "In progress"]),
+      ...S.tasks.map(k => [k.title, "—", dmy(String(k.completedAt ?? "").slice(0, 10)), "Completed"]),
+    ];
+    if (!rows.length) rows.push(["No work was completed in this period.", "", "", ""]);
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(co.name)}</title><style>
+      @page { size: A4 landscape; margin: 14mm; }
+      body { font-family: Arial, sans-serif; color: #1A1523; font-size: 10pt; }
+      h1 { font-size: 15pt; margin: 0 0 2mm; }
+      .sub { color: #6F6C7A; font-size: 9pt; margin: 0 0 6mm; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; font-size: 8pt; letter-spacing: .04em; text-transform: uppercase;
+           color: #6F6C7A; border-bottom: 1.5pt solid #26074D; padding: 0 3mm 2mm 0; }
+      td { padding: 2.5mm 3mm 2.5mm 0; border-bottom: .5pt solid #DDD9E6; vertical-align: top; }
+      td.n, th.n { text-align: right; padding-right: 0; }
+      .foot { margin-top: 6mm; color: #6F6C7A; font-size: 8.5pt; }
+    </style></head><body>
+      <h1>${esc(org.legalName || org.orgName || "STIMES PRO")}</h1>
+      <p class="sub">${esc(co.name)} &mdash; work completed ${esc(dmy(from))} to ${esc(dmy(to))}</p>
+      <table><thead><tr><th>Case</th><th class="n">Steps</th><th class="n">Last activity</th><th class="n">Status</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r[0])}</td><td class="n">${esc(r[1])}</td><td class="n">${esc(r[2])}</td><td class="n">${esc(r[3])}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="foot">${S.totals.cases} case(s) &middot; ${S.totals.casesClosed} completed &middot; ${S.totals.steps} steps &middot; ${S.totals.tasks} separate tasks</p>
+    </body></html>`;
+
+    const pdf = await htmlToPdf(html);
+    // The converter is not on every machine — a developer box without LibreOffice must say so
+    // rather than hand back an empty tab.
+    if (!pdf) return res.status(503).json({ error: "The PDF converter is not available on this server" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${co.name.replace(/[^a-z0-9]+/gi, "-")}-${from}-to-${to}.pdf"`);
+    res.send(pdf);
+  } catch (e: any) { return fail(res, 400, e, "reports.client-work.summary-pdf"); }
+});
+
+/** The client-facing detail: what changed in the period, and what is still open. */
+app.get("/api/reports/client-work/:companyId/detail", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const co = await prisma.company.findUnique({ where: { id: req.params.companyId }, select: { name: true } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+    res.json({ client: co.name, from, to, ...await clientReportDetail({ from, to, companyId: req.params.companyId }) });
+  } catch (e: any) { return fail(res, 400, e, "reports.client-work.detail-lines"); }
+});
+
 app.get("/api/reports/client-work/:companyId/summary", requireAuth, requireStaff, async (req, res) => {
   try {
     const { from, to } = reportRange(req);
@@ -6535,7 +6604,7 @@ async function filePortalLicence(opts: { companyId: string; govCenter: string; e
   const doc = await prisma.document.create({
     data: { companyId, person: company?.name ?? govCenter, docType: type.name, expiryDate: expiry, issuingAuthority: govCenter, ...state },
   });
-  logActivity({ type: "client", message: `${type.name} recorded — expires ${expiry}${company?.name ? ` · ${company.name}` : ""}` });
+  logActivity({ type: "client", message: `${type.name} recorded — expires ${dmy(expiry)}${company?.name ? ` · ${company.name}` : ""}` });
   return doc;
 }
 
