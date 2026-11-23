@@ -16122,22 +16122,34 @@
           <sc-if value="{{ cwSumEmpty }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:11.5px; color:#8C8899; padding:10px 0;">Nothing was completed for this client in this period.</div>
           </sc-if>
+          <!-- A TABLE, because this is read as a statement of work and a statement is compared
+               down its columns. It was a list of sentences, and the LAST ACTIVITY date the server
+               already computes was not shown at all — the one column a client actually asks about
+               ("when did you do this?"). Header row and figures right-aligned, like every other
+               table here. -->
           <sc-if value="{{ cwSumHasCases }}" hint-placeholder-val="{{ true }}">
             <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin-bottom:7px;">CASES</div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) 68px 92px 86px; gap:10px; align-items:baseline; padding:0 0 6px; border-bottom:1px solid #EFEAF7; font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase;">
+              <span>Case</span><span style="text-align:right;">Steps</span><span style="text-align:right;">Last activity</span><span style="text-align:right;">Status</span>
+            </div>
             <sc-for list="{{ cwSumCases }}" as="c" hint-placeholder-count="3">
-              <div style="display:flex; align-items:baseline; gap:10px; padding:7px 0; border-bottom:1px solid #F7F5FB;">
-                <span style="flex:1; font-size:12.5px; font-weight:600; color:#2E2937; min-width:0;">{{ c.title }}</span>
-                <span style="font-size:10.5px; color:#A9A6B4; flex-shrink:0;">{{ c.steps }}</span>
-                <span style="font-size:10.5px; font-weight:700; color:{{ c.stateColor }}; flex-shrink:0; width:76px; text-align:right;">{{ c.state }}</span>
+              <div style="display:grid; grid-template-columns:minmax(0,1fr) 68px 92px 86px; gap:10px; align-items:baseline; padding:7px 0; border-bottom:1px solid #F7F5FB;">
+                <span style="font-size:12.5px; font-weight:600; color:#2E2937; min-width:0;">{{ c.title }}</span>
+                <span style="font-size:10.5px; color:#6F6C7A; text-align:right;">{{ c.steps }}</span>
+                <span style="font-size:10.5px; color:#6F6C7A; text-align:right; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ c.last }}</span>
+                <span style="font-size:10.5px; font-weight:700; color:{{ c.stateColor }}; text-align:right;">{{ c.state }}</span>
               </div>
             </sc-for>
           </sc-if>
           <sc-if value="{{ cwSumHasTasks }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; margin:15px 0 7px;">ALSO COMPLETED</div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) 92px; gap:10px; align-items:baseline; padding:0 0 6px; border-bottom:1px solid #EFEAF7; font-size:9px; font-weight:800; letter-spacing:.05em; color:#B9B6C4; text-transform:uppercase;">
+              <span>Task</span><span style="text-align:right;">Completed</span>
+            </div>
             <sc-for list="{{ cwSumTasks }}" as="k" hint-placeholder-count="2">
-              <div style="display:flex; align-items:baseline; gap:10px; padding:6px 0; border-bottom:1px solid #F7F5FB;">
-                <span style="flex:1; font-size:12px; color:#3E3949; min-width:0;">{{ k.title }}</span>
-                <span style="font-size:10.5px; color:#A9A6B4; flex-shrink:0;">{{ k.when }}</span>
+              <div style="display:grid; grid-template-columns:minmax(0,1fr) 92px; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid #F7F5FB;">
+                <span style="font-size:12px; color:#3E3949; min-width:0;">{{ k.title }}</span>
+                <span style="font-size:10.5px; color:#6F6C7A; text-align:right; font-family:ui-monospace,Menlo,Consolas,monospace;">{{ k.when }}</span>
               </div>
             </sc-for>
           </sc-if>
@@ -39433,7 +39445,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           cwSumHasCases: !!(st9.cwSummary && st9.cwSummary.cases && st9.cwSummary.cases.length),
           cwSumCases: ((st9.cwSummary && st9.cwSummary.cases) || []).map(c9 => ({
             title: c9.title,
-            steps: c9.steps + (c9.steps === 1 ? ' step' : ' steps'),
+            // Bare numbers in a column that is headed "Steps" — "3 steps" in a table repeats its
+            // own header on every row.
+            steps: String(c9.steps),
+            last: niceDay9(String(c9.last || '').slice(0, 10)),
             state: c9.finished ? 'Completed' : 'In progress',
             stateColor: c9.finished ? '#0E9355' : '#B8860B',
           })),
@@ -39455,12 +39470,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const L9 = [(S9.client || 'Client') + ' - work completed ' + niceDay9(from9) + ' to ' + niceDay9(to9), ''];
             if (S9.cases.length) {
               S9.cases.forEach(c9 => L9.push('- ' + c9.title + ' - ' + c9.steps + ' step'
-                + (c9.steps === 1 ? '' : 's') + (c9.finished ? ', completed' : ', in progress')));
+                + (c9.steps === 1 ? '' : 's') + ', last ' + niceDay9(String(c9.last || '').slice(0, 10))
+                + (c9.finished ? ', completed' : ', in progress')));
               L9.push('');
             }
             if (S9.tasks.length) {
               L9.push('Also completed:');
-              S9.tasks.forEach(k9 => L9.push('- ' + k9.title));
+              S9.tasks.forEach(k9 => L9.push('- ' + k9.title + ' - ' + niceDay9(String(k9.completedAt).slice(0, 10))));
               L9.push('');
             }
             if (!S9.cases.length && !S9.tasks.length) L9.push('No work was completed in this period.');
