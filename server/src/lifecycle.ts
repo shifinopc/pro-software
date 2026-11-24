@@ -179,12 +179,12 @@ export async function lifecycleAnalytics(scope: { companyIds?: string[] | null }
  * gets its own line rather than being dropped: until every lead enters the pipeline, "no deal
  * yet" is the most common status there is, and hiding it would make the board look complete.
  */
-async function openLeadsByStage(companyIds: string[]): Promise<{ name: string; count: number }[]> {
+async function openLeadsByStage(companyIds: string[]): Promise<{ rows: { name: string; count: number }[]; byStage: Map<string, string[]> }> {
   const open = await prisma.company.findMany({
     where: { id: { in: companyIds }, lifecycle: { in: ["lead", "prospect"] } },
     select: { id: true },
   });
-  if (!open.length) return [];
+  if (!open.length) return { rows: [], byStage: new Map() };
   const ids = open.map(c => c.id);
   const deals = await prisma.opportunity.findMany({
     where: { companyId: { in: ids } },
@@ -198,15 +198,16 @@ async function openLeadsByStage(companyIds: string[]): Promise<{ name: string; c
   const stageOf = new Map<string, string>();
   for (const d of deals) stageOf.set(d.companyId, nameOf.get(d.stageId) ?? "Unknown stage");
 
-  const tally = new Map<string, number>();
+  const byStage = new Map<string, string[]>();
   for (const id of ids) {
     const key = stageOf.get(id) ?? "No deal yet";
-    tally.set(key, (tally.get(key) ?? 0) + 1);
+    byStage.set(key, [...(byStage.get(key) ?? []), id]);
   }
-  return [...tally.entries()]
-    .map(([name, count]) => ({ name, count }))
+  const rows = [...byStage.entries()]
+    .map(([name, xs]) => ({ name, count: xs.length }))
     // Pipeline order, with the un-carded leads last — they are not a stage, they are the gap.
     .sort((a, b) => (order.get(a.name) ?? 99) - (order.get(b.name) ?? 99) || a.name.localeCompare(b.name));
+  return { rows, byStage };
 }
 
 /** One line of the lead status report. */
@@ -250,10 +251,17 @@ export async function leadStatusReport(opts: {
   companyIds?: string[] | null;
   source?: string | null;
   campaign?: string | null;
+  /**
+   * WHICH COMPANIES ARE BEHIND ONE NUMBER. Asked of the SAME function that produced the number,
+   * not a second query with the rules written out again — that is how a drill-down comes to
+   * disagree with the total it was opened from. `owner` is a user id, or "unassigned".
+   */
+  detailFor?: { owner: string | null; bucket: string } | null;
 }): Promise<{
   rows: LeadStatusRow[];
   totals: Omit<LeadStatusRow, "ownerId" | "owner">;
   stages: { name: string; count: number }[];
+  detail?: { id: string; name: string; owner: string; stage: string }[];
   from: string; to: string; since: string | null;
 }> {
   const { from, to } = opts;
@@ -290,11 +298,20 @@ export async function leadStatusReport(opts: {
     if (!r) per.set(ownerId, (r = { ownerId, owner: "", newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 }));
     return r;
   };
+  const want = opts.detailFor ?? null;
+  const picked = new Set<string>();
+  const wanted = (companyId: string, bucket: string) => {
+    if (!want || want.bucket !== bucket) return;
+    const owner = ownerOf.get(companyId) ?? null;
+    // "all" is the TOTAL row — every owner, including the unassigned.
+    if (want.owner === "all" || (want.owner === "unassigned" ? owner === null : owner === want.owner)) picked.add(companyId);
+  };
   const once = (companyId: string, bucket: keyof LeadStatusRow & ("newLeads" | "toProspect" | "toClient" | "lost")) => {
     const key = `${companyId}|${bucket}`;
     if (seen.has(key)) return;
     seen.add(key);
     line(ownerOf.get(companyId) ?? null)[bucket]++;
+    wanted(companyId, bucket);
   };
 
   for (const r of rows) {
@@ -307,7 +324,7 @@ export async function leadStatusReport(opts: {
     else if (r.toLifecycle === "lost") once(r.companyId, "lost");
   }
   for (const [companyId, state] of stateAtEnd) {
-    if (state === "lead" || state === "prospect") line(ownerOf.get(companyId) ?? null).openAtEnd++;
+    if (state === "lead" || state === "prospect") { line(ownerOf.get(companyId) ?? null).openAtEnd++; wanted(companyId, "openAtEnd"); }
   }
 
   const ids = [...per.keys()].filter(Boolean) as string[];
@@ -331,5 +348,35 @@ export async function leadStatusReport(opts: {
   // and saying so on the screen is cheaper than everyone learning it the hard way.
   const first = await prisma.lifecycleTransition.findFirst({ orderBy: { changedAt: "asc" }, select: { changedAt: true } });
 
-  return { rows: out, totals, stages: await openLeadsByStage(cos.map(c => c.id)), from, to, since: first?.changedAt.slice(0, 10) ?? null };
+  const byStage = await openLeadsByStage(cos.map(c => c.id));
+  // A stage cell drills down too: "stage:Quoted" is 15 companies, and which 15 is the question.
+  if (want?.bucket.startsWith("stage:")) {
+    for (const id of byStage.byStage.get(want.bucket.slice(6)) ?? []) {
+      const owner = ownerOf.get(id) ?? null;
+      if (want.owner === "all" || (want.owner === "unassigned" ? owner === null : owner === want.owner)) picked.add(id);
+    }
+  }
+
+  let detail: { id: string; name: string; owner: string; stage: string }[] | undefined;
+  if (want) {
+    const named = await prisma.company.findMany({
+      where: { id: { in: [...picked] } },
+      select: { id: true, name: true, ownerId: true, lifecycle: true },
+      orderBy: { name: "asc" },
+      // shortcut: 300 names is already more than anybody reads off a screen; the count above is
+      // the figure, this is the "who". Raise it when somebody actually asks to scroll 300 rows.
+      take: 300,
+    });
+    const stageByCompany = new Map<string, string>();
+    for (const [stage, xs] of byStage.byStage) for (const id of xs) stageByCompany.set(id, stage);
+    detail = named.map(c => ({
+      id: c.id,
+      name: c.name,
+      owner: c.ownerId ? (nameOf.get(c.ownerId) ?? "Someone who has left") : "Unassigned",
+      // A company that has left the leads behind says so, rather than showing a stale stage.
+      stage: c.lifecycle === "client" ? "Client" : c.lifecycle === "lost" ? "Lost" : (stageByCompany.get(c.id) ?? "No deal yet"),
+    }));
+  }
+
+  return { rows: out, totals, stages: byStage.rows, detail, from, to, since: first?.changedAt.slice(0, 10) ?? null };
 }

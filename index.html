@@ -7287,25 +7287,53 @@
               <span style="width:70px; text-align:right;">CONVERTED</span>
             </div>
             <sc-for list="{{ lrRows }}" as="r" hint-placeholder-count="4">
-              <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid #F7F5FB;" style-hover="background:#FBFAFE;">
+              <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid #F7F5FB; background:{{ r.bg }};" style-hover="background:#FBFAFE;">
                 <span style="flex:1; font-size:12.5px; font-weight:600; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.owner }}</span>
-                <span style="width:80px; text-align:right; font-size:12px; color:#3E3949;">{{ r.newLeads }}</span>
-                <span style="width:90px; text-align:right; font-size:12px; color:#3E3949;">{{ r.toProspect }}</span>
-                <span style="width:90px; text-align:right; font-size:12px; font-weight:700; color:{{ r.wonColor }};">{{ r.toClient }}</span>
-                <span style="width:70px; text-align:right; font-size:12px; color:{{ r.lostColor }};">{{ r.lost }}</span>
-                <span style="width:80px; text-align:right; font-size:12px; color:#3E3949;">{{ r.openAtEnd }}</span>
+                <span onClick="{{ r.openNewLeads }}" title="Show the names" style="width:80px; text-align:right; font-size:12px; color:#3E3949; cursor:pointer; border-radius:7px;" style-hover="color:#7C00FF;">{{ r.newLeads }}</span>
+                <span onClick="{{ r.openToProspect }}" title="Show the names" style="width:90px; text-align:right; font-size:12px; color:#3E3949; cursor:pointer; border-radius:7px;" style-hover="color:#7C00FF;">{{ r.toProspect }}</span>
+                <span onClick="{{ r.openToClient }}" title="Show the names" style="width:90px; text-align:right; font-size:12px; font-weight:700; color:{{ r.wonColor }}; cursor:pointer; border-radius:7px;">{{ r.toClient }}</span>
+                <span onClick="{{ r.openLost }}" title="Show the names" style="width:70px; text-align:right; font-size:12px; color:{{ r.lostColor }}; cursor:pointer; border-radius:7px;">{{ r.lost }}</span>
+                <span onClick="{{ r.openOpenAtEnd }}" title="Show the names" style="width:80px; text-align:right; font-size:12px; color:#3E3949; cursor:pointer; border-radius:7px;" style-hover="color:#7C00FF;">{{ r.openAtEnd }}</span>
                 <span style="width:70px; text-align:right; font-size:11.5px; color:#8C8899;">{{ r.rate }}</span>
               </div>
+              <sc-if value="{{ r.dOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:6px 14px 12px 22px; background:#FCFBFE; border-bottom:1px solid #F7F5FB;">
+                  <div style="font-size:9px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; padding:6px 0;">{{ r.dTitle }}</div>
+                  <sc-if value="{{ r.dLoading }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:6px 0;">Fetching the names&hellip;</div></sc-if>
+                  <sc-if value="{{ r.dEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:6px 0;">Nobody in this one.</div></sc-if>
+                  <sc-for list="{{ r.dRows }}" as="d" hint-placeholder-count="3">
+                    <div style="display:flex; align-items:baseline; gap:10px; padding:4px 0;">
+                      <span style="flex:1; font-size:11.5px; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.name }}</span>
+                      <span style="font-size:10px; color:#A9A6B4; width:150px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.owner }}</span>
+                      <span style="font-size:10px; font-weight:700; color:#7C00FF; width:90px; flex-shrink:0; text-align:right;">{{ d.stage }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
             </sc-for>
             <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; background:#FBFAFE; font-size:12px; font-weight:800; color:#2E2937;">
               <span style="flex:1;">TOTAL</span>
-              <span style="width:80px; text-align:right;">{{ lrTotNew }}</span>
-              <span style="width:90px; text-align:right;">{{ lrTotProspect }}</span>
-              <span style="width:90px; text-align:right; color:#0E9355;">{{ lrTotClient }}</span>
-              <span style="width:70px; text-align:right;">{{ lrTotLost }}</span>
-              <span style="width:80px; text-align:right;">{{ lrTotOpen }}</span>
+              <span onClick="{{ openNewLeads }}" title="Show the names" style="width:80px; text-align:right; cursor:pointer; border-radius:7px;">{{ lrTotNew }}</span>
+              <span onClick="{{ openToProspect }}" title="Show the names" style="width:90px; text-align:right; cursor:pointer; border-radius:7px;">{{ lrTotProspect }}</span>
+              <span onClick="{{ openToClient }}" title="Show the names" style="width:90px; text-align:right; color:#0E9355; cursor:pointer; border-radius:7px;">{{ lrTotClient }}</span>
+              <span onClick="{{ openLost }}" title="Show the names" style="width:70px; text-align:right; cursor:pointer; border-radius:7px;">{{ lrTotLost }}</span>
+              <span onClick="{{ openOpenAtEnd }}" title="Show the names" style="width:80px; text-align:right; cursor:pointer; border-radius:7px;">{{ lrTotOpen }}</span>
               <span style="width:70px; text-align:right; font-weight:650; color:#8C8899;">{{ lrTotRate }}</span>
             </div>
+            <sc-if value="{{ dOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:6px 14px 12px 22px; background:#FCFBFE; border-top:1px solid #F1EEF7;">
+                <div style="font-size:9px; font-weight:800; letter-spacing:.1em; color:#A9A6B4; padding:6px 0;">{{ dTitle }}</div>
+                <sc-if value="{{ dLoading }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:6px 0;">Fetching the names&hellip;</div></sc-if>
+                <sc-if value="{{ dEmpty }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:6px 0;">Nobody in this one.</div></sc-if>
+                <sc-for list="{{ dRows }}" as="d" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:baseline; gap:10px; padding:4px 0;">
+                    <span style="flex:1; font-size:11.5px; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.name }}</span>
+                    <span style="font-size:10px; color:#A9A6B4; width:150px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.owner }}</span>
+                    <span style="font-size:10px; font-weight:700; color:#7C00FF; width:90px; flex-shrink:0; text-align:right;">{{ d.stage }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
           </div>
           <sc-if value="{{ lrHasStages }}" hint-placeholder-val="{{ true }}">
             <div style="border:1px solid #F1EEF7; border-radius:16px; overflow:hidden;">
@@ -7314,10 +7342,21 @@
                 <span style="width:80px; text-align:right;">LEADS</span>
               </div>
               <sc-for list="{{ lrStages }}" as="st" hint-placeholder-count="4">
-                <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #F7F5FB;">
+                <div onClick="{{ st.open }}" title="Show the names" style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #F7F5FB; cursor:pointer;" style-hover="background:#FBFAFE;">
                   <span style="flex:1; font-size:12.5px; font-weight:600; color:{{ st.color }};">{{ st.name }}</span>
                   <span style="width:80px; text-align:right; font-size:12px; color:{{ st.color }};">{{ st.count }}</span>
                 </div>
+                <sc-if value="{{ st.dOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:6px 14px 12px 22px; background:#FCFBFE; border-bottom:1px solid #F7F5FB;">
+                    <sc-if value="{{ st.dLoading }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#A9A6B4; padding:6px 0;">Fetching the names&hellip;</div></sc-if>
+                    <sc-for list="{{ st.dRows }}" as="d" hint-placeholder-count="3">
+                      <div style="display:flex; align-items:baseline; gap:10px; padding:4px 0;">
+                        <span style="flex:1; font-size:11.5px; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.name }}</span>
+                        <span style="font-size:10px; color:#A9A6B4; width:150px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ d.owner }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
               </sc-for>
             </div>
           </sc-if>
@@ -16377,7 +16416,7 @@
                free space real and the split visible.
                `0 1 auto` sizes each to its CONTENT, so the empty one is 0px and the used one still
                shrinks and scrolls at the panel's limit. -->
-        <div class="fm-body" data-hidescroll="true" style="flex:0 1 auto; max-height:100%; display:flex; flex-direction:column;">
+        <div class="fm-body" data-hidescroll="true" style="flex:0 1 auto; max-height:100%; padding-top:0; padding-bottom:0; display:flex; flex-direction:column;">
           <!-- The run advancing, OVER the step just completed rather than instead of it. The old
                flow closed the sheet here and reopened a new one a second or two later, which reads
                as a second dialog appearing by itself. `.fm-body` is position:relative for the
@@ -19562,6 +19601,16 @@ class Component extends DCLogic {
             });
           })
           .catch(() => this.setState({ lrLoading: false, lrError: 'The server could not be reached.' }));
+      };
+      // WHICH COMPANIES ARE BEHIND ONE NUMBER. The same endpoint the figures come from, with a
+      // bucket named: a drill-down fetched from somewhere else is a second set of rules.
+      this._loadLRDetail = (from, to, owner, bucket) => {
+        this.setState({ lrDetail: null, lrDetailFor: owner + '|' + bucket });
+        return this._bootFetch('/api/reports/lead-status?from=' + from + '&to=' + to
+            + '&owner=' + encodeURIComponent(owner) + '&bucket=' + encodeURIComponent(bucket), { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => this.setState({ lrDetail: (v && Array.isArray(v.detail)) ? v.detail : [] }))
+          .catch(() => this.setState({ lrDetail: [] }));
       };
       this._loadCW = (from, to) => {
         const q = from && to ? ('?from=' + from + '&to=' + to) : '';
@@ -39899,6 +39948,40 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // A conversion rate only where there is something to divide by. "0%" off two leads is a
         // number people quote, and it is not one.
         const rate9 = (part9, whole9) => (whole9 >= 5 ? Math.round((part9 * 1000) / whole9) / 10 + '%' : '—');
+
+        // ── the drill-down ──────────────────────────────────────────────────────────────────
+        // One cell open at a time, keyed by owner and bucket. Pressing the open one closes it,
+        // which is the behaviour of every other expander in this console.
+        const openKey9 = st9.lrDetailFor || '';
+        const detail9 = Array.isArray(st9.lrDetail) ? st9.lrDetail : null;
+        const BUCKETS9 = [['newLeads', 'new leads'], ['toProspect', 'moved to prospect'],
+          ['toClient', 'became clients'], ['lost', 'lost'], ['openAtEnd', 'still open']];
+        const pick9 = (ownerKey9, bucket9) => () => {
+          const key9 = ownerKey9 + '|' + bucket9;
+          if (openKey9 === key9) return this.setState({ lrDetailFor: '', lrDetail: null });
+          if (this._loadLRDetail) this._loadLRDetail(from9, to9, ownerKey9, bucket9);
+        };
+        // The expansion is rendered once per row, so each row needs its own copy of the state.
+        const panel9 = (ownerKey9, who9) => {
+          const mine9 = openKey9.indexOf(ownerKey9 + '|') === 0;
+          const bucket9 = mine9 ? openKey9.slice(ownerKey9.length + 1) : '';
+          const label9 = (BUCKETS9.find(b9 => b9[0] === bucket9) || [null, bucket9.replace('stage:', '')])[1];
+          return {
+            isOpen: mine9,
+            loading: mine9 && detail9 === null,
+            title: mine9 ? (who9 === 'everyone' ? label9 : label9 + ' · ' + who9) : '',
+            rows: (mine9 && detail9) ? detail9.map(d9 => ({ name: d9.name, owner: d9.owner, stage: d9.stage })) : [],
+            empty: mine9 && detail9 !== null && detail9.length === 0,
+          };
+        };
+        const cells9 = (ownerKey9, who9) => {
+          const out9 = {};
+          for (const [b9] of BUCKETS9) out9['open' + b9.charAt(0).toUpperCase() + b9.slice(1)] = pick9(ownerKey9, b9);
+          const p9 = panel9(ownerKey9, who9);
+          out9.dOpen = p9.isOpen; out9.dLoading = p9.loading; out9.dTitle = p9.title;
+          out9.dRows = p9.rows; out9.dEmpty = p9.empty;
+          return out9;
+        };
         return {
           lrFrom: from9, lrTo: to9,
           setLrFrom: (e9) => setRange9(e9.target.value, to9),
@@ -39909,6 +39992,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           lrError: st9.lrError || false,
           lrHasRows: rows9.length > 0,
           lrEmpty: !st9.lrLoading && !st9.lrError && !!D9 && rows9.length === 0,
+          // EVERY NUMBER OPENS THE NAMES BEHIND IT. A count nobody can take apart is a number
+          // people either trust blindly or ignore; the names are what gets acted on.
           lrRows: rows9.map(r9 => ({
             owner: r9.owner,
             newLeads: r9.newLeads, toProspect: r9.toProspect, toClient: r9.toClient,
@@ -39916,17 +40001,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             lostColor: r9.lost > 0 ? '#B42318' : '#C9C6D2',
             wonColor: r9.toClient > 0 ? '#0E9355' : '#C9C6D2',
             rate: rate9(r9.toClient, r9.newLeads),
+            bg: openKey9 && openKey9.indexOf((r9.ownerId || 'unassigned') + '|') === 0 ? '#FBFAFE' : '#fff',
+            ...cells9(r9.ownerId || 'unassigned', r9.owner),
           })),
+          ...cells9('all', 'everyone'),
           lrTotNew: T9.newLeads, lrTotProspect: T9.toProspect, lrTotClient: T9.toClient,
           lrTotLost: T9.lost, lrTotOpen: T9.openAtEnd,
           lrTotRate: rate9(T9.toClient, T9.newLeads),
           // WHERE THE OPEN LEADS STAND. The lead's status IS its pipeline stage now that every new
           // lead enters the board as it is captured; "No deal yet" is the backlog of ones captured
           // before that rule, and it is shown rather than hidden so the gap is countable.
-          lrStages: ((D9 && Array.isArray(D9.stages)) ? D9.stages : []).map(st9 => ({
-            name: st9.name, count: st9.count,
-            gap: st9.name === 'No deal yet',
-            color: st9.name === 'No deal yet' ? '#B7791F' : '#2E2937',
+          lrStages: ((D9 && Array.isArray(D9.stages)) ? D9.stages : []).map(s8 => ({
+            name: s8.name, count: s8.count,
+            color: s8.name === 'No deal yet' ? '#B7791F' : '#2E2937',
+            open: pick9('all', 'stage:' + s8.name),
+            ...(() => { const p8 = panel9('all', 'everyone');
+              return { dOpen: p8.isOpen && openKey9 === 'all|stage:' + s8.name, dLoading: p8.loading, dRows: p8.rows, dEmpty: p8.empty }; })(),
           })),
           lrHasStages: !!(D9 && Array.isArray(D9.stages) && D9.stages.length),
           // THE DAY THE HISTORY STARTS, said on the screen. Everything here is counted from

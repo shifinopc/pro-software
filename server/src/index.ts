@@ -4787,11 +4787,16 @@ app.get("/api/reports/client-work.xlsx", requireAuth, requireStaff, async (req, 
 app.get("/api/reports/lead-status", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   try {
     const { from, to } = reportRange(req);
+    // ?owner=&bucket= asks the same call which companies are behind one number. The same call on
+    // purpose: a drill-down built from a second query is a second set of rules, and the two
+    // disagree the first time either changes.
+    const bucket = String(req.query.bucket ?? "").trim();
     res.json(await leadStatusReport({
       from, to,
       companyIds: await salesCompanyIds(req as any),
       source: String(req.query.source ?? "").trim() || null,
       campaign: String(req.query.campaign ?? "").trim() || null,
+      detailFor: bucket ? { owner: String(req.query.owner ?? "all").trim() || "all", bucket } : null,
     }));
   } catch (e: any) { return fail(res, 400, e, "reports.lead-status"); }
 });
