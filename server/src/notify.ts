@@ -470,7 +470,14 @@ export function notifyInvoiceOverdue(a: {
 export function notifySlaBreach(a: { title: string; detail: string }) {
   notify({
     rule: "SLA breached",
-    inApp: { type: "overdue", title: a.title, message: a.detail },
+    // NO `inApp` HERE — THE EMAIL HALF ONLY.
+    //
+    // The SLA job has already filed the in-app notification, through notifyOnce and under the key
+    // `sla:<taskId>:breached`, which is what stops a breach being announced again on every hourly
+    // tick. This wrote a SECOND row for the same breach with no key at all, and a MySQL unique
+    // index ignores NULLs, so nothing could ever collapse the pair: every breach appeared twice,
+    // for good. On live that was 142 rows for 71 breaches of one step, and the two copies sat next
+    // to each other on the screen looking like the job had run twice.
     audience: "staff",
     subject: `SLA breached: ${a.title}`,
     heading: "An SLA has been breached",
