@@ -99,6 +99,7 @@ import { prisma } from "./db.js";
 import { buildEmployeeWorkbook } from "./employee-export.js";
 import { clientWork, clientWorkItems, clientWorkSummary, clientReportDetail } from "./clientwork.js";
 import { clientReportPdf } from "./client-report-pdf.js";
+import { masterDataPdf, type MasterDataRow } from "./master-data-pdf.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
@@ -122,7 +123,7 @@ import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
   requireAuth, requireStaff, requirePortal, requireWriteRole, requireReadRole, requireHuman, generateTempPassword,
   resolveEffectiveRole,
-  encrypt, decrypt, logAudit, logActivity, logNotification, clientIp,
+  encrypt, decrypt, tryDecrypt, logAudit, logActivity, logNotification, clientIp,
 } from "./auth.js";
 import { auditCatOf, auditWhereFor } from "./audit-cats.js";
 
@@ -1625,8 +1626,16 @@ app.get("/api/portal/credentials/:id/reveal", requireAuth, requirePortal, async 
   const a = (req as any).auth;
   const c = await prisma.siteCredential.findUnique({ where: { id: req.params.id } });
   if (!c || c.companyId !== a.companyId) return res.status(404).json({ error: "Not found" }); // isolation
+  // NULL means this ciphertext will not open with the key this process holds - a vault copied
+  // between environments without its CRED_KEY. Said out loud rather than answered with "": an empty
+  // password box reads as "nobody recorded one", which sends somebody to ask the client for a
+  // password that is sitting right there, intact, in the row they are looking at.
+  const plain = tryDecrypt(c.password);
+  if (plain === null) {
+    return res.status(409).json({ error: "This password cannot be read on this server - it was encrypted with a different CRED_KEY. The stored value is intact; the key is what is missing." });
+  }
   await logAudit({ action: "credential.reveal", actorId: a.sub, target: `${c.label} (${c.id})`, detail: `company ${c.companyId}`, ip: clientIp(req) });
-  res.json({ password: decrypt(c.password) });
+  res.json({ password: plain });
 });
 
 // Portal: client manages its OWN site credentials (company-scoped). Edits are activity-logged so
@@ -2340,6 +2349,17 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
   const problem = contactProblem(contact);
   if (problem) return res.status(400).json({ error: problem });
 
+  // THE RESPONSIBLE MANAGER MUST BE THIS CLIENT'S OWN CONTACT. Refused rather than ignored: the
+  // master data sheet prints their national ID and date of birth, so another client's person here
+  // is not a mis-set field, it is one client's officer reading another's identity documents off a
+  // page that looks authoritative.
+  if (b.managerContactId) {
+    const ct = await prisma.contact.findUnique({ where: { id: String(b.managerContactId) }, select: { companyId: true } });
+    if (!ct || ct.companyId !== existing.id) {
+      return res.status(400).json({ error: "That contact does not belong to this client" });
+    }
+  }
+
   try {
     await prisma.company.update({
       where: { id: existing.id },
@@ -2390,6 +2410,10 @@ app.put("/api/companies/:id/details", requireAuth, requireStaff, requireWriteRol
         ...("molId" in b ? { molId: b.molId || null } : {}),
         ...("chamberNumber" in b ? { chamberNumber: b.chamberNumber || null } : {}),
         ...("misaLicense" in b ? { misaLicense: b.misaLicense || null } : {}),
+        // Which employee is the responsible manager — whose Nafath approves this client's portal
+        // logins. An id, checked below rather than trusted: an employee of ANOTHER client here
+        // would print a stranger's national ID on the master data sheet.
+        ...("managerContactId" in b ? { managerContactId: b.managerContactId || null } : {}),
         ...("shortAddress" in b ? { shortAddress: b.shortAddress || null } : {}),
         ...("buildingNumber" in b ? { buildingNumber: b.buildingNumber || null } : {}),
         ...("street" in b ? { street: b.street || null } : {}),
@@ -6644,9 +6668,129 @@ app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRol
   const a = (req as any).auth;
   const c = await prisma.siteCredential.findUnique({ where: { id: req.params.id } });
   if (!c) return res.status(404).json({ error: "Not found" });
+  // NULL means this ciphertext will not open with the key this process holds - a vault copied
+  // between environments without its CRED_KEY. Said out loud rather than answered with "": an empty
+  // password box reads as "nobody recorded one", which sends somebody to ask the client for a
+  // password that is sitting right there, intact, in the row they are looking at.
+  const plain = tryDecrypt(c.password);
+  if (plain === null) {
+    return res.status(409).json({ error: "This password cannot be read on this server - it was encrypted with a different CRED_KEY. The stored value is intact; the key is what is missing." });
+  }
   await logAudit({ action: "credential.reveal", actorId: a.sub, target: `${c.label} (${c.id})`, detail: `company ${c.companyId}`, ip: clientIp(req) });
-  res.json({ password: decrypt(c.password) });
+  res.json({ password: plain });
 });
+
+/**
+ * THE CLIENT MASTER DATA SHEET — identity, the responsible manager, and every portal login.
+ *
+ * This is the only route in the system that can decrypt a whole client's vault in one call, so it
+ * is the only one that needed a reason to exist. The reason is the counter: an officer going to
+ * GOSI with three clients' work takes a page, and what they did instead was photograph the vault
+ * screen one reveal at a time, which is the same secrets with none of the audit trail.
+ *
+ * TWO DOCUMENTS, TWO GATES, because they are not the same risk:
+ *
+ *  · MASKED (the default). Labels, file numbers and usernames — exactly what `GET /api/credentials`
+ *    already hands a PRO officer — with the password column struck out. Open to PRO officers for
+ *    their own clients, scoped by the same `canTouchCompany` as the writes.
+ *  · REVEALED (`?reveal=1`). Admin only and `requireHuman`, the same gate as a single reveal,
+ *    because that is what it is: every reveal for this client at once.
+ *
+ * AUDITED PER CREDENTIAL, not per sheet. A `credential.reveal` row is written for each login on the
+ * page, with the sheet named in the detail — so "who has seen this client's Qiwa password" keeps one
+ * complete answer. Logging it as one new action instead would have left the existing audit view
+ * quietly blind to the only bulk reveal in the product.
+ */
+app.get("/api/companies/:id/master-data.pdf", requireAuth, requireStaff,
+  requireReadRole("super_admin", "admin", "pro_officer"), reportLimiter, async (req, res) => {
+  try {
+    const a = (req as any).auth;
+    const reveal = String(req.query.reveal ?? "") === "1";
+    const eff = await resolveEffectiveRole(a?.role);
+    const isAdmin = eff === "super_admin" || eff === "admin";
+
+    // The passwords are the admin-only part, so the refusal names that rather than the document.
+    if (reveal && !isAdmin) {
+      return res.status(403).json({ error: "Printing the passwords requires admin access — the sheet without them is available to you" });
+    }
+    // An API key is not a person, and a bulk reveal is not something to hand a script.
+    if (reveal && a?.apiKey) return res.status(403).json({ error: "This has to be done by a signed-in person" });
+
+    const scope = await canTouchCompany(req, req.params.id);
+    if (!isAdmin && scope) return res.status(403).json({ error: scope });
+
+    const co = await prisma.company.findUnique({ where: { id: req.params.id } });
+    if (!co) return res.status(404).json({ error: "No such client" });
+
+    // The manager is a POINTER to one of this client's contacts, scoped to this client and to a
+    // live row — so an id left behind by somebody who has been archived prints no block rather than
+    // a half-empty one.
+    const manager = co.managerContactId
+      ? await prisma.contact.findFirst({
+          where: { id: co.managerContactId, companyId: co.id, archived: false },
+          select: { name: true, govId: true, dob: true, phone: true, jobTitle: true },
+        }).then(c => (c ? { name: c.name, govId: c.govId, dob: c.dob, phone: c.phone, role: c.jobTitle } : null))
+      : null;
+
+    const creds = await prisma.siteCredential.findMany({
+      where: { companyId: co.id },
+      include: { establishment: { select: { crNumber: true } } },
+      orderBy: [{ label: "asc" }],
+    });
+
+    const rows: MasterDataRow[] = creds.map(c => {
+      // Decrypted ONLY on the revealed sheet. The masked one never holds a plaintext password in
+      // memory, let alone in the file — the renderer cannot print what it was not given.
+      const plain = reveal && c.password ? tryDecrypt(c.password) : null;
+      return {
+        label: c.label, govCenter: c.govCenter, fileNo: c.fileNo,
+        username: c.username, nafath: c.nafath, nafathId: c.nafathId, notes: c.notes,
+        crNumber: c.establishment?.crNumber ?? null,
+        password: plain,
+        // WHETHER THERE IS ONE AT ALL, answerable without the key: the stored form is
+        // iv:tag:ciphertext, and a blank password (including every Nafath login) is the ciphertext
+        // of "" - an empty third field. Without this the masked sheet could not tell "withheld"
+        // from "none recorded" and printed the same thing for both.
+        hasPassword: (c.password ?? "").split(":")[2] !== "",
+        // A login this server cannot open is MARKED, not left blank. A blank cell on a sheet being
+        // carried to a counter reads as "there is no password", which is the one thing it is not.
+        unreadable: reveal && !!c.password && plain === null,
+      };
+    });
+
+    const actor = await prisma.user.findUnique({ where: { id: a.sub }, select: { name: true, email: true } }).catch(() => null);
+    const printedBy = actor?.name || actor?.email || a.sub;
+
+    const org = ((await prisma.appSetting.findUnique({ where: { key: "org" } }))?.value as any) ?? {};
+    const pdf = await masterDataPdf({
+      org, logo: orgLogoRaster(org),
+      client: {
+        name: co.name, nameAr: co.nameAr, cr: co.cr, vatNumber: co.vatNumber,
+        gosiNumber: co.gosiNumber, molId: co.molId, chamberNumber: co.chamberNumber,
+        misaLicense: co.misaLicense, companyType: co.companyType,
+        email: co.email, phone: co.phone, shortAddress: co.shortAddress, city: co.city,
+      },
+      manager, rows, reveal, printedBy, printedAt: new Date().toISOString(),
+    });
+
+    // Written AFTER the document is built: a render that threw should not leave an audit trail
+    // saying somebody saw passwords they never received.
+    if (reveal) {
+      for (const c of creds.filter(c => c.password)) {
+        await logAudit({ action: "credential.reveal", actorId: a.sub, target: `${c.label} (${c.id})`,
+          detail: `master data sheet · company ${co.id}`, ip: clientIp(req) });
+      }
+    }
+    await logAudit({ action: "credential.sheet", actorId: a.sub, target: co.name,
+      detail: reveal ? `with passwords · ${creds.filter(c => c.password).length} login(s)` : "passwords withheld",
+      ip: clientIp(req) });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${co.name.replace(/[^a-z0-9]+/gi, "-")}-master-data${reveal ? "" : "-masked"}.pdf"`);
+    res.send(pdf);
+  } catch (e: any) { return fail(res, 400, e, "companies.master-data-pdf"); }
+});
+
 // Resolve a company name for credential activity lines (so they show in that client's Activity tab).
 async function coName(companyId?: string | null): Promise<string> {
   if (!companyId) return "";
@@ -6687,6 +6831,9 @@ app.post("/api/credentials", requireAuth, requireStaff, async (req, res) => {
       label: String(b.label ?? "").trim(),
       url: String(b.url ?? "").trim(),
       username: b.username ? String(b.username).trim() : null,
+      // The portal's own reference for this client (GOSI file, Chamber branch, ZATCA TIN). Not a
+      // secret, and printed beside the login on the master data sheet.
+      fileNo: b.fileNo ? String(b.fileNo).trim() : null,
       notes: b.notes ? String(b.notes) : null,
       govCenter: b.govCenter ? String(b.govCenter).trim() : null,
       // Nafath logins carry no password: the officer enters the national ID and approves it on the
@@ -6727,6 +6874,7 @@ app.put("/api/credentials/:id", requireAuth, requireStaff, async (req, res) => {
     if (b.label !== undefined) data.label = String(b.label).trim();
     if (b.url !== undefined) data.url = String(b.url).trim();
     if (b.username !== undefined) data.username = b.username ? String(b.username).trim() : null;
+    if (b.fileNo !== undefined) data.fileNo = b.fileNo ? String(b.fileNo).trim() : null;
     if (b.notes !== undefined) data.notes = b.notes ? String(b.notes) : null;
     if (b.govCenter !== undefined) data.govCenter = b.govCenter ? String(b.govCenter).trim() : null;
     if (b.nafath !== undefined) data.nafath = b.nafath === true;

@@ -71,6 +71,24 @@ model Company {
   // a MISA licence and no other type does.
   companyType     String?
   misaLicense     String?
+
+  /// WHOSE NAFATH APPROVES THIS CLIENT'S GOVERNMENT LOGINS.
+  ///
+  /// ALWAYS A CONTACT, never an employee. This person is the owner, the partner or the GM — the one
+  /// whose national ID the registrations are held in — and they are usually not on the client's
+  /// payroll at all. An Employee row for them would be counted in headcount, in the Saudization
+  /// ratio and chased by the Iqama renewal job, none of which is true of them. (There was briefly a
+  /// second column pointing at Employee; it was removed unused. Two ways to name one person is two
+  /// answers to "who is the manager".)
+  ///
+  /// A POINTER, not a copy of their name, ID and date of birth: those live on the Contact row, so a
+  /// renewed Iqama does not leave the master data sheet printing last year's number. `contact`
+  /// above is the NAME of who to ring and a different thing entirely.
+  ///
+  /// Deliberately NOT a relation: a contact who leaves is archived rather than deleted, and a
+  /// foreign key here would either block that or cascade into clearing the field. A dangling id
+  /// prints no manager block, which is the honest outcome.
+  managerContactId String?
   employees Int     @default(0)
   status    String  @default("active")
   overdue   Int     @default(0)
@@ -278,6 +296,18 @@ model Contact {
   company   Company @relation(fields: [companyId], references: [id])
   companyId String
   name      String
+
+  /// WHO THIS PERSON IS TO THE AUTHORITIES, for the ones who deal with them.
+  ///
+  /// A client's responsible manager — whose Nafath approves the portal logins — is very often the
+  /// owner or the GM, who is NOT on the client's payroll. Recording them as an Employee just to
+  /// hold their ID would put them in headcount, in the Saudization ratio, in the Iqama renewal job
+  /// and on reports they do not belong on. A Contact is already "a person at this client we deal
+  /// with", which is exactly what they are; these two columns are what it was missing.
+  ///
+  /// Nullable and ignored by everything else: a sales contact has no reason to carry either.
+  govId     String? // national ID / Iqama / passport — whatever identifies them officially
+  dob       String? // ISO date. Age is derived, never stored.
   /// What they do, in their words — "HR Manager", "PRO", "Owner". Free text on purpose: a picker
   /// here would be a list of titles that is wrong in the second country the product reaches.
   jobTitle  String?
@@ -963,6 +993,13 @@ model SiteCredential {
   /// its own, because the approval happens on the holder's phone.
   nafathId  String?
   username  String?
+  /// THE NUMBER THE PORTAL KNOWS THIS CLIENT BY — a GOSI file number, a Chamber branch, a ZATCA TIN.
+  ///
+  /// Not a credential and not a secret: it is printed on the master data sheet beside the login
+  /// because an officer at a counter is asked for it in the same breath as the username. One
+  /// nullable column rather than a table, because every portal has at most one of these and the few
+  /// that have two (ZATCA's TIN and VAT) are already two rows for other reasons.
+  fileNo    String?
   password  String // NOTE: encrypt at rest in production
   notes     String? @db.Text
   // Which government portal this login is for, so a step that names an authority can point straight

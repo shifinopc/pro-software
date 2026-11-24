@@ -107,6 +107,7 @@ export async function assertWhatsAppFree(whatsapp: string | null | undefined, ex
 export async function addContact(companyId: string, data: {
   name: string; jobTitle?: string | null; email?: string | null; phone?: string | null;
   whatsapp?: string | null; notes?: string | null; isPrimary?: boolean; userId?: string | null;
+  govId?: string | null; dob?: string | null;
 }) {
   await assertWhatsAppFree(data.whatsapp);
   const existing = await live(companyId);
@@ -121,6 +122,9 @@ export async function addContact(companyId: string, data: {
       email: data.email ?? null,
       phone: data.phone ?? null,
       whatsapp: data.whatsapp ?? null,
+      // Asked for only when somebody is recording a responsible manager; blank on everyone else.
+      govId: data.govId ?? null,
+      dob: data.dob ?? null,
       notes: data.notes ?? null,
       userId: data.userId ?? null,
       isPrimary: false, // set below through the one path that maintains the invariant
@@ -148,6 +152,8 @@ export async function editContact(contactId: string, data: Record<string, any>) 
       email: rest.email,
       phone: rest.phone,
       whatsapp: rest.whatsapp,
+      govId: rest.govId,
+      dob: rest.dob,
       notes: rest.notes,
       userId: rest.userId,
       archived: rest.archived ?? undefined,

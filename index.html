@@ -3156,8 +3156,24 @@
                 </div>
               </div>
               <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:13px 14px;">
-                <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Site credential vault</div><div style="font-size:10px; color:#A9A6B4; margin-top:2px;">Government portal logins · reveals &amp; edits are audited</div></div><button onClick="{{ openCdCred }}" style="background:#7C00FF; color:#fff; border:none; font-size:10px; font-weight:700; padding:7px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add</button></div>
-                <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Site credential vault</div><div style="font-size:10px; color:#A9A6B4; margin-top:2px;">Government portal logins · reveals &amp; edits are audited</div></div><div style="display:flex; align-items:center; gap:7px;"><button onClick="{{ printMasterData }}" title="One page: identity, manager and every portal login with its password" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:10px; font-weight:700; padding:7px 10px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Master data sheet</button><button onClick="{{ openCdCred }}" style="background:#7C00FF; color:#fff; border:none; font-size:10px; font-weight:700; padding:7px 10px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">+ Add</button></div></div>
+                  <div style="display:flex; align-items:center; gap:10px; margin:11px 0 0; padding:9px 12px; border:1px solid #EDEBF2; border-radius:12px; background:#FCFBFE;">
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:8.5px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">RESPONSIBLE MANAGER</div>
+                      <div style="font-size:10px; color:#A9A6B4; margin-top:2px;">{{ cdMgrHint }}</div>
+                    </div>
+                    <div style="position:relative; width:260px; flex-shrink:0;">
+                      <div data-dd onClick="{{ ddCdMgrToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:10px; padding:8px 11px; font-size:11px; background:#fff; display:flex; align-items:center; gap:8px; cursor:pointer;" style-hover="border-color:#C9A2FF;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddCdMgrValue }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div>
+                      <sc-if value="{{ ddCdMgrOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:240px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;">
+                          <sc-for list="{{ ddCdMgrOptions }}" as="o" hint-placeholder-count="4">
+                            <div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; margin-top:10px; align-items:start;">
                   <sc-for list="{{ cdCreds }}" as="c" hint-placeholder-count="3">
                     <div style="border:1px solid #EDEBF2; border-radius:14px; padding:10px 10px; transition:border-color .15s, box-shadow .15s;" style-hover="border-color:#DDD1F5; box-shadow:0 6px 18px rgba(124,0,255,.07);">
                       <div style="display:flex; align-items:center; gap:11px;">
@@ -12727,55 +12743,84 @@
   <!-- The old "Add contact" dialog stood here. It wrote to component state and never to the
        server, so the contact vanished on reload. The real one is the shared contact dialog above. -->
 
+  <!-- EDIT CLIENT - the Add-client form's own layout, and the same questions, because they are the
+       same questions. It was a narrow box with nine of them, so an Arabic name, a VAT number or a
+       national address missed at sign-up could never be filled in afterwards. The PROVISIONING half
+       of the wizard (documents, portal invitation, package, PRO officer) is deliberately absent:
+       correcting a record must not be able to hand out a login or start a subscription. -->
   <sc-if value="{{ showEditClient }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeEditClient }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:540px; padding:17px 18px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; max-height:88vh; overflow-y:auto;" data-hidescroll="true">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-          <div>
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:1080px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
             <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Edit client</div>
-            <div style="font-size:11px; color:#8C8899; margin-top:3px;">Their identity, contact and the country whose rules apply</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:2px;">Their identity, registrations and national address &mdash; everything the client form asks for</div>
           </div>
           <div onClick="{{ closeEditClient }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 10px; margin-top:12px;">
-          <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COMPANY NAME</div><input sc-camel-default-value="{{ ecName }}" data-seed-val="{{ ecName }}" onBlur="{{ setEcName }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CR NUMBER</div><input sc-camel-default-value="{{ ecCr }}" data-seed-val="{{ ecCr }}" onBlur="{{ setEcCr }}" placeholder="1010123456" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">TYPE OF CLIENT</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcTypeToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ecTypeVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcTypeOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><sc-if value="{{ ecTypeNudgeShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#B7791F; margin-top:5px; line-height:1.5;">{{ ecTypeNudge }}</div></sc-if></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CONTACT PERSON</div><input sc-camel-default-value="{{ ecContact }}" data-seed-val="{{ ecContact }}" onBlur="{{ setEcContact }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">EMAIL</div><input sc-camel-default-value="{{ ecEmail }}" data-seed-val="{{ ecEmail }}" onBlur="{{ setEcEmail }}" placeholder="name@company.sa" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PHONE</div><input sc-camel-default-value="{{ ecPhone }}" data-seed-val="{{ ecPhone }}" onBlur="{{ setEcPhone }}" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">STATUS</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcStatusToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ecStatusVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcStatusOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CLIENT GROUP</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcGroupToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ecGroupColor }};"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddEcGroupVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcGroupOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcGroupOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">COUNTRY</div><div style="position:relative; margin-top:6px;"><div data-dd onClick="{{ ddEcCountryToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ecCountryColor }};"><span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ddEcCountryVal }}</span></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcCountryOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; max-height:210px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddEcCountryOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Decides which country&#39;s rules and thresholds apply.</div></div>
-          <div><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">CITY</div><input sc-camel-default-value="{{ ecCity }}" data-seed-val="{{ ecCity }}" onBlur="{{ setEcCity }}" placeholder="Riyadh" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"></div>
-          <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">INDUSTRY</div><input sc-camel-default-value="{{ ecIndustry }}" data-seed-val="{{ ecIndustry }}" onBlur="{{ setEcIndustry }}" placeholder="Construction" style="margin-top:6px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE;"><div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Suggests which nationalisation bands apply.</div></div>
-          <!-- WHAT THEY BUY FROM US, as against what they do for a living, which is Industry above.
-               Captured on the lead and then frozen: there was nowhere to change it once they became
-               a client, so a client who later took on VAT work could not be recorded as doing so. -->
-          <div style="grid-column:1 / -1;"><div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">PRODUCT</div>
-            <div data-dd style="position:relative; margin-top:6px;">
-              <span onClick="{{ ecSvcToggle }}" title="Pick the services they take" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex; z-index:1;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
-              </span>
-              <input sc-camel-default-value="{{ ecService }}" data-seed-val="{{ ecService }}" onBlur="{{ setEcService }}" placeholder="What are they buying?" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:11px; padding:10px 32px 10px 13px; font-size:12px; background:#FCFBFE;">
-              <sc-if value="{{ ecSvcOpen }}" hint-placeholder-val="{{ false }}">
-                <div data-dd data-hidescroll="true" class="fm-dd">
-                  <sc-for list="{{ ecSvcOptions }}" as="o" hint-placeholder-count="4">
-                    <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span style="flex:0 0 12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
-                  </sc-for>
-                  <sc-if value="{{ ecSvcEmpty }}" hint-placeholder-val="{{ false }}">
-                    <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
+        <div class="fm-body">
+          <sc-if value="{{ ecErrShow }}" hint-placeholder-val="{{ false }}"><div style="margin-top:4px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ ecErr }}</div></sc-if>
+          <div class="ldf-land ac-land">
+            <div class="ldf-col">
+              <div class="ldf-cap">The company</div>
+              <div><label class="fm-lab">COMPANY NAME</label><input sc-camel-default-value="{{ ecName }}" data-seed-val="{{ ecName }}" onBlur="{{ setEcName }}" class="fm-inp"></div>
+              <div><label class="fm-lab">ARABIC NAME</label><input sc-camel-default-value="{{ ecNameAr }}" data-seed-val="{{ ecNameAr }}" onBlur="{{ setEcNameAr }}" dir="rtl" placeholder="الاسم بالعربية" class="fm-inp"><div class="fm-hint fm-hint-slot">{{ ecArHint }}</div></div>
+              <div><label class="fm-lab">CLIENT GROUP</label><div style="position:relative;"><div data-dd onClick="{{ ddEcGroupToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ ecGroupColor }};">{{ ddEcGroupVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcGroupOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-for list="{{ ddEcGroupOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+              <div><label class="fm-lab">CR NUMBER</label><input sc-camel-default-value="{{ ecCr }}" data-seed-val="{{ ecCr }}" onBlur="{{ setEcCr }}" placeholder="1010123456" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">MAIN ACTIVITY</label><input sc-camel-default-value="{{ ecActivity }}" data-seed-val="{{ ecActivity }}" onBlur="{{ setEcActivity }}" placeholder="e.g. Building contracting" class="fm-inp"></div>
+              <div><label class="fm-lab">TYPE OF CLIENT</label><div style="position:relative;"><div data-dd onClick="{{ ddEcTypeToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ecTypeVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcTypeOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-for list="{{ ddEcTypeOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+              <sc-if value="{{ ecTypeNudgeShow }}" hint-placeholder-val="{{ false }}">
+              <div class="fm-wide"><label class="fm-lab"></label><div class="fm-hint" style="color:#B7791F;">{{ ecTypeNudge }}</div></div>
+              </sc-if>
+              <sc-if value="{{ ecIsForeign }}" hint-placeholder-val="{{ false }}">
+              <div><label class="fm-lab">MISA LICENSE NUMBER</label><input sc-camel-default-value="{{ ecMisa }}" data-seed-val="{{ ecMisa }}" onBlur="{{ setEcMisa }}" placeholder="e.g. 1234567890" class="fm-inp"></div>
+              </sc-if>
+              <div class="ldf-cap">Registrations</div>
+              <div><label class="fm-lab">VAT NUMBER</label><input sc-camel-default-value="{{ ecVat }}" data-seed-val="{{ ecVat }}" onBlur="{{ setEcVat }}" placeholder="15 digits" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">GOSI SUBSCRIPTION NUMBER</label><input sc-camel-default-value="{{ ecGosi }}" data-seed-val="{{ ecGosi }}" onBlur="{{ setEcGosi }}" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">MOL ID</label><input sc-camel-default-value="{{ ecMol }}" data-seed-val="{{ ecMol }}" onBlur="{{ setEcMol }}" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">CHAMBER MEMBERSHIP NUMBER</label><input sc-camel-default-value="{{ ecChamber }}" data-seed-val="{{ ecChamber }}" onBlur="{{ setEcChamber }}" inputmode="numeric" class="fm-inp"></div>
+              <div class="ldf-cap">National address<span>as on the CR</span></div>
+              <div><label class="fm-lab">SHORT ADDRESS</label><input sc-camel-default-value="{{ ecShortAddr }}" data-seed-val="{{ ecShortAddr }}" onBlur="{{ setEcShortAddr }}" placeholder="e.g. RRRD2929" class="fm-inp"></div>
+              <div><label class="fm-lab">BUILDING NUMBER</label><input sc-camel-default-value="{{ ecBuilding }}" data-seed-val="{{ ecBuilding }}" onBlur="{{ setEcBuilding }}" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">STREET</label><input sc-camel-default-value="{{ ecStreet }}" data-seed-val="{{ ecStreet }}" onBlur="{{ setEcStreet }}" class="fm-inp"></div>
+              <div><label class="fm-lab">SECONDARY NUMBER</label><input sc-camel-default-value="{{ ecSecondary }}" data-seed-val="{{ ecSecondary }}" onBlur="{{ setEcSecondary }}" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">DISTRICT</label><input sc-camel-default-value="{{ ecDistrict }}" data-seed-val="{{ ecDistrict }}" onBlur="{{ setEcDistrict }}" class="fm-inp"></div>
+              <div><label class="fm-lab">POSTAL CODE</label><input sc-camel-default-value="{{ ecPostal }}" data-seed-val="{{ ecPostal }}" onBlur="{{ setEcPostal }}" inputmode="numeric" class="fm-inp"></div>
+              <div><label class="fm-lab">CITY</label><input sc-camel-default-value="{{ ecCity }}" data-seed-val="{{ ecCity }}" onBlur="{{ setEcCity }}" placeholder="e.g. Riyadh" class="fm-inp"></div>
+              <div><label class="fm-lab">COUNTRY</label><div style="position:relative;"><div data-dd onClick="{{ ddEcCountryToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ ecCountryColor }};">{{ ddEcCountryVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcCountryOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-for list="{{ ddEcCountryOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};">{{ o.label }}</div></sc-for></div></sc-if></div><div class="fm-hint">Decides which country&#39;s rules and thresholds apply.</div></div>
+              <div class="ldf-cap">Contact person</div>
+              <div><label class="fm-lab">CONTACT PERSON NAME</label><input sc-camel-default-value="{{ ecContact }}" data-seed-val="{{ ecContact }}" onBlur="{{ setEcContact }}" class="fm-inp"></div>
+              <div><label class="fm-lab">DESIGNATION</label><input sc-camel-default-value="{{ ecDesignation }}" data-seed-val="{{ ecDesignation }}" onBlur="{{ setEcDesignation }}" placeholder="e.g. General Manager" class="fm-inp"></div>
+              <div><label class="fm-lab">MOBILE NUMBER</label><input sc-camel-default-value="{{ ecPhone }}" data-seed-val="{{ ecPhone }}" onBlur="{{ setEcPhone }}" inputmode="tel" class="fm-inp"></div>
+              <div><label class="fm-lab">MAIL ID</label><input sc-camel-default-value="{{ ecEmail }}" data-seed-val="{{ ecEmail }}" onBlur="{{ setEcEmail }}" placeholder="name@company.sa" type="email" class="fm-inp"></div>
+              <div class="ldf-cap">How we will work it</div>
+              <div><label class="fm-lab">PRODUCT</label>
+                <div data-dd style="position:relative;">
+                  <span onClick="{{ ecSvcToggle }}" title="Pick the services they take" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); cursor:pointer; display:flex; z-index:1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></span>
+                  <input sc-camel-default-value="{{ ecService }}" data-seed-val="{{ ecService }}" onBlur="{{ setEcService }}" placeholder="What are they buying?" class="fm-inp" style="padding-right:28px;">
+                  <sc-if value="{{ ecSvcOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" class="fm-dd">
+                      <sc-for list="{{ ecSvcOptions }}" as="o" hint-placeholder-count="4">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }};"><span style="flex:0 0 12px; color:#7C00FF;">{{ o.mark }}</span><span>{{ o.label }}</span></div>
+                      </sc-for>
+                      <sc-if value="{{ ecSvcEmpty }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:8px 11px; font-size:10px; color:#A9A6B4;">No products set up yet &mdash; add them under Sales Settings, or just type.</div>
+                      </sc-if>
+                    </div>
                   </sc-if>
                 </div>
-              </sc-if>
+                <div class="fm-hint">Pick as many as apply, or type your own.</div>
+              </div>
+              <div><label class="fm-lab">INDUSTRY</label><input sc-camel-default-value="{{ ecIndustry }}" data-seed-val="{{ ecIndustry }}" onBlur="{{ setEcIndustry }}" placeholder="Construction" class="fm-inp"><div class="fm-hint">Suggests which nationalisation bands apply.</div></div>
+              <div><label class="fm-lab">STATUS</label><div style="position:relative;"><div data-dd onClick="{{ ddEcStatusToggle }}" class="fm-inp" style="display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ ecStatusVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddEcStatusOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" class="fm-dd"><sc-for list="{{ ddEcStatusOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};">{{ o.label }}</div></sc-for></div></sc-if></div></div>
             </div>
-            <div style="font-size:10px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Pick as many as apply, or type your own. Shows on the Clients list and can be filtered there.</div>
           </div>
         </div>
-        <sc-if value="{{ ecErrShow }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:10px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ ecErr }}</div>
-        </sc-if>
-        <div style="display:flex; gap:10px; margin-top:13px; justify-content:flex-end;"><button onClick="{{ closeEditClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ saveEditClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 14px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save changes</button></div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <button onClick="{{ closeEditClient }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 15px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
+          <button onClick="{{ saveEditClient }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 18px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">Save changes</button>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -12889,6 +12934,11 @@
               </label>
               <sc-if value="{{ ccPassHintShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:-5px;">{{ ccPassHint }}</div></sc-if>
             </sc-if>
+            <label style="display:block;">
+              <span style="display:block; font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em; margin-bottom:6px;">FILE / SUBSCRIPTION NO <span style="font-weight:600; color:#C4C0CE;">&middot; optional</span></span>
+              <input sc-camel-default-value="{{ ccFileNo }}" data-seed-val="{{ ccFileNo }}" onBlur="{{ setCcFileNo }}" placeholder="e.g. GOSI 635228091, Chamber branch RUH, ZATCA TIN" style="width:100%; box-sizing:border-box; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; color:#1A1523; background:#F6F4FA; outline:none; transition:background .12s, border-color .12s;" style-focus="background:#fff; border-color:#7C00FF;">
+              <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.5;">The number this portal knows the client by. Not a secret &mdash; it prints on the master data sheet beside the login.</div>
+            </label>
           </div>
         </div>
 
@@ -14675,7 +14725,16 @@
               <label class="fm-lab">Notes</label>
               <input sc-camel-default-value="{{ ctfNotes }}" data-seed-val="{{ ctfNotes }}" onBlur="{{ setCtfNotes }}" class="fm-inp">
             </div>
+            <div>
+              <label class="fm-lab">National ID <span style="font-weight:600; color:#C4C0CE;">&middot; only for a responsible manager</span></label>
+              <input sc-camel-default-value="{{ ctfGovId }}" data-seed-val="{{ ctfGovId }}" onBlur="{{ setCtfGovId }}" placeholder="Iqama / national ID" inputmode="numeric" class="fm-inp">
+            </div>
+            <div>
+              <label class="fm-lab">Date of birth</label>
+              <input sc-camel-default-value="{{ ctfDob }}" data-seed-val="{{ ctfDob }}" onBlur="{{ setCtfDob }}" type="date" class="fm-inp">
+            </div>
           </div>
+          <div style="font-size:10px; color:#A9A6B4; margin-top:8px; line-height:1.5;">Those two are asked for because an owner or GM who signs into the government portals is usually not on the payroll &mdash; so they are a person here, not an employee. They print on the master data sheet.</div>
           <sc-if value="{{ ctfCanPrimary }}" hint-placeholder-val="{{ true }}">
             <div onClick="{{ toggleCtfPrimary }}" class="fm-sel" style="margin-top:10px;">
               <span class="fm-tick" style="width:16px; height:16px; border-radius:5px; border:1.5px solid {{ ctfPrimaryBd }}; background:{{ ctfPrimaryBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><sc-if value="{{ ctfPrimary }}" hint-placeholder-val="{{ true }}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if></span>
@@ -27266,7 +27325,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // only one — a button that cannot change anything is a button people press and mistrust.
         canPromote: canWrite && !p9.isPrimary,
         promote: () => this._makePrimaryContact(p9.id, p9.name),
-        edit: () => this.setState({ ctEdit: { id: p9.id, companyId: clRow.realId, name: p9.name || '', jobTitle: p9.jobTitle || '', email: p9.email || '', phone: p9.phone || '', whatsapp: p9.whatsapp || '', notes: p9.notes || '', isPrimary: !!p9.isPrimary }, ctErr: '' }),
+        edit: () => this.setState({ ctEdit: { id: p9.id, companyId: clRow.realId, name: p9.name || '', jobTitle: p9.jobTitle || '', email: p9.email || '', phone: p9.phone || '', whatsapp: p9.whatsapp || '', notes: p9.notes || '', govId: p9.govId || '', dob: (p9.dob || '').slice(0, 10), isPrimary: !!p9.isPrimary }, ctErr: '' }),
         remove: () => this._removeContact(p9.id, p9.name),
       }));
       clDetailApi.cdNoContacts = _cdPeople.length === 0;
@@ -27294,7 +27353,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         intLog: { companyId: clRow.realId, companyName: clRow.name, kind: 'call', at: _today9, summary: '', outcome: '', next: '', nextAt: '' },
         igErr: '',
       });
-      clDetailApi.cdAddContact = () => this.setState({ ctEdit: { id: null, companyId: clRow.realId, name: '', jobTitle: '', email: '', phone: '', whatsapp: '', notes: '', isPrimary: _cdPeople.length === 0 }, ctErr: '' });
+      clDetailApi.cdAddContact = () => this.setState({ ctEdit: { id: null, companyId: clRow.realId, name: '', jobTitle: '', email: '', phone: '', whatsapp: '', notes: '', govId: '', dob: '', isPrimary: _cdPeople.length === 0 }, ctErr: '' });
       // The tab's own button opens the same dialog. One way in, so the two cannot capture different
       // fields — which is precisely how the old add-contact form ended up storing nothing at all.
       clDetailApi.openAddContact = clDetailApi.cdAddContact;
@@ -27911,9 +27970,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (cdCredPass[row7.id]) return this.setState({ cdCredReveal: { ...cdCredReveal, [row7.id]: true } });
         const t7 = localStorage.getItem('stimespro:token');
         fetch((this._apiBase || 'http://localhost:4100') + '/api/credentials/' + row7.id + '/reveal', { headers: t7 ? { Authorization: 'Bearer ' + t7 } : {} })
-          .then(r7 => (r7.ok ? r7.json() : Promise.reject()))
+          // THE SERVER'S OWN WORDS. This used to say "admin access required" whatever came back,
+          // which was a guess that happened to be right for the 403 and wrong for everything else:
+          // a vault copied between environments answers 409 "encrypted with a different CRED_KEY",
+          // and reporting that as a permission problem sends somebody to ask for a role they
+          // already have instead of for the key.
+          .then(r7 => (r7.ok ? r7.json() : r7.json().catch(() => ({})).then(j7 => Promise.reject(new Error((j7 && j7.error) || 'Could not reveal — admin access required')))))
           .then(j7 => this.setState({ cdCredPass: { ...cdCredPass, [row7.id]: j7.password || '' }, cdCredReveal: { ...cdCredReveal, [row7.id]: true } }))
-          .catch(() => this.toast('Could not reveal — admin access required', 'error'));
+          .catch(e7 => this.toast(String((e7 && e7.message) || 'Could not reveal').slice(0, 160), 'error'));
       };
       // A portal licence is an ordinary company document of a type the firm flagged as one. Matched
       // on the authority, which is the same thing the credential's portal field names — so the two
@@ -27996,7 +28060,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // Seeded from the licence already on file — an empty box beside a licence that exists
             // would read as "none recorded", and saving would then look like it had erased it.
             const L7 = _licFor(c7.govCenter);
-            this.setState({ cdCredModal: true, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id,
+            this.setState({ cdCredModal: true, ccUrl: url, ccUser: c7.username || '', ccPass: '', ccErr: '', ccEditId: c7.id, ccFileNo: c7.fileNo || '',
               ccNafath: c7.nafath === true, ccNafathId: c7.nafathId || '', ccEst: c7.establishmentId || null,
               ccPortal: c7.govCenter || _CC_NO_PORTAL, ccLicExpiry: (L7 && !L7.missing && L7.expiry) ? String(L7.expiry).slice(0, 10) : '' });
           },
@@ -28038,7 +28102,128 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // The button said "Add credential" while the heading above it said "Edit credential" — the
       // same dialog telling you two different things about what the click will do.
       clDetailApi.cdCredSave = this.state.ccEditId ? 'Save changes' : 'Add credential';
-      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '', ccNafath: false, ccNafathId: '', ccEst: null });
+      clDetailApi.openCdCred = () => this.setState({ cdCredModal: true, ccUrl: '', ccUser: '', ccPass: '', ccErr: '', ccEditId: null, ccPortal: _CC_NO_PORTAL, ccLicExpiry: '', ccNafath: false, ccNafathId: '', ccEst: null, ccFileNo: '' });
+
+      // THE MASTER DATA SHEET.
+      //
+      // One page an officer takes to a counter: the client's identity, the responsible manager, and
+      // every portal login numbered. Two buttons rather than one with a toggle, because the two
+      // documents are not the same thing to leave on a desk - and the server enforces that split
+      // (the passwords need admin), so this is a label on a rule, not the rule.
+      //
+      // FETCHED WITH THE HEADER, NOT LINKED WITH THE TOKEN IN THE URL.
+      //
+      // `window.open` on the route would have been one line, and it cannot carry an Authorization
+      // header - so it would have needed the token as a query parameter, which puts a live session
+      // key into browser history, the referrer and every proxy log in between. For the one document
+      // that prints government passwords that is not a trade worth making, so the PDF is fetched
+      // like the proposal above and shown from a blob instead.
+      const _mdSheet = (reveal9) => {
+        if (!clRow.realId) return this.toast('Open a real client first', 'error');
+        const t9 = localStorage.getItem('stimespro:token');
+        const base9 = this._apiBase || 'http://localhost:4100';
+        // THE TAB IS OPENED NOW, NOT WHEN THE PDF ARRIVES.
+        //
+        // A browser only allows window.open while it is still handling the click. The fetch takes a
+        // few hundred milliseconds, so opening afterwards was always a popup the browser refused -
+        // and the code fell back to downloading, which is why this saved a file instead of showing
+        // one. So the tab is claimed inside the handler and pointed at the document when it is
+        // ready; a browser that refuses even this gets the download, as before.
+        const tab9 = window.open('', '_blank');
+        if (tab9) { try { tab9.document.write('<title>Master data sheet</title><body style="font:14px system-ui;color:#6F6C7A;padding:28px">Building the sheet...</body>'); } catch (e) {} }
+        this.toast('Building the sheet...');
+        fetch(base9 + '/api/companies/' + clRow.realId + '/master-data.pdf' + (reveal9 ? '?reveal=1' : ''),
+          { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+          .then(r9 => {
+            if (r9.ok) return r9.blob();
+            // The server's own words: "requires admin access", "another PRO officer's client". A
+            // generic failure here would read as a broken button rather than a refusal.
+            return r9.json().catch(() => ({})).then(j9 => Promise.reject(new Error((j9 && j9.error) || 'Could not build the sheet')));
+          })
+          .then(b9 => {
+            const u9 = URL.createObjectURL(b9);
+            if (tab9) { tab9.location.replace(u9); }
+            else {
+              // Only when the browser refused the tab outright. Downloading keeps the document
+              // reachable and says where it went, rather than looking like nothing happened.
+              const a9 = document.createElement('a');
+              a9.href = u9; a9.download = String(clRow.name || 'client').replace(/[^a-z0-9]+/gi, '-') + '-master-data.pdf';
+              document.body.appendChild(a9); a9.click(); a9.remove();
+              this.toast('Popup blocked - the sheet was downloaded instead');
+            }
+            setTimeout(() => URL.revokeObjectURL(u9), 60000);
+          })
+          .catch(e9 => { if (tab9) tab9.close(); this.toast(e9.message || 'Server unreachable', 'error'); });
+      };
+      // WHOSE NAFATH APPROVES THESE LOGINS — ONE OF THIS CLIENT'S CONTACTS.
+      //
+      // NEVER AN EMPLOYEE. This person is the owner, the partner or the GM: the one whose national
+      // ID the registrations are held in, and who is usually not on the client's payroll at all.
+      // Employees were offered here for a day and it was wrong twice over — the list was eight
+      // payroll names deep with the one real candidate under the scroll, and recording such a
+      // person as an employee to hold their ID would put them in headcount, in the Saudization
+      // ratio and in the Iqama renewal job.
+      //
+      // A POINTER, never typed here: the national ID and date of birth the sheet prints live on the
+      // contact's own record, so a renewed Iqama does not leave this printing last year's number.
+      // Add the person, and their ID, on the Contacts tab.
+      const _mgrPeople = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
+        .filter(c9 => c9 && c9.companyId === clRow.realId && !c9.archived);
+      // The raw company row, because clRow is a positional tuple that carries none of the
+      // particulars - the same source every other screen reads a client's own fields from.
+      const _mgrCo = (Array.isArray(this.state.companiesData) ? this.state.companiesData : [])
+        .find(c9 => c9.id === clRow.realId) || null;
+      const _mgrId = _mgrCo ? _mgrCo.managerContactId : null;
+      const _mgrSel = _mgrPeople.find(c9 => c9.id === _mgrId) || null;
+      clDetailApi.cdMgrHint = !_mgrPeople.length
+        ? 'No contacts on file for this client - add the manager on the Contacts tab.'
+        : _mgrSel
+          ? ([_mgrSel.govId ? 'ID ' + _mgrSel.govId : '', _mgrSel.phone || ''].filter(Boolean).join(' \u00b7 ')
+             || 'No national ID recorded for them - add it on their contact, or the sheet prints the name alone.')
+          : 'Not set - the master data sheet will print without a manager block.';
+      Object.assign(clDetailApi, mkDd('ddCdMgr',
+        _mgrPeople.map(c9 => ({
+          value: c9.id,
+          label: c9.name + (c9.govId ? ' \u00b7 ' + c9.govId : '') + (c9.jobTitle ? ' \u00b7 ' + c9.jobTitle : ''),
+        })),
+        _mgrId || null,
+        (id9) => {
+          const t9 = localStorage.getItem('stimespro:token');
+          // `name` goes with it because the route requires one; every other field it writes is keyed
+          // on presence, so this changes nothing else about the client.
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/companies/' + clRow.realId + '/details', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+            body: JSON.stringify({ name: clRow.name, managerContactId: id9 || null }),
+          })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => {
+              if (!ok) return this.toast((j9 && j9.error) || 'Could not save the manager', 'error');
+              this.toast(id9 ? 'Responsible manager set' : 'Responsible manager cleared');
+              this._opReload('companies', 'companiesData');
+            })
+            .catch(() => this.toast('Server unreachable', 'error'));
+        },
+        'Nobody named'));
+      clDetailApi.ddCdMgrValue = _mgrSel ? _mgrSel.name : 'Nobody named';
+      // ONE BUTTON, AND IT PRINTS THE PASSWORDS. The sheet exists to be carried to a government
+      // counter, so a masked copy was a document nobody would pick - two buttons for one job, with
+      // the quieter one always the wrong answer.
+      //
+      // The route still serves both, and that is not dead code: the passwords are admin-only there,
+      // so a PRO officer pressing this gets the masked sheet rather than a 403 and a button that
+      // looks broken. The server decides which document they get; this just asks for the best one
+      // they are allowed.
+      //
+      // NO CONFIRMATION, by the firm's choice. It asked before printing, on the grounds that this
+      // is the only click that decrypts a whole vault at once - but the people pressing it do so
+      // every time they go to a counter, and a dialog answered the same way daily stops being read.
+      //
+      // What actually protects this is unchanged and does not depend on anybody reading anything:
+      // the passwords are admin-only on the server, every login on the page writes its own
+      // `credential.reveal` audit row, and the sheet is footed on every page with the client, the
+      // person who printed it and when.
+      clDetailApi.printMasterData = () => _mdSheet(_canReveal9);
       // Offered only when there is a choice to make. One CR means every login is the client's, which
       // is what a null establishment already says.
       clDetailApi.ccCrShow = !!this.state.cdCredModal && _crIsMultiCred;
@@ -28165,6 +28350,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       clDetailApi.ccPassEye = this.state.ccPassShow ? 'Hide' : 'Show';
       clDetailApi.toggleCcPassShow = () => this.setState({ ccPassShow: !this.state.ccPassShow });
       clDetailApi.setCcUrl = (e) => this.setState({ ccUrl: e.target.value, ccErr: '' });
+      clDetailApi.ccFileNo = this.state.ccFileNo || '';
+      clDetailApi.setCcFileNo = (e) => this.setState({ ccFileNo: e.target.value });
       clDetailApi.setCcUser = (e) => this.setState({ ccUser: e.target.value });
       clDetailApi.setCcPass = (e) => this.setState({ ccPass: e.target.value });
       clDetailApi.submitCdCred = () => {
@@ -28182,6 +28369,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         let host7 = url.replace(/^https?:\/\//, '').split('/')[0] || url;
         const label7 = (st.ccPortal && st.ccPortal !== _CC_NO_PORTAL) ? st.ccPortal : host7;
         const body7 = { companyId: clRow.realId, label: label7, url, username: (st.ccUser || '').trim() || null,
+          fileNo: (st.ccFileNo || '').trim() || null,
           nafath: st.ccNafath === true, nafathId: st.ccNafath ? (st.ccNafathId || '').trim() : null,
           // Which authority this login belongs to. Declared here rather than guessed from the label,
           // so a step that names a portal can point straight at it — see the step drawer.
@@ -28209,6 +28397,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       };
     }
     // Edit client modal
+    //
+    // THE PARTICULARS THIS DIALOG USED TO LEAVE OUT. Everything here is asked for when a client is
+    // CREATED and then had nowhere to be corrected: a company whose Arabic name, VAT, GOSI, MOL or
+    // national address was missed at sign-up could never have it filled in, and the master data
+    // sheet printed a page with half the cards absent. One table rather than fourteen written-out
+    // getter/setter pairs, and the same table drives the seed, the inputs and the save - which is
+    // what keeps them from drifting apart, the way `industry` and `service` once did.
+    const EC_FIELDS = {
+      ecNameAr: 'nameAr', ecActivity: 'mainActivity', ecDesignation: 'contactDesignation',
+      ecVat: 'vatNumber', ecGosi: 'gosiNumber', ecMol: 'molId', ecChamber: 'chamberNumber',
+      ecMisa: 'misaLicense',
+      ecShortAddr: 'shortAddress', ecBuilding: 'buildingNumber', ecStreet: 'street',
+      ecSecondary: 'secondaryNumber', ecDistrict: 'district', ecPostal: 'postalCode',
+    };
+    const _ecCap = (k9) => 'set' + k9.charAt(0).toUpperCase() + k9.slice(1);
     const ecOpen = !!this.state.editClient;
     const ecRow = ecOpen && clSel != null ? allClients[clSel] : null;
     const editClientApi = {
@@ -28233,7 +28436,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                      // WITHOUT THIS THERE IS NO WAY OUT OF "Individual". A client the firm has just
                      // formed a company for holds a CR and is still recorded as a person, and every
                      // form goes on hiding the VAT, GOSI and MOL boxes their new company needs.
-                     ecType: raw9.companyType || '' };
+                     ecType: raw9.companyType || '',
+                     // Same source as the rest: the RECORD, never the rendered list row.
+                     ...Object.keys(EC_FIELDS).reduce((o9, k9) => { o9[k9] = raw9[EC_FIELDS[k9]] || ''; return o9; }, {}),
+                     // THE ARABIC NAME IS SUGGESTED, exactly as the create form suggests it - but
+                     // only into an EMPTY box. `ecArTouched` starts true when one is already
+                     // stored, so a name somebody checked is never transliterated over.
+                     ecNameAr: raw9.nameAr || arabicFromLatin(r.name || ''),
+                     ecArTouched: !!raw9.nameAr };
           })(),
           ecErr: '',
         });
@@ -28281,6 +28491,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         };
       })(),
       ecCity: this.state.ecCity || '', ecIndustry: this.state.ecIndustry || '',
+      ...Object.keys(EC_FIELDS).reduce((o9, k9) => {
+        o9[k9] = this.state[k9] || '';
+        o9[_ecCap(k9)] = (e9) => this.setState({ [k9]: e9.target.value, ecErr: '' });
+        return o9;
+      }, {}),
+      // MISA is a foreign-investment licence; the create form hides the box for everyone else and
+      // so does this one. Changing the type away from foreign clears it below, for the same reason
+      // the create form does: an invisible value that still saves is a value nobody can correct.
+      ecIsForeign: (this.state.ecType || '') === 'Foreign Investment Company',
+      // These two override the generic pair above, so they must stay AFTER it.
+      setEcName: (e9) => this.setState({ ecName: e9.target.value, ecErr: '',
+        ...(this.state.ecArTouched ? {} : { ecNameAr: arabicFromLatin(e9.target.value) }) }),
+      setEcNameAr: (e9) => this.setState({ ecNameAr: e9.target.value, ecArTouched: true, ecErr: '' }),
+      ecArHint: this.state.ecArTouched ? '' : (this.state.ecNameAr ? 'suggested — correct it if it is wrong' : ''),
       // A country is a CODE chosen from the server's list, never typed: "Saudi", "KSA" and "SA" are
       // one country to a person and three to every count in this system.
       ...mkDd('ddEcCountry', _countryLabels, _labelFromCode(this.state.ecCountry), (v9) => this.setState({ ecCountry: _codeFromLabel(v9), ecErr: '' })),
@@ -28292,7 +28516,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // "Not recorded" is a real answer and the one most rows hold, so it is on the list rather than
       // being something you can only ever move away from.
       ...mkDd('ddEcType', ['Not recorded', 'Individual', 'Saudi Company', 'Establishment Saudi', 'GCC Citizen Company', 'GCC Citizen Establishment', 'Foreign Investment Company'],
-        this.state.ecType || 'Not recorded', (v) => this.setState({ ecType: v === 'Not recorded' ? '' : v })),
+        this.state.ecType || 'Not recorded', (v) => this.setState({ ecType: v === 'Not recorded' ? '' : v,
+          ...(v === 'Foreign Investment Company' ? {} : { ecMisa: '' }) })),
       ecTypeVal: this.state.ecType || 'Not recorded',
       // Said only where it is news: a client holding a CR that is still filed as a person is the
       // end of a business setup with its last step missing.
@@ -28325,6 +28550,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             service: (st9.ecService || '').trim() || null,
             cr: (st9.ecCr || '').trim() || null,
             companyType: (st9.ecType || '').trim() || null,
+            // Blanks as null, like every field above: clearing a VAT number has to be possible.
+            ...Object.keys(EC_FIELDS).reduce((o9, k9) => { o9[EC_FIELDS[k9]] = (st9[k9] || '').trim() || null; return o9; }, {}),
             // Sent as an id, and null clears it. The picker deals in names because that is what a
             // person reads; the column deals in ids because two groups can be renamed to match.
             groupId: (() => {
@@ -46253,7 +46480,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : 'Somebody you deal with at this company — the HR manager, the PRO, the owner.',
       ctfName: (_ct && _ct.name) || '', ctfTitle: (_ct && _ct.jobTitle) || '', ctfEmail: (_ct && _ct.email) || '',
       ctfPhone: (_ct && _ct.phone) || '', ctfWhats: (_ct && _ct.whatsapp) || '', ctfNotes: (_ct && _ct.notes) || '',
-      ...Object.fromEntries([['Name', 'name'], ['Title', 'jobTitle'], ['Email', 'email'], ['Phone', 'phone'], ['Whats', 'whatsapp'], ['Notes', 'notes']].map(([ui, k]) => [
+      ctfGovId: (_ct && _ct.govId) || '', ctfDob: ((_ct && _ct.dob) || '').slice(0, 10),
+      ...Object.fromEntries([['Name', 'name'], ['Title', 'jobTitle'], ['Email', 'email'], ['Phone', 'phone'], ['Whats', 'whatsapp'], ['Notes', 'notes'], ['GovId', 'govId'], ['Dob', 'dob']].map(([ui, k]) => [
         'setCtf' + ui,
         (e) => this.setState({ ctEdit: { ...(this.state.ctEdit || {}), [k]: e.target.value }, ctErr: '' }),
       ])),
@@ -46272,6 +46500,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         this._saveContact(f.companyId, f.id, {
           name: String(f.name).trim(), jobTitle: f.jobTitle || null, email: f.email || null,
           phone: f.phone || null, whatsapp: f.whatsapp || null, notes: f.notes || null,
+          govId: (f.govId || '').trim() || null, dob: (f.dob || '').trim() || null,
           isPrimary: !!f.isPrimary,
         });
       },

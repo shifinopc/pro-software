@@ -129,15 +129,33 @@ export function encrypt(plain: string): string {
   const tag = cipher.getAuthTag();
   return `${iv.toString("hex")}:${tag.toString("hex")}:${enc.toString("hex")}`;
 }
-export function decrypt(payload: string): string {
+/**
+ * The plaintext, or NULL when this ciphertext cannot be opened with the key this process holds.
+ *
+ * THE DISTINCTION MATTERS AND USED TO BE LOST. `decrypt` below returns "" either way, so a vault
+ * copied to a machine with a different CRED_KEY looked exactly like a vault full of blank
+ * passwords: the Reveal button showed nothing, and nobody could tell whether the password was
+ * missing or merely unreadable here. Measured on one developer copy of live: 39 of 48 stored
+ * logins, every single real one, silently blank.
+ *
+ * Callers that show a password to a person should use this and say which of the two it is. The
+ * difference is not cosmetic - "we never recorded it" sends somebody to ask the client, and "this
+ * machine lacks the key" does not.
+ */
+export function tryDecrypt(payload: string): string | null {
   try {
     const [ivH, tagH, dataH] = payload.split(":");
     const decipher = crypto.createDecipheriv("aes-256-gcm", CRED_KEY, Buffer.from(ivH, "hex"));
     decipher.setAuthTag(Buffer.from(tagH, "hex"));
     return Buffer.concat([decipher.update(Buffer.from(dataH, "hex")), decipher.final()]).toString("utf8");
   } catch {
-    return "";
+    return null;
   }
+}
+/** The lenient form every existing caller already expects. A failure is indistinguishable from a
+ *  deliberately blank password here - prefer `tryDecrypt` in anything a person reads. */
+export function decrypt(payload: string): string {
+  return tryDecrypt(payload) ?? "";
 }
 
 // ── Middleware ──
