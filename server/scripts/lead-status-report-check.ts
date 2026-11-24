@@ -19,6 +19,7 @@
  */
 import { prisma } from "../src/db.js";
 import { leadStatusReport } from "../src/lifecycle.js";
+import { ensureLeadDeal, stagesFor } from "../src/pipeline.js";
 
 const host = (process.env.DATABASE_URL || "").match(/@([^:/?]+)/)?.[1] ?? "";
 if (!["localhost", "127.0.0.1", "::1"].includes(host)) {
@@ -34,6 +35,11 @@ const at = (d: string) => `${d}T10:00:00.000Z`;
 const cleanup = async () => {
   const ids = (await prisma.company.findMany({ where: { name: { startsWith: TAG } }, select: { id: true } })).map(c => c.id);
   if (ids.length) {
+    const deals = (await prisma.opportunity.findMany({ where: { companyId: { in: ids } }, select: { id: true } })).map(d => d.id);
+    if (deals.length) {
+      await prisma.stageTransition.deleteMany({ where: { opportunityId: { in: deals } } });
+      await prisma.opportunity.deleteMany({ where: { id: { in: deals } } });
+    }
     await prisma.lifecycleTransition.deleteMany({ where: { companyId: { in: ids } } });
     await prisma.company.deleteMany({ where: { id: { in: ids } } });
   }
@@ -87,10 +93,35 @@ const cleanup = async () => {
   if (rep.rows.length !== 1) fails.push(`expected one owner row, got ${rep.rows.length}`);
   else if (rep.rows[0].owner !== "Unassigned") fails.push(`the unowned row is labelled "${rep.rows[0].owner}"`);
 
+  // ── and the rule that makes a stage a lead STATUS at all ─────────────────────────────────
+  //
+  // A lead with no card has no status, which is the hole this closes. Checked on the helper rather
+  // than through a route: both doors a lead arrives by call it, and a route test would prove one.
+  const home = (await prisma.company.findFirst({ where: { country: { not: null } }, select: { country: true } }))?.country ?? "SA";
+  const open = (await stagesFor(home)).find(st => !st.isWon && !st.isLost);
+  if (!open) fails.push(`no open pipeline stage for ${home} — cannot check that a lead enters the board`);
+  else {
+    const fresh = await prisma.company.create({ data: { name: `${TAG} I fresh`, lifecycle: "lead", status: "active", country: home } });
+    const first = await ensureLeadDeal(fresh.id);
+    if (!first) fails.push("a new lead was not given a pipeline card");
+    else {
+      const deal = await prisma.opportunity.findUnique({ where: { id: first }, select: { stageId: true, valueMinor: true } });
+      if (deal?.stageId !== open.id) fails.push(`the card was raised in the wrong stage (expected ${open.name})`);
+      if (deal?.valueMinor != null) fails.push("the card was given a value; a lead nobody has quoted has none");
+      if (!(await prisma.stageTransition.count({ where: { opportunityId: first } }))) fails.push("the card has no stage history");
+      // Twice must be once: the backfill reruns, and so does anything that retries a create.
+      if (await ensureLeadDeal(fresh.id)) fails.push("a second card was raised for the same lead");
+      if (await prisma.opportunity.count({ where: { companyId: fresh.id } }) !== 1) fails.push("the lead ended up with more than one card");
+    }
+    const client = await prisma.company.create({ data: { name: `${TAG} J client`, lifecycle: "client", status: "active", country: home } });
+    if (await ensureLeadDeal(client.id)) fails.push("a client was given a lead card");
+  }
+
   await cleanup();
   if (fails.length) { console.error("FAIL:\n  " + fails.join("\n  ")); process.exit(1); }
   console.log(`ok: ${want.newLeads} new (bounces counted once, re-opens not new, the day after excluded), `
-    + `${want.toProspect} to prospect, ${want.toClient} converted, ${want.lost} lost, ${want.openAtEnd} open as at ${TO}`);
+    + `${want.toProspect} to prospect, ${want.toClient} converted, ${want.lost} lost, ${want.openAtEnd} open as at ${TO}`
+    + `; a new lead lands in "${open?.name}" once, with no value, and a client gets no card`);
   await prisma.$disconnect();
 })().catch(async (e) => {
   console.error(String(e?.message ?? e));

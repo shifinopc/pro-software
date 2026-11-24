@@ -4822,6 +4822,13 @@ app.get("/api/reports/lead-status.xlsx", requireAuth, requireStaff, requireReadR
     ws.addRow({ owner: "TOTAL", ...rep.totals }).font = { bold: true };
     // The period and the caveats travel WITH the file: a sheet pasted into an email loses its
     // name, and a count with no period and no definitions on it is a number nobody can check.
+    // Where the open leads stand, under the per-person table rather than on a second sheet: it is
+    // five rows, and a tab nobody opens is a figure nobody reads.
+    if (rep.stages.length) {
+      ws.addRow([]);
+      ws.addRow(["OPEN LEADS BY STAGE (as at today)"]).font = { bold: true };
+      rep.stages.forEach(st => ws.addRow({ owner: st.name, newLeads: st.count }));
+    }
     ws.addRow([]);
     ws.addRow([`${from} to ${to} inclusive. Each company counted once per column. "Still open" is its state as at ${to}.`]);
     ws.addRow([`Credited to the client's current owner.${rep.since ? ` Lifecycle history begins ${rep.since}.` : ""}`]);

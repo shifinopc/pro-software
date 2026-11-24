@@ -17,6 +17,7 @@
 import { prisma } from "./db.js";
 import { summariesForMany } from "./dealchecklist.js";
 import { countryCurrency } from "./countries.js";
+import { nextNumber } from "./sequence.js";
 import { healthOf } from "./dealhealth.js";
 import { jobRules } from "./jobrules.js";
 import { lastContactMap, openFollowUps } from "./interactions.js";
@@ -625,4 +626,60 @@ export async function winOpportunityForQuotation(quotationId: string) {
   // dragging a card.
   await recordTransition(prisma, { opportunityId: opp.id, fromStageId: opp.stageId, toStageId: wonStage.id, at: now });
   return won;
+}
+
+/**
+ * EVERY LEAD ENTERS THE PIPELINE, so the stage IS the lead's status.
+ *
+ * The firm asked for a lead status report and the app had nowhere to read one from: a lead sat in
+ * lifecycle `lead` from the day it arrived until the day it became a client, and only 26 of 183
+ * had a deal, so 157 had no status at all. Rather than add a FOURTH status column beside
+ * lifecycle, Company.status and the stage — which is how a system ends up with four answers to one
+ * question — the stages that already exist become the answer, and a lead that is not in them is
+ * the thing to fix.
+ *
+ * Raised with NO VALUE, deliberately: `valueMinor` null is "nobody has quoted this yet", which is
+ * true, and it keeps the weighted forecast honest. A zero would be a number somebody has decided.
+ *
+ * Quiet by design — it returns null rather than throwing. A lead that was captured is captured
+ * even if its card could not be raised (no stages configured for that country, say); failing the
+ * capture because the bookkeeping around it failed would lose the lead itself.
+ */
+export async function ensureLeadDeal(companyId: string, opts: { actorId?: string | null } = {}): Promise<string | null> {
+  try {
+    const co = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, country: true, source: true, ownerId: true, lifecycle: true },
+    });
+    if (!co || (co.lifecycle !== "lead" && co.lifecycle !== "prospect")) return null;
+    // Already in the pipeline — including a deal somebody closed. Raising a second card for a lead
+    // whose deal was lost would reopen it behind their back.
+    if (await prisma.opportunity.count({ where: { companyId: co.id } })) return null;
+
+    const stages = await stagesFor(co.country);
+    const stage = stages.find(s => !s.isWon && !s.isLost);
+    if (!stage) return null;
+
+    const now = new Date().toISOString();
+    const deal = await prisma.opportunity.create({
+      data: {
+        number: await nextNumber("opportunity").catch(() => null),
+        companyId: co.id,
+        // The company's own name: a lead has not told anybody what it wants yet, and an invented
+        // title ("New enquiry — Acme") is a sentence nobody wrote.
+        title: co.name,
+        valueMinor: null,
+        currency: countryCurrency(co.country),
+        stageId: stage.id,
+        ownerId: co.ownerId ?? opts.actorId ?? null,
+        source: co.source ?? null,
+        country: co.country,
+        createdAt: now, stageAt: now,
+      },
+    });
+    await recordTransition(prisma, { opportunityId: deal.id, toStageId: stage.id, movedById: opts.actorId ?? null, at: now });
+    return deal.id;
+  } catch {
+    return null;
+  }
 }

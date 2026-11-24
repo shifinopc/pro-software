@@ -7307,6 +7307,20 @@
               <span style="width:70px; text-align:right; font-weight:650; color:#8C8899;">{{ lrTotRate }}</span>
             </div>
           </div>
+          <sc-if value="{{ lrHasStages }}" hint-placeholder-val="{{ true }}">
+            <div style="border:1px solid #F1EEF7; border-radius:16px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#FBFAFE; border-bottom:1px solid #F1EEF7; font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4;">
+                <span style="flex:1;">OPEN LEADS BY STAGE &mdash; AS AT TODAY</span>
+                <span style="width:80px; text-align:right;">LEADS</span>
+              </div>
+              <sc-for list="{{ lrStages }}" as="st" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #F7F5FB;">
+                  <span style="flex:1; font-size:12.5px; font-weight:600; color:{{ st.color }};">{{ st.name }}</span>
+                  <span style="width:80px; text-align:right; font-size:12px; color:{{ st.color }};">{{ st.count }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
           <div style="font-size:10.5px; color:#A9A6B4; line-height:1.6;">{{ lrNote }}</div>
           <sc-if value="{{ lrShowSince }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:10.5px; color:#B7791F; line-height:1.6;">{{ lrSince }}</div>
@@ -16310,8 +16324,16 @@
 
   <!-- My Tasks detail drawer -->
   <sc-if value="{{ showWorkDrawer }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:18px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-wd="true" data-hidescroll="true" class="fm-modal fm-rise" style="width:100%; max-width:560px; background:#fff; border-radius:20px; box-shadow:0 30px 80px rgba(38,7,77,.34);">
+    <!-- A SIDE PANEL, not a centred box. A task is not a modal thing: an officer works through a
+         QUEUE, and the queue was the one thing a centred sheet covered up. Docked right, the list
+         stays on screen beside it, the step gets the full height instead of 90vh minus two gutters
+         (a checklist of five items with captures under it never fitted), and the toolbar's back
+         chevron can mean "back to the record" rather than closing everything — the record and its
+         current step were a modal inside a modal.
+         The backdrop keeps its dimming and loses the blur, for the same reason: a queue you cannot
+         read is a queue that is still covered up. Same shell as the deal drawer above. -->
+    <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.38); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" data-wd="true" data-hidescroll="true" class="fm-modal" style="width:min(620px,100%); height:100%; max-height:100%; background:#fff; box-shadow:-24px 0 60px rgba(38,7,77,.28); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
         <div style="border-bottom:1px solid #F0EDF6; padding:12px 17px 12px; flex-shrink:0;">
           <!-- The toolbar the handoff specifies. The back chevron closes the sheet, which is what it
                means here; the link button copies this task's own URL, which the drawer already has
@@ -16346,7 +16368,16 @@
              container, and the action bar is sticky to ITS bottom — so a bottom padding here is not
              a gap under the last row, it is dead space UNDER THE PINNED BAR, stacked on top of the
              bar's own 20px. Two paddings, one visible gap, twice the size it should be. -->
-        <div class="fm-body" data-hidescroll="true" style="display:flex; flex-direction:column;">
+          <!-- `flex:0 1 auto`, NOT `flex:1`. THE SHEET HAS TWO SCROLLERS, one for a task record and
+               one for a workflow step, and only ever one of them has anything in it. While they both
+               grew to fill, the empty one claimed half the panel: on a record that was 334px of white
+               below the buttons, and on a step it was a void ABOVE the form, pushing it down the
+               screen with the record's own Delegate bar stranded in the middle. Nobody saw it while
+               the sheet was a centred box that shrank to its content; docking it full height made the
+               free space real and the split visible.
+               `0 1 auto` sizes each to its CONTENT, so the empty one is 0px and the used one still
+               shrinks and scrolls at the panel's limit. -->
+        <div class="fm-body" data-hidescroll="true" style="flex:0 1 auto; max-height:100%; display:flex; flex-direction:column;">
           <!-- The run advancing, OVER the step just completed rather than instead of it. The old
                flow closed the sheet here and reopened a new one a second or two later, which reads
                as a second dialog appearing by itself. `.fm-body` is position:relative for the
@@ -16489,15 +16520,20 @@
                  Bottom padding is stated here rather than inherited: this row is sticky to the
                  SCROLL CONTAINER, which has no padding, so the body's own sits below it and does
                  nothing. -->
-            <div style="display:flex; gap:10px; margin:14px 0 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:12px 20px 16px; border-top:1px solid #F1EEF7; z-index:2;">
-              <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer; transition:border-color .2s, color .2s;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
-              <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
-              <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
-              <!-- The sweep is a child rather than a background animation so it can be clipped by the
-                   button's own radius and sit under the label. overflow:hidden on the button, the
-                   highlight skewed and travelling across it once every few seconds. -->
-              <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.5; position:relative; overflow:hidden; background:#15111D; color:#fff; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer; box-shadow:0 8px 22px rgba(21,17,29,.24); transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-1px); box-shadow:0 12px 28px rgba(21,17,29,.3);"><span style="position:absolute; top:0; bottom:0; left:0; width:32%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0)); animation:sweep 3.2s ease-in-out 1s infinite; pointer-events:none;"></span><span style="position:relative;">Mark done</span></button></sc-if>
+            <!-- THE RECORD'S OWN BAR, and only the record's. It is a sibling of both scrollers, so
+                 it rendered on a workflow step too - a Delegate button for the task, sitting between
+                 the step's heading and the step's form, above that form's own Complete bar. -->
+            <sc-if value="{{ wdIsPlain }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:10px; margin:14px 0 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:12px 20px 16px; border-top:1px solid #F1EEF7; z-index:2;">
+              <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer; transition:border-color .2s, color .2s;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
+              <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
+              <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
+              <!-- The sweep is a child rather than a background animation so it can be clipped by the
+                   button's own radius and sit under the label. overflow:hidden on the button, the
+                   highlight skewed and travelling across it once every few seconds. -->
+              <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.5; position:relative; overflow:hidden; background:#15111D; color:#fff; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer; box-shadow:0 8px 22px rgba(21,17,29,.24); transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-1px); box-shadow:0 12px 28px rgba(21,17,29,.3);"><span style="position:absolute; top:0; bottom:0; left:0; width:32%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0)); animation:sweep 3.2s ease-in-out 1s infinite; pointer-events:none;"></span><span style="position:relative;">Mark done</span></button></sc-if>
             </div>
+            </sc-if>
           </sc-if>
           <!-- THE STEP'S OWN GUTTER, AND ITS OWN SCROLL.
                These sections are not inside `.fm-body` — they are direct children of the sheet,
@@ -16517,7 +16553,7 @@
                buttons showing below the footer and sliced off by the sheet's rounded corner. The
                spacer at the end of this container is what keeps the breathing room when neither
                footer is on screen. -->
-          <div style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 20px 0;">
+          <div style="flex:0 1 auto; max-height:100%; min-height:0; overflow-y:auto; padding:0 20px 0;">
           <!-- Workflow step detail -->
           <!-- What the person is meant to do. Snapshotted onto the step when it was created, so it is
                the brief they were actually given, not whatever the template says today. -->
@@ -39884,6 +39920,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           lrTotNew: T9.newLeads, lrTotProspect: T9.toProspect, lrTotClient: T9.toClient,
           lrTotLost: T9.lost, lrTotOpen: T9.openAtEnd,
           lrTotRate: rate9(T9.toClient, T9.newLeads),
+          // WHERE THE OPEN LEADS STAND. The lead's status IS its pipeline stage now that every new
+          // lead enters the board as it is captured; "No deal yet" is the backlog of ones captured
+          // before that rule, and it is shown rather than hidden so the gap is countable.
+          lrStages: ((D9 && Array.isArray(D9.stages)) ? D9.stages : []).map(st9 => ({
+            name: st9.name, count: st9.count,
+            gap: st9.name === 'No deal yet',
+            color: st9.name === 'No deal yet' ? '#B7791F' : '#2E2937',
+          })),
+          lrHasStages: !!(D9 && Array.isArray(D9.stages) && D9.stages.length),
           // THE DAY THE HISTORY STARTS, said on the screen. Everything here is counted from
           // LifecycleTransition, which began recording on a date — a range reaching before it is
           // not empty, it is unrecorded, and those are different answers.
@@ -39892,6 +39937,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             : '',
           lrShowSince: !!(D9 && D9.since && D9.since > from9),
           lrNote: 'Each client counts once per column however often it moved. "Still open" is its state as at the end date, not today. '
+            + 'The STATUS of a lead is its pipeline stage; every new lead enters the board as it is captured, and "No deal yet" is what is left of the ones captured before that. '
             + 'The rate is conversions IN the period over leads that arrived in it, so a client who arrived earlier can push it over 100%; it is a pace, not a cohort. Shown only from five leads up.',
           lrExport: () => {
             const tok9 = localStorage.getItem('stimespro:token');

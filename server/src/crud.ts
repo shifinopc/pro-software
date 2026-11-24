@@ -13,6 +13,7 @@ import { startDeliveryForQuotation } from "./delivery.js";
 import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
 import { resolveEstablishmentId, syncMainFromCompany, adoptMainCr, EstablishmentError } from "./establishments.js";
+import { ensureLeadDeal } from "./pipeline.js";
 import { reAddressOnRename } from "./companyname.js";
 
 /**
@@ -400,6 +401,10 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       }
       // A client created with a CR has that CR as its main one from the start.
       if (modelName === "company" && (created as any).cr) await syncMainFromCompany(created.id).catch(() => {});
+      // A LEAD ENTERS THE PIPELINE AS IT IS CAPTURED, so its stage is its status from minute one.
+      // Here rather than in the lead form, because this is the route the form, the importer and
+      // anything else that creates a company all go through — one door, one behaviour.
+      if (modelName === "company") await ensureLeadDeal(created.id, { actorId: (req as any).auth?.sub ?? null });
       // ...and a client still waiting for one gets it from the certificate, whenever that arrives:
       // from step 2 of the Add-client form on the day they sign, or from their Documents tab months
       // later when the formation work finishes. One place, so both doors behave the same.

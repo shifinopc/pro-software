@@ -24,6 +24,7 @@
  */
 import crypto from "node:crypto";
 import { recordLifecycle } from "./lifecycle.js";
+import { ensureLeadDeal } from "./pipeline.js";
 import { prisma } from "./db.js";
 import { findDuplicates } from "./duplicates.js";
 import { addContact } from "./contacts.js";
@@ -185,6 +186,9 @@ export async function receiveEnquiry(body: any, ctx: { keyName: string; homeCoun
   });
   // System arrival — no person changed anything; the website did.
   await recordLifecycle(prisma, { companyId: created.id, to: "lead", at: new Date().toISOString() });
+  // Into the pipeline, like a lead typed in by a person. A website lead that never got a card was
+  // a lead with no status, which is exactly the hole the stage-as-status rule closes.
+  await ensureLeadDeal(created.id);
   // And why it landed where it did. A rep who finds a website lead on their desk can now see the
   // rule that put it there rather than assuming a colleague passed it on.
   if (owner) {

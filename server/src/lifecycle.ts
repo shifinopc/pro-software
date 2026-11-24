@@ -167,6 +167,48 @@ export async function lifecycleAnalytics(scope: { companyIds?: string[] | null }
   };
 }
 
+/**
+ * WHERE THE OPEN LEADS STAND, BY PIPELINE STAGE — the lead's status, as at NOW.
+ *
+ * Not as at the end of the report's range, and labelled that way on the screen: reconstructing a
+ * stage on a past date means replaying StageTransition per deal, and a figure that says "now" and
+ * means it is better than one that looks historical and is approximate.
+ *
+ * A lead with several deals is counted under the one most recently moved — it is one lead, and
+ * counting it twice would make the column add up to more leads than exist. A lead with NO deal
+ * gets its own line rather than being dropped: until every lead enters the pipeline, "no deal
+ * yet" is the most common status there is, and hiding it would make the board look complete.
+ */
+async function openLeadsByStage(companyIds: string[]): Promise<{ name: string; count: number }[]> {
+  const open = await prisma.company.findMany({
+    where: { id: { in: companyIds }, lifecycle: { in: ["lead", "prospect"] } },
+    select: { id: true },
+  });
+  if (!open.length) return [];
+  const ids = open.map(c => c.id);
+  const deals = await prisma.opportunity.findMany({
+    where: { companyId: { in: ids } },
+    select: { companyId: true, stageId: true },
+    orderBy: { stageAt: "asc" },           // ascending, so the last write per company is the latest
+  });
+  const stages = await prisma.pipelineStage.findMany({ select: { id: true, name: true }, orderBy: [{ sort: "asc" }] });
+  const nameOf = new Map(stages.map(s => [s.id, s.name]));
+  const order = new Map(stages.map((s, i) => [s.name, i]));
+
+  const stageOf = new Map<string, string>();
+  for (const d of deals) stageOf.set(d.companyId, nameOf.get(d.stageId) ?? "Unknown stage");
+
+  const tally = new Map<string, number>();
+  for (const id of ids) {
+    const key = stageOf.get(id) ?? "No deal yet";
+    tally.set(key, (tally.get(key) ?? 0) + 1);
+  }
+  return [...tally.entries()]
+    .map(([name, count]) => ({ name, count }))
+    // Pipeline order, with the un-carded leads last — they are not a stage, they are the gap.
+    .sort((a, b) => (order.get(a.name) ?? 99) - (order.get(b.name) ?? 99) || a.name.localeCompare(b.name));
+}
+
 /** One line of the lead status report. */
 export interface LeadStatusRow {
   ownerId: string | null;
@@ -208,7 +250,12 @@ export async function leadStatusReport(opts: {
   companyIds?: string[] | null;
   source?: string | null;
   campaign?: string | null;
-}): Promise<{ rows: LeadStatusRow[]; totals: Omit<LeadStatusRow, "ownerId" | "owner">; from: string; to: string; since: string | null }> {
+}): Promise<{
+  rows: LeadStatusRow[];
+  totals: Omit<LeadStatusRow, "ownerId" | "owner">;
+  stages: { name: string; count: number }[];
+  from: string; to: string; since: string | null;
+}> {
   const { from, to } = opts;
   // Inclusive of the end date: `changedAt` is a full ISO timestamp, so "<= to" would drop
   // everything that happened on the last day after midnight.
@@ -223,7 +270,7 @@ export async function leadStatusReport(opts: {
     select: { id: true, ownerId: true },
   });
   if (!cos.length) {
-    return { rows: [], totals: { newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 }, from, to, since: null };
+    return { rows: [], totals: { newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 }, stages: [], from, to, since: null };
   }
   const ownerOf = new Map(cos.map(c => [c.id, c.ownerId ?? null]));
 
@@ -284,5 +331,5 @@ export async function leadStatusReport(opts: {
   // and saying so on the screen is cheaper than everyone learning it the hard way.
   const first = await prisma.lifecycleTransition.findFirst({ orderBy: { changedAt: "asc" }, select: { changedAt: true } });
 
-  return { rows: out, totals, from, to, since: first?.changedAt.slice(0, 10) ?? null };
+  return { rows: out, totals, stages: await openLeadsByStage(cos.map(c => c.id)), from, to, since: first?.changedAt.slice(0, 10) ?? null };
 }

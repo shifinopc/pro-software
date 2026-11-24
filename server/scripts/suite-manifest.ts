@@ -215,6 +215,9 @@ export const TOOLS: string[] = [
   // Corrects the installed Business Setup template's CR step (it filed nothing) and clears the
   // CR-pending waiver from clients that already hold a registration. Idempotent, --apply to write.
   "fix-business-setup-cr",
+  // Raises a pipeline card for the leads captured before every lead got one automatically.
+  // Deliberately NOT run by the deploy: it puts a card on the board for every open lead.
+  "leads-into-pipeline",
   // Removes the unkeyed twin of every SLA breach notification. notify.ts no longer writes one;
   // this clears what is already filed. Idempotent, --apply to delete.
   "dedupe-sla-notifications",
