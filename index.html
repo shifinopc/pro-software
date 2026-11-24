@@ -18165,7 +18165,18 @@ class Component extends DCLogic {
         if (oy === 'auto' || oy === 'scroll') break;
         box = box.parentElement;
       }
-      const t = trigger.getBoundingClientRect();
+      let t = trigger.getBoundingClientRect();
+      // A CHEVRON IS NOT THE FIELD. `previousElementSibling` finds whatever element happens to sit
+      // before the panel, and in the hand-rolled pickers that is often the little caret `span` the
+      // panel is toggled by - 11px wide. The panel was then pinned to 11px: a white sliver with a
+      // scrollbar in it, floating beside the form, which is what "product not coming" actually
+      // was. The options were all there, in a box too narrow to show one letter of them.
+      //
+      // The wrapper is what `left:0; right:0` meant in the stylesheet, so it is the honest anchor
+      // when the thing we found is plainly not the field. Only when it is PLAINLY not: a trigger
+      // narrower than two thirds of its wrapper is an icon, not a control somebody reads.
+      const wrapRect = wrap.getBoundingClientRect();
+      if (wrapRect.width > 0 && t.width < wrapRect.width * 0.66) t = wrapRect;
       // ESCAPE THE CLIPPING BOX INSTEAD OF SHRINKING TO FIT IT.
       //
       // `.fm-body` scrolls, so an absolutely-positioned panel inside a dialog is CUT at the
