@@ -279,10 +279,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       // so page 1 and page 2 could both contain the same employee while another was in neither — and
       // above the cap below, the screen showed an arbitrary 500 that could differ between two loads.
       // `id` because every model has one and cuids sort roughly newest-last, so it is stable without
-      // needing a per-model choice. A caller wanting a different order can still sort client-side.
+      // needing a per-model choice.
+      //
+      // ?order=desc BECAUSE SORTING CLIENT-SIDE IS NOT ENOUGH ONCE A LIST IS CAPPED. That is what
+      // this comment used to say, and it was wrong in exactly the case that matters: the console
+      // asked for notifications, got the OLDEST 500 of 5,230, sorted those newest-first and showed
+      // a screen on which every line was two months old and today's were unreachable. Which end of
+      // the set you are given is the server's decision, not the caller's.
       const [total, rows] = await Promise.all([
         model.count({ ...where }),
-        model.findMany({ ...where, ...(include ? { include } : {}), orderBy: { id: "asc" }, skip, take }),
+        model.findMany({ ...where, ...(include ? { include } : {}), orderBy: { id: String(q.order ?? "").toLowerCase() === "desc" ? "desc" : "asc" }, skip, take }),
       ]);
       res.setHeader("X-Total-Count", String(total));
       res.setHeader("X-Page-Size", String(take));

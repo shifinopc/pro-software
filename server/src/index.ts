@@ -286,7 +286,12 @@ app.use(cors((req, cb) => {
     // RateLimit-Reset is exposed for the same reason: the login screen tells somebody HOW LONG they
     // are locked out for, and without this the browser hands it a null and the message degrades to
     // "later" — which is what makes people keep pressing, spending the limit they are waiting on.
-    return cb(null, { origin: true, credentials: true, maxAge: 86400, exposedHeaders: ["Content-Disposition", "X-Proposal-Format", "RateLimit-Reset", "Retry-After"] });
+    return cb(null, { origin: true, credentials: true, maxAge: 86400, exposedHeaders: ["Content-Disposition", "X-Proposal-Format", "RateLimit-Reset", "Retry-After",
+      // X-Total-Count and its companions: every list route sets them to say how much of the set a
+      // page actually is, and cross-origin JavaScript could not read any of them — so the console
+      // had no way to tell a page of 500 from a set of 500, and the notifications badge read the
+      // cap as a count.
+      "X-Total-Count", "X-Page-Size", "X-Page-Skip", "X-Has-More"] });
   cb(new Error(`Origin ${origin} not allowed by CORS`));
 }));
 /**

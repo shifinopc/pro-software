@@ -19724,7 +19724,13 @@ class Component extends DCLogic {
       // Client site credentials (admin-only read; passwords are never included in the list payload).
       this._bootFetch('/api/credentials', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ credentialsData: v }); }).catch(() => {});
       this._bootFetch('/api/email-config', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (v && typeof v === 'object') this.setState({ emailCfg: v }); }).catch(() => {});
-      this._bootFetch('/api/notifications', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ notificationsData: v }); }).catch(() => {});
+      // NEWEST FIRST, and the true size of the set beside them. The list route caps at 500 and used
+      // to hand back the OLDEST 500 of them: the Notifications screen showed 500 rows all two months
+      // old, today's were unreachable, and the badge read "500" as though that were the count.
+      // Sorting on this side cannot fix which 500 arrive, so the order is asked for.
+      this._bootFetch('/api/notifications?order=desc', { headers: hdr })
+        .then(r => (r.ok ? r.json().then(v => ({ v, total: Number(r.headers.get('X-Total-Count')) || 0 })) : null))
+        .then(res => { if (res && Array.isArray(res.v)) this.setState({ notificationsData: res.v, notificationsTotal: res.total }); }).catch(() => {});
       this._bootFetch('/api/workflow/instances', { headers: hdr }).then(r => (r.ok ? r.json() : null)).then(v => { if (Array.isArray(v)) this.setState({ wfInstancesData: v }); }).catch(() => {});
     };
     // ── Live channel (SSE): incoming client replies + "client is typing…" ──
@@ -21747,8 +21753,22 @@ class Component extends DCLogic {
     // throw before its own declaration and blank the console.
     const _unreadNotifCount = (() => {
       const rows9 = Array.isArray(this.state.notificationsData) ? this.state.notificationsData : [];
-      const n9 = rows9.filter(r9 => !r9.read).length;
-      return n9 > 0 ? String(n9) : '';
+      // THE SAME RULE THE SCREEN ITSELF USES. Notification rows are global, so "mark all read"
+      // deliberately never flips `read` - it moves THIS user's watermark instead (see
+      // POST /api/notifications/read). This badge read the column alone, so it sat at 500 beside a
+      // page header saying "All caught up", and no amount of reading cleared it.
+      const seen9 = (this.state.meUser && this.state.meUser.notifReadAt) || '';
+      const n9 = rows9.filter(r9 => {
+        if (r9.read) return false;
+        const at9 = r9.createdAt || r9.at || '';
+        return !seen9 || !at9 || String(at9) > String(seen9);
+      }).length;
+      if (!n9) return '';
+      // "500" was the CAP being read as a count. Only the loaded page can be counted - the unread
+      // among the rest are not on this machine - so a full page says "500+" rather than claiming
+      // to have counted 5,230 notifications and arrived at exactly five hundred.
+      const total9 = Number(this.state.notificationsTotal) || 0;
+      return n9 + (total9 > rows9.length ? '+' : '');
     })();
     // Open leads only. A badge that counts the ones already marked lost would go up when the news
     // is bad, which is the opposite of what a number next to "Leads" is read as meaning. Declared
@@ -23436,7 +23456,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       notifGroups: notifGroupsFiltered,
       notifEmpty: notifGroupsFiltered.length === 0,
       notifTabs: [nTab('all', 'All'), nTab('unread', 'Unread', unreadCount || false), nTab('action', 'Action required')],
-      unreadLabel: unreadCount ? unreadCount + ' unread · grouped by day' : 'All caught up ✓',
+      // "+" for the same reason the sidebar badge carries one: this page is the newest 500 of a
+      // larger set, and the unread among the rest were never sent to this browser to be counted.
+      unreadLabel: unreadCount
+        ? unreadCount + ((Number(this.state.notificationsTotal) || 0) > (_nRows || []).length ? '+' : '') + ' unread · newest first'
+        : 'All caught up ✓',
       // PERSISTS now — this used to be `setState({ readAll: true })`, so the badge came back on reload.
       markAllRead: () => {
         const tok9 = localStorage.getItem('stimespro:token');
