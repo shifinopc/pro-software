@@ -19,7 +19,7 @@ import { reAddressOnRename } from "./companyname.js";
 import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryContact } from "./contacts.js";
 import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics } from "./pipeline.js";
 import { crmDashboard } from "./crmdashboard.js";
-import { recordLifecycle, lifecycleAnalytics, campaignPerformance } from "./lifecycle.js";
+import { recordLifecycle, lifecycleAnalytics, campaignPerformance, leadStatusReport } from "./lifecycle.js";
 import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
 import { openFollowUps, historyFor, logInteraction, closeFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
 import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
@@ -4775,6 +4775,61 @@ app.get("/api/reports/client-work.xlsx", requireAuth, requireStaff, async (req, 
     await wb.xlsx.write(res);
     res.end();
   } catch (e: any) { return fail(res, 500, e, "reports.client-work.xlsx"); }
+});
+
+/**
+ * THE LEAD STATUS REPORT — what happened to the leads between two dates, per salesperson.
+ *
+ * Same visibility rungs as every other sales surface (`salesCompanyIds`), same date range as the
+ * client-work report (`reportRange`), and the counting rules live with the query in lifecycle.ts
+ * rather than here, so the screen and the spreadsheet cannot drift apart.
+ */
+app.get("/api/reports/lead-status", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    res.json(await leadStatusReport({
+      from, to,
+      companyIds: await salesCompanyIds(req as any),
+      source: String(req.query.source ?? "").trim() || null,
+      campaign: String(req.query.campaign ?? "").trim() || null,
+    }));
+  } catch (e: any) { return fail(res, 400, e, "reports.lead-status"); }
+});
+
+app.get("/api/reports/lead-status.xlsx", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
+  try {
+    const { from, to } = reportRange(req);
+    const rep = await leadStatusReport({
+      from, to,
+      companyIds: await salesCompanyIds(req as any),
+      source: String(req.query.source ?? "").trim() || null,
+      campaign: String(req.query.campaign ?? "").trim() || null,
+    });
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(`Leads ${from} to ${to}`.slice(0, 31));
+    ws.columns = [
+      { header: "Salesperson", key: "owner", width: 32 },
+      { header: "New leads", key: "newLeads", width: 12 },
+      { header: "Moved to prospect", key: "toProspect", width: 20 },
+      { header: "Became clients", key: "toClient", width: 16 },
+      { header: "Lost", key: "lost", width: 10 },
+      { header: "Still open", key: "openAtEnd", width: 12 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    rep.rows.forEach(r => ws.addRow(r));
+    ws.addRow([]);
+    ws.addRow({ owner: "TOTAL", ...rep.totals }).font = { bold: true };
+    // The period and the caveats travel WITH the file: a sheet pasted into an email loses its
+    // name, and a count with no period and no definitions on it is a number nobody can check.
+    ws.addRow([]);
+    ws.addRow([`${from} to ${to} inclusive. Each company counted once per column. "Still open" is its state as at ${to}.`]);
+    ws.addRow([`Credited to the client's current owner.${rep.since ? ` Lifecycle history begins ${rep.since}.` : ""}`]);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="lead-status-${from}-to-${to}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (e: any) { return fail(res, 500, e, "reports.lead-status.xlsx"); }
 });
 
 app.get("/api/staff-directory", requireAuth, requireStaff, async (_req, res) => {

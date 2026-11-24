@@ -7239,6 +7239,81 @@
            the question a client asks and an invoice needs, which is why tasks and steps stay in
            separate columns: one Iqama renewal is a single task and eleven steps, and a blended
            number would make a nine-step renewal look like a phone call. -->
+      <!-- LEAD REPORT. The lifecycle funnel existed as numbers nothing drew: /api/stage-analytics
+           returned the counts and no markup read them. This is the question people actually ask —
+           what happened to the leads last month, and whose were they — answered per salesperson
+           over the same append-only history, with the definitions printed under the table. -->
+      <sc-if value="{{ showLeadReport }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:14px; padding:22px 28px 30px;">
+        <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <div style="font-size:10px; font-weight:800; letter-spacing:.14em; color:#A9A6B4;">SALES</div>
+            <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Lead Report</h1>
+            <div style="font-size:11px; color:#8C8899; margin-top:4px;">{{ lrCaption }}</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+            <sc-for list="{{ lrShortcuts }}" as="s" hint-placeholder-count="2">
+              <button onClick="{{ s.pick }}" style="background:{{ s.bg }}; color:{{ s.fg }}; border:1px solid {{ s.bd }}; font-size:11px; font-weight:650; padding:7px 12px; border-radius:99px; cursor:pointer;">{{ s.label }}</button>
+            </sc-for>
+            <input value="{{ lrFrom }}" onChange="{{ setLrFrom }}" type="date" style="font-size:11px; padding:6px 9px; border:1px solid #E7E3F0; border-radius:9px; color:#3E3949;" />
+            <span style="font-size:11px; color:#A9A6B4;">to</span>
+            <input value="{{ lrTo }}" onChange="{{ setLrTo }}" type="date" style="font-size:11px; padding:6px 9px; border:1px solid #E7E3F0; border-radius:9px; color:#3E3949;" />
+            <button onClick="{{ lrExport }}" style="background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:7px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Export to Excel</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ lrError }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#FEECEC; border:1px solid #FBD5D5; border-radius:12px; padding:12px 14px; font-size:11.5px; color:#8C2226;">{{ lrError }}</div>
+        </sc-if>
+        <sc-if value="{{ lrLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px; color:#8C8899;">Counting&hellip;</div>
+        </sc-if>
+        <sc-if value="{{ lrEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed #E7E3F0; border-radius:14px; padding:26px; text-align:center;">
+            <div style="font-size:13px; font-weight:650; color:#3E3949;">No lead moved in this period</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:5px;">Nobody arrived, converted or was lost between these dates.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ lrHasRows }}" hint-placeholder-val="{{ true }}">
+          <div style="border:1px solid #F1EEF7; border-radius:16px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#FBFAFE; border-bottom:1px solid #F1EEF7; font-size:9.5px; font-weight:800; letter-spacing:.1em; color:#A9A6B4;">
+              <span style="flex:1;">SALESPERSON</span>
+              <span style="width:80px; text-align:right;">NEW LEADS</span>
+              <span style="width:90px; text-align:right;">&rarr; PROSPECT</span>
+              <span style="width:90px; text-align:right;">&rarr; CLIENT</span>
+              <span style="width:70px; text-align:right;">LOST</span>
+              <span style="width:80px; text-align:right;">STILL OPEN</span>
+              <span style="width:70px; text-align:right;">CONVERTED</span>
+            </div>
+            <sc-for list="{{ lrRows }}" as="r" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid #F7F5FB;" style-hover="background:#FBFAFE;">
+                <span style="flex:1; font-size:12.5px; font-weight:600; color:#2E2937; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.owner }}</span>
+                <span style="width:80px; text-align:right; font-size:12px; color:#3E3949;">{{ r.newLeads }}</span>
+                <span style="width:90px; text-align:right; font-size:12px; color:#3E3949;">{{ r.toProspect }}</span>
+                <span style="width:90px; text-align:right; font-size:12px; font-weight:700; color:{{ r.wonColor }};">{{ r.toClient }}</span>
+                <span style="width:70px; text-align:right; font-size:12px; color:{{ r.lostColor }};">{{ r.lost }}</span>
+                <span style="width:80px; text-align:right; font-size:12px; color:#3E3949;">{{ r.openAtEnd }}</span>
+                <span style="width:70px; text-align:right; font-size:11.5px; color:#8C8899;">{{ r.rate }}</span>
+              </div>
+            </sc-for>
+            <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; background:#FBFAFE; font-size:12px; font-weight:800; color:#2E2937;">
+              <span style="flex:1;">TOTAL</span>
+              <span style="width:80px; text-align:right;">{{ lrTotNew }}</span>
+              <span style="width:90px; text-align:right;">{{ lrTotProspect }}</span>
+              <span style="width:90px; text-align:right; color:#0E9355;">{{ lrTotClient }}</span>
+              <span style="width:70px; text-align:right;">{{ lrTotLost }}</span>
+              <span style="width:80px; text-align:right;">{{ lrTotOpen }}</span>
+              <span style="width:70px; text-align:right; font-weight:650; color:#8C8899;">{{ lrTotRate }}</span>
+            </div>
+          </div>
+          <div style="font-size:10.5px; color:#A9A6B4; line-height:1.6;">{{ lrNote }}</div>
+          <sc-if value="{{ lrShowSince }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:10.5px; color:#B7791F; line-height:1.6;">{{ lrSince }}</div>
+          </sc-if>
+        </sc-if>
+      </div></sc-freeze></sc-if>
+
       <sc-if value="{{ showClientWork }}" hint-placeholder-val="{{ false }}"><sc-freeze value="{{ scrFrozen }}"><div style="display:flex; flex-direction:column; gap:14px; padding:22px 28px 30px;">
         <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
           <div style="min-width:0;">
@@ -18779,7 +18854,7 @@ class Component extends DCLogic {
       // active screen is decided by `act === '<label>'`. A second entry called Dashboard would put
       // two screens behind one name and light both up at once.
       'Sales Dashboard': 'Sales', 'Activities': 'Sales',
-      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure', 'Agents': 'Configure',
+      'Pipeline': 'Sales', 'Follow-ups': 'Sales', 'Leads': 'Sales', 'Contacts': 'Sales', 'Inbox': 'Sales', 'Targets & Forecast': 'Sales', 'Lead Report': 'Sales', 'Sales Teams': 'Sales', 'PRO Teams': 'Operations', 'Team Performance': 'Operations', 'Sales Settings': 'Configure', 'Setup Check': 'Configure', 'Agents': 'Configure',
       'My Tasks': 'Operations', 'Task List': 'Operations', 'Approvals': 'Operations', 'SLA Monitor': 'Operations',
       'Requests Queue': 'Operations', 'Government Centers': 'Operations', 'Appointments': 'Operations', 'Courier': 'Operations',
       'Client Report': 'Operations',
@@ -19432,6 +19507,26 @@ class Component extends DCLogic {
        * when somebody opens that row, because a month of steps for 188 clients is a page nobody
        * asked for. Month and range are the same endpoint - the screen sends dates either way.
        */
+      // The lead status report. Same shape as _loadCW below: one range, one call, errors kept as
+      // words on the screen rather than a silent empty table.
+      this._loadLR = (from, to, source, campaign) => {
+        const q = '?from=' + from + '&to=' + to
+          + (source ? '&source=' + encodeURIComponent(source) : '')
+          + (campaign ? '&campaign=' + encodeURIComponent(campaign) : '');
+        this.setState({ lrLoading: true, lrError: '' });
+        return this._bootFetch('/api/reports/lead-status' + q, { headers: hdr })
+          .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, j })).catch(() => ({ ok: false, status: r.status, j: null })))
+          .then(({ ok, status, j }) => {
+            if (ok && j && Array.isArray(j.rows)) return this.setState({ lrData: j, lrError: '', lrLoading: false });
+            this.setState({
+              lrLoading: false,
+              lrError: status === 403
+                ? 'Your role cannot read this screen. An administrator can change that in Settings.'
+                : (j && j.error) || 'That did not load. Try again in a moment.',
+            });
+          })
+          .catch(() => this.setState({ lrLoading: false, lrError: 'The server could not be reached.' }));
+      };
       this._loadCW = (from, to) => {
         const q = from && to ? ('?from=' + from + '&to=' + to) : '';
         this.setState({ cwLoading: true, cwError: '' });
@@ -21708,7 +21803,7 @@ class Component extends DCLogic {
       // Stage setup reads and writes the same route the board draws from, so it cannot live anywhere
       // else without leaving somebody a pipeline that will not render.
       'Sales Settings': 'Pipeline',
-      'Leads': 'Leads', 'Inbox': 'Leads',
+      'Leads': 'Leads', 'Inbox': 'Leads', 'Lead Report': 'Leads',
       'Contacts': 'Contacts', 'Follow-ups': 'Contacts', 'Activities': 'Contacts',
       'Targets & Forecast': 'Sales Targets',
       // Both team screens are one API route and therefore one module — PRO Teams lives in the
@@ -21968,7 +22063,7 @@ class Component extends DCLogic {
       // Ordered to follow the life of a deal: the board first because it is what people open, then
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
-      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers]]],
+      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers], ['Lead Report', I.fileText]]],
       ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers], ['Client Report', I.fileText]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
@@ -39729,6 +39824,92 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       showTeams: act === 'Sales Teams' || act === 'PRO Teams',
       showTeamPerf: act === 'Team Performance',
       showClientWork: act === 'Client Report',
+      showLeadReport: act === 'Lead Report',
+      /**
+       * LEAD REPORT — what happened to the leads in a period, per salesperson.
+       *
+       * The counting lives on the server (lifecycle.ts), so this is a range, a fetch and a table.
+       * Deliberately NOT inside the CRM render gate: it holds its own values, reads none of the
+       * pipeline's, and gating it would mean adding a screen name to a list for no saving.
+       */
+      ...(() => {
+        const st9 = this.state;
+        const monthRange9 = (back9) => {
+          const d9 = new Date();
+          const first9 = new Date(Date.UTC(d9.getUTCFullYear(), d9.getUTCMonth() - back9, 1));
+          const last9 = new Date(Date.UTC(d9.getUTCFullYear(), d9.getUTCMonth() - back9 + 1, 0));
+          return [first9.toISOString().slice(0, 10), last9.toISOString().slice(0, 10)];
+        };
+        const from9 = st9.lrFrom || monthRange9(0)[0];
+        const to9 = st9.lrTo || monthRange9(0)[1];
+        // Keyed on the range itself: a flag would have to be cleared by every path that moves it.
+        const key9 = from9 + '..' + to9;
+        if (act === 'Lead Report' && this._lrKey !== key9 && !st9.lrLoading) {
+          this._lrKey = key9;
+          if (this._loadLR) setTimeout(() => this._loadLR(from9, to9), 0);
+        }
+        const D9 = st9.lrData || null;
+        const rows9 = (D9 && Array.isArray(D9.rows)) ? D9.rows : [];
+        const T9 = (D9 && D9.totals) || { newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 };
+        const setRange9 = (f9, t9) => this.setState({ lrFrom: f9, lrTo: t9 });
+        const same9 = (pair9) => pair9[0] === from9 && pair9[1] === to9;
+        const shortcut9 = (label9, pair9) => ({
+          label: label9,
+          bg: same9(pair9) ? '#7C00FF' : '#fff',
+          fg: same9(pair9) ? '#fff' : '#3E3949',
+          bd: same9(pair9) ? '#7C00FF' : '#E7E3F0',
+          pick: () => setRange9(pair9[0], pair9[1]),
+        });
+        // A conversion rate only where there is something to divide by. "0%" off two leads is a
+        // number people quote, and it is not one.
+        const rate9 = (part9, whole9) => (whole9 >= 5 ? Math.round((part9 * 1000) / whole9) / 10 + '%' : '—');
+        return {
+          lrFrom: from9, lrTo: to9,
+          setLrFrom: (e9) => setRange9(e9.target.value, to9),
+          setLrTo: (e9) => setRange9(from9, e9.target.value),
+          lrShortcuts: [shortcut9('This month', monthRange9(0)), shortcut9('Last month', monthRange9(1))],
+          lrCaption: 'Lead movement between ' + _dmy9(from9) + ' and ' + _dmy9(to9) + ' · credited to the current owner of each client',
+          lrLoading: !!st9.lrLoading,
+          lrError: st9.lrError || false,
+          lrHasRows: rows9.length > 0,
+          lrEmpty: !st9.lrLoading && !st9.lrError && !!D9 && rows9.length === 0,
+          lrRows: rows9.map(r9 => ({
+            owner: r9.owner,
+            newLeads: r9.newLeads, toProspect: r9.toProspect, toClient: r9.toClient,
+            lost: r9.lost, openAtEnd: r9.openAtEnd,
+            lostColor: r9.lost > 0 ? '#B42318' : '#C9C6D2',
+            wonColor: r9.toClient > 0 ? '#0E9355' : '#C9C6D2',
+            rate: rate9(r9.toClient, r9.newLeads),
+          })),
+          lrTotNew: T9.newLeads, lrTotProspect: T9.toProspect, lrTotClient: T9.toClient,
+          lrTotLost: T9.lost, lrTotOpen: T9.openAtEnd,
+          lrTotRate: rate9(T9.toClient, T9.newLeads),
+          // THE DAY THE HISTORY STARTS, said on the screen. Everything here is counted from
+          // LifecycleTransition, which began recording on a date — a range reaching before it is
+          // not empty, it is unrecorded, and those are different answers.
+          lrSince: (D9 && D9.since)
+            ? ('Lifecycle history begins ' + _dmy9(D9.since) + '. A range starting before that is unrecorded, not empty.')
+            : '',
+          lrShowSince: !!(D9 && D9.since && D9.since > from9),
+          lrNote: 'Each client counts once per column however often it moved. "Still open" is its state as at the end date, not today. '
+            + 'The rate is conversions IN the period over leads that arrived in it, so a client who arrived earlier can push it over 100%; it is a pace, not a cohort. Shown only from five leads up.',
+          lrExport: () => {
+            const tok9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/reports/lead-status.xlsx?from=' + from9 + '&to=' + to9,
+              { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+              .then(x9 => { if (!x9.ok) throw new Error(String(x9.status)); return x9.blob(); })
+              .then(b9 => {
+                const a9 = document.createElement('a');
+                a9.href = URL.createObjectURL(b9);
+                a9.download = 'lead-status-' + from9 + '-to-' + to9 + '.xlsx';
+                document.body.appendChild(a9); a9.click(); a9.remove();
+                setTimeout(() => URL.revokeObjectURL(a9.href), 1000);
+                this.toast && this.toast('Exported ' + rows9.length + ' row' + (rows9.length === 1 ? '' : 's'));
+              })
+              .catch(() => this.toast && this.toast('Could not export that', 'error'));
+          },
+        };
+      })(),
       /**
        * CLIENT WORK — the values behind the screen.
        *

@@ -166,3 +166,123 @@ export async function lifecycleAnalytics(scope: { companyIds?: string[] | null }
     recorded: rows.length,
   };
 }
+
+/** One line of the lead status report. */
+export interface LeadStatusRow {
+  ownerId: string | null;
+  owner: string;
+  newLeads: number;
+  toProspect: number;
+  toClient: number;
+  lost: number;
+  openAtEnd: number;
+}
+
+/**
+ * WHAT HAPPENED TO THE LEADS, BETWEEN TWO DATES, PER SALESPERSON.
+ *
+ * `lifecycleAnalytics` above answers "where does the book stand today"; this answers the question
+ * a manager actually asks in a meeting — how many came in last month, how many moved, how many we
+ * lost, and whose they were. Both read the same append-only `LifecycleTransition` rows, so neither
+ * needs anything new to be captured.
+ *
+ * THE COUNTING RULES, because a funnel is only as honest as its definitions:
+ *
+ *  · new leads  — the ARRIVAL row (fromLifecycle null) landing on `lead` inside the range. A lead
+ *                 re-opened after being lost is not new; it never arrives twice.
+ *  · → prospect / → client / lost — counted ONCE PER COMPANY per state, however many times it
+ *                 bounced in the range. Two rows for one company moving back and forth would make
+ *                 a busy week look like a good one.
+ *  · open at end — reconstructed AS AT the end of the range from the transitions, not read off the
+ *                 company's current lifecycle. Asking "how many were open in March" of today's
+ *                 column answers a different question and silently rewrites history every day.
+ *
+ * `owner` is the company's CURRENT owner, not whoever held it at the time. OwnerHistory exists and
+ * could date this properly; it is not read here because the ordinary case is a lead that never
+ * changes hands, and a second as-at join is cost for a correction that is usually zero. A report
+ * run after a book is handed over will credit the new owner — the screen says so.
+ */
+export async function leadStatusReport(opts: {
+  from: string;
+  to: string;
+  companyIds?: string[] | null;
+  source?: string | null;
+  campaign?: string | null;
+}): Promise<{ rows: LeadStatusRow[]; totals: Omit<LeadStatusRow, "ownerId" | "owner">; from: string; to: string; since: string | null }> {
+  const { from, to } = opts;
+  // Inclusive of the end date: `changedAt` is a full ISO timestamp, so "<= to" would drop
+  // everything that happened on the last day after midnight.
+  const end = `${to}T23:59:59.999Z`;
+
+  const cos = await prisma.company.findMany({
+    where: {
+      ...(opts.companyIds ? { id: { in: opts.companyIds } } : {}),
+      ...(opts.source ? { source: opts.source } : {}),
+      ...(opts.campaign ? { campaign: opts.campaign } : {}),
+    },
+    select: { id: true, ownerId: true },
+  });
+  if (!cos.length) {
+    return { rows: [], totals: { newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 }, from, to, since: null };
+  }
+  const ownerOf = new Map(cos.map(c => [c.id, c.ownerId ?? null]));
+
+  // Everything up to the end of the range: the in-range rows are the movements, and the earlier
+  // ones are what each company's state at the end of the range is reconstructed from.
+  const rows = await prisma.lifecycleTransition.findMany({
+    where: { companyId: { in: cos.map(c => c.id) }, changedAt: { lte: end } },
+    orderBy: { changedAt: "asc" },
+    select: { companyId: true, fromLifecycle: true, toLifecycle: true, changedAt: true },
+  });
+
+  const stateAtEnd = new Map<string, string>();
+  const seen = new Set<string>();                       // `${companyId}|${bucket}` — once each
+  const per = new Map<string | null, LeadStatusRow>();
+  const line = (ownerId: string | null) => {
+    let r = per.get(ownerId);
+    if (!r) per.set(ownerId, (r = { ownerId, owner: "", newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 }));
+    return r;
+  };
+  const once = (companyId: string, bucket: keyof LeadStatusRow & ("newLeads" | "toProspect" | "toClient" | "lost")) => {
+    const key = `${companyId}|${bucket}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    line(ownerOf.get(companyId) ?? null)[bucket]++;
+  };
+
+  for (const r of rows) {
+    stateAtEnd.set(r.companyId, r.toLifecycle);          // ordered ascending, so the last wins
+    const day = r.changedAt.slice(0, 10);
+    if (day < from || day > to) continue;
+    if (r.fromLifecycle === null && r.toLifecycle === "lead") once(r.companyId, "newLeads");
+    else if (r.toLifecycle === "prospect") once(r.companyId, "toProspect");
+    else if (r.toLifecycle === "client") once(r.companyId, "toClient");
+    else if (r.toLifecycle === "lost") once(r.companyId, "lost");
+  }
+  for (const [companyId, state] of stateAtEnd) {
+    if (state === "lead" || state === "prospect") line(ownerOf.get(companyId) ?? null).openAtEnd++;
+  }
+
+  const ids = [...per.keys()].filter(Boolean) as string[];
+  const users = ids.length
+    ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+    : [];
+  const nameOf = new Map(users.map(u => [u.id, u.name]));
+
+  const out = [...per.values()].map(r => ({ ...r, owner: r.ownerId ? (nameOf.get(r.ownerId) ?? "Someone who has left") : "Unassigned" }))
+    // Busiest first, and the people with nothing in the period last rather than absent: a rep with
+    // a row of zeros is a fact about the period, and dropping them hides it.
+    .filter(r => r.newLeads || r.toProspect || r.toClient || r.lost || r.openAtEnd)
+    .sort((a, b) => (b.newLeads + b.toClient) - (a.newLeads + a.toClient) || a.owner.localeCompare(b.owner));
+
+  const totals = out.reduce((t, r) => ({
+    newLeads: t.newLeads + r.newLeads, toProspect: t.toProspect + r.toProspect,
+    toClient: t.toClient + r.toClient, lost: t.lost + r.lost, openAtEnd: t.openAtEnd + r.openAtEnd,
+  }), { newLeads: 0, toProspect: 0, toClient: 0, lost: 0, openAtEnd: 0 });
+
+  // The day the history starts. A report that begins before it cannot be read as a whole truth,
+  // and saying so on the screen is cheaper than everyone learning it the hard way.
+  const first = await prisma.lifecycleTransition.findFirst({ orderBy: { changedAt: "asc" }, select: { changedAt: true } });
+
+  return { rows: out, totals, from, to, since: first?.changedAt.slice(0, 10) ?? null };
+}

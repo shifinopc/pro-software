@@ -47,6 +47,9 @@ export const EXPECTED: string[] = [
   // Drives the real engine over a one-step CR template: does finishing that step register the
   // client? Creates and deletes its own fixture client, and refuses a database off this machine.
   "business-setup-cr-check",
+  // The lead report's counting rules on a fixture whose answer is known: bounces counted once,
+  // re-opens are not new leads, "still open" reconstructed as at the end date. Local DBs only.
+  "lead-status-report-check",
   "money-capture-check",
   "node-types-check",
   "number-format-pool-check",
