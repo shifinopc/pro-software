@@ -77,10 +77,16 @@ const real = (role: string) => ROLE_MAP[role] ?? role;
 type N = { id: string; type: string; label: string; config?: any };
 type E = { from: string; to: string; condition?: string };
 
-const task = (id: string, label: string, role: string, slaHours: number, instructions: string, captures: any[] = [], checklist: string[] = []): N => ({
+const task = (id: string, label: string, role: string, slaHours: number, instructions: string, captures: any[] = [], checklist: string[] = [], docType?: string): N => ({
   id, type: "task", label,
   config: {
     assigneeRole: real(role), slaHours, instructions,
+    // WHAT DOCUMENT THIS STEP IS ABOUT. Without it the engine files nothing, and captures named
+    // "crNumber" and "crExpiry" stay run variables - true of the run and invisible to Compliance.
+    // BOTH KEYS: stepDocType() takes the name only when the source says it was chosen deliberately,
+    // because the other source is a run variable and a step must not file against whatever the run
+    // happened to be carrying.
+    ...(docType ? { docTypeSource: "specific", docType } : {}),
     ...(captures.length ? { captures } : {}),
     // Required items block completion, which is what "the checklist must be 100%" means in the chart.
     ...(checklist.length ? { checklist: checklist.map(label => ({ key: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"), label, required: true })) } : {}),
@@ -318,10 +324,22 @@ const nodes: N[] = [
     "Draft, sign and notarise the Articles.",
     [date("aoaOn", "Notarised on"), money("aoaFee", "Fee")],
     ["Signed Articles of Association"]),
+  /**
+   * THE STEP THAT FINISHES THE SETUP, and the only one whose answers leave the run.
+   *
+   * `docType` plus a `purpose` on each capture is what turns three typed answers into the client's
+   * Commercial Registration: the engine files the certificate, and filing it is what adopts the
+   * number as their MAIN CR and lifts the `crPending` waiver. Without the two, all 44 steps could
+   * be completed and the client record would still read `cr: null, crPending: true` — registered
+   * in fact, and a company-being-formed everywhere the system looks.
+   */
   task("cr", "CR application and issue", "setup_exec", 120,
     "Apply for and collect the Commercial Registration.",
-    [text("crNumber", "CR number"), date("crIssued", "Issued on"), date("crExpiry", "Expires on")],
-    ["Commercial Registration"]),
+    [{ ...text("crNumber", "CR number"), purpose: "number" },
+     { ...date("crIssued", "Issued on"), purpose: "issue" },
+     { ...date("crExpiry", "Expires on"), purpose: "expiry" }],
+    ["Commercial Registration"],
+    "Commercial Registration"),
   task("cr_check", "Check the CR against the data sheet", "setup_exec", 24,
     "Every field, against the sheet the client signed. The client must never be the one who finds the mistake.",
     [pick("crMatches", "Everything matches?", "yes,no"), { var: "crMismatch", label: "What is wrong", type: "textarea", required: false, showIf: { var: "crMatches", equals: "no" } }]),

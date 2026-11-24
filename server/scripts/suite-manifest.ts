@@ -44,6 +44,9 @@ export const EXPECTED: string[] = [
   "lifecycle-guard-check",
   "mail-send-check",
   "master-data-pdf-check",
+  // Drives the real engine over a one-step CR template: does finishing that step register the
+  // client? Creates and deletes its own fixture client, and refuses a database off this machine.
+  "business-setup-cr-check",
   "money-capture-check",
   "node-types-check",
   "number-format-pool-check",
@@ -206,6 +209,9 @@ export const TOOLS: string[] = [
   // Retires the duplicate Company Acquisition workflow and, with --undo, puts it back. A one-off
   // migration with a flag, not a check.
   "retire-company-acquisition",
+  // Corrects the installed Business Setup template's CR step (it filed nothing) and clears the
+  // CR-pending waiver from clients that already hold a registration. Idempotent, --apply to write.
+  "fix-business-setup-cr",
   "repoint-old-fee-steps",
   "whatsapp-send-test",
   "render-map",

@@ -13,6 +13,7 @@ import { validateGraph, stepsMissingRole, type GraphIssue } from "./workflow-val
 import { evaluateRule } from "./dealchecklist.js";
 import { figuresForFee } from "./money.js";
 import { unmetPrereqs } from "./jobs.js";
+import { adoptMainCr } from "./establishments.js";
 import { requireAuth, requireStaff, requireWriteRole, logActivity, logNotification, logAudit } from "./auth.js";
 
 import { MONEY, parseMoney, minorFromTyped, moneyAmountText, recordDisbursements } from "./disbursements.js";
@@ -2119,6 +2120,16 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
               customData: custom, status, daysLeft },
           });
           await supersede(alsoLive, made.id, docType1, person, inst.id, task.nodeId);
+          // THE SAME ADOPTION THE DOCUMENTS TAB DOES. A Commercial Registration filed for a client
+          // who is still waiting for one becomes their main CR and lifts the waiver — and that lived
+          // only in the CRUD create route, so a certificate filed BY A RUN did nothing. Which is the
+          // end of a Business Setup: 44 steps, and the client record still said `cr: null`.
+          const adopted1 = await adoptMainCr(made).catch(() => null);
+          if (adopted1) {
+            await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "company.cr_adopted",
+              detail: `CR ${adopted1} is now this client's main registration`, actor: "engine", at: nowISO() } }).catch(() => {});
+            logActivity({ type: "client", message: `CR ${adopted1} issued — ${inst.clientName || "the client"} is now registered`, user: "System" });
+          }
           await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "document.created", detail: `${docType1} for ${person} → ${expiry ?? "no expiry"}`, actor: opts.actor ?? "engine", at: nowISO() } });
           logActivity({ type: "compliance", message: `${docType1} filed for ${person} from "${task.title}"${inst.clientName ? ` (${inst.clientName})` : ""}` });
         } else {

@@ -171,9 +171,15 @@ export async function updateEstablishment(companyId: string, id: string, input: 
 
 /** The client form still edits Company.cr: keep the main CR in step, creating it if there was none. */
 export async function syncMainFromCompany(companyId: string) {
-  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { cr: true, name: true, city: true } });
+  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { cr: true, name: true, city: true, crPending: true } });
   const cr = normCr(co?.cr);
   if (!co || !isRealCr(cr)) return;
+  // THE WAIVER GOES WHEN THE REGISTRATION ARRIVES, however it arrived. `crPending` says "the firm is
+  // getting them one"; a client holding a real CR is not waiting for one, and a flag that outlives
+  // the fact it describes is worse than no flag. mirrorCompanyCr already did this for the CRs card
+  // and adoptMainCr for a filed certificate — this is the third door, the client form, and it was
+  // the only one that left the flag standing. Two live clients were found in exactly that state.
+  if (co.crPending) await prisma.company.update({ where: { id: companyId }, data: { crPending: false } });
   const main = await mainEstablishment(companyId);
   if (!main) {
     const existing = await findByCr(companyId, cr);
