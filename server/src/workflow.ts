@@ -3109,6 +3109,150 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
   }
 });
 /**
+ * THE RUN OF STEPS ONE PERSON CAN DO WITHOUT PUTTING THE FILE DOWN.
+ *
+ * An Iqama renewal is four task nodes in a row — the permit, the Jawazat payment, the violations
+ * check, the renewal itself — every one of them the same officer's, with nothing between them that
+ * anybody else decides. They were four separate visits to the same sheet because the engine creates
+ * each task only when the one before it finishes, so the form could only ever show one.
+ *
+ * This walks forward from a task's node and returns the nodes that follow it WHILE ALL OF THIS
+ * HOLDS, stopping at the first that does not:
+ *
+ *   · exactly one way out of the current node — a decision or a split is somebody choosing, and a
+ *     form cannot ask for answers to a branch that has not been taken yet
+ *   · the next node is a plain `task` — an approval belongs to a second person by design (the
+ *     engine's own segregation rule), and an automatic node has nobody to ask
+ *   · it is assigned the same way — same role, or the same named person
+ *   · it has no checklist — documents are received and verified one at a time, against a step that
+ *     is open; collecting five steps' worth of uploads in one form is a different screen
+ *   · nothing loops back to it from further on — a rework wire means this node can be reached more
+ *     than once, and "fill it in now" would be answering the wrong visit
+ *
+ * The cap is there because this is a form, not a batch tool: past half a dozen steps the officer is
+ * no longer looking at one piece of work.
+ */
+const CHAIN_MAX = 6;
+
+export function stepChain(g: Graph, fromNodeId: string): Node[] {
+  const start = getNode(g, fromNodeId);
+  if (!start) return [];
+  const out: Node[] = [];
+  let cur = start;
+  while (out.length < CHAIN_MAX) {
+    const edges = outEdges(g, cur.id);
+    if (edges.length !== 1) break;
+    const next = getNode(g, edges[0].to);
+    if (!next || next.type !== "task") break;
+    // A node anything else also points at can be arrived at twice — a rework loop's target. Its
+    // turn is whichever visit it is on, and this form would be answering for the wrong one.
+    if (inDegree(g, next.id) !== 1) break;
+    const a = (cur.config ?? {}) as any, b = (next.config ?? {}) as any;
+    if (String(b.assigneeRole ?? "") !== String(a.assigneeRole ?? "")) break;
+    if (String(b.assignee ?? "") !== String(a.assignee ?? "")) break;
+    if (Array.isArray(b.checklist) && b.checklist.length) break;
+    if (b.checklistSource) break;
+    out.push(next);
+    cur = next;
+  }
+  return out;
+}
+
+/**
+ * What the sheet needs to draw the rest of the run: each following step's id, title, brief and the
+ * questions it will ask. Captures are resolved the same way the engine resolves them when it
+ * creates the task, so the form shows the fields the step will actually carry.
+ */
+R.get("/tasks/:id/chain", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId } });
+    const tpl = inst ? await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId } }) : null;
+    if (!tpl || !task.nodeId) return res.json({ steps: [] });
+    const g = asGraph(tpl.graph);
+    const vars = ((inst as any)?.variables ?? {}) as Record<string, any>;
+    const steps = [];
+    for (const n of stepChain(g, task.nodeId)) {
+      steps.push({
+        nodeId: n.id,
+        title: n.label ?? n.id,
+        instructions: (n.config as any)?.instructions ?? "",
+        slaHours: (n.config as any)?.slaHours ?? null,
+        captures: (await resolveCaptures(n.config, vars)) ?? [],
+      });
+    }
+    res.json({ steps });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * COMPLETE A RUN OF STEPS IN ONE PRESS.
+ *
+ * Done on the server, not as a loop in the browser, for one reason that matters: each step's task
+ * does not exist until the step before it finishes, so a browser loop would be completing a task,
+ * re-reading the run, hoping the next one has appeared, and guessing which of several live tasks is
+ * the one it meant. Here the next task is whatever the engine just created against the node we are
+ * expecting, and if that is not what appeared, the run stops.
+ *
+ * STOPS AT THE FIRST REFUSAL AND SAYS WHERE. Everything already completed stays completed — this is
+ * a sequence of real state changes, not a transaction, and pretending otherwise by rolling back
+ * would undo work the engine has already acted on (documents filed, renewals started, a CR
+ * adopted). The response names the step that stopped it and why, and the sheet reopens there.
+ */
+R.post("/tasks/:id/complete-chain", requireAuth, requireStaff, async (req, res) => {
+  const a = (req as any).auth;
+  const done: string[] = [];
+  try {
+    const first = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!first) return res.status(404).json({ error: "Task not found" });
+    const me = await prisma.user.findUnique({ where: { id: a.sub } });
+    if (!(await mayActOnTask(a, me, first))) return res.status(403).json({ error: "This step is assigned to another role" });
+
+    const body = req.body ?? {};
+    const rest: Array<{ nodeId: string; variables?: any }> = Array.isArray(body.steps) ? body.steps : [];
+    const inst0 = await prisma.workflowInstance.findUnique({ where: { id: first.instanceId } });
+    const tpl = inst0 ? await prisma.workflowTemplate.findUnique({ where: { id: inst0.templateId } }) : null;
+    // The browser's list is checked against the graph rather than trusted: a stale sheet naming a
+    // step that is no longer next must not drive the engine somewhere it was not going.
+    const allowed = (tpl && first.nodeId) ? stepChain(asGraph(tpl.graph), first.nodeId).map(n => n.id) : [];
+    for (const [i, s] of rest.entries()) {
+      if (allowed[i] !== s.nodeId) {
+        return res.status(409).json({
+          error: "This run has moved on since the form was opened — reopen the step and try again.",
+          expected: allowed, got: rest.map(x => x.nodeId),
+        });
+      }
+    }
+
+    let inst = await completeTask(first.id, { actor: me?.name ?? a.sub, actorId: a.sub, outcome: body.outcome, checklist: body.checklist, variables: body.variables });
+    await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${first.title} (${first.id})` });
+    done.push(first.title);
+
+    for (const step of rest) {
+      const next = await prisma.workflowTask.findFirst({
+        where: { instanceId: first.instanceId, nodeId: step.nodeId, status: "active" },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!next) {
+        return res.status(409).json({ error: `"${step.nodeId}" did not open — the run went a different way. The steps before it are done.`, completed: done, instance: inst });
+      }
+      if (!(await mayActOnTask(a, me, next))) {
+        return res.status(403).json({ error: `"${next.title}" is assigned to another role, so it was left open.`, completed: done, instance: inst });
+      }
+      inst = await completeTask(next.id, { actor: me?.name ?? a.sub, actorId: a.sub, variables: step.variables });
+      await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${next.title} (${next.id})`, detail: "completed as part of a run" });
+      done.push(next.title);
+    }
+    res.json({ instance: inst, completed: done });
+  } catch (e: any) {
+    // The steps already finished are reported with the failure: "it did not work" would be untrue,
+    // and the officer needs to know where in the run they now are.
+    res.status(400).json({ error: e.message, completed: done, ...(e.fields ? { fields: e.fields, rules: e.rules } : {}) });
+  }
+});
+
+/**
  * WHERE EACH RULE IS ACTUALLY USED — one answer, two readers.
  *
  * The delete guard and the rules screen both need this. Computing it twice is how the screen ends up

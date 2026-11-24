@@ -47,6 +47,9 @@ export const EXPECTED: string[] = [
   // Drives the real engine over a one-step CR template: does finishing that step register the
   // client? Creates and deletes its own fixture client, and refuses a database off this machine.
   "business-setup-cr-check",
+  // Where the one-press run of steps stops, and that the engine really opens each next task the
+  // moment the one before it closes — the assumption the whole chain rests on.
+  "step-chain-check",
   // The lead report's counting rules on a fixture whose answer is known: bounces counted once,
   // re-opens are not new leads, "still open" reconstructed as at the end date. Local DBs only.
   "lead-status-report-check",
@@ -221,6 +224,9 @@ export const TOOLS: string[] = [
   // Removes the unkeyed twin of every SLA breach notification. notify.ts no longer writes one;
   // this clears what is already filed. Idempotent, --apply to delete.
   "dedupe-sla-notifications",
+  // Takes the work permit fee off "Issue Work Permit" — the capture, the rule it feeds and the
+  // instruction line, because removing only the first deadlocks the step. Idempotent, --apply.
+  "drop-permit-fee-capture",
   "repoint-old-fee-steps",
   "whatsapp-send-test",
   "render-map",

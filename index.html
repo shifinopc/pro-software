@@ -16729,6 +16729,15 @@
                 <!-- data-cap so the blocked Complete button can scroll to the answer it is waiting
                      for. A dead grey button and one small orange line were all the sheet said; the
                      field itself is where the reader is looking. -->
+                <!-- WHOSE QUESTION THIS IS. One form now carries the steps after this one as well,
+                     and without a heading above the first field of each the officer is answering a
+                     column of boxes with no idea which piece of work they belong to. -->
+                <sc-if value="{{ c.grpShow }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:6px;">
+                    <span style="font-size:9px; font-weight:800; letter-spacing:.12em; color:#7C00FF; text-transform:uppercase; white-space:nowrap;">then · {{ c.grp }}</span>
+                    <span style="flex:1; height:1px; background:#EFE9FA;"></span>
+                  </div>
+                </sc-if>
                 <div data-cap="{{ c.var }}">
                   <label class="fm-lab">{{ c.label }} <sc-if value="{{ c.req }}" hint-placeholder-val="{{ true }}"><span class="fm-req">*</span></sc-if><sc-if value="{{ c.ruleErr }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#C0353A; background:#FEECEC; padding:2px 7px; border-radius:99px;">CHECK THIS</span></sc-if><sc-if value="{{ c.missing }}" hint-placeholder-val="{{ false }}"><span style="margin-left:6px; font-size:9px; font-weight:800; letter-spacing:.06em; color:#B8860B; background:#FEF4E2; padding:2px 7px; border-radius:99px;">NEEDED</span></sc-if></label>
                   <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
@@ -30404,6 +30413,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // stuck on "Loading run steps…" for good. Task List did the fetch; My Tasks did not, and the same
     // task therefore showed its process from one screen and never from the other.
     // The document a step must check, and the server's verdict on it.
+    // THE REST OF THE RUN THIS PERSON CAN FINISH NOW. The server decides where it stops - a gate,
+    // a branch, a change of owner, a step with documents to receive - because only it has the
+    // graph. A plain task is not part of a run and answers 404, so a failure here says nothing.
+    this._loadChain = (stepId9) => {
+      this.setState({ wdChain: null });
+      const tok8 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + stepId9 + '/chain', { headers: tok8 ? { Authorization: 'Bearer ' + tok8 } : {} })
+        .then(r8 => (r8.ok ? r8.json() : null))
+        // Guarded on the row still being open, like the verify call below: a fast click-through
+        // would otherwise pour one run's upcoming steps into another step's form.
+        .then(v8 => { if (v8 && Array.isArray(v8.steps) && v8.steps.length && this.state.workRow === stepId9) this.setState({ wdChain: { for: stepId9, steps: v8.steps } }); })
+        .catch(() => {});
+    };
     this._loadVerify = (stepId9) => {
       const tok9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + stepId9 + '/verify', { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
@@ -30433,6 +30455,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // steps into another task's drawer.
         .then(v2 => { if (v2 && this.state.workRow === rowId) this.setState({ wfRunDetail: v2 }); })
         .catch(() => {});
+      this._loadChain && this._loadChain(rowId);
     };
     const allTasks = [...createdObjs, ...taskDefs].map((t, i) => {
       const overdue = t.dueIn < 0 && t.status !== 'Done' && t.status !== 'Cancelled';
@@ -38296,7 +38319,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         statusChip: w.kind === 'approval' ? 'Awaiting decision' : 'Active step', stBg: (kindBadge[w.kind] || ['—', '#6F6C7A', '#F3F1F7'])[2], stColor: (kindBadge[w.kind] || ['—', '#6F6C7A', '#F3F1F7'])[1],
         // Fetch the document gate with the drawer, so the verdict is on screen before anyone reaches
         // for Complete. The server makes the same call when completing, so the two cannot disagree.
-        open: () => { this.setState({ workRow: w.id, wdVerify: null, wdVerifyFor: w.id }); this._loadVerify && this._loadVerify(w.id); },
+        open: () => { this.setState({ workRow: w.id, wdVerify: null, wdVerifyFor: w.id }); this._loadVerify && this._loadVerify(w.id); this._loadChain && this._loadChain(w.id); },
       };
     });
     const allWorkRows = [...myPlainRows, ...myStepRows].map(r => ({
@@ -38510,9 +38533,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
        * Resolved in declaration order, each field's value counting only while the field itself is
        * shown. A question that was never asked contributes nothing to the ones after it.
        */
+      // THE STEPS AFTER THIS ONE, as the server allowed them, and every question the form is
+      // currently asking. Declared here rather than beside the fields because the three things
+      // that reason about questions - what is visible, what is still missing, and what gets drawn
+      // - must reason about the SAME list. They did not: visibility was worked out from this step
+      // alone, so "Late payment amount" went on being asked, and counted as missing, after the
+      // officer had answered "Late payment charged? No" on a step further down the form.
+      const _chainSteps9 = (this.state.wdChain && this.state.wdChain.for === selStep.id)
+        ? (this.state.wdChain.steps || []) : [];
+      const _runCaps9 = [].concat((selStep.captures || []), ...(_chainSteps9.map(st9 => st9.captures || [])));
       const _capVis = (() => {
         const shown = {}, eff = {};
-        for (const c of (selStep.captures || [])) {
+        for (const c of _runCaps9) {
           if (!c || !c.var) continue;
           const cond = c.showIf;
           let vis = true;
@@ -38535,7 +38567,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (String(c.type) === 'money') return !!String((v && v.amount) == null ? '' : v.amount).trim();
         return !!String(v == null ? '' : v).trim();
       };
-      const _capsMissing = (selStep.captures || []).filter(_capShown)
+      // Across the whole run being filled, not just this step: pressing one button for four steps
+      // means one button's worth of refusal, and it has to name whichever step is short an answer.
+      const _capsMissing = _runCaps9.filter(_capShown)
         .filter(c => !(c.required === false || c.optional === true))
         .filter(c => !_capAnswered(c))
         .map(c => c.label || c.var);
@@ -38577,9 +38611,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         }
         return out;
       };
-      const caps = (selStep.captures || []).filter(_capShown).map(c => {
+      // Answers for every step go in ONE bag: the variable names are unique across a run, and one
+      // bag means the fee prefill, the showIf rules and the typed-in-progress guards all keep
+      // working unchanged. It is split back out per step at the moment of sending.
+      const _mkCap9 = (c, grp, grpShow) => {
         const val = cap[c.var] || '';
         return {
+          // The step this question belongs to, printed once above the first of its fields. Without
+          // it the form is one undifferentiated column and nobody can tell which work they are
+          // answering for - which matters most on the step they have not opened yet.
+          grp: grp || '', grpShow: !!grpShow,
           var: c.var, label: c.label, type: c.type,
           // Rendered from STATE, not by poking the node. An inline highlight written on click is
           // gone on the next render — this runtime replaces the elements — which is the same lesson
@@ -38673,7 +38714,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             };
           })(),
         };
+      };
+      const caps = (selStep.captures || []).filter(_capShown).map(c => _mkCap9(c, '', false));
+      const _chainCaps9 = [];
+      _chainSteps9.forEach(st9 => {
+        (st9.captures || []).filter(_capShown).forEach((c9, i9) => _chainCaps9.push(_mkCap9(c9, st9.title, i9 === 0)));
       });
+      const _allCaps9 = caps.concat(_chainCaps9);
       // No SLA on the step means no deadline to be late against — the same rule the list applies.
       // Without the guard `null - elapsedH` is a small negative number, which rounds to 0 and had
       // every step with no SLA announcing itself "0h over SLA" in red from the moment it opened.
@@ -38855,7 +38902,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           if (rejected9) return 'Complete blocked — ' + rejected9 + ' required document' + (rejected9 === 1 ? '' : 's') + ' rejected';
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
-        wdCaptures: caps, wdHasCaptures: (selStep.captures || []).length > 0,
+        wdCaptures: _allCaps9, wdHasCaptures: _allCaps9.length > 0,
         wdRuleErrShow: !!_ruleErr,
         wdRuleMsgs: _ruleErr ? (_ruleErr.rules || []).map(r => ({ text: r.message })) : [],
         // A workflow step has its own next step — the graph decides it — so there is nothing to
@@ -38890,13 +38937,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // Only what the form actually asked. A value typed into a field that has since been
             // hidden — "paid", reference entered, then switched back to unpaid — would otherwise be
             // sent as the answer to a question no longer on screen.
-            const shown2 = new Set((selStep.captures || []).filter(_capShown).map(c2 => c2.var));
-            const vars2 = {}; Object.entries(cap).forEach(([k2, v2]) => { if (shown2.has(k2) && v2 && String(v2).trim()) vars2[k2] = v2; });
+            // Each step gets ONLY the answers to the questions IT asked. The bag is shared because
+            // the fields share one form; handing the whole bag to every step would have the engine
+            // refuse it outright - "this step does not collect ..." is a real error it raises - and
+            // would file one step's fee against another's.
+            const _varsFor9 = (capList9) => {
+              const shown9 = new Set((capList9 || []).filter(_capShown).map(c2 => c2.var));
+              const out9 = {};
+              Object.entries(cap).forEach(([k2, v2]) => { if (shown9.has(k2) && v2 && String(v2).trim()) out9[k2] = v2; });
+              return out9;
+            };
+            const vars2 = _varsFor9(selStep.captures);
             const t2 = localStorage.getItem('stimespro:token');
-            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ checklistState: chkState, variables: vars2, ...(oc9 ? { outcome: oc9 } : {}) }) })
+            const chain9 = _chainSteps9.map(st9 => ({ nodeId: st9.nodeId, variables: _varsFor9(st9.captures) }));
+            const url9 = '/api/workflow/tasks/' + selStep.id + (chain9.length ? '/complete-chain' : '/complete');
+            const body9 = { checklistState: chkState, variables: vars2, ...(oc9 ? { outcome: oc9 } : {}), ...(chain9.length ? { steps: chain9 } : {}) };
+            fetch((this._apiBase || 'http://localhost:4100') + url9, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(body9) })
               .then(r2 => r2.ok
-                ? r2.json().catch(() => null).then(inst2 => {
-                    this.toast('Step completed — workflow advanced');
+                ? r2.json().catch(() => null).then(res2 => {
+                    // Two shapes: the chain route wraps the run and says what it finished, the
+                    // single-step route answers with the run itself.
+                    const inst2 = (res2 && res2.instance) ? res2.instance : res2;
+                    const didN9 = (res2 && Array.isArray(res2.completed)) ? res2.completed.length : 1;
+                    this.toast(didN9 > 1 ? (didN9 + ' steps completed — workflow advanced') : 'Step completed — workflow advanced');
                     // The body is the run with its tasks — that is how the sheet knows whether the
                     // next step is yours, somebody else's, or that there is none.
                     this._afterStepDone(selStep.instanceId, selStep.id, inst2);
@@ -38906,7 +38969,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 // else stays a toast, because there is nothing on screen to point at.
                 if (j2 && Array.isArray(j2.fields) && j2.fields.length) {
                   this.setState({ wfRuleErr: { id: selStep.id, fields: j2.fields, rules: (j2.rules && j2.rules.length) ? j2.rules : [{ message: j2.error }] } });
-                } else this.toast(j2.error || 'Could not complete', 'error');
+                } else {
+                  // Part of a run may have gone through before the refusal. "Could not complete"
+                  // on its own would leave the officer believing none of it was filed.
+                  const didSome9 = j2 && Array.isArray(j2.completed) && j2.completed.length;
+                  this.toast((didSome9 ? (j2.completed.length + ' step(s) completed, then stopped: ') : '') + (j2.error || 'Could not complete'), 'error');
+                  if (didSome9) this._afterStepDone(selStep.instanceId, selStep.id, j2.instance || null);
+                }
               }))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'done' }, workRow: null });
@@ -39464,7 +39533,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const firstLine9 = (String(drawerApi.wdInstructions || '').match(/[^\r\n]+/) || [''])[0].trim();
       drawerApi = {
         ...drawerApi,
-        wdCompleteLabel: moreAhead9 ? 'Complete step' : 'Complete task',
+        // Says how many steps the press will finish. A button labelled "Complete step" over a form
+        // holding four steps' questions is the one place this screen could mislead somebody into
+        // thinking the rest were saved for later.
+        wdCompleteLabel: (drawerApi.wdChainCount > 0)
+          ? ('Complete ' + (drawerApi.wdChainCount + 1) + ' steps')
+          : (moreAhead9 ? 'Complete step' : 'Complete task'),
         // ONE BUTTON PER WAY OUT, for a step the graph wires to end more than one way. The branch
         // names come from whoever drew the workflow ("ok" / "fix", "consent" / "blocked"), so they
         // are shown as written rather than translated into something this screen invented.
