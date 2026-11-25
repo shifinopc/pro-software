@@ -4450,6 +4450,117 @@ app.post("/api/invoices/:id/void", requireAuth, requireStaff, requireWriteRole, 
 });
 
 /**
+ * CORRECT AN ISSUED INVOICE — void it and raise its replacement, in one act.
+ *
+ * An issued invoice cannot be edited: the client holds a copy, the figures are frozen on a tax
+ * document, and in Saudi Arabia a tax invoice is corrected by a credit or debit note against it,
+ * never by rewriting it. The lawful correction while nothing has been paid is to cancel this one
+ * and issue another — which the void route and the create route could already do SEPARATELY. Doing
+ * it by hand meant voiding, then retyping every line from a document you had just cancelled, which
+ * is how people end up editing the database instead.
+ *
+ * ONE TRANSACTION, because the halfway states are both bad. Void without the replacement and the
+ * work is uninvoiced with nothing saying so; create without the void and the client holds two live
+ * invoices for the same work.
+ *
+ * It refuses once money has been received, for the same reason the void route does: a payment
+ * against a cancelled invoice is orphaned cash. That case needs a CREDIT NOTE, which this system
+ * does not have yet — so the refusal says so rather than pretending the problem is the amount.
+ *
+ * The replacement arrives as a DRAFT. Nothing is sent to the client and nothing is owed until
+ * somebody approves it, which is also the moment the figures are checked against the tax identity.
+ */
+app.post("/api/invoices/:id/correct", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const inv = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+  if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+  const status = String(inv.status ?? "").toLowerCase();
+  if (status === "draft")
+    return res.status(409).json({ error: `${inv.number} is still a draft — edit it directly, nothing has been issued.` });
+  if (status === "void") {
+    const already = inv.supersededById
+      ? await prisma.invoice.findUnique({ where: { id: inv.supersededById }, select: { number: true } })
+      : null;
+    return res.status(409).json({
+      error: `${inv.number} is already void${already ? ` — it was replaced by ${already.number}` : ""}.`,
+      ...(already ? { replacedBy: already.number } : {}),
+    });
+  }
+
+  // Same rule and same figure as the void route: `amount` summed, because that is what it compares.
+  const paid = await prisma.payment.aggregate({ where: { invoiceId: inv.id }, _sum: { amount: true } });
+  const received = paid._sum.amount ?? 0;
+  if (received > 0)
+    return res.status(409).json({
+      error: `${inv.currency} ${received.toLocaleString()} has been received against ${inv.number}, so it cannot be cancelled.`
+        + ` Correcting a paid invoice needs a credit note.`,
+      received,
+    });
+
+  const reason = String((req.body ?? {}).reason ?? "").trim();
+  if (!reason) return res.status(400).json({ error: "A reason is required — it stays on both documents" });
+
+  // Outside the transaction: it reads the invoice table to find the highest number in use, and
+  // deriving it inside would be reading the rows the transaction is about to write to.
+  const number = await nextInvoiceNumber();
+
+  try {
+    const replacement = await prisma.$transaction(async (tx) => {
+      const made = await tx.invoice.create({
+        data: {
+          number,
+          companyId: inv.companyId, clientName: inv.clientName,
+          // The figures as they stand. The point of a correction is usually that ONE of them is
+          // wrong, and a replacement that arrives blank makes the person retype the four that were
+          // right. It opens as a draft, so every one of them is still editable.
+          amount: inv.amount, subtotalMinor: inv.subtotalMinor, vatMinor: inv.vatMinor,
+          totalMinor: inv.totalMinor, vatRateBp: inv.vatRateBp, currency: inv.currency,
+          // Dates carried over rather than reset to today: the replacement bills the same work for
+          // the same period. Back-dating is a decision for whoever approves it, on a draft.
+          date: inv.date, dueDate: inv.dueDate,
+          services: inv.services, items: inv.items ?? [], notes: inv.notes,
+          // The links the original carried. Losing them would leave the quotation looking uninvoiced
+          // and the add-on looking unpaid.
+          quotationId: inv.quotationId, addonServiceId: inv.addonServiceId,
+          status: "draft",
+          revisesId: inv.id,
+        },
+      });
+      await tx.invoice.update({
+        where: { id: inv.id },
+        data: { status: "void", voidedAt: new Date().toISOString(), voidReason: reason, supersededById: made.id },
+      });
+      // Ministry payments this invoice re-charged follow the replacement. Left pointing at a
+      // cancelled invoice they would read as billed while nothing billable exists, and the client
+      // would never be charged for them.
+      const moved = await tx.disbursement.updateMany({ where: { invoiceId: inv.id }, data: { invoiceId: made.id } });
+      return { made, moved: moved.count };
+    });
+
+    // Stop the old one chasing: the dunning ladder and any arrangement are meaningless once it is
+    // cancelled. Same clean-up the void route does.
+    await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: `dunning:${inv.id}:` } } });
+
+    const me = await prisma.user.findUnique({ where: { id: a?.sub }, select: { name: true } });
+    logActivity({
+      type: "finance",
+      message: `Invoice ${inv.number} corrected — replaced by ${replacement.made.number} (${reason})`,
+      user: me?.name ?? "Staff",
+    });
+    await logAudit({
+      action: "invoice.correct", actorId: a?.sub, target: inv.id,
+      detail: `${inv.number} → ${replacement.made.number} · ${inv.currency} ${inv.amount} · ${reason}`
+        + (replacement.moved ? ` · ${replacement.moved} disbursement${replacement.moved === 1 ? "" : "s"} moved` : ""),
+      ip: clientIp(req),
+    });
+    res.status(201).json({ invoice: replacement.made, voided: inv.number, disbursementsMoved: replacement.moved });
+  } catch (e: any) {
+    res.status(409).json({ error: e?.message ?? "Could not correct this invoice" });
+  }
+});
+
+/**
  * Take an add-on off a client's subscription. Shared by the "Remove" control on the client's plan
  * and by voiding the invoice that paid for it, so both routes leave the same state behind.
  * Returns whether anything was actually removed — callers report honestly rather than claiming it.

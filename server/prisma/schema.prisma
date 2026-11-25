@@ -803,10 +803,23 @@ model Invoice {
   // because a tax document that vanishes is worse than one marked cancelled.
   voidedAt       String?
   voidReason     String?
+  /// CORRECTION CHAIN — the same shape as the one on Quotation, deliberately, so a reader who knows
+  /// one knows the other.
+  ///
+  /// An issued invoice is never edited: the client holds a copy and the figures are frozen on a tax
+  /// document. It is corrected by voiding it and raising a replacement, and these two columns are
+  /// what make that a CORRECTION rather than two unrelated records — one cancelled for reasons
+  /// nobody can reconstruct, and one that appeared from nowhere.
+  ///
+  /// `revisesId` points back one step, so the chain can be walked. `supersededById` is set on the
+  /// old one and is what lets a list say "replaced by INV-2026-021" instead of just "void".
+  revisesId      String?
+  supersededById String?
 
   @@index([status])
   @@index([date])
   @@index([promisedDate])
+  @@index([revisesId])
 }
 
 model User {
