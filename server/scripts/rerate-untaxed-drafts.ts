@@ -36,6 +36,19 @@ import { assertTarget } from "./_live-guard.js";
 
 assertTarget("rerate-untaxed-drafts");
 const APPLY = process.argv.includes("--apply");
+/**
+ * ALSO RE-RATE QUOTATIONS ALREADY CONVERTED TO AN INVOICE.
+ *
+ * Off by default, because an invoiced quotation is the record of what was offered and accepted and
+ * rewriting it is rewriting history. It is offered because leaving them behind creates a worse
+ * problem than it avoids: the invoice raised from one IS a draft, so it was re-rated, and the pair
+ * then disagree — QT-030 saying 34,500 beside INV-2026-008 saying 33,600, with nothing on either
+ * document explaining the gap. A quotation and the invoice it became must not state two prices.
+ *
+ * Still never a SENT or APPROVED quotation: there the client holds the old figure, and the fix is a
+ * revision they receive rather than an edit they never see.
+ */
+const INVOICED = process.argv.includes("--invoiced");
 
 type Line = { name?: string; units?: number; price?: number; vat?: string };
 
@@ -68,8 +81,10 @@ async function main() {
 
       const label = `${String(d.number ?? d.id).padEnd(14)} ${String(d.status).padEnd(9)}`;
 
-      // Only a draft. Anything else is somebody else's copy of the truth.
-      if (String(d.status).toLowerCase() !== "draft") {
+      // Only a draft — or, with --invoiced, a quotation already converted to one. Anything else is
+      // somebody else's copy of the truth.
+      const status = String(d.status).toLowerCase();
+      if (!(status === "draft" || (INVOICED && kind === "quotation" && status === "invoiced"))) {
         skipped++;
         held.push(`  ${label} VAT ${(got / 100).toFixed(2)} → would be ${(want / 100).toFixed(2)}  — left alone`);
         continue;
@@ -107,10 +122,10 @@ async function main() {
     }
   }
 
-  if (done.length) console.log(`\ndrafts re-rated:\n${done.join("\n")}`);
-  if (held.length) console.log(`\nnot drafts — reported, not touched:\n${held.join("\n")}`);
+  if (done.length) console.log(`\nre-rated:\n${done.join("\n")}`);
+  if (held.length) console.log(`\nout of scope — reported, not touched:\n${held.join("\n")}`);
   if (bad.length) console.log(`\nrefused:\n${bad.join("\n")}`);
-  console.log(`\n${fixed} draft${fixed === 1 ? "" : "s"} ${APPLY ? "re-rated" : "would be re-rated"}` +
+  console.log(`\n${fixed} document${fixed === 1 ? "" : "s"} ${APPLY ? "re-rated" : "would be re-rated"}` +
     `, removing ${(freedMinor / 100).toFixed(2)} of VAT that was charged on untaxed lines.` +
     `\n${skipped} issued or sent document${skipped === 1 ? "" : "s"} left alone` +
     (refused ? `, ${refused} refused.` : "."));
