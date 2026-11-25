@@ -18565,7 +18565,57 @@ class Component extends DCLogic {
       if (el.value !== want) el.value = want;
     }
   }
+  /**
+   * EVERY REFUSAL SAYS ITSELF OUT LOUD.
+   *
+   * A dialog writes its error where it belongs — beside the field, or above the footer — and in a
+   * form taller than the screen that is frequently out of sight. Pressing Save then looks like
+   * pressing nothing: Add a lead writes "Give the lead a name" below eleven fields and a duplicate
+   * panel, and the only clue that anything happened is that nothing happened.
+   *
+   * So the message is ALSO spoken. The inline one stays exactly where it was — a toast cannot say
+   * WHICH field is wrong and it disappears, so one does not replace the other.
+   *
+   * HOOKED ON STATE, NOT ON THE DOM. There are 124 distinct error keys in this console and they are
+   * drawn two dozen different ways — a shared `.fm-err` box in some dialogs, an inline-styled panel
+   * in others. Watching the markup would catch some and miss the rest, and would need a line in
+   * every new dialog. Every one of them travels through setState under a key ending in Err or
+   * Error, so that is the one place to listen, and the next dialog is covered without anyone
+   * remembering to do anything.
+   *
+   * `…ErrField` is excluded: it names the field to highlight, it is not a sentence.
+   */
+  _announceErrors() {
+    if (this._errHooked) return;
+    this._errHooked = true;
+    const base = this.setState.bind(this);
+    const said = new Map();
+    this.setState = (patch, ...rest) => {
+      try {
+        if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
+          for (const k of Object.keys(patch)) {
+            if (!/(Err|Error)$/.test(k) || /ErrField$/.test(k)) continue;
+            const v = patch[k];
+            const msg = typeof v === 'string' ? v.trim() : '';
+            // Clearing an error is not an error. Anything under three characters is a flag, not a
+            // sentence somebody wrote to be read.
+            if (msg.length < 3) { said.delete(k); continue; }
+            const was = said.get(k);
+            // The same message set twice by one submit is one message. Six seconds, because a
+            // person who presses Save again after reading it deserves to be told again.
+            if (was && was.msg === msg && Date.now() - was.at < 6000) continue;
+            said.set(k, { msg, at: Date.now() });
+            // Out of this call stack: toast() sets state itself, and a dialog mid-update should
+            // finish updating before anything else runs.
+            setTimeout(() => this.toast(msg, 'error'), 0);
+          }
+        }
+      } catch (e) { /* announcing must never be the reason a save fails */ }
+      return base(patch, ...rest);
+    };
+  }
   componentDidMount() {
+    this._announceErrors();
     // A FIXED PANEL DOES NOT MOVE WITH ITS FIELD, so anything that moves the field has to re-place
     // it: scrolling the dialog, scrolling the page behind it, or resizing. Capture phase, because a
     // scroll inside .fm-body does not bubble. Throttled to a frame, and it does nothing at all
