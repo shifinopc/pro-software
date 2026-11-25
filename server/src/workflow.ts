@@ -2947,6 +2947,9 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
   //
   // `url` rides along so a login the officer has just identified can be used in place, instead of
   // sending them to the vault to find the row they already have on screen.
+  // Who may open the password on this panel — the same three the reveal route itself admits. A hint
+  // for the UI, not the gate: the server still decides when the button is pressed.
+  const CAN_REVEAL = ["super_admin", "admin", "pro_officer"];
   const asChoice = (c: typeof all[number]) => ({
     id: c.id, label: c.label, username: c.username, nafath: c.nafath, nafathId: c.nafathId, url: c.url,
     cr: c.establishment ? [c.establishment.crNumber, c.establishment.name].filter(Boolean).join(" · ") : "the client as a whole",
@@ -2958,12 +2961,12 @@ R.get("/tasks/:id/credential", requireAuth, requireStaff, async (req, res) => {
     portal: task.govCenter, found: false, ambiguous: true,
     choices: shortlist.map(asChoice),
     // The picked choice renders as the found panel, reveal and all, so it needs the same answer.
-    canReveal: a?.role === "admin" || a?.role === "super_admin",
+    canReveal: CAN_REVEAL.includes(String(a?.role ?? "")),
     licence: await portalLicence(inst.companyId, task.govCenter),
     reason: `${shortlist.length} ${task.govCenter} logins are on file for this client${runCr ? " and this CR" : ""}. Pick the one this step is for — they are different registrations, not copies.`,
   });
 
-  const canReveal = a?.role === "admin" || a?.role === "super_admin";
+  const canReveal = CAN_REVEAL.includes(String(a?.role ?? ""));
   // The CR is named on the panel even when there is only one login: "which account am I in" is the
   // question an officer asks after a submission goes to the wrong establishment, and by then the
   // answer is expensive.

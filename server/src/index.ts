@@ -6837,31 +6837,32 @@ async function canTouchCompany(req: any, companyId: string | null | undefined): 
   if (eff === "super_admin" || eff === "admin") return null;
   if (eff !== "pro_officer") return "Write access requires admin role";
   if (!companyId) return "A credential has to belong to a client";
-  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { roleOwners: true, name: true } });
+  // THE VAULT IS THE FIRM'S, THE WORK IS THE OFFICER'S. This used to refuse a client that named a
+  // different PRO officer, which made the vault follow the work routing. In practice the two are
+  // not the same question: whoever covers a counter needs the login for whatever client is in front
+  // of them that morning, while the TASK still goes to the client's own officer. Scoping the vault
+  // as well left an officer reading a password they could not correct when the portal changed it —
+  // and, worse, looking at an empty tab that said no login existed.
+  const co = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
   if (!co) return "No such client";
-  const owner = ((co.roleOwners ?? {}) as any)?.pro_officer ?? null;
-  if (!owner || owner === a?.sub) return null;
-  return `${co.name} is another PRO officer's client — ask an admin if that is wrong`;
+  return null;
 }
 
-app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), async (req, res) => {
+// EVERY PRO OFFICER SEES EVERY CLIENT'S VAULT. It used to be filtered to the clients that named
+// you — and a filtered-away row is indistinguishable from one that was never created, so the client
+// screen told an officer "No stored credentials · add the government portal logins you hold for
+// this client" over four logins that were already there, inviting a duplicate of each.
+//
+// The password is never in this payload whatever the role; reading one is a separate, audited call.
+app.get("/api/credentials", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), async (_req, res) => {
   const creds = await prisma.siteCredential.findMany({ take: 500 }); // hard cap
-  const a = (req as any).auth;
-  const eff = await resolveEffectiveRole(a?.role);
-  let rows = creds;
-  if (eff !== "super_admin" && eff !== "admin") {
-    // Same rule as the writes, applied to what they can SEE: a client that names another officer is
-    // not theirs to look at either. Done with one query rather than one per row.
-    const cos = await prisma.company.findMany({ select: { id: true, roleOwners: true } });
-    const mine = new Set(cos.filter(c => {
-      const owner = ((c.roleOwners ?? {}) as any)?.pro_officer ?? null;
-      return !owner || owner === a?.sub;
-    }).map(c => c.id));
-    rows = creds.filter(c => c.companyId && mine.has(c.companyId));
-  }
-  res.json(rows.map(({ password, ...rest }: any) => rest));
+  res.json(creds.map(({ password, ...rest }: any) => rest));
 });
-app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRole("super_admin", "admin"), requireHuman, async (req, res) => {
+// A PRO OFFICER MAY READ A PASSWORD. They are the people who sign in to these portals; an officer
+// who can see the row but must find an admin to open it either waits, or keeps their own copy
+// somewhere with no audit trail at all. `requireHuman` stays: an API key is not a person, and the
+// `credential.reveal` row below still records who opened what, for every single reveal.
+app.get("/api/credentials/:id/reveal", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer"), requireHuman, async (req, res) => {
   const a = (req as any).auth;
   const c = await prisma.siteCredential.findUnique({ where: { id: req.params.id } });
   if (!c) return res.status(404).json({ error: "Not found" });
@@ -6906,10 +6907,11 @@ app.get("/api/companies/:id/master-data.pdf", requireAuth, requireStaff,
     const eff = await resolveEffectiveRole(a?.role);
     const isAdmin = eff === "super_admin" || eff === "admin";
 
-    // The passwords are the admin-only part, so the refusal names that rather than the document.
-    if (reveal && !isAdmin) {
-      return res.status(403).json({ error: "Printing the passwords requires admin access — the sheet without them is available to you" });
-    }
+    // The sheet follows the single reveal: whoever may open one login may print the page of them.
+    // Keeping it admin-only once officers could reveal individually bought nothing — the same
+    // secrets, nine clicks apart — and the page is the better of the two, because it is audited per
+    // credential rather than per screenshot.
+    //
     // An API key is not a person, and a bulk reveal is not something to hand a script.
     if (reveal && a?.apiKey) return res.status(403).json({ error: "This has to be done by a signed-in person" });
 

@@ -5,22 +5,21 @@
  *   npx tsx scripts/credential-scope-check.ts     (needs the API running)
  *
  * The vault holds government portal passwords for every client. It was admin-only on all five
- * routes, which blocked the people who actually do the work: live had 0 credentials filed. Add and
- * edit are now open to PRO officers; reveal and delete are not.
+ * routes, which blocked the people who actually do the work. It was then opened to PRO officers
+ * for the clients they are NAMED on — which turned out to be the wrong axis: the officer covering
+ * a counter needs the login for whoever is in front of them, and a client that named somebody else
+ * showed them an empty tab reading "No stored credentials" over four logins that existed. So the
+ * vault is the FIRM'S and is open to every PRO officer, while the WORK still routes to the client's
+ * own officer — `clientRoleOwner`, untouched by any of this.
  *
  * That is a security boundary, so every rung of it is asserted here rather than described:
  *
  *   · an admin may do everything, as before
- *   · a PRO officer may ADD and EDIT
- *   · a PRO officer may NOT reveal a password, which is the thing the original rule protected
- *   · a PRO officer may NOT delete
- *   · a PRO officer is refused on a client that names a DIFFERENT pro_officer
- *   · a PRO officer is allowed on a client that names NOBODY — 4 of 189 clients name one, so
- *     refusing the unnamed would have blocked 185 and rebuilt the original problem
- *   · the list never carries a password, to any role
- *   · an accountant and a sales user are refused outright
- *   · editing cannot be used to reach another officer's client: the check reads the client off the
- *     ROW, not off the body
+ *   · a PRO officer may ADD, EDIT and REVEAL — on ANY client, named or not
+ *   · a PRO officer may still NOT delete: removing the only record of a login is not a correction
+ *   · an accountant and a sales user are refused outright, add and reveal alike
+ *   · the list never carries a password, to any role, and shows every client's rows
+ *   · every reveal writes a `credential.reveal` audit row naming who opened what
  *
  * Everything it makes is named "ZZ " and deleted at the end.
  */
@@ -88,10 +87,7 @@ async function main() {
   const p2 = await call(mine, "POST", "/api/credentials", cred(ours.id, TAG + " ours"));
   expect(p2.status, 201, "PRO officer, their own client");
   const p3 = await call(mine, "POST", "/api/credentials", cred(theirs.id, TAG + " theirs"));
-  expect(p3.status, 403, "PRO officer, ANOTHER officer's client");
-  if (p3.status === 403 && !/another PRO officer/i.test(String(p3.body?.error))) {
-    fail(`the refusal does not say why: ${JSON.stringify(p3.body?.error)}`);
-  } else if (p3.status === 403) ok(`and says why: "${p3.body.error}"`);
+  expect(p3.status, 201, "PRO officer, ANOTHER officer's client");
   expect((await call(acct, "POST", "/api/credentials", cred(unowned.id, TAG + " acct"))).status, 403, "accountant");
   expect((await call(sales, "POST", "/api/credentials", cred(unowned.id, TAG + " sales"))).status, 403, "sales");
 
@@ -100,16 +96,21 @@ async function main() {
 
   console.log("\nedit");
   expect((await call(mine, "PUT", `/api/credentials/${ourId}`, { label: TAG + " renamed" })).status, 200, "PRO officer, own client");
-  expect((await call(mine, "PUT", `/api/credentials/${theirId}`, { label: TAG + " hijack" })).status, 403, "PRO officer, another officer's client");
-  // The client is read off the ROW, so naming a reachable client in the body must not help.
-  const sneak = await call(mine, "PUT", `/api/credentials/${theirId}`, { companyId: ours.id, label: TAG + " sneak" });
-  expect(sneak.status, 403, "…and cannot be reached by naming a different client in the body");
+  // A password changes at the portal, not at the desk of whoever the client is filed under. An
+  // officer who can read it but not correct it leaves the vault wrong for everybody after them.
+  expect((await call(mine, "PUT", `/api/credentials/${theirId}`, { label: TAG + " renamed too" })).status, 200, "PRO officer, another officer's client");
 
-  console.log("\nreveal — the power the original rule protected");
+  console.log("\nreveal — audited, and open to the people who sign in");
   expect((await call(admin, "GET", `/api/credentials/${ourId}/reveal`)).status, 200, "admin");
-  expect((await call(mine, "GET", `/api/credentials/${ourId}/reveal`)).status, 403, "PRO officer, even on their OWN client");
+  expect((await call(mine, "GET", `/api/credentials/${ourId}/reveal`)).status, 200, "PRO officer, own client");
+  expect((await call(mine, "GET", `/api/credentials/${theirId}/reveal`)).status, 200, "PRO officer, another officer's client");
+  expect((await call(acct, "GET", `/api/credentials/${ourId}/reveal`)).status, 403, "accountant");
+  // The audit trail is the whole basis on which this was opened up, so it is asserted, not assumed.
+  const seen = await prisma.audit.count({ where: { action: "credential.reveal", actorId: mine.id } });
+  seen >= 2 ? ok(`every reveal is on the audit trail (${seen} rows for this officer)`)
+            : fail(`reveals are not being audited — ${seen} rows for this officer`);
 
-  console.log("\ndelete");
+  console.log("\ndelete — still admin only");
   expect((await call(mine, "DELETE", `/api/credentials/${ourId}`)).status, 403, "PRO officer");
 
   console.log("\nlist");
@@ -118,8 +119,17 @@ async function main() {
   expect(la.status, 200, "admin");
   expect(lp.status, 200, "PRO officer");
   const names = (b: any) => (Array.isArray(b) ? b : []).filter((c: any) => String(c.label).startsWith(TAG)).map((c: any) => c.label);
-  if ((names(lp.body) as string[]).some(n => n.includes("by admin"))) fail("a PRO officer can see another officer's client's entry");
-  else ok("a PRO officer does not see another officer's client's entry");
+  // THE EMPTY TAB THAT STARTED THIS. A row filtered away is indistinguishable from one that was
+  // never created, so the client screen reported "No stored credentials" over somebody else's
+  // client's four logins and invited a duplicate of each.
+  // By id, not by label: the edit assertions above renamed this very row, and a check that greps
+  // for a name it no longer has reports a scoping failure that is not there.
+  (Array.isArray(lp.body) ? lp.body : []).some((c: any) => c?.id === theirId)
+    ? ok("a PRO officer sees another officer's client's entry")
+    : fail("a PRO officer still cannot see another officer's client's entry");
+  (names(la.body) as string[]).length === (names(lp.body) as string[]).length
+    ? ok("both roles see the same rows")
+    : fail(`admin sees ${names(la.body).length} rows, the officer ${names(lp.body).length}`);
   const anyPassword = [...(Array.isArray(la.body) ? la.body : []), ...(Array.isArray(lp.body) ? lp.body : [])]
     .some((c: any) => c && Object.prototype.hasOwnProperty.call(c, "password"));
   if (anyPassword) fail("the list carries a password field — it must never leave the server");

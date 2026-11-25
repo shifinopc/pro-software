@@ -16751,7 +16751,7 @@
                   <div style="font-size:9px; color:#A9A6B4; margin-top:6px;">Revealing is recorded against your name.</div>
                 </sc-if>
                 <sc-if value="{{ wdCredNoPermission }}" hint-placeholder-val="{{ false }}">
-                  <div style="font-size:10px; color:#A9A6B4; margin-top:10px;">The password is stored. Only an admin can reveal it — ask one to open it for you.</div>
+                  <div style="font-size:10px; color:#A9A6B4; margin-top:10px;">The password is stored, but your role cannot open it — ask an admin.</div>
                 </sc-if>
                 <sc-if value="{{ wdCredNafath }}" hint-placeholder-val="{{ false }}">
                   <div style="font-size:10px; color:#A9A6B4; margin-top:10px;">No password is kept: enter this number on the portal and the login is approved in the Nafath app on the holder&rsquo;s phone.</div>
@@ -28400,10 +28400,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const cdCopied = this.state.cdCredCopied;
       // Passwords are NEVER in the list payload — revealing fetches one on demand and is audited
       // server-side (action credential.reveal).
-      // WHO MAY READ A PASSWORD, as the server decides it: the reveal route is admin-only, and a
-      // PRO officer who presses anything that needs one gets a 403. A UI hint, not the gate — the
-      // server is still the gate, and a custom role is resolved there, not here.
-      const _canReveal9 = _meRole === 'admin' || _meRole === 'super_admin' || _meRole === null;
+      // WHO MAY READ A PASSWORD, as the server decides it: admins and PRO officers — the people who
+      // actually sign in to these portals. A UI hint, not the gate — the server is still the gate,
+      // and a custom role is resolved there, not here.
+      const _canReveal9 = _meRole === 'admin' || _meRole === 'super_admin' || _meRole === 'pro_officer' || _meRole === null;
       const _cdReveal = (row7) => {
         if (cdCredReveal[row7.id]) return this.setState({ cdCredReveal: { ...cdCredReveal, [row7.id]: false } });
         if (cdCredPass[row7.id]) return this.setState({ cdCredReveal: { ...cdCredReveal, [row7.id]: true } });
@@ -28414,7 +28414,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // a vault copied between environments answers 409 "encrypted with a different CRED_KEY",
           // and reporting that as a permission problem sends somebody to ask for a role they
           // already have instead of for the key.
-          .then(r7 => (r7.ok ? r7.json() : r7.json().catch(() => ({})).then(j7 => Promise.reject(new Error((j7 && j7.error) || 'Could not reveal — admin access required')))))
+          .then(r7 => (r7.ok ? r7.json() : r7.json().catch(() => ({})).then(j7 => Promise.reject(new Error((j7 && j7.error) || 'Could not reveal this password')))))
           .then(j7 => this.setState({ cdCredPass: { ...cdCredPass, [row7.id]: j7.password || '' }, cdCredReveal: { ...cdCredReveal, [row7.id]: true } }))
           .catch(e7 => this.toast(String((e7 && e7.message) || 'Could not reveal').slice(0, 160), 'error'));
       };
@@ -28530,7 +28530,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // Unauthenticated is the design preview, and a null role is a `me` that has not landed yet —
       // showing a control a moment early beats blanking every control on every load, which is the
       // same trade `_mayDo` above makes.
-      clDetailApi.cdCanManageCreds = !_authed || _meRole === null || _meRole === 'admin' || _meRole === 'super_admin';
+      clDetailApi.cdCanManageCreds = !_authed || _meRole === null || _meRole === 'admin' || _meRole === 'super_admin' || _meRole === 'pro_officer';
       // Which authorities exist, for tagging a login with the portal it opens. Declared above every
       // use: a const read before its own line throws and blanks the console.
       const _CC_NO_PORTAL = 'Not a government portal';
