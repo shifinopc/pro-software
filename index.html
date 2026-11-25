@@ -15278,15 +15278,34 @@
                 </div>
               </div>
               <div>
+                <!-- A LIST, NOT A CHIP SHELF. The eleven industries were laid out as chips under a
+                     free text box: four rows of them, taller than the rest of the column, and still
+                     a text box that let "Trading", "trading" and "Trade" into the same report. The
+                     same control the Product box above uses — type, or press the chevron and pick.
+                     Typed text is still accepted, because a salesperson meeting an industry nobody
+                     has set up yet must be able to write it down; it is the LIST that makes the
+                     common ones consistent. Manage them in Sales Settings → Industries. -->
                 <label class="fm-lab">Industry</label>
-                <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp">
-                <sc-if value="{{ hasIndustryChips }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;">
-                    <sc-for list="{{ ldfIndustryChips }}" as="c" hint-placeholder-count="5">
-                      <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:3px 10px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                    </sc-for>
-                  </div>
-                </sc-if>
+                <div data-dd style="position:relative;">
+                  <!-- `value` + onInput, exactly as before the chevron was added. The Product box
+                       beside it captures on blur, which is right for a box people fill once; this
+                       one is also WRITTEN TO by the picker, and a blur-captured box loses what was
+                       typed when Save is clicked before the blur has applied. -->
+                  <input value="{{ ldfIndustry }}" onInput="{{ setLdfIndustry }}" placeholder="What do they do?" class="fm-inp" style="padding-right:30px;">
+                  <span onClick="{{ ldfIndToggle }}" title="Pick an industry" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); width:18px; height:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A9A6B4" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                  </span>
+                  <sc-if value="{{ ldfIndOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd class="qc-dd">
+                      <sc-for list="{{ ldfIndOptions }}" as="o" hint-placeholder-count="5">
+                        <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};">{{ o.label }}</div>
+                      </sc-for>
+                      <sc-if value="{{ ldfIndEmpty }}" hint-placeholder-val="{{ true }}">
+                        <div style="padding:8px 11px; font-size:10px; color:#A9A6B4; line-height:1.5;">No industries set up yet (Sales Settings → Industries). You can still type one in.</div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
               </div>
               <div>
                 <label class="fm-lab">City</label>
@@ -46957,8 +46976,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ldfNamePlaceholder: ((_ldf && _ldf.companyType) || '') === 'Individual' ? 'e.g. Abdullah Al-Ghamdi' : 'e.g. Al Faisal Contracting',
       ldfIndustry: (_ldf && _ldf.industry) || '',
       setLdfIndustry: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: e.target.value }, ldfErr: '' }),
-      ldfIndustryChips: _chips9(_industryList, _ldf && _ldf.industry, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: v }, ldfErr: '' })),
-      hasIndustryChips: _industryList.length > 0,
+      // The industry picker — single-select, same shape as the Product box above it. Picking CLOSES
+      // it, unlike Product: a company has one industry, so there is nothing to come back for.
+      ...(() => {
+        const open9 = this.state.openDd === 'ldf-industry';
+        const cur9 = String((_ldf && _ldf.industry) || '').trim().toLowerCase();
+        return {
+          ldfIndOpen: open9,
+          ldfIndToggle: () => this.setState({ openDd: open9 ? null : 'ldf-industry' }),
+          ldfIndEmpty: _industryList.length === 0,
+          ldfIndOptions: _industryList.map(o => {
+            const on9 = String(o.name).trim().toLowerCase() === cur9;
+            return {
+              label: o.name,
+              weight: on9 ? '700' : '500',
+              color: on9 ? '#7C00FF' : '#1A1523',
+              bg: on9 ? '#F7F3FD' : 'transparent',
+              pick: () => this.setState({ ldForm: { ...(this.state.ldForm || {}), industry: o.name }, ldfErr: '', openDd: null }),
+            };
+          }),
+        };
+      })(),
       ldfCampaign: (_ldf && _ldf.campaign) || '',
       setLdfCampaign: (e) => this.setState({ ldForm: { ...(this.state.ldForm || {}), campaign: e.target.value }, ldfErr: '' }),
       ldfCampaignChips: _chips9(_campaignList, _ldf && _ldf.campaign, v => this.setState({ ldForm: { ...(this.state.ldForm || {}), campaign: v }, ldfErr: '' })),
