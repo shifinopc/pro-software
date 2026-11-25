@@ -134,6 +134,7 @@ const text = (v: string, label: string, required = true) => ({ var: v, label, ty
 const date = (v: string, label: string, required = true) => ({ var: v, label, type: "date", required });
 const money = (v: string, label: string, required = true) => ({ var: v, label, type: "money", required });
 const pick = (v: string, label: string, options: string, required = true) => ({ var: v, label, type: "select", options, required });
+const area = (v: string, label: string, required = true) => ({ var: v, label, type: "textarea", required });
 
 const nodes: N[] = [
   { id: "start", type: "start", label: "Deal won" },
@@ -170,13 +171,26 @@ const nodes: N[] = [
    * record and holds for every case that client ever has. A step that asks for it again each time
    * is a reminder with no output, so the run goes straight from the advance to the onboarding work.
    */
+  /*
+   * THREE ANSWERS BETWEEN THEM, AND NOT ONE MORE.
+   *
+   * These two steps asked for five things: the group, the portal invite date, the call date, the
+   * date the minutes were shared, and the minutes themselves as an uploaded DOCUMENT. Four of the
+   * five were dates nobody reads afterwards — "minutes shared on" in particular records the
+   * administration of the work rather than the work — and the minutes arriving as a file meant the
+   * step could not be completed until somebody had made one, for a call that had already happened.
+   *
+   * What is left is what somebody actually wants to know later: was the group made, when was the
+   * meeting, and what was said. The minutes are TYPED and OPTIONAL — a call with nothing worth
+   * recording must not hold the case open, and a required box is how empty boxes full of "." get
+   * written.
+   */
   task("access", "WhatsApp group and portal access", "account_manager", 24,
     "Create the group and send the portal invitation.",
-    [pick("groupCreated", "WhatsApp group created?", "yes,no"), date("portalInviteOn", "Portal invite sent on")]),
+    [pick("groupCreated", "WhatsApp group created?", "yes,no")]),
   task("call", "Onboarding call", "account_manager", 72,
-    "Hold the call and share the minutes within 24 hours. Target for the whole of onboarding is 3 working days from the advance.",
-    [date("callOn", "Call held on"), date("minutesOn", "Minutes shared on")],
-    ["Meeting minutes"]),
+    "Hold the call and write up what was agreed. Target for the whole of onboarding is 3 working days from the advance.",
+    [date("callOn", "Meeting date"), area("minutes", "Meeting minutes", false)]),
   task("kyc", "KYC and client documents", "account_manager", 72,
     "Collect and check the identity pack. Every required document must be received and verified before G1.",
     [pick("kickoffConfirmed", "Client confirms kick-off?", "yes,no")],
