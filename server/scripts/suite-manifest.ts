@@ -237,6 +237,7 @@ export const TOOLS: string[] = [
   "drop-renewed-iqama-checklist",
   "repoint-old-fee-steps",
   "repoint-step",
+  "rerate-untaxed-drafts",
   "vat-per-line-check",
   "whatsapp-send-test",
   "render-map",
