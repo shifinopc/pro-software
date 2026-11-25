@@ -211,6 +211,16 @@
   input[type='number']::-webkit-inner-spin-button{opacity:1;}
   ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:#DDD9E6;border-radius:4px;}
   [data-hidescroll]{scrollbar-width:none;-ms-overflow-style:none;} [data-hidescroll]::-webkit-scrollbar{display:none;width:0;height:0;}
+  /* A CAPPED DROPDOWN HAS TO SAY IT IS CAPPED.
+     `data-hidescroll` is right for a panel whose list fits, and a lie for one that does not: the
+     list stops in mid-air with nothing to scroll it by, so it reads as a box with its bottom cut
+     off rather than as a list with more in it. `_placeDropdowns` puts this class on any panel it
+     actually had to cap, and takes it off again when the list fits. Attribute+class outranks the
+     bare attribute above, so it wins without !important. */
+  [data-dd].dd-scrolls{scrollbar-width:thin;scrollbar-color:#D9D2E6 transparent;-ms-overflow-style:auto;}
+  [data-dd].dd-scrolls::-webkit-scrollbar{display:block;width:6px;height:6px;}
+  [data-dd].dd-scrolls::-webkit-scrollbar-thumb{background:#D9D2E6;border-radius:99px;}
+  [data-dd].dd-scrolls::-webkit-scrollbar-track{background:transparent;}
   @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
   @keyframes toastIn{from{opacity:0;transform:translateY(16px) scale(.96);}to{opacity:1;transform:translateY(0) scale(1);}}
   button{transition:transform .1s ease, box-shadow .15s ease, background .15s ease;} button:active{transform:scale(.97);}
@@ -18469,6 +18479,44 @@ class Component extends DCLogic {
       // unaffected.
       dd.style.overflowY = 'auto';
       dd.style.overscrollBehavior = 'contain';
+      // END ON A ROW, NOT THROUGH THE MIDDLE OF A NAME.
+      //
+      // The cap above is whatever room there happens to be, and nothing makes that a whole number
+      // of rows — so the bottom entry is sliced through its text, and `data-hidescroll` has taken
+      // away the one thing that would have explained why. Together they read as a dropdown with
+      // its bottom cut off, which is what it looks like, and the geometry being otherwise perfect
+      // is no consolation to anyone reading half a name.
+      //
+      // So pull the cap back to the last row that fits ENTIRELY, and let a panel that is really
+      // holding more than it shows have a slim scrollbar to say so.
+      //
+      // Recomputed from `cap` every pass rather than from the current max-height, so repeated
+      // passes cannot ratchet the list shorter and shorter. `offsetTop` is relative to the panel
+      // (it is the positioned ancestor) and does not move when the panel is scrolled, so the trim
+      // is the same answer at any scroll position.
+      const cap = Math.min(MAX, Math.max(0, room));
+      const overflows = dd.scrollHeight > cap + 1;
+      if (overflows) {
+        // NO BOTTOM PADDING IN THE SUM. Overflow is clipped at the PADDING box, not the content
+        // box, so leaving room for `padding-bottom` leaves exactly that much of the NEXT row
+        // showing — a 5px sliver of somebody's name under the last one, which is the thing being
+        // fixed. Ending flush on the row boundary costs the capped panel its bottom padding and
+        // buys a clean edge; the scrollbar is what says there is more.
+        const bT = parseFloat(cs.borderTopWidth) || 0, bB = parseFloat(cs.borderBottomWidth) || 0;
+        // One wrapper element around the options is common enough to be worth stepping through;
+        // anything deeper keeps the plain cap, which is the behaviour this had before.
+        let rows = [...dd.children];
+        if (rows.length === 1 && rows[0].children.length > 1) rows = [...rows[0].children];
+        let fit = 0;
+        for (const row of rows) {
+          const need = bT + row.offsetTop + row.offsetHeight + bB;
+          if (need > cap) break;
+          fit = need;
+        }
+        // A single row taller than the cap keeps the cap — half a row beats none of it.
+        if (fit > 0) dd.style.maxHeight = Math.round(fit) + 'px';
+      }
+      dd.classList.toggle('dd-scrolls', overflows);
       if (inBox) {
         // Opening upward: the panel hangs from its own height, which is only known now.
         if (up) {
