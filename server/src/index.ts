@@ -3791,11 +3791,32 @@ app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, a
   const scoped = await salesCompanyIds(req as any);
   if (scoped && !scoped.includes(before.companyId)) return res.status(403).json({ error: "Not one of your clients" });
   const b = req.body ?? {};
+  /**
+   * ATTACHING A QUOTATION THAT WAS COMPOSED RATHER THAN CONJURED.
+   *
+   * The Quote button used to POST to /quote, which built the document itself from the deal's title
+   * and value — one line, no fee kind, the amount read as VAT-inclusive. Composing it instead means
+   * the quotation is created by the quotation route like any other, and this is how it gets back to
+   * the deal it came from.
+   *
+   * Checked, not trusted: a quotation belonging to another client would put the deal's money on
+   * somebody else's document, and RE-POINTING one would orphan the first while the win-rate figures
+   * still counted it. A deal carries at most one quotation, which is what /quote has always said.
+   */
+  if (b.quotationId) {
+    const q = await prisma.quotation.findUnique({ where: { id: String(b.quotationId) }, select: { id: true, companyId: true, number: true } });
+    if (!q) return res.status(400).json({ error: "No such quotation" });
+    if (q.companyId && q.companyId !== before.companyId) return res.status(400).json({ error: "That quotation belongs to another client" });
+    if (before.quotationId && before.quotationId !== q.id) {
+      return res.status(409).json({ error: `This deal already has quotation ${(await prisma.quotation.findUnique({ where: { id: before.quotationId }, select: { number: true } }))?.number ?? ""}`.trim() });
+    }
+  }
   const updated = await prisma.opportunity.update({
     where: { id: before.id },
     data: {
       title: b.title == null ? undefined : String(b.title).trim(),
       contactId: b.contactId === undefined ? undefined : (b.contactId || null),
+      quotationId: b.quotationId === undefined ? undefined : (b.quotationId || null),
       valueMinor: b.valueMinor === undefined ? undefined : (b.valueMinor === "" || b.valueMinor === null ? null : Math.round(Number(b.valueMinor))),
       probabilityBp: b.probabilityBp === undefined ? undefined : (b.probabilityBp === "" || b.probabilityBp === null ? null : Math.max(0, Math.min(10000, Number(b.probabilityBp)))),
       expectedCloseDate: b.expectedCloseDate === undefined ? undefined : (b.expectedCloseDate || null),

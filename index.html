@@ -20877,14 +20877,39 @@ class Component extends DCLogic {
      * Lands as a DRAFT, deliberately: quoting is not sending, and a document that goes out the
      * moment somebody presses a button on a board is one nobody has read.
      */
-    this._quoteDeal = (id, title) => this._crmFetch('/api/opportunities/' + id + '/quote', { method: 'POST', body: JSON.stringify({}) })
-      .then(({ ok, j }) => {
-        if (!ok) return this.toast((j && j.error) || 'Could not raise a quotation', 'error');
-        this.toast('Quotation ' + j.quotation.number + ' drafted for ' + (title || 'this deal'));
-        if (this._loadPipeline) this._loadPipeline();
-        this._opReload('quotations', 'quotationsData');
-      })
-      .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    this._quoteDeal = (id, title) => {
+      const cols = ((this.state.pipelineData || {}).columns) || [];
+      let deal = null;
+      for (const c of cols) { const hit = (c.deals || []).find(d => d.id === id); if (hit) { deal = hit; break; } }
+      if (this._composeQuoteFor && deal) {
+        // THE PRICE GOES IN AS THE LINE PRICE, which is NET — the composer adds VAT on top and
+        // shows the total as you type. /quote read the same number as VAT-INCLUSIVE and silently
+        // took the tax out of the fee: SAR 25,000 became 21,739.13 + 3,260.87. Nothing said so.
+        // Here the ambiguity is on screen, in front of the person who knows which it was.
+        const price9 = deal.valueMinor != null ? String(deal.valueMinor / 100) : '';
+        return this._composeQuoteFor({
+          qcClient: (deal.company && deal.company.name) || deal.clientName || deal.companyName || '',
+          qcClientId: deal.companyId || null,
+          qcSubject: deal.title || title || '',
+          // Seeded from the deal and MEANT to be edited. The old route wrote this line straight on
+          // to the document, so the client read "New business — Perfume Company" as the service
+          // they were being quoted for.
+          qcLines: [[deal.title || title || '', '1', price9]],
+          qcDealId: id,
+        });
+      }
+      // No board loaded — the row and drawer buttons can be pressed from screens that never fetch
+      // the pipeline. Falling back to the old route is worse than composing, and much better than
+      // a button that does nothing.
+      return this._crmFetch('/api/opportunities/' + id + '/quote', { method: 'POST', body: JSON.stringify({}) })
+        .then(({ ok, j }) => {
+          if (!ok) return this.toast((j && j.error) || 'Could not raise a quotation', 'error');
+          this.toast('Quotation ' + j.quotation.number + ' drafted for ' + (title || 'this deal'));
+          if (this._loadPipeline) this._loadPipeline();
+          this._opReload('quotations', 'quotationsData');
+        })
+        .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    };
     /**
      * Log an interaction, and optionally tick off the follow-up it answers.
      *
@@ -48886,11 +48911,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // No schedule by default. A pre-filled one would be a commitment nobody chose, and the
         // proposal already prints "the full amount on signing" when there is none.
         qcTerms: [],
+        // Cleared with everything else, or a quotation composed later would attach itself to the
+        // deal somebody quoted an hour ago.
+        qcDealId: null,
         qcCur: sysCurCode, qcVat: null, qcNextNo: null });
       const t9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/next-number', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
         .then(r9 => (r9.ok ? r9.json() : null)).then(j9 => { if (j9 && j9.number) this.setState({ qcNextNo: j9.number }); }).catch(() => {});
     };
+    /**
+     * Open THIS composer, seeded — so the pipeline's Quote button lands on the real quotation
+     * builder rather than on a second, worse one.
+     *
+     * Exposed from in here rather than reimplemented on the instance because `openCreateQuote` is
+     * also the RESET: every field the dialog owns is cleared by it, and a copy of that list would
+     * be one field out of date the first time somebody adds one — leaving the previous quotation's
+     * value sitting in a box nobody looked at.
+     */
+    this._composeQuoteFor = (seed9) => { openCreateQuote(); this.setState({ ...seed9 }); };
     // Minor units, matching the save below to the halala. Rounding VAT to a whole riyal here showed
     // the user "VAT SAR 38 / TOTAL SAR 288" for a quotation that saves as 37.50 / 287.50 — a preview
     // that disagrees with what it is previewing is worse than no preview.
@@ -49012,6 +49050,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           this.setState({ createQuote: false, qcEditId: null, qcErr: '' });
           this.toast(status9 === 'draft' ? 'Draft ' + body9.number + ' saved' : body9.number + ' sent to ' + client);
           this._opReload('quotations', 'quotationsData');
+          // BACK TO THE DEAL IT WAS QUOTED FOR.
+          //
+          // /quote set `quotationId` itself; composing it here means the link has to be made
+          // afterwards, and if it is missed the deal reads as never quoted — the Quoted column's
+          // own entry requirement, and the card keeps offering to quote it again.
+          //
+          // Deliberately not fatal: the quotation is saved and the client can have it. A failure
+          // here is said out loud rather than swallowed, because the deal is now the thing that is
+          // wrong and somebody has to know.
+          const deal9 = st.qcDealId;
+          if (deal9 && !_qcEditing && j5 && j5.id) {
+            this._crmFetch('/api/opportunities/' + deal9, { method: 'PUT', body: JSON.stringify({ quotationId: j5.id }) })
+              .then(({ ok: ok9, j: j9 }) => {
+                if (!ok9) return this.toast((j9 && j9.error) || 'Saved, but it is not linked to the deal', 'error');
+                if (this._loadPipeline) this._loadPipeline();
+              })
+              .catch(() => this.toast('Saved, but it is not linked to the deal', 'error'));
+          }
         })
         .catch(() => this.setState({ qcErr: 'Server unreachable — nothing was saved' }));
     };
