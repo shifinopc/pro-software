@@ -2892,6 +2892,52 @@ R.get("/tasks/:id/verify", requireAuth, requireStaff, async (req, res) => {
   res.json(await evalVerifyRule(task) ?? { docType: null });
 });
 /**
+ * THE MONEY, ON THE STEP THAT TURNS ON IT.
+ *
+ * "Approve once the 50% advance is in the bank and matched to this client" is the first gate of
+ * Business Setup, and the person signing it had nothing on screen: they checked the bank themselves
+ * and remembered which client it was. A gate held open by memory is not a gate — and the receipt
+ * they are certifying has a SLIP attached to it, which is the thing that makes it checkable.
+ *
+ * So this answers, for the client this run is about: what has been billed, what has come in, and
+ * every receipt with its proof of payment. It decides nothing — approving stays a person's act —
+ * but it puts the evidence in front of them instead of in another screen.
+ *
+ * Bounded to the twenty most recent receipts: a gate is a decision about the money that just
+ * arrived, not an account statement.
+ */
+R.get("/tasks/:id/money", requireAuth, requireStaff, async (req, res) => {
+  const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+  const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId } });
+  if (!inst?.companyId) return res.json({ clientName: inst?.clientName ?? null, invoices: [], payments: [], receivedMinor: 0, billedMinor: 0 });
+
+  const [invoices, payments] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { companyId: inst.companyId, NOT: { status: "void" } },
+      orderBy: { number: "desc" }, take: 20,
+      select: { id: true, number: true, status: true, date: true, dueDate: true, currency: true,
+                amount: true, totalMinor: true, vatMinor: true },
+    }),
+    prisma.payment.findMany({
+      where: { companyId: inst.companyId },
+      orderBy: [{ date: "desc" }, { id: "desc" }], take: 20,
+      select: { id: true, number: true, invoiceNumber: true, date: true, method: true, reference: true,
+                amount: true, amountMinor: true, attachment: true, attachmentName: true },
+    }),
+  ]);
+  // Minor units on both sides, for the same reason money.ts gives: `amount` is a whole-riyal copy
+  // and comparing it against a total that carries halalas is how an invoice became unsettleable.
+  const billedMinor = invoices.reduce((n, i) => n + (i.totalMinor ?? i.amount * 100), 0);
+  const receivedMinor = payments.reduce((n, p) => n + (p.amountMinor ?? p.amount * 100), 0);
+  res.json({
+    clientName: inst.clientName ?? null,
+    currency: invoices[0]?.currency ?? "SAR",
+    invoices, payments, billedMinor, receivedMinor,
+  });
+});
+
+/**
  * The client's login for the authority this step is done at.
  *
  * Never returns the password. It answers "is there one, and which" so the officer stops hunting

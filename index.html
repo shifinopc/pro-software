@@ -16701,6 +16701,45 @@
             <div onClick="{{ wdInstrToggle }}" style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; cursor:pointer;">WHAT TO DO</div>
             <div style="margin-top:7px; margin-bottom:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:12px; padding:12px 10px; font-size:11px; color:#4B4757; line-height:1.6; white-space:pre-line;">{{ wdInstructions }}</div>
           </sc-if>
+          <!-- THE MONEY, on a gate that turns on it. "Approve once the 50% advance is in the bank"
+               was an instruction with nothing on screen to check it against: the approver went to
+               the bank themselves and remembered which client it was. The receipts are here, each
+               with the slip the client sent, so the thing being certified can be looked at. -->
+          <sc-if value="{{ wdMoneyShow }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em;">MONEY RECEIVED</div>
+            <div style="margin-top:7px; margin-bottom:11px; border:1px solid #EDEBF2; border-radius:12px; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; gap:10px; padding:11px 12px; background:#FBFAFE; border-bottom:1px solid #F0EDF6;">
+                <div style="flex:1; min-width:0;">
+                  <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:#0E9355;">{{ wdMoneyReceived }}</div>
+                  <div style="font-size:10px; color:#8C8899; margin-top:2px;">{{ wdMoneyPct }}</div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                  <div style="font-size:9px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">BILLED</div>
+                  <div style="font-size:12px; font-weight:700; margin-top:2px;">{{ wdMoneyBilled }}</div>
+                </div>
+              </div>
+              <sc-for list="{{ wdMoneyRows }}" as="r" hint-placeholder-count="2">
+                <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid #F6F4FA;">
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:11px; font-weight:700; color:#1A1523;">{{ r.amount }} <span style="font-weight:600; color:#8C8899;">· {{ r.when }}</span></div>
+                    <div style="font-size:10px; color:#8C8899; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.no }} · {{ r.how }}</div>
+                  </div>
+                  <sc-if value="{{ r.fileShow }}" hint-placeholder-val="{{ true }}">
+                    <span onClick="{{ r.openFile }}" title="{{ r.fileName }}" style="display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #D9E9F7; border-radius:9px; padding:5px 10px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#0284C7;">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+                      <span style="font-size:10px; font-weight:700; color:#0284C7;">Slip</span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ r.noFile }}" hint-placeholder-val="{{ false }}">
+                    <span title="No proof of payment was attached when this was recorded" style="font-size:10px; font-weight:700; color:#B8860B; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:5px 10px; flex-shrink:0;">No slip</span>
+                  </sc-if>
+                </div>
+              </sc-for>
+              <sc-if value="{{ wdMoneyNone }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:12px; font-size:11px; font-weight:600; color:#C0353A; background:#FEF2F2;">Nothing has been received from this client yet.</div>
+              </sc-if>
+            </div>
+          </sc-if>
           <!-- The document this step has to check. Shown here so the officer is not sent to another
                screen to find it, and gated so a step cannot be completed while it falls short. The
                server runs the same check on completion, so this can never show a false green. -->
@@ -30675,6 +30714,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         .then(r9 => (r9.ok ? r9.json() : null))
         .then(v9 => { if (v9 && this.state.wdVerifyFor === stepId9) this.setState({ wdCred: v9, wdCredShown: '' }); })
         .catch(() => {});
+      // What the client has been billed and what has come in — for the gates that turn on money.
+      // "Approve once the advance is in the bank" is the first step of Business Setup, and the
+      // person signing it had nothing on screen: they checked the bank themselves and remembered
+      // which client it was.
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + stepId9 + '/money', { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+        .then(r9 => (r9.ok ? r9.json() : null))
+        .then(v9 => { if (v9 && this.state.wdVerifyFor === stepId9) this.setState({ wdMoney: v9 }); })
+        .catch(() => {});
     };
     const _openTaskDrawer = (rowId, wfId) => {
       // The task id goes in the address, so a refresh reopens the same drawer. The screen label comes
@@ -39074,6 +39121,48 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         wdChecklist: items.map(i9 => ({ ...i9, grp: '', grpShow: false, showReject: true })).concat(_chainDocs9),
         wdHasChecklist: ((selStep.checklist || []).length + _chainDocs9.length) > 0,
         wdInstructions: selStep.instructions || '', wdHasInstructions: !!(selStep.instructions || '').trim(),
+        // ── The money, on a gate that turns on it ──
+        //
+        // Approvals only. Every other step's drawer is unchanged — a receipt is evidence for the
+        // person SIGNING, and on a step that just does work it would be noise. It decides nothing:
+        // the figures are shown, the slip opens, and a human still presses Approve.
+        ...(() => {
+          const m9 = (this.state.wdVerifyFor === selId) ? this.state.wdMoney : null;
+          // `kind`, not `nodeType`: wfStepDefs is an allowlist map and renames it on the way in.
+          const isGate9 = String(selStep.kind || '') === 'approval';
+          const pays9 = (m9 && Array.isArray(m9.payments)) ? m9.payments : [];
+          const ccy9 = (m9 && m9.currency) || sysCurCode;
+          // `fmtCurAs`, not `_money9`: that one is declared 2,000 lines further down and a const
+          // read before its own line throws — which blanks the whole screen, not just this block.
+          const _mm9 = (minor) => fmtCurAs(ccy9, (minor == null ? 0 : minor) / 100);
+          return {
+            wdMoneyShow: !!(isGate9 && m9),
+            wdMoneyBilled: m9 ? _mm9(m9.billedMinor) : '',
+            wdMoneyReceived: m9 ? _mm9(m9.receivedMinor) : '',
+            // The share that has actually arrived, which is what a 50%-advance gate is asking about.
+            // Shown rather than judged: what the stage is a percentage OF is a question about the
+            // quotation's payment terms, and guessing it here would put a number on screen that
+            // nobody could check.
+            wdMoneyPct: (m9 && m9.billedMinor > 0)
+              ? Math.round((m9.receivedMinor / m9.billedMinor) * 100) + '% of what has been billed'
+              : 'nothing billed yet',
+            wdMoneyNone: !!(isGate9 && m9 && pays9.length === 0),
+            wdMoneyRows: pays9.map(p9 => {
+              const hasFile9 = !!p9.attachment;
+              return {
+                no: p9.number || ('RCP-' + String(p9.id).slice(-6).toUpperCase()),
+                amount: _mm9(p9.amountMinor == null ? (p9.amount || 0) * 100 : p9.amountMinor),
+                when: _dmy9(p9.date) || 'no date',
+                how: [p9.method || 'method not recorded', p9.invoiceNumber || null, p9.reference ? 'ref ' + p9.reference : null].filter(Boolean).join(' · '),
+                fileShow: hasFile9,
+                fileName: p9.attachmentName || 'Proof of payment',
+                // No slip is not a failure — it is the one thing the approver should notice.
+                noFile: !hasFile9,
+                openFile: () => hasFile9 && this._openFile(String(p9.attachment), p9.attachmentName || 'Receipt'),
+              };
+            }),
+          };
+        })(),
         // ── The document gate ──
         ...(() => {
           const v9 = (this.state.wdVerifyFor === selId) ? this.state.wdVerify : null;
