@@ -18435,7 +18435,33 @@ class Component extends DCLogic {
       //  · IT FOLLOWS THE FIELD. Scrolling a fixed panel's own dialog would otherwise leave it
       //    behind; the listener installed in componentDidMount re-runs this on any scroll.
       const inBox = !!(box && box !== document.body);
-      if (inBox) { dd.style.position = 'fixed'; dd.dataset.ddFixed = '1'; dd.style.width = Math.round(t.width) + 'px'; dd.style.right = 'auto'; }
+      if (inBox) {
+        dd.style.position = 'fixed'; dd.dataset.ddFixed = '1';
+        dd.style.width = Math.round(t.width) + 'px'; dd.style.right = 'auto';
+        // AND ACTUALLY LET IT OUT OF THE DIALOG.
+        //
+        // `fixed` escapes `.fm-body`'s scrolling, and that is as far as it gets. `.fm-modal` has a
+        // transform -- every dialog does, popIn ends on `scale(1)` with `both` -- which makes IT
+        // the panel's containing block, and it is `overflow:hidden` for its rounded corners. A
+        // fixed element IS clipped by its own containing block, so the list was cut off at the
+        // dialog's edge: measured 121px of it gone, with the room below worked out against the
+        // viewport at 911 while the real cut came at 766.
+        //
+        // Nothing in the geometry could reveal this. getBoundingClientRect reports the laid-out
+        // box and knows nothing about clipping, so every number this function checks -- width,
+        // offsets, the gap, the row trim -- was correct while the bottom of the list was being
+        // sliced off on screen.
+        //
+        // So open the containing block for as long as a panel is out there. The dialog's own
+        // scrolling lives on `.fm-body`, one level in, and is untouched; this only stops the card
+        // trimming what paints over its edge. Restored the moment the last panel closes, below.
+        let cb = dd.parentElement;
+        while (cb && cb !== document.body && getComputedStyle(cb).transform === 'none') cb = cb.parentElement;
+        if (cb && cb !== document.body && getComputedStyle(cb).overflow !== 'visible') {
+          if (!this._ddClip || this._ddClip.el !== cb) this._ddClip = { el: cb, prev: cb.style.overflow };
+          cb.style.overflow = 'visible';
+        }
+      }
       const b = inBox
         ? { top: 0, bottom: window.innerHeight }
         : ((box && box !== document.body)
@@ -18596,6 +18622,12 @@ class Component extends DCLogic {
     if (open && !this._ddSettle) {
       this._ddSettle = true;
       requestAnimationFrame(() => { this._ddSettle = false; this._placeDropdowns(); });
+    }
+    // The dialog gets its clipping back as soon as nothing is hanging out of it, so the card is
+    // only ever open while something needs it to be.
+    if (!open && this._ddClip) {
+      this._ddClip.el.style.overflow = this._ddClip.prev;
+      this._ddClip = null;
     }
   }
   componentDidUpdate() { this._placeDropdowns(); this._reseedFast(); }
