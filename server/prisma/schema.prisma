@@ -1831,6 +1831,21 @@ model ChargeType {
   bg           String?
   sort         Int     @default(0)
   retired      Boolean @default(false)
+  /// WHETHER THIS KIND OF CHARGE CARRIES VAT.
+  ///
+  /// One rate was applied to a whole document, so a quotation of professional fees plus government
+  /// fees charged 15% on both — including money the firm merely collects and hands to the ministry.
+  /// Ten live invoices carried SAR 9,450 of VAT on fees that are not the firm's supply.
+  ///
+  /// "standard" | "zero" | "exempt" | "outside". All four produce no VAT on the line except the
+  /// first; they are kept apart because a VAT return reports them in different boxes, and a
+  /// treatment recorded as a boolean cannot be split back out later.
+  ///
+  /// NULL means standard-rated, which is exactly how every existing charge type already behaves —
+  /// this column changes nothing until somebody sets one of them otherwise. Nullable rather than
+  /// defaulted because the picklist writer turns an unsent field into null, and a column that
+  /// cannot hold null would make every save of every other list fail on it.
+  vatTreatment String?
   packKey      String?
   packVersion  String?
   packModified Boolean @default(false)

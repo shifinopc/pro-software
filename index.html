@@ -8314,6 +8314,9 @@
                 <sc-for list="{{ L.rows }}" as="r" hint-placeholder-count="5">
                   <span style="display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; color:{{ L.tone }}; background:{{ L.toneBg }}; border:1px solid {{ L.toneBd }}; padding:6px 11px; border-radius:99px;">
                     <input sc-camel-default-value="{{ r.name }}" data-seed-val="{{ r.name }}" onBlur="{{ r.setName }}" placeholder="{{ L.placeholder }}" style="border:none; background:transparent; outline:none; font-size:11px; font-weight:600; color:inherit; font-family:inherit; width:{{ r.width }};">
+                    <sc-if value="{{ r.taxShow }}" hint-placeholder-val="{{ false }}">
+                      <span onClick="{{ r.toggleTax }}" title="{{ r.taxHint }}" style="font-size:8.5px; font-weight:800; letter-spacing:.03em; color:{{ r.taxFg }}; background:{{ r.taxBg }}; border:1px solid {{ r.taxBd }}; padding:2px 6px; border-radius:6px; cursor:pointer;">{{ r.taxLabel }}</span>
+                    </sc-if>
                     <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
                       <span onClick="{{ r.remove }}" title="Remove" style="cursor:pointer; opacity:.5; font-size:12px; line-height:1;" style-hover="opacity:1;">×</span>
                     </sc-if>
@@ -21216,7 +21219,11 @@ class Component extends DCLogic {
           + '<div class="g"><span>' + lbl('RECEIVED', 'المبلغ المستلم') + '</span><span>' + esc(doc.total) + '</span></div></div>'
         : '<div class="tot">'
           + (doc.subtotal ? '<div><span>' + lbl('Subtotal', 'المجموع') + '</span><span>' + esc(doc.subtotal) + '</span></div>' : '')
-          + (doc.vat ? '<div><span>' + lbl('VAT ' + vatPct + '%', 'الضريبة') + '</span><span>' + esc(doc.vat) + '</span></div>' : '')
+          // WHAT THE VAT WAS CHARGED ON, when that is not the whole subtotal. A document carrying
+          // government fees shows "Subtotal 34,000 / VAT 15% 3,600" — figures that do not multiply
+          // out, and a reader who cannot tell a correct document from a miscalculated one. Named
+          // only when it differs, so an ordinary invoice reads exactly as it always has.
+          + (doc.vat ? '<div><span>' + lbl('VAT ' + vatPct + '%' + (doc.vatOn ? ' on ' + doc.vatOn : ''), 'الضريبة') + '</span><span>' + esc(doc.vat) + '</span></div>' : '')
           + '<div class="g"><span>' + lbl('TOTAL', 'الإجمالي') + '</span><span>' + esc(doc.total) + '</span></div></div>';
 
       // Artwork (letterhead band, header/footer images, watermark) bleeds the full page width; the
@@ -24350,10 +24357,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             : (rateLive9 > 0 ? Math.round(totalMinor9 / (1 + rateLive9 / 100)) : totalMinor9);
           const vatMinor9 = hasStored9 ? Number(raw9.vatMinor) : (totalMinor9 - netMinor9);
           const _fromMinor = (m) => fmtCurAs(cur, m / 100);
+          // What the VAT was charged on, named only when it is NOT the whole subtotal — a document
+          // mixing taxed and untaxed lines otherwise prints three figures that do not multiply out.
+          const taxed9 = _itemsTaxedMinor9(raw9.items);
           return { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
             services: desc, notes: raw9.notes,
             subtotal: rate9 > 0 ? _fromMinor(netMinor9) : '',
             vat: rate9 > 0 ? _fromMinor(vatMinor9) : '',
+            vatOn: (rate9 > 0 && taxed9 > 0 && taxed9 !== netMinor9) ? _fromMinor(taxed9) : '',
             total: _fromMinor(totalMinor9),
             // The QR and the printed figures come from the same numbers, to the halala.
             totalNum: (totalMinor9 / 100).toFixed(2), vatNum: (vatMinor9 / 100).toFixed(2), subtotalNum: (netMinor9 / 100).toFixed(2),
@@ -24416,12 +24427,48 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // place to set it is a second place for it to be wrong.
     const ciCur = sysCurCode;
     // Saudi rates only. A UAE 5% option on a Saudi tax invoice is a wrong rate one mis-click away.
+    /**
+     * WHICH LINES CARRY VAT, AND WHICH DO NOT.
+     *
+     * One rate was applied to the whole document, so a quotation of professional fees PLUS
+     * government fees charged 15% on both — including money the firm merely collects and hands to
+     * the ministry. Ten live invoices carried SAR 9,450 of VAT on fees that are not the firm's own
+     * supply, and nothing on the screen admitted it: a single "VAT 15%" line over a single subtotal
+     * looks right whatever it was multiplied by.
+     *
+     * The treatment belongs to the CHARGE TYPE (Sales Settings → Quotation line items), because
+     * "are government fees taxable" is one answer for the firm and not a decision to retake on
+     * every line. It is FROZEN onto the line when the document is saved, so renaming or re-rating a
+     * charge type later never rewrites a document somebody has already been sent.
+     *
+     * A line with no stored treatment falls back to the catalogue by name, then to "standard" —
+     * which is exactly how every document written before this behaved.
+     */
+    const _vatOfName9 = (nm) => {
+      const want9 = String(nm || '').trim().toLowerCase();
+      if (!want9) return 'standard';
+      const list9 = Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : [];
+      const hit9 = list9.find(c9 => String(c9.name || '').trim().toLowerCase() === want9);
+      return String((hit9 && hit9.vatTreatment) || 'standard');
+    };
+    /** A COMPOSER line (an array: name, units, price, …) — is it taxed? */
+    const _lineTaxed9 = (l9) => _vatOfName9(l9 && l9[0]) === 'standard';
+    /** A SAVED item ({ name, units, price, vat }) — its frozen treatment wins over the catalogue. */
+    const _itemVat9 = (it9) => String((it9 && it9.vat) || '').trim() || _vatOfName9(it9 && it9.name);
+    /** What VAT is actually charged on, in minor units, out of saved items. */
+    const _itemsTaxedMinor9 = (items9) => (Array.isArray(items9) ? items9 : []).reduce((a9, it9) =>
+      // The invoice composer appends "VAT (15%)" as a line so `amount` stays the grand total. It is
+      // a total, not something to tax — the editor strips it on the way back in for the same reason.
+      (!/^VAT\s*\(/i.test(String((it9 && it9.name) || '')) && _itemVat9(it9) === 'standard')
+        ? a9 + Math.round((Number(it9.units) || 1) * Math.round((Number(it9.price) || 0) * 100)) : a9, 0);
+    // What VAT is charged ON, which is not always the subtotal — see _vatOfName9 above.
+    const ciTaxedN = ciLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) : s2, 0);
     const CI_VAT_OPTS = ['15% — KSA standard', '0% — exempt / zero-rated'];
     const ciVatSel = this.state.ciVat || CI_VAT_OPTS[0];
     const ciVatRate = parseInt(ciVatSel) || 0;
     // Minor units, to the halala, matching what the save writes. Rounding VAT to a whole riyal here
     // previewed "VAT SAR 38 / TOTAL SAR 288" for an invoice that stores 37.50 / 287.50.
-    const ciVatN = Math.round(Math.round(ciSubtotalN * 100) * Math.round(ciVatRate * 100) / 10000) / 100;
+    const ciVatN = Math.round(Math.round(ciTaxedN * 100) * Math.round(ciVatRate * 100) / 10000) / 100;
     const ciGrandN = ciSubtotalN + ciVatN;
     // Next number = highest issued + 1, matching the server. It used to be `4 + how many invoices
     // exist`, which is a count and not a sequence: with any gap — a deletion, a non-contiguous
@@ -24449,6 +24496,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })),
       subtotal: ciVatRate > 0 ? fmtCurAs(ciCur, ciSubtotalN) : '',
       vat: ciVatRate > 0 ? fmtCurAs(ciCur, ciVatN) : '',
+      // The preview is captioned "exactly how it prints", so it names the VAT base on the same
+      // rule the printed document does — only when it is not the whole subtotal.
+      vatOn: (ciVatRate > 0 && ciTaxedN > 0 && Math.round(ciTaxedN * 100) !== Math.round(ciSubtotalN * 100)) ? fmtCurAs(ciCur, ciTaxedN) : '',
       total: fmtCurAs(ciCur, ciGrandN),
       totalNum: ciGrandN.toFixed(2), vatNum: ciVatN.toFixed(2), subtotalNum: ciSubtotalN.toFixed(2), vatRate: ciVatRate,
       stamp: new Date().toISOString(),
@@ -24639,8 +24689,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // not return the figure the lines actually showed.
         const _minor = (n) => Math.round((parseFloat(n) || 0) * 100);
         const subtotalMinor = valid.reduce((s2, l) => s2 + Math.round((parseFloat(l[1]) || 1) * _minor(l[2])), 0);
+        // VAT IS CHARGED ON THE TAXABLE LINES, NOT ON THE SUBTOTAL. Government fees are collected
+        // and handed to the ministry, so taxing them bills the client for VAT the firm never owes.
+        const taxedMinor = valid.reduce((s2, l) => _lineTaxed9(l) ? s2 + Math.round((parseFloat(l[1]) || 1) * _minor(l[2])) : s2, 0);
         const vatRateBp = Math.round(ciVatRate * 100);                       // 15 → 1500
-        const vatMinor = Math.round(subtotalMinor * vatRateBp / 10000);      // one rounding, at the end
+        const vatMinor = Math.round(taxedMinor * vatRateBp / 10000);         // one rounding, at the end
         const totalMinor = subtotalMinor + vatMinor;
         // Kept for the line-item list and the existing guards below, which think in whole currency.
         const subtotal = subtotalMinor / 100;
@@ -24648,7 +24701,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const desc = st.ciSubject || (valid[0][0] + (valid.length > 1 ? ' +' + (valid.length - 1) : ''));
         const client = st.ciClient;
         const co6 = (Array.isArray(this.state.companiesData) ? this.state.companiesData : []).find(c6 => c6.name === client);
-        const items = valid.map(l => ({ name: l[0].trim(), units: parseFloat(l[1]) || 1, price: parseFloat(l[2]) }));
+        const items = valid.map(l => {
+          const it6 = { name: l[0].trim(), units: parseFloat(l[1]) || 1, price: parseFloat(l[2]) };
+          // Only when it is NOT the usual case: the absence of `vat` means standard-rated, which
+          // keeps every document written before this readable without a migration.
+          const vt6 = _vatOfName9(it6.name);
+          if (vt6 !== 'standard') it6.vat = vt6;
+          return it6;
+        });
         if (vatMinor > 0) items.push({ name: 'VAT (' + ciVatRate + '%)', units: 1, price: vatMinor / 100 });
         const editing = st.ciEditId;
         const no6 = editing ? (st.ciEditNo || ciAutoNo) : ciAutoNo;
@@ -46192,7 +46252,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           hint: 'Dropping a follow-up always requires a reason. These are the suggestions; anything else can still be typed.',
         },
       ].map(L => {
-        const rows = this.state[L.draftKey] || L.live.map(r => ({ id: r.id, name: r.name }));
+        const rows = this.state[L.draftKey] || L.live.map(r => ({ id: r.id, name: r.name, vatTreatment: r.vatTreatment || 'standard' }));
         const put = (next) => this.setState({ [L.draftKey]: next, [L.errKey]: '' });
         return {
           title: L.title, sub: L.sub, placeholder: L.placeholder,
@@ -46208,6 +46268,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           dirty: !!this.state[L.draftKey],
           rows: rows.map((r, i) => ({
             name: r.name,
+            /**
+             * TAXED OR NOT — on the quotation line items only.
+             *
+             * "Are government fees subject to VAT" is one answer for the firm, not a decision to
+             * retake on every line, so it lives on the charge type and every line picks it up.
+             *
+             * shortcut: a two-way toggle writes "standard" or "outside", though the column holds
+             * four treatments (standard, zero, exempt, outside) because a VAT return reports them
+             * in different boxes. Make it a four-way picker when somebody has to file one.
+             */
+            taxShow: L.key === 'charge',
+            taxOn: (r.vatTreatment || 'standard') === 'standard',
+            taxLabel: (r.vatTreatment || 'standard') === 'standard' ? 'VAT' : 'NO VAT',
+            taxFg: (r.vatTreatment || 'standard') === 'standard' ? '#5B21B6' : '#B4690E',
+            taxBg: (r.vatTreatment || 'standard') === 'standard' ? '#F5EEFF' : '#FFF7E6',
+            taxBd: (r.vatTreatment || 'standard') === 'standard' ? '#E6D6FF' : '#F3D8A6',
+            taxHint: (r.vatTreatment || 'standard') === 'standard'
+              ? 'Charged at the document’s VAT rate. Click if this is money collected and passed on — a ministry fee is not the firm’s supply.'
+              : 'Outside VAT — no tax is added for this line, and the rest of the document is unaffected. Click to tax it again.',
+            toggleTax: () => put(rows.map((x, j) => (j === i
+              ? { ...x, vatTreatment: (x.vatTreatment || 'standard') === 'standard' ? 'outside' : 'standard' }
+              : x))),
             // The chip is the field. Sized to the word so a five-letter reason is not a wide empty
             // box, with a floor so an emptied one is still clickable.
             width: Math.max(56, Math.min(220, String(r.name || '').length * 7.6 + 14)) + 'px',
@@ -46220,7 +46302,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const clean = rows.filter(r => String(r.name || '').trim());
             this._crmFetch('/api/' + L.path, {
               method: 'PUT',
-              body: JSON.stringify({ rows: clean.map((r, i) => ({ id: r.id, name: String(r.name).trim(), sort: i })) }),
+              // `vatTreatment` rides along for every list; the server only stores it where the model
+              // has the column (PICKLIST_EXTRA), so the other seven are unaffected by it being here.
+              body: JSON.stringify({ rows: clean.map((r, i) => ({ id: r.id, name: String(r.name).trim(), sort: i, vatTreatment: r.vatTreatment || 'standard' })) }),
             }).then(({ ok, j }) => {
               if (!ok) return this.setState({ [L.errKey]: (j && j.error) || 'Could not save that list' });
               this.setState({ [L.draftKey]: null, [L.errKey]: '' });
@@ -47752,7 +47836,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       if (!lines.length) lines.push([q2.service || 'Service', fmtCur(q2.subtotalMinor != null ? q2.subtotalMinor / 100 : q2.amount)]);
       if (q2.vatMinor != null && q2.vatMinor > 0) {
         lines.push(['Subtotal', fmtCur(q2.subtotalMinor / 100)]);
-        lines.push(['VAT ' + (Number(q2.vatRateBp) || 0) / 100 + '%', fmtCur(q2.vatMinor / 100)]);
+        // On what, when that is not the whole subtotal — see the note in the print template.
+        const taxed2 = _itemsTaxedMinor9(q2.items);
+        lines.push(['VAT ' + (Number(q2.vatRateBp) || 0) / 100 + '%'
+          + (taxed2 > 0 && taxed2 !== Number(q2.subtotalMinor) ? ' on ' + fmtCur(taxed2 / 100) : ''),
+          fmtCur(q2.vatMinor / 100)]);
       }
       return lines;
     };
@@ -47890,6 +47978,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             })),
             subtotal: rate9 > 0 ? fmtCur(net9) : '',
             vat: rate9 > 0 ? fmtCur(vatAmt9) : '',
+            // Same as the invoice: name the base only when the VAT is not on all of it.
+            vatOn: (() => { const t9 = _itemsTaxedMinor9(raw0 && raw0.items) / 100;
+              return (rate9 > 0 && t9 > 0 && Math.round(t9 * 100) !== Math.round(net9 * 100)) ? fmtCur(t9) : ''; })(),
             total: fmtCur(gross9),
             subtotalNum: net9.toFixed(2), vatNum: vatAmt9.toFixed(2), vatRate: rate9,
           };
@@ -48206,7 +48297,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // Minor units, matching the save below to the halala. Rounding VAT to a whole riyal here showed
     // the user "VAT SAR 38 / TOTAL SAR 288" for a quotation that saves as 37.50 / 287.50 — a preview
     // that disagrees with what it is previewing is worse than no preview.
-    const qcVatN = Math.round(Math.round(qcSubtotalN * 100) * Math.round(qcVatRate * 100) / 10000) / 100;
+    // On the TAXABLE lines, not the subtotal — a quotation that mixes professional and government
+    // fees was quoting 15% on both, and the invoice copies these figures exactly.
+    const qcTaxedN = qcLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) : s2, 0);
+    const qcVatN = Math.round(Math.round(qcTaxedN * 100) * Math.round(qcVatRate * 100) / 10000) / 100;
     // Re-open a DRAFT for editing. Only drafts: once a quotation has been sent the client has seen
     // it, so changing it underneath them would make their copy and ours disagree.
     const openEditQuote = (raw9) => this.setState({
@@ -48269,8 +48363,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // invoice. Rounding the gross to a whole riyal here is what made the printed rate a lie.
       const _qminor = (n) => Math.round((parseFloat(n) || 0) * 100);
       const qSubtotalMinor = valid.reduce((s2, l) => s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])), 0);
+      const qTaxedMinor = valid.reduce((s2, l) => _lineTaxed9(l) ? s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])) : s2, 0);
       const qVatRateBp = Math.round(qcVatRate * 100);                        // 15 → 1500
-      const qVatMinor = Math.round(qSubtotalMinor * qVatRateBp / 10000);
+      const qVatMinor = Math.round(qTaxedMinor * qVatRateBp / 10000);
       const qTotalMinor = qSubtotalMinor + qVatMinor;
       const total = Math.round(qTotalMinor / 100);   // whole units, for the lists that read `amount`
       const service = st.qcSubject || (valid[0][0] + (valid.length > 1 ? ' +' + (valid.length - 1) : ''));
@@ -48297,6 +48392,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // fee is noise in a document that is read by people.
         items: valid.map(l5 => {
           const it5 = { name: String(l5[0]).trim(), units: parseFloat(l5[1]) || 1, price: parseFloat(l5[2]) || 0, kind: _qcKindOf(l5[3]) };
+          // Frozen like every other figure on the document. Absent means standard-rated.
+          const vt5 = _vatOfName9(it5.name);
+          if (vt5 !== 'standard') it5.vat = vt5;
           if (_qcNeedsCountry9(it5.name) && String(l5[4] || '').trim()) it5.country = String(l5[4]).trim();
           return it5;
         }),
