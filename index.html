@@ -15300,7 +15300,11 @@
               <div class="ldf-cap">{{ ldfPartyCap }}<span>who they are</span></div>
               <div class="fm-wide">
                 <label class="fm-lab">{{ ldfNameLabel }} <span class="fm-req">*</span></label>
-                <input sc-camel-default-value="{{ ldfName }}" data-seed-val="{{ ldfName }}" onBlur="{{ setLdfName }}" placeholder="{{ ldfNamePlaceholder }}" class="fm-inp">
+                <!-- `data-ldf="name"` so the save can read the BOX. The field commits on blur, and
+                     the blur a click causes has not been applied when the click handler runs — so
+                     typing a name and pressing Save once was refused for having no name, and the
+                     second press saved. That is how eight leads called "shifin" happened. -->
+                <input sc-camel-default-value="{{ ldfName }}" data-seed-val="{{ ldfName }}" onBlur="{{ setLdfName }}" data-ldf="name" placeholder="{{ ldfNamePlaceholder }}" class="fm-inp">
                 <!-- Under the name, because it decides what the name above IS. -->
                 <div style="display:flex; gap:5px; margin-top:6px;">
                   <sc-for list="{{ ldfKindChips }}" as="k" hint-placeholder-count="2">
@@ -15549,7 +15553,7 @@
         </div>
         <div class="fm-foot" style="justify-content:flex-end;">
           <span onClick="{{ ldFormClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
-          <button onClick="{{ ldfSave }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ ldfSaveLabel }}</button>
+          <button onClick="{{ ldfSave }}" style="background:{{ ldfSaveBg }}; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:{{ ldfSaveCursor }};" style-hover="background:#6900D6;">{{ ldfSaveLabel }}</button>
         </div>
       </div>
     </div>
@@ -47185,8 +47189,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : ((_ldf && _ldf.companyType) || '') === 'Individual'
           ? 'A person you are pitching. If they want a company, that gets set up after they sign — nothing here needs a CR.'
           : 'A company you are pitching. No CR number needed — that gets captured when they become a client.',
-      ldfSaveLabel: (_ldf && _ldf.id) ? 'Save changes' : 'Save lead',
-      ldFormClose: () => this.setState({ ldForm: null, ldfErr: '', ldfBad: '', dupMatches: [] }),
+      // Saving says so. A button that looks identical while a request is in flight is the other
+      // half of why this got pressed repeatedly.
+      ldfSaveLabel: this.state.ldfBusy ? 'Saving…' : ((_ldf && _ldf.id) ? 'Save changes' : 'Save lead'),
+      ldfSaveBg: this.state.ldfBusy ? '#C9A2FF' : '#7C00FF',
+      ldfSaveCursor: this.state.ldfBusy ? 'progress' : 'pointer',
+      ldFormClose: () => (this._ldfSaving = false, this.setState({ ldForm: null, ldfErr: '', ldfBad: '', ldfBusy: false, dupMatches: [] })),
       ...(() => {
         // The parser's names, and the form field each one belongs in.
         // Only fields this form actually has. A website lookup also returns a street, a
@@ -47403,7 +47411,33 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         },
       })),
       ldfSave: () => {
-        const f = this.state.ldForm || {};
+        /**
+         * ONE PRESS IS ONE LEAD.
+         *
+         * There was no in-flight guard here, and the save gives nothing back while it runs: the
+         * button does not change, the dialog stays open, and the row appears in a list behind the
+         * dialog that nobody can see. So a press that felt like it did nothing got pressed again —
+         * and every press created another company. Eight leads named "shifin" arrived that way,
+         * six of them inside seventeen milliseconds, because the requests queued and landed
+         * together the moment the server came free.
+         *
+         * The flag is cleared on every exit, including the refusals below: a form that refuses and
+         * then will not let you try again is worse than the duplicate it prevents.
+         */
+        // AN INSTANCE FLAG, NOT STATE. `setState` does not apply before the next click arrives —
+        // measured: three presses on a slow save each read `ldfBusy` as false and each sent a
+        // request, while the button already read "Saving…". The flag that stops the second press
+        // has to be set in the same tick as the first one reads it.
+        if (this._ldfSaving) return;
+        // THE BOX, THEN STATE — the same rule the sign-in form needed. This field commits on blur
+        // and a click's blur has not applied by the time this runs, so a name typed and saved in
+        // one go read as empty and the form refused for having no name. The second press worked,
+        // which is exactly the shape that produces duplicates.
+        const f0 = this.state.ldForm || {};
+        const nameBox9 = document.querySelector('[data-ldf="name"]');
+        const typed9 = nameBox9 ? String(nameBox9.value || '').trim() : '';
+        const f = (typed9 && typed9 !== String(f0.name || '').trim()) ? { ...f0, name: typed9 } : f0;
+        if (f !== f0) this.setState({ ldForm: f });
         // WHAT IS AND IS NOT REQUIRED
         //
         // Only the company name. A lead taken off a phone call may have no email, no phone and no
@@ -47428,6 +47462,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // save paths here and the importer already do the same thing with it, filing the details
         // against the company's own name, so the block contradicted the behaviour of every path it
         // was guarding. The server still refuses a contact that genuinely has no name.
+
+        // Past every check: from here a request WILL go out, so the button closes behind us.
+        // The instance flag guards; the state flag is only what the button is drawn from.
+        this._ldfSaving = true;
+        this.setState({ ldfBusy: true });
 
         // ── correcting one that exists ──
         // A separate route from the create, not the generic CRUD PUT: `contacts` is a relation, and
@@ -47458,11 +47497,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               },
             }),
           }).then(({ ok, j }) => {
-            if (!ok) return this.setState({ ldfErr: (j && j.error) || 'Could not save those changes' });
-            this.setState({ ldForm: null, ldfErr: '', ldfBad: '', dupMatches: [] });
+            if (!ok) return (this._ldfSaving = false, this.setState({ ldfBusy: false, ldfErr: (j && j.error) || 'Could not save those changes' }));
+            this._ldfSaving = false;
+            this.setState({ ldForm: null, ldfErr: '', ldfBad: '', ldfBusy: false, dupMatches: [] });
             this.toast(String(f.name).trim() + ' updated');
             this._crmReload();
-          }).catch(() => this.setState({ ldfErr: 'Server unreachable — nothing was saved' }));
+          }).catch(() => (this._ldfSaving = false, this.setState({ ldfBusy: false, ldfErr: 'Server unreachable — nothing was saved' })));
         }
 
         this._crmFetch('/api/companies', {
@@ -47483,11 +47523,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               : [],
           }),
         }).then(({ ok, j }) => {
-          if (!ok) return this.setState({ ldfErr: (j && j.error) || 'Could not save that lead' });
-          this.setState({ ldForm: null, ldfErr: '', ldfBad: '' });
+          if (!ok) return (this._ldfSaving = false, this.setState({ ldfBusy: false, ldfErr: (j && j.error) || 'Could not save that lead' }));
+          (this._ldfSaving = false, this.setState({ ldForm: null, ldfErr: '', ldfBad: '', ldfBusy: false }));
           this.toast(String(f.name).trim() + ' added as a lead');
           this._crmReload();
-        }).catch(() => this.setState({ ldfErr: 'Server unreachable — nothing was saved' }));
+        }).catch(() => (this._ldfSaving = false, this.setState({ ldfBusy: false, ldfErr: 'Server unreachable — nothing was saved' })));
       },
 
       // ── Won / lost ──
