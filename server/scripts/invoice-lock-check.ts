@@ -75,6 +75,19 @@ async function main() {
   console.log("\na draft is still a form");
   const draft = await make("draft");
   expect((await call("PUT", `/api/invoices/${draft.id}`, { amount: 500, totalMinor: 50000 })).status, 200, "draft · amount edited");
+  // THE BODY THE CONSOLE ACTUALLY SENDS. Its edit dialog posts the same shape to PUT as to POST,
+  // `disbursementIds` included; the create route strips it and the edit path did not, so Prisma
+  // refused the unknown column and EVERY draft edit failed with "Something went wrong".
+  const real = await call("PUT", `/api/invoices/${draft.id}`, {
+    number: draft.number, companyId: co.id, clientName: co.name, amount: 288,
+    subtotalMinor: 25000, vatMinor: 3750, totalMinor: 28750, vatRateBp: 1500,
+    currency: "SAR", status: "draft", date: "2026-11-10", dueDate: "2026-11-24",
+    services: "ZZ edited", items: [{ name: "ZZ line", units: 1, price: 250 }], notes: null,
+    disbursementIds: [],
+  });
+  expect(real.status, 200, "draft · the console's own edit body");
+  (await prisma.invoice.findUnique({ where: { id: draft.id } }))?.services === "ZZ edited"
+    ? ok("the edit landed") : fail("it answered 200 and changed nothing");
 
   console.log("\nan issued invoice is not");
   const issued = await make("pending");

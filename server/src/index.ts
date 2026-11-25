@@ -7250,6 +7250,25 @@ app.post("/api/invoices", requireAuth, requireStaff, requireWriteRole, async (re
   }
 });
 
+/**
+ * THE SAME FIELD, ON THE WAY BACK IN.
+ *
+ * The create route above strips `disbursementIds` before handing an ordinary invoice to the generic
+ * router, and says why: the form sends it on every invoice, empty or not, and an unknown column is
+ * refused by Prisma. The edit dialog sends the IDENTICAL body to PUT — where nothing stripped it.
+ * So every attempt to edit a draft invoice died on `Unknown argument 'disbursementIds'` and the
+ * console showed "Something went wrong. Please try again.", which named neither the field nor the
+ * fact that nothing had been saved.
+ *
+ * It is dropped rather than acted on: which ministry payments an invoice re-charges is settled when
+ * it is RAISED, inside the transaction that stamps them, because a half-applied re-stamp is how a
+ * client gets billed twice for the same fee. An edit changes the document, not what it re-charges.
+ */
+app.put("/api/invoices/:id", (req, _res, next) => {
+  if (req.body && typeof req.body === "object") delete (req.body as any).disbursementIds;
+  next();
+});
+
 // Generic CRUD for the remaining entities (staff auth + write-role guard)
 const entities: [string, string][] = [
   ["companies", "company"],   // list handled above; :id/POST/PUT/DELETE fall through to crud
