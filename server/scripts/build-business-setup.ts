@@ -77,7 +77,18 @@ const real = (role: string) => ROLE_MAP[role] ?? role;
 type N = { id: string; type: string; label: string; config?: any };
 type E = { from: string; to: string; condition?: string };
 
-const task = (id: string, label: string, role: string, slaHours: number, instructions: string, captures: any[] = [], checklist: string[] = [], docType?: string): N => ({
+/**
+ * A checklist item nobody is blocked by. Still listed, still tickable, still printed on the step —
+ * it simply does not hold the step shut.
+ *
+ * The identity pack is the case for it: five documents that arrive over days from a client who is
+ * abroad, in an order nobody controls. Required, they stopped the officer recording ANYTHING about
+ * the step until the last one landed — so the work that had been done was invisible, and the step
+ * sat red against its SLA for a reason that was not the officer's doing.
+ */
+const optional = (labels: string[]) => labels.map(label => ({ label, required: false }));
+
+const task = (id: string, label: string, role: string, slaHours: number, instructions: string, captures: any[] = [], checklist: (string | { label: string; required?: boolean })[] = [], docType?: string): N => ({
   id, type: "task", label,
   config: {
     assigneeRole: real(role), slaHours, instructions,
@@ -89,7 +100,12 @@ const task = (id: string, label: string, role: string, slaHours: number, instruc
     ...(docType ? { docTypeSource: "specific", docType } : {}),
     ...(captures.length ? { captures } : {}),
     // Required items block completion, which is what "the checklist must be 100%" means in the chart.
-    ...(checklist.length ? { checklist: checklist.map(label => ({ key: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"), label, required: true })) } : {}),
+    // A plain string is required — that is how every one of these was written and how they stay.
+    // `optional([...])` is the opt-out, for a pack that genuinely arrives piece by piece.
+    ...(checklist.length ? { checklist: checklist.map(c => {
+      const label = typeof c === "string" ? c : c.label;
+      return { key: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"), label, required: typeof c === "string" ? true : c.required !== false };
+    }) } : {}),
   },
 });
 const gate = (id: string, label: string, role: string, slaHours: number, instructions: string): N =>
@@ -192,9 +208,14 @@ const nodes: N[] = [
     "Hold the call and write up what was agreed. Target for the whole of onboarding is 3 working days from the advance.",
     [date("callOn", "Meeting date"), area("minutes", "Meeting minutes", false)]),
   task("kyc", "KYC and client documents", "account_manager", 72,
-    "Collect and check the identity pack. Every required document must be received and verified before G1.",
+    "Collect and check the identity pack. Tick each document as it arrives — none of them holds this step shut, because they come in over days. G1 is where the pack is checked as complete.",
     [pick("kickoffConfirmed", "Client confirms kick-off?", "yes,no")],
-    ["Passport copy — every shareholder", "National ID or residency", "Parent company profile", "Signed power of attorney", "Screening result"]),
+    // NOT REQUIRED. The identity pack comes from a client who is usually abroad, a document at a
+    // time; demanding all five before the step could be completed meant the step recorded nothing
+    // for days and breached an SLA over somebody else's post. They are still listed and still
+    // ticked off one by one — G1 is where somebody checks the pack is genuinely complete, and that
+    // is a person's judgement, not a count of five boxes.
+    optional(["Passport copy — every shareholder", "National ID or residency", "Parent company profile", "Signed power of attorney", "Screening result"])),
   gate("g1", "G1 — onboarding complete", "qa_reviewer", 48,
     "Check the onboarding checklist is genuinely complete and the client has confirmed kick-off. Not the person who collected it."),
 
