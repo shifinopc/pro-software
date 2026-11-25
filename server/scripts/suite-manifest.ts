@@ -46,6 +46,7 @@ export const EXPECTED: string[] = [
   "lead-import-check",
   "lifecycle-guard-check",
   "mail-send-check",
+  "milestone-invoice-check",
   "master-data-pdf-check",
   // Drives the real engine over a one-step CR template: does finishing that step register the
   // client? Creates and deletes its own fixture client, and refuses a database off this machine.
@@ -335,6 +336,7 @@ export const API_GROUP: string[] = [
   "disbursement-billing-check",
   "lifecycle-guard-check",
   "invoice-correct-check",
+  "milestone-invoice-check",
   "invoice-lock-check",
   "task-delegate-check",
   "payment-receipt-check",

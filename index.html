@@ -12559,6 +12559,35 @@
         <div style="margin-top:12px; background:#F6F4FB; border-radius:14px; padding:10px;">
           <div data-qt-preview style="background:#fff; border-radius:8px; box-shadow:0 3px 14px rgba(38,7,77,.10); overflow:hidden; position:relative; min-height:120px;"></div>
         </div>
+        <!-- THE PAYMENT SCHEDULE, AND WHAT HAS BEEN BILLED AGAINST IT.
+             The stages used to exist only on the printed proposal, so "has the client been invoiced
+             for the licence stage yet" was answered by comparing a PDF to a list of invoices. -->
+        <sc-if value="{{ qvHasStages }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; border:1px solid #EDEBF2; border-radius:14px; padding:11px 13px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+              <div style="font-size:11px; font-weight:700; color:#1A1523;">Payment schedule</div>
+              <div style="font-size:10px; color:#A9A6B4;">{{ qvStageDone }} of {{ qvStageCount }} billed</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:7px; margin-top:9px;">
+              <sc-for list="{{ qvStageRows }}" as="st" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="width:20px; height:20px; border-radius:6px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:{{ st.fg }}; background:{{ st.bg }};">{{ st.n }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:11px; font-weight:600; color:#1A1523; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ st.label }}</div>
+                    <div style="font-size:10px; color:#8C8899; margin-top:1px;">{{ st.note }}</div>
+                  </div>
+                  <span style="font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:700; flex-shrink:0;">{{ st.amount }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ qvCanRaiseStage }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ qvRaiseStage }}" style="width:100%; margin-top:11px; background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 0; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ qvRaiseStageLabel }}</button>
+            </sc-if>
+            <sc-if value="{{ qvStagesDone }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:10px; font-size:10px; color:#0E9355; font-weight:600;">Every stage has been invoiced.</div>
+            </sc-if>
+          </div>
+        </sc-if>
         <div style="display:flex; gap:9px; margin-top:12px; flex-wrap:wrap;">
       <sc-if value="{{ qvCanEdit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Edit</button></sc-if>
       <sc-if value="{{ qvCanApprove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvApprove }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Approve</button></sc-if>
@@ -47883,6 +47912,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const reopened = rawSt === 'changes_requested';
       const cli0 = (raw0 && raw0.clientName) || '—';
       return { id, title, meta, amount: total, status, stBg: chip[0], stColor: chip[1],
+        // The database id and the document's currency, for the schedule panel in the drawer.
+        realId, cur: (raw0 && raw0.currency) || sysCurCode,
         // Client as its own column with an initials chip, matching the invoice list.
         client: cli0,
         initials: String(cli0).split(' ').filter(Boolean).map(w9 => w9[0]).slice(0, 2).join('').toUpperCase() || '—',
@@ -48511,11 +48542,39 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       shadow: qtFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
     // ---- View a quotation (the document, in a drawer) ----
+    /**
+     * THE FEE A STAGE IS A SHARE OF, in the words a person uses.
+     *
+     * The three shipped kinds have keys older than the column that holds them; a kind the firm
+     * typed itself IS the word they want, so it is printed as it stands. Same rule as the server's
+     * proposal wording, deliberately — the schedule on screen and the schedule on the client's
+     * document must not name the same fee two different ways.
+     */
+    const _feeWord9 = (k9) => ({ prof: 'Professional Fees', gov: 'Government Fees', foreign: 'Foreign Company Fees' })[k9] || String(k9 || '');
+    /**
+     * The schedule, fetched when the drawer opens. Not carried on the row: it is arithmetic over the
+     * quotation's lines AND over the invoices already raised from it, and the server owns both — a
+     * browser copy would be a second answer to "has the licence stage been billed".
+     */
+    this._loadQStages = (id9) => {
+      if (!id9) return;
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + id9 + '/stages', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.json() : null))
+        .then(v9 => { if (v9) this.setState({ qStages: { id: id9, ...v9 } }); })
+        .catch(() => {});
+    };
     const qtViewRow = this.state.qtView ? quotes.find(q9 => q9.id === this.state.qtView) : null;
     const quotesApi = {
       showQtView: (() => {
         // Paint once the drawer has mounted, same as the invoice detail.
         if (qtViewRow) { clearTimeout(this._qvPaint); this._qvPaint = setTimeout(() => this._paintDocInto('[data-qt-preview]', 'quotation', qtViewRow.docFor()), 60); }
+        // Asked once per opening, not on every render: renderVals runs on every keystroke anywhere.
+        if (qtViewRow && qtViewRow.realId && this._qStagesFor !== qtViewRow.realId) {
+          this._qStagesFor = qtViewRow.realId;
+          this._loadQStages(qtViewRow.realId);
+        }
+        if (!qtViewRow) this._qStagesFor = null;
         return !!qtViewRow;
       })(),
       ...(qtViewRow ? {
@@ -48530,6 +48589,54 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         qvApprove: () => { this.setState({ qtView: null }); qtViewRow.approve(); },
         qvSend: () => { this.setState({ qtView: null }); qtViewRow.send(); },
         qvInvoice: () => { this.setState({ qtView: null }); qtViewRow.convert(); },
+        // ── the payment schedule ──
+        // Fetched when the drawer opens rather than carried on the row: the stages are arithmetic
+        // over the lines and over the invoices already raised, and the server owns both.
+        ...(() => {
+          const sd9 = (this.state.qStages && this.state.qStages.id === qtViewRow.realId) ? this.state.qStages : null;
+          const rows9 = (sd9 && Array.isArray(sd9.stages)) ? sd9.stages : [];
+          const done9 = rows9.filter(st9 => st9.invoice).length;
+          const busy9 = !!this.state.qStageBusy;
+          return {
+            qvHasStages: !!(sd9 && sd9.hasSchedule && rows9.length),
+            qvStageCount: String(rows9.length),
+            qvStageDone: String(done9),
+            qvStagesDone: !!(sd9 && sd9.hasSchedule && rows9.length && done9 === rows9.length),
+            qvStageRows: rows9.map((st9, i9) => ({
+              n: String(i9 + 1),
+              label: st9.label || ('Stage ' + (i9 + 1)),
+              // What it is a share of, and what became of it — the two things a person is looking for.
+              note: [st9.pct ? st9.pct + '% of ' + (st9.basis && st9.basis !== 'total' ? _feeWord9(st9.basis) : 'the total') : '',
+                     st9.invoice ? st9.invoice.number + ' · ' + String(st9.invoice.status || '') : 'not raised yet'].filter(Boolean).join(' · '),
+              amount: _money9(st9.subtotalMinor, qtViewRow.cur || sysCurCode),
+              fg: st9.invoice ? '#0E9355' : '#8C8899',
+              bg: st9.invoice ? '#E7F8EF' : '#F3F1F7',
+            })),
+            // Only when there is a next one to raise, and never while one is in flight.
+            qvCanRaiseStage: !!(sd9 && sd9.hasSchedule && rows9.length && done9 > 0 && done9 < rows9.length && canWrite),
+            qvRaiseStageLabel: busy9 ? 'Raising…' : (() => {
+              const next9 = rows9.find(st9 => !st9.invoice);
+              return next9 ? ('Raise ' + (next9.label || ('stage ' + (next9.index + 1)))) : 'Raise the next stage';
+            })(),
+            qvRaiseStage: () => {
+              if (busy9) return;
+              this.setState({ qStageBusy: true });
+              const t9 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/' + qtViewRow.realId + '/stages/next', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+                body: JSON.stringify({}) })
+                .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+                .then(({ ok, j9 }) => {
+                  this.setState({ qStageBusy: false });
+                  if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 180)) || 'Could not raise that stage', 'error');
+                  this.toast((j9.invoice && j9.invoice.number ? j9.invoice.number : 'Invoice') + ' raised — ' + ((j9.stage && j9.stage.label) || 'next stage'));
+                  this._loadQStages && this._loadQStages(qtViewRow.realId);
+                  this._reloadInvoices && this._reloadInvoices();
+                })
+                .catch(() => { this.setState({ qStageBusy: false }); this.toast('Server unreachable — nothing was raised', 'error'); });
+            },
+          };
+        })(),
       } : {}),
       ...(() => {
         const shown9 = quotes.filter(q9 => qtFilter === 'All' || q9.status === qtFilter);

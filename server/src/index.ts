@@ -118,6 +118,7 @@ import { workforceAll, workforceFor, recordBand, workforceHistory } from "./work
 import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
 import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
+import { planStages, figuresForLines } from "./stages.js";
 import { clientMargins } from "./profitability.js";
 import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
@@ -5685,6 +5686,108 @@ app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRo
   res.json(created);
 });
 
+/**
+ * RAISE ONE PAYMENT STAGE OF A QUOTATION AS ITS OWN INVOICE.
+ *
+ * Shared by the convert route (which raises the first stage as the acceptance happens) and by the
+ * "raise the next stage" route below, so a stage billed on day one and a stage billed six weeks
+ * later are the same document built the same way.
+ *
+ * The figures are computed HERE, from the lines, with each line's own VAT treatment — not taken
+ * from the quotation's totals and apportioned. A stage against government fees and a stage against
+ * professional fees do not carry the same tax, and splitting a blended total would give both the
+ * average.
+ */
+async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opts: { date?: string } = {}) {
+  const figures = await figuresForLines(stage.lines, Number(q.vatRateBp ?? 0) || 0);
+  const number = await nextInvoiceNumber();
+  const today = opts.date ?? businessToday();
+  // What the client reads on the bill: the stage's own wording, and the fee it is a share of.
+  // The three shipped kinds have keys older than the column that holds them, so they are named;
+  // a kind the firm typed itself IS the word they want and is used as it stands. Same map as the
+  // proposal's, because the schedule on the document and the label on the invoice raised from it
+  // must not call the same fee two different things.
+  const FEE_WORD: Record<string, string> = { prof: "Professional Fees", gov: "Government Fees", foreign: "Foreign Company Fees" };
+  const ofLabel = stage.basis && stage.basis !== "total" ? (FEE_WORD[stage.basis] ?? stage.basis) : "";
+  const services = [q.service, stage.label || `Stage ${stage.index + 1}`].filter(Boolean).join(" — ");
+  return prisma.invoice.create({
+    data: {
+      number, companyId: q.companyId, clientName: q.clientName,
+      subtotalMinor: figures.subtotalMinor, vatMinor: figures.vatMinor,
+      totalMinor: figures.totalMinor, vatRateBp: figures.vatRateBp,
+      amount: figures.amount,
+      status: "draft", date: today,
+      services, items: stage.lines as any, notes: q.notes ?? null,
+      quotationId: q.id,
+      milestoneIndex: stage.index,
+      milestoneLabel: [stage.label, ofLabel && stage.pct ? `${stage.pct}% of ${ofLabel}` : ""].filter(Boolean).join(" · ") || null,
+    },
+  });
+}
+
+/**
+ * THE STAGES OF A QUOTATION, AND WHICH OF THEM HAVE BEEN BILLED.
+ *
+ * Read by the console so the quotation can show its schedule with the invoice against each line,
+ * rather than a person comparing a proposal to a list of invoices by eye.
+ */
+app.get("/api/quotations/:id/stages", requireAuth, requireStaff, async (req, res) => {
+  const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+  if (!q) return res.status(404).json({ error: "Quotation not found" });
+  const totalMinor = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
+  const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
+  const raised = await prisma.invoice.findMany({
+    where: { quotationId: q.id },
+    select: { id: true, number: true, status: true, milestoneIndex: true, totalMinor: true, amount: true },
+  });
+  const byIndex = new Map(raised.filter(i => i.milestoneIndex != null).map(i => [i.milestoneIndex as number, i]));
+  res.json({
+    hasSchedule: stages.length > 0,
+    // A quotation with no schedule bills as one invoice, which is what every one of them did before
+    // stages existed — said out loud so the console does not have to infer it from an empty list.
+    stages: stages.map(st => ({
+      index: st.index, label: st.label, pct: st.pct, basis: st.basis,
+      subtotalMinor: st.subtotalMinor, lines: st.lines.length,
+      invoice: byIndex.get(st.index) ?? null,
+    })),
+    whole: raised.find(i => i.milestoneIndex == null) ?? null,
+  });
+});
+
+/**
+ * RAISE THE NEXT STAGE THAT HAS NOT BEEN BILLED.
+ *
+ * Deliberately one at a time and deliberately manual: a stage falls due when something in the real
+ * world happens — the licence is approved, the CR is issued — and the system is not the thing that
+ * knows that. Raising them all on acceptance would hand the client three bills for work not yet
+ * done; raising none would leave the schedule as decoration, which is where this started.
+ */
+app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const a = (req as any).auth;
+  const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
+  if (!q) return res.status(404).json({ error: "Quotation not found" });
+  const totalMinor = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
+  const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
+  if (!stages.length) return res.status(409).json({ error: `${q.number} has no payment schedule — it bills as one invoice` });
+
+  const raised = await prisma.invoice.findMany({ where: { quotationId: q.id }, select: { milestoneIndex: true, number: true } });
+  if (raised.some(i => i.milestoneIndex == null))
+    return res.status(409).json({ error: `${q.number} was already invoiced in full as ${raised.find(i => i.milestoneIndex == null)!.number}` });
+  const done = new Set(raised.map(i => i.milestoneIndex));
+  const wanted = req.body?.index != null ? Number(req.body.index) : stages.find(st => !done.has(st.index))?.index;
+  if (wanted == null) return res.status(409).json({ error: `Every stage of ${q.number} has been invoiced` });
+  if (done.has(wanted)) return res.status(409).json({ error: `Stage ${wanted + 1} of ${q.number} is already invoiced` });
+  const stage = stages.find(st => st.index === wanted);
+  if (!stage) return res.status(400).json({ error: `${q.number} has no stage ${wanted + 1}` });
+  if (!(stage.subtotalMinor > 0))
+    return res.status(400).json({ error: `"${stage.label || `Stage ${wanted + 1}`}" bills nothing on this quotation — it is a percentage of a fee the quotation does not carry` });
+
+  const invoice = await raiseStageInvoice(q, stage);
+  logActivity({ type: "finance", message: `${invoice.number} raised for ${q.number} — ${stage.label || `stage ${wanted + 1}`}`, user: (req as any).auth?.email });
+  await logAudit({ action: "quotation.stage_invoice", actorId: a?.sub, target: `${q.number} → ${invoice.number}`, detail: `stage ${wanted + 1}: ${stage.label}`, ip: clientIp(req) });
+  res.status(201).json({ invoice, stage: { index: stage.index, label: stage.label, of: stages.length } });
+});
+
 app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const a = (req as any).auth;
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
@@ -5715,9 +5818,39 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
   if (already) return res.status(409).json({ error: `${q.number} was already invoiced as ${already.number}` });
 
+  /**
+   * A QUOTATION WITH A SCHEDULE BILLS ITS FIRST STAGE, NOT THE WHOLE THING.
+   *
+   * The terms the client signed say "50% of professional fees on signing, 100% of the foreign
+   * company fee" — and accepting used to raise one invoice for the entire amount, so the client was
+   * asked on day one for money their own terms did not make due until the licence was approved.
+   * Paying what the terms asked for then read as a PART payment of a bill nobody had sent in that
+   * shape, and no document anywhere said which fee had been settled.
+   *
+   * Only the first. The later stages fall due when something happens in the real world that this
+   * system is not the one to know about, so they are raised deliberately — see /stages/next.
+   */
+  const today = businessToday();
+  const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], qGross);
+  const billable = stages.filter(st => st.subtotalMinor > 0);
+  if (billable.length) {
+    const first = billable[0];
+    const staged = await raiseStageInvoice(q, first, { date: today });
+    await prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } });
+    // The same delivery the single-invoice path owes, for the same reason: three line items are
+    // three jobs somebody has to do, and billing for work nobody was given is how it goes undone.
+    let stagedDelivery: Awaited<ReturnType<typeof startDeliveryForQuotation>> | null = null;
+    if (st === "sent") {
+      stagedDelivery = await startDeliveryForQuotation(q.id, { actor: a?.email ?? a?.sub })
+        .catch(e => { console.error("delivery failed for", q.number, e); return null; });
+    }
+    logActivity({ type: "finance", message: `Invoice ${staged.number} raised from quotation ${q.number} — ${first.label || "stage 1"} of ${stages.length} stage(s)${q.clientName ? ` — ${q.clientName}` : ""}` });
+    await logAudit({ action: "quotation.convert", actorId: a.sub, target: q.id, detail: `${q.number} → ${staged.number} · stage 1 of ${stages.length}: ${first.label}${stagedDelivery?.tasks?.length ? ` · ${stagedDelivery.tasks.length} job(s) opened` : ""}` });
+    return res.status(201).json({ invoice: staged, accepted: st === "sent", delivery: stagedDelivery, stage: { index: first.index, of: stages.length, label: first.label } });
+  }
+
   const number = await nextInvoiceNumber();
 
-  const today = businessToday();
   const [invoice] = await prisma.$transaction([
     prisma.invoice.create({
       data: {

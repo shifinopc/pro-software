@@ -803,6 +803,15 @@ model Invoice {
   // because a tax document that vanishes is worse than one marked cancelled.
   voidedAt       String?
   voidReason     String?
+  /// WHICH PAYMENT STAGE THIS INVOICE IS, on a quotation billed in stages. Null means the whole
+  /// quotation — every invoice raised before stages existed, and every one raised from a quotation
+  /// that has no schedule.
+  ///
+  /// The index is the position in the quotation's `milestones`, which is what makes "has stage 2
+  /// been raised yet" answerable without comparing money. The label is copied because the schedule
+  /// can be renegotiated on a later revision and this invoice must keep saying what it was for.
+  milestoneIndex Int?
+  milestoneLabel String?
   /// CORRECTION CHAIN — the same shape as the one on Quotation, deliberately, so a reader who knows
   /// one knows the other.
   ///
