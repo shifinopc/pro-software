@@ -5940,9 +5940,12 @@
                           <sc-if value="{{ d.canMove }}" hint-placeholder-val="{{ true }}">
                             <span onClick="{{ d.next }}" style="font-size:8.5px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D3F1E1;">{{ d.nextLabel }}</span>
                           </sc-if>
-                          <sc-if value="{{ d.canQuote }}" hint-placeholder-val="{{ true }}">
-                            <span onClick="{{ d.quote }}" style="font-size:8.5px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="background:#D2ECFB;">Quote</span>
-                          </sc-if>
+                          <!-- NO SEPARATE "Quote" CHIP.
+                               It sat beside "→ Quoted" and the two read as the same action while
+                               doing different things: one made the document, the other moved the
+                               card into a column that CLAIMS the document exists. The easier of
+                               the two was the one that lied. Quoting is now what moving to Quoted
+                               asks for, so there is one button and it does the honest thing. -->
                         </div>
                       </sc-if>
                     </div>
@@ -14884,6 +14887,9 @@
               <sc-if value="{{ r.cannotFill }}" hint-placeholder-val="{{ false }}">
                 <div style="margin-top:6px; border:1px dashed #DDD9E6; border-radius:11px; padding:10px 12px; font-size:11px; color:#6F6C7A; background:#FBFAFE; line-height:1.5;">{{ r.where }}</div>
               </sc-if>
+              <sc-if value="{{ r.isAction }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ r.act }}" style="margin-top:6px; border:1px solid #C9A2FF; border-radius:11px; padding:10px 13px; font-size:11px; font-weight:700; color:#7C00FF; background:#F9F5FF; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px;" style-hover="background:#F2E8FF;"><span>{{ r.actionLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.5" stroke-linecap="round"><path d="M9 6l6 6-6 6"></path></svg></div>
+              </sc-if>
               <sc-if value="{{ r.hasHint }}" hint-placeholder-val="{{ false }}">
                 <div class="fm-hint" style="margin-top:5px;">{{ r.hint }}</div>
               </sc-if>
@@ -20724,6 +20730,28 @@ class Component extends DCLogic {
       employees:    { label: 'Headcount', kind: 'number', to: 'company', hint: '' },
     };
     /**
+     * SOME MISSING THINGS ARE NOT A BOX TO TYPE IN — they are a job to do.
+     *
+     * "A quotation has been raised" cannot be answered by typing anything: the answer is a
+     * document. Showing it as a greyed-out row saying "go and do this elsewhere" would put the
+     * separate Quote button back, in words instead of in pixels. So the row carries the action
+     * itself, and the card moves when the job is done.
+     *
+     * Keyed by fact, so this generalises: a document blocker can be given "Upload it…" the same
+     * way without touching anything else here.
+     */
+    this._FIX_ACTIONS = {
+      hasQuotation: {
+        label: 'Compose the quotation…',
+        note: 'Opens the quotation builder for this client, seeded from the deal. The card moves on its own once the quotation is saved.',
+        run: (s9) => {
+          // Closed first: the composer is a dialog too, and two stacked over the board is a maze.
+          this.setState({ fixMissing: null, fixErr: '', fixSaving: false });
+          this._quoteDeal(s9.dealId, s9.title, s9.stageId);
+        },
+      },
+    };
+    /**
      * Open the form that answers a refused move.
      *
      * Prefilled from what the record already holds, because some of these are half-answered — a
@@ -20877,7 +20905,7 @@ class Component extends DCLogic {
      * Lands as a DRAFT, deliberately: quoting is not sending, and a document that goes out the
      * moment somebody presses a button on a board is one nobody has read.
      */
-    this._quoteDeal = (id, title) => {
+    this._quoteDeal = (id, title, thenMoveStageId) => {
       const cols = ((this.state.pipelineData || {}).columns) || [];
       let deal = null;
       for (const c of cols) { const hit = (c.deals || []).find(d => d.id === id); if (hit) { deal = hit; break; } }
@@ -20896,6 +20924,9 @@ class Component extends DCLogic {
           // they were being quoted for.
           qcLines: [[deal.title || title || '', '1', price9]],
           qcDealId: id,
+          // The move this quotation was opened in order to make possible. Retried after saving —
+          // never assumed, because the stage may ask for more than the quotation.
+          qcThenMove: thenMoveStageId || null,
         });
       }
       // No board loaded — the row and drawer buttons can be pressed from screens that never fetch
@@ -41856,7 +41887,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               // into a role="button" tab stop, and a whole card announcing itself as a button would
               // be wrong — the real controls are the pills inside it.
               dragCursor: canWrite ? 'grab' : 'default',
-              canQuote: canWrite && d.status === 'open' && !d.quotationId,
+              // `canQuote`/`quote` are gone from the card — quoting is what moving to Quoted asks
+              // for now, so the board has one forward button instead of two that looked alike.
               // Only forward, and only while open. A "next" button on a closed deal would either do
               // nothing or reopen it, and neither is what the word means.
               canMove: canWrite && d.status === 'open' && !!(nextOpen || lostStage),
@@ -41865,7 +41897,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 if (nextOpen) return this._moveDeal(d.id, nextOpen.id);
                 if (lostStage) this.setState({ dealMove: { id: d.id, title: d.title, stageId: lostStage.id, stageName: lostStage.name, reason: '' }, dmErr: '' });
               },
-              quote: () => this._quoteDeal(d.id, d.title),
               // Pre-bound to this deal, so what gets logged is attached to the right thing rather
               // than floating against the company and losing which deal it was about.
               log: () => this.setState({
@@ -45388,8 +45419,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           fixSaveBg: _fxSaving9 ? '#C9A2FF' : '#7C00FF',
           fixSaveCursor: _fxSaving9 ? 'default' : 'pointer',
           fixRows: ((_fx9 && _fx9.blockers) || []).map((b9) => {
-            const f9 = this._FIX_FIELDS[b9.field];
+            const a9 = this._FIX_ACTIONS[b9.field];
+            const f9 = a9 ? null : this._FIX_FIELDS[b9.field];
+            if (a9) {
+              return {
+                label: b9.label || b9.key,
+                canFill: false, cannotFill: false, isAction: true,
+                actionLabel: a9.label, hasHint: true, hint: a9.note,
+                act: () => a9.run(_fx9),
+                type: 'text', placeholder: '', value: '', set: () => {},
+                hasUnit: false, unit: '', where: '',
+              };
+            }
             return {
+              isAction: false, actionLabel: '', act: () => {},
               // The stage's own wording for the item, not the field's — the person configured the
               // list and that is what they will be looking for.
               label: b9.label || (f9 && f9.label) || b9.key,
@@ -48913,7 +48956,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         qcTerms: [],
         // Cleared with everything else, or a quotation composed later would attach itself to the
         // deal somebody quoted an hour ago.
-        qcDealId: null,
+        qcDealId: null, qcThenMove: null,
         qcCur: sysCurCode, qcVat: null, qcNextNo: null });
       const t9 = localStorage.getItem('stimespro:token');
       fetch((this._apiBase || 'http://localhost:4100') + '/api/quotations/next-number', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
@@ -49065,6 +49108,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               .then(({ ok: ok9, j: j9 }) => {
                 if (!ok9) return this.toast((j9 && j9.error) || 'Saved, but it is not linked to the deal', 'error');
                 if (this._loadPipeline) this._loadPipeline();
+                // The move this was opened for. RETRIED, not assumed — the stage may ask for more
+                // than a quotation, and if it does the refusal re-opens with whatever is left
+                // rather than the card sliding over on the strength of one item.
+                if (st.qcThenMove) this._moveDeal(deal9, st.qcThenMove);
               })
               .catch(() => this.toast('Saved, but it is not linked to the deal', 'error'));
           }
