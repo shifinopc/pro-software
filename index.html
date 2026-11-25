@@ -16923,6 +16923,12 @@
                   <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ true }}">
                     <input sc-camel-default-value="{{ c.value }}" data-seed-val="{{ c.value }}" onChange="{{ c.type }}" onBlur="{{ c.set }}" class="fm-inp">
                   </sc-if>
+                  <!-- Seeded, not bound, and the value goes in the ATTRIBUTE: a textarea takes its
+                       content from its children, and binding those re-renders the box on every
+                       keystroke and puts the cursor back at the start. -->
+                  <sc-if value="{{ c.isArea }}" hint-placeholder-val="{{ false }}">
+                    <textarea sc-camel-default-value="{{ c.value }}" data-seed-val="{{ c.value }}" onChange="{{ c.type }}" onBlur="{{ c.set }}" rows="4" class="fm-inp" style="resize:vertical; min-height:74px; font-family:inherit;"></textarea>
+                  </sc-if>
                 </div>
               </sc-for>
             </div>
@@ -39012,7 +39018,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // at whatever it was on first render. An element that appears and disappears cannot.
           ruleErr: _ruleFields.indexOf(c.var) >= 0,
           isSelect: c.type === 'select', isDate: c.type === 'date', isMoney: c.type === 'money',
-          isText: c.type !== 'select' && c.type !== 'date' && c.type !== 'money',
+          // A capture declared `textarea` rendered as a one-line box: the builder has offered the
+          // type since it was written and this form never looked for it, so "what was agreed on
+          // the call" was a field you could not see the start of once you had typed a sentence.
+          isArea: c.type === 'textarea',
+          isText: c.type !== 'select' && c.type !== 'date' && c.type !== 'money' && c.type !== 'textarea',
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
           // refused on completion, so the form should say so before the button is pressed.
           req: !(c.required === false || c.optional === true),
