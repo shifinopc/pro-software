@@ -11249,6 +11249,18 @@
           <div><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">REFERENCE</div><input sc-camel-default-value="{{ rpRef }}" data-seed-val="{{ rpRef }}" onBlur="{{ setRpRef }}" placeholder="Bank ref / receipt no." style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
           <div><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">DATE RECEIVED</div><input value="{{ rpDate }}" onChange="{{ setRpDate }}" type="date" style="margin-top:6px; width:100%; border:1px solid transparent; border-radius:12px; padding:12px 10px; font-size:12px; background:#F6F4FA;" style-focus="background:#fff; border-color:#7C00FF;"></div>
         </div>
+        <div style="margin-top:13px;">
+          <div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">RECEIPT / PROOF OF PAYMENT</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:6px; border:1px solid #EDEBF2; border-radius:12px; padding:10px 12px; background:#FCFBFE;">
+            <span style="width:32px; height:32px; border-radius:9px; background:#E4F1FD; color:#0284C7; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></span>
+            <div style="flex:1; min-width:0;">
+              <sc-if value="{{ rpHasFile }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; font-weight:600; color:#1A1523; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ rpFileName }}</div><div style="font-size:10px; color:#8C8899; margin-top:1px;">Filed with the receipt</div></sc-if>
+              <sc-if value="{{ rpNoFile }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px; font-weight:600; color:#8C8899;">No file attached</div><div style="font-size:10px; color:#A9A6B4; margin-top:1px;">Bank slip or receipt · PDF, JPG or PNG up to 4 MB · optional</div></sc-if>
+            </div>
+            <sc-if value="{{ rpHasFile }}" hint-placeholder-val="{{ false }}"><span onClick="{{ rpClearFile }}" style="font-size:11px; font-weight:700; color:#C0353A; cursor:pointer; white-space:nowrap;" style-hover="text-decoration:underline;">Remove</span></sc-if>
+            <label style="background:#fff; color:#5B21B6; border:1px solid #D9C6F5; font-size:11px; font-weight:600; padding:6px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#F5EEFF;">{{ rpFileBtn }}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange="{{ rpPickFile }}" style="display:none;"></label>
+          </div>
+        </div>
         <sc-if value="{{ rpHasErr }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ rpErr }}</div></sc-if>
         <div style="display:flex; gap:10px; margin-top:13px; justify-content:flex-end;">
           <button onClick="{{ closeRecordPay }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button>
@@ -12263,6 +12275,7 @@
             <div style="display:flex; gap:10px; margin-top:10px;">
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VAT</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddCiVatToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ciVatVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiVatOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCiVatOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
             </div>
+            <sc-if value="{{ ciZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — no VAT will be charged and the document prints no VAT line. Only for genuinely exempt or zero-rated work.</div></sc-if>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SUBJECT / PROJECT</div><input sc-camel-default-value="{{ ciSubject }}" data-seed-val="{{ ciSubject }}" onBlur="{{ setCiSubject }}" placeholder="e.g. Work Visa Processing" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE;"></div>
             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addCiLine }}" title="{{ addCiLineHint }}" style="font-size:11px; font-weight:700; color:{{ ciAddColor }}; cursor:{{ ciAddCursor }};">+ Add item</span></div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
@@ -12309,6 +12322,7 @@
             <div style="display:flex; gap:10px; margin-top:10px;">
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VAT</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddQcVatToggle }}" style="border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE; cursor:pointer; display:flex; align-items:center; gap:8px;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddQcVatVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddQcVatOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:10px; box-shadow:0 10px 28px rgba(38,7,77,.16); padding:4px; z-index:30;"><sc-for list="{{ ddQcVatOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 10px; border-radius:7px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
             </div>
+            <sc-if value="{{ qcZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — no VAT will be charged and the document prints no VAT line. Only for genuinely exempt or zero-rated work.</div></sc-if>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SERVICE / SUBJECT</div><input sc-camel-default-value="{{ qcSubject }}" data-seed-val="{{ qcSubject }}" onBlur="{{ setQcSubject }}" data-qcf="subject" maxlength="120" placeholder="e.g. Labour card renewal × 3" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
             <!-- WHAT THIS SELLS, as opposed to what it charges for. The subject above is written for
                  the client to read; this is the catalogue service that becomes one case when the
@@ -12474,6 +12488,13 @@
         <div style="margin-top:12px; background:#F6F4FB; border-radius:14px; padding:10px;">
           <div data-rc-preview style="background:#fff; border-radius:8px; box-shadow:0 3px 14px rgba(38,7,77,.10); overflow:hidden; position:relative; min-height:120px;"></div>
         </div>
+        <sc-if value="{{ rcHasFile }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ rcViewFile }}" style="display:flex; align-items:center; gap:9px; margin-top:12px; border:1px solid #D9E9F7; border-radius:12px; padding:10px 12px; background:#F7FBFE; cursor:pointer;" style-hover="border-color:#0284C7;">
+            <span style="width:28px; height:28px; border-radius:8px; background:#E4F1FD; color:#0284C7; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg></span>
+            <div style="flex:1; min-width:0;"><div style="font-size:11px; font-weight:700; color:#1A1523; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ rcFileName }}</div><div style="font-size:10px; color:#8C8899; margin-top:1px;">Proof of payment the client sent</div></div>
+            <span style="font-size:11px; font-weight:700; color:#0284C7; white-space:nowrap;">View</span>
+          </div>
+        </sc-if>
         <div style="display:flex; gap:9px; margin-top:12px; justify-content:flex-end;">
           <button onClick="{{ rcPrint }}" title="Print — or choose “Save as PDF” in the print dialog" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</button>
         </div>
@@ -16569,14 +16590,22 @@
                  it rendered on a workflow step too - a Delegate button for the task, sitting between
                  the step's heading and the step's form, above that form's own Complete bar. -->
             <sc-if value="{{ wdIsPlain }}" hint-placeholder-val="{{ false }}">
-            <div style="display:flex; gap:10px; margin:14px 0 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:12px 20px 16px; border-top:1px solid #F1EEF7; z-index:2;">
-              <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer; transition:border-color .2s, color .2s;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
-              <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
-              <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
-              <!-- The sweep is a child rather than a background animation so it can be clipped by the
-                   button's own radius and sit under the label. overflow:hidden on the button, the
-                   highlight skewed and travelling across it once every few seconds. -->
-              <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.5; position:relative; overflow:hidden; background:#15111D; color:#fff; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer; box-shadow:0 8px 22px rgba(21,17,29,.24); transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-1px); box-shadow:0 12px 28px rgba(21,17,29,.3);"><span style="position:absolute; top:0; bottom:0; left:0; width:32%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0)); animation:sweep 3.2s ease-in-out 1s infinite; pointer-events:none;"></span><span style="position:relative;">Mark done</span></button></sc-if>
+            <div style="display:flex; gap:10px; margin:14px 0 0; position:sticky; bottom:0; background:rgba(255,255,255,.92); backdrop-filter:blur(18px); padding:12px 20px 16px; border-top:1px solid #F1EEF7; z-index:2;">
+
+              <sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}"><button onClick="{{ toggleDelegate }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer; transition:border-color .2s, color .2s;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button></sc-if>
+
+              <sc-if value="{{ wdCanStart }}" hint-placeholder-val="{{ false }}"><button onClick="{{ startTask }}" style="flex:1; background:#F3E8FF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">Start</button></sc-if>
+
+              <sc-if value="{{ wdCanReopen }}" hint-placeholder-val="{{ false }}"><button onClick="{{ reopenTask }}" style="flex:1; background:#fff; color:#3E3949; border:1px solid #E7E3F0; font-size:11px; font-weight:650; padding:13px 0; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Reopen</button></sc-if>
+
+              <!-- The sweep is a child rather than a background animation so it can be clipped by the
+
+                   button's own radius and sit under the label. overflow:hidden on the button, the
+
+                   highlight skewed and travelling across it once every few seconds. -->
+
+              <sc-if value="{{ wdCanComplete }}" hint-placeholder-val="{{ true }}"><button onClick="{{ markTaskDone }}" style="flex:1.5; position:relative; overflow:hidden; background:#15111D; color:#fff; border:none; font-size:11px; font-weight:700; padding:13px 0; border-radius:99px; cursor:pointer; box-shadow:0 8px 22px rgba(21,17,29,.24); transition:transform .2s, box-shadow .2s;" style-hover="transform:translateY(-1px); box-shadow:0 12px 28px rgba(21,17,29,.3);"><span style="position:absolute; top:0; bottom:0; left:0; width:32%; background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0)); animation:sweep 3.2s ease-in-out 1s infinite; pointer-events:none;"></span><span style="position:relative;">Mark done</span></button></sc-if>
+
             </div>
             </sc-if>
           </sc-if>
@@ -23501,6 +23530,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         rcAmount: fmtCur(_rcRow.amount),
         closeRcView: () => this.setState({ rcView: null }),
         rcPrint: () => this._printDocDirect('receipt', this._receiptFor(_rcRow)),
+        // The slip the client sent, if one was filed with the payment. It is a private file, so it
+        // opens through the viewer that carries the token rather than as a plain link.
+        rcHasFile: !!_rcRow.attachment,
+        rcFileName: _rcRow.attachmentName || 'Attached receipt',
+        rcViewFile: () => _rcRow.attachment && this._openFile(String(_rcRow.attachment), _rcRow.attachmentName || 'Receipt'),
       } : {}),
     };
 
@@ -24441,6 +24475,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })(),
       ...mkDd('ddCiVat', CI_VAT_OPTS, ciVatSel, (v) => this.setState({ ciVat: v })),
       ciCurVal: ciCur, ciVatVal: ciVatSel,
+      // Zero-rating is a one-click choice that carries all the way to the printed document and
+      // the ZATCA QR, and it leaves no VAT line behind to notice it by. So it says so while it
+      // is still a choice, rather than being discovered on a bill the client already holds.
+      ciZeroVat: ciVatRate === 0,
       ciClientVal: this.state.ciClient || 'Select a client',
       ciClientColor: this.state.ciClient ? '#1A1523' : '#A9A6B4',
       ciSaveLabel: this.state.ciEditId ? 'Save changes' : 'Save',
@@ -24800,9 +24838,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // part payment is how an invoice ends up paid twice.
         this.setState({ rpOpen: true, rpInv: row9 ? row9.no : '',
           rpAmount: row9 ? String(row9.outstandingNum) : '', rpMethod: 'Bank transfer',
-          rpRef: '', rpDate: new Date().toISOString().slice(0, 10), rpErr: '' });
+          rpRef: '', rpDate: new Date().toISOString().slice(0, 10), rpErr: '',
+          // The proof of payment starts empty every time the dialog opens — a slip left over from
+          // the last payment would be filed against this one.
+          rpFile: null, rpFileBusy: false });
       },
-      closeRecordPay: () => this.setState({ rpOpen: false }),
+      closeRecordPay: () => this.setState({ rpOpen: false, rpFile: null, rpFileBusy: false }),
+      // ---- Proof of payment: the bank slip or receipt the client sent ----
+      // Uploaded as soon as it is picked (a private document, like any other scan), so the dialog
+      // can name the file and the submit stays a single call.
+      rpFileName: (this.state.rpFile && this.state.rpFile.name) || '',
+      rpHasFile: !!(this.state.rpFile && this.state.rpFile.path),
+      rpNoFile: !(this.state.rpFile && this.state.rpFile.path),
+      rpFileBtn: this.state.rpFileBusy ? 'Uploading…' : (this.state.rpFile && this.state.rpFile.path) ? 'Replace' : 'Attach file',
+      rpClearFile: () => { if (!this.state.rpFileBusy) this.setState({ rpFile: null, rpErr: '' }); },
+      rpPickFile: (ev9) => {
+        const f9 = ev9 && ev9.target && ev9.target.files && ev9.target.files[0];
+        if (ev9 && ev9.target) ev9.target.value = '';
+        if (!f9 || this.state.rpFileBusy) return;
+        this.setState({ rpFileBusy: true, rpErr: '' });
+        this._uploadDocFile(f9)
+          .then(u9 => this.setState({ rpFile: { path: u9.path, name: u9.name }, rpFileBusy: false }))
+          .catch(e9 => this.setState({ rpFileBusy: false, rpErr: String((e9 && e9.message) || 'Could not attach that file') }));
+      },
       rpAmount: this.state.rpAmount || '', rpRef: this.state.rpRef || '', rpDate: this.state.rpDate || '',
       rpErr: this.state.rpErr || '', rpHasErr: !!(this.state.rpErr || ''),
       setRpAmount: (e9) => this.setState({ rpAmount: e9.target.value, rpErr: '' }),
@@ -24825,6 +24883,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (!row9) return this.setState({ rpErr: 'Pick the invoice this payment settles' });
         const amt9 = parseFloat(String(st9.rpAmount).replace(/[^0-9.]/g, ''));
         if (!Number.isFinite(amt9) || amt9 <= 0) return this.setState({ rpErr: 'Enter the amount received' });
+        if (st9.rpFileBusy) return this.setState({ rpErr: 'Wait for the receipt to finish uploading' });
         const t9 = localStorage.getItem('stimespro:token');
         if (!t9) return this.setState({ rpErr: 'Sign in to record a payment' });
         const H9 = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t9 };
@@ -24836,11 +24895,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // NOT rounded on the way out. A total carries halalas (SAR 250 + 15% VAT is 287.50), and
           // rounding here meant the figure recorded was never the figure received.
           body: JSON.stringify({ invoiceId: inv9.id, amount: amt9,
-            method: st9.rpMethod || 'Bank transfer', reference: (st9.rpRef || '').trim() || null, date: st9.rpDate || null }) })
+            method: st9.rpMethod || 'Bank transfer', reference: (st9.rpRef || '').trim() || null, date: st9.rpDate || null,
+            ...(st9.rpFile && st9.rpFile.path ? { attachment: st9.rpFile.path, attachmentName: st9.rpFile.name } : {}) }) })
           .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
           .then(({ ok, j9 }) => {
             if (!ok) return this.setState({ rpErr: (j9 && j9.error && String(j9.error).slice(0, 140)) || 'Could not record the payment' });
-            this.setState({ rpOpen: false });
+            this.setState({ rpOpen: false, rpFile: null });
             this.toast(fmtCur(Math.round(amt9)) + ' recorded against ' + row9.no + (j9.settled ? '' : ' (part payment)'));
             this._opReload('payments', 'paymentsData'); this._reloadInvoices && this._reloadInvoices();
           })
@@ -48263,6 +48323,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       qcClientVal: this.state.qcClient || qcDefaultClient,
       ...mkDd('ddQcVat', QC_VAT_OPTS, qcVatSel, (v) => this.setState({ qcVat: v })),
       ddQcVatVal: qcVatSel,
+      // Same warning as the invoice dialog, and it matters more here: the invoice copies the
+      // quotation's figures exactly, so a quotation saved zero-rated bills zero-rated.
+      qcZeroVat: qcVatRate === 0,
       qcAutoNo: _qcEditing ? (this.state.qcEditNo || qcAutoNo) : qcAutoNo,
       qcTitle: _qcEditing ? 'Edit quotation' : 'Create quotation',
       // The catalogue, as {value,label} so two services with the same name cannot be confused.

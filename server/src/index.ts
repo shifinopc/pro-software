@@ -5766,15 +5766,29 @@ app.post("/api/invoices/:id/approve", requireAuth, requireStaff, requireWriteRol
 // An approved invoice is a document the client has been sent; editing it behind their back would
 // make the copy they hold disagree with ours. Corrections go through void + reissue instead.
 // Registered BEFORE the generic /api/invoices CRUD mount so it runs first and falls through on GET.
+//
+// DELETE IS THE SAME RULE, AND IT WAS NOT COVERED. Editing an issued invoice was refused here from
+// the start; deleting one fell straight through to the generic CRUD route, which removed the row
+// outright. That is the worse of the two: an edited invoice at least still exists to be compared
+// against the client's copy, while a deleted one leaves an unexplainable gap in the number series,
+// payments pointing at nothing, and no record that it ever existed. The void route exists so a
+// cancelled invoice stays on file with its reason — which is also what a tax authority expects.
 app.use("/api/invoices", requireAuth, requireStaff, async (req, res, next) => {
-  if (req.method !== "PUT" && req.method !== "PATCH") return next();
+  if (req.method !== "PUT" && req.method !== "PATCH" && req.method !== "DELETE") return next();
   const id = req.path.replace(/^\//, "").split("/")[0];
   if (!id) return next();
   const inv = await prisma.invoice.findUnique({ where: { id } });
   if (!inv) return next(); // let the CRUD layer answer 404 in its own shape
-  if (String(inv.status).toLowerCase() !== "draft")
-    return res.status(409).json({ error: `${inv.number} has been approved — void it and reissue to change it` });
-  next();
+  if (String(inv.status).toLowerCase() === "draft") return next();
+  // Kept under 140 characters each: the console slices a server message at that length, and a
+  // refusal truncated before the instruction is just a refusal.
+  return res.status(409).json({
+    error: req.method === "DELETE"
+      ? `${inv.number} has been issued and cannot be deleted — void it instead, so it stays on file with the reason.`
+      : `${inv.number} has been approved — void it and reissue to change it`,
+    status: inv.status,
+    void: `/api/invoices/${id}/void`,
+  });
 });
 
 // ── Money on a billing document is checked here, not only in the browser ──────────────────────
@@ -7047,7 +7061,12 @@ app.put("/api/users/:id/status", requireAuth, requireStaff, requireWriteRole, re
 // an invoice that still reads unpaid, or an invoice marked paid with no payment row behind it.
 // Settlement is decided server-side from the sum of payments, so a part payment can't mark it paid.
 app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
-  const { invoiceId, amount, method, reference, date, notes, settle } = req.body ?? {};
+  const { invoiceId, amount, method, reference, date, notes, settle, attachment, attachmentName } = req.body ?? {};
+  // The proof of payment, if one was attached. Only an id from our own private file route is
+  // accepted — anything else would let a caller point a receipt at an arbitrary URL.
+  const proof = attachment ? String(attachment) : null;
+  if (proof && !/^\/api\/files\/[A-Za-z0-9_-]+$/.test(proof))
+    return res.status(400).json({ error: "Attachment must be an uploaded file" });
   const inv = invoiceId ? await prisma.invoice.findUnique({ where: { id: String(invoiceId) } }) : null;
   if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
@@ -7111,6 +7130,7 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
           amountMinor: amtMinor, amount: Math.round(amtMinor / 100),
           method: method ? String(method) : null, reference: reference ? String(reference) : null,
           date: date ? String(date) : businessToday(), notes: notes ? String(notes) : null,
+          attachment: proof, attachmentName: proof ? (String(attachmentName || "").trim() || "Receipt") : null,
         },
       }),
       // Only flip the invoice when the payments actually cover it.
@@ -7122,7 +7142,7 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
       logActivity({ type: "finance", message: `Invoice ${inv.number} settled${inv.clientName ? ` — ${inv.clientName}` : ""}` });
       logNotification({ type: "payment", title: `Payment received: ${inv.number}`, message: inv.clientName ?? undefined });
     }
-    await logAudit({ action: "payment.record", actorId: (req as any).auth?.sub, target: `${inv.number} (${payment.id})`, detail: `amount=${(amtMinor / 100).toFixed(2)} settled=${settled}`, ip: clientIp(req) });
+    await logAudit({ action: "payment.record", actorId: (req as any).auth?.sub, target: `${inv.number} (${payment.id})`, detail: `amount=${(amtMinor / 100).toFixed(2)} settled=${settled}${proof ? ` proof=${proof}` : ""}`, ip: clientIp(req) });
     res.status(201).json({ payment, settled });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
