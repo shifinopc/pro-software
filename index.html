@@ -30818,14 +30818,58 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * view, which is right: it is not this client's work.
      */
     const _tlScope = (rows) => _clientScope ? rows.filter(t9 => t9.client === _clientScope) : rows;
-    const visibleTasks = _tlScope([...allTasks.filter(t => t.archived === showArchived), ..._tlRuns]);
+    /**
+     * ONE JOB, ONE ROW.
+     *
+     * Starting a case writes BOTH records on purpose: a run (the machinery) and a Task (the row a
+     * person looks for), linked by workflowInstanceId. Every path does it — New task, an accepted
+     * quotation, an accepted request, a parked task resuming — so the list showed the same job
+     * twice, under two names and two dates, because the two drift apart the moment either one is
+     * reassigned. Two rows, two owners, and each can assume the other's belongs to somebody else.
+     *
+     * The run row wins: it knows the live step, the officer actually on it and the SLA clock. But
+     * the companion task carries two things the run does not — who it was DELEGATED to, and the
+     * date promised for the job as a whole — so those are carried across rather than hidden with
+     * it. Bucketing takes whichever of the two deadlines is sooner, so collapsing the pair can
+     * never make a row look less urgent than it was.
+     *
+     * Only tasks whose run is actually in this list are folded away. One whose run has finished or
+     * was never fetched still stands on its own, which is better than a job that vanishes.
+     */
+    const _tlRunIds9 = new Set(_tlRuns.map(r9 => r9._wfId).filter(Boolean));
+    const _tlCase9 = new Map();
+    for (const t9 of allTasks) if (t9._wfId && _tlRunIds9.has(t9._wfId) && !_tlCase9.has(t9._wfId)) _tlCase9.set(t9._wfId, t9);
+    const _tlRunRows9 = _tlRuns.map(r9 => {
+      const c9 = r9._wfId ? _tlCase9.get(r9._wfId) : null;
+      if (!c9) return r9;
+      const named9 = c9.assignee && c9.assignee !== 'Unassigned' ? c9.assignee : r9.assignee;
+      return { ...r9,
+        assignee: named9,
+        // The job's own deadline, beside the step's SLA rather than instead of it: one is what the
+        // client was promised, the other is what this step has left, and they are different facts.
+        dept: r9.dept + (c9.due ? ' · due ' + c9.due : ''),
+        dueIn: Math.min(r9.dueIn, c9.dueIn),
+        // `_id` is deliberately NOT carried over. It is what archive, delegate and the status
+        // buttons write to, and quietly repointing them at the folded task would turn archiving a
+        // run row into archiving the case for everybody. The drawer already opens the case record
+        // through openDrawer, which is the one place that should act on it.
+      };
+    });
+    const visibleTasks = _tlScope([
+      ...allTasks.filter(t => t.archived === showArchived && !(t._wfId && _tlRunIds9.has(t._wfId))),
+      ..._tlRunRows9,
+    ]);
     // The sidebar badge, counted off the SAME rows the screen renders — which is what the comment
     // on _liveBadges already promises and this one entry did not keep. It read `taskDefs`: plain
     // tasks only, so it said 3 while the list showed sixty, because almost everything here is a
     // workflow run. Archived is excluded outright rather than following the screen's toggle — a
     // badge that changes when you tick "show archived" is reporting the control, not the work.
-    const _tlOpen = _tlScope([...allTasks.filter(t9 => !t9.archived), ..._tlRuns])
-      .filter(t9 => t9.status !== 'Done' && t9.status !== 'Cancelled');
+    const _tlOpen = _tlScope([
+      // The same fold as the list above, or the badge counts a job twice and disagrees with the
+      // screen it is a badge for — which is the exact promise _liveBadges makes.
+      ...allTasks.filter(t9 => !t9.archived && !(t9._wfId && _tlRunIds9.has(t9._wfId))),
+      ..._tlRunRows9,
+    ]).filter(t9 => t9.status !== 'Done' && t9.status !== 'Cancelled');
     // The heading said "across all clients" whether or not one was chosen, so with the list correctly
     // narrowed the page contradicted itself in its own subtitle.
     const tasksSubtitle = _clientScope
