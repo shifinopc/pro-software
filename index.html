@@ -18340,7 +18340,23 @@ class Component extends DCLogic {
     const GAP = 6, FALLBACK_MAX = 210, MIN = 96;
     for (const dd of document.querySelectorAll('[data-dd]')) {
       const cs = getComputedStyle(dd);
-      if (cs.position !== 'absolute') continue;                     // a trigger, not a panel
+      // A TRIGGER, NOT A PANEL — but a panel we have already promoted is still a panel.
+      //
+      // Panels declare `position:absolute` and triggers do not, so that test told the two apart.
+      // The catch is that this function PROMOTES a dialog panel to `fixed` further down, to get it
+      // out of `.fm-body`'s clipping box — and from that moment the panel failed this test and was
+      // skipped by every later pass. So every dropdown inside a modal was placed exactly once,
+      // from whatever the measurements happened to be at that instant, and could never be
+      // corrected: not when the dialog finished its 250ms `popIn` scale, not when the form grew as
+      // it loaded, not on scroll, not on resize. `_ddFollow` was aimed at exactly these panels and
+      // had been dead for all of them.
+      //
+      // That is the whole of "the dropdowns in the modals have broken style": a client list 237px
+      // wide hanging 80px below a 461px field, because those were the field's numbers mid-animation.
+      //
+      // Our own promotion is marked rather than trusting `fixed` alone, so a panel that genuinely
+      // declares `fixed` in its own markup is still left to its markup.
+      if (cs.position !== 'absolute' && !(cs.position === 'fixed' && dd.dataset.ddFixed === '1')) continue;
       // EACH PANEL'S OWN CEILING, not one number for all of them.
       //
       // These declare anything from 190px to 260px — `.fm-dd` caps at 210, `.pill-dd` at 260, and
@@ -18408,7 +18424,7 @@ class Component extends DCLogic {
       //  · IT FOLLOWS THE FIELD. Scrolling a fixed panel's own dialog would otherwise leave it
       //    behind; the listener installed in componentDidMount re-runs this on any scroll.
       const inBox = !!(box && box !== document.body);
-      if (inBox) { dd.style.position = 'fixed'; dd.style.width = Math.round(t.width) + 'px'; dd.style.right = 'auto'; }
+      if (inBox) { dd.style.position = 'fixed'; dd.dataset.ddFixed = '1'; dd.style.width = Math.round(t.width) + 'px'; dd.style.right = 'auto'; }
       const b = inBox
         ? { top: 0, bottom: window.innerHeight }
         : ((box && box !== document.body)
@@ -18506,6 +18522,27 @@ class Component extends DCLogic {
             this._ddReflow = true;
             requestAnimationFrame(() => { this._ddReflow = false; this._placeDropdowns(); });
           }
+        }
+      }
+      // THE FIELD MOVES AFTER WE HAVE MEASURED IT.
+      //
+      // Every dialog opens on `popIn`, a 250ms scale. A panel opened while that is still running
+      // is sized and placed in SCALED coordinates and then left there: a 395px field gets a 237px
+      // list hanging 50px below it, for good. Nothing corrected it because this runs on render,
+      // and an animation finishing is not a render — so the only thing deciding whether a person
+      // saw it was how fast they clicked after the dialog appeared. That is why it reads as "the
+      // dropdown style is broken in the modals" rather than as a bug with a reproduction.
+      //
+      // So: re-run while the anchor is still moving, stop the moment it holds still. This ends by
+      // itself when the animation does (~15 frames), and costs one dataset write per frame while
+      // it lasts. It covers any late movement, not just popIn — a web font landing, an image
+      // resizing the row above, a dialog that grows as it fills in.
+      const anchor = Math.round(t.left) + ',' + Math.round(t.bottom) + ',' + Math.round(t.width);
+      if (dd.dataset.ddAnchor !== anchor) {
+        dd.dataset.ddAnchor = anchor;
+        if (!this._ddSettle) {
+          this._ddSettle = true;
+          requestAnimationFrame(() => { this._ddSettle = false; this._placeDropdowns(); });
         }
       }
     }
