@@ -1146,10 +1146,18 @@
             </div>
           </sc-if>
           <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:15px;">WORK EMAIL</div>
-          <input sc-camel-default-value="{{ lEmail }}" data-seed-val="{{ lEmail }}" onBlur="{{ setLEmail }}" placeholder="you@company.com" type="email" style="margin-top:7px; width:100%; border:1.5px solid transparent; border-radius:14px; padding:10px 11px; font-size:13px; color:#1A1523; background:#F4F1F9; transition:border-color .15s, background .15s;">
+          <!-- CAPTURED AS IT CHANGES, NOT ON BLUR — because a password manager does not blur.
+               Picking a saved credential sets both boxes' value and fires `input`; it does not
+               necessarily move focus out of the email field, so an onBlur capture never ran. The
+               state stayed empty, the next render re-seeded the box FROM that empty state, and the
+               email visibly vanished while the password stayed — which is what it looked like from
+               the outside: "I click the username and there is nothing".
+               `name` and `autocomplete` are what let the manager recognise the pair in the first
+               place; without them it has to guess from placeholders. -->
+          <input value="{{ lEmail }}" onInput="{{ setLEmail }}" data-login="email" name="email" autocomplete="username" placeholder="you@company.com" type="email" style="margin-top:7px; width:100%; border:1.5px solid transparent; border-radius:14px; padding:10px 11px; font-size:13px; color:#1A1523; background:#F4F1F9; transition:border-color .15s, background .15s;">
           <div style="display:flex; align-items:center; margin-top:10px;"><span style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; flex:1;">PASSWORD</span><span onClick="{{ openForgot }}" style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">Forgot?</span></div>
           <div style="position:relative; margin-top:7px;">
-            <input sc-camel-default-value="{{ lPass }}" data-seed-val="{{ lPass }}" onBlur="{{ setLPass }}" placeholder="••••••••" type="{{ lPassType }}" style="width:100%; border:1.5px solid transparent; border-radius:14px; padding:10px 11px; font-size:13px; color:#1A1523; background:#F4F1F9; transition:border-color .15s, background .15s; padding-right:30px;">
+            <input value="{{ lPass }}" onInput="{{ setLPass }}" data-login="password" name="password" autocomplete="current-password" placeholder="••••••••" type="{{ lPassType }}" style="width:100%; border:1.5px solid transparent; border-radius:14px; padding:10px 11px; font-size:13px; color:#1A1523; background:#F4F1F9; transition:border-color .15s, background .15s; padding-right:30px;">
             <div onClick="{{ toggleLShow }}" title="Show / hide" style="position:absolute; right:9px; top:50%; transform:translateY(-50%); width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EDE7F7;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path data-dcattr-d="{{ lEyeIcon }}"></path></svg>
             </div>
@@ -23919,12 +23927,25 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       setLPass: (e) => this.setState({ lPass: e.target.value, lError: '' }),
       toggleLShow: () => this.setState({ lShow: !s.lShow }),
       doLogin: () => {
-        const email = (s.lEmail || '').trim();
+        /**
+         * WHAT IS IN THE BOXES WINS OVER WHAT IS IN STATE.
+         *
+         * Signing in used to read state alone, so anything a password manager put in the fields
+         * without firing an event it was listening for simply did not exist: the boxes were full,
+         * the button said "Enter a valid email address", and the only way through was to retype
+         * what was already on screen. Managers differ in what they fire and when — some fill on
+         * page load before any handler is attached — so the DOM is asked and state is corrected
+         * from it, rather than the other way round.
+         */
+        const box9 = (k9) => { const el9 = document.querySelector('[data-login="' + k9 + '"]'); return el9 ? String(el9.value || '') : ''; };
+        const email = (box9('email') || s.lEmail || '').trim();
+        const pass9 = box9('password') || s.lPass || '';
+        if (email !== (s.lEmail || '') || pass9 !== (s.lPass || '')) this.setState({ lEmail: email, lPass: pass9 });
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.setState({ lError: 'Enter a valid email address' });
-        if (!s.lPass) return this.setState({ lError: 'Password is required' });
+        if (!pass9) return this.setState({ lError: 'Password is required' });
         const API = this._apiBase || 'http://localhost:4100';
         this.setState({ lBusy: true, lError: '' });
-        fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: s.lPass }) })
+        fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass9 }) })
           // `.catch(() => ({}))`: a 500 from Express is an HTML error page, and parsing it threw —
           // so the one failure that most needed explaining fell through to the generic "Server
           // unreachable", which is what a pulled network cable says too.
@@ -23955,7 +23976,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // goes no further. Kept in memory so the next screen can send it as the current password
             // rather than asking for it twice.
             if (j.mustChangePassword) {
-              this._tempPw = s.lPass;
+              // The password actually SENT, not the state copy it may have outrun — an autofilled
+              // sign-in would otherwise hand the change screen an empty current password.
+              this._tempPw = pass9;
               return this.setState({ auth: 'change', lError: '', lPass: '', pError: '', nPass: '', cPass: '', cpCurrent: '' });
             }
             this.setState({ auth: 'in', lError: '', lPass: '', impersonate: null, impersonateRole: null });
