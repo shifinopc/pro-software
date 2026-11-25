@@ -14854,6 +14854,51 @@
   </sc-if>
 
   <!-- Losing a deal. The reason is the field, so it is the whole dialog. -->
+  <!-- ══ Fill in what the move is waiting on ══════════════════════════════════════════════════
+       The answer to a refused move, rather than a sentence listing what is wrong. Naming four
+       missing things and leaving somebody to go and find each one on three different screens is
+       how a gate stops being enforced and starts being resented.
+
+       Only the fields this code knows the home of get a box — see _FIX_FIELDS. Anything else says
+       where to go, because a box that writes to the wrong record is worse than no box. -->
+  <sc-if value="{{ fixOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ fixClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:520px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ fixTitle }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ fixSub }}</div>
+          </div>
+          <div onClick="{{ fixClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body" style="max-height:62vh; overflow-y:auto;">
+          <sc-for list="{{ fixRows }}" as="r" hint-placeholder-count="3">
+            <div style="margin-bottom:13px;">
+              <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase;">{{ r.label }}</div>
+              <sc-if value="{{ r.canFill }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; align-items:center; gap:7px; margin-top:6px;">
+                  <input sc-camel-default-value="{{ r.value }}" data-seed-val="{{ r.value }}" onInput="{{ r.set }}" type="{{ r.type }}" placeholder="{{ r.placeholder }}" class="fm-inp" style="flex:1;">
+                  <sc-if value="{{ r.hasUnit }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#8C8899;">{{ r.unit }}</span></sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.cannotFill }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; border:1px dashed #DDD9E6; border-radius:11px; padding:10px 12px; font-size:11px; color:#6F6C7A; background:#FBFAFE; line-height:1.5;">{{ r.where }}</div>
+              </sc-if>
+              <sc-if value="{{ r.hasHint }}" hint-placeholder-val="{{ false }}">
+                <div class="fm-hint" style="margin-top:5px;">{{ r.hint }}</div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ fixErrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-err">{{ fixErr }}</div></sc-if>
+        </div>
+        <div class="fm-foot" style="justify-content:space-between; align-items:center;">
+          <span onClick="{{ fixClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Not now</span>
+          <span onClick="{{ fixSave }}" style="font-size:12px; font-weight:700; color:#fff; background:{{ fixSaveBg }}; padding:10px 17px; border-radius:99px; cursor:{{ fixSaveCursor }};">{{ fixSaveLabel }}</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ══ A deal's checklist ═══════════════════════════════════════════════════════════════════
        Its own dialog rather than a section of the edit form: the edit form is for changing the
        deal's figures, and this is for reading what is still outstanding. Mixing them puts a
@@ -20628,12 +20673,163 @@ class Component extends DCLogic {
     this._moveDeal = (id, stageId, lostReason) => this._crmFetch('/api/opportunities/' + id + '/move', {
       method: 'POST', body: JSON.stringify({ stageId, ...(lostReason ? { lostReason } : {}) }),
     }).then(({ ok, j }) => {
-      if (!ok) { this.setState({ dmErr: (j && j.error) || 'Could not move that deal' }); return false; }
+      if (!ok) {
+        // A CHECKLIST REFUSAL IS ANSWERED WITH THE FORM, NOT WITH THE SENTENCE.
+        //
+        // Naming the four things that are missing and then leaving somebody to go and find each
+        // one is how a gate becomes something people route around. Handled HERE rather than in the
+        // callers, because there are five ways to move a deal — the board drag, the row's "→ next"
+        // chip, the drawer's two buttons and the lost dialog — and four of them ignore the result
+        // entirely. One place, and every one of them offers to fix it.
+        //
+        // `dmErr` is deliberately NOT set on this path: it is announced as a toast, and a toast
+        // saying what is missing on top of a dialog asking for it is the same sentence twice.
+        const stuck = (j && Array.isArray(j.blockers)) ? j.blockers : [];
+        // Not `false`: the board drag's handler says "could not move that deal" out loud on false,
+        // and a toast behind a dialog that is already asking for the missing fields is noise.
+        if (stuck.length) { this._openFixMissing(id, stageId, stuck); return 'fix'; }
+        this.setState({ dmErr: (j && j.error) || 'Could not move that deal' });
+        return false;
+      }
       this.setState({ dealMove: null, dmErr: '' });
       this.toast(j.status === 'won' ? 'Deal won' : j.status === 'lost' ? 'Deal marked lost' : 'Moved to ' + (j.stage && j.stage.name));
       if (this._loadPipeline) this._loadPipeline();
       return true;
     }).catch(() => { this.setState({ dmErr: 'Server unreachable — nothing changed' }); return false; });
+    /**
+     * WHAT EACH MISSING FACT CAN BE FILLED IN AS, AND WHERE THE ANSWER IS WRITTEN.
+     *
+     * A fact that is not in here is not guessed at. Offering a box for something whose home this
+     * code does not know would write it to the wrong record — or to nowhere — and the gate would
+     * then refuse the same item again with the person swearing they had just filled it in. Those
+     * are shown as a row saying where to go instead.
+     *
+     * `to` is the record the answer belongs on, not the screen it is usually typed on: a budget is
+     * the deal's, a phone number is the person's, a headcount is the client's.
+     */
+    this._FIX_FIELDS = {
+      value:        { label: 'Budget figure', unit: 'SAR', kind: 'number', to: 'deal',
+                      hint: 'Roughly what this is worth. A figure you can revise later beats no figure at all.' },
+      closeDate:    { label: 'Expected close date', kind: 'date', to: 'deal',
+                      hint: 'When you expect a decision — this is what separates a buyer from a browser.' },
+      source:       { label: 'Where it came from', kind: 'text', to: 'deal', hint: '' },
+      contact:      { label: 'Who you are dealing with', kind: 'text', to: 'contact', as: 'name',
+                      hint: 'Their name. Saved on the client record, so it is there next time too.' },
+      contactRole:  { label: 'Their job title', kind: 'text', to: 'contact', as: 'jobTitle',
+                      hint: 'Owner, GM, HR manager — it is what tells you who you are talking to.' },
+      contactReach: { label: 'Phone, WhatsApp or email', kind: 'text', to: 'contact', as: 'phone',
+                      hint: 'Any one of the three will do.' },
+      city:         { label: 'City', kind: 'text', to: 'company', hint: '' },
+      industry:     { label: 'Industry', kind: 'text', to: 'company', hint: '' },
+      employees:    { label: 'Headcount', kind: 'number', to: 'company', hint: '' },
+    };
+    /**
+     * Open the form that answers a refused move.
+     *
+     * Prefilled from what the record already holds, because some of these are half-answered — a
+     * contact with a name and no phone is the common case, and showing an empty box next to "who
+     * you are dealing with" invites somebody to type the same name a second time and create a
+     * duplicate person.
+     */
+    this._openFixMissing = (dealId, stageId, blockers) => {
+      const cols = ((this.state.pipelineData || {}).columns) || [];
+      let deal = null, fromName = '';
+      for (const c of cols) {
+        const hit = (c.deals || []).find(d => d.id === dealId);
+        if (hit) { deal = hit; fromName = (c.stage && c.stage.name) || ''; break; }
+      }
+      const to = cols.find(c => c.stage && c.stage.id === stageId);
+      // The client's own contact, primary first — the same one the server's fallback reads, so the
+      // box edits the person the gate is actually looking at rather than a different one.
+      const ct = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
+        .filter(c => c.companyId === (deal && deal.companyId) && !c.archived)
+        .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))[0] || null;
+      const vals = {};
+      for (const b of blockers) {
+        const f = this._FIX_FIELDS[b.field];
+        if (!f) continue;
+        vals[b.field] =
+          f.to === 'contact' ? String((ct && ct[f.as || b.field]) || '')
+          : b.field === 'value' ? (deal && deal.valueMinor != null ? String(deal.valueMinor / 100) : '')
+          : b.field === 'closeDate' ? String((deal && deal.expectedCloseDate) || '')
+          : String((deal && deal[b.field]) || '');
+      }
+      this.setState({
+        fixMissing: {
+          dealId, stageId,
+          title: (deal && deal.title) || 'this deal',
+          companyId: deal && deal.companyId,
+          contactId: ct && ct.id,
+          fromName, toName: (to && to.stage && to.stage.name) || '',
+          blockers, vals,
+        },
+        fixErr: '', fixSaving: false,
+      });
+    };
+    /**
+     * Save what was typed, then try the move again.
+     *
+     * Writes are grouped by record — one call per record that actually changed, rather than one
+     * per box. Four fields on a deal is one request, and a failure part-way leaves a record either
+     * written or not, never half.
+     *
+     * THE MOVE IS RETRIED, not assumed. The server decides whether the gate is satisfied; this
+     * form's job is to make answering it possible, not to decide it has been answered. If anything
+     * is still outstanding the refusal comes back and the dialog re-opens with what is left.
+     */
+    this._saveFixMissing = () => {
+      const s = this.state.fixMissing;
+      if (!s || this.state.fixSaving) return;
+      const vals = s.vals || {};
+      const deal = {}, company = {}, contact = {};
+      for (const b of (s.blockers || [])) {
+        const f = this._FIX_FIELDS[b.field];
+        if (!f) continue;
+        const raw = String(vals[b.field] ?? '').trim();
+        if (!raw) continue;
+        if (f.to === 'deal') {
+          if (b.field === 'value') deal.valueMinor = Math.round(Number(raw) * 100);
+          else if (b.field === 'closeDate') deal.expectedCloseDate = raw;
+          else deal[b.field] = raw;
+        } else if (f.to === 'company') {
+          company[b.field] = f.kind === 'number' ? Number(raw) : raw;
+        } else {
+          contact[f.as || b.field] = raw;
+        }
+      }
+      if (!Object.keys(deal).length && !Object.keys(company).length && !Object.keys(contact).length) {
+        return this.setState({ fixErr: 'Nothing filled in yet.' });
+      }
+      // A new contact needs a name, and the one box that is certainly on this form when the contact
+      // is missing is the name itself. Without this a phone number would create a nameless person.
+      if (Object.keys(contact).length && !s.contactId && !contact.name) {
+        return this.setState({ fixErr: 'Give the person a name — a phone number on its own is not a contact.' });
+      }
+      this.setState({ fixSaving: true, fixErr: '' });
+      const jobs = [];
+      if (Object.keys(deal).length) {
+        jobs.push(this._crmFetch('/api/opportunities/' + s.dealId, { method: 'PUT', body: JSON.stringify(deal) })
+          .then(({ ok, j }) => ok || Promise.reject(new Error((j && j.error) || 'Could not save the deal'))));
+      }
+      if (Object.keys(company).length) {
+        jobs.push(this._crmFetch('/api/companies/' + s.companyId, { method: 'PUT', body: JSON.stringify(company) })
+          .then(({ ok, j }) => ok || Promise.reject(new Error((j && j.error) || 'Could not save the client'))));
+      }
+      if (Object.keys(contact).length) {
+        const path = s.contactId ? '/api/contacts/' + s.contactId : '/api/contacts';
+        jobs.push(this._crmFetch(path, { method: s.contactId ? 'PUT' : 'POST', body: JSON.stringify({ ...contact, companyId: s.companyId }) })
+          .then(({ ok, j }) => ok || Promise.reject(new Error((j && j.error) || 'Could not save the contact'))));
+      }
+      return Promise.all(jobs)
+        .then(() => {
+          // The facts the gate reads come off these records, so they have to be back in hand before
+          // the retry is worth making.
+          if (this._crmReload) this._crmReload();
+          this.setState({ fixMissing: null, fixSaving: false, fixErr: '' });
+          return this._moveDeal(s.dealId, s.stageId);
+        })
+        .catch((e) => this.setState({ fixSaving: false, fixErr: String((e && e.message) || 'That did not save') }));
+    };
     /**
      * A card was dropped on a column.
      *
@@ -45144,7 +45340,50 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             .catch(e => this.toast(String(e.message || 'That did not work'), 'error'));
         };
 
+        // ── Fill in what the move is waiting on ───────────────────────────────────────────────
+        const _fx9 = this.state.fixMissing;
+        const _fxSaving9 = !!this.state.fixSaving;
+        const _fxSet9 = (field9) => (e) => {
+          const cur9 = this.state.fixMissing;
+          if (!cur9) return;
+          this.setState({ fixMissing: { ...cur9, vals: { ...(cur9.vals || {}), [field9]: e.target.value } }, fixErr: '' });
+        };
+
         return {
+          fixOpen: !!_fx9,
+          fixTitle: _fx9 ? 'Before it goes to ' + (_fx9.toName || 'the next stage') : '',
+          // Says WHICH deal, because this can be opened from a drag on a board of forty cards and
+          // "this deal" is no answer to "which one".
+          fixSub: _fx9 ? _fx9.title + ' · ' + (_fx9.fromName || 'this stage') + ' asks for these first' : '',
+          fixErr: this.state.fixErr || '',
+          fixErrShow: !!this.state.fixErr,
+          fixClose: () => this.setState({ fixMissing: null, fixErr: '', fixSaving: false }),
+          fixSave: () => this._saveFixMissing(),
+          fixSaveLabel: _fxSaving9 ? 'Saving…' : 'Save and move',
+          fixSaveBg: _fxSaving9 ? '#C9A2FF' : '#7C00FF',
+          fixSaveCursor: _fxSaving9 ? 'default' : 'pointer',
+          fixRows: ((_fx9 && _fx9.blockers) || []).map((b9) => {
+            const f9 = this._FIX_FIELDS[b9.field];
+            return {
+              // The stage's own wording for the item, not the field's — the person configured the
+              // list and that is what they will be looking for.
+              label: b9.label || (f9 && f9.label) || b9.key,
+              canFill: !!f9, cannotFill: !f9,
+              type: f9 && f9.kind === 'date' ? 'date' : f9 && f9.kind === 'number' ? 'number' : 'text',
+              placeholder: (f9 && f9.label) || '',
+              value: String(((_fx9 && _fx9.vals) || {})[b9.field] ?? ''),
+              set: _fxSet9(b9.field),
+              hasUnit: !!(f9 && f9.unit), unit: (f9 && f9.unit) || '',
+              hasHint: !!(f9 && f9.hint), hint: (f9 && f9.hint) || '',
+              // The ones this form cannot answer still have to say what WOULD answer them.
+              where: b9.source === 'document'
+                ? 'Satisfied by the ' + (b9.docType || 'document') + ' — record it against the client and this ticks itself.'
+                : b9.source === 'field'
+                  ? 'Set “' + b9.field + '” on the deal or the client record.'
+                  : 'Somebody has to confirm this — tick it on the deal’s checklist.',
+            };
+          }),
+
           clkOpen: !!_clk9,
           clkStage: (_clk9 && _clk9.stageName) || '',
           clkSub: _clk9 ? _clk9.title + ' · ' + (_clk9.companyName || '') : '',

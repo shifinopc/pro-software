@@ -3853,7 +3853,10 @@ app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteR
         // NAMED, every one of them. "Checklist incomplete" sends somebody hunting; the list tells
         // them what to go and get.
         error: `${opp.stage?.name ?? "This stage"} still needs: ${outstanding.map(i => i.label).join(", ")}`,
-        blockers: outstanding.map(i => ({ key: i.key, label: i.label, source: i.source, docType: i.docType })),
+        // `field` travels with the blocker so the console can OFFER TO FILL IT rather than only
+        // naming it. A refusal that lists four things and leaves you to go and find each one is
+        // how a gate becomes something people route around.
+        blockers: outstanding.map(i => ({ key: i.key, label: i.label, source: i.source, docType: i.docType, field: i.field ?? null })),
         canWaive: true,
       });
     }
