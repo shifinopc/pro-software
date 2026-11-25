@@ -52,6 +52,10 @@ async function main() {
       // Only documents that stored their figures. The older ones have nothing to compare against,
       // and inventing a comparison for them would report every one of them as broken.
       if (d.totalMinor == null || d.vatRateBp == null) continue;
+      // A superseded quotation is history: a later revision replaced it and carries the live
+      // figures. Reporting it for ever means this audit never comes back clean, and an audit with
+      // three permanent entries is one people stop reading.
+      if (d.supersededAt) continue;
       const items: Line[] = Array.isArray(d.items) ? d.items : [];
       if (!items.length) continue;
       checked++;

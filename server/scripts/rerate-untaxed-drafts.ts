@@ -81,10 +81,18 @@ async function main() {
 
       const label = `${String(d.number ?? d.id).padEnd(14)} ${String(d.status).padEnd(9)}`;
 
-      // Only a draft — or, with --invoiced, a quotation already converted to one. Anything else is
-      // somebody else's copy of the truth.
+      // THE INVARIANT IS "NOBODY HAS SEEN THIS", not the word on the status chip.
+      //
+      // A draft satisfies it by definition. So does a quotation that was APPROVED but never sent —
+      // approving is an internal act, and the revise route refuses that case for exactly this
+      // reason: "a quotation the client has never seen should be corrected in place rather than
+      // versioned, or every typo in a draft leaves a dead -R behind". `sentAt` is the fact that
+      // decides it, so a document that has gone out can never fall in here however it is labelled.
+      //
+      // --invoiced additionally allows a quotation already converted; see the note on the flag.
       const status = String(d.status).toLowerCase();
-      if (!(status === "draft" || (INVOICED && kind === "quotation" && status === "invoiced"))) {
+      const unseen = status === "draft" || (kind === "quotation" && status === "approved" && !d.sentAt);
+      if (!(unseen || (INVOICED && kind === "quotation" && status === "invoiced"))) {
         skipped++;
         held.push(`  ${label} VAT ${(got / 100).toFixed(2)} → would be ${(want / 100).toFixed(2)}  — left alone`);
         continue;
