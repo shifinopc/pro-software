@@ -3531,6 +3531,31 @@ function normalizeRows(raw: unknown): any[] {
 }
 
 // Delegate a workflow step to a specific person (admin only). Clears the role gate so the named person owns it.
+/**
+ * MAY THIS PERSON HAND WORK TO THAT ONE? One rule, because there are now two callers.
+ *
+ * Admins move anything. Below that it is the team-lead rung: whoever leads a team handing work to
+ * one of their own people. BOTH ENDS are checked — the target must be in their team, and the work
+ * must be unassigned or already on one of their team. A lead cannot pull work off somebody outside
+ * it, however good their reasons, because the person losing it answers to a different lead.
+ *
+ * Handing to YOURSELF is not delegation; it is claiming, which has its own narrower rule at the
+ * step route and does not apply to a whole task.
+ *
+ * Lives here rather than beside either caller: the step route and the task route must never answer
+ * "who may move this" two different ways, which is precisely how a task came to move to somebody
+ * while the step it is the cover sheet for stayed where it was.
+ */
+export async function mayHandOver(auth: any, targetId: string, currentAssigneeId: string | null | undefined): Promise<boolean> {
+  if (auth?.role === "admin" || auth?.role === "super_admin") return true;
+  if (!targetId || targetId === auth?.sub) return false;
+  const { visibleUserIds } = await import("./visibility.js");
+  const vis = await visibleUserIds(auth);
+  return vis.scope === "team"
+    && !!vis.ids?.includes(targetId)
+    && (!currentAssigneeId || !!vis.ids?.includes(currentAssigneeId));
+}
+
 R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
   const a = (req as any).auth;
   const isAdmin = a.role === "admin" || a.role === "super_admin";
@@ -3564,13 +3589,7 @@ R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
     let leadDelegating = false;
     if (!isAdmin && !claimingSelf && assignee) {
       const target = await resolveStaffByName(assignee);
-      if (target) {
-        const { visibleUserIds } = await import("./visibility.js");
-        const vis = await visibleUserIds(a);
-        leadDelegating = vis.scope === "team"
-          && vis.ids!.includes(target.id) && target.id !== a.sub
-          && (!cur.assigneeId || vis.ids!.includes(cur.assigneeId));
-      }
+      if (target) leadDelegating = await mayHandOver(a, target.id, cur.assigneeId);
     }
 
     if (!isAdmin && !claimingSelf && !leadDelegating) {

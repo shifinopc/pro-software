@@ -13,7 +13,7 @@ import { fail, safeError } from "./errors.js";
 import QRCode from "qrcode";
 import { crud, withLiveCounts, sanitize, type ScopeFn } from "./crud.js";
 import { startScheduler, runTick } from "./scheduler.js";
-import { workflowRouter } from "./workflow.js";
+import { workflowRouter, resolveStaffByName, mayHandOver } from "./workflow.js";
 import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, INDIVIDUAL, contactProblem, billingAmountProblem } from "./validate.js";
 import { reAddressOnRename } from "./companyname.js";
 import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryContact } from "./contacts.js";
@@ -107,7 +107,7 @@ import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invitations.js";
 import { addClient, issueTicket, redeemTicket, publish, connectionCount } from "./realtime.js";
-import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed } from "./notify.js";
+import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, notifyInvoiceRaised, notifyAddonApproved, notifyAddonRemoved, notifyRequestRejected, notifyDocumentRenewed, notifyTaskAssigned } from "./notify.js";
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
@@ -8330,6 +8330,80 @@ const taskWorkflowGate = async (req: any, res: any, next: any) => {
     });
   } catch { return next(); } // a guard that cannot read the row must not block ordinary work
 };
+/**
+ * HAND A TASK ON — AND THE WORK WITH IT.
+ *
+ * Delegating used to be two things the BROWSER did in sequence: PUT the task's `assignee`, then
+ * reassign whichever of the run's steps it could find — and it looked for them in the delegator's
+ * OWN queue. A step held by somebody else is not in your queue, so nothing was found, nothing moved,
+ * and the toast said "Reassigned to Iqbal" while the step it is the cover sheet for stayed with
+ * Navas. The new owner then opened My Tasks and had nothing: a task with a run attached is left out
+ * of the plain list on purpose (the steps are the work), and the step was not his.
+ *
+ * So the act is one request, here, where it can see every step regardless of whose queue it is in.
+ *
+ * IT ALSO WRITES `assigneeId`. The schema calls `assignee` "the display mirror" of it, and the old
+ * PUT wrote only the mirror: the task read as owned on screen and as UNOWNED to everything keyed on
+ * the id — so the new owner was never notified and the SLA job had nobody to chase.
+ *
+ * ALL OR NOTHING on permission. If the caller may not move one of the steps they may not move the
+ * task either, because moving the task alone is the half-done state this exists to prevent. The rule
+ * is `mayHandOver`, shared with the step route so the two cannot drift.
+ */
+app.post("/api/tasks/:id/delegate", requireAuth, requireStaff, taskWriteGate, async (req, res) => {
+  const a = (req as any).auth;
+  const name = String((req.body ?? {}).assignee ?? "").trim();
+  if (!name) return res.status(400).json({ error: "Name somebody to hand this task to" });
+
+  const task = await prisma.task.findUnique({ where: { id: req.params.id } });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+
+  // The one bridge that refuses to guess: a name from a form becomes a real, active staff member or
+  // the whole thing stops here. Writing an id we are not sure of is how work lands on nobody.
+  const target = await resolveStaffByName(name);
+  if (!target) return res.status(400).json({ error: `No active staff member called "${name}"` });
+  if (target.id === task.assigneeId) return res.status(409).json({ error: `${task.title} is already with ${target.name}` });
+
+  const steps = task.workflowInstanceId
+    ? await prisma.workflowTask.findMany({
+        where: { instanceId: task.workflowInstanceId, status: "active" },
+        select: { id: true, title: true, assignee: true, assigneeId: true },
+      })
+    : [];
+
+  for (const step of steps) {
+    if (!(await mayHandOver(a, target.id, step.assigneeId))) {
+      return res.status(403).json({
+        error: `"${step.title}" is with ${step.assignee ?? "another queue"} and only an admin can move it.`
+          + ` The task is not moved on its own — it would leave ${target.name} holding a case they cannot act on.`,
+        step: step.title,
+      });
+    }
+  }
+
+  const [updated] = await prisma.$transaction([
+    prisma.task.update({ where: { id: task.id }, data: { assignee: target.name, assigneeId: target.id } }),
+    // The role queue is cleared with the move: naming a person is what takes a step OUT of the pool.
+    ...steps.map(step => prisma.workflowTask.update({
+      where: { id: step.id },
+      data: { assignee: target.name, assigneeId: target.id, assigneeRole: null },
+    })),
+  ]);
+
+  notifyTaskAssigned({
+    assigneeId: target.id, title: task.title, clientName: task.clientName, dueDate: task.dueDate,
+    why: steps.length ? `handed over with ${steps.length} open step${steps.length === 1 ? "" : "s"}` : "handed over to you",
+  });
+  const me = await prisma.user.findUnique({ where: { id: a?.sub }, select: { name: true } });
+  logActivity({ type: "task", message: `"${task.title}" handed to ${target.name}${steps.length ? ` with ${steps.length} open step${steps.length === 1 ? "" : "s"}` : ""}`, user: me?.name ?? "Staff" });
+  await logAudit({
+    action: "task.delegate", actorId: a?.sub, target: `${task.title} (${task.id})`,
+    detail: `${task.assignee ?? "unassigned"} → ${target.name}${steps.length ? ` · steps: ${steps.map(s => s.title).join("; ")}` : ""}`,
+    ip: clientIp(req),
+  });
+  res.json({ task: updated, assignee: target.name, stepsMoved: steps.length });
+});
+
 app.use("/api/tasks", requireAuth, requireStaff, taskWriteGate, taskWorkflowGate, crud("task", salesScope("companyId")));
 
 // BPM workflow engine (templates + instances + task inbox). Own auth guards per route.

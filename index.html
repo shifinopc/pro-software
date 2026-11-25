@@ -39793,34 +39793,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // WIRED: delegate to a real staff member (persists the assignee), mark done persists status.
         wdDelegateOptions: (realStaffNames || (_authed ? [] : ['Rashid', 'Aisha', 'Omar', 'Sara'])).filter(n => n !== selPlain.assignee).map(n => ({
           name: n, initials: n.slice(0, 2).toUpperCase(),
+          // ONE CALL, SERVER-SIDE. This used to PUT the task's assignee and then reassign whichever
+          // of the run's steps it could find — looking for them in THIS browser's my-work list. A
+          // step held by somebody else is not in your list, so nothing was found and nothing moved:
+          // the task went to the new owner and the work stayed where it was. The route moves both,
+          // because only the server can see every step regardless of whose queue it sits in.
           pick: () => {
             this.setState({ wdDelegatedTo: n, wdDelegate: false });
             if (!selPlain._id) return;
-            this._opPut('tasks', selPlain._id, { assignee: n }, () => {
-              this._reloadTasks();
-              // The task is only the cover sheet. If a workflow is attached, the ACTIVE steps are
-              // the actual work and have to move too, or the new owner sees a task they cannot act
-              // on while the old owner keeps the step.
-              const runId9 = selPlain._wfId;
-              const steps9 = runId9
-                ? (Array.isArray(this.state.myWorkData) ? this.state.myWorkData : []).filter(w9 => w9.instanceId === runId9 && w9.status === 'active')
-                : [];
-              if (!steps9.length) return this.toast('Reassigned to ' + n);
-              const tok9 = localStorage.getItem('stimespro:token');
-              const API9 = this._apiBase || 'http://localhost:4100';
-              Promise.all(steps9.map(w9 => fetch(API9 + '/api/workflow/tasks/' + w9.id + '/reassign', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
-                body: JSON.stringify({ assignee: n }),
-              }).then(r9 => r9.ok))).then((oks9) => {
+            const tok9 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/tasks/' + selPlain._id + '/delegate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+              body: JSON.stringify({ assignee: n }),
+            })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 180)) || 'Could not hand this task over', 'warn');
+                const moved9 = Number(j9 && j9.stepsMoved) || 0;
+                this.toast('Handed to ' + n + (moved9 ? ' — with ' + moved9 + ' open step' + (moved9 === 1 ? '' : 's') : ''));
+                this._reloadTasks();
                 this._reloadMyWork && this._reloadMyWork();
-                const moved9 = oks9.filter(Boolean).length;
-                // Delegating a step is admin-only. Say so rather than reporting a move that only
-                // half happened — the mismatch is the bug this is fixing.
-                if (moved9 === steps9.length) this.toast('Reassigned to ' + n + ' — task and ' + moved9 + ' workflow step' + (moved9 === 1 ? '' : 's'));
-                else this.toast('Task reassigned, but the workflow step stayed put — delegating a step needs an admin', 'warn');
-              });
-            });
+              })
+              .catch(() => this.toast('Server unreachable — nothing was handed over', 'warn'));
           },
         })),
         closeWorkDrawer: () => (this._capPend = {}, this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })),
