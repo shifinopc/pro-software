@@ -5,6 +5,9 @@
 // completed via completeTask(), which resumes the frontier from that node.
 import { Router } from "express";
 import { prisma } from "./db.js";
+// `Prisma.DbNull` is the only way to write SQL NULL into a Json column — a plain `null` stores the
+// JSON value null, which reads back as a draft that exists and is empty.
+import { Prisma } from "@prisma/client";
 import { evaluateFieldSet, normalizeFields } from "./fieldsets.js";
 import { homeCurrency, homeCountry } from "./orgsettings.js";
 import { nextNumber } from "./sequence.js";
@@ -351,6 +354,34 @@ function effectiveState(task: any): Record<string, any> {
   }
   return state;
 }
+/**
+ * THE DOCUMENT GATE, APPLIED AND RECORDED — one copy, because there are now two ways in.
+ *
+ * It lived inline in the single-step complete route. The chain route, which completes the steps
+ * after it, had no copy at all: a run of four steps went through with none of their required
+ * documents received, because `completeTask` does not check this — the route does. A control that
+ * holds on one path and not the other is not a control.
+ *
+ * Returns the refusal, or writes the merged state and lets the caller carry on. Incoming ticks are
+ * merged over what is already on the row rather than replacing it, so a document the client
+ * uploaded through the portal and the engine pre-ticked is not discarded by a form that never knew
+ * about it.
+ */
+export async function applyChecklistGate(task: any, incoming: any): Promise<string | null> {
+  if (task.nodeType !== "task") return null;            // approvals branch on approve/reject
+  const items = normalizeItems(task.checklist);
+  if (!items.length) return null;
+  const given = (incoming && typeof incoming === "object" && !Array.isArray(incoming)) ? incoming : null;
+  const base = effectiveState(task);
+  const state: Record<string, any> = { ...base };
+  for (const [k, v] of Object.entries(given ?? {})) {
+    if (v && typeof v === "object") state[k] = { ...(base[k] ?? {}), ...(v as any) };
+  }
+  const { ok, missing } = checklistSatisfied(items, state, !!task.requireVerification);
+  if (!ok) return `Cannot complete "${task.title}" — required document${missing.length > 1 ? "s" : ""} not ${task.requireVerification ? "verified" : "received"}: ${missing.join(", ")}`;
+  if (given) await prisma.workflowTask.update({ where: { id: task.id }, data: { checklistState: state } });
+  return null;
+}
 // Are all REQUIRED items satisfied? (received, or received && verified when requireVerification.)
 function checklistSatisfied(items: ChecklistItem[], state: Record<string, any>, requireVerification: boolean): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
@@ -693,7 +724,7 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
         // (employee for person docs, the company itself for company docs). Non-fatal on any error.
         const c = node.config ?? {};
         const pick = (...keys: string[]) => { for (const k of keys) { if (!k) continue; const v = vars[k]; if (v !== undefined && v !== null && String(v).trim() !== "") return String(v); } return ""; };
-        const expiry  = pick(c.expiryVar, "newExpiry", "expiryDate", "expiry");
+        let   expiry  = pick(c.expiryVar, "newExpiry", "expiryDate", "expiry");
         const number  = pick(c.numberVar, "docNumber", "newNumber", "documentNumber");
         const issue   = pick(c.issueVar, "issueDate", "issue");
         const fee     = pick(c.feeVar, "fee", "renewalFee");
@@ -742,6 +773,31 @@ async function runFrontier(inst: any, g: Graph, frontier: string[]) {
           if (documentId) {
             const existing = await prisma.document.findUnique({ where: { id: documentId } });
             if (existing) {
+              /**
+               * A TERM THAT WAS PAID FOR IS ARITHMETIC, NOT A QUESTION.
+               *
+               * A Saudi work permit is bought in 3/6/9/12-month blocks at an earlier step, so by the
+               * time the renewal is recorded its new expiry is already decided. Asking the officer
+               * to type it was a second chance to get it wrong, and the firm asked for it to go.
+               *
+               * COUNTED FROM THE EXPIRY ON FILE, not from today: cover runs on from where it ran
+               * out, so renewing a fortnight early does not throw a fortnight away. The consequence
+               * is the honest one — renew a permit that lapsed months ago and the new date can still
+               * be in the past, which is true and is said out loud in the run log rather than
+               * quietly rounded away.
+               */
+              if (c.expiryFromTerm && existing.expiryDate) {
+                const term = String(vars[String(c.expiryFromTerm)] ?? "");
+                const months = parseInt(term, 10);
+                // 12 months is a year, not 360 days. The rest are the 30-day blocks the fee is
+                // quoted in, which is how the firm states them ("3 month = 90 days").
+                const days = months === 12 ? 365 : (months > 0 ? months * 30 : 0);
+                const from = new Date(existing.expiryDate).getTime();
+                if (days && !isNaN(from)) {
+                  expiry = new Date(from + days * 86400000).toISOString().slice(0, 10);
+                  await log("issue_document.term", nodeId, `${docType}: ${term} from ${existing.expiryDate} → ${expiry}${new Date(expiry).getTime() < Date.now() ? " (still in the past — this permit lapsed before it was renewed)" : ""}`);
+                }
+              }
               const st = expiry ? statusOf(expiry) : { daysLeft: existing.daysLeft, status: "valid" };
               const hist = Array.isArray(existing.history) ? (existing.history as any[]) : [];
               hist.unshift({ at: nowISO(), by: "workflow", oldExpiry: existing.expiryDate ?? undefined, newExpiry: expiry || existing.expiryDate, oldNumber: existing.docNumber ?? undefined, newNumber: number || existing.docNumber, fee: fee || undefined, receipt: receipt || undefined, note: `Renewed via ${tpl?.name ?? "workflow"}` });
@@ -2163,7 +2219,11 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
   await prisma.workflowTask.update({
     where: { id: taskId },
     data: { status: finalStatus, outcome: opts.outcome ?? null, completedBy: opts.actor ?? null, completedById: opts.actorId ?? null, completedAt: nowISO(),
-             checklist: Array.isArray(opts.checklist) ? opts.checklist : task.checklist as any },
+             checklist: Array.isArray(opts.checklist) ? opts.checklist : task.checklist as any,
+             // The draft was scaffolding. Its answers are run variables now — recorded, logged and
+             // readable — and leaving a stale copy on the row would be a second version of the
+             // truth for anyone who later reopens the step.
+             draftAnswers: Prisma.DbNull, draftSavedAt: null },
   });
   // The reviewer's note is the reason for the decision — the one thing an audit actually wants to
   // read back. It was collected in the UI and dropped; now it rides on the log line beside the
@@ -3023,6 +3083,50 @@ export async function mayActOnTask(
   return vis.scope === "team" && !!vis.ids && vis.ids.includes(task.assigneeId);
 }
 
+/**
+ * SAVE WHAT HAS BEEN TYPED, WITHOUT FINISHING THE STEP.
+ *
+ * A step's answers used to live in the browser until Complete. That is fine for one field and wrong
+ * for a run of four, which is what the sheet now offers: the work permit term is known today, the
+ * Jawazat receipt arrives on Tuesday and the violations check after that. One refresh in between and
+ * the lot was gone, with nothing on the server to show anyone had started.
+ *
+ * ONE BAG FOR THE WHOLE RUN, kept on the FIRST step — the later steps' tasks do not exist yet (the
+ * engine creates each one as the one before it finishes), so there is nowhere else to put their
+ * answers. Same shape the completion body posts, `{ [var]: value }`.
+ *
+ * IT IS NOT A RECORD OF ANYTHING. No rule reads it, no document is written from it, nothing is
+ * validated — a draft is allowed to be half-answered and contradictory, that is what makes it a
+ * draft. It is deleted the moment the step is completed. The gate that matters still sits on
+ * completion, where it always did.
+ *
+ * Same permission as completing: whoever may do the step may save against it.
+ */
+R.post("/tasks/:id/draft", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const a = (req as any).auth;
+    const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    if (task.status !== "active") return res.status(409).json({ error: "This step is already finished." });
+    const me = await prisma.user.findUnique({ where: { id: a.sub } });
+    if (!(await mayActOnTask(a, me, task))) return res.status(403).json({ error: "This step is assigned to another role" });
+
+    const answers = req.body?.answers;
+    if (answers !== null && (typeof answers !== "object" || Array.isArray(answers))) {
+      return res.status(400).json({ error: "answers must be an object of { variable: value }" });
+    }
+    // Replaces rather than merges: the form posts everything it is holding, so a merge would make a
+    // cleared field impossible to clear. `null` is how the sheet discards a draft outright.
+    const empty = !answers || !Object.keys(answers).length;
+    const savedAt = empty ? null : nowISO();
+    await prisma.workflowTask.update({
+      where: { id: task.id },
+      data: { draftAnswers: empty ? Prisma.DbNull : answers, draftSavedAt: savedAt },
+    });
+    res.json({ ok: true, savedAt });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 // Update a task's checklist state WITHOUT changing status (partial save + per-item receive/verify/reject).
 R.post("/tasks/:id/checklist", requireAuth, requireStaff, async (req, res) => {
   try {
@@ -3088,15 +3192,8 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
     const { outcome, checklist, checklistState, variables } = req.body ?? {};
     // #2/#3 completion gating (tasks only — approvals branch on approve/reject): every REQUIRED item must be
     // received (and verified when requireVerification). Enforced server-side even if the UI is bypassed.
-    if (task.nodeType === "task") {
-      const items = normalizeItems(task.checklist);
-      if (items.length) {
-        const state = { ...effectiveState(task), ...(checklistState && typeof checklistState === "object" ? checklistState : {}) };
-        const { ok, missing } = checklistSatisfied(items, state, !!task.requireVerification);
-        if (!ok) return res.status(400).json({ error: `Cannot complete — required document${missing.length > 1 ? "s" : ""} not ${task.requireVerification ? "verified" : "received"}: ${missing.join(", ")}` });
-        if (checklistState && typeof checklistState === "object") await prisma.workflowTask.update({ where: { id: task.id }, data: { checklistState: state } });
-      }
-    }
+    const gate = await applyChecklistGate(task, checklistState);
+    if (gate) return res.status(400).json({ error: gate });
     // actorId is what the segregation guard compares; actor stays the display name everything else
     // already reads. Never let this call omit the id — that is the identity the control runs on.
     const inst = await completeTask(req.params.id, { actor: me?.name ?? a.sub, actorId: a.sub, outcome, checklist, variables });
@@ -3150,8 +3247,12 @@ export function stepChain(g: Graph, fromNodeId: string): Node[] {
     const a = (cur.config ?? {}) as any, b = (next.config ?? {}) as any;
     if (String(b.assigneeRole ?? "") !== String(a.assigneeRole ?? "")) break;
     if (String(b.assignee ?? "") !== String(a.assignee ?? "")) break;
-    if (Array.isArray(b.checklist) && b.checklist.length) break;
-    if (b.checklistSource) break;
+    // DOCUMENTS NO LONGER END IT. They used to, because a document is received against a task and
+    // the later steps' tasks do not exist yet — so there was nowhere to put a tick. The form holds
+    // them instead and `complete-chain` writes each step's ticks onto its task at the moment the
+    // engine creates it, which is the only moment the row is there to write to. Without this a
+    // Business Setup officer could never see more than one step at a time: almost every step
+    // between two gates collects something.
     out.push(next);
     cur = next;
   }
@@ -3180,6 +3281,11 @@ R.get("/tasks/:id/chain", requireAuth, requireStaff, async (req, res) => {
         instructions: (n.config as any)?.instructions ?? "",
         slaHours: (n.config as any)?.slaHours ?? null,
         captures: (await resolveCaptures(n.config, vars)) ?? [],
+        // Resolved the same way the engine resolves them when it creates the task — a dynamic rule
+        // or a service's own list, not just the node's static array — so the form collects exactly
+        // what the step will ask for and the ticks line up when they are written.
+        checklist: (await resolveChecklist(n.config, vars)) ?? [],
+        requireVerification: !!(n.config as any)?.requireVerification,
       });
     }
     res.json({ steps });
@@ -3210,7 +3316,7 @@ R.post("/tasks/:id/complete-chain", requireAuth, requireStaff, async (req, res) 
     if (!(await mayActOnTask(a, me, first))) return res.status(403).json({ error: "This step is assigned to another role" });
 
     const body = req.body ?? {};
-    const rest: Array<{ nodeId: string; variables?: any }> = Array.isArray(body.steps) ? body.steps : [];
+    const rest: Array<{ nodeId: string; variables?: any; checklistState?: any }> = Array.isArray(body.steps) ? body.steps : [];
     const inst0 = await prisma.workflowInstance.findUnique({ where: { id: first.instanceId } });
     const tpl = inst0 ? await prisma.workflowTemplate.findUnique({ where: { id: inst0.templateId } }) : null;
     // The browser's list is checked against the graph rather than trusted: a stale sheet naming a
@@ -3225,6 +3331,8 @@ R.post("/tasks/:id/complete-chain", requireAuth, requireStaff, async (req, res) 
       }
     }
 
+    const gate0 = await applyChecklistGate(first, body.checklistState);
+    if (gate0) return res.status(400).json({ error: gate0, completed: [] });
     let inst = await completeTask(first.id, { actor: me?.name ?? a.sub, actorId: a.sub, outcome: body.outcome, checklist: body.checklist, variables: body.variables });
     await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${first.title} (${first.id})` });
     done.push(first.title);
@@ -3240,6 +3348,21 @@ R.post("/tasks/:id/complete-chain", requireAuth, requireStaff, async (req, res) 
       if (!(await mayActOnTask(a, me, next))) {
         return res.status(403).json({ error: `"${next.title}" is assigned to another role, so it was left open.`, completed: done, instance: inst });
       }
+      /**
+       * THE TICKS, WRITTEN AT THE ONLY MOMENT THERE IS A ROW TO WRITE THEM TO.
+       *
+       * A document is received against a TASK, and this task came into existence a line ago — so
+       * the form has been holding its ticks since before it existed. They go on now, before the
+       * step is completed, because completion is what checks them: `checklistSatisfied` reads
+       * `checklistState`, and an empty one would refuse a step whose documents the officer has in
+       * front of them.
+       *
+       * MERGED, not replaced. `preTickFromRequest` may already have ticked items the client
+       * uploaded through the portal, and overwriting that would discard a real receipt and its
+       * file reference in favour of a box nobody touched.
+       */
+      const gateN = await applyChecklistGate(next, step.checklistState);
+      if (gateN) return res.status(400).json({ error: `${gateN} The steps before it are done.`, completed: done, instance: inst });
       inst = await completeTask(next.id, { actor: me?.name ?? a.sub, actorId: a.sub, variables: step.variables });
       await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${next.title} (${next.id})`, detail: "completed as part of a run" });
       done.push(next.title);

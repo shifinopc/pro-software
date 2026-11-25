@@ -24,6 +24,7 @@
 export const EXPECTED: string[] = [
   "auth-failure-check",
   "auth-limit-gate-check",
+  "chain-docs-check",
   "check-date-fields",
   "client-ip-check",
   "client-report-pdf-check",
@@ -50,12 +51,14 @@ export const EXPECTED: string[] = [
   // Where the one-press run of steps stops, and that the engine really opens each next task the
   // moment the one before it closes — the assumption the whole chain rests on.
   "step-chain-check",
+  "step-draft-check",
   // The lead report's counting rules on a fixture whose answer is known: bounces counted once,
   // re-opens are not new leads, "still open" reconstructed as at the end date. Local DBs only.
   "lead-status-report-check",
   "money-capture-check",
   "node-types-check",
   "number-format-pool-check",
+  "permit-term-expiry-check",
   "phone-split-check",
   "probe-addon-deal",
   "probe-agents",
@@ -227,7 +230,9 @@ export const TOOLS: string[] = [
   // Takes the work permit fee off "Issue Work Permit" — the capture, the rule it feeds and the
   // instruction line, because removing only the first deadlocks the step. Idempotent, --apply.
   "drop-permit-fee-capture",
+  "drop-renewed-iqama-checklist",
   "repoint-old-fee-steps",
+  "repoint-step",
   "whatsapp-send-test",
   "render-map",
   "add-staff-user",

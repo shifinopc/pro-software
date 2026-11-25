@@ -1242,6 +1242,21 @@ model WorkflowTask {
   checklistState      Json? // per-item runtime state: { [key]: { received, verified, note?, fileRef? } }
   requireVerification Boolean          @default(false) // completion needs each required item received AND verified
   captures            Json? // [{ var, label, type, options? }] — variables the completer must set
+  /// ANSWERS TYPED BUT NOT YET COMMITTED — the step as the officer left it.
+  ///
+  /// A step used to hold its answers in the browser until Complete, which is fine for one field and
+  /// wrong for a run of four: the work permit term is known today, the Jawazat receipt on Tuesday
+  /// and the violations check after that, and a refresh in between threw the lot away. This is
+  /// where "save and come back" lands — the same shape the form posts, `{ [var]: value }`, and for
+  /// a chained run it holds the later steps' answers too, because their tasks do not exist yet.
+  ///
+  /// NOT THE RECORD OF ANYTHING. Nothing reads it but the form: no rule, no report and no document
+  /// is written from a draft, and it is cleared the moment the step is completed, when the answers
+  /// become run variables and get their audit trail.
+  draftAnswers        Json?
+  /// When the draft above was last written, so the sheet can say "saved 10:42" rather than leaving
+  /// the officer to guess whether it took.
+  draftSavedAt        String?
   outcome             String? // approval: approve|reject ; task with branches: chosen key
   completedBy         String?
   /// WHO, as an id rather than a name. `completedBy` is a display name, and the segregation rule

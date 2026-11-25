@@ -72,9 +72,13 @@ const cleanup = async () => {
     [{ from: "a", to: "b" }]), "a").length === 0,
     "a change of role ends it");
 
-  ok(stepChain(g([task("a"), task("b", { checklist: [{ key: "x", label: "X" }] })],
-    [{ from: "a", to: "b" }]), "a").length === 0,
-    "a step with documents to receive ends it");
+  // DOCUMENTS NO LONGER END IT. They did, because a tick is written against a task and the later
+  // steps' tasks do not exist yet — the form holds them now and `complete-chain` writes them on as
+  // each task is created. Nearly every Business Setup step between two gates collects something, so
+  // with the old rule that workflow could never offer more than one step at a time.
+  ok(ids(stepChain(g([task("a"), task("b", { checklist: [{ key: "x", label: "X" }] })],
+    [{ from: "a", to: "b" }]), "a")) === "b",
+    "a step with documents to receive is offered — the form collects them for it");
 
   // Nothing is offered at all here, not "b and stop": b IS the rework target, so the very first
   // step after `a` is one that will be visited again. Answering it now answers the wrong visit.

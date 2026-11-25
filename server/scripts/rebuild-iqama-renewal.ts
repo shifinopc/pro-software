@@ -117,20 +117,29 @@ const nodes = [
 
   { id: "renew", type: "task", label: "Renew Iqama",
     config: { assigneeRole: "pro_officer", slaHours: 24,
-      instructions: "Record the renewed Iqama and the work permit renewed with it. Both dates are entered as the government issued them.",
-      checklist: [{ key: "renewed_iqama", label: "Renewed Iqama attached", source: "manual", required: true }],
+      // ONE ANSWER, BECAUSE THE OTHER TWO WERE ALREADY KNOWN.
+      //
+      // The Iqama NUMBER does not change when an Iqama is renewed - it is the resident's id for
+      // life - so the number on file is already right, and `issue_document` keeps whatever it holds
+      // when nothing is captured. Typing it again was a chance to mistype it, not a question.
+      //
+      // The PERMIT EXPIRY is the term that was paid for at "Issue Work Permit", so it is arithmetic,
+      // not knowledge, and it is derived rather than asked (see `permitExpiryFromTerm` below).
+      instructions: "Record the renewed Iqama. The work permit is renewed with it, for the term paid at the work permit step.",
       captures: [
-        { var: "iqamaNumber", type: "text", label: "Iqama number", required: true },
         { var: "newExpiry", type: "date", label: "New Iqama expiry", required: true },
-        { var: "permitExpiry", type: "date", label: "New work permit expiry", required: true },
       ] } },
 
   // Two documents, one renewal. The permit names its own variable rather than sharing `documentId`
   // — which belongs to the Iqama — and finds the permit this employee already holds.
   { id: "issue_iqama", type: "issue_document", label: "Iqama",
-    config: { docType: "Iqama", numberVar: "iqamaNumber", expiryVar: "newExpiry" } },
+    config: { docType: "Iqama", expiryVar: "newExpiry" } },
+  // `expiryFromTerm` names the variable holding the term that was paid for, and the engine counts
+  // that many days from the expiry already on file. Nobody types this date. With no permit on file
+  // there is nothing to count from, and it falls back to the Iqama's new expiry — which is the rule
+  // anyway: the permit is renewed with the Iqama and carries its date.
   { id: "issue_permit", type: "issue_document", label: "Work Permit",
-    config: { docType: "Work Permit", expiryVar: "permitExpiry", documentIdVar: "workPermitDocId", renewExisting: true } },
+    config: { docType: "Work Permit", expiryFromTerm: "permitTerm", documentIdVar: "workPermitDocId", renewExisting: true } },
 
   { id: "notify", type: "notify", label: "Tell the Client", config: {} },
   { id: "end_done", type: "end", label: "Renewal Complete", config: {} },

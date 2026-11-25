@@ -16701,6 +16701,14 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:9px; margin-top:11px;">
               <sc-for list="{{ wdChecklist }}" as="i" hint-placeholder-count="3">
+                <!-- WHOSE DOCUMENT THIS IS, for the same reason the questions carry one: a column
+                     of boxes belonging to four different steps is unreadable without it. -->
+                <sc-if value="{{ i.grpShow }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:9px; margin-top:4px;">
+                    <span style="font-size:9px; font-weight:800; letter-spacing:.12em; color:#7C00FF; text-transform:uppercase; white-space:nowrap;">then · {{ i.grp }}</span>
+                    <span style="flex:1; height:1px; background:#EFE9FA;"></span>
+                  </div>
+                </sc-if>
                 <div style="border:1px solid #F0EDF6; border-radius:12px; padding:12px 13px;">
                   <div style="display:flex; align-items:center; gap:10px;">
                     <div onClick="{{ i.setRcv }}" style="width:20px; height:20px; border-radius:6px; background:{{ i.rcvBg }}; border:1.5px solid #D8D3E3; display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer;" style-hover="border-color:#7C00FF;">
@@ -16713,7 +16721,12 @@
                   <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
                     <input sc-camel-default-value="{{ i.ref }}" data-seed-val="{{ i.ref }}" onChange="{{ i.typeRef }}" onBlur="{{ i.setRef }}" placeholder="Ref / receipt no." style="flex:1; border:1px solid #E4E0EC; border-radius:8px; padding:6px 10px; font-size:11px; background:#FBFAFE;">
                     <sc-if value="{{ i.showVerify }}" hint-placeholder-val="{{ false }}"><span onClick="{{ i.verify }}" style="font-size:10px; font-weight:700; color:#0E9355; background:#E7F8EF; padding:6px 11px; border-radius:8px; cursor:pointer;">Verify</span></sc-if>
-                    <span onClick="{{ i.reject }}" style="font-size:10px; font-weight:700; color:#C0353A; background:#FEECEC; padding:6px 11px; border-radius:8px; cursor:pointer;">Reject</span>
+                    <!-- Rejecting tells the client what to fix and writes an audited line against
+                         the task — neither is possible for a step that has not started yet, so the
+                         later steps of a run offer the tick and the reference and nothing else. -->
+                    <sc-if value="{{ i.showReject }}" hint-placeholder-val="{{ true }}">
+                      <span onClick="{{ i.reject }}" style="font-size:10px; font-weight:700; color:#C0353A; background:#FEECEC; padding:6px 11px; border-radius:8px; cursor:pointer;">Reject</span>
+                    </sc-if>
                   </div>
                 </div>
               </sc-for>
@@ -16806,6 +16819,17 @@
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:14px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 18px;">
               <div style="font-size:10px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
+              <!-- SAVE SITS ABOVE BOTH FOOTERS, not inside the "ready" one: a part-filled step is
+                   the only kind worth saving, and that is exactly the step that cannot complete. -->
+              <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+                  <button onClick="{{ saveStepDraft }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Save for later</button>
+                  <sc-if value="{{ wdSaving }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:10px; color:#A9A6B4;">Saving…</span>
+                  </sc-if>
+                  <span style="font-size:10px; color:#A9A6B4;">{{ wdSavedNote }}</span>
+                </div>
+              </sc-if>
               <!-- TWO BUTTONS UNDER sc-if, not one with a bound colour. A mostly-static style
                    attribute is hoisted into a generated class and stops re-evaluating, so the
                    background froze at whatever it was on first render — grey for ever, however much
@@ -38221,6 +38245,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           instructions: t2.instructions || '',
           checklist: Array.isArray(t2.checklist) ? t2.checklist.map(it2 => ({ key: it2.key || it2.label, label: it2.label || it2.key, required: !!it2.required })) : [],
           captures: Array.isArray(t2.captures) ? t2.captures.map(c2 => ({ ...c2, label: c2.label || c2.var, type: c2.options ? 'select' : (c2.type || 'text'), options: c2.options || undefined })) : [],
+          // WHAT WAS TYPED LAST TIME AND NOT FINISHED. The form starts from this when it has
+          // nothing of its own, which is what makes "Save for later" survive a refresh, a different
+          // machine, and somebody else opening the step.
+          draftAnswers: (t2.draftAnswers && typeof t2.draftAnswers === 'object') ? t2.draftAnswers : null,
+          draftSavedAt: t2.draftSavedAt || null,
           onApprove: t2.nodeType === 'approval' ? 'Approve' : undefined, onReject: t2.nodeType === 'approval' ? 'Reject' : undefined,
         }))
       : (_authed ? [] : [
@@ -38416,6 +38445,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       this._capPend = this._capPend || {};
       const _chkPre9 = selStep.id + '|chk:';
       const _chkKey9 = (k9) => _chkPre9 + k9;
+      // THE STEPS AFTER THIS ONE, as the server allowed them. Declared up here because three
+      // separate things reason about them and all three must see the SAME list: the documents they
+      // collect, the questions they ask, and what the one Complete button is still waiting for.
+      const _chainSteps9 = (this.state.wdChain && this.state.wdChain.for === selStep.id)
+        ? (this.state.wdChain.steps || []) : [];
       const chk = (() => {
         let out = _chkRaw9;
         for (const pk9 of Object.keys(this._capPend)) {
@@ -38426,7 +38460,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         }
         return out;
       })();
-      const _capRaw9 = wfCap[selStep.id] || {};
+      // WHERE THE FORM STARTS: what is in hand this session, else what was saved against the step.
+      // Only as a starting point - the moment anything is typed, `wfCap` exists and wins, so a
+      // stale draft can never overwrite what somebody is doing now.
+      const _capRaw9 = wfCap[selStep.id]
+        || ((selStep.draftAnswers && typeof selStep.draftAnswers === 'object') ? selStep.draftAnswers : {});
       /**
        * TEXT TYPED BUT NOT YET COMMITTED.
        *
@@ -38505,8 +38543,52 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           },
         };
       });
+      /**
+       * THE DOCUMENTS THE LATER STEPS OF THIS RUN COLLECT.
+       *
+       * Held in the browser, keyed by step, and written onto each task by `complete-chain` at the
+       * moment the engine creates it — there is no row to persist them to before that, which is
+       * why they cannot use `_chkPersist` like the ticks above.
+       *
+       * TICK AND REFERENCE ONLY. Verify and Reject write audited log lines against a task and tell
+       * the client what to fix; neither is possible against a step that has not started, and a
+       * rejection recorded now would be a rejection nobody was told about. An officer who has not
+       * got the document simply leaves it unticked, which holds the whole run exactly as it should.
+       */
+      const _chainChk9 = this.state.wfChainChk || {};
+      const _chainChkFor9 = (nodeId9) => (_chainChk9[selStep.id] || {})[nodeId9] || {};
+      const _setChainChk9 = (nodeId9, key9, patch9) => {
+        const forStep9 = _chainChk9[selStep.id] || {};
+        const forNode9 = forStep9[nodeId9] || {};
+        this.setState({ wfChainChk: { ..._chainChk9,
+          [selStep.id]: { ...forStep9, [nodeId9]: { ...forNode9, [key9]: { ...(forNode9[key9] || {}), ...patch9 } } } } });
+      };
+      const _chainDocs9 = [];
+      _chainSteps9.forEach(st9 => {
+        (st9.checklist || []).forEach((it9, i9) => {
+          const st10 = _chainChkFor9(st9.nodeId)[it9.key] || {};
+          _chainDocs9.push({
+            key: st9.nodeId + ':' + it9.key, label: it9.label, required: !!it9.required, reqMark: it9.required ? '*' : '',
+            grp: st9.title, grpShow: i9 === 0,
+            received: !!st10.received, verified: false, rejected: false,
+            rcvBg: st10.received ? '#F3E8FF' : '#fff', note: '', ref: st10.ref || '',
+            stateLabel: st10.received ? 'Received' : 'Not received',
+            stateColor: st10.received ? '#B8860B' : '#A9A6B4',
+            stateBg: st10.received ? '#FEF4E2' : '#F3F1F7',
+            showVerify: false, showReject: false,
+            setRcv: () => _setChainChk9(st9.nodeId, it9.key, { received: !st10.received }),
+            verify: () => {}, reject: () => {},
+            typeRef: (e) => { this._capPend[_chkKey9(st9.nodeId + ':' + it9.key)] = e.target.value; },
+            setRef: (e) => { delete this._capPend[_chkKey9(st9.nodeId + ':' + it9.key)]; _setChainChk9(st9.nodeId, it9.key, { ref: e.target.value }); },
+          });
+        });
+      });
       const reqItems = (selStep.checklist || []).filter(i => i.required);
-      const notReceived = reqItems.filter(i => !(chk[i.key] && chk[i.key].received)).length;
+      // The gate counts the WHOLE form, for the same reason the unanswered-question count does: one
+      // button finishing four steps has to refuse for any of them, or it files a step whose
+      // documents nobody has.
+      const _chainReqMissing9 = _chainDocs9.filter(d9 => d9.required && !d9.received).length;
+      const notReceived = reqItems.filter(i => !(chk[i.key] && chk[i.key].received)).length + _chainReqMissing9;
       const notVerified = selStep.requireVerification ? reqItems.filter(i => !(chk[i.key] && chk[i.key].verified)).length : 0;
       // The document gate joins the checklist gate. Both must pass, and the server re-checks the
       // document one anyway — this only stops the officer being sent to a button that will refuse.
@@ -38562,8 +38644,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // - must reason about the SAME list. They did not: visibility was worked out from this step
       // alone, so "Late payment amount" went on being asked, and counted as missing, after the
       // officer had answered "Late payment charged? No" on a step further down the form.
-      const _chainSteps9 = (this.state.wdChain && this.state.wdChain.for === selStep.id)
-        ? (this.state.wdChain.steps || []) : [];
       const _runCaps9 = [].concat((selStep.captures || []), ...(_chainSteps9.map(st9 => st9.captures || [])));
       const _capVis = (() => {
         const shown = {}, eff = {};
@@ -38755,7 +38835,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       drawerApi = {
         showWorkDrawer: true, wdKind: selStep.kind, wdIsApproval: selStep.kind === 'approval',
         wdTitle: selStep.title, wdClient: selStep.client, wdRelated: selStep.related, wdRole: selStep.role,
-        wdChecklist: items, wdHasChecklist: (selStep.checklist || []).length > 0,
+        // This step's documents, then the ones the later steps of the run collect — one list, so
+        // the officer sees everything the single Complete button is going to need.
+        // HOW MANY STEPS THIS BUTTON FINISHES. Never set, so the button said "Complete step" while
+        // quietly completing four — the one number somebody needs before pressing it.
+        wdChainCount: _chainSteps9.length,
+        wdChecklist: items.map(i9 => ({ ...i9, grp: '', grpShow: false, showReject: true })).concat(_chainDocs9),
+        wdHasChecklist: ((selStep.checklist || []).length + _chainDocs9.length) > 0,
         wdInstructions: selStep.instructions || '', wdHasInstructions: !!(selStep.instructions || '').trim(),
         // ── The document gate ──
         ...(() => {
@@ -38942,6 +39028,42 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           + ((selStep.checklist || []).length ? ' · ' + (gateOk ? 'All required documents ready' : 'Complete blocked — required docs not ready') : ''),
         // Grey for a step with no SLA: nothing is wrong, so nothing should look urgent.
         wdSlaColor: !_capsOk ? '#B8860B' : !_hasSla9 ? '#8C8899' : remH < 0 ? '#C0353A' : remH <= selStep.slaHours * 0.25 ? '#B8860B' : '#0E9355',
+        /**
+         * SAVE AND COME BACK.
+         *
+         * A run of four steps is not filled in one sitting - the permit term is known today, the
+         * Jawazat receipt on Tuesday - and until this existed the answers lived in the browser
+         * until Complete, so a refresh threw them away and nobody else could see the work had been
+         * started. `cap` is posted rather than the committed state because it folds in whatever is
+         * typed but not yet tabbed out of, which is exactly the keystroke somebody pressing Save is
+         * worried about losing.
+         *
+         * It is also written into `wfCap`, so the save commits those pending keystrokes locally too
+         * and the form cannot show one thing while the server holds another.
+         */
+        wdSavedNote: (() => {
+          const at9 = (this.state.wdSaved && this.state.wdSaved.for === selStep.id)
+            ? this.state.wdSaved.at : selStep.draftSavedAt;
+          if (!at9) return '';
+          const d9 = new Date(at9);
+          return isNaN(d9.getTime()) ? '' : 'Draft saved ' + d9.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        })(),
+        wdSaving: this.state.wdSaving === selStep.id,
+        saveStepDraft: () => {
+          const tok9 = localStorage.getItem('stimespro:token');
+          const body9 = JSON.stringify({ answers: cap });
+          this.setState({ wdSaving: selStep.id, wfCap: { ...wfCap, [selStep.id]: cap } });
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/draft',
+            { method: 'POST', headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) }, body: body9 })
+            .then(r9 => r9.json().then(j9 => ({ ok: r9.ok, j: j9 })))
+            .then(({ ok: ok9, j: j9 }) => {
+              this.setState({ wdSaving: null });
+              if (!ok9) return this.toast(j9.error || 'Could not save');
+              this.setState({ wdSaved: { for: selStep.id, at: j9.savedAt || new Date().toISOString() } });
+              this.toast('Saved — you can close this and come back to it');
+            })
+            .catch(() => { this.setState({ wdSaving: null }); this.toast('Server unreachable — nothing was saved'); });
+        },
         closeWorkDrawer: () => (this._capPend = {}, this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })),
         // WIRED: real steps complete through the engine (checklist state + captured variables included).
         // `outcome9` is the branch the officer picked, for a step wired to end more than one way.
@@ -38972,7 +39094,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             };
             const vars2 = _varsFor9(selStep.captures);
             const t2 = localStorage.getItem('stimespro:token');
-            const chain9 = _chainSteps9.map(st9 => ({ nodeId: st9.nodeId, variables: _varsFor9(st9.captures) }));
+            // Each step carries its OWN ticks, in the shape `checklistState` is stored in, so the
+            // server can write them onto the task the engine is about to create.
+            const chain9 = _chainSteps9.map(st9 => {
+              const held9 = _chainChkFor9(st9.nodeId);
+              const cs9 = {};
+              (st9.checklist || []).forEach(it9 => {
+                const v9 = held9[it9.key];
+                if (v9 && (v9.received || v9.ref)) cs9[it9.key] = { received: !!v9.received, fileRef: v9.ref || undefined };
+              });
+              return { nodeId: st9.nodeId, variables: _varsFor9(st9.captures),
+                       ...(Object.keys(cs9).length ? { checklistState: cs9 } : {}) };
+            });
             const url9 = '/api/workflow/tasks/' + selStep.id + (chain9.length ? '/complete-chain' : '/complete');
             const body9 = { checklistState: chkState, variables: vars2, ...(oc9 ? { outcome: oc9 } : {}), ...(chain9.length ? { steps: chain9 } : {}) };
             fetch((this._apiBase || 'http://localhost:4100') + url9, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(body9) })
