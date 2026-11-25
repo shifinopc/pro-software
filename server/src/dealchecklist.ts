@@ -29,21 +29,41 @@ export interface DealChecklistItem {
   key: string;
   label: string;
   required: boolean;
-  /** "manual" | "document" */
+  /** "manual" | "document" | "field" */
   source: string;
   /** For a document item: the DocumentType name it is satisfied by. */
   docType?: string | null;
+  /** For a field item: which fact in `factsFor` must hold a value. */
+  field?: string | null;
 }
 
 export interface ItemStatus extends DealChecklistItem {
   done: boolean;
   /** How it came to be done, so the screen never implies somebody ticked a document. */
-  how: "manual" | "document" | "waived" | null;
-  /** For a document item that IS satisfied: which document satisfied it. */
+  how: "manual" | "document" | "field" | "waived" | null;
+  /** For a document or field item that IS satisfied: what satisfied it. */
   evidence?: string | null;
 }
 
 const str = (v: unknown) => String(v ?? "").trim();
+
+/**
+ * IS THIS FIELD ACTUALLY FILLED IN.
+ *
+ * `0` is not a budget and `""` is not a close date, so neither counts — an unset `valueMinor`
+ * arrives here as 0 and must not satisfy "a budget figure".
+ *
+ * "no" and "false" are absent too, because the yes/no facts (`hasCr`, `hasQuotation`) read as
+ * questions: a field item on `hasCr` means "we hold their CR", and "no" is the answer that means we
+ * do not. Without this the item would tick itself the moment the fact existed, whatever it said,
+ * which is the opposite of what anybody configuring it would expect.
+ */
+const hasValue = (v: unknown): boolean => {
+  if (v == null) return false;
+  if (typeof v === "number") return v !== 0;
+  const s = String(v).trim().toLowerCase();
+  return s !== "" && s !== "0" && s !== "no" && s !== "false";
+};
 
 /** Same operators the workflow's checklist rules use, so one rule syntax covers both halves. */
 /**
@@ -93,7 +113,8 @@ export function normalizeItems(raw: unknown): DealChecklistItem[] {
   for (const r of raw as any[]) {
     const key = str(r?.key), label = str(r?.label) || key;
     if (!key) continue;
-    const source = str(r?.source) === "document" ? "document" : "manual";
+    const asked = str(r?.source);
+    const source = asked === "document" ? "document" : asked === "field" ? "field" : "manual";
     out.push({
       key, label,
       required: r?.required !== false,
@@ -101,9 +122,15 @@ export function normalizeItems(raw: unknown): DealChecklistItem[] {
       // A document item with no type names nothing and could never be satisfied, so it degrades to
       // manual rather than sitting on the list permanently unsatisfiable.
       docType: source === "document" ? (str(r?.docType) || null) : null,
+      field: source === "field" ? (str(r?.field) || null) : null,
     });
   }
-  return out.map(i => (i.source === "document" && !i.docType ? { ...i, source: "manual", docType: null } : i));
+  // Same degradation for both derived kinds: one that names nothing can never be satisfied, and an
+  // item nobody can ever tick is worse than one they can.
+  return out.map(i =>
+    (i.source === "document" && !i.docType) || (i.source === "field" && !i.field)
+      ? { ...i, source: "manual", docType: null, field: null }
+      : i);
 }
 
 /**
@@ -137,6 +164,13 @@ export const DEAL_FACTS: Array<{ name: string; note: string }> = [
   { name: "hasCr", note: "yes / no - whether a commercial registration is on file" },
   { name: "group", note: "The client group, blank if the client is not in one" },
   { name: "package", note: "The client's current subscription package, blank if none" },
+  // THE QUALIFYING FACTS. Added for the field items on the Enquiry stage — "is there a named
+  // decision maker, a way to reach them, a budget and a date" — which is the question a pipeline
+  // exists to answer and which none of the facts above could be asked.
+  { name: "contact", note: "The named contact on the deal, blank if nobody is linked" },
+  { name: "contactRole", note: "That contact's job title - who you are actually talking to" },
+  { name: "contactReach", note: "Their phone, WhatsApp or email - blank if there is no way to reach them" },
+  { name: "closeDate", note: "The expected close date, blank if nobody has committed to one" },
 ];
 
 /**
@@ -159,6 +193,39 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
       ])
     : [null, null];
 
+  /**
+   * WHO WE ARE ACTUALLY TALKING TO — the deal's own contact, or failing that the client's.
+   *
+   * The fallback is not a convenience, it is the difference between a gate and a dead end.
+   * `Opportunity.contactId` is accepted by the API and NEVER SET BY THE CONSOLE: the deal form
+   * carries title, value, probability, close date, source, notes, forecast and competitor, and no
+   * contact picker at all. Requiring the deal's own contact would therefore be a required item
+   * nobody could satisfy through the UI — on this database, 0 of 9 deals in Enquiry had one.
+   *
+   * The client's contacts ARE maintained (the lead form's "who you spoke to" writes one, and the
+   * client record has a Contacts tab), and a deal belongs to a client, so the honest reading of
+   * "is there a named decision maker" is: on the deal if anybody ever sets one, otherwise the
+   * client's primary contact, otherwise any live contact on the record.
+   *
+   * An archived contact never counts, at any level — a deal must not qualify on somebody who has
+   * been removed from the client record.
+   */
+  const pick = (rows: any[]) => rows.find(c => c && !c.archived) ?? null;
+  const SEL = { id: true, name: true, jobTitle: true, phone: true, whatsapp: true, email: true, archived: true, isPrimary: true };
+  const onDeal = deal?.contactId
+    ? await prisma.contact.findUnique({ where: { id: String(deal.contactId) }, select: SEL }).catch(() => null)
+    : null;
+  const live = pick([onDeal]) ?? (company?.id
+    ? pick(await prisma.contact.findMany({
+        where: { companyId: company.id, archived: false },
+        // Primary first, so "the decision maker" is whoever the record says it is rather than
+        // whichever row happens to come back first.
+        orderBy: [{ isPrimary: "desc" }, { id: "asc" }],
+        select: SEL,
+        take: 5,
+      }).catch(() => []))
+    : null);
+
   return {
     source: deal?.source ?? "",
     country: deal?.country ?? company?.country ?? "",
@@ -178,6 +245,12 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
     hasCr: company?.cr ? "yes" : "no",
     group: group?.name ?? "",
     package: (sub as any)?.package?.name ?? "",
+    contact: live?.name ?? "",
+    contactRole: live?.jobTitle ?? "",
+    // ANY one of the three is a way to reach them. Requiring a specific channel would fail the
+    // client who only ever answers WhatsApp, which in this market is most of them.
+    contactReach: str(live?.phone) || str(live?.whatsapp) || str(live?.email) || "",
+    closeDate: deal?.expectedCloseDate ?? "",
     // THE ADMIN'S OWN FIELDS, if any exist. Whatever the Form Builder (or anything else) has put on
     // the client record is conditionable without a code change — which is the whole point of a rule
     // engine that a firm is supposed to configure for itself.
@@ -260,6 +333,9 @@ export async function statusFor(deal: any, company: any, stage?: any): Promise<I
   const manual: Record<string, any> = (deal?.checklistState && typeof deal.checklistState === "object") ? deal.checklistState : {};
   const waived: Record<string, any> = (deal?.checklistWaived && typeof deal.checklistWaived === "object") ? deal.checklistWaived : {};
 
+  // Only fetched when something asks for it — a list of plain manual items costs no extra query.
+  const facts = items.some(i => i.source === "field") ? await factsFor(deal, company) : null;
+
   const docTypes = [...new Set(items.filter(i => i.source === "document" && i.docType).map(i => i.docType as string))];
   const docs = docTypes.length && company?.id
     ? await prisma.document.findMany({
@@ -280,6 +356,19 @@ export async function statusFor(deal: any, company: any, stage?: any): Promise<I
         how: hit ? ("document" as const) : null,
         evidence: hit ? [i.docType, hit.docNumber, hit.expiryDate ? "expires " + hit.expiryDate : null].filter(Boolean).join(" · ") : null,
       };
+    }
+    // THE FIELD ITSELF IS THE EVIDENCE.
+    //
+    // A manual tick is a declaration: somebody saying the budget is confirmed proves only that
+    // they clicked. These read the record instead, so "a budget figure" is satisfied by there
+    // BEING one and by nothing else — which is the difference between a gate and a ceremony.
+    //
+    // The value is shown as the evidence, so the row answers "what have we got" rather than only
+    // "is it there", and a wrong figure is visible on the card instead of hiding behind a tick.
+    if (i.source === "field") {
+      const v = facts ? facts[String(i.field)] : undefined;
+      const ok = hasValue(v);
+      return { ...i, done: ok, how: ok ? ("field" as const) : null, evidence: ok ? String(v) : null };
     }
     const t = manual[i.key];
     return { ...i, done: !!t?.done, how: t?.done ? ("manual" as const) : null, evidence: str(t?.by) || null };

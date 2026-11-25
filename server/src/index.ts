@@ -3378,6 +3378,12 @@ app.post("/api/opportunities/:id/checklist", requireAuth, requireStaff, requireW
   if (String(item.source) === "document") {
     return res.status(400).json({ error: `"${item.label}" is satisfied by the document itself — upload or record it against the client and it ticks on its own.` });
   }
+  // Same reasoning as documents: a field item is satisfied by the record holding a value, and a
+  // hand-tick that could override it would put the list and the deal back into exactly the
+  // disagreement that reading the field was meant to end — with the tick winning.
+  if (String(item.source) === "field") {
+    return res.status(400).json({ error: `"${item.label}" is read from the deal — fill it in on the deal and it ticks on its own.` });
+  }
 
   const me = await prisma.user.findUnique({ where: { id: (req as any).auth?.sub }, select: { name: true } });
   const state: Record<string, any> = (opp.checklistState && typeof opp.checklistState === "object") ? { ...(opp.checklistState as any) } : {};

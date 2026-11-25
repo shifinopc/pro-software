@@ -8097,9 +8097,9 @@
                       <input sc-camel-default-value="{{ it.label }}" data-seed-val="{{ it.label }}" onBlur="{{ it.setLabel }}" placeholder="What is needed" class="fm-inp">
                       <!-- The whole point of this screen: a MANUAL item is somebody's word, a
                            DOCUMENT item is satisfied by a record and can never be ticked by hand. -->
-                      <div onClick="{{ it.flipKind }}" title="Switch between somebody confirming it and a document satisfying it" style="font-size:10px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:{{ it.kindColor }}; background:{{ it.kindBg }};">{{ it.kindLabel }}</div>
-                      <sc-if value="{{ it.isDoc }}" hint-placeholder-val="{{ false }}">
-                        <div style="position:relative;"><div onClick="{{ it.ddToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#fff; display:flex; align-items:center; gap:6px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.ddLabel }}</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ it.ddOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:300px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input sc-camel-default-value="{{ it.ddQuery }}" data-seed-val="{{ it.ddQuery }}" onInput="{{ it.ddSetQuery }}" placeholder="Search document types…" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:11px; outline:none; margin-bottom:4px;"><sc-for list="{{ it.ddOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
+                      <div onClick="{{ it.flipKind }}" title="Cycle the kind: somebody confirms it, a document satisfies it, or it is read from a field on the deal" style="font-size:10px; font-weight:700; text-align:center; padding:8px 6px; border-radius:9px; cursor:pointer; color:{{ it.kindColor }}; background:{{ it.kindBg }};">{{ it.kindLabel }}</div>
+                      <sc-if value="{{ it.hasPicker }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:relative;"><div onClick="{{ it.ddToggle }}" style="width:100%; box-sizing:border-box; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#fff; display:flex; align-items:center; gap:6px; cursor:pointer;" style-hover="border-color:#7C00FF;"><span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.ddLabel }}</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ it.ddOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 5px); left:0; min-width:100%; width:max-content; max-width:300px; max-height:220px; overflow-y:auto; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:40;"><input sc-camel-default-value="{{ it.ddQuery }}" data-seed-val="{{ it.ddQuery }}" onInput="{{ it.ddSetQuery }}" placeholder="{{ it.ddSearchPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:11px; outline:none; margin-bottom:4px;"><sc-for list="{{ it.ddOptions }}" as="o" hint-placeholder-count="4"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer; white-space:nowrap;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
                       </sc-if>
                       <sc-if value="{{ it.isManual }}" hint-placeholder-val="{{ true }}">
                         <div style="font-size:10px; color:#BFBCC9; padding:0 4px; line-height:1.4;">Somebody confirms it</div>
@@ -45157,27 +45157,38 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           clkFootColor: _clkD9 && _clkD9.blocked ? '#B7791F' : '#0E9355',
           clkItems: _items9.map(i => {
             const isDoc = i.source === 'document';
+            // A FIELD ITEM IS READ, NOT TICKED. Same category as a document item: its box reports
+            // what the deal holds, so it is a status and never a control. Shown as the value it
+            // found rather than just a tick, because "SAR 40,000" on the row is what lets somebody
+            // spot a figure that is present but wrong — a tick hides exactly that.
+            const isField = i.source === 'field';
+            const derived = isDoc || isField;
             return {
               label: i.label,
               done: !!i.done,
-              // A document item's box is a STATUS, not a control — see the markup. Its cursor says so
+              // A derived item's box is a STATUS, not a control — see the markup. Its cursor says so
               // before anybody presses it and finds out.
-              cursor: (isDoc || !canWrite) ? 'default' : 'pointer',
+              cursor: (derived || !canWrite) ? 'default' : 'pointer',
               boxBd: i.done ? (i.how === 'waived' ? '#B7791F' : '#0E9355') : '#DDD9E6',
               boxBg: i.done ? (i.how === 'waived' ? '#B7791F' : '#0E9355') : '#fff',
-              tag: i.how === 'waived' ? 'WAIVED' : isDoc ? 'DOCUMENT' : i.required ? 'REQUIRED' : 'OPTIONAL',
-              tagColor: i.how === 'waived' ? '#B7791F' : isDoc ? '#7C00FF' : i.required ? '#6F6C7A' : '#A9A6B4',
-              tagBg: i.how === 'waived' ? '#FFF6E5' : isDoc ? '#F5EEFF' : '#F3F1F7',
+              tag: i.how === 'waived' ? 'WAIVED' : isDoc ? 'DOCUMENT' : isField ? 'ON THE DEAL' : i.required ? 'REQUIRED' : 'OPTIONAL',
+              tagColor: i.how === 'waived' ? '#B7791F' : derived ? '#7C00FF' : i.required ? '#6F6C7A' : '#A9A6B4',
+              tagBg: i.how === 'waived' ? '#FFF6E5' : derived ? '#F5EEFF' : '#F3F1F7',
               // What the row can say for itself. A document item that is satisfied names the document
               // that satisfied it, so nobody has to go and look for the thing they are being told about.
               note: i.how === 'waived' ? 'Waived — ' + (i.evidence || 'no reason recorded')
                 : isDoc
                   ? (i.done ? 'On file · ' + (i.evidence || i.docType) : 'Waiting on the ' + (i.docType || 'document') + ' — it ticks itself once recorded against the client')
-                  : (i.done ? 'Ticked' + (i.evidence ? ' by ' + i.evidence : '') : 'Nobody has confirmed this yet'),
+                  : isField
+                    ? (i.done ? 'On the deal · ' + i.evidence : 'Not filled in yet — set it on the deal and this ticks itself')
+                    : (i.done ? 'Ticked' + (i.evidence ? ' by ' + i.evidence : '') : 'Nobody has confirmed this yet'),
               toggle: () => {
                 if (!canWrite) return;
                 if (isDoc) {
                   return this.toast(i.label + ' ticks itself once the ' + (i.docType || 'document') + ' is recorded against the client.', 'error');
+                }
+                if (isField) {
+                  return this.toast(i.label + ' is read from the deal — fill it in there and this ticks itself.', 'error');
                 }
                 _clkSend9('/checklist', { key: i.key, done: !i.done });
               },
@@ -45484,33 +45495,53 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                     };
                   }),
                   items: items9.map((it, ii) => {
-                    const isDoc9 = String(it.source) === 'document';
+                    const src9 = String(it.source || 'manual');
+                    const isDoc9 = src9 === 'document';
+                    // READ FROM THE DEAL. The third kind: neither somebody's word nor a filed
+                    // document, but a field on the deal itself — "is there a budget figure", "is
+                    // there a named contact". The facts come from the same vocabulary endpoint the
+                    // conditions above use, so anything a rule can be written against can also be
+                    // required, including the firm's own custom client fields.
+                    const isField9 = src9 === 'field';
+                    const facts9 = ((this.state.checklistVocabData || {}).deal || []);
                     const ip9 = (next) => patch9({ documents: items9.map((x, j) => (j === ii ? { ...x, ...next } : x)) });
                     // The key is DERIVED from the label rather than typed. It is the identity the
                     // stored tick and the pack upgrade both hang off, and asking somebody to invent
                     // one produces "item1" — which then means nothing when it appears in a diff.
                     const keyFor9 = (label) => String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
                     const kDd9 = 'crDoc' + rule.id + '_' + ri + '_' + ii;
+                    // ONE picker, pointed at whichever list this kind of item picks from.
                     const dd9 = mkDdSearch(
                       kDd9,
-                      _crDocTypesFor9(rule.country).map(d => ({ value: d.name, label: d.name + (d.subjectKind === 'company' ? ' · company' : ' · employee') })),
-                      it.docType || '',
-                      (v9) => ip9({ docType: v9 }),
-                      'Search document types…', 'Which document?',
+                      isField9
+                        ? facts9.map(f => ({ value: f.name, label: f.name + (f.note ? ' · ' + f.note : '') }))
+                        : _crDocTypesFor9(rule.country).map(d => ({ value: d.name, label: d.name + (d.subjectKind === 'company' ? ' · company' : ' · employee') })),
+                      (isField9 ? it.field : it.docType) || '',
+                      (v9) => ip9(isField9 ? { field: v9 } : { docType: v9 }),
+                      isField9 ? 'Search fields…' : 'Search document types…',
+                      isField9 ? 'Which field?' : 'Which document?',
                     );
                     return {
                       label: it.label || '',
                       required: it.required !== false,
-                      isDoc: isDoc9, isManual: !isDoc9,
-                      kindLabel: isDoc9 ? 'DOCUMENT' : 'CONFIRMED',
-                      kindColor: isDoc9 ? '#7C00FF' : '#6F6C7A',
-                      kindBg: isDoc9 ? '#F5EEFF' : '#F3F1F7',
+                      isDoc: isDoc9, isManual: !isDoc9 && !isField9,
+                      // Both derived kinds pick from a list; only a manual item picks nothing.
+                      hasPicker: isDoc9 || isField9,
+                      ddSearchPlaceholder: isField9 ? 'Search fields…' : 'Search document types…',
+                      kindLabel: isDoc9 ? 'DOCUMENT' : isField9 ? 'ON THE DEAL' : 'CONFIRMED',
+                      kindColor: (isDoc9 || isField9) ? '#7C00FF' : '#6F6C7A',
+                      kindBg: (isDoc9 || isField9) ? '#F5EEFF' : '#F3F1F7',
                       reqBd: it.required !== false ? '#7C00FF' : '#DDD9E6',
                       reqBg: it.required !== false ? '#7C00FF' : '#fff',
                       setLabel: (e) => ip9({ label: e.target.value, key: keyFor9(e.target.value) || it.key || '' }),
-                      // Switching to a document clears nothing and switching back drops the docType,
-                      // so a manual item can never carry a stale document reference into the resolver.
-                      flipKind: () => ip9(isDoc9 ? { source: 'manual', docType: null } : { source: 'document' }),
+                      // Confirmed -> Document -> On the deal -> Confirmed. Each switch clears the
+                      // OTHER kind's pointer, so an item can never carry a stale document reference
+                      // or a stale field name into the resolver — which would otherwise resolve as
+                      // an item nobody can satisfy, on a screen showing it as perfectly configured.
+                      flipKind: () => ip9(
+                        isDoc9 ? { source: 'field', docType: null }
+                        : isField9 ? { source: 'manual', docType: null, field: null }
+                        : { source: 'document', field: null }),
                       flipRequired: () => ip9({ required: it.required === false }),
                       remove: () => patch9({ documents: items9.filter((_x, j) => j !== ii) }),
                       ddToggle: dd9[kDd9 + 'Toggle'], ddOpen: dd9[kDd9 + 'Open'], ddOptions: dd9[kDd9 + 'Options'],
