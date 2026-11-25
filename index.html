@@ -18338,6 +18338,7 @@ class Component extends DCLogic {
    */
   _placeDropdowns() {
     const GAP = 6, FALLBACK_MAX = 210, MIN = 96;
+    let open = false;                        // is any panel on screen, and therefore worth following
     for (const dd of document.querySelectorAll('[data-dd]')) {
       const cs = getComputedStyle(dd);
       // A TRIGGER, NOT A PANEL — but a panel we have already promoted is still a panel.
@@ -18524,27 +18525,29 @@ class Component extends DCLogic {
           }
         }
       }
-      // THE FIELD MOVES AFTER WE HAVE MEASURED IT.
-      //
-      // Every dialog opens on `popIn`, a 250ms scale. A panel opened while that is still running
-      // is sized and placed in SCALED coordinates and then left there: a 395px field gets a 237px
-      // list hanging 50px below it, for good. Nothing corrected it because this runs on render,
-      // and an animation finishing is not a render — so the only thing deciding whether a person
-      // saw it was how fast they clicked after the dialog appeared. That is why it reads as "the
-      // dropdown style is broken in the modals" rather than as a bug with a reproduction.
-      //
-      // So: re-run while the anchor is still moving, stop the moment it holds still. This ends by
-      // itself when the animation does (~15 frames), and costs one dataset write per frame while
-      // it lasts. It covers any late movement, not just popIn — a web font landing, an image
-      // resizing the row above, a dialog that grows as it fills in.
-      const anchor = Math.round(t.left) + ',' + Math.round(t.bottom) + ',' + Math.round(t.width);
-      if (dd.dataset.ddAnchor !== anchor) {
-        dd.dataset.ddAnchor = anchor;
-        if (!this._ddSettle) {
-          this._ddSettle = true;
-          requestAnimationFrame(() => { this._ddSettle = false; this._placeDropdowns(); });
-        }
-      }
+      open = true;
+    }
+    // AN OPEN PANEL IS FOLLOWED FOR AS LONG AS IT IS OPEN.
+    //
+    // Every dialog opens on `popIn`, a 250ms scale, so a panel opened during it is sized and
+    // placed in SCALED coordinates. Nothing corrected that, because this runs on render and an
+    // animation finishing is not a render — the only thing deciding whether a person saw a 237px
+    // list under a 395px field was how fast they clicked after the dialog appeared.
+    //
+    // The first attempt re-ran only while the anchor was MOVING and stopped the moment it held
+    // still for one frame. That is not enough, because a dialog does not settle once: on Create
+    // invoice `popIn` finishes, the field holds still — the loop quits here — and then the client
+    // list arrives and the form reflows a second later, leaving the panel wrong until the next
+    // render. Measured: 237px at 1.1s, still 237px at 1.3s, right only at 1.9s. A second and a
+    // half of visibly broken dropdown is the complaint, whatever it eventually settles to.
+    //
+    // So the condition is simply whether a panel is open. One rAF while a dropdown is on screen,
+    // which is what any popover does, and it stops dead when the panel closes. It also covers the
+    // cases a settle timer never would: a web font landing, an image resizing the row above, the
+    // window being dragged between displays.
+    if (open && !this._ddSettle) {
+      this._ddSettle = true;
+      requestAnimationFrame(() => { this._ddSettle = false; this._placeDropdowns(); });
     }
   }
   componentDidUpdate() { this._placeDropdowns(); this._reseedFast(); }
