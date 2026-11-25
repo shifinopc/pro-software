@@ -2151,7 +2151,7 @@ const PICKLIST_EXTRA: Record<string, Record<string, "bool" | "str">> = {
   appointmentStatus: { terminal: "bool", offLadder: "bool" },
   appointmentType: { icon: "str" },
   // Whether this kind of charge carries VAT. Null is standard-rated — see the column's own note.
-  chargeType: { vatTreatment: "str" },
+  chargeType: { vatTreatment: "str", kind: "str" },
 };
 // Which columns actually carry each list's wording — the retire-vs-delete check below reads these.
 // Competitor lives only on the deal; sources and reasons on both the deal and the company;

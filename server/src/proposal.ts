@@ -395,14 +395,19 @@ export async function proposalData(
    */
   const baseFor = (basis: string) => {
     if (!rawItems.length) return totalMinor;
-    if (basis === "gov") return govMinor;
-    if (basis === "foreign") return foreignMinor;
-    if (basis === "prof") return profMinor;
-    return totalMinor;
+    if (!basis || basis === "total") return totalMinor;
+    // ANY kind, not the three that were hardcoded here. A firm that bills for translation or
+    // attestation files those lines under their own kind and schedules them on their own stage;
+    // this used to answer "the whole total" for every kind it had not heard of, which silently
+    // billed the client the entire quotation at that stage's percentage.
+    return kindMinor(basis);
   };
-  const OF_LABEL: Record<string, string> = {
+  // The three shipped kinds have names older than this column; anything else is its own name,
+  // because a kind typed by the firm IS the words they want on the client's schedule.
+  const LEGACY_OF: Record<string, string> = {
     prof: "Professional Fees", gov: "Government Fees", foreign: "Foreign Company Fees", total: "",
   };
+  const ofLabel = (basis: string) => (basis in LEGACY_OF ? LEGACY_OF[basis] : String(basis || ""));
 
   /**
    * WHICH FEE A STAGE BILLS HAS TO SURVIVE ONTO THE PAGE.
@@ -451,7 +456,7 @@ export async function proposalData(
     const basis = String(m.basis ?? "total");
     // A stored amount still wins, for a stage agreed as a flat sum rather than a percentage.
     const amountMinor = amountOf(m);
-    const of = OF_LABEL[basis] ?? "";
+    const of = ofLabel(basis);
     const label = String(m.label ?? "");
     return {
       "milestone.no": String(i + 1),

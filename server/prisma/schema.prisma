@@ -1841,6 +1841,22 @@ model ChargeType {
   /// first; they are kept apart because a VAT return reports them in different boxes, and a
   /// treatment recorded as a boolean cannot be split back out later.
   ///
+  /// WHICH FEE THIS IS, for the payment schedule — "Professional Fees", "Government Fees",
+  /// "Foreign Company Fees", or whatever else this firm bills. A stage charges a percentage OF a
+  /// kind ("50% of professional fees"), so a charge filed under the wrong one is billed on the
+  /// wrong schedule.
+  ///
+  /// It used to be three values hardcoded in the browser and GUESSED from the line's name, which
+  /// fitted Business Setup and nothing else: every charge outside it landed as a professional fee,
+  /// and renaming a charge type silently moved it. Free text because a firm that bills for
+  /// translation or attestation needs those groups and nobody can enumerate them here; the stage
+  /// basis picker offers whatever is actually in use, so a typo shows up as a new entry rather
+  /// than hiding.
+  ///
+  /// NULL keeps the old behaviour — the name is guessed, and an unrecognised name is professional.
+  /// The three shipped keys ("prof", "gov", "foreign") stay valid for every document already
+  /// written against them.
+  kind         String?
   /// NULL means standard-rated, which is exactly how every existing charge type already behaves —
   /// this column changes nothing until somebody sets one of them otherwise. Nullable rather than
   /// defaulted because the picklist writer turns an unsent field into null, and a column that

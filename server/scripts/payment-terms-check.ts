@@ -269,6 +269,36 @@ try {
     ok(allZero.milestones.length === 1 && num(allZero.milestones[0]["milestone.amount"]) === 28000,
       "a template whose every stage came to nothing falls back to the full amount, never a blank section");
   }
+  /**
+   * A KIND THE THREE SHIPPED ONES DO NOT COVER.
+   *
+   * prof / gov / foreign describe Business Setup's money and nothing else, and a firm that bills
+   * for translation or attestation has nowhere to file it. `baseFor` used to answer "the whole
+   * total" for any kind it had not heard of, so a stage reading "100% of Translation" collected
+   * the ENTIRE quotation — the one failure mode where the client is billed far too much and the
+   * schedule still foots up.
+   */
+  console.log("\na kind the firm added bills on its own schedule:");
+  {
+    const { v } = await render(
+      [{ name: "Professional fees", price: 20000, units: 1, kind: "prof" },
+       { name: "Legal translation", price: 3000, units: 1, kind: "Translation" },
+       { name: "Government fees", price: 5000, units: 1, kind: "gov" }],
+      [{ label: "On signing", pct: 100, basis: "Translation" },
+       { label: "On signing", pct: 50, basis: "prof" },
+       { label: "On completion", pct: 50, basis: "prof" },
+       { label: "On filing", pct: 100, basis: "gov" }],
+      co.id);
+    const amts = v.milestones.map((m: any) => num(m["milestone.amount"]));
+    ok(amts[0] === 3000, `100% of translation is 3,000, not the whole quotation (got ${amts[0]})`);
+    ok(amts[1] === 10000 && amts[2] === 10000, `the professional fees still split 50/50 (got ${amts[1]}/${amts[2]})`);
+    ok(amts[3] === 5000, `and the government fees are untouched by it (got ${amts[3]})`);
+    ok(amts.reduce((a: number, b: number) => a + b, 0) === 28000,
+      `the four stages foot up to the net total, 28,000 (got ${amts.reduce((a: number, b: number) => a + b, 0)})`);
+    // The three shipped kinds have names older than the column; a kind the firm typed IS its label.
+    ok(v.milestones[0]["milestone.of"] === "Translation" && v.milestones[1]["milestone.of"] === "Professional Fees",
+      "a firm-made kind prints under its own name, and the shipped ones keep theirs");
+  }
 } finally {
   await sweep();
 }

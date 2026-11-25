@@ -8314,6 +8314,9 @@
                 <sc-for list="{{ L.rows }}" as="r" hint-placeholder-count="5">
                   <span style="display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; color:{{ L.tone }}; background:{{ L.toneBg }}; border:1px solid {{ L.toneBd }}; padding:6px 11px; border-radius:99px;">
                     <input sc-camel-default-value="{{ r.name }}" data-seed-val="{{ r.name }}" onBlur="{{ r.setName }}" placeholder="{{ L.placeholder }}" style="border:none; background:transparent; outline:none; font-size:11px; font-weight:600; color:inherit; font-family:inherit; width:{{ r.width }};">
+                    <sc-if value="{{ r.kindShow }}" hint-placeholder-val="{{ false }}">
+                      <input sc-camel-default-value="{{ r.kind }}" data-seed-val="{{ r.kind }}" onBlur="{{ r.setKind }}" placeholder="group" title="Which fee this is, for the payment schedule — a stage bills a percentage OF a group. Leave blank to keep the old guess from the name. Type any word: it becomes a group the stage picker offers." style="border:none; background:#fff; outline:none; font-size:9.5px; font-weight:700; color:#6F6C7A; font-family:inherit; width:62px; border-radius:6px; padding:2px 5px; border:1px solid #E7E3F0;">
+                    </sc-if>
                     <sc-if value="{{ r.taxShow }}" hint-placeholder-val="{{ false }}">
                       <span onClick="{{ r.toggleTax }}" title="{{ r.taxHint }}" style="font-size:8.5px; font-weight:800; letter-spacing:.03em; color:{{ r.taxFg }}; background:{{ r.taxBg }}; border:1px solid {{ r.taxBd }}; padding:2px 6px; border-radius:6px; cursor:pointer;">{{ r.taxLabel }}</span>
                     </sc-if>
@@ -46252,7 +46255,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           hint: 'Dropping a follow-up always requires a reason. These are the suggestions; anything else can still be typed.',
         },
       ].map(L => {
-        const rows = this.state[L.draftKey] || L.live.map(r => ({ id: r.id, name: r.name, vatTreatment: r.vatTreatment || 'standard' }));
+        const rows = this.state[L.draftKey] || L.live.map(r => ({ id: r.id, name: r.name, vatTreatment: r.vatTreatment || 'standard', kind: r.kind || '' }));
         const put = (next) => this.setState({ [L.draftKey]: next, [L.errKey]: '' });
         return {
           title: L.title, sub: L.sub, placeholder: L.placeholder,
@@ -46278,6 +46281,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
              * four treatments (standard, zero, exempt, outside) because a VAT return reports them
              * in different boxes. Make it a four-way picker when somebody has to file one.
              */
+            /**
+             * WHICH FEE THIS IS, for the payment schedule.
+             *
+             * A stage bills "50% of professional fees", so the kind decides which schedule a line
+             * is collected on. It used to be guessed from the line's NAME against three built-in
+             * groups, which fitted Business Setup and left every other charge billed as a
+             * professional fee.
+             *
+             * Free text, and deliberately so: nobody can list a firm's fee groups in advance, and
+             * the stage picker offers whatever is actually in use — so a typo shows up there as an
+             * extra group rather than hiding inside one. Blank keeps the old behaviour (guessed).
+             */
+            kindShow: L.key === 'charge',
+            kind: r.kind || '',
+            setKind: (e) => put(rows.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x))),
             taxShow: L.key === 'charge',
             taxOn: (r.vatTreatment || 'standard') === 'standard',
             taxLabel: (r.vatTreatment || 'standard') === 'standard' ? 'VAT' : 'NO VAT',
@@ -46304,7 +46322,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               method: 'PUT',
               // `vatTreatment` rides along for every list; the server only stores it where the model
               // has the column (PICKLIST_EXTRA), so the other seven are unaffected by it being here.
-              body: JSON.stringify({ rows: clean.map((r, i) => ({ id: r.id, name: String(r.name).trim(), sort: i, vatTreatment: r.vatTreatment || 'standard' })) }),
+              body: JSON.stringify({ rows: clean.map((r, i) => ({ id: r.id, name: String(r.name).trim(), sort: i, vatTreatment: r.vatTreatment || 'standard', kind: String(r.kind || '').trim() })) }),
             }).then(({ ok, j }) => {
               if (!ok) return this.setState({ [L.errKey]: (j && j.error) || 'Could not save that list' });
               this.setState({ [L.draftKey]: null, [L.errKey]: '' });
@@ -47952,18 +47970,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
            * change again: move the formatting into the quotation payload the list already returns,
            * and delete this block.
            */
+          // ANY kind, not the three that were named here. A stage billing a kind this code had
+          // not heard of fell through to the whole quotation — the one failure where the client is
+          // billed far too much and the schedule still foots up.
           const _kindNet9 = (want9) => (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
-            .reduce((a9, it9) => {
-              const k9 = (it9.kind === 'gov' || it9.kind === 'foreign') ? it9.kind : 'prof';
-              return k9 === want9 ? a9 + (Number(it9.units) || 1) * (Number(it9.price) || 0) : a9;
-            }, 0);
-          const _termBase9 = (b9) => (b9 === 'gov' || b9 === 'foreign' || b9 === 'prof') ? _kindNet9(b9) : net9;
+            .reduce((a9, it9) => (String(it9.kind || 'prof') === want9
+              ? a9 + (Number(it9.units) || 1) * (Number(it9.price) || 0) : a9), 0);
+          const _termBase9 = (b9) => (!b9 || b9 === 'total') ? net9 : _kindNet9(b9);
           const _termName9 = { prof: 'Professional Fees', gov: 'Government Fees', foreign: 'Foreign Company Fees' };
           const terms9 = (Array.isArray(raw0 && raw0.milestones) ? raw0.milestones : []).map(m9 => {
             const pct9 = Number(m9 && m9.pct) || 0;
-            const b9 = (m9 && (m9.basis === 'gov' || m9.basis === 'foreign' || m9.basis === 'prof')) ? m9.basis : 'total';
+            const b9 = String((m9 && m9.basis) || 'total');
             const wording9 = String((m9 && m9.label) || '').trim();
-            const head9 = (pct9 ? pct9 + '% of ' + (_termName9[b9] || 'the total') : '')
+            const head9 = (pct9 ? pct9 + '% of ' + (_termName9[b9] || (b9 === 'total' ? 'the total' : b9)) : '')
               + (wording9 ? (pct9 ? ' \u2014 ' : '') + wording9 : '');
             return head9 + '  \u00b7  ' + fmtCur(Math.round(_termBase9(b9) * pct9) / 100);
           });
@@ -48136,8 +48155,38 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * Kept in MINOR units, because the stage amounts are rounded once from these and a halala lost
      * here is a halala the stages do not add up to.
      */
-    const QC_KINDS = ['prof', 'gov', 'foreign'];
+    /**
+     * THE KINDS A LINE CAN BE FILED UNDER.
+     *
+     * Three were hardcoded here — professional, government, foreign company — which describes
+     * Business Setup's money and nothing else. Every charge outside it landed as a professional fee
+     * and was billed by whichever stage charges those, so a firm billing for translation or
+     * attestation had nowhere to put it and no way to schedule it separately.
+     *
+     * The list is now the three this app ships PLUS whatever the firm has typed on its own charge
+     * types (Sales Settings → Quotation line items). Free text there rather than another managed
+     * list: nobody can enumerate these in advance, and the stage basis picker offers exactly what is
+     * in use, so a typo appears as an extra entry instead of hiding inside one.
+     *
+     * The three shipped keys stay first and keep their names, because every quotation and every
+     * saved term set already written refers to them.
+     */
+    const _QC_KIND_BUILTIN_LOOK = {
+      prof: ['FEE', '#F7F3FD', '#7C00FF', '#E6DAFB', 'Professional fee — the firm’s own charge for the work.'],
+      gov: ['GOV', '#FFF7E6', '#B4690E', '#F3D8A6', 'Government fee — collected and paid to the ministry.'],
+      foreign: ['ACQ', '#EAF4FF', '#1667B8', '#C3DDF7', 'Foreign company — acquiring or incorporating the parent abroad.'],
+    };
+    const QC_KIND_BUILTIN = ['prof', 'gov', 'foreign'];
+    const QC_KINDS = (() => {
+      const rows9 = Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : [];
+      const extra9 = [...new Set(rows9.map(c9 => String(c9.kind || '').trim()).filter(k9 => k9 && QC_KIND_BUILTIN.indexOf(k9) < 0))];
+      return QC_KIND_BUILTIN.concat(extra9.sort());
+    })();
     const _qcKindOf = (kk) => (QC_KINDS.indexOf(kk) >= 0 ? kk : 'prof');
+    /** The badge and tone for a kind. The three shipped ones keep the look people already know. */
+    const _qcKindLook9 = (kk) => _QC_KIND_BUILTIN_LOOK[kk]
+      || [String(kk).slice(0, 4).toUpperCase(), '#F2F4F7', '#4B4458', '#E0E2E7',
+          kk + ' — a fee kind this firm bills on its own schedule.'];
     /**
      * WHICH KIND A NAMED LINE IS, GUESSED FROM ITS NAME.
      *
@@ -48152,7 +48201,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * — worth doing when somebody renames "Government Fees" and quietly loses the default.
      */
     const _qcKindFromName9 = (nm) => {
-      const s9 = String(nm || '').toLowerCase();
+      // THE CATALOGUE FIRST, the guess only after. The charge type now carries its own kind
+      // (Sales Settings → Quotation line items), so "Legal Translation" can be filed under
+      // Translation instead of being read as a professional fee by a regular expression that has
+      // never heard of it — and renaming a charge type no longer moves it to another schedule.
+      const want9 = String(nm || '').trim().toLowerCase();
+      const rows9 = Array.isArray(this.state.chargeTypesData) ? this.state.chargeTypesData : [];
+      const hit9 = want9 && rows9.find(c9 => String(c9.name || '').trim().toLowerCase() === want9);
+      const set9 = hit9 && String(hit9.kind || '').trim();
+      if (set9) return set9;
+      // Nothing in the catalogue says: fall back to the words, which is all this ever had.
+      const s9 = want9;
       if (/acquisit|acquir/.test(s9)) return 'foreign';
       if (/govern|govt|ministry|municipal|authority fee/.test(s9)) return 'gov';
       return 'prof';
@@ -48237,7 +48296,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     }, 0);
     /** One structural change: taken from the boxes, patched, written back, boxes refreshed. */
     const _qcEdit9 = (fn9) => { const h9 = _qcHarvest(); this.setState(fn9(h9)); _qcReseed(); };
-    const QC_BASIS = ['prof', 'gov', 'foreign', 'total'];
+    const QC_BASIS = QC_KINDS.concat(['total']);
     const _qcBasisOf = (bb) => (QC_BASIS.indexOf(bb) >= 0 ? bb : 'total');
     // label, background, text, border, what it is a percentage OF, and its name in the summary.
     //
@@ -48247,12 +48306,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // 100% up front because it leaves for a foreign agent before the Saudi work begins. Marked as
     // a professional fee it would be billed at 50/30/20 instead, which on 15,000 + 16,000 collects
     // 15,500 on signing where the terms ask for 23,500.
-    const QC_BASIS_LOOK = {
+    const _QC_BASIS_BUILTIN = {
       prof: ['FEES', '#F7F3FD', '#7C00FF', '#E6DAFB', 'the professional fees', 'Professional fees'],
       gov: ['GOV', '#FFF7E6', '#B4690E', '#F3D8A6', 'the government fees', 'Government fees'],
       foreign: ['ACQ', '#EAF4FF', '#1667B8', '#C3DDF7', 'the foreign company fees', 'Foreign company'],
       total: ['TOTAL', '#F2F4F7', '#4B4458', '#E0E2E7', 'the whole quotation', 'Whole quotation'],
     };
+    // A kind the firm added is labelled in its own words — it IS what they typed on the charge type.
+    const _qcBasisLook9 = (k9) => _QC_BASIS_BUILTIN[k9]
+      || [String(k9).slice(0, 5).toUpperCase(), '#F2F4F7', '#4B4458', '#E0E2E7',
+          'the ' + String(k9).toLowerCase() + ' lines', String(k9)];
     // Next number = highest issued + 1 (server-confirmed), not `339 + how many exist` — a count
     // repeats itself the moment anything is deleted.
     const _qcPrefix = 'QT-';
@@ -48831,11 +48894,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // marking one wrong is the difference between a stage billing 50% of it and not at all.
         ...(() => {
           const kk9 = _qcKindOf(l[3]);
-          const look9 = {
-            prof: ['FEE', '#F7F3FD', '#7C00FF', '#E6DAFB', 'Professional fee \u2014 the firm\u2019s own charge for the work.'],
-            gov: ['GOV', '#FFF7E6', '#B4690E', '#F3D8A6', 'Government fee \u2014 collected and paid to the ministry.'],
-            foreign: ['ACQ', '#EAF4FF', '#1667B8', '#C3DDF7', 'Foreign company \u2014 acquiring or incorporating the parent abroad.'],
-          }[kk9];
+          const look9 = _qcKindLook9(kk9);
           return {
             kindLabel: look9[0], kindBg: look9[1], kindFg: look9[2], kindBd: look9[3],
             kindHint: look9[4] + ' Click to change it.',
@@ -48873,11 +48932,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const pct9 = parseFloat(t9[1]) || 0;
         return {
           label: t9[0], pct: t9[1],
-          basisLabel: QC_BASIS_LOOK[of9][0],
-          basisBg: QC_BASIS_LOOK[of9][1],
-          basisFg: QC_BASIS_LOOK[of9][2],
-          basisBd: QC_BASIS_LOOK[of9][3],
-          basisHint: 'This stage bills a percentage of ' + QC_BASIS_LOOK[of9][4]
+          basisLabel: _qcBasisLook9(of9)[0],
+          basisBg: _qcBasisLook9(of9)[1],
+          basisFg: _qcBasisLook9(of9)[2],
+          basisBd: _qcBasisLook9(of9)[3],
+          basisHint: 'This stage bills a percentage of ' + _qcBasisLook9(of9)[4]
             + '. Click to change what it is a percentage of.',
           basisCycle: () => _qcEdit9(h => {
             const a9 = h.terms.map(x => [...x]);
