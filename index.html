@@ -12402,18 +12402,7 @@
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ qcNotes }}" data-seed-val="{{ qcNotes }}" onBlur="{{ setQcNotes }}" data-qcf="notes" placeholder="Printed on the quotation. Terms &amp; footer come from Print Layout." rows="4" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
             </div>
             <div style="min-width:0;">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span style="display:inline-flex; align-items:center; gap:11px;"><span onClick="{{ addQcLine }}" title="{{ addQcLineHint }}" style="font-size:11px; font-weight:700; color:{{ qcAddColor }}; cursor:{{ qcAddCursor }};">+ Add item</span><!--
-
-                   A DISCOUNT IS A LINE, not a field.
-
-                   Every figure on this document is computed from the lines - the VAT base, each
-                   payment stage's share of its own fee kind, the invoice raised on acceptance. A
-                   discount held anywhere else has to be apportioned back over them, which is the
-                   arithmetic this file has already had VAT bugs in. As a line it needs no new
-                   arithmetic at all, it carries its own FEE/GOV and VAT chips so it comes off the
-                   right base, and the client can see it on the quotation - which a discount
-                   subtracted invisibly cannot do.
-              --><span onClick="{{ addQcDiscount }}" title="{{ addQcDiscountHint }}" style="font-size:11px; font-weight:700; color:#B7791F; cursor:pointer;">+ Add discount</span></span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addQcLine }}" title="{{ addQcLineHint }}" style="font-size:11px; font-weight:700; color:{{ qcAddColor }}; cursor:{{ qcAddCursor }};">+ Add item</span></div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
               <sc-for list="{{ qcLineRows }}" as="l" hint-placeholder-count="1">
                 <!-- One LINE is now two rows: the charge, and under it the country when the charge
@@ -14954,49 +14943,6 @@
 
        Only the fields this code knows the home of get a box — see _FIX_FIELDS. Anything else says
        where to go, because a box that writes to the wrong record is worse than no box. -->
-  <!-- TAKING MONEY OFF.
-
-       Two shapes, because the firm needs both: a discount against one fee ("10% off our
-       professional fee") and a discount against the whole quotation. They are not the same
-       document and cannot be the same line — one line carries ONE fee kind and ONE VAT
-       treatment, and a discount off the whole has to come off each of them in proportion or
-       the VAT and the payment stages are both wrong.
-
-       So this writes the LINES, one per kind and treatment it touches, and the quotation goes
-       on being read exactly as it was. Nothing downstream learns a new concept. -->
-  <sc-if value="{{ qdOpen }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ qdClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:430px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
-        <div class="fm-head">
-          <div style="min-width:0;">
-            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">Add a discount</div>
-            <div style="font-size:11px; color:#8C8899; margin-top:2px;">{{ qdSub }}</div>
-          </div>
-          <div onClick="{{ qdClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
-        </div>
-        <div class="fm-body">
-          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase;">Off what</div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:7px;">
-            <sc-for list="{{ qdBases }}" as="b" hint-placeholder-count="3">
-              <span onClick="{{ b.pick }}" style="font-size:11px; font-weight:{{ b.weight }}; color:{{ b.color }}; background:{{ b.bg }}; border:1px solid {{ b.bd }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ b.label }}</span>
-            </sc-for>
-          </div>
-          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; text-transform:uppercase; margin-top:14px;">How much</div>
-          <div style="display:flex; align-items:center; gap:7px; margin-top:7px;">
-            <input sc-camel-default-value="{{ qdValue }}" data-seed-val="{{ qdValue }}" onInput="{{ setQdValue }}" data-qd="v" type="number" min="0" step="0.01" placeholder="0.00" class="fm-inp" style="flex:1;">
-            <!-- Two states and one click, like the fee chip on a line. -->
-            <span onClick="{{ qdFlip }}" title="Switch between an amount and a percentage" style="font-size:11px; font-weight:800; color:#7C00FF; background:#F5EEFF; border:1px solid #E4D3FB; padding:9px 14px; border-radius:9px; cursor:pointer; flex-shrink:0;">{{ qdModeLabel }}</span>
-          </div>
-          <div class="fm-hint" style="margin-top:7px;">{{ qdPreview }}</div>
-          <sc-if value="{{ qdErrShow }}" hint-placeholder-val="{{ false }}"><div class="fm-err" style="margin-top:10px;">{{ qdErr }}</div></sc-if>
-        </div>
-        <div class="fm-foot" style="justify-content:flex-end;">
-          <span onClick="{{ qdClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Cancel</span>
-          <button onClick="{{ qdApply }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">Add the discount</button>
-        </div>
-      </div>
-    </div>
-  </sc-if>
   <sc-if value="{{ fixOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ fixClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:520px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -50014,97 +49960,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         }
         _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
-      // Always offered. Greying it from render-time state meant it looked disabled for exactly as
-      // long as somebody was typing the row that would enable it — the refusal is a toast now.
-      // Opens the chooser rather than dropping a line straight in: a discount is sometimes off
-      // one fee and sometimes off the whole quotation, and those are different documents.
-      addQcDiscount: () => {
-        const h9 = _qcHarvest();
-        if (!h9.lines.some(l9 => parseFloat(l9[2]))) return this.toast('Price the lines first — there is nothing to discount yet');
-        this.setState({ qdOpen: true, qdMode: 'amount', qdValue: '', qdBasis: 'all', qdErr: '' });
-      },
-      addQcDiscountHint: 'Take an amount or a percentage off — one fee, or the whole quotation',
-      /**
-       * THE DISCOUNT CHOOSER — THE SAME FIELD, SCOPED TO ONE FEE.
-       *
-       * The Discount box on the totals panel takes money off everything. This takes it off ONE
-       * fee kind, which is the case the totals box cannot express and the commonest real one:
-       * government fees are collected and handed to the ministry, so discounting them means
-       * absorbing the difference, and that is a decision somebody makes deliberately rather than
-       * a side effect of rounding a quotation down.
-       *
-       * It writes the per-line `disc` the box writes, through the same allocator, so there is one
-       * place in this file where a discount becomes money. An earlier version appended NEGATIVE
-       * LINES instead; documents written that way still read correctly (a negative line is still
-       * just a line), but a discount is not a service and listing it as one put "Discount —
-       * Government Fees" on the client's copy as though it were something they had bought.
-       *
-       * The base is each line's list price. Two 10% discounts therefore come to 20%, not 19% —
-       * except that this REPLACES rather than stacks, so the second simply wins.
-       */
-      ...(() => {
-        const st9 = this.state;
-        const open9 = !!st9.qdOpen;
-        const pct9 = st9.qdMode === 'pct';
-        // Read from the DOM, not from state: the prices somebody just typed have not been
-        // committed yet, and discounting the figures as they were a keystroke ago is a wrong
-        // number arrived at silently.
-        const live9 = open9 ? _qcHarvest().lines : [];
-        const positive9 = live9.filter(l9 => _lineGrossC9(l9) > 0);
-        const netOf9 = (l9) => _lineGrossC9(l9);
-        const kinds9 = [...new Set(positive9.map(l9 => _qcKindOf(l9[3])))];
-        const basis9 = st9.qdBasis || 'all';
-        const target9 = basis9 === 'all' ? positive9 : positive9.filter(l9 => _qcKindOf(l9[3]) === basis9);
-        const base9 = target9.reduce((a9, l9) => a9 + netOf9(l9), 0);
-        const raw9 = parseFloat(st9.qdValue) || 0;
-        const wantMinor9 = pct9 ? Math.round(base9 * raw9 / 100) : Math.round(raw9 * 100);
-        const basisWord9 = basis9 === 'all' ? 'the whole quotation' : _feeWord9(basis9);
-        return {
-          qdOpen: open9,
-          qdSub: open9 ? 'Taken off the lines of that fee, so the stages bill the discounted amount' : '',
-          qdClose: () => this.setState({ qdOpen: false, qdErr: '' }),
-          qdModeLabel: pct9 ? '%' : (sysCurCode || 'SAR'),
-          qdFlip: () => this.setState({ qdMode: pct9 ? 'amount' : 'pct', qdErr: '' }),
-          setQdValue: (e9) => this.setState({ qdValue: e9.target.value, qdErr: '' }),
-          qdValue: st9.qdValue || '',
-          qdErr: st9.qdErr || '', qdErrShow: !!st9.qdErr,
-          // Only the kinds this quotation actually has. Offering "Foreign Company Fees" on a
-          // quotation that carries none is a choice that silently discounts nothing.
-          qdBases: [{ k: 'all', label: 'Everything' }, ...kinds9.map(k9 => ({ k: k9, label: _feeWord9(k9) }))]
-            .map(o9 => ({
-              label: o9.label,
-              weight: o9.k === basis9 ? '700' : '600',
-              color: o9.k === basis9 ? '#fff' : '#4B4757',
-              bg: o9.k === basis9 ? '#7C00FF' : '#fff',
-              bd: o9.k === basis9 ? '#7C00FF' : '#DDD9E6',
-              pick: () => this.setState({ qdBasis: o9.k, qdErr: '' }),
-            })),
-          // Says what will happen before it happens, in money, every keystroke.
-          qdPreview: !base9
-            ? 'Nothing priced under ' + basisWord9 + ' yet.'
-            : !raw9
-              ? (pct9 ? 'A percentage of ' : 'An amount off ') + basisWord9 + ' — ' + fmtCur(base9 / 100) + ' at the moment.'
-              : fmtCur(wantMinor9 / 100) + ' off ' + basisWord9
-                + (pct9 ? '' : ' (' + (Math.round(wantMinor9 * 10000 / base9) / 100) + '%)')
-                + ' — leaving ' + fmtCur((base9 - wantMinor9) / 100),
-          qdApply: () => {
-            if (!base9) return this.setState({ qdErr: 'There is nothing priced under ' + basisWord9 + ' to discount' });
-            if (wantMinor9 <= 0) return this.setState({ qdErr: 'Type how much to take off' });
-            // More than it comes off. Allowed nowhere: the stages for that kind would bill
-            // negative amounts, and nobody means to pay the client.
-            if (wantMinor9 > base9) {
-              return this.setState({ qdErr: fmtCur(wantMinor9 / 100) + ' is more than ' + basisWord9
-                + ' comes to (' + fmtCur(base9 / 100) + ')' });
-            }
-            // Scoped to the chosen fee and apportioned by the one allocator — each line's own VAT
-            // treatment therefore takes its own share, which is what keeps the tax right when a
-            // fee is quoted partly taxed and partly not.
-            const in9 = basis9 === 'all' ? () => true : (l9) => _qcKindOf(l9[3]) === basis9;
-            this.setState({ qdOpen: false, qdErr: '' });
-            _qcEdit9(h9 => ({ qcLines: _qcSpread9(h9.lines, wantMinor9, in9), qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
-          },
-        };
-      })(),
       qcAddColor: '#7C00FF',
       qcAddCursor: 'pointer',
       addQcLineHint: 'Add another line',
