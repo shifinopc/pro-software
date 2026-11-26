@@ -24398,7 +24398,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const _invOfPay = (p9) => (p9 && p9.invoiceId ? _invRawById.get(p9.invoiceId) : null)
       || (p9 && p9.invoiceNumber ? _invRawByNo.get(p9.invoiceNumber) : null) || null;
     const payments = (Array.isArray(payData)
-      ? payData.map(p2 => [p2.date || '—', [p2.invoiceNumber || p2.reference || '—', p2.method || ''].filter(Boolean).join(' · '), p2.clientName || '—', fmtCur(_payTotal(p2)), 'Completed', p2])
+      // NEWEST FIRST, like the invoice and quotation lists. /api/payments returns rows in whatever
+      // order the database hands back, so the receipts list was oldest-first by accident — and on a
+      // day with several receipts the one you just recorded was the hardest to find. Sorted on the
+      // date, then the receipt number, so two receipts booked the same day still read 002, 001.
+      ? _newestFirst9(payData).map(p2 => [p2.date || '—', [p2.invoiceNumber || p2.reference || '—', p2.method || ''].filter(Boolean).join(' · '), p2.clientName || '—', fmtCur(_payTotal(p2)), 'Completed', p2])
       : (_authed ? [] : [
         ['28 Jun', 'INV-1173 · Trade license amendment', 'Falcon Trading', 'AED 5,400', 'Completed', null],
         ['15 Jun', 'INV-1168 · Monthly PRO plan', 'Falcon Technologies', 'AED 1,450', 'Completed', null],
