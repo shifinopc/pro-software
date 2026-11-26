@@ -119,7 +119,7 @@ import { workforceAll, workforceFor, recordBand, workforceHistory } from "./work
 import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
 import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
-import { planStages, figuresForLines } from "./stages.js";
+import { planStages, figuresForLines, lineMinor } from "./stages.js";
 import { clientMargins } from "./profitability.js";
 import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
@@ -3339,6 +3339,9 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
         name: String(r?.name ?? r?.description ?? "Item"),
         units: Number(r?.units ?? r?.qty ?? 1) || 1,
         priceMinor: Math.round(Number(r?.price ?? 0) * 100) || 0,
+        // What the line actually comes to. The drawer used to multiply price by units itself,
+        // which stopped being the answer the moment a line could carry a discount.
+        amountMinor: lineMinor({ ...r, units: r?.units ?? r?.qty }),
       })),
       subtotalMinor: q.subtotalMinor, vatMinor: q.vatMinor, totalMinor: q.totalMinor,
       vatRateBp: q.vatRateBp,
@@ -3987,7 +3990,7 @@ app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWrite
   const items = Array.isArray(b.items) && b.items.length
     ? b.items
     : [{ name: opp.title, units: 1, price: (opp.valueMinor ?? 0) / 100 }];
-  const gross = items.reduce((n: number, it: any) => n + (Number(it.price) || 0) * (Number(it.units) || 1), 0);
+  const gross = items.reduce((n: number, it: any) => n + lineMinor(it), 0) / 100;
   // The same figure helper the rest of the money paths use, so VAT is worked out one way only —
   // and at the CONFIGURED rate, not one passed in from the caller.
   const figures = await figuresFromAmount(gross);

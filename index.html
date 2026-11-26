@@ -12447,6 +12447,16 @@
                   </div>
                   <input sc-camel-default-value="{{ l.units }}" data-seed-val="{{ l.units }}" onBlur="{{ l.setUnits }}" data-qcl="u" type="number" min="1" max="9999" step="1" placeholder="Qty" style="width:46px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
                   <input sc-camel-default-value="{{ l.price }}" data-seed-val="{{ l.price }}" onBlur="{{ l.setPrice }}" data-qcl="p" type="number" min="-10000000" max="10000000" step="0.01" placeholder="Price" style="width:72px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
+                  <!-- WHAT IS TAKEN OFF THIS LINE.
+
+                       An amount off the line, not a cut to the unit price: the client's copy shows
+                       the fee that was quoted and the concession made on it, which is the whole
+                       point of discounting a line rather than retyping its price.
+
+                       Clamped to the line as you leave the box. A discount larger than the fee it
+                       comes off would flip the line negative and take every payment stage billed
+                       against that fee with it. -->
+                  <input sc-camel-default-value="{{ l.disc }}" data-seed-val="{{ l.disc }}" onBlur="{{ l.setDisc }}" data-qcl="x" type="number" min="0" max="10000000" step="0.01" placeholder="Disc" title="An amount off this line" style="width:62px; border:1px solid #F0E4CC; border-radius:9px; padding:8px 8px; font-size:11px; background:#FFFDF7; color:#8A5A12;">
                   <!-- WHICH FEE THIS LINE IS.
 
                        The payment terms below bill professional fees and government fees at
@@ -12497,6 +12507,44 @@
                 </sc-if>
                 </div>
               </sc-for>
+            </div>
+            <!-- WHAT IT COMES TO.
+
+                 The composer showed no total at all until now - every figure was computed on save
+                 and first seen on the row afterwards, so pricing a quotation with mixed VAT
+                 treatments meant doing the arithmetic in your head and checking it later.
+
+                 The Discount box here is a VIEW of the per-line figures above, not a second place
+                 money is kept: typing in it apportions the amount across the lines in proportion to
+                 their prices and writes it there. One owner for the arithmetic, which is what keeps
+                 the VAT base, every payment stage, the invoice raised on acceptance and the client's
+                 printed copy agreeing with each other. -->
+            <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:10.5px; color:#6F6C7A;">Sub total</span>
+                <span style="font-size:11.5px; font-weight:700; color:#1A1523;">{{ qcSumGross }}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:7px;">
+                <span style="flex:1; min-width:0; font-size:10.5px; color:#6F6C7A;">Discount</span>
+                <input sc-camel-default-value="{{ qcDiscVal }}" data-seed-val="{{ qcDiscVal }}" onBlur="{{ setQcDisc }}" data-qcf="disc" type="number" min="0" step="0.01" placeholder="0.00" style="width:86px; border:1px solid #F0E4CC; border-radius:9px; padding:7px 8px; font-size:11px; background:#FFFDF7; color:#8A5A12;">
+                <span onClick="{{ qcDiscFlip }}" title="Switch between an amount and a percentage" style="font-size:10px; font-weight:800; color:#B7791F; background:#FFF7E8; border:1px solid #F0E4CC; padding:7px 9px; border-radius:8px; cursor:pointer; flex-shrink:0;">{{ qcDiscModeLabel }}</span>
+                <span style="width:92px; text-align:right; font-size:11.5px; font-weight:700; color:{{ qcSumDiscFg }};">{{ qcSumDisc }}</span>
+              </div>
+              <div style="font-size:9.5px; color:#A9A6B4; line-height:1.5; margin-top:-3px;">{{ qcDiscHint }}</div>
+              <sc-if value="{{ qcSumNetShow }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span style="font-size:10.5px; color:#6F6C7A;">After discount</span>
+                  <span style="font-size:11.5px; font-weight:700; color:#1A1523;">{{ qcSumNet }}</span>
+                </div>
+              </sc-if>
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:10.5px; color:#6F6C7A;">{{ qcSumVatLabel }}</span>
+                <span style="font-size:11.5px; font-weight:700; color:#1A1523;">{{ qcSumVat }}</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid #EDEBF2; padding-top:8px;">
+                <span style="font-size:10.5px; font-weight:700; color:#1A1523;">Grand total</span>
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:#7C00FF;">{{ qcSumTotal }}</span>
+              </div>
             </div>
             <!-- PAYMENT TERMS - WHEN each part of this quotation falls due, and against WHICH
                  subtotal. A percentage on its own is ambiguous the moment a quotation carries both
@@ -25022,6 +25070,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // the firm's answer and re-deciding it per line is the exception, not the rule. Empty means
     // "whatever the catalogue says", which is also what every line written before this said.
     const _lineTaxed9 = (l9) => (String((l9 && l9[5]) || '').trim() || _vatOfName9(l9 && l9[0])) === 'standard';
+    /**
+     * WHAT A LINE COMES TO, ONCE WHAT WAS TAKEN OFF IT IS TAKEN OFF.
+     *
+     * The mirror of lineMinor/lineDiscMinor on the server, which is the one that actually bills.
+     * Both clamp the discount to the line: a discount larger than the fee it comes off would flip
+     * the line negative and take every payment stage against that fee with it.
+     *
+     * COMPOSER tuples carry the discount at index 6; SAVED items carry it as `disc`. Two shapes,
+     * one rule, because the figure the composer shows while you type and the figure the server
+     * stores a moment later must be the same figure.
+     */
+    const _lineGrossC9 = (l9) => Math.round((parseFloat(l9 && l9[1]) || 1) * Math.round((parseFloat(l9 && l9[2]) || 0) * 100));
+    const _lineDiscC9 = (l9) => {
+      const d9 = Math.round((parseFloat(l9 && l9[6]) || 0) * 100);
+      return d9 > 0 ? Math.min(d9, Math.max(0, _lineGrossC9(l9))) : 0;
+    };
+    const _lineNetC9 = (l9) => _lineGrossC9(l9) - _lineDiscC9(l9);
+    const _itemGross9 = (it9) => Math.round((Number(it9 && it9.units) || 1) * Math.round((Number(it9 && it9.price) || 0) * 100));
+    const _itemDisc9 = (it9) => {
+      const d9 = Math.round((Number(it9 && it9.disc) || 0) * 100);
+      return d9 > 0 ? Math.min(d9, Math.max(0, _itemGross9(it9))) : 0;
+    };
+    const _itemNet9 = (it9) => _itemGross9(it9) - _itemDisc9(it9);
     /** A SAVED item ({ name, units, price, vat }) — its frozen treatment wins over the catalogue. */
     const _itemVat9 = (it9) => String((it9 && it9.vat) || '').trim() || _vatOfName9(it9 && it9.name);
     /** What VAT is actually charged on, in minor units, out of saved items. */
@@ -25029,7 +25100,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // The invoice composer appends "VAT (15%)" as a line so `amount` stays the grand total. It is
       // a total, not something to tax — the editor strips it on the way back in for the same reason.
       (!/^VAT\s*\(/i.test(String((it9 && it9.name) || '')) && _itemVat9(it9) === 'standard')
-        ? a9 + Math.round((Number(it9.units) || 1) * Math.round((Number(it9.price) || 0) * 100)) : a9, 0);
+        ? a9 + _itemNet9(it9) : a9, 0);
     // What VAT is charged ON, which is not always the subtotal — see _vatOfName9 above.
     const ciTaxedN = ciLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) : s2, 0);
     const CI_VAT_OPTS = ['15% — KSA standard', '0% — exempt / zero-rated'];
@@ -46417,7 +46488,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           ddHasQuote: !!(q9 && q9.lines && q9.lines.length),
           ddQuoteLines: (q9 && q9.lines ? q9.lines : []).map((l, i) => ({
             desc: l.name, qty: l.units,
-            amount: _money9(l.priceMinor * (l.units || 1), ccy9),
+            amount: _money9(l.amountMinor != null ? l.amountMinor : l.priceMinor * (l.units || 1), ccy9),
             _k: i,
           })),
           // The rate is READ from the quotation, never assumed. It is frozen on the document at
@@ -48572,8 +48643,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // WHICH COUNTRY, on the client's copy. "Company Acquisition" for SAR 40,000 says nothing
           // about what was agreed; the country is the thing being bought.
           String(it.name).trim() + (it.country ? ' — ' + String(it.country).trim() : '')
-            + ((Number(it.units) || 1) !== 1 ? ' × ' + (Number(it.units) || 1) : ''),
-          fmtCur((Number(it.units) || 1) * (Number(it.price) || 0)),
+            + ((Number(it.units) || 1) !== 1 ? ' × ' + (Number(it.units) || 1) : '')
+            // The amount beside it is NET, so what was taken off is said here. A discounted line
+            // that shows only the net figure reads as a cheaper fee rather than as a concession,
+            // and the client never learns they were given one.
+            + (_itemDisc9(it) ? ' · less ' + fmtCur(_itemDisc9(it) / 100) : ''),
+          fmtCur(_itemNet9(it) / 100),
         ]);
       if (!lines.length) lines.push([q2.service || 'Service', fmtCur(q2.subtotalMinor != null ? q2.subtotalMinor / 100 : q2.amount)]);
       if (q2.vatMinor != null && q2.vatMinor > 0) {
@@ -48867,7 +48942,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // ---- Create quotation (full modal builder, mirrors the invoice one) ----
     const qcLines = this.state.qcLines || [['', '1', '']];
     const _qcBlankLine = qcLines.some(l => !String(l[0]).trim() && !String(l[2]).trim());
-    const qcTotal = qcLines.reduce((s2, l) => s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)), 0);
+    const qcTotal = qcLines.reduce((s2, l) => s2 + _lineNetC9(l), 0) / 100;
+    const qcGrossN = qcLines.reduce((s2, l) => s2 + _lineGrossC9(l), 0) / 100;
+    const qcDiscN = qcLines.reduce((s2, l) => s2 + _lineDiscC9(l), 0) / 100;
     const qcSubtotalN = Math.round(qcTotal * 100) / 100;
     /**
      * THE TWO SUBTOTALS THE PAYMENT SCHEDULE IS BILLED AGAINST.
@@ -48987,6 +49064,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       };
       if (!dlg9) return cur9;
       const d9 = _qcRead9(dlg9, '[data-qcl="d"]'), u9 = _qcRead9(dlg9, '[data-qcl="u"]'), p9 = _qcRead9(dlg9, '[data-qcl="p"]');
+      const x9 = _qcRead9(dlg9, '[data-qcl="x"]');
       const tl9 = _qcRead9(dlg9, '[data-qct="l"]'), tp9 = _qcRead9(dlg9, '[data-qct="p"]');
       const sub9 = dlg9.querySelector('[data-qcf="subject"]'), not9 = dlg9.querySelector('[data-qcf="notes"]');
       return {
@@ -48996,7 +49074,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // not hold and must be carried over, or a structural change — adding a line, deleting one —
         // silently drops it. `r9.slice(3)` rather than a list of indices so the next thing a line
         // learns to remember is not lost the same way: kind was index 3, the country is index 4.
-        lines: d9.length === cur9.lines.length ? cur9.lines.map((r9, i9) => [d9[i9], u9[i9], p9[i9], ...r9.slice(3)]) : cur9.lines,
+        lines: d9.length === cur9.lines.length ? cur9.lines.map((r9, i9) => {
+          const o9 = [d9[i9], u9[i9], p9[i9], ...r9.slice(3)];
+          // The discount is a fourth typed box, added later than the other three. Only trusted when
+          // its count agrees too — a row that has not rendered its box yet must keep the figure the
+          // row already holds rather than being handed a blank.
+          if (x9.length === d9.length) o9[6] = x9[i9];
+          return o9;
+        }) : cur9.lines,
         terms: tl9.length === cur9.terms.length ? cur9.terms.map((r9, i9) => [tl9[i9], tp9[i9], r9[2]]) : cur9.terms,
         subject: sub9 ? sub9.value : cur9.subject,
         notes: not9 ? not9.value : cur9.notes,
@@ -49018,10 +49103,58 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (r9) el9.value = r9[f9] == null ? '' : String(r9[f9]);
       });
       put9('[data-qcl="d"]', lines9, 0); put9('[data-qcl="u"]', lines9, 1); put9('[data-qcl="p"]', lines9, 2);
+      put9('[data-qcl="x"]', lines9, 6);
+      // The total-discount box is a VIEW of the per-line figures, so it is rewritten whenever they
+      // change — unless the cursor is in it, which would overwrite what somebody is typing.
+      const dd9 = dlg9.querySelector('[data-qcf="disc"]');
+      if (dd9 && document.activeElement !== dd9) {
+        const tot9 = lines9.reduce((a9, l9) => a9 + _lineDiscC9(l9), 0);
+        dd9.value = tot9 > 0 ? String(tot9 / 100) : '';
+      }
       put9('[data-qct="l"]', terms9, 0); put9('[data-qct="p"]', terms9, 1);
     }, 0);
     /** One structural change: taken from the boxes, patched, written back, boxes refreshed. */
     const _qcEdit9 = (fn9) => { const h9 = _qcHarvest(); this.setState(fn9(h9)); _qcReseed(); };
+    /**
+     * ONE DISCOUNT, SPREAD OVER THE LINES IT COMES OFF.
+     *
+     * A discount typed against the grand total, or against one fee kind, cannot be held there: a
+     * LINE is what carries the fee kind and the VAT treatment, and those two facts are what decide
+     * which payment stage bills the money and whether it reduces the taxable base. Held on the
+     * header it would have to be apportioned again by every reader — the VAT base, each stage, the
+     * invoice raised on acceptance, the printed proposal — and the reader that forgot would
+     * disagree with the client's own copy.
+     *
+     * So it is apportioned ONCE, here, in proportion to each line's list price, and what is stored
+     * is per-line money. Allocated to the halala with the last line taking the remainder, the same
+     * rule the payment stages use, so the parts always foot to the whole.
+     *
+     * REPLACES what those lines already had rather than adding to it: the figure in the Discount
+     * box is what the quotation is discounted by, and a box that means "and another" the second
+     * time you touch it is a box that quietly doubles a discount.
+     */
+    const _qcSpread9 = (lines9, wantMinor9, pick9) => {
+      const out9 = lines9.map(l9 => [...l9]);
+      const rows9 = [];
+      lines9.forEach((l9, i9) => {
+        if (!pick9(l9)) return;
+        out9[i9][6] = '';
+        const g9 = _lineGrossC9(l9);
+        if (g9 > 0) rows9.push({ i: i9, g: g9 });
+      });
+      const base9 = rows9.reduce((a9, r9) => a9 + r9.g, 0);
+      if (!base9 || !(wantMinor9 > 0)) return out9;
+      // Never past zero. The stages would bill negative amounts and the invoice raised on
+      // acceptance would be a credit note nobody asked for.
+      const take9 = Math.min(wantMinor9, base9);
+      let left9 = take9;
+      rows9.forEach((r9, k9) => {
+        const share9 = k9 === rows9.length - 1 ? left9 : Math.round(take9 * r9.g / base9);
+        left9 -= share9;
+        out9[r9.i][6] = share9 > 0 ? String(share9 / 100) : '';
+      });
+      return out9;
+    };
     const QC_BASIS = QC_KINDS.concat(['total']);
     const _qcBasisOf = (bb) => (QC_BASIS.indexOf(bb) >= 0 ? bb : 'total');
     // label, background, text, border, what it is a percentage OF, and its name in the summary.
@@ -49088,7 +49221,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // that disagrees with what it is previewing is worse than no preview.
     // On the TAXABLE lines, not the subtotal — a quotation that mixes professional and government
     // fees was quoting 15% on both, and the invoice copies these figures exactly.
-    const qcTaxedN = qcLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) : s2, 0);
+    const qcTaxedN = qcLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + _lineNetC9(l) : s2, 0) / 100;
     const qcVatN = Math.round(Math.round(qcTaxedN * 100) * Math.round(qcVatRate * 100) / 10000) / 100;
     // Re-open a DRAFT for editing. Only drafts: once a quotation has been sent the client has seen
     // it, so changing it underneath them would make their copy and ours disagree.
@@ -49103,7 +49236,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // row simply stopped belonging to anybody, and every count by company quietly lost it.
       qcClientId: raw9.companyId || null,
       qcLines: (Array.isArray(raw9.items) && raw9.items.length ? raw9.items : [{ name: '', units: 1, price: '' }])
-        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || ''), String(it9.vat || '')]),
+        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || ''), String(it9.vat || ''), String(it9.disc == null || !Number(it9.disc) ? '' : it9.disc)]),
       // The schedule as stored. A quotation written before this existed has none, which is not the
       // same as an empty one and prints the same either way.
       qcTerms: (Array.isArray(raw9.milestones) ? raw9.milestones : [])
@@ -49163,9 +49296,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           + fmtCur(parseFloat(_wrongWay9[2]) || 0) + ' — type it as a negative, e.g. -'
           + (parseFloat(_wrongWay9[2]) || 0) });
       }
-      const _qminor = (n) => Math.round((parseFloat(n) || 0) * 100);
-      const qSubtotalMinor = valid.reduce((s2, l) => s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])), 0);
-      const qTaxedMinor = valid.reduce((s2, l) => _lineTaxed9(l) ? s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])) : s2, 0);
+      // Net of what each line is discounted by, the same helper the figures above the Save button
+      // were computed with — a preview that disagrees with what it saves is worse than none.
+      const qSubtotalMinor = valid.reduce((s2, l) => s2 + _lineNetC9(l), 0);
+      const qTaxedMinor = valid.reduce((s2, l) => _lineTaxed9(l) ? s2 + _lineNetC9(l) : s2, 0);
       const qVatRateBp = Math.round(qcVatRate * 100);                        // 15 → 1500
       const qVatMinor = Math.round(qTaxedMinor * qVatRateBp / 10000);
       const qTotalMinor = qSubtotalMinor + qVatMinor;
@@ -49208,6 +49342,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const vt5 = own5 || _vatOfName9(it5.name);
           if (own5 || vt5 !== 'standard') it5.vat = vt5;
           if (_qcNeedsCountry9(it5.name) && String(l5[4] || '').trim()) it5.country = String(l5[4]).trim();
+          // WHAT WAS TAKEN OFF THIS LINE, as money, clamped to the line. Stored as an amount even
+          // when it was typed as a percentage: the document has to say what was agreed, not a rule
+          // to re-evaluate against prices that may since have been corrected.
+          const disc5 = _lineDiscC9(l5);
+          if (disc5 > 0) it5.disc = disc5 / 100;
           return it5;
         }),
         // PERCENTAGES AND THEIR BASE, never the computed money.
@@ -49663,8 +49802,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       setQcSubject: (e) => _qcEdit9(h => ({ qcSubject: e.target.value, qcLines: h.lines, qcTerms: h.terms, qcNotes: h.notes })),
       setQcNotes: (e) => _qcEdit9(h => ({ qcNotes: e.target.value, qcLines: h.lines, qcTerms: h.terms, qcSubject: h.subject })),
       qcLineRows: qcLines.map((l, i) => ({
-        desc: l[0], units: l[1], price: l[2],
-        lineTotal: fmtCur((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)),
+        desc: l[0], units: l[1], price: l[2], disc: l[6] == null ? '' : l[6],
+        lineTotal: fmtCur(_lineNetC9(l) / 100),
         setDesc: (e) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][0] = e.target.value; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes }; }),
         // Built per row rather than once, because a chip has to know WHICH line it fills. That is
         // also why this is not one of the named dropdown helpers: those take a binding name, and a
@@ -49721,6 +49860,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         })(),
         setUnits: (e) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][1] = e.target.value; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes }; }),
         setPrice: (e) => _qcEdit9(h => { const a = h.lines.map(x => [...x]); if (a[i]) a[i][2] = e.target.value; return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes }; }),
+        // An amount off THIS line. Clamped on the way in as well as in the arithmetic: a figure
+        // the box shows and the total ignores is the kind of disagreement nobody reports as a bug.
+        setDisc: (e) => _qcEdit9(h => {
+          const a = h.lines.map(x => [...x]);
+          if (a[i]) {
+            const want9 = parseFloat(e.target.value) || 0;
+            const cap9 = Math.max(0, _lineGrossC9(a[i])) / 100;
+            a[i][6] = want9 <= 0 ? '' : String(Math.min(want9, cap9));
+          }
+          return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes };
+        }),
         // ── WHERE, on the lines where where is the whole job ─────────────────────────────
         //
         // Shown only for acquisition and formation, because every other line has no country to
@@ -49862,7 +50012,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (h9.lines.some(l9 => !String(l9[0]).trim() && !String(l9[2]).trim())) {
           return this.toast('Fill the empty line before adding another');
         }
-        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
       // Always offered. Greying it from render-time state meant it looked disabled for exactly as
       // long as somebody was typing the row that would enable it — the refusal is a toast now.
@@ -49875,22 +50025,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       },
       addQcDiscountHint: 'Take an amount or a percentage off — one fee, or the whole quotation',
       /**
-       * THE DISCOUNT CHOOSER, AND WHY IT WRITES MORE THAN ONE LINE.
+       * THE DISCOUNT CHOOSER — THE SAME FIELD, SCOPED TO ONE FEE.
        *
-       * A discount off the WHOLE quotation cannot be one line. A line carries one fee kind and
-       * one VAT treatment, and those two facts are what the rest of the system reads: the kind
-       * decides which payment stage bills it, the treatment decides whether it reduces the
-       * taxable base. A single -2,000 line filed under professional fees, standing for a
-       * discount off professional AND government fees, would take the whole 2,000 off the
-       * professional stages and claim VAT relief on money that never carried VAT.
+       * The Discount box on the totals panel takes money off everything. This takes it off ONE
+       * fee kind, which is the case the totals box cannot express and the commonest real one:
+       * government fees are collected and handed to the ministry, so discounting them means
+       * absorbing the difference, and that is a decision somebody makes deliberately rather than
+       * a side effect of rounding a quotation down.
        *
-       * So the discount is split across the (kind, treatment) groups it actually touches, in
-       * proportion to what each group is worth, and written as one line per group. The document
-       * then reads correctly with no new arithmetic anywhere — which is the entire reason a
-       * discount is a line here rather than a field.
+       * It writes the per-line `disc` the box writes, through the same allocator, so there is one
+       * place in this file where a discount becomes money. An earlier version appended NEGATIVE
+       * LINES instead; documents written that way still read correctly (a negative line is still
+       * just a line), but a discount is not a service and listing it as one put "Discount —
+       * Government Fees" on the client's copy as though it were something they had bought.
        *
-       * The base is the POSITIVE lines only. Two 10% discounts therefore come to 20%, not 19%,
-       * which is what somebody typing the second one means.
+       * The base is each line's list price. Two 10% discounts therefore come to 20%, not 19% —
+       * except that this REPLACES rather than stacks, so the second simply wins.
        */
       ...(() => {
         const st9 = this.state;
@@ -49900,8 +50050,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // committed yet, and discounting the figures as they were a keystroke ago is a wrong
         // number arrived at silently.
         const live9 = open9 ? _qcHarvest().lines : [];
-        const positive9 = live9.filter(l9 => (parseFloat(l9[2]) || 0) > 0);
-        const netOf9 = (l9) => Math.round((parseFloat(l9[1]) || 1) * Math.round((parseFloat(l9[2]) || 0) * 100));
+        const positive9 = live9.filter(l9 => _lineGrossC9(l9) > 0);
+        const netOf9 = (l9) => _lineGrossC9(l9);
         const kinds9 = [...new Set(positive9.map(l9 => _qcKindOf(l9[3])))];
         const basis9 = st9.qdBasis || 'all';
         const target9 = basis9 === 'all' ? positive9 : positive9.filter(l9 => _qcKindOf(l9[3]) === basis9);
@@ -49911,7 +50061,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const basisWord9 = basis9 === 'all' ? 'the whole quotation' : _feeWord9(basis9);
         return {
           qdOpen: open9,
-          qdSub: open9 ? 'Written as a line, so it prints and the stages bill it' : '',
+          qdSub: open9 ? 'Taken off the lines of that fee, so the stages bill the discounted amount' : '',
           qdClose: () => this.setState({ qdOpen: false, qdErr: '' }),
           qdModeLabel: pct9 ? '%' : (sysCurCode || 'SAR'),
           qdFlip: () => this.setState({ qdMode: pct9 ? 'amount' : 'pct', qdErr: '' }),
@@ -49946,29 +50096,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               return this.setState({ qdErr: fmtCur(wantMinor9 / 100) + ' is more than ' + basisWord9
                 + ' comes to (' + fmtCur(base9 / 100) + ')' });
             }
-            // Grouped by kind AND treatment, because both travel on the line and both decide
-            // what the discount does. Allocated to the halala, last group taking the remainder —
-            // the same rule the payment stages use, so the lines always foot exactly.
-            const key9 = (l9) => _qcKindOf(l9[3]) + '|' + (String(l9[5] || '').trim() || _vatOfName9(l9[0]));
-            const groups9 = [];
-            for (const l9 of target9) {
-              const k9 = key9(l9);
-              const hit9 = groups9.find(g9 => g9.key === k9);
-              if (hit9) hit9.net += netOf9(l9);
-              else groups9.push({ key: k9, kind: _qcKindOf(l9[3]), vat: String(l9[5] || '').trim() || _vatOfName9(l9[0]), net: netOf9(l9) });
-            }
-            let left9 = wantMinor9;
-            const made9 = groups9.map((g9, i9) => {
-              const share9 = i9 === groups9.length - 1 ? left9 : Math.round(wantMinor9 * g9.net / base9);
-              left9 -= share9;
-              return [
-                groups9.length > 1 ? 'Discount — ' + _feeWord9(g9.kind) : 'Discount',
-                '1', String(-(share9 / 100)), g9.kind, '', g9.vat,
-              ];
-            }).filter(r9 => parseFloat(r9[2]) !== 0);
-            const h9 = _qcHarvest();
+            // Scoped to the chosen fee and apportioned by the one allocator — each line's own VAT
+            // treatment therefore takes its own share, which is what keeps the tax right when a
+            // fee is quoted partly taxed and partly not.
+            const in9 = basis9 === 'all' ? () => true : (l9) => _qcKindOf(l9[3]) === basis9;
             this.setState({ qdOpen: false, qdErr: '' });
-            _qcEdit9(() => ({ qcLines: [...h9.lines, ...made9], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+            _qcEdit9(h9 => ({ qcLines: _qcSpread9(h9.lines, wantMinor9, in9), qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
           },
         };
       })(),
@@ -49976,6 +50109,44 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       qcAddCursor: 'pointer',
       addQcLineHint: 'Add another line',
       qcTotal: fmtCurAs(qcCur, qcSubtotalN + qcVatN),
+      /**
+       * WHAT IT COMES TO, WHILE IT IS BEING WRITTEN.
+       *
+       * The composer had no totals at all: every figure was computed, saved and only then seen, on
+       * the row in the list. Somebody pricing a four-line quotation with mixed VAT treatments was
+       * doing the arithmetic in their head and finding out afterwards.
+       */
+      qcSumGross: fmtCurAs(qcCur, qcGrossN),
+      qcSumDisc: qcDiscN > 0 ? '− ' + fmtCurAs(qcCur, qcDiscN) : fmtCurAs(qcCur, 0),
+      qcSumDiscFg: qcDiscN > 0 ? '#B7791F' : '#A9A6B4',
+      qcSumNet: fmtCurAs(qcCur, qcSubtotalN),
+      qcSumNetShow: qcDiscN > 0,
+      qcSumVatLabel: 'VAT ' + qcVatRate + '%' + (qcTaxedN > 0 && Math.abs(qcTaxedN - qcSubtotalN) > 0.004 ? ' on ' + fmtCurAs(qcCur, qcTaxedN) : ''),
+      qcSumVat: fmtCurAs(qcCur, qcVatN),
+      qcSumTotal: fmtCurAs(qcCur, qcSubtotalN + qcVatN),
+      // Interpretation only. The box always SHOWS money, because money is what gets stored and what
+      // the client is told — a percentage is a way of arriving at it, not the thing agreed.
+      qcDiscPctOn: this.state.qcDiscPct === true,
+      qcDiscModeLabel: this.state.qcDiscPct === true ? '%' : (sysCurCode || 'SAR'),
+      qcDiscFlip: () => this.setState({ qcDiscPct: this.state.qcDiscPct !== true }),
+      qcDiscVal: qcDiscN > 0 ? String(qcDiscN) : '',
+      qcDiscHint: this.state.qcDiscPct === true
+        ? 'Typed as a percentage of ' + fmtCurAs(qcCur, qcGrossN) + ', spread across every line in proportion to its price'
+        : 'Spread across every line in proportion to its price, so each fee and each VAT treatment takes its share',
+      setQcDisc: (e9) => {
+        const typed9 = e9.target.value;
+        const pct9 = this.state.qcDiscPct === true;
+        _qcEdit9(h9 => {
+          const raw9 = parseFloat(typed9) || 0;
+          const base9 = h9.lines.reduce((a9, l9) => a9 + Math.max(0, _lineGrossC9(l9)), 0);
+          const want9 = pct9 ? Math.round(base9 * raw9 / 100) : Math.round(raw9 * 100);
+          return {
+            qcLines: _qcSpread9(h9.lines, want9, () => true),
+            qcDiscPct: false,
+            qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes,
+          };
+        });
+      },
       // Save without sending. A draft is ours alone — the portal already withholds drafts — so it
       // can be revised until it is right, then sent.
       submitQuoteDraft: () => _quoteSubmit('draft'),

@@ -14,6 +14,7 @@
  */
 import { TemplateHandler, TemplateHandlerOptions } from "easy-template-x";
 import { prisma } from "./db.js";
+import { lineMinor, lineGrossMinor, lineDiscMinor } from "./stages.js";
 
 const handler = new TemplateHandler(new TemplateHandlerOptions({
   delimiters: { tagStart: "{{", tagEnd: "}}" },
@@ -318,13 +319,23 @@ export async function proposalData(
   const items = rawItems.map((it, i) => {
     // `price` is stored in MAJOR units on the line (225 = SAR 225) while the document totals are in
     // minor (22500). Mixing the two is how a proposal prints a hundredth of its own total.
+    //
+    // THE SAME lineMinor THE REST OF THE SYSTEM BILLS BY. This had its own copy of the arithmetic,
+    // which was harmless while a line was only a price and a quantity; the moment a line could
+    // carry a discount, a private copy meant the client's printed copy footed to a different
+    // figure from the invoice raised against it.
+    const line: any = { ...it, units: it.units ?? it.qty };
     const units = Number(it.units ?? it.qty ?? 1) || 1;
-    const lineMinor = Math.round(Number(it.price ?? 0) * 100) * units;
+    const discMinor = lineDiscMinor(line);
     return {
       "item.no": String(i + 1),
       "item.description": String(it.name ?? it.description ?? ""),
       "item.units": String(units),
-      "item.amount": money(lineMinor),
+      "item.amount": money(lineMinor(line)),
+      // Published so a template can show what was taken off rather than only the net figure — a
+      // discount the client cannot see on their own copy is a discount they were never given.
+      "item.gross": money(lineGrossMinor(line)),
+      "item.discount": discMinor ? money(discMinor) : "",
     };
   });
 
@@ -337,7 +348,7 @@ export async function proposalData(
   // here.
   const linesMinor = items.reduce((a, _it, i) => {
     const raw = rawItems[i] ?? {};
-    return a + Math.round(Number(raw.price ?? 0) * 100) * (Number(raw.units ?? raw.qty ?? 1) || 1);
+    return a + lineMinor({ ...raw, units: raw.units ?? raw.qty });
   }, 0);
   // THE DOCUMENT PRINTS MONEY EXCLUSIVE OF TAX.
   //
@@ -349,6 +360,7 @@ export async function proposalData(
   //
   // `total.gross` is still published for a template that wants to show the tax-inclusive figure —
   // this fixes which number the standard `total.amount` carries, it does not decide for every firm.
+  const discountMinor = rawItems.reduce((a, raw) => a + lineDiscMinor({ ...raw, units: raw?.units ?? raw?.qty }), 0);
   const netMinor = q.subtotalMinor || linesMinor
     || q.totalMinor || Math.round(Number(q.amount ?? 0) * 100);
   const grossMinor = q.totalMinor || netMinor;
@@ -369,7 +381,7 @@ export async function proposalData(
    */
   const kindMinor = (want: string) => rawItems.reduce((a, raw) => {
     if (String(raw?.kind ?? "prof") !== want) return a;
-    return a + Math.round(Number(raw?.price ?? 0) * 100) * (Number(raw?.units ?? raw?.qty ?? 1) || 1);
+    return a + lineMinor({ ...raw, units: raw?.units ?? raw?.qty });
   }, 0);
   const profMinor = kindMinor("prof");
   const govMinor = kindMinor("gov");
@@ -501,6 +513,11 @@ export async function proposalData(
 
     "total.amount": money(totalMinor),
     "total.subtotal": money(subtotalMinor),
+    // What came off, across every line, so a template can show list price → discount → net. Blank
+    // rather than "0.00" when nothing was discounted: a zero discount row on a document somebody
+    // signs invites the question of what it was for.
+    "total.discount": discountMinor ? money(discountMinor) : "",
+    "total.listPrice": discountMinor ? money(subtotalMinor + discountMinor) : money(subtotalMinor),
     "total.vat": money(q.vatMinor ?? 0),
     // The tax-inclusive figure, for a template whose prices are quoted with VAT in them.
     "total.gross": money(grossMinor),

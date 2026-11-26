@@ -183,6 +183,12 @@ export function billingAmountProblem(body: any): string | null {
       if (price !== null && price < 0) return `"${where}" has a negative price. An invoice is never a credit note — raise a credit note for a refund.`;
       if (units !== null && units > 9999) return `"${where}" has a quantity of ${units}, which is beyond anything this business bills. Please check it.`;
       if (price !== null && price > 10_000_000) return `"${where}" has a price beyond anything this business bills. Please check it.`;
+      // `disc` is an amount off the LINE. Negative would be a surcharge wearing a discount's name,
+      // which is the one thing a client reading the document would never expect it to mean.
+      const disc = num(raw?.disc);
+      if (disc !== null && Number.isNaN(disc)) return `"${where}" has a discount that is not a number.`;
+      if (disc !== null && disc < 0) return `"${where}" has a negative discount. To charge more, raise the price.`;
+      if (disc !== null && disc > 10_000_000) return `"${where}" has a discount beyond anything this business bills. Please check it.`;
     }
   }
 

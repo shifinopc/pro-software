@@ -18,11 +18,39 @@
 import { prisma } from "./db.js";
 
 /** A line as it is stored on a quotation or an invoice. Everything is optional because older rows. */
-export type Line = { name?: string; units?: number | string; price?: number | string; kind?: string; vat?: string; country?: string };
+export type Line = { name?: string; units?: number | string; price?: number | string; kind?: string; vat?: string; country?: string; disc?: number | string };
 
-/** What one line comes to, in minor units. Integer arithmetic, per the note in money.ts. */
-export const lineMinor = (l: Line): number =>
+/** The line at list price, before anything is taken off it. Integer arithmetic, per money.ts. */
+export const lineGrossMinor = (l: Line): number =>
   Math.round(Number(l?.price ?? 0) * 100) * (Number(l?.units ?? 1) || 1);
+
+/**
+ * WHAT IS TAKEN OFF THIS LINE.
+ *
+ * `disc` is an amount off the LINE, in major units, never a per-unit price cut and never a
+ * percentage — a percentage typed in the console is resolved to money there, once, so that the
+ * stored document says what was agreed rather than a rule to re-evaluate. Clamped to the line
+ * itself: a discount larger than what it comes off would flip the line negative and every stage
+ * billed against that fee with it.
+ *
+ * A line whose own price is negative — the older way a discount was written here — has nothing to
+ * discount, so the clamp floors at zero and leaves it exactly as it was.
+ */
+export const lineDiscMinor = (l: Line): number => {
+  const d = Math.round(Number(l?.disc ?? 0) * 100);
+  if (!Number.isFinite(d) || d <= 0) return 0;
+  return Math.min(d, Math.max(0, lineGrossMinor(l)));
+};
+
+/**
+ * WHAT ONE LINE COMES TO — the one place that answers it.
+ *
+ * Every figure on a quotation or an invoice is a sum of these: the VAT base, each payment stage's
+ * share of its own fee kind, the stage invoices, the printed proposal. A discount subtracted
+ * anywhere other than here would have to be subtracted in all of them, and the ones it was missed
+ * in would disagree with the client's copy.
+ */
+export const lineMinor = (l: Line): number => lineGrossMinor(l) - lineDiscMinor(l);
 
 /**
  * The composer appends "VAT (15%)" as a line so the stored `amount` stays the grand total. It is a
@@ -108,7 +136,10 @@ export function planStages(items: Line[], milestones: any[], totalMinor: number)
       // Same remainder rule one level down, so the lines foot to the stage.
       const minor = i === source.length - 1 ? Math.max(0, want - allocated) : exact;
       allocated += minor;
-      return { ...l, units: 1, price: minor / 100 };
+      // `price` here is ALREADY the discounted share, so the line's own discount must not travel
+      // with it — spreading the source line would hand the stage invoice a second deduction of
+      // money that has been deducted once.
+      return { ...l, disc: 0, units: 1, price: minor / 100 };
     }).filter(l => Number(l.price) > 0);
 
     return { index, label: String(m?.label ?? "").trim(), pct, basis, lines, subtotalMinor: want };
