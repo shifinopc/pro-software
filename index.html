@@ -21779,8 +21779,24 @@ class Component extends DCLogic {
       // Bilingual labels only when the toggle is on — never half-translated.
       const lbl = (en, ar) => esc(en) + (bil ? '<span style="opacity:.65;font-weight:400;"> · ' + ar + '</span>' : '');
 
-      const rows = (doc.items || []).map(it => '<tr><td>' + esc(it.name) + '</td><td style="text-align:center;">' + esc(it.qty ?? it.units ?? '—') + '</td><td style="text-align:right;">' + esc(it.price ?? '—') + '</td><td style="text-align:right;">' + esc(it.amount ?? '—') + '</td></tr>').join('')
-        || '<tr><td colspan="4" style="color:#888;">' + esc(doc.services || 'Professional services') + '</td></tr>';
+      /**
+       * WHICH COLUMNS THIS DOCUMENT NEEDS.
+       *
+       * A discount column on a document that discounts nothing is an empty column asking to be
+       * read, so both are offered by the builder rather than always printed: `showDisc` when any
+       * line carries one, `showVat` when the document is a tax document at all. The receipt branch
+       * below never reaches here — it is not a tax document and prices nothing.
+       */
+      const showDisc = !!doc.showDisc;
+      const showVat = !!doc.showVat;
+      const cols = 4 + (showDisc ? 1 : 0) + (showVat ? 1 : 0);
+      const rows = (doc.items || []).map(it => '<tr><td>' + esc(it.name) + '</td>'
+        + '<td class="c">' + esc(it.qty ?? it.units ?? '—') + '</td>'
+        + '<td class="r">' + esc(it.price ?? '—') + '</td>'
+        + (showDisc ? '<td class="r dsc">' + (it.disc ? '− ' + esc(it.disc) : '') + '</td>' : '')
+        + (showVat ? '<td class="r">' + esc(it.vat ?? '') + '</td>' : '')
+        + '<td class="r amt">' + esc(it.amount ?? '—') + '</td></tr>').join('')
+        || '<tr><td colspan="' + cols + '" style="color:#888;">' + esc(doc.services || 'Professional services') + '</td></tr>';
 
       // Seller identity block. Every line is omitted when the setting is blank — an invoice must never
       // carry an invented VAT or CR number.
@@ -21839,12 +21855,20 @@ class Component extends DCLogic {
           + (doc.balance ? '<div><span>' + lbl('Balance due', 'المتبقي') + '</span><span>' + esc(doc.balance) + '</span></div>' : '')
           + '<div class="g"><span>' + lbl('RECEIVED', 'المبلغ المستلم') + '</span><span>' + esc(doc.total) + '</span></div></div>'
         : '<div class="tot">'
+          // EVERY ROW HERE IS THE SUM OF A COLUMN ABOVE IT, in the order the subtraction happens:
+          // the extended prices, what came off them, what is left, what of that is taxable, the
+          // tax, the total. A reader can check the document with a pencil, which is the only test
+          // of a tax document that matters.
           + (doc.subtotal ? '<div><span>' + lbl('Subtotal', 'المجموع') + '</span><span>' + esc(doc.subtotal) + '</span></div>' : '')
-          // WHAT THE VAT WAS CHARGED ON, when that is not the whole subtotal. A document carrying
-          // government fees shows "Subtotal 34,000 / VAT 15% 3,600" — figures that do not multiply
-          // out, and a reader who cannot tell a correct document from a miscalculated one. Named
-          // only when it differs, so an ordinary invoice reads exactly as it always has.
-          + (doc.vat ? '<div><span>' + lbl('VAT ' + vatPct + '%' + (doc.vatOn ? ' on ' + doc.vatOn : ''), 'الضريبة') + '</span><span>' + esc(doc.vat) + '</span></div>' : '')
+          + (doc.discount ? '<div class="dsc"><span>' + lbl('Discount', 'الخصم') + '</span><span>− ' + esc(doc.discount) + '</span></div>' : '')
+          + (doc.netTotal ? '<div><span>' + lbl('Net amount', 'الصافي') + '</span><span>' + esc(doc.netTotal) + '</span></div>' : '')
+          // WHAT THE VAT WAS CHARGED ON, when that is not all of it. A document carrying government
+          // fees shows "Net 66,000 / VAT 15% 9,825.56" — figures that do not multiply out, and a
+          // reader who cannot tell a correct document from a miscalculated one. Named only when it
+          // differs, so an ordinary invoice reads exactly as it always has. On its own row rather
+          // than inside the VAT label, which wrapped the Arabic onto a line of its own.
+          + (doc.vatOn ? '<div class="sub"><span>' + lbl('Taxable amount', 'الخاضع للضريبة') + '</span><span>' + esc(doc.vatOn) + '</span></div>' : '')
+          + (doc.vat ? '<div><span>' + lbl('VAT ' + vatPct + '%', 'الضريبة') + '</span><span>' + esc(doc.vat) + '</span></div>' : '')
           + '<div class="g"><span>' + lbl('TOTAL', 'الإجمالي') + '</span><span>' + esc(doc.total) + '</span></div></div>';
 
       // Artwork (letterhead band, header/footer images, watermark) bleeds the full page width; the
@@ -21860,7 +21884,12 @@ class Component extends DCLogic {
             + [['Against invoice', 'مقابل فاتورة', doc.invoiceNo], ['Payment method', 'طريقة الدفع', doc.method], ['Reference', 'المرجع', doc.reference], ['For', 'عن', doc.services]]
               .filter(r9 => r9[2]).map(r9 => '<tr><td>' + lbl(r9[0], r9[1]) + '</td><td style="text-align:right;">' + esc(r9[2]) + '</td></tr>').join('')
             + '</tbody></table>'
-          : '<table><thead><tr><th>' + lbl('DESCRIPTION', 'الوصف') + '</th><th style="text-align:center;">' + lbl('QTY', 'الكمية') + '</th><th style="text-align:right;">' + lbl('PRICE', 'السعر') + '</th><th style="text-align:right;">' + lbl('AMOUNT', 'المبلغ') + '</th></tr></thead><tbody>' + rows + '</tbody></table>')
+          : '<table><thead><tr><th>' + lbl('DESCRIPTION', 'الوصف') + '</th>'
+            + '<th class="c">' + lbl('QTY', 'الكمية') + '</th>'
+            + '<th class="r">' + lbl('PRICE', 'السعر') + '</th>'
+            + (showDisc ? '<th class="r">' + lbl('DISCOUNT', 'الخصم') + '</th>' : '')
+            + (showVat ? '<th class="r">' + lbl('VAT ' + vatPct + '%', 'الضريبة') + '</th>' : '')
+            + '<th class="r">' + lbl('AMOUNT', 'المبلغ') + '</th></tr></thead><tbody>' + rows + '</tbody></table>')
         + '<div class="foot">' + (qrSvg ? '<div class="qr" title="ZATCA QR">' + qrSvg + '</div>' : '<div></div>') + totals + '</div>'
         // THE PAYMENT SCHEDULE PRINTS ON THE DOCUMENT IT BELONGS TO.
         //
@@ -21918,6 +21947,12 @@ class Component extends DCLogic {
         + 'table{width:100%;border-collapse:collapse;font-size:' + fs(16) + ';margin-top:' + fs(22) + '}'
         + 'th{background:#F3EFFA;text-align:left;font-size:' + fs(12.5) + ';letter-spacing:.04em;color:#555}'
         + 'th,td{padding:' + fs(11.5) + ' ' + fs(13) + ';border-bottom:1px solid #EEE}'
+        // FIGURES LINE UP OR THEY CANNOT BE ADDED UP. Right-aligned and tabular, so the halalas sit
+        // under each other down the column and a reader can total it by eye; nowrap because a money
+        // figure broken over two lines is the one thing a printed total must never do.
+        + 'th.c,td.c{text-align:center}th.r,td.r{text-align:right}'
+        + 'td.r,td.c{white-space:nowrap;font-variant-numeric:tabular-nums}'
+        + 'td.amt{font-weight:600}td.dsc,.tot .dsc{color:#B7791F}'
         + '.foot{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-top:' + fs(22) + '}'
         + '.qr svg{width:' + fs(124) + ';height:' + fs(124) + ';display:block}'
         + '.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:0;pointer-events:none}.wm img{max-width:70%;max-height:60%;opacity:.08}'
@@ -21926,8 +21961,14 @@ class Component extends DCLogic {
         // one page there is no leftover, so it lands at the end of the last page instead — after
         // the content rather than through it, which is the safe way for it to fail.
         + (_pinFooter ? '.ftr{margin-top:auto}' : '')
-        + '.tot{width:' + fs(290) + ';font-size:' + fs(16) + '}.tot div{display:flex;justify-content:space-between;padding:6px 0}'
-        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(20) + ';padding-top:9px;color:' + accent + '}'
+        + '.tot{width:' + fs(300) + ';font-size:' + fs(16) + '}'
+        // `gap` so a long label can never collide with its figure, and nowrap on the figure so it
+        // stays on one line — "VAT 15% on SAR 65,503.76" used to wrap and leave the Arabic hanging
+        // under it on a line of its own.
+        + '.tot div{display:flex;justify-content:space-between;gap:' + fs(14) + ';padding:6px 0}'
+        + '.tot div>span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}'
+        + '.tot .sub{font-size:' + fs(13.5) + ';color:#777;padding:3px 0}'
+        + '.tot .g{border-top:2px solid ' + accent + ';font-weight:700;font-size:' + fs(20) + ';padding-top:9px;margin-top:4px;color:' + accent + '}'
         + '.notes{margin-top:' + fs(22) + ';font-size:' + fs(13.5) + ';color:#777;line-height:1.6;border-top:1px solid #F0EDF6;padding-top:11px}'
         + (opts && opts.forPrint ? '@page{size:' + (L.pageSize || 'A4') + ';margin:' + (L.margin ?? 0) + 'mm}' : '');
       return { title: title + ' ' + esc(doc.no), css, body, layout: L };
@@ -21947,10 +21988,30 @@ class Component extends DCLogic {
         no: kind === 'quotation' ? 'QT-0001' : 'INV-0001',
         client: 'Sample Client LLC', clientVat: '3009876543210003',
         date: '01 Aug 2026', dueDate: kind === 'quotation' ? '' : '31 Aug 2026',
-        items: [{ name: 'New Employment Visa — sample line', qty: 1, price: cur + ' 3,200', amount: cur + ' 3,200' },
-                { name: 'Medical test', qty: 2, price: cur + ' 350', amount: cur + ' 700' }],
-        subtotal: cur + ' 3,900', vat: cur + ' 585', total: cur + ' 4,485',
-        totalNum: '4485.00', vatNum: '585.00', stamp: '2026-08-01T09:00:00Z',
+        // A DISCOUNTED, PART-TAXED SAMPLE, because the designer is meant to be a true preview and a
+        // real document now carries a discount column and a per-line tax column. A sample without
+        // them showed a narrower table than anything the firm actually prints.
+        //
+        // AND IT ADDS UP AT WHATEVER RATE THE DESIGNER IS SET TO. The old sample's figures were
+        // fixed strings worked out at 15% while the label beside them printed the rate from these
+        // settings — so a firm on 12% was shown "VAT 12% · SAR 585", which is 15% of the subtotal.
+        // Hard to notice with one figure; impossible to miss now that every line carries its own.
+        ...(() => {
+          const r9 = Number(this._printLayoutFor(kind).vatRate) || 0;
+          const m9 = (v9) => cur + ' ' + v9.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          // 3,200 + 700 gross, 200 off the first line, and the medical test is exempt — so the tax
+          // falls on 3,000 and the first line carries all of it.
+          const taxable9 = 3000, vat9 = Math.round(taxable9 * r9) / 100;
+          return {
+            items: [{ name: 'New Employment Visa — sample line', qty: 1, price: m9(3200), disc: m9(200), vat: m9(vat9), amount: m9(3200) },
+                    { name: 'Medical test — exempt', qty: 2, price: m9(350), disc: '', vat: m9(0), amount: m9(700) }],
+            showDisc: true, showVat: r9 > 0,
+            subtotal: m9(3900), discount: m9(200), netTotal: m9(3700),
+            vatOn: m9(taxable9), vat: m9(vat9), total: m9(3700 + vat9),
+            totalNum: (3700 + vat9).toFixed(2), vatNum: vat9.toFixed(2), vatRate: r9,
+          };
+        })(),
+        stamp: '2026-08-01T09:00:00Z',
         notes: 'Sample preview — your real documents use this exact layout.',
       };
       // Delegates to the shared painter rather than repeating the injection: this copy is what leaked
@@ -24974,7 +25035,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // what you look at on screen is byte-for-byte what comes out of the printer.
         docFor: () => {
           const raw9 = (Array.isArray(invData) ? invData : []).find(v9 => v9.id === id) || {};
-          const items9 = (Array.isArray(raw9.items) ? raw9.items : []).map(it9 => ({ name: it9.name, qty: it9.units, price: fmtCurAs(cur, Number(it9.price) || 0), amount: fmtCurAs(cur, (Number(it9.units) || 1) * (Number(it9.price) || 0)) }));
+          // Lines, discounts and per-line tax from the shared builder — the same one the quotation
+          // uses, so an invoice raised from a quotation prints the same breakdown it was agreed on.
+          const L9 = _docLines9(raw9.items, Number(raw9.vatRateBp) || 0, (v9) => fmtCurAs(cur, v9));
+          const items9 = L9.rows;
           // A tax invoice must show the VAT breakdown, and the ZATCA QR must carry the same figures.
           //
           // READ, do not re-derive. These are stored at issue in minor units with the rate frozen
@@ -24995,10 +25059,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const _fromMinor = (m) => fmtCurAs(cur, m / 100);
           // What the VAT was charged on, named only when it is NOT the whole subtotal — a document
           // mixing taxed and untaxed lines otherwise prints three figures that do not multiply out.
-          const taxed9 = _itemsTaxedMinor9(raw9.items);
+          const taxed9 = L9.taxedMinor;
           return { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
             services: desc, notes: raw9.notes,
-            subtotal: rate9 > 0 ? _fromMinor(netMinor9) : '',
+            showDisc: L9.anyDisc,
+            showVat: rate9 > 0,
+            // THE SUBTRACTION MUST ALWAYS HOLD. The stored net is the figure of record (see the
+            // note above — it is what the client agreed and what the QR carries), so the subtotal
+            // is derived as net + discount rather than summed from the lines. On a correctly
+            // written document the two are the same figure; on an older or hand-written row that
+            // disagrees with its own lines, this keeps "subtotal − discount = net" true on the
+            // page and leaves the discrepancy where a reader can see it, in the amount column.
+            subtotal: rate9 > 0 ? _fromMinor(L9.anyDisc ? netMinor9 + L9.discMinor : netMinor9) : '',
+            discount: L9.anyDisc ? _fromMinor(L9.discMinor) : '',
+            netTotal: L9.anyDisc ? _fromMinor(netMinor9) : '',
             vat: rate9 > 0 ? _fromMinor(vatMinor9) : '',
             vatOn: (rate9 > 0 && taxed9 > 0 && taxed9 !== netMinor9) ? _fromMinor(taxed9) : '',
             total: _fromMinor(totalMinor9),
@@ -25123,6 +25197,68 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // a total, not something to tax — the editor strips it on the way back in for the same reason.
       (!/^VAT\s*\(/i.test(String((it9 && it9.name) || '')) && _itemVat9(it9) === 'standard')
         ? a9 + _itemNet9(it9) : a9, 0);
+    /**
+     * ONE DOCUMENT'S LINES, EACH CARRYING ITS OWN DISCOUNT AND ITS OWN TAX.
+     *
+     * The printed document used to show `price × qty` as the line amount and a subtotal taken from
+     * the stored figure. The moment a line could be discounted those two stopped agreeing: a
+     * quotation listed 1,000 + 500 + 50,000 + 15,000 and then a subtotal of 66,000, with nothing on
+     * the page accounting for the missing 500. Four figures, none of which added up to the fifth,
+     * on a document a client signs.
+     *
+     * So the amount column is the extended price, the discount gets a column of its own, and the
+     * totals block carries the subtraction — which is how every tax invoice has always been laid
+     * out, and makes every column sum to the row beneath it.
+     *
+     * THE PER-LINE TAX IS ALLOCATED, NOT ROUNDED. The document's VAT is one rounding of the whole
+     * taxable base (that is the figure on the quotation, the invoice and the ZATCA QR). Rounding
+     * each line on its own would give a column that does not add up to it — off by a halala or
+     * two, which on a tax document is the difference between arithmetic and a typo. Each taxed line
+     * takes its share and the last one takes the remainder, the same rule the payment stages use.
+     *
+     * Shared by the quotation and the invoice builders so the two cannot disagree about the same
+     * lines; `fmt9` is passed in because each one formats in its own currency.
+     */
+    const _docLines9 = (items9, rateBp9, fmt9) => {
+      const real9 = (Array.isArray(items9) ? items9 : [])
+        // The composer appends "VAT (15%)" as a line so the stored `amount` stays the grand total.
+        // It is a total, not a thing to price or to tax, and every reader has to skip it.
+        .filter(it9 => it9 && String(it9.name || '').trim() && !/^VAT\s*\(/i.test(String(it9.name)));
+      const rows9 = real9.map(it9 => {
+        const gross9 = _itemGross9(it9), disc9 = _itemDisc9(it9);
+        return { it: it9, gross: gross9, disc: disc9, net: gross9 - disc9, taxed: _itemVat9(it9) === 'standard', vat: 0 };
+      });
+      const taxedMinor9 = rows9.reduce((a9, r9) => r9.taxed ? a9 + r9.net : a9, 0);
+      const vatMinor9 = Math.round(taxedMinor9 * (Number(rateBp9) || 0) / 10000);
+      const taxedRows9 = rows9.filter(r9 => r9.taxed);
+      let left9 = vatMinor9;
+      taxedRows9.forEach((r9, i9) => {
+        const share9 = i9 === taxedRows9.length - 1
+          ? left9
+          : (taxedMinor9 > 0 ? Math.round(vatMinor9 * r9.net / taxedMinor9) : 0);
+        left9 -= share9;
+        r9.vat = share9;
+      });
+      const grossMinor9 = rows9.reduce((a9, r9) => a9 + r9.gross, 0);
+      const discMinor9 = rows9.reduce((a9, r9) => a9 + r9.disc, 0);
+      return {
+        grossMinor: grossMinor9, discMinor: discMinor9, netMinor: grossMinor9 - discMinor9,
+        taxedMinor: taxedMinor9, vatMinor: vatMinor9,
+        anyDisc: discMinor9 > 0,
+        rows: rows9.map(r9 => ({
+          // The country belongs on the client's copy: "Company Acquisition" for SAR 50,000 says
+          // nothing about what is being bought.
+          name: String(r9.it.name || '').trim() + (r9.it.country ? ' — ' + String(r9.it.country).trim() : ''),
+          qty: String(Number(r9.it.units) || 1),
+          price: fmt9((Number(r9.it.price) || 0)),
+          disc: r9.disc ? fmt9(r9.disc / 100) : '',
+          // 0.00 rather than a dash on an untaxed line: the column has to be seen to add up to the
+          // VAT on the totals block, and a dash reads as "not stated" rather than "none charged".
+          vat: fmt9(r9.vat / 100),
+          amount: fmt9(r9.gross / 100),
+        })),
+      };
+    };
     // What VAT is charged ON, which is not always the subtotal — see _vatOfName9 above.
     const ciTaxedN = ciLines.reduce((s2, l) => _lineTaxed9(l) ? s2 + ((parseFloat(l[1]) || 0) * (parseFloat(l[2]) || 0)) : s2, 0);
     const CI_VAT_OPTS = ['15% — KSA standard', '0% — exempt / zero-rated'];
@@ -48796,9 +48932,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // ANY kind, not the three that were named here. A stage billing a kind this code had
           // not heard of fell through to the whole quotation — the one failure where the client is
           // billed far too much and the schedule still foots up.
+          // NET OF WHAT CAME OFF THE LINE, which is what the server bills. planStages works off
+          // lineMinor(), so a schedule printed from the list prices promised the client stages that
+          // added up to 66,500 on a quotation totalling 66,000 — and the invoices raised against it
+          // would have asked for the lower figure. A printed schedule that disagrees with the
+          // invoices raised from it is worse than no schedule at all.
           const _kindNet9 = (want9) => (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
             .reduce((a9, it9) => (String(it9.kind || 'prof') === want9
-              ? a9 + (Number(it9.units) || 1) * (Number(it9.price) || 0) : a9), 0);
+              ? a9 + _itemNet9(it9) / 100 : a9), 0);
           const _termBase9 = (b9) => (!b9 || b9 === 'total') ? net9 : _kindNet9(b9);
           const _termName9 = { prof: 'Professional Fees', gov: 'Government Fees', foreign: 'Foreign Company Fees' };
           const terms9 = (Array.isArray(raw0 && raw0.milestones) ? raw0.milestones : []).map(m9 => {
@@ -48809,20 +48950,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               + (wording9 ? (pct9 ? ' \u2014 ' : '') + wording9 : '');
             return head9 + '  \u00b7  ' + fmtCur(Math.round(_termBase9(b9) * pct9) / 100);
           });
+          // The lines, their discounts and their tax, from the one builder the invoice also uses.
+          const L9 = _docLines9(raw0 && raw0.items, Math.round(rate9 * 100), fmtCur);
           return {
             no: id, client: cli0,
             date: (raw0 && raw0.date) || '—', dueDate: (raw0 && raw0.validUntil) || '',
             services: (raw0 && raw0.service) || '', notes: (raw0 && raw0.notes) || '', terms: terms9,
-            items: (Array.isArray(raw0 && raw0.items) ? raw0.items : []).map(it9 => ({
-              name: it9.name, qty: it9.units,
-              price: fmtCur(Number(it9.price) || 0),
-              amount: fmtCur((Number(it9.units) || 1) * (Number(it9.price) || 0)),
-            })),
-            subtotal: rate9 > 0 ? fmtCur(net9) : '',
+            items: L9.rows,
+            showDisc: L9.anyDisc,
+            showVat: rate9 > 0,
+            // Subtotal is the EXTENDED PRICES, so it is the sum of the amount column; the discount
+            // and the net are their own rows beneath it. Printing the net as "Subtotal" is what
+            // left 500 unaccounted for between the lines and the total.
+            //
+            // Derived from the stored net plus the discount, not summed from the lines, so that
+            // "subtotal − discount = net" holds on the page even for a row whose stored figure
+            // disagrees with its own items. Same figure either way on anything written correctly.
+            subtotal: rate9 > 0 ? fmtCur(net9 + L9.discMinor / 100) : '',
+            discount: L9.anyDisc ? fmtCur(L9.discMinor / 100) : '',
+            netTotal: L9.anyDisc ? fmtCur(net9) : '',
             vat: rate9 > 0 ? fmtCur(vatAmt9) : '',
-            // Same as the invoice: name the base only when the VAT is not on all of it.
-            vatOn: (() => { const t9 = _itemsTaxedMinor9(raw0 && raw0.items) / 100;
-              return (rate9 > 0 && t9 > 0 && Math.round(t9 * 100) !== Math.round(net9 * 100)) ? fmtCur(t9) : ''; })(),
+            // Named only when the VAT is not on all of the net — see the totals block.
+            vatOn: (rate9 > 0 && L9.taxedMinor > 0 && L9.taxedMinor !== L9.netMinor)
+              ? fmtCur(L9.taxedMinor / 100) : '',
             total: fmtCur(gross9),
             subtotalNum: net9.toFixed(2), vatNum: vatAmt9.toFixed(2), vatRate: rate9,
           };
