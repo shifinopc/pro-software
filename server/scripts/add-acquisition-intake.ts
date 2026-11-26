@@ -23,6 +23,14 @@ const NODE = {
   type: "task",
   label: "Company acquisition — partners and documents",
   config: {
+    /**
+     * WHOSE QUEUE THIS SITS IN. Without it the step belongs to nobody: `role` is read as
+     * `assigneeRole || approverRole`, and with neither there is no role gate, no shared-queue log
+     * line, and nothing puts the step in anybody's My Tasks — it exists, the case waits on it, and
+     * the only place it is visible is the Task List. Every other step of this workflow names
+     * pro_officer; a step that collects the partners' papers is the same desk's work.
+     */
+    assigneeRole: "pro_officer",
     // The same clock the steps either side of it run on. Without slaHours the engine derives no due
     // date, so the step is never due, never breaches and never appears in the SLA Monitor — the
     // number is not decoration, it is the only thing that puts a step on that screen.
