@@ -12399,10 +12399,13 @@
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">ISSUED</div><input value="{{ ciIssued }}" onChange="{{ setCiIssued }}" type="date" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE;"></div>
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">DUE</div><input value="{{ ciDue }}" onChange="{{ setCiDue }}" type="date" min="{{ ciIssued }}" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE;"></div>
             </div>
-            <div style="display:flex; gap:10px; margin-top:10px;">
-              <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VAT</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddCiVatToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1;">{{ ciVatVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiVatOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><sc-for list="{{ ddCiVatOptions }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
-            </div>
-            <sc-if value="{{ ciZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — no VAT will be charged and the document prints no VAT line. Only for genuinely exempt or zero-rated work.</div></sc-if>
+            <!-- THE VAT RATE IS NOT ASKED HERE ANY MORE. It is the firm's rate, set once in
+                 Settings → Print Layout, and it is still FROZEN onto the document on save — a
+                 reprint next year has to produce the same figures, which is why it is stored on the
+                 row rather than read live. Taking the control away does not change what is saved;
+                 it stops the rate on a tax document being a per-invoice decision. An invoice already
+                 written at another rate keeps it: editing one loads its stored rate untouched. -->
+            <sc-if value="{{ ciZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — this invoice charges no VAT and prints no VAT line.</div></sc-if>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SUBJECT / PROJECT</div><input sc-camel-default-value="{{ ciSubject }}" data-seed-val="{{ ciSubject }}" onBlur="{{ setCiSubject }}" placeholder="e.g. Work Visa Processing" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE;"></div>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ ciNotes }}" data-seed-val="{{ ciNotes }}" onBlur="{{ setCiNotes }}" placeholder="Printed on the invoice. Terms &amp; footer come from Print Layout." rows="4" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
             </div>
@@ -25532,8 +25535,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           })),
         };
       })(),
-      ...mkDd('ddCiVat', CI_VAT_OPTS, ciVatSel, (v) => this.setState({ ciVat: v })),
-      ciCurVal: ciCur, ciVatVal: ciVatSel,
+      // ddCiVat and ciVatVal removed with the picker. `ciVatSel` and `ciVatRate` stay: they are
+      // what freezes vatRateBp onto the saved invoice, and what an edited invoice loads its own rate
+      // into — the figure still travels, it is simply no longer a question on this form.
+      ciCurVal: ciCur,
       // Zero-rating is a one-click choice that carries all the way to the printed document and
       // the ZATCA QR, and it leaves no VAT line behind to notice it by. So it says so while it
       // is still a choice, rather than being discovered on a bill the client already holds.
