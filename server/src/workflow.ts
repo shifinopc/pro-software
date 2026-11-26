@@ -2987,11 +2987,43 @@ R.get("/tasks/:id/money", requireAuth, requireStaff, async (req, res) => {
     }
   }
 
+  /**
+   * MONEY THAT IS IN THE BANK AND NOT ON AN INVOICE.
+   *
+   * The case this gate is waiting on may already be funded — the transfer arrived and nobody has
+   * matched it yet. Without this the approver reads "received SAR 0.00", concludes the client has
+   * not paid, and chases somebody who paid last week.
+   *
+   * BANK LINES, not a parallel allocation of our own. A receipt in this system is attached to an
+   * invoice when it is created, so an "unallocated receipt" does not exist; unmatched money lives
+   * as a BankLine from an uploaded statement, which the bank reconciliation agent proposes matches
+   * for and a person confirms. That flow owns the over-payment guard, the audit entry and the
+   * decision record, so this only REPORTS — matching stays where it belongs.
+   *
+   * Money in only (a negative line is a payment out), still open, and bounded: a gate is a decision
+   * about the money that just arrived, not a statement.
+   */
+  const unmatched = await prisma.bankLine.findMany({
+    where: { status: { in: ["unmatched", "proposed"] }, amountMinor: { gt: 0 } },
+    orderBy: [{ date: "desc" }], take: 50,
+    select: { id: true, date: true, description: true, reference: true, amountMinor: true, currency: true, status: true },
+  });
+  // Named for THIS client. A statement carries every client's money, and the line does not say
+  // whose it is — the name or the reference is the only link until somebody matches it, so this
+  // asks the narrow question "does this line mention them" rather than guessing at amounts.
+  const who = String(inst.clientName ?? "").trim().toLowerCase();
+  const mine = who
+    ? unmatched.filter(l => `${l.description} ${l.reference ?? ""}`.toLowerCase().includes(who))
+    : [];
+
   res.json({
     clientName: inst.clientName ?? null,
     currency: invoices[0]?.currency ?? "SAR",
     invoices, payments, billedMinor, receivedMinor,
     advance,
+    // Only when the gate is actually short — money sitting unmatched against a settled stage is
+    // somebody else's problem, and a panel that always has something in it stops being read.
+    unmatchedBank: advance && !advance.allSettled ? mine : [],
   });
 });
 

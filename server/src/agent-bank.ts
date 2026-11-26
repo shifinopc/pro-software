@@ -18,6 +18,7 @@
  */
 import crypto from "node:crypto";
 import { prisma } from "./db.js";
+import { releaseAdvanceGates } from "./advance-gate.js";
 import { upsertFinding, closeMissing, markRun, decide, requirePerm, AgentActionError, normName, type AgentActor } from "./agent-core.js";
 import { allocate } from "./agent-collections.js";
 import { nextNumber } from "./sequence.js";
@@ -295,6 +296,18 @@ export async function act(taskId: string, action: string, input: any, actor: Age
   }
   if (!recorded.length) throw new AgentActionError("Those invoices are already settled — nothing to record.", 409);
   await prisma.bankLine.update({ where: { id: line.id }, data: { status: "matched", paymentIds: paymentIds as any, decidedBy: actor.id, decidedAt: new Date().toISOString() } });
+  /**
+   * A GATE WAITING ON THIS MONEY, opened here too.
+   *
+   * The release was hooked to /payments/record, which is the route a person uses — and this path
+   * does not go through it: it writes prisma.payment.create directly, as does the collections
+   * agent. So a client whose advance arrived by bank statement had their gate held open while the
+   * receipt sat against the invoice, which is exactly the "paid but still blocked" window the
+   * event-driven design exists to close.
+   */
+  for (const a of (o.match?.allocations ?? []) as { invoiceId: string }[]) {
+    await releaseAdvanceGates(a.invoiceId, null, line.date);
+  }
   // The client's own "I've paid" notice for this money is answered by the bank, not left open.
   const notices = await prisma.agentTask.findMany({ where: { agent: "collections", kind: "payment-match", status: "review", companyId: t.companyId } });
   for (const n of notices) {

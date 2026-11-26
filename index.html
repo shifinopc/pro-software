@@ -4016,6 +4016,24 @@
                           </div>
                         </div>
                       </sc-if>
+                      <!-- Money that is in and not yet on an invoice. Reported, not matched: the
+                           matching lives in bank reconciliation with its own guard and audit. -->
+                      <sc-if value="{{ a.bankShow }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-bottom:11px; border:1px solid #F6E3BC; background:#FFF9EE; border-radius:12px; padding:11px 12px;">
+                          <div style="font-size:11px; font-weight:700; color:#7A5B12;">{{ a.bankHead }}</div>
+                          <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                            <sc-for list="{{ a.bankRows }}" as="b" hint-placeholder-count="1">
+                              <div style="display:flex; align-items:center; gap:9px; font-size:10.5px;">
+                                <span style="font-weight:700; font-variant-numeric:tabular-nums; color:#4B4757; flex-shrink:0;">{{ b.amount }}</span>
+                                <span style="color:#8C6B1F; flex-shrink:0;">{{ b.date }}</span>
+                                <span style="flex:1; min-width:0; color:#8C8899; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ b.what }}</span>
+                                <span style="font-size:9px; font-weight:700; color:{{ b.fg }}; background:{{ b.bg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ b.state }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                          <div style="font-size:10px; color:#8C6B1F; margin-top:9px; line-height:1.5;">Match it in <span onClick="{{ a.bankGo }}" style="font-weight:700; color:#7C00FF; cursor:pointer;">Bank Reconciliation</span> — the gate opens by itself once the receipt lands against this invoice.</div>
+                        </div>
+                      </sc-if>
                       <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">DECISION NOTE <span style="color:#8C8899; font-weight:600;">(required to reject)</span></div>
                       <textarea sc-camel-default-value="{{ apNote }}" data-seed-val="{{ apNote }}" onBlur="{{ setApNote }}" placeholder="Add context for this decision…" rows="2" style="width:100%; margin-top:7px; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:11px; font-family:'Inter',sans-serif; background:#fff; resize:vertical;"></textarea>
                       <sc-if value="{{ a.apErrShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:600; color:#C0353A; margin-top:6px;">A reason is required to reject.</div></sc-if>
@@ -32527,6 +32545,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               fg: st9.settled ? '#0E9355' : (st9.receivedMinor > 0 ? '#B8860B' : '#8C8899'),
               bg: st9.settled ? '#E7F8EF' : (st9.receivedMinor > 0 ? '#FEF4E2' : '#F3F1F7'),
             })) : [],
+            /**
+             * MONEY IN THE BANK THAT NOBODY HAS MATCHED.
+             *
+             * Without this the card reads "received SAR 0.00" and the approver chases a client who
+             * paid last week. It REPORTS only — matching happens in bank reconciliation, which owns
+             * the over-payment guard, the audit entry and the human confirmation. A button here
+             * would be a second way to do an accounting act, which is how two ways disagree.
+             */
+            bankShow: !!(m9 && Array.isArray(m9.unmatchedBank) && m9.unmatchedBank.length),
+            bankHead: m9 && m9.unmatchedBank && m9.unmatchedBank.length
+              ? m9.unmatchedBank.length + ' unmatched bank ' + (m9.unmatchedBank.length === 1 ? 'line names' : 'lines name') + ' this client'
+              : '',
+            bankRows: (m9 && m9.unmatchedBank ? m9.unmatchedBank : []).map(b9 => ({
+              amount: (b9.currency || cur9) + ' ' + ((b9.amountMinor || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+              date: _dmy9 ? _dmy9(b9.date) : b9.date,
+              what: String(b9.reference || b9.description || '').slice(0, 90),
+              state: b9.status === 'proposed' ? 'a match is proposed' : 'not matched',
+              fg: b9.status === 'proposed' ? '#B8860B' : '#8C8899',
+              bg: b9.status === 'proposed' ? '#FEF4E2' : '#F3F1F7',
+            })),
+            bankGo: () => this.setState({ active: 'Bank Reconciliation', activeGroup: 'Finance' }),
           };
         })(),
         approve: () => setStatus('Approved'),

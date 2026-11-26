@@ -18,6 +18,7 @@
  * about money is not a risk worth the nicer prose.
  */
 import { prisma } from "./db.js";
+import { releaseAdvanceGates } from "./advance-gate.js";
 import { claimTask, finishTask, agentSetting, decide, requirePerm, AgentActionError, parseDay, DAY, type AgentActor } from "./agent-core.js";
 import { logActivity, logAudit, logNotification } from "./auth.js";
 import { nextNumber } from "./sequence.js";
@@ -184,6 +185,9 @@ export async function act(taskId: string, action: string, input: any, actor: Age
     recorded.push(`${inv.number} ${amt.toLocaleString()}${settled ? " (settled)" : ""}`);
     await logAudit({ action: "payment.record", actorId: actor.id, target: `${inv.number} (${number})`, detail: `amount=${amt} settled=${settled} via collections agent` });
     if (settled) logNotification({ type: "payment", title: `Payment received: ${inv.number}`, message: inv.clientName ?? undefined });
+    // Same reason as the bank agent: this path writes the payment directly rather than going
+    // through /payments/record, so without this the advance could be in and the gate still shut.
+    await releaseAdvanceGates(inv.id, number, null);
   }
   if (t.refId) await prisma.serviceRequest.update({ where: { id: t.refId }, data: { status: "resolved" } }).catch(() => {});
   logActivity({ type: "finance", message: `Payment notice confirmed: ${recorded.join(", ")}`, user: actor.name });
