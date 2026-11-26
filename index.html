@@ -12612,6 +12612,34 @@
             </sc-if>
           </div>
         </sc-if>
+        <!-- HOW IT GOT HERE.
+
+             `status` is one word about now. It could not tell "approved on Tuesday, sent on
+             Thursday" from "sent straight out", and said nothing about who did either - so the
+             only record of a quotation being signed off internally was that somebody remembered.
+
+             Below the schedule because the money is what the drawer is opened for; the trail is
+             what the second question is about. -->
+        <sc-if value="{{ qvHasLog }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px; border:1px solid #EDEBF2; border-radius:14px; padding:11px 13px;">
+            <div style="font-size:11px; font-weight:700; color:#1A1523;">History</div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
+              <sc-for list="{{ qvLogRows }}" as="h" hint-placeholder-count="3">
+                <div style="display:flex; align-items:flex-start; gap:9px;">
+                  <span style="width:7px; height:7px; border-radius:99px; flex-shrink:0; margin-top:5px; background:{{ h.dot }};"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:11px; font-weight:600; color:#1A1523;">{{ h.what }}</div>
+                    <div style="font-size:10px; color:#8C8899; margin-top:1px;">{{ h.who }}</div>
+                  </div>
+                  <span style="font-size:10px; color:#A9A6B4; flex-shrink:0; font-variant-numeric:tabular-nums;">{{ h.when }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ qvLogPartial }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:9px; font-size:10px; color:#A9A6B4; line-height:1.5;">{{ qvLogPartialNote }}</div>
+            </sc-if>
+          </div>
+        </sc-if>
         <div style="display:flex; gap:9px; margin-top:12px; flex-wrap:wrap;">
       <sc-if value="{{ qvCanEdit }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvEdit }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Edit</button></sc-if>
       <sc-if value="{{ qvCanApprove }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvApprove }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Approve</button></sc-if>
@@ -49206,6 +49234,41 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         qvInvoiceLabel: qtViewRow.invoiceLabel === 'Invoice' ? 'Raise invoice' : qtViewRow.invoiceLabel,
         qvInvoiceTitle: qtViewRow.invoiceTitle,
         closeQtView: () => this.setState({ qtView: null }),
+        // ── how it got here ──
+        //
+        // Read off `history`, which the server appends on every status change. A quotation written
+        // before that existed has none, and an EMPTY panel would read as "nothing ever happened to
+        // this" rather than "nobody was recording" — so the panel is hidden and the creation it
+        // does know about is shown as the single row, with a note saying the rest is not held.
+        ...(() => {
+          const raw9 = (Array.isArray(qtData) ? qtData : []).find(x9 => x9.id === qtViewRow.realId) || {};
+          const log9 = Array.isArray(raw9.history) ? raw9.history.filter(Boolean) : [];
+          // Date AND time: approve-then-send often happens inside one minute, and two rows reading
+          // the same date with no order to them is the thing this panel exists to replace.
+          const when9 = (iso9) => {
+            const d9 = new Date(iso9);
+            if (!iso9 || isNaN(d9.getTime())) return '';
+            return _dmy9(iso9) + ' · ' + String(d9.getHours()).padStart(2, '0') + ':' + String(d9.getMinutes()).padStart(2, '0');
+          };
+          const DOT9 = { approved: '#7C00FF', sent: '#0284C7', accepted: '#0E9355', invoiced: '#0E9355', rejected: '#C0353A', changes_requested: '#B4690E' };
+          const rows9 = [
+            // The one event every quotation has, from the issue date it has always carried.
+            ...(raw9.date ? [{ what: 'Created', who: raw9.createdByName || '', when: _dmy9(raw9.date), dot: '#C4C0CE' }] : []),
+            ...log9.map(h9 => ({
+              what: (QT_ST[String(h9 && h9.to).toLowerCase()] || String((h9 && h9.to) || '')),
+              who: (h9 && h9.by) ? 'by ' + h9.by : '',
+              when: when9(h9 && h9.at),
+              dot: DOT9[String(h9 && h9.to).toLowerCase()] || '#C4C0CE',
+            })),
+          ];
+          return {
+            qvHasLog: rows9.length > 0,
+            qvLogRows: rows9,
+            // Said only when the document has clearly been somewhere the log does not mention.
+            qvLogPartial: !log9.length && String(qtViewRow.status || '').toLowerCase() !== 'draft',
+            qvLogPartialNote: 'Nothing else was recorded for this quotation — it was issued before the history was kept.',
+          };
+        })(),
         qvPrint: () => qtViewRow.print(),
         qvEdit: () => { this.setState({ qtView: null }); qtViewRow.edit(); },
         qvApprove: () => { this.setState({ qtView: null }); qtViewRow.approve(); },

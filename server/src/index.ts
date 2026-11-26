@@ -111,6 +111,7 @@ import { clientEmailHeld, notify, notifyNewServiceRequest, notifyRequestReply, n
 import { numberHeldByAnother, clashMessage } from "./docnumber.js";
 import { tokensIn, renderDocx, proposalData, docxToPdf, paramTokens } from "./proposal.js";
 import { startDeliveryForQuotation, acceptServiceRequest, previewAcceptServiceRequest } from "./delivery.js";
+import { recordQuotationStatus } from "./quotation-history.js";
 import { getSequences, saveSequences, nextNumber, SEQ_KINDS, SEQ_LABEL } from "./sequence.js";
 import { unmetPrereqs, PREREQ_ATTRS, ATTR_LABEL } from "./jobs.js";
 import { COUNTRIES, countryName, countryCurrency } from "./countries.js";
@@ -1609,6 +1610,9 @@ app.put("/api/portal/quotations/:id", requireAuth, requirePortal, async (req, re
   if (["draft", "approved"].includes(String(q.status))) return res.status(400).json({ error: "This quotation has not been sent yet" });
   const updated = await prisma.quotation.update({ where: { id: q.id }, data: { status: want, ...(want === "changes_requested" ? { clientNote: note } : {}) } });
   const verb = want === "changes_requested" ? "sent back with changes" : want;
+  // Named as the CLIENT, not as whoever's portal login it came from: the timeline is read by staff
+  // asking who moved this, and "the client accepted it" is the answer that means something.
+  await recordQuotationStatus(q.id, want, q.clientName ?? "Client", q.status);
   logActivity({ type: "finance", message: `Quotation ${q.number} ${verb} by ${q.clientName ?? "client"}`, user: q.clientName ?? "Client" });
   logNotification({ type: "system", title: `Quotation ${verb} — ${q.clientName ?? "client"}`, message: [`${q.number} · ${q.service ?? ""}`.trim(), note].filter(Boolean).join(" — ") });
   // The client agreeing is the moment the firm is committed, so it is the moment the work is
@@ -5867,6 +5871,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     const first = billable[0];
     const staged = await raiseStageInvoice(q, first, { date: today });
     await prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } });
+    await recordQuotationStatus(q.id, "invoiced", a?.email ?? a?.sub ?? "Staff", st);
     // The same delivery the single-invoice path owes, for the same reason: three line items are
     // three jobs somebody has to do, and billing for work nobody was given is how it goes undone.
     let stagedDelivery: Awaited<ReturnType<typeof startDeliveryForQuotation>> | null = null;
@@ -5903,6 +5908,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     }),
     prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } }),
   ]);
+  await recordQuotationStatus(q.id, "invoiced", a?.email ?? a?.sub ?? "Staff", st);
   // The acceptance this just recorded owes exactly what the portal's Accept owes: three line items
   // are three jobs somebody has to go and do, and billing for work nobody was given is how it goes
   // undone. Deliberately outside the transaction and never allowed to fail the response — the
@@ -8355,6 +8361,9 @@ app.post("/api/quotations/:id/proposal/email", requireAuth, requireStaff, requir
     }
     // One update, so the record cannot end up half-changed: the typed fields land with the release.
     if (Object.keys(after).length) await prisma.quotation.update({ where: { id: q.id }, data: after });
+    // This route can RELEASE a draft as a side effect of mailing it, which is a status change the
+    // timeline would otherwise show as having happened by itself.
+    if (released) await recordQuotationStatus(q.id, "sent", who || "Staff", q.status);
     logActivity({ type: "client", message: `Proposal ${q.number ?? ""} emailed to ${q.clientName ?? to}`, user: who || undefined });
     await logAudit({ action: "proposal.emailed", actorId: (req as any).auth?.sub,
       target: `${q.number ?? ""} \u00b7 ${to}${cc.length ? ` (cc ${cc.join(", ")})` : ""}`,

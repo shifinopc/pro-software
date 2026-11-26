@@ -2536,6 +2536,18 @@ model Quotation {
   ///
   /// Negotiations run to several rounds, which is why this is a chain and not a single flag: R1 can
   /// be superseded by R2 the same way the original was superseded by R1.
+  /// EVERY STATE THIS DOCUMENT HAS BEEN IN, and who put it there.
+  ///
+  /// `status` says where a quotation is now and nothing about how it got there, so "approved and
+  /// sent" was indistinguishable from "sent straight out" — and neither said by whom or when.
+  /// `sentAt` existed for the one transition the chasing jobs need and stopped there.
+  ///
+  /// Append-only `[{ at, from, to, by }]`, ISO timestamps. JSON rather than a column per state
+  /// because the states are not fixed (changes_requested arrived after the first three) and a
+  /// column each means a migration every time one is added, with nothing recording WHO either way.
+  /// Null on every quotation written before this: absent history is unknown, not an empty one.
+  history       Json?
+
   revisesId      String?
   supersededAt   String?
   supersededById String?

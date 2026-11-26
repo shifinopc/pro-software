@@ -10,6 +10,7 @@ import { normalizeDates } from "./dates.js";
 import { logActivity, logNotification } from "./auth.js";
 import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
 import { startDeliveryForQuotation } from "./delivery.js";
+import { recordQuotationStatus } from "./quotation-history.js";
 import { closeAddonDeal } from "./pipeline.js";
 import { nextNumber } from "./sequence.js";
 import { resolveEstablishmentId, syncMainFromCompany, adoptMainCr, EstablishmentError } from "./establishments.js";
@@ -625,6 +626,16 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       // A quotation reaching `sent` is the moment the clock starts on the client's answer. Stamped
       // on the TRANSITION, so re-saving an already-sent quotation does not restart the wait and let
       // a stale one escape being chased.
+      // AND THE SAME TRANSITION, WRITTEN DOWN. Every status a quotation passes through, with who
+      // and when — `status` alone cannot say whether "sent" was approved first or shot straight
+      // out. `before.status` is read explicitly because `updated` already holds the new one.
+      if (modelName === "quotation"
+        && String(req.body?.status ?? "").trim()
+        && String(req.body.status).toLowerCase() !== String((before as any).status ?? "").toLowerCase()) {
+        await recordQuotationStatus(updated.id, String(req.body.status),
+          (req as any).auth?.keyName ?? (req as any).auth?.sub ?? null,
+          (before as any).status ?? null);
+      }
       if (modelName === "quotation"
         && String(req.body?.status ?? "").toLowerCase() === "sent"
         && String((before as any).status ?? "").toLowerCase() !== "sent"
