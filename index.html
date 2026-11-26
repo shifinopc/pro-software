@@ -4228,7 +4228,10 @@
                     <!-- A superseded quotation keeps its own status — it WAS sent — so the row says
                          separately that a newer version has taken over, rather than pretending the
                          client rejected it. -->
-                    <sc-if value="{{ q.isSuperseded }}" hint-placeholder-val="{{ false }}"><span title="{{ q.supersededNote }}" style="font-size:10px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:6px 11px; border-radius:9px; white-space:nowrap;">Superseded</span></sc-if>
+                    <sc-if value="{{ q.isSuperseded }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.supersededJump }}" title="{{ q.supersededNote }}" style="font-size:10px; font-weight:700; color:#8C8899; background:#F3F1F7; padding:6px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#EBE8F2; color:#4B4757;">{{ q.supersededLabel }}</span></sc-if>
+                    <!-- And the other end of the chain. Without it the newest row looked like an
+                         unrelated quotation that happened to have an -R1 on the end. -->
+                    <sc-if value="{{ q.isRevision }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.revisesJump }}" title="{{ q.revisesNote }}" style="font-size:10px; font-weight:700; color:#6D5BD0; background:#F5EEFF; border:1px solid #E4D3FB; padding:5px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#EBDBFF;">{{ q.revisesLabel }}</span></sc-if>
                     <sc-if value="{{ q.hasInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.openInvoice }}" title="Open the invoice this quotation became" style="font-size:10px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);">{{ q.invoicedAs }} →</span></sc-if>
                     <sc-if value="{{ q.canProposal }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.proposal }}" title="{{ q.proposalTitle }}" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#7C00FF; background:#F5EEFF; border:1px solid #E4D3FB; border-radius:9px; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 15l2 2 4-4"></path></svg></span></sc-if>
                     <span onClick="{{ q.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span>
@@ -48771,8 +48774,38 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // price on this row would leave their copy and ours disagreeing with nothing to show it.
         // Creates QT-343-R1 as a draft and opens it, so the new price is typed into the revision.
         canRevise: ['sent', 'rejected'].includes(String(raw0 && raw0.status || '').toLowerCase()) && !(raw0 && raw0.supersededAt),
-        supersededNote: raw0 && raw0.supersededAt ? 'Replaced by a newer revision' : '',
-        isSuperseded: !!(raw0 && raw0.supersededAt),
+        /**
+         * WHICH DOCUMENT REPLACED THIS ONE, and which one this replaced.
+         *
+         * The chip said "Superseded" and nothing else, so the row admitted the offer was dead
+         * without saying what took over — and the revision beside it carried no sign it was a
+         * revision at all. The whole chain was in the data (`supersededById`, `revisesId`) and
+         * none of it reached the screen, so following QT-001 → QT-001-R1 meant reading the
+         * numbers and guessing from the suffix.
+         *
+         * Resolved out of the list already loaded, so this costs no request. Both chips open the
+         * other document, the same way the invoice chip opens the invoice this became.
+         */
+        ...(() => {
+          const next9 = raw0 && raw0.supersededById ? _qtById.get(raw0.supersededById) : null;
+          const prev9 = raw0 && raw0.revisesId ? _qtById.get(raw0.revisesId) : null;
+          const jump9 = (row9) => () => { if (row9) this.setState({ qtView: row9.number || row9.id }); };
+          return {
+            isSuperseded: !!(raw0 && raw0.supersededAt),
+            // Named where it is known. A replacement that has since been deleted leaves the plain
+            // word rather than a chip pointing at nothing.
+            supersededLabel: next9 ? 'Superseded by ' + next9.number : 'Superseded',
+            supersededNote: next9
+              ? 'This is the offer the client was sent. ' + next9.number + ' replaced it — click to open it.'
+              : 'Replaced by a newer revision',
+            supersededJump: jump9(next9),
+            supersededIsLink: !!next9,
+            isRevision: !!prev9,
+            revisesLabel: prev9 ? 'Revises ' + prev9.number : '',
+            revisesNote: prev9 ? 'Replaces ' + prev9.number + ', which the client was sent — click to open it.' : '',
+            revisesJump: jump9(prev9),
+          };
+        })(),
         revise: (ev9) => {
           ev9 && ev9.stopPropagation && ev9.stopPropagation();
           const tok9 = localStorage.getItem('stimespro:token');
