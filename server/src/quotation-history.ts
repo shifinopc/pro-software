@@ -61,7 +61,10 @@ export async function recordQuotationStatus(
   try {
     const next = str(to, 40);
     if (!next) return null;
-    const q = await prisma.quotation.findUnique({ where: { id }, select: { status: true, history: true } });
+    const q = await prisma.quotation.findUnique({
+      where: { id },
+      select: { status: true, history: true, number: true, companyId: true, clientName: true },
+    });
     if (!q) return null;
     // `from` is passed by callers that already read the row before updating it — by then the stored
     // status IS the new one, so reading it here would record "sent → sent" for every transition.
@@ -72,9 +75,69 @@ export async function recordQuotationStatus(
     // without limit; the oldest entries are the ones a reader scrolls past anyway.
     const out = [...rows, { at: new Date().toISOString(), from: prev, to: next, by: await nameOf(by) }].slice(-40);
     await prisma.quotation.update({ where: { id }, data: { history: out as any } });
+    await noteOnTheLead(id, q.companyId, q.number, next, out[out.length - 1].by);
     return out;
   } catch (e) {
     console.error("could not record quotation history for", id, e);
     return null;
+  }
+}
+
+/**
+ * THE SAME EVENT, WHERE THE CLIENT IS READ ABOUT.
+ *
+ * The drawer's History tells you what happened to the document. Nobody opens a document to find
+ * out what is happening with a lead — they open the lead, whose Timeline already carries the
+ * calls, the notes, and the "Moved to Quoted" a stage rule writes. A quotation being approved and
+ * sent is the most consequential thing that happens between those two entries and it was the one
+ * thing missing from them, so the lead's own record skipped from "moved to Quoted" to the client
+ * replying, with no sign of the document that was actually sent.
+ *
+ * Written as the stage rules write theirs: an `auto` note, no chase attached. A follow-up here
+ * would compete with the stage's own — applyStageFollowUp retires the previous chase when a deal
+ * moves, and a second auto chase from a different writer is how a lead ends up with two.
+ */
+const TIMELINE_WORDING: Record<string, string> = {
+  approved: "approved internally — ready to send",
+  sent: "sent to the client",
+  accepted: "accepted by the client",
+  rejected: "rejected by the client",
+  changes_requested: "sent back by the client with changes",
+  invoiced: "invoiced",
+};
+
+async function noteOnTheLead(
+  quotationId: string,
+  companyId: string | null,
+  number: string | null,
+  to: string,
+  by: string | null,
+) {
+  // A quotation can be written against a name with no client record behind it, and Interaction
+  // requires a real company — there is no lead whose timeline this would appear on.
+  if (!companyId) return;
+  // Back to draft is housekeeping, not an event in the client's story.
+  const wording = TIMELINE_WORDING[to.trim().toLowerCase()];
+  if (!wording) return;
+  try {
+    // Linked to the DEAL as well when one points at this quotation, so it lands on the deal's own
+    // timeline rather than only on the company's.
+    const deal = await prisma.opportunity.findFirst({ where: { quotationId }, select: { id: true } });
+    const now = new Date().toISOString();
+    await prisma.interaction.create({
+      data: {
+        companyId,
+        opportunityId: deal?.id ?? null,
+        // Nothing was said to anybody: it is a note that the document moved.
+        kind: "note",
+        at: now,
+        summary: `Quotation ${number ?? ""} ${wording}`.replace(/\s+/g, " ").trim(),
+        outcome: by ? `by ${by}` : null,
+        auto: true,
+        createdAt: now,
+      } as any,
+    });
+  } catch (e) {
+    console.error("could not write the lead timeline entry for", quotationId, e);
   }
 }
