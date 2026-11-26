@@ -14883,22 +14883,21 @@
                   </div>
                 </sc-if>
               </div>
-              <div class="fm-hint">{{ dlfSvcHint }}</div>
             </div>
             <div>
               <label class="fm-lab">Value ({{ dlCurrency }})</label>
               <input sc-camel-default-value="{{ dlfValue }}" data-seed-val="{{ dlfValue }}" onBlur="{{ setDlfValue }}" placeholder="Estimate, if you have one" class="fm-inp">
-              <div class="fm-hint">An estimate until a quotation is raised. After that the quotation is the figure.</div>
             </div>
             <div>
               <label class="fm-lab">Expected close</label>
               <input value="{{ dlfClose }}" onInput="{{ setDlfClose }}" type="date" class="fm-inp">
             </div>
-            <div>
-              <label class="fm-lab">Odds %</label>
-              <input sc-camel-default-value="{{ dlfProb }}" data-seed-val="{{ dlfProb }}" onBlur="{{ setDlfProb }}" placeholder="{{ dlStageOdds }}" class="fm-inp">
-              <div class="fm-hint">Leave blank to use the column's own odds.</div>
-            </div>
+            <!-- ODDS, FORECAST AND "UP AGAINST" REMOVED from this form.
+                 The columns are untouched and so are the values already on deals: the form simply
+                 stops sending those three keys, and the update route leaves a field alone when its
+                 key is absent. A deal with no odds of its own is weighted at its COLUMN's odds,
+                 which is what every deal on this board already did, and the forecast bucket is
+                 derived from that rather than overridden. -->
             <div>
               <label class="fm-lab">Where from</label>
               <!-- Same control as the Add-lead form. One field, one idiom. -->
@@ -14919,28 +14918,6 @@
               </sc-if>
               <sc-if value="{{ dlfSourceOther }}" hint-placeholder-val="{{ false }}">
                 <input sc-camel-default-value="{{ dlfSource }}" data-seed-val="{{ dlfSource }}" onBlur="{{ setDlfSource }}" placeholder="{{ sourceOtherHint }}" class="fm-inp" style="margin-top:7px;">
-              </sc-if>
-            </div>
-            <div class="fm-wide">
-              <label class="fm-lab">Forecast</label>
-              <!-- Four chips, not a dropdown: the whole set fits on one line, and "Auto" being a
-                   peer of the three categories says clearly that not overriding is the normal state. -->
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <sc-for list="{{ dlfForecast }}" as="f" hint-placeholder-count="4">
-                  <span onClick="{{ f.pick }}" style="font-size:11px; font-weight:{{ f.weight }}; color:{{ f.color }}; background:{{ f.bg }}; border:1px solid {{ f.bd }}; padding:6px 13px; border-radius:99px; cursor:pointer;">{{ f.label }}</span>
-                </sc-for>
-              </div>
-              <div class="fm-hint">{{ dlfForecastHint }}</div>
-            </div>
-            <div class="fm-wide">
-              <label class="fm-lab">Up against</label>
-              <input sc-camel-default-value="{{ dlfCompetitor }}" data-seed-val="{{ dlfCompetitor }}" onBlur="{{ setDlfCompetitor }}" placeholder="Who else is the client considering?" class="fm-inp">
-              <sc-if value="{{ hasCompChips }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:7px;">
-                  <sc-for list="{{ dlfCompChips }}" as="c" hint-placeholder-count="4">
-                    <span onClick="{{ c.pick }}" style="font-size:10px; font-weight:600; color:{{ c.fg }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:4px 11px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
-                  </sc-for>
-                </div>
               </sc-if>
             </div>
             <div class="fm-wide">
@@ -20792,7 +20769,7 @@ class Component extends DCLogic {
      */
     this._openDealForm = (companyId, name) => this.setState({
       dealEdit: { id: null, companyId: companyId || '', title: name ? 'New business — ' + name : '',
-                  productId: '', value: '', prob: '', close: '', source: '', notes: '' },
+                  productId: '', value: '', close: '', source: '', notes: '' },
       dlErr: '',
     });
 
@@ -42307,10 +42284,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 dealEdit: {
                   id: d.id, companyId: d.companyId, title: d.title,
                   value: d.valueSource === 'estimate' && d.valueMinor != null ? String(d.valueMinor / 100) : '',
-                  prob: d.probabilityBp != null ? String(d.probabilityBp / 100) : '',
                   close: d.expectedCloseDate || '', source: d.source || '', notes: d.notes || '',
-                  forecast: d.forecastCategory || '',
-                  competitor: d.competitor || '',
                   // Carried into the form, or editing a deal to change its close date would save
                   // the product back as null — the field is sent on every save.
                   productId: d.productId || '',
@@ -46801,7 +46775,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : 'What you are trying to sell, and roughly what it is worth.',
       dlNeedsCompany: !!_dl && !_dl.id,
       dlCurrency: _ccy9,
-      dlStageOdds: 'stage default',
       // Same list and same keying as the Log-contact picker: by ID, because two leads can share a
       // name and a deal opened against the wrong one is money attributed to the wrong company.
       // Same control as Managed by: the field IS the search box. Sectioned, because "who for" is two
@@ -46837,34 +46810,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       }], (_dl && _dl.productId) || '',
         (v) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), productId: v }, dlErr: '' }),
         'What are they asking for?'),
-      dlfSvcHint: 'What the client is buying — the same list the lead form asks for. It carries onto the quotation and decides which case opens when they accept.',
       dlfTitle: (_dl && _dl.title) || '', dlfCompany: (_dl && _dl.companyId) || '',
-      dlfValue: (_dl && _dl.value) || '', dlfProb: (_dl && _dl.prob) || '',
+      dlfValue: (_dl && _dl.value) || '',
       dlfClose: (_dl && _dl.close) || '', dlfSource: (_dl && _dl.source) || '', dlfNotes: (_dl && _dl.notes) || '',
-      dlfForecast: (() => {
-        const cur = (_dl && _dl.forecast) || '';
-        return [['', 'Auto'], ['pipeline', 'Pipeline'], ['best_case', 'Best case'], ['commit', 'Commit']].map(([v, label]) => {
-          const on = cur === v;
-          return {
-            label,
-            pick: () => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), forecast: v }, dlErr: '' }),
-            weight: on ? '700' : '500',
-            color: on ? '#7C00FF' : '#6F6C7A',
-            bg: on ? '#F5EEFF' : '#fff',
-            bd: on ? '#DDD1F5' : '#DDD9E6',
-          };
-        });
-      })(),
-      dlfCompetitor: (_dl && _dl.competitor) || '',
-      setDlfCompetitor: (e) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), competitor: e.target.value }, dlErr: '' }),
-      // Chips fill the box; anything else can still be typed — the same suggest-don't-constrain
-      // contract as sources and loss reasons, because a hard list is wrong in the second market.
-      dlfCompChips: _chips9(_compList, _dl && _dl.competitor, v => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), competitor: v }, dlErr: '' })),
-      hasCompChips: _compList.length > 0,
-      dlfForecastHint: (_dl && _dl.forecast)
-        ? 'Set by hand — the odds no longer decide which forecast bucket this deal sits in.'
-        : 'Auto: commit at 75%+ odds, best case at 50%+, pipeline below. Pick one to overrule the odds.',
-      ...Object.fromEntries([['Title', 'title'], ['Company', 'companyId'], ['Value', 'value'], ['Prob', 'prob'], ['Close', 'close'], ['Source', 'source'], ['Notes', 'notes']].map(([ui, k]) => [
+      ...Object.fromEntries([['Title', 'title'], ['Company', 'companyId'], ['Value', 'value'], ['Close', 'close'], ['Source', 'source'], ['Notes', 'notes']].map(([ui, k]) => [
         'setDlf' + ui,
         (e) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), [k]: e.target.value }, dlErr: '' }),
       ])),
@@ -46875,22 +46824,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (!String(f.title || '').trim()) return this.setState({ dlErr: 'Give it a title — a board of untitled deals cannot be read.' });
         if (!f.id && !f.companyId) return this.setState({ dlErr: 'Choose who this deal is for.' });
         const money = String(f.value ?? '').trim();
-        const odds = String(f.prob ?? '').trim();
         if (money && !Number.isFinite(Number(money))) return this.setState({ dlErr: 'The value has to be a number.' });
-        if (odds && (!Number.isFinite(Number(odds)) || Number(odds) < 0 || Number(odds) > 100)) return this.setState({ dlErr: 'Odds are a percentage between 0 and 100.' });
         this._saveDeal(f.id, {
           ...(f.id ? {} : { companyId: f.companyId }),
           title: String(f.title).trim(),
           // Locked once a quotation exists: sending a value would be overwritten on read anyway,
           // and a field that appears to save and then does not is worse than one that is absent.
           ...(f.locked ? {} : { valueMinor: money ? Math.round(Number(money) * 100) : null }),
-          probabilityBp: odds ? Math.round(Number(odds) * 100) : null,
           expectedCloseDate: f.close || null, source: f.source || null, notes: f.notes || null,
           // null, not '', when nothing is chosen: the column is nullable and '' is not an id.
           productId: f.productId || null,
-          // '' round-trips as "derive from the odds" — the server maps anything unknown to null.
-          forecastCategory: f.forecast || '',
-          competitor: f.competitor || '',
+          // NOT SENT: probabilityBp, forecastCategory and competitor. Their fields are gone from
+          // this form and their columns are not — the update route leaves a field alone when its
+          // key is absent, so a deal that already carries odds or a competitor keeps them. Sending
+          // them as null would have quietly wiped both on the next edit of a close date.
         });
       },
 
