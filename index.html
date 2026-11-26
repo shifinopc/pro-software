@@ -778,6 +778,14 @@
      above it, and a menu narrower than its input reads as a different control. */
   .qc-dlg input[type=number]{-moz-appearance:textfield}
   .qc-dlg input[type=number]::-webkit-outer-spin-button,.qc-dlg input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  /* NO SPINNERS ON MONEY. The stepper arrows on a number field are for a quantity somebody nudges;
+     on a price they are a 1.00 step through a figure that was typed exactly, and they eat the right
+     edge of a narrow box — which is where the digits are. The field stays type=number, so the
+     numeric keypad and the browser's own validation are unaffected. Scoped to the invoice builder
+     rather than applied globally: a stepper is right on the fields that really are counters. */
+  .ci-dlg input[type=number]::-webkit-outer-spin-button,
+  .ci-dlg input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .ci-dlg input[type=number]{-moz-appearance:textfield;appearance:textfield;}
   .qc-dd{position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;background:#fff;border:1px solid #E4E0EC;border-radius:12px;box-shadow:0 10px 28px rgba(38,7,77,.16);padding:5px;max-height:190px;overflow-y:auto;overscroll-behavior:contain;}
   /* A pipeline column scrolls its OWN cards. Everything else in this app hides its scrollbar, but a
      column that can hold thirty deals must say so — with nothing visible, the deals below the fold
@@ -12332,7 +12340,7 @@
 
   <sc-if value="{{ showCreateInv }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeCreateInv }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:860px; max-height:92vh; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; display:flex; flex-direction:column; overflow:hidden;">
+      <div onClick="{{ stopClick }}" class="ci-dlg" style="background:#fff; border-radius:20px; width:100%; max-width:860px; max-height:92vh; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; display:flex; flex-direction:column; overflow:hidden;">
         <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 17px; border-bottom:1px solid #F0EDF6;"><div><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ciHeadTitle }}</span><div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ ciHeadNo }} · the document is on the row, under Open</div></div><div onClick="{{ closeCreateInv }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
         <div style="display:flex; flex:1; min-height:0;">
           <!-- ONE PANE, TWO COLUMNS — the shape the quotation builder settled on.
