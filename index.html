@@ -49119,27 +49119,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
            * change again: move the formatting into the quotation payload the list already returns,
            * and delete this block.
            */
-          // ANY kind, not the three that were named here. A stage billing a kind this code had
-          // not heard of fell through to the whole quotation — the one failure where the client is
-          // billed far too much and the schedule still foots up.
-          // NET OF WHAT CAME OFF THE LINE, which is what the server bills. planStages works off
-          // lineMinor(), so a schedule printed from the list prices promised the client stages that
-          // added up to 66,500 on a quotation totalling 66,000 — and the invoices raised against it
-          // would have asked for the lower figure. A printed schedule that disagrees with the
-          // invoices raised from it is worse than no schedule at all.
-          const _kindNet9 = (want9) => (Array.isArray(raw0 && raw0.items) ? raw0.items : [])
-            .reduce((a9, it9) => (String(it9.kind || 'prof') === want9
-              ? a9 + _itemNet9(it9) / 100 : a9), 0);
-          const _termBase9 = (b9) => (!b9 || b9 === 'total') ? net9 : _kindNet9(b9);
+          /**
+           * THE SCHEDULE PRINTS THE TERMS, NOT THE MONEY.
+           *
+           * Each stage used to end in a figure — "50% of Professional Fees · SAR 496.24" — computed
+           * here, in the browser, from the lines. That figure was wrong twice this week: once
+           * because it read a fee kind this code had not heard of as the whole quotation, and once
+           * because it used list prices on a discounted quotation, promising stages that added up
+           * to 66,500 on a quotation totalling 66,000. Both were found only by reading the page.
+           *
+           * A PERCENTAGE OF A NAMED FEE CANNOT DRIFT. It says exactly what was agreed, it survives
+           * the price being corrected, and it is the sentence the firm's own terms have always
+           * used. The money belongs on the invoice that bills the stage — the document that
+           * actually asks for it, computed by planStages with 22 assertions behind it. Two places
+           * computing one figure is how they come to disagree.
+           */
           const _termName9 = { prof: 'Professional Fees', gov: 'Government Fees', foreign: 'Foreign Company Fees' };
           const terms9 = (Array.isArray(raw0 && raw0.milestones) ? raw0.milestones : []).map(m9 => {
             const pct9 = Number(m9 && m9.pct) || 0;
             const b9 = String((m9 && m9.basis) || 'total');
             const wording9 = String((m9 && m9.label) || '').trim();
-            const head9 = (pct9 ? pct9 + '% of ' + (_termName9[b9] || (b9 === 'total' ? 'the total' : b9)) : '')
+            return (pct9 ? pct9 + '% of ' + (_termName9[b9] || (b9 === 'total' ? 'the total' : b9)) : '')
               + (wording9 ? (pct9 ? ' \u2014 ' : '') + wording9 : '');
-            return head9 + '  \u00b7  ' + fmtCur(Math.round(_termBase9(b9) * pct9) / 100);
-          });
+          }).filter(Boolean);
           // The lines, their discounts and their tax, from the one builder the invoice also uses.
           const L9 = _docLines9(raw0 && raw0.items, Math.round(rate9 * 100), fmtCur);
           return {
