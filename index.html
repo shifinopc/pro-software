@@ -14946,6 +14946,29 @@
 
        Only the fields this code knows the home of get a box — see _FIX_FIELDS. Anything else says
        where to go, because a box that writes to the wrong record is worse than no box. -->
+  <!-- ══ The deal has moved on ════════════════════════════════════════════════════════════
+       Raised only after a REVISION is sent: see _nudgeStageOnRevision for why it asks rather
+       than moving, and why it offers the next open stage rather than one called "Negotiation". -->
+  <sc-if value="{{ dnOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ dnClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:130; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:420px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
+        <div class="fm-head">
+          <div style="min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ dnHead }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:2px;">Move the deal on the board?</div>
+          </div>
+          <div onClick="{{ dnClose }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+        </div>
+        <div class="fm-body">
+          <div style="font-size:11.5px; color:#4B4757; line-height:1.6;">{{ dnBody }}</div>
+        </div>
+        <div class="fm-foot" style="justify-content:flex-end;">
+          <span onClick="{{ dnClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Not now</span>
+          <button onClick="{{ dnMove }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 13px; border-radius:99px; cursor:pointer;" style-hover="background:#6900D6;">{{ dnMoveLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
   <sc-if value="{{ fixOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ fixClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" class="fm-modal" style="background:#fff; border-radius:20px; width:100%; max-width:520px; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both;">
@@ -20784,6 +20807,56 @@ class Component extends DCLogic {
       if (this._loadPipeline) this._loadPipeline();
       return true;
     }).catch(() => { this.setState({ dmErr: 'Server unreachable — nothing changed' }); return false; });
+    /**
+     * A SECOND OFFER IS A NEGOTIATION — OFFERED, NOT ASSUMED.
+     *
+     * Sending a REVISION is the one moment in the quotation's life that means the deal has moved
+     * on: the client who was holding one price is now holding a different one. Pressing Revise
+     * does not mean it (the draft may be abandoned), approving does not mean it (nothing has left
+     * the building), and accepting means something else entirely.
+     *
+     * WHY IT ASKS INSTEAD OF MOVING. Half of real revisions are about payment terms or scope
+     * rather than price, and the stage is somebody's read of the deal, not a fact the documents
+     * can settle. More practically, the move has to go through /opportunities/:id/move — that is
+     * what runs the stage's CHECKLIST GATE, writes the transition history and swaps the follow-up
+     * chase. A direct stage write from here would land a deal in Negotiation with no budget and no
+     * named decision maker on it, and nothing would record who moved it or why.
+     *
+     * THE NEXT OPEN STAGE, not a stage called "Negotiation". Stage names are the firm's to change
+     * and every country has its own pipeline; matching on a name would quietly stop working the
+     * day somebody renames a column.
+     */
+    this._nudgeStageOnRevision = (q9, fetched9) => {
+      // A first offer is not a negotiation, however much haggling preceded it.
+      if (!q9 || !q9.revisesId) return;
+      // THE DEALS ARE FETCHED, NOT ASSUMED. `dealsData` is populated by the CRM screens; the
+      // quotations list does not load it, so reading it here found nothing and the prompt never
+      // appeared — silently, because a missing deal is also the legitimate reason not to ask.
+      // One request, only when a revision is actually sent, beats every screen carrying a pipeline
+      // it does not show.
+      // `fetched9` makes the retry ONE-SHOT. Without it, a firm with no deals at all answers the
+      // fetch with [] for ever and this calls itself until the tab dies.
+      if (!Array.isArray(this.state.dealsData) && !fetched9) {
+        if (this._opReload) this._opReload('opportunities', 'dealsData', () => this._nudgeStageOnRevision(q9, true));
+        return;
+      }
+      const deal9 = (Array.isArray(this.state.dealsData) ? this.state.dealsData : [])
+        .find(d9 => d9 && d9.quotationId === q9.id);
+      if (!deal9) return;
+      const stages9 = (Array.isArray(this.state.stagesData) ? this.state.stagesData : [])
+        .filter(s9 => s9 && !s9.retired);
+      const cur9 = stages9.find(s9 => s9.id === deal9.stageId);
+      // A won or lost deal is not negotiating, and neither is one whose column has no successor.
+      if (!cur9 || cur9.isWon || cur9.isLost) return;
+      const next9 = stages9
+        .filter(s9 => !s9.isWon && !s9.isLost && s9.country === cur9.country && s9.sort > cur9.sort)
+        .sort((a9, b9) => a9.sort - b9.sort)[0];
+      if (!next9) return;
+      this.setState({
+        dnQuote: q9.number || '', dnDealId: deal9.id, dnDealTitle: deal9.title || 'this deal',
+        dnFrom: cur9.name, dnToId: next9.id, dnTo: next9.name,
+      });
+    };
     /**
      * WHAT EACH MISSING FACT CAN BE FILLED IN AS, AND WHERE THE ANSWER IS WRITTEN.
      *
@@ -48768,6 +48841,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           this._opPut('quotations', realId, { status: 'sent' }, () => {
             this.toast(id + ' sent to ' + (raw0 && raw0.clientName ? raw0.clientName : 'the client') + ' — now visible in their portal');
             this._opReload('quotations', 'quotationsData');
+            // Only ever after the send actually landed: offering to advance a deal on the strength
+            // of a quotation that failed to send is how the board starts disagreeing with the file.
+            this._nudgeStageOnRevision && this._nudgeStageOnRevision(raw0);
           });
         },
         // A NEW OFFER, not an edit. The client is holding the PDF of this number — changing the
@@ -49993,6 +50069,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         }
         _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
+      /**
+       * THE PROMPT ITSELF. State only — _nudgeStageOnRevision decides whether it opens, and
+       * _moveDeal does the moving, including answering a checklist refusal with the form.
+       */
+      ...(() => {
+        const close9 = () => this.setState({ dnDealId: null, dnQuote: '', dnDealTitle: '', dnFrom: '', dnToId: '', dnTo: '' });
+        return {
+          dnOpen: !!this.state.dnDealId,
+          dnHead: (this.state.dnQuote || 'The revision') + ' is with the client',
+          dnBody: '“' + (this.state.dnDealTitle || 'this deal') + '” is in ' + (this.state.dnFrom || '—')
+            + '. They were holding one price and now they are holding another, which usually means the deal has moved on.',
+          dnMoveLabel: 'Move to ' + (this.state.dnTo || 'the next stage'),
+          dnClose: close9,
+          dnMove: () => {
+            const id9 = this.state.dnDealId, to9 = this.state.dnToId;
+            close9();
+            // Through the real move route, so the gate, the history and the chase swap all apply.
+            // A refusal opens the fill-in dialog from inside _moveDeal; nothing more to do here.
+            if (id9 && to9 && this._moveDeal) this._moveDeal(id9, to9);
+          },
+        };
+      })(),
       qcAddColor: '#7C00FF',
       qcAddCursor: 'pointer',
       addQcLineHint: 'Add another line',
