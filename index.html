@@ -14919,7 +14919,12 @@
         </div>
         <div class="fm-foot" style="justify-content:space-between; align-items:center;">
           <span onClick="{{ fixClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#F3EFFA;">Not now</span>
-          <span onClick="{{ fixSave }}" style="font-size:12px; font-weight:700; color:#fff; background:{{ fixSaveBg }}; padding:10px 17px; border-radius:99px; cursor:{{ fixSaveCursor }};">{{ fixSaveLabel }}</span>
+          <sc-if value="{{ fixCanSave }}" hint-placeholder-val="{{ true }}">
+            <span onClick="{{ fixSave }}" style="font-size:12px; font-weight:700; color:#fff; background:{{ fixSaveBg }}; padding:10px 17px; border-radius:99px; cursor:{{ fixSaveCursor }};">{{ fixSaveLabel }}</span>
+          </sc-if>
+          <sc-if value="{{ fixCannotSave }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:10.5px; color:#8C8899; text-align:right; line-height:1.45; max-width:62%;">Nothing to fill in here — do the above and the card moves on its own.</span>
+          </sc-if>
         </div>
       </div>
     </div>
@@ -45437,6 +45442,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           fixErr: this.state.fixErr || '',
           fixErrShow: !!this.state.fixErr,
           fixClose: () => this.setState({ fixMissing: null, fixErr: '', fixSaving: false }),
+          // WHETHER THERE IS ANYTHING TO SAVE AT ALL.
+          //
+          // A blocker can be an ACTION (go and compose the quotation) or a FIELD this form cannot
+          // answer (a document somebody has to file). Neither puts a box on the dialog, so when
+          // every row is one of those, "Save and move" would save nothing, retry the move, and be
+          // refused again by the same server rule that opened this dialog. A button that cannot
+          // do what it says is worse than no button.
+          fixCanSave: ((_fx9 && _fx9.blockers) || []).some(b9 => !this._FIX_ACTIONS[b9.field] && !!this._FIX_FIELDS[b9.field]),
+          fixCannotSave: !((_fx9 && _fx9.blockers) || []).some(b9 => !this._FIX_ACTIONS[b9.field] && !!this._FIX_FIELDS[b9.field]),
           fixSave: () => this._saveFixMissing(),
           fixSaveLabel: _fxSaving9 ? 'Saving…' : 'Save and move',
           fixSaveBg: _fxSaving9 ? '#C9A2FF' : '#7C00FF',
