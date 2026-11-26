@@ -40841,7 +40841,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         wdDelegateStep: selStep.title + (selStep.related ? ' · ' + selStep.related : ''),
         wdDelegatedTo: this.state.wdDelegatedTo || false,
         toggleDelegate: () => this.setState({ wdDelegate: !this.state.wdDelegate }),
-        wdDelegateOptions: (realStaffNames || []).map(n => ({
+        wdDelegateOptions: (realStaffNames || []).filter(n => n !== selStep.assigneeName).map(n => ({
           name: n, initials: n.slice(0, 2).toUpperCase(),
           pick: () => {
             this.setState({ wdDelegatedTo: n, wdDelegate: false });
@@ -40850,11 +40850,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               method: 'POST',
               headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
               body: JSON.stringify({ assignee: n }),
-            }).then(r9 => {
-              if (!r9.ok) return this.toast('Could not hand this step over', 'warn');
-              this.toast(selStep.title + ' → ' + n);
-              this._reloadMyWork && this._reloadMyWork();
-            }).catch(() => this.toast('Server unreachable — the step was NOT handed over', 'warn'));
+            })
+              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+              .then(({ ok, j9 }) => {
+                /**
+                 * THE SERVER'S OWN REASON, not a shrug.
+                 *
+                 * The reassign route refuses anything but an admin, a claim for yourself, or a team
+                 * lead handing within their team — and says exactly that in its 403. This handler
+                 * threw the body away and toasted "Could not hand this step over", so a refusal was
+                 * indistinguishable from a bug: the officer picked a name, the step stayed where it
+                 * was, and nothing on screen said the rule existed. The task half of this drawer has
+                 * always shown the message; the step half did not.
+                 */
+                if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 200)) || 'Could not hand this step over', 'warn');
+                this.toast(selStep.title + ' → ' + n);
+                this._reloadMyWork && this._reloadMyWork();
+              })
+              .catch(() => this.toast('Server unreachable — the step was NOT handed over', 'warn'));
           },
         })),
         wdCanCompleteStep: selStep.kind !== 'approval',
