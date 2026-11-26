@@ -139,7 +139,14 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   // either buys one or incorporates one, and the Business Setup case opens a lane for whichever it
   // is. Quoted alongside the setup — as a quotation naming both quite reasonably does — it was
   // breaking out as its own unassigned row beside the case that already contains it.
-  const CONTAINS: Record<string, string[]> = { "business setup": ["company acquisition", "company formation"] };
+  // ONE PROCESS, TWO NAMES FOR THE SALE. The firm runs a single Business Setup workflow; what the
+  // sales side calls it is "Company Formation", and either can be the thing quoted. So both are
+  // containers for the acquisition lane, and "Business Setup" still contains a formation line
+  // quoted beside it — a quotation naming the setup and its parts quite reasonably names both.
+  const CONTAINS: Record<string, string[]> = {
+    "business setup": ["company acquisition", "company formation"],
+    "company formation": ["company acquisition", "business setup"],
+  };
   const lineServices = lines.map(l => matchService(l.name, services)).filter(Boolean) as { name: string }[];
   const absorbedBy = (svcName: string) => lineServices.find(other =>
     (CONTAINS[other.name.trim().toLowerCase()] ?? []).includes(svcName.trim().toLowerCase()))?.name ?? null;
