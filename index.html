@@ -40996,12 +40996,25 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // can act on it whatever role they hold.
         wdDelegateOpen: !!this.state.wdDelegate,
         wdDelegateStep: selStep.title + (selStep.related ? ' · ' + selStep.related : ''),
-        wdDelegatedTo: this.state.wdDelegatedTo || false,
+        /**
+         * THE BANNER BELONGS TO THE RECORD IT HAPPENED ON, and only after it happened.
+         *
+         * `wdDelegatedTo` was a bare name in session state, set the moment a name was picked. Two
+         * consequences, both of which said something untrue:
+         *   • It was not scoped to anything, so "Reassigned to Iqbal" went on greeting you in EVERY
+         *     step drawer you opened afterwards — including steps that had nothing to do with it.
+         *   • It was set BEFORE the server answered, so a refusal still painted a green
+         *     "✓ Reassigned ... logged to activity". The one case where the message matters most is
+         *     the one where it was a lie, and it is why a 403 read as a broken button.
+         * Keyed to the record now, and written only on a 2xx.
+         */
+        wdDelegatedTo: (this.state.wdDelegatedTo && this.state.wdDelegatedTo.id === selStep.id)
+          ? this.state.wdDelegatedTo.to : false,
         toggleDelegate: () => this.setState({ wdDelegate: !this.state.wdDelegate }),
         wdDelegateOptions: (realStaffNames || []).filter(n => n !== selStep.assigneeName).map(n => ({
           name: n, initials: n.slice(0, 2).toUpperCase(),
           pick: () => {
-            this.setState({ wdDelegatedTo: n, wdDelegate: false });
+            this.setState({ wdDelegate: false });
             const tok9 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/reassign', {
               method: 'POST',
@@ -41021,6 +41034,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                  * always shown the message; the step half did not.
                  */
                 if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 200)) || 'Could not hand this step over', 'warn');
+                this.setState({ wdDelegatedTo: { id: selStep.id, to: n } });
                 this.toast(selStep.title + ' → ' + n);
                 this._reloadMyWork && this._reloadMyWork();
               })
@@ -41610,7 +41624,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const live8 = run8 && Array.isArray(run8.tasks) ? run8.tasks.find(t8 => t8.status === 'active') : null;
           return (live8 && live8.title) || selPlain.title || '';
         })(),
-        wdDelegatedTo: this.state.wdDelegatedTo || false,
+        wdDelegatedTo: (this.state.wdDelegatedTo && this.state.wdDelegatedTo.id === selPlain._id)
+          ? this.state.wdDelegatedTo.to : false,
         // Opened as a modal of its own rather than a panel at the foot of the sheet: inline, it
         // rendered below the fold behind a sticky action bar, so the button looked like it had done
         // nothing. A modal needs no scrolling into view and cannot be covered by the bar.
@@ -41624,7 +41639,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // the task went to the new owner and the work stayed where it was. The route moves both,
           // because only the server can see every step regardless of whose queue it sits in.
           pick: () => {
-            this.setState({ wdDelegatedTo: n, wdDelegate: false });
+            this.setState({ wdDelegate: false });
             if (!selPlain._id) return;
             const tok9 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/tasks/' + selPlain._id + '/delegate', {
@@ -41636,6 +41651,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               .then(({ ok, j9 }) => {
                 if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 180)) || 'Could not hand this task over', 'warn');
                 const moved9 = Number(j9 && j9.stepsMoved) || 0;
+                this.setState({ wdDelegatedTo: { id: selPlain._id, to: n } });
                 this.toast('Handed to ' + n + (moved9 ? ' — with ' + moved9 + ' open step' + (moved9 === 1 ? '' : 's') : ''));
                 this._reloadTasks();
                 this._reloadMyWork && this._reloadMyWork();
