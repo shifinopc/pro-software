@@ -120,6 +120,7 @@ import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, in
 import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
 import { planStages, figuresForLines, lineMinor } from "./stages.js";
+import { renameProductEverywhere } from "./productname.js";
 import { clientMargins } from "./profitability.js";
 import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
@@ -2180,6 +2181,12 @@ const PICKLIST_USAGE: Record<string, Array<["opportunity" | "company" | "interac
   // rename migration below, which the flat lists deliberately do not get.
   courierStatus: [["courierShipment", "status"]],
   appointmentStatus: [["appointment", "status"]],
+  // WHAT THE FIRM SELLS, which lives on the CLIENT as free text written by the lead form's Product
+  // field. Absent until now, and not harmlessly: the removal path below iterates this map, so
+  // taking a product off the list threw on `undefined` and came back "Could not save the list" —
+  // the list could be added to and renamed but never trimmed. It also meant `used` was never
+  // counted, so the retire-don't-delete rule the other lists get did not apply to this one.
+  product: [["company", "service"]],
 };
 
 for (const [path, model] of Object.entries(PICKLISTS)) {
@@ -2221,8 +2228,13 @@ for (const [path, model] of Object.entries(PICKLISTS)) {
     for (const row of existing) {
       if (keep.has(row.id)) continue;
       let used = 0;
-      for (const [table, field] of PICKLIST_USAGE[model]) {
-        used += await (prisma as any)[table].count({ where: { [field]: row.name } });
+      for (const [table, field] of PICKLIST_USAGE[model] ?? []) {
+        // `Company.service` holds a LIST — "Auditing, Business Setup" — so a product is in use when
+        // it is named ANYWHERE in that string, not only when it is the whole of it. An exact match
+        // would have hard-deleted a product that half the clients buy alongside something else.
+        used += await (prisma as any)[table].count({
+          where: { [field]: model === "product" ? { contains: row.name } : row.name },
+        });
       }
       if (used > 0) await (prisma as any)[model].update({ where: { id: row.id }, data: { retired: true } });
       else await (prisma as any)[model].delete({ where: { id: row.id } });
@@ -2258,6 +2270,23 @@ for (const [path, model] of Object.entries(PICKLISTS)) {
         // same state — leaving the old string behind would strand every one of those records off
         // the ladder, showing as the first rung whatever they had actually reached. Flat lists get
         // no such migration on purpose: renaming a lead source there must not rewrite history.
+        /**
+         * A RENAMED PRODUCT CARRIES TO THE CLIENTS WHO NAME IT.
+         *
+         * The flat lists deliberately get no migration — renaming a lead source must not rewrite
+         * where leads actually came from, because the old wording is the historical fact. A PRODUCT
+         * is not that: it is the thing being sold, and renaming it renames the thing. Measured when
+         * "Company Formation" became "Business Setup": the row changed, and 55 clients, the Clients
+         * list, the Leads list and the product filter all went on saying the old name.
+         *
+         * Its own function because Company.service is a comma-separated LIST, which the updateMany
+         * below cannot express: the token has to be replaced while every other entry survives
+         * untouched and in order.
+         */
+        if (model === "product" && wasCalled && wasCalled !== name) {
+          migrated += await renameProductEverywhere(wasCalled, name)
+            .catch(e => { console.error("[products] renamed but could not carry it to the clients:", (e as any)?.message ?? e); return 0; });
+        }
         if (LADDERS[model] && wasCalled && wasCalled !== name) {
           // Everything that MEANS this rung moves, not only the rows spelling it the current way.
           // A record written by an older version still says "in_transit"; if the rename only
