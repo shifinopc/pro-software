@@ -21126,6 +21126,63 @@ class Component extends DCLogic {
      * and every country has its own pipeline; matching on a name would quietly stop working the
      * day somebody renames a column.
      */
+    /**
+     * OFFER THE NEXT STAGE THE MOMENT ITS GATE COMES CLEAR.
+     *
+     * The gate only ever says NO. A deal whose last missing fact has just been filled in sits in
+     * the same column it was stuck in, and nothing tells the person who filled it that the thing
+     * they were blocked on is now done — so the board goes on reporting an Enquiry that qualified
+     * itself twenty minutes ago.
+     *
+     * IT ASKS, IT DOES NOT MOVE. A stage is a claim a person makes about where a deal stands, and
+     * advancing on the presence of a phone number would have a lead report itself as Qualified when
+     * nobody has qualified anything. Same reasoning as the revision nudge, and the same prompt — one
+     * dialog, two doors into it, rather than a second thing to keep in step.
+     *
+     * The server decides whether the gate is clear: GET /checklist already returns `blocked`, which
+     * is the same statusFor() the move route refuses on. Asking the client to work it out from facts
+     * it holds a copy of is how a prompt comes to disagree with the refusal that follows it.
+     */
+    this._nudgeStageWhenGateClears = (companyId9, fetched9) => {
+      if (!companyId9) return;
+      // Same one-shot retry as the revision nudge: a firm with no deals answers [] for ever, and an
+      // unconditional retry would call itself until the tab died.
+      if (!Array.isArray(this.state.dealsData) && !fetched9) {
+        if (this._opReload) this._opReload('opportunities', 'dealsData', () => this._nudgeStageWhenGateClears(companyId9, true));
+        return;
+      }
+      const stages9 = (Array.isArray(this.state.stagesData) ? this.state.stagesData : []).filter(s9 => s9 && !s9.retired);
+      const deals9 = (Array.isArray(this.state.dealsData) ? this.state.dealsData : [])
+        .filter(d9 => d9 && d9.companyId === companyId9);
+      if (!deals9.length || !stages9.length) return;
+      const tok9 = localStorage.getItem('stimespro:token');
+      // The FIRST open deal that is now clear and has somewhere to go. One prompt: a client with
+      // three deals that all came unstuck at once must not raise three dialogs on top of each other.
+      const ask9 = (i9) => {
+        if (i9 >= deals9.length) return;
+        const d9 = deals9[i9];
+        const cur9 = stages9.find(x9 => x9.id === d9.stageId);
+        const next9 = cur9 && !cur9.isWon && !cur9.isLost
+          ? stages9.filter(x9 => !x9.isWon && !x9.isLost && x9.country === cur9.country && x9.sort > cur9.sort)
+              .sort((a9, b9) => a9.sort - b9.sort)[0]
+          : null;
+        if (!next9) return ask9(i9 + 1);
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/opportunities/' + d9.id + '/checklist',
+          { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+          .then(r9 => (r9.ok ? r9.json() : null))
+          .then(j9 => {
+            // A stage that asks for nothing is not a gate that just came clear — it never gated.
+            // Prompting on it would fire on every contact saved against every deal for ever.
+            if (!j9 || j9.blocked || !Number(j9.requiredTotal)) return ask9(i9 + 1);
+            this.setState({
+              dnQuote: '', dnDealId: d9.id, dnDealTitle: d9.title || 'this deal',
+              dnFrom: cur9.name, dnToId: next9.id, dnTo: next9.name,
+            });
+          })
+          .catch(() => {});
+      };
+      ask9(0);
+    };
     this._nudgeStageOnRevision = (q9, fetched9) => {
       // A first offer is not a negotiation, however much haggling preceded it.
       if (!q9 || !q9.revisesId) return;
@@ -21485,6 +21542,11 @@ class Component extends DCLogic {
           this.toast(contactId ? 'Contact updated' : 'Contact added');
           this._crmReload();
           this.setState({ ctEdit: null, ctErr: '' });
+          // A contact's phone or email is the whole of the Enquiry gate, so saving one is the
+          // commonest moment a deal stops being blocked — and the person who just unblocked it is
+          // looking at a Contacts tab, nowhere near the board. Asked here rather than inferred on
+          // the board, which may not be open for hours.
+          this._nudgeStageWhenGateClears && this._nudgeStageWhenGateClears(companyId);
           return true;
         })
         .catch(() => { this.toast('Server unreachable — nothing changed', 'error'); return false; });
@@ -21494,6 +21556,10 @@ class Component extends DCLogic {
         if (!ok) return this.toast((j && j.error) || 'Could not change the main contact', 'error');
         this.toast((name || 'That person') + ' is now the main contact');
         this._crmReload();
+        // Promoting somebody to main contact can satisfy the gate on its own: contactReach reads
+        // the PRIMARY contact before it falls back to any other, so a reachable person moving into
+        // that slot changes the answer without any field being edited.
+        this._nudgeStageWhenGateClears && this._nudgeStageWhenGateClears(this.state.cdCompanyId || (this.state.ctEdit || {}).companyId);
       })
       .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
     this._removeContact = (id, name) => this._crmFetch('/api/contacts/' + id, { method: 'DELETE' })
