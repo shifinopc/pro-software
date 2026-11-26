@@ -3685,6 +3685,27 @@ function normalizeRows(raw: unknown): any[] {
 export async function mayHandOver(auth: any, targetId: string, currentAssigneeId: string | null | undefined): Promise<boolean> {
   if (auth?.role === "admin" || auth?.role === "super_admin") return true;
   if (!targetId || targetId === auth?.sub) return false;
+
+  /**
+   * GIVING AWAY WORK YOU ARE HOLDING YOURSELF.
+   *
+   * The rule here was admin, or a team lead handing within their team. On a PRO desk that left the
+   * commonest hand-off of all impossible: an officer who has picked up a step and cannot finish it
+   * — wrong centre, wrong day, off sick, somebody else is already at that ministry — passing it to
+   * another officer. With no teams configured it was not merely narrow but total: every non-admin
+   * delegation refused, because the team branch can never be true without a team.
+   *
+   * What the old rule was actually protecting is still protected. The danger in delegation is
+   * moving work ONTO or OFF somebody else — dumping a step on a colleague, or pulling one off them
+   * — and neither is this. You may only give away a step that is yours right now, and only to
+   * active staff, because the name resolves through resolveStaffByName, which refuses anybody
+   * disabled, portal-side, or ambiguous. Taking a step off a third party still needs an admin or
+   * their own lead, and claiming unassigned role work is its own separate rule.
+   *
+   * The audit row names you either way, so a step handed on is as traceable as one an admin moved.
+   */
+  if (currentAssigneeId && currentAssigneeId === auth?.sub) return true;
+
   const { visibleUserIds } = await import("./visibility.js");
   const vis = await visibleUserIds(auth);
   return vis.scope === "team"
@@ -3729,7 +3750,7 @@ R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
     }
 
     if (!isAdmin && !claimingSelf && !leadDelegating) {
-      return res.status(403).json({ error: "You can claim unassigned work for your own role, or hand a step to one of your own team — anything wider needs an admin" });
+      return res.status(403).json({ error: "You can claim unassigned work for your own role, hand on a step you are holding yourself, or hand one to your own team — taking a step off somebody else needs an admin" });
     }
 
     // A claim keeps assigneeRole so the step still reads as role-owned work; a delegation clears it,
