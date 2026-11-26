@@ -2930,10 +2930,68 @@ R.get("/tasks/:id/money", requireAuth, requireStaff, async (req, res) => {
   // and comparing it against a total that carries halalas is how an invoice became unsettleable.
   const billedMinor = invoices.reduce((n, i) => n + (i.totalMinor ?? i.amount * 100), 0);
   const receivedMinor = payments.reduce((n, p) => n + (p.amountMinor ?? p.amount * 100), 0);
+
+  /**
+   * THE BILL THIS GATE IS ACTUALLY ABOUT.
+   *
+   * Everything above is the client's ACCOUNT: twenty invoices, twenty receipts, two totals. For
+   * "approve once the 50% advance is in" that is the wrong question answered thoroughly — a client
+   * with four other invoices running shows a healthy-looking "received" while the advance this gate
+   * turns on has not arrived at all. The approver then does the subtraction themselves, which is the
+   * arithmetic a gate exists to stop being done from memory.
+   *
+   * So the stage invoice is named and reconciled on its own. No new field anywhere: the case already
+   * carries `quotationId`, delivery put it there, and the stage invoices point back at the quotation
+   * — which is how /stages answers the same question for the quotation drawer.
+   *
+   * The EARLIEST UNSETTLED stage, not the first raised: later stages are billed as the work reaches
+   * them, and the one a gate is waiting on is the one still short. Everything settled means the gate
+   * has nothing to wait for, and says so.
+   */
+  const quotationId = String((inst.variables as any)?.quotationId ?? "");
+  let advance: any = null;
+  if (quotationId) {
+    const staged = await prisma.invoice.findMany({
+      where: { quotationId, NOT: { status: "void" } },
+      orderBy: [{ milestoneIndex: "asc" }, { number: "asc" }],
+      select: { id: true, number: true, status: true, date: true, currency: true, amount: true,
+                totalMinor: true, milestoneIndex: true, milestoneLabel: true },
+    });
+    if (staged.length) {
+      const sums = await prisma.payment.groupBy({
+        by: ["invoiceId"],
+        where: { invoiceId: { in: staged.map(i => i.id) } },
+        _sum: { amountMinor: true, amount: true },
+      });
+      const got = new Map(sums.map(r => [r.invoiceId, (r._sum.amountMinor ?? (r._sum.amount ?? 0) * 100)]));
+      const rows = staged.map(i => {
+        const dueMinor = i.totalMinor ?? Math.round((Number(i.amount) || 0) * 100);
+        const receivedMinor = got.get(i.id) ?? 0;
+        return {
+          id: i.id, number: i.number, status: i.status, date: i.date,
+          label: i.milestoneLabel ?? (i.milestoneIndex == null ? "The whole quotation" : `Stage ${i.milestoneIndex + 1}`),
+          dueMinor, receivedMinor,
+          shortMinor: Math.max(0, dueMinor - receivedMinor),
+          settled: receivedMinor >= dueMinor,
+        };
+      });
+      const waiting = rows.find(r => !r.settled) ?? null;
+      advance = {
+        currency: staged[0].currency ?? "SAR",
+        stages: rows,
+        // What the gate is waiting on, already subtracted. Null when every stage raised so far is
+        // settled, which is a different answer from "short by zero".
+        waitingOn: waiting,
+        allSettled: !waiting,
+      };
+    }
+  }
+
   res.json({
     clientName: inst.clientName ?? null,
     currency: invoices[0]?.currency ?? "SAR",
     invoices, payments, billedMinor, receivedMinor,
+    advance,
   });
 });
 

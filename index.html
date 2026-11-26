@@ -3988,6 +3988,34 @@
                   </div>
                   <sc-if value="{{ a.reviewing }}" hint-placeholder-val="{{ false }}">
                     <div style="border-top:1px solid #F0EDF6; background:#FBFAFE; padding:10px 13px; animation:fadeUp .2s ease both;">
+                      <!-- WHAT THE GATE TURNS ON. A gate held open by memory is not a gate: the
+                           figures are here so the decision is checkable, and the schedule is under
+                           them because "is the advance in" is often asked three stages along. -->
+                      <sc-if value="{{ a.moneyShow }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-bottom:11px; border:1px solid #EDEBF2; background:#fff; border-radius:12px; padding:11px 12px;">
+                          <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">THE MONEY</div>
+                          <div style="font-size:11.5px; font-weight:700; color:#1A1523; margin-top:5px;">{{ a.moneyHead }}</div>
+                          <sc-if value="{{ a.moneySettled }}" hint-placeholder-val="{{ false }}">
+                            <div style="font-size:10.5px; color:#0E9355; margin-top:3px;">Nothing is outstanding on this quotation.</div>
+                          </sc-if>
+                          <div style="font-size:10px; color:#8C8899; margin-top:3px; line-height:1.5;">{{ a.moneyWhat }}</div>
+                          <div style="display:flex; gap:18px; margin-top:9px; flex-wrap:wrap;">
+                            <div><div style="font-size:9px; font-weight:700; color:#A9A6B4;">DUE</div><div style="font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px;">{{ a.moneyDue }}</div></div>
+                            <div><div style="font-size:9px; font-weight:700; color:#A9A6B4;">RECEIVED</div><div style="font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px;">{{ a.moneyGot }}</div></div>
+                            <div><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SHORT</div><div style="font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; color:{{ a.moneyShortFg }};">{{ a.moneyShort }}</div></div>
+                          </div>
+                          <div style="display:flex; flex-direction:column; gap:5px; margin-top:10px; border-top:1px solid #F3F1F7; padding-top:9px;">
+                            <sc-for list="{{ a.moneyStages }}" as="st" hint-placeholder-count="2">
+                              <div style="display:flex; align-items:center; gap:9px; font-size:10.5px;">
+                                <span style="font-weight:700; color:#4B4757; flex-shrink:0;">{{ st.number }}</span>
+                                <span style="flex:1; min-width:0; color:#8C8899; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ st.label }}</span>
+                                <span style="font-variant-numeric:tabular-nums; color:#4B4757;">{{ st.amount }}</span>
+                                <span style="font-size:9px; font-weight:700; color:{{ st.fg }}; background:{{ st.bg }}; padding:3px 9px; border-radius:99px; flex-shrink:0;">{{ st.state }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
                       <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.05em;">DECISION NOTE <span style="color:#8C8899; font-weight:600;">(required to reject)</span></div>
                       <textarea sc-camel-default-value="{{ apNote }}" data-seed-val="{{ apNote }}" onBlur="{{ setApNote }}" placeholder="Add context for this decision…" rows="2" style="width:100%; margin-top:7px; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:11px; font-family:'Inter',sans-serif; background:#fff; resize:vertical;"></textarea>
                       <sc-if value="{{ a.apErrShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; font-weight:600; color:#C0353A; margin-top:6px;">A reason is required to reject.</div></sc-if>
@@ -32450,7 +32478,57 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         slaText, slaColor, hasSla: !!slaText,
         status: st, stBg: chip[0], stColor: chip[1], pending: st === 'Pending',
         reviewing, canEscalate: origin !== 'workflow',
-        openReview: () => this.setState({ apReview: reviewing ? null : id, apNote: '' }),
+        /**
+         * THE MONEY THE GATE TURNS ON, fetched when the panel opens.
+         *
+         * "Approve once the 50% advance is in" was signed with nothing on screen: the approver
+         * checked the bank themselves and remembered which client it was. The figures existed —
+         * /tasks/:id/money has answered this since the gate was built — but only the task drawer
+         * ever asked, and approvals are decided from THIS screen.
+         *
+         * On open only, and only for a workflow step (the other origins have no stage invoice), so
+         * the list itself costs no requests.
+         */
+        openReview: () => {
+          const opening9 = !reviewing;
+          this.setState({ apReview: opening9 ? id : null, apNote: '' });
+          if (!opening9 || origin !== 'workflow' || !realId) return;
+          const tok9 = localStorage.getItem('stimespro:token');
+          fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + realId + '/money',
+                { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+            .then(r9 => (r9.ok ? r9.json() : null))
+            .then(v9 => { if (v9) this.setState({ apMoney: { ...(this.state.apMoney || {}), [id]: v9 } }); })
+            .catch(() => {});
+        },
+        ...(() => {
+          const m9 = (this.state.apMoney || {})[id] || null;
+          const adv9 = m9 && m9.advance ? m9.advance : null;
+          const w9 = adv9 ? adv9.waitingOn : null;
+          const cur9 = (adv9 && adv9.currency) || (m9 && m9.currency) || 'SAR';
+          const money9 = (minor9) => cur9 + ' ' + (minor9 / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return {
+            // Nothing to show until it has arrived, and nothing to show for an approval with no
+            // quotation behind it — an empty panel reads as "no money due", which is a lie.
+            moneyShow: !!adv9,
+            moneySettled: !!(adv9 && adv9.allSettled),
+            moneyHead: adv9 ? (adv9.allSettled ? 'Every stage billed so far is settled' : 'Waiting on ' + (w9 ? w9.number : 'a payment')) : '',
+            moneyWhat: w9 ? w9.label : '',
+            moneyDue: w9 ? money9(w9.dueMinor) : '',
+            moneyGot: w9 ? money9(w9.receivedMinor) : '',
+            moneyShort: w9 ? money9(w9.shortMinor) : '',
+            moneyShortFg: w9 && w9.shortMinor > 0 ? '#C0353A' : '#0E9355',
+            // The whole schedule underneath, because "is the advance in" is often asked of a
+            // quotation that is three stages along.
+            moneyStages: adv9 ? adv9.stages.map(st9 => ({
+              number: st9.number,
+              label: st9.label,
+              amount: money9(st9.dueMinor),
+              state: st9.settled ? 'settled' : (st9.receivedMinor > 0 ? 'part paid · short ' + money9(st9.shortMinor) : 'unpaid'),
+              fg: st9.settled ? '#0E9355' : (st9.receivedMinor > 0 ? '#B8860B' : '#8C8899'),
+              bg: st9.settled ? '#E7F8EF' : (st9.receivedMinor > 0 ? '#FEF4E2' : '#F3F1F7'),
+            })) : [],
+          };
+        })(),
         approve: () => setStatus('Approved'),
         reject: () => { if (!apNote.trim()) return this.setState({ apErr: id }); setStatus('Rejected'); },
         escalate: () => setStatus('Escalated'),
