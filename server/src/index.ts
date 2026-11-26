@@ -27,6 +27,7 @@ import { opsReport, opsPeriodsWithActivity } from "./opsreport.js";
 import { setupCheck } from "./setupcheck.js";
 import { salesRules } from "./salesrules.js";
 import { findDuplicates } from "./duplicates.js";
+import { releaseAdvanceGates } from "./advance-gate.js";
 import { nextOwner, nextOwnerFor, rotation, distributeUnowned, assignableOwners, recordAssignment, assignmentHistory } from "./assignment.js";
 import { routeFor } from "./routing.js";
 import { scoreOpenLeads, scoreLead, sourceConversion } from "./leadscore.js";
@@ -7561,7 +7562,18 @@ app.post("/api/payments/record", requireAuth, requireStaff, requireWriteRole, as
       logNotification({ type: "payment", title: `Payment received: ${inv.number}`, message: inv.clientName ?? undefined });
     }
     await logAudit({ action: "payment.record", actorId: (req as any).auth?.sub, target: `${inv.number} (${payment.id})`, detail: `amount=${(amtMinor / 100).toFixed(2)} settled=${settled}${proof ? ` proof=${proof}` : ""}`, ip: clientIp(req) });
-    res.status(201).json({ payment, settled });
+    /**
+     * A GATE WAITING ON THIS MONEY HAS NOTHING LEFT TO ESTABLISH.
+     *
+     * Awaited, so the response can say which steps it opened — the person who keyed the receipt in
+     * is usually the person wondering whether the work can start. It never throws and it only
+     * touches approvals whose own template asked to be settled by money; see advance-gate.ts.
+     */
+    const released = await releaseAdvanceGates(inv.id, payment.number, payment.date);
+    for (const r of released) {
+      logActivity({ type: "task", message: `${r.title} approved automatically — ${inv.number} settled`, user: "Finance (automatic)" });
+    }
+    res.status(201).json({ payment, settled, released });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
