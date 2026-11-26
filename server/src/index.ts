@@ -2029,8 +2029,28 @@ function asAtFor(period?: string): string {
   return end < today ? end : today;
 }
 
+/**
+ * THE CLIENTS A CALLER MAY SEE, or null for "all of them".
+ *
+ * Named for sales because sales was the only scoped role when it was written, and the name was
+ * actively misleading once it was not: it reads as "a sales thing" while it is the single scoping
+ * rule the board, the deals list, contacts, interactions, follow-ups, activities and the CRM
+ * dashboard all share.
+ *
+ * A PRO OFFICER IS SCOPED TOO. They were not, and nothing said so — the role fell through this
+ * first line to `null` and every one of those surfaces showed all 53 deals and all 215 clients to
+ * all six officers. An officer needs their own desk; a lead needs their team's; the firm's own view
+ * belongs to admin. That was already the rule in visibleUserIds and only one role was being held to
+ * it.
+ *
+ * SCOPED ON THE DEAL'S OWNER AS WELL AS THE CLIENT'S. Measured when this changed: 53 of 53 deals
+ * name an owner and only 41 of 215 clients do, so clamping on Company.ownerId alone would have
+ * hidden 174 clients and the deals attached to them from everybody — scoping working perfectly and
+ * answering the wrong question, which is the same failure as a gate nobody can pass. A deal
+ * assigned to you makes its client yours to see, whatever the client record says.
+ */
 async function salesCompanyIds(req: any, on?: string): Promise<string[] | null> {
-  if (req.auth?.role !== "sales") return null;
+  if (!["sales", "pro_officer"].includes(String(req.auth?.role ?? ""))) return null;
   // The caller's own book — or their TEAM's, when they lead one. Without this, a sales lead (who
   // per the firm's model owns no clients themselves) would be clamped to companies they personally
   // own: an empty set, which the report machinery correctly treats as "sees nothing". The lead's
@@ -2042,9 +2062,15 @@ async function salesCompanyIds(req: any, on?: string): Promise<string[] | null> 
   // figures even though the owner filter still counted them. Two scopings of one report disagreeing
   // is worse than either being wrong on its own — the total is short and nothing looks broken.
   const vis = await visibleUserIds(req.auth, on);
-  const owners = vis.ids ?? [req.auth.sub];
-  const mine = await prisma.company.findMany({ where: { ownerId: { in: owners } }, select: { id: true } });
-  return mine.map(c => c.id);
+  // A firm-wide visibility answer means no clamp at all, whatever the role: an admin who also
+  // happened to be a pro_officer must not be narrowed by the branch above.
+  if (vis.ids === null) return null;
+  const owners = vis.ids.length ? vis.ids : [req.auth.sub];
+  const [byClient, byDeal] = await Promise.all([
+    prisma.company.findMany({ where: { ownerId: { in: owners } }, select: { id: true } }),
+    prisma.opportunity.findMany({ where: { ownerId: { in: owners } }, select: { companyId: true } }),
+  ]);
+  return [...new Set([...byClient.map(c => c.id), ...byDeal.map(o => o.companyId)].filter(Boolean))];
 }
 
 app.get("/api/contacts", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
