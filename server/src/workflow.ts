@@ -614,7 +614,12 @@ async function finalizeInstance(inst: any, result: string, nodeId?: string | nul
 
 // One synchronous execution pass. Mutates `inst.variables` (persisted by the caller) and
 // creates WorkflowTasks / logs as side effects. `frontier` = node ids to activate now.
-async function runFrontier(inst: any, g: Graph, frontier: string[]) {
+//
+// EXPORTED for scripts/reenter-at-node.ts. A step inserted into a template BEHIND a running case's
+// frontier is never visited — the engine walks forward one node at a time and does not look back —
+// so putting an in-flight run onto a newly drawn branch means re-entering it at the fork through
+// this same pass, rather than hand-writing the task row the engine would have written.
+export async function runFrontier(inst: any, g: Graph, frontier: string[]) {
   const vars: Record<string, any> = (inst.variables && typeof inst.variables === "object") ? inst.variables : {};
   vars._joins = vars._joins || {}; // parallel-join arrival counters
   const log = (action: string, nodeId?: string, detail?: string) =>

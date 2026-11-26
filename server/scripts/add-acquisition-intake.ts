@@ -23,6 +23,10 @@ const NODE = {
   type: "task",
   label: "Company acquisition — partners and documents",
   config: {
+    // The same clock the steps either side of it run on. Without slaHours the engine derives no due
+    // date, so the step is never due, never breaches and never appears in the SLA Monitor — the
+    // number is not decoration, it is the only thing that puts a step on that screen.
+    slaHours: 72,
     whatToDo: "Collect the partners' details and every document the acquisition needs. Shareholding must add up to 100%.",
     captures: [
       {
