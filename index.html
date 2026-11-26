@@ -4938,7 +4938,7 @@
               <sc-for list="{{ payments }}" as="p" hint-placeholder-count="5">
                 <div style="display:grid; grid-template-columns:118px 104px 1.1fr 1fr 128px 110px 140px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
                   <span style="font-weight:700; font-variant-numeric:tabular-nums; font-size:11px;">{{ p.receiptNo }}</span>
-                  <span style="font-weight:700; color:#7C00FF; font-size:11px;">{{ p.invoiceNo }}</span>
+                  <span onClick="{{ p.openInvoice }}" title="Preview the invoice this settles" style="font-weight:700; color:#7C00FF; font-size:11px; cursor:pointer; width:fit-content;" style-hover="text-decoration:underline;">{{ p.invoiceNo }}</span>
                   <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.date }}</div><sc-if value="{{ p.hasRef }}" hint-placeholder-val="{{ true }}"><div style="font-size:9px; color:#A9A6B4;">{{ p.reference }}</div></sc-if></div>
                   <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.client }}</span></div>
                   <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums; color:#0E9355;">{{ p.amount }}</span></div>
@@ -24386,6 +24386,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           client: cli9,
           initials: String(cli9).split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '—',
           receiptNo: (raw9 && raw9.number) || '—',
+          // The invoice this receipt settles, in the SAME drawer the Invoices screen opens — it
+          // paints the real document from docFor(), so there is no second preview to keep in step.
+          openInvoice: () => {
+            const no9 = raw9 && raw9.invoiceNumber;
+            const have9 = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
+            if (!no9) return this.toast('That is a sample row — record a real payment first', 'error');
+            if (!have9.some(v9 => v9.number === no9)) return this.toast(no9 + ' could not be loaded', 'error');
+            this.setState({ invDetail: no9 });
+          },
           invoiceNo: (raw9 && raw9.invoiceNumber) || '—',
           via: (raw9 && raw9.method) || '—',
           reference: (raw9 && raw9.reference) ? 'ref ' + raw9.reference : '',
@@ -26205,8 +26214,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         idNo: invDetailRow.no, idClient: invDetailRow.client, idDesc: invDetailRow.desc, idAmount: invDetailRow.amount,
         idStatus: invDetailRow.status, idStBg: invDetailRow.stBg, idStColor: invDetailRow.stColor, idDate: invDetailRow.date,
         idPayable: invDetailRow.payable,
-        closeInvDetail: () => { this._goRecord('Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
-        payInvDetail: () => { invDetailRow.pay(); this._goRecord('Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
+        closeInvDetail: () => { this._goRecord(this.state.active || 'Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
+        payInvDetail: () => { invDetailRow.pay(); this._goRecord(this.state.active || 'Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
         // "Download PDF" had NO handler at all — it now runs the same print pipeline as the row's
         // Print button (choose "Save as PDF" as the destination in the dialog).
         idDownloadPdf: () => invDetailRow.print(),
