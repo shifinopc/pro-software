@@ -5867,8 +5867,37 @@ app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRo
  * professional fees do not carry the same tax, and splitting a blended total would give both the
  * average.
  */
-async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opts: { date?: string } = {}) {
+async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opts: { date?: string; isLast?: boolean } = {}) {
   const figures = await figuresForLines(stage.lines, Number(q.vatRateBp ?? 0) || 0);
+  /**
+   * THE LAST STAGE TAKES THE REMAINDER OF THE TAX.
+   *
+   * The NET already foots: planStages gives the final stage of each fee what is left rather than
+   * its percentage, because 50/30/20 of a figure ending in an odd halala leaves the client short or
+   * over for ever. The TAX had no such rule. Each stage rounds its own VAT and the quotation rounds
+   * once over the whole taxable base, so five roundings against one drifted — measured on QT-001-R1:
+   * stages 9,825.57 against a quotation saying 9,825.56, one halala the client never agreed to.
+   *
+   * So the stage that COMPLETES the schedule is charged the difference between the quotation's VAT
+   * and what the other invoices actually carry. Read from the invoices rather than recomputed,
+   * because what they carry is what the client was asked for — and a void one is not a bill, so it
+   * does not count.
+   *
+   * Only when the quotation stored a VAT figure of its own. An older row that never did has nothing
+   * to reconcile against, and inventing a target would be worse than the halala.
+   */
+  let vatMinor = figures.vatMinor;
+  if (opts.isLast && q.vatMinor != null) {
+    const others = await prisma.invoice.aggregate({
+      where: { quotationId: q.id, NOT: { status: "void" } },
+      _sum: { vatMinor: true },
+    });
+    const left = Number(q.vatMinor) - (others._sum.vatMinor ?? 0);
+    // Never negative, and never a correction so large it is hiding a different problem: a stage
+    // whose own VAT and the remainder disagree by more than a rounding is not a rounding.
+    if (left >= 0 && Math.abs(left - figures.vatMinor) <= 100) vatMinor = left;
+  }
+  const totalMinor = figures.subtotalMinor + vatMinor;
   const number = await nextInvoiceNumber();
   const today = opts.date ?? businessToday();
   // What the client reads on the bill: the stage's own wording, and the fee it is a share of.
@@ -5882,9 +5911,9 @@ async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opt
   return prisma.invoice.create({
     data: {
       number, companyId: q.companyId, clientName: q.clientName,
-      subtotalMinor: figures.subtotalMinor, vatMinor: figures.vatMinor,
-      totalMinor: figures.totalMinor, vatRateBp: figures.vatRateBp,
-      amount: figures.amount,
+      subtotalMinor: figures.subtotalMinor, vatMinor,
+      totalMinor, vatRateBp: figures.vatRateBp,
+      amount: Math.round(totalMinor / 100),
       status: "draft", date: today,
       services, items: stage.lines as any, notes: q.notes ?? null,
       quotationId: q.id,
@@ -5951,7 +5980,13 @@ app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWr
   if (!(stage.subtotalMinor > 0))
     return res.status(400).json({ error: `"${stage.label || `Stage ${wanted + 1}`}" bills nothing on this quotation — it is a percentage of a fee the quotation does not carry` });
 
-  const invoice = await raiseStageInvoice(q, stage);
+  /**
+   * IS THIS THE ONE THAT FINISHES THE SCHEDULE? Not "is it stage N" — a stage can be raised out of
+   * order through this route's own `index`, and a stage that bills nothing is never raised at all.
+   * The question is whether anything billable would still be outstanding afterwards.
+   */
+  const isLast = !stages.some(st => st.index !== wanted && !done.has(st.index) && st.subtotalMinor > 0);
+  const invoice = await raiseStageInvoice(q, stage, { isLast });
   logActivity({ type: "finance", message: `${invoice.number} raised for ${q.number} — ${stage.label || `stage ${wanted + 1}`}`, user: (req as any).auth?.email });
   await logAudit({ action: "quotation.stage_invoice", actorId: a?.sub, target: `${q.number} → ${invoice.number}`, detail: `stage ${wanted + 1}: ${stage.label}`, ip: clientIp(req) });
   res.status(201).json({ invoice, stage: { index: stage.index, label: stage.label, of: stages.length } });
@@ -6004,7 +6039,8 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const billable = stages.filter(st => st.subtotalMinor > 0);
   if (billable.length) {
     const first = billable[0];
-    const staged = await raiseStageInvoice(q, first, { date: today });
+    // The first stage is also the last when the schedule has only one billable stage on it.
+    const staged = await raiseStageInvoice(q, first, { date: today, isLast: billable.length === 1 });
     await prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } });
     await recordQuotationStatus(q.id, "invoiced", a?.email ?? a?.sub ?? "Staff", st);
     // The same delivery the single-invoice path owes, for the same reason: three line items are

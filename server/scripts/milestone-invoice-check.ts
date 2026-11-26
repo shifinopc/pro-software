@@ -137,6 +137,18 @@ async function main() {
   const oddRows = await prisma.invoice.findMany({ where: { quotationId: odd.id } });
   expect(oddRows.length, 3, "three stages");
   expect(oddRows.reduce((a, i) => a + (i.subtotalMinor ?? 0), 0), 1000001, "to the halala");
+  /**
+   * AND SO DOES THE TAX — the half this fixture never exercised.
+   *
+   * "VAT sums to the quotation's" is asserted above, and passed, because 10,000 split 50/30/20
+   * gives 5,000 / 3,000 / 2,000 and VAT of 750 / 450 / 300, which happens to need no rounding at
+   * all. Measured on a real quotation whose stages do not divide evenly: five stages charged
+   * 9,825.57 against a quotation saying 9,825.56, because each stage rounds its own VAT while the
+   * quotation rounds once over the whole taxable base. The net had the remainder rule; the tax did
+   * not. One halala the client never agreed to, on every schedule that does not divide cleanly.
+   */
+  expect(oddRows.reduce((a, i) => a + (i.vatMinor ?? 0), 0), 150000, "and the VAT does too, on figures that do not divide");
+  expect(oddRows.reduce((a, i) => a + (i.totalMinor ?? 0), 0), 1150001, "so the totals foot as well");
 
   console.log("\na quotation with no schedule is untouched");
   const plain = await prisma.quotation.create({
