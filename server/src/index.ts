@@ -17,7 +17,7 @@ import { workflowRouter, resolveStaffByName, mayHandOver } from "./workflow.js";
 import { validate, LIFECYCLES, ACTIVE_CLIENT, NON_CLIENT, INDIVIDUAL, contactProblem, billingAmountProblem } from "./validate.js";
 import { reAddressOnRename } from "./companyname.js";
 import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryContact } from "./contacts.js";
-import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics } from "./pipeline.js";
+import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics, promoteOnDeal } from "./pipeline.js";
 import { crmDashboard } from "./crmdashboard.js";
 import { recordLifecycle, lifecycleAnalytics, campaignPerformance, leadStatusReport } from "./lifecycle.js";
 import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
@@ -3785,6 +3785,9 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
     include: { stage: true },
   });
   await recordTransition(prisma, { opportunityId: created.id, toStageId: stage.id, movedById: (req as any).auth?.sub ?? null, at: now });
+  // A lead with a deal on it is a prospect. The same rule openDealFor applies, applied here too:
+  // this is the route the board's own "+ New deal" uses, and it is the one people actually press.
+  await promoteOnDeal(co);
   logActivity({ type: "sales", message: `Deal opened: ${created.title} (${co.name})`, user: (req as any).auth?.email });
   res.status(201).json(await withMoney(created as any));
 });

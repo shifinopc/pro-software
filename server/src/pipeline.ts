@@ -21,6 +21,7 @@ import { nextNumber } from "./sequence.js";
 import { healthOf } from "./dealhealth.js";
 import { jobRules } from "./jobrules.js";
 import { lastContactMap, openFollowUps } from "./interactions.js";
+import { recordLifecycle } from "./lifecycle.js";
 import type { Opportunity, PipelineStage } from "@prisma/client";
 
 export type DealStatus = "open" | "won" | "lost";
@@ -392,6 +393,45 @@ export async function boardFor(country: string | null, opts: { ownerId?: string 
  * already an open deal or no stage to put one in — both are ordinary situations for the caller to
  * report, not failures.
  */
+/**
+ * A LEAD WITH A DEAL ON IT IS A PROSPECT.
+ *
+ * "Move on to prospect" was a button somebody had to remember, and the measurement said they did
+ * not: 17 of 176 leads were carrying an open deal while still filed as leads. Every report that
+ * splits the funnel by lifecycle was wrong by that much, and the honest reading is that the button
+ * was asking a question the record had already answered.
+ *
+ * It is not a new rule either — the promote dialog has always offered "open a deal" as part of
+ * promoting, which is the same statement in the other direction. This just makes the implication
+ * run both ways, so the two cannot disagree.
+ *
+ * ONLY FROM `lead`. A prospect is already there; a client must not be demoted by somebody opening
+ * a second deal on them; `lost` and `churned` are deliberate states that a new deal should not
+ * quietly undo — openDealFor refuses a lost company outright for the same reason.
+ *
+ * Recorded in LifecycleTransition like every manual change, with no `changedById`: nobody decided
+ * this, and attributing it to whoever opened the deal would put a decision in their name that they
+ * did not make. Never throws — a deal must not fail to open because the funnel bookkeeping did.
+ */
+export async function promoteOnDeal(
+  company: { id: string; lifecycle?: string | null },
+  db: any = prisma,
+): Promise<boolean> {
+  if (String(company.lifecycle ?? "") !== "lead") return false;
+  try {
+    const at = new Date().toISOString();
+    await db.company.update({ where: { id: company.id }, data: { lifecycle: "prospect" } });
+    await recordLifecycle(db, {
+      companyId: company.id, from: "lead", to: "prospect", changedById: null, at,
+      reason: "A deal was opened",
+    });
+    return true;
+  } catch (e) {
+    console.error("[pipeline] could not promote", company.id, "to prospect:", (e as any)?.message ?? e);
+    return false;
+  }
+}
+
 export async function openDealFor(
   company: { id: string; name: string; country: string | null; ownerId: string | null; source: string | null; lifecycle: string },
   opts: {
@@ -443,6 +483,8 @@ export async function openDealFor(
   // The stage's own chase window applies to a deal that lands here, exactly as it would to one
   // dragged in — otherwise a deal opened this way is the one nobody is ever reminded about.
   await applyStageFollowUp(deal, stage, opts.actor ?? null).catch(() => {});
+  // A lead with a deal on it is a prospect — see promoteOnDeal.
+  await promoteOnDeal(company);
   return { deal };
 }
 

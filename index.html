@@ -47591,7 +47591,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // wall, and a green tick beside a red cross is a poor way to ask "is this a client now?".
           // Same conditions as the row used, same dialogs — only the presentation changed, and the
           // panel closes first so the confirmation is not read through a slide-over.
-          ldpPromoteShow: canWrite && !!lp && lp.lifecycle === 'lead',
+          // PROSPECT IS NO LONGER A BUTTON. Opening a deal promotes the lead on its own — a lead
+          // carrying an open deal IS a prospect, and 17 of 176 were sitting on one unpromoted
+          // because this asked somebody to say what the record already said. The only case the
+          // rule does not cover is promoting with no deal at all, which the measurement says
+          // nobody was doing, and which "+ New deal" now does in one step instead of two.
+          ldpPromoteShow: false,
           ldpPromote: () => this.setState({
             leadPanel: null,
             // Ticked when there is no deal yet: promoting IS the moment somebody decides there is
@@ -47599,7 +47604,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             lcOpen: { id: lp.id, name: lp.name, to: 'prospect', openDeal: !deal, hasDeal: !!deal },
             lcErr: '',
           }),
-          ldpWinShow: canWrite && !!lp && lp.lifecycle !== 'lost',
+          // NOT ON A COMPANY THAT IS ALREADY A CLIENT. This read `!== 'lost'` alone, which was
+          // only ever safe because the list behind this panel fetches lead/prospect/lost/churned
+          // and no clients — so the guard was the fetch, one screen away, rather than anything
+          // here. It holds for the case the fetch does not cover: a company promoted while its
+          // panel is open, which would otherwise invite re-running onboarding over a live record.
+          //
+          // It stays a button, and deliberately: it is not a flag being flipped, it opens the
+          // client form and asks for the CR number, VAT, GOSI, MOL and the national address. Those
+          // are facts only a person holds, so there is nothing here to automate — inventing a CR
+          // is not an option and converting without one writes the hole the required field exists
+          // to prevent. The system already says WHEN it is due: accepting a quotation raises
+          // "<name> is not a client yet" (see startDeliveryForQuotation).
+          ldpWinShow: canWrite && !!lp && lp.lifecycle !== 'lost' && lp.lifecycle !== 'client',
           // THE SAME FORM A CLIENT IS CREATED WITH, pre-filled from the lead.
           //
           // This was a one-field dialog asking for a CR number, and a client arrived with the eight
