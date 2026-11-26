@@ -20775,7 +20775,26 @@ class Component extends DCLogic {
     };
 
     /** The same, for a deal. */
-    this._openDealForm = () => this.setState({ dealEdit: { id: null, companyId: '', title: '', value: '', prob: '', close: '', source: '', notes: '' }, dlErr: '' });
+    /**
+     * THE NEW-DEAL FORM, optionally already knowing who it is for.
+     *
+     * "Open a deal" on a lead used to POST straight to /companies/:id/open-deal and create the deal
+     * with no form at all — one press, and the server titled it "New business — <name>". Tidy,
+     * until the deal gained the one field that decides everything downstream: what is being sold.
+     * That press could never set it, so every deal opened from a lead arrived unnamed, the
+     * quotation had nothing to inherit, and acceptance opened loose tasks instead of a case.
+     *
+     * So it opens the form instead, with the company filled in and the same title the server would
+     * have invented. One extra press, and it is the press that captures the thing the field exists
+     * for. openDealFor stays on the server for the paths where nobody is there to ask — web intake
+     * and the lead-created rule — which leave the service null on purpose, and which a required
+     * checklist item on Qualified is there to catch.
+     */
+    this._openDealForm = (companyId, name) => this.setState({
+      dealEdit: { id: null, companyId: companyId || '', title: name ? 'New business — ' + name : '',
+                  serviceItemId: '', value: '', prob: '', close: '', source: '', notes: '' },
+      dlErr: '',
+    });
 
     this._crmReload = () => {
       if (this._loadLeads) this._loadLeads();
@@ -21185,14 +21204,10 @@ class Component extends DCLogic {
           .catch(() => {});
       }, 450);
     };
-    /** Open a deal for a company in one press. The server pre-fills it from what it already knows. */
-    this._openDeal = (companyId, name) => this._crmFetch('/api/companies/' + companyId + '/open-deal', { method: 'POST', body: JSON.stringify({}) })
-      .then(({ ok, j }) => {
-        if (!ok) return this.toast((j && j.error) || 'Could not open a deal', 'error');
-        this.toast('Deal opened for ' + (name || 'that company') + (j.number ? ' — ' + j.number : ''));
-        this._crmReload();
-      })
-      .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    // REMOVED: _openDeal, which created a deal in one press with no form. Both its callers now open
+    // the form instead (_openDealForm), because a deal created without naming what it sells is the
+    // defect that made this field necessary. The route it called, /companies/:id/open-deal, is still
+    // there for the server-side paths that have nobody to ask.
     this._setOwner = (companyId, ownerId, name) => this._crmFetch('/api/companies/' + companyId, {
       method: 'PUT', body: JSON.stringify({ ownerId: ownerId || null }),
     })
@@ -47647,7 +47662,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // buttons for one decision. A lead promoted without that box ticked becomes a prospect,
           // and the icon appears then, which is the moment it is actually the next thing to do.
           canOpenDeal: canWrite && l.lifecycle === 'prospect' && !_openDealFor9(l.id),
-          openDeal: () => this._openDeal(l.id, l.name),
+          openDeal: () => this._openDealForm(l.id, l.name),
           // Correcting the record itself, as opposed to moving it through the lifecycle. Pre-filled
           // from the PRIMARY CONTACT rather than the company's flat columns — those are a mirror of
           // it, and reading the mirror is how an edit form quietly reverts a change made on the
@@ -47931,7 +47946,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             ldForm: _ldDraft9(lp, primary), ldfDial: '',
           }),
           ldpOpenDealShow: canWrite && !!lp && lp.lifecycle !== 'lost' && !deal,
-          ldpOpenDeal: () => { this.setState({ leadPanel: null }); this._openDeal(lp.id, lp.name); },
+          ldpOpenDeal: () => { this.setState({ leadPanel: null }); this._openDealForm(lp.id, lp.name); },
           // ── moving the record through its lifecycle ──────────────────────────────────────────
           //
           // These four were coloured squares on the list row until they were not: eight icons is a
