@@ -1609,6 +1609,27 @@ app.put("/api/portal/quotations/:id", requireAuth, requirePortal, async (req, re
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
   if (!q || q.companyId !== a.companyId) return res.status(404).json({ error: "Not found" });
   if (["draft", "approved"].includes(String(q.status))) return res.status(400).json({ error: "This quotation has not been sent yet" });
+  /**
+   * A WITHDRAWN OFFER CANNOT BE ACCEPTED, even though it still says `sent`.
+   *
+   * Revising leaves the original at `sent` and marks it superseded, and the portal lists everything
+   * that is not draft or approved — so a replaced quotation went on sitting in the client's portal
+   * with its Accept button live. Accepting it would have committed the firm to the OLD price (on the
+   * quotation that prompted this, SAR 76,400 against the revision's 75,825.56) and scheduled the
+   * work a second time, because acceptance is what starts delivery.
+   *
+   * The convert route has always refused a superseded quotation. This is the same rule on the side
+   * the client can reach.
+   */
+  if (q.supersededAt) {
+    const by = q.supersededById
+      ? await prisma.quotation.findUnique({ where: { id: q.supersededById }, select: { number: true, status: true } })
+      : null;
+    return res.status(409).json({
+      error: `${q.number} was replaced${by ? ` by ${by.number}` : ""} — please act on the newer quotation instead.`,
+      ...(by ? { replacedBy: by.number } : {}),
+    });
+  }
   const updated = await prisma.quotation.update({ where: { id: q.id }, data: { status: want, ...(want === "changes_requested" ? { clientNote: note } : {}) } });
   const verb = want === "changes_requested" ? "sent back with changes" : want;
   // Named as the CLIENT, not as whoever's portal login it came from: the timeline is read by staff
