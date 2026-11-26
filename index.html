@@ -12382,23 +12382,12 @@
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">ISSUED</div><input value="{{ qcIssued }}" onChange="{{ setQcIssued }}" type="date" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VALID UNTIL</div><input value="{{ qcValid }}" onChange="{{ setQcValid }}" type="date" min="{{ qcIssued }}" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
             </div>
-            <!-- THE RATE, WHICH IS NOT A CHOICE MADE PER QUOTATION.
+            <!-- NO VAT CONTROL HERE AT ALL.
 
-                 This was a picker offering "15%" and "0% — exempt", which made it the second
-                 control on this dialog answering "is there VAT", and the two could disagree: the
-                 lines each carry their own VAT/NO VAT chip now, and a document zero-rated here
-                 overrode every one of them with nothing on screen saying so.
-
-                 So the rate is stated, not chosen. Which lines it applies to is the chips' job,
-                 and a quotation where none of them are taxed charges no VAT and prints no VAT
-                 line — exactly what picking 0% used to do. An existing quotation raised at some
-                 other rate still SHOWS its own rate here, because the rate is frozen on the
-                 document and this line describes the document rather than the settings. -->
-            <div style="display:flex; align-items:center; gap:7px; margin-top:10px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:9px; padding:7px 10px;">
-              <span style="font-size:9px; font-weight:800; letter-spacing:.05em; color:#A9A6B4;">VAT</span>
-              <span style="font-size:11px; font-weight:700; color:#1A1523;">{{ qcVatRateLabel }}</span>
-              <span style="font-size:10px; color:#8C8899;">· per line, on the items marked VAT</span>
-            </div>
+                 The rate is one number for the firm and is still FROZEN onto the document on save
+                 (it is in the ZATCA QR), but nothing on this dialog decides it, so nothing on this
+                 dialog shows it. Whether a given line is taxed is the VAT/NO VAT chip on the line,
+                 which is where the question is actually answered. -->
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SERVICE / SUBJECT</div><input sc-camel-default-value="{{ qcSubject }}" data-seed-val="{{ qcSubject }}" onBlur="{{ setQcSubject }}" data-qcf="subject" maxlength="120" placeholder="e.g. Labour card renewal × 3" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
             <!-- WHAT THIS SELLS, as opposed to what it charges for. The subject above is written for
                  the client to read; this is the catalogue service that becomes one case when the
@@ -49525,9 +49514,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         this.setState({ qcClient: v, qcClientId: hit9 ? hit9.id : null, qcErr: '' });
       }, 'Search clients…'),
       qcClientVal: this.state.qcClient || qcDefaultClient,
-      // A document raised at 0% before the per-line chips existed still reads 0 here, and
-      // calling that "KSA standard" would be the dialog contradicting the document.
-      qcVatRateLabel: qcVatRate + (qcVatRate === 0 ? '% — zero-rated' : '% — KSA standard'),
       // Same warning as the invoice dialog, and it matters more here: the invoice copies the
       // quotation's figures exactly, so a quotation saved zero-rated bills zero-rated.
       qcAutoNo: _qcEditing ? (this.state.qcEditNo || qcAutoNo) : qcAutoNo,
