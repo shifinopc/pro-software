@@ -25062,7 +25062,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const taxed9 = L9.taxedMinor;
           return { no, client, date, dueDate: fmtInvDate(raw9.dueDate), items: items9,
             services: desc, notes: raw9.notes,
-            showDisc: L9.anyDisc,
+            showDisc: L9.anyDisc && !L9.wholeDisc,
             showVat: rate9 > 0,
             // THE SUBTRACTION MUST ALWAYS HOLD. The stored net is the figure of record (see the
             // note above — it is what the client agreed and what the QR carries), so the subtotal
@@ -25241,10 +25241,26 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       });
       const grossMinor9 = rows9.reduce((a9, r9) => a9 + r9.gross, 0);
       const discMinor9 = rows9.reduce((a9, r9) => a9 + r9.disc, 0);
+      /**
+       * ONE DISCOUNT OR SEVERAL — which decides how the document reads.
+       *
+       * A discount off the whole quotation is STORED per line, because that is what makes the VAT
+       * base and each payment stage right. But the client agreed one figure, and a page reporting
+       * four of them at 7.52, 3.76, 375.94 and 112.78 describes a haggle over each service that
+       * never took place. So when every discounted line says it came from the same decision, the
+       * column is dropped and the totals block carries the single figure instead.
+       *
+       * An untagged line is one somebody typed a discount ON, which is a genuine per-line discount
+       * and gets its column — including on every document written before `discFrom` existed.
+       */
+      const discRows9 = rows9.filter(r9 => r9.disc > 0);
+      const from9 = discRows9.length ? String(discRows9[0].it.discFrom || '') : '';
+      const whole9 = !!from9 && discRows9.every(r9 => String(r9.it.discFrom || '') === from9);
       return {
         grossMinor: grossMinor9, discMinor: discMinor9, netMinor: grossMinor9 - discMinor9,
         taxedMinor: taxedMinor9, vatMinor: vatMinor9,
         anyDisc: discMinor9 > 0,
+        wholeDisc: whole9,
         rows: rows9.map(r9 => ({
           // The country belongs on the client's copy: "Company Acquisition" for SAR 50,000 says
           // nothing about what is being bought.
@@ -48957,7 +48973,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             date: (raw0 && raw0.date) || '—', dueDate: (raw0 && raw0.validUntil) || '',
             services: (raw0 && raw0.service) || '', notes: (raw0 && raw0.notes) || '', terms: terms9,
             items: L9.rows,
-            showDisc: L9.anyDisc,
+            // Only when the lines were discounted individually — see wholeDisc.
+            showDisc: L9.anyDisc && !L9.wholeDisc,
             showVat: rate9 > 0,
             // Subtotal is the EXTENDED PRICES, so it is the sum of the amount column; the discount
             // and the net are their own rows beneath it. Printing the net as "Subtotal" is what
@@ -49344,12 +49361,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * box is what the quotation is discounted by, and a box that means "and another" the second
      * time you touch it is a box that quietly doubles a discount.
      */
-    const _qcSpread9 = (lines9, wantMinor9, pick9) => {
+    const _qcSpread9 = (lines9, wantMinor9, pick9, from9) => {
       const out9 = lines9.map(l9 => [...l9]);
       const rows9 = [];
       lines9.forEach((l9, i9) => {
         if (!pick9(l9)) return;
         out9[i9][6] = '';
+        // HOW IT WAS DECIDED, carried alongside the money. One discount off the whole quotation has
+        // to be stored per line — that is what makes the VAT base and each payment stage right —
+        // but a client reading the document agreed ONE discount, and a page reporting four of them,
+        // at 7.52 and 3.76 and 375.94, describes a negotiation that never happened. The figures
+        // stay per line; the document is told which story to tell.
+        out9[i9][7] = from9 || '';
         const g9 = _lineGrossC9(l9);
         if (g9 > 0) rows9.push({ i: i9, g: g9 });
       });
@@ -49363,6 +49386,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const share9 = k9 === rows9.length - 1 ? left9 : Math.round(take9 * r9.g / base9);
         left9 -= share9;
         out9[r9.i][6] = share9 > 0 ? String(share9 / 100) : '';
+        if (!(share9 > 0)) out9[r9.i][7] = '';
       });
       return out9;
     };
@@ -49447,7 +49471,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // row simply stopped belonging to anybody, and every count by company quietly lost it.
       qcClientId: raw9.companyId || null,
       qcLines: (Array.isArray(raw9.items) && raw9.items.length ? raw9.items : [{ name: '', units: 1, price: '' }])
-        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || ''), String(it9.vat || ''), String(it9.disc == null || !Number(it9.disc) ? '' : it9.disc)]),
+        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || ''), String(it9.vat || ''), String(it9.disc == null || !Number(it9.disc) ? '' : it9.disc), String(it9.discFrom || '')]),
       // The schedule as stored. A quotation written before this existed has none, which is not the
       // same as an empty one and prints the same either way.
       qcTerms: (Array.isArray(raw9.milestones) ? raw9.milestones : [])
@@ -49557,7 +49581,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // when it was typed as a percentage: the document has to say what was agreed, not a rule
           // to re-evaluate against prices that may since have been corrected.
           const disc5 = _lineDiscC9(l5);
-          if (disc5 > 0) it5.disc = disc5 / 100;
+          if (disc5 > 0) {
+            it5.disc = disc5 / 100;
+            // 'all' = apportioned from one discount off the whole quotation. Absent = typed on this
+            // line. The printed document reads this to decide whether to show a discount COLUMN or
+            // a single discount row.
+            const from5 = String(l5[7] || '').trim();
+            if (from5) it5.discFrom = from5;
+          }
           return it5;
         }),
         // PERCENTAGES AND THEIR BASE, never the computed money.
@@ -50079,6 +50110,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             const want9 = parseFloat(e.target.value) || 0;
             const cap9 = Math.max(0, _lineGrossC9(a[i])) / 100;
             a[i][6] = want9 <= 0 ? '' : String(Math.min(want9, cap9));
+            // Typed HERE, so it is this line's own discount from now on and the document stops
+            // reporting it as a share of a whole-quotation one.
+            a[i][7] = '';
           }
           return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes };
         }),
@@ -50223,7 +50257,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (h9.lines.some(l9 => !String(l9[0]).trim() && !String(l9[2]).trim())) {
           return this.toast('Fill the empty line before adding another');
         }
-        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
       /**
        * THE PROMPT ITSELF. State only — _nudgeStageOnRevision decides whether it opens, and
@@ -50283,7 +50317,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const base9 = h9.lines.reduce((a9, l9) => a9 + Math.max(0, _lineGrossC9(l9)), 0);
           const want9 = pct9 ? Math.round(base9 * raw9 / 100) : Math.round(raw9 * 100);
           return {
-            qcLines: _qcSpread9(h9.lines, want9, () => true),
+            qcLines: _qcSpread9(h9.lines, want9, () => true, 'all'),
             qcDiscPct: false,
             qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes,
           };
