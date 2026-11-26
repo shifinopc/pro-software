@@ -12402,7 +12402,18 @@
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ qcNotes }}" data-seed-val="{{ qcNotes }}" onBlur="{{ setQcNotes }}" data-qcf="notes" placeholder="Printed on the quotation. Terms &amp; footer come from Print Layout." rows="4" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
             </div>
             <div style="min-width:0;">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addQcLine }}" title="{{ addQcLineHint }}" style="font-size:11px; font-weight:700; color:{{ qcAddColor }}; cursor:{{ qcAddCursor }};">+ Add item</span></div>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span style="display:inline-flex; align-items:center; gap:11px;"><span onClick="{{ addQcLine }}" title="{{ addQcLineHint }}" style="font-size:11px; font-weight:700; color:{{ qcAddColor }}; cursor:{{ qcAddCursor }};">+ Add item</span><!--
+
+                   A DISCOUNT IS A LINE, not a field.
+
+                   Every figure on this document is computed from the lines - the VAT base, each
+                   payment stage's share of its own fee kind, the invoice raised on acceptance. A
+                   discount held anywhere else has to be apportioned back over them, which is the
+                   arithmetic this file has already had VAT bugs in. As a line it needs no new
+                   arithmetic at all, it carries its own FEE/GOV and VAT chips so it comes off the
+                   right base, and the client can see it on the quotation - which a discount
+                   subtracted invisibly cannot do.
+              --><span onClick="{{ addQcDiscount }}" title="{{ addQcDiscountHint }}" style="font-size:11px; font-weight:700; color:#B7791F; cursor:pointer;">+ Add discount</span></span></div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
               <sc-for list="{{ qcLineRows }}" as="l" hint-placeholder-count="1">
                 <!-- One LINE is now two rows: the charge, and under it the country when the charge
@@ -12435,7 +12446,7 @@
                     </sc-if>
                   </div>
                   <input sc-camel-default-value="{{ l.units }}" data-seed-val="{{ l.units }}" onBlur="{{ l.setUnits }}" data-qcl="u" type="number" min="1" max="9999" step="1" placeholder="Qty" style="width:46px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
-                  <input sc-camel-default-value="{{ l.price }}" data-seed-val="{{ l.price }}" onBlur="{{ l.setPrice }}" data-qcl="p" type="number" min="0" max="10000000" step="0.01" placeholder="Price" style="width:72px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
+                  <input sc-camel-default-value="{{ l.price }}" data-seed-val="{{ l.price }}" onBlur="{{ l.setPrice }}" data-qcl="p" type="number" min="-10000000" max="10000000" step="0.01" placeholder="Price" style="width:72px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 8px; font-size:11px; background:#FCFBFE;">
                   <!-- WHICH FEE THIS LINE IS.
 
                        The payment terms below bill professional fees and government fees at
@@ -49096,12 +49107,31 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       }
       // Minor units, integer arithmetic, VAT rounded ONCE at the end — the same discipline as the
       // invoice. Rounding the gross to a whole riyal here is what made the printed rate a lie.
+      // A LINE CALLED DISCOUNT THAT ADDS MONEY.
+      //
+      // Typing 2000 into a discount line can only mean 2,000 off, and taking it at face value
+      // puts the quotation out by twice that in the client's disfavour. Refused rather than
+      // silently negated: a quotation is a price somebody is held to, and the one thing worse
+      // than a wrong figure is the software quietly choosing a different one.
+      const _wrongWay9 = (st.qcLines || []).find(l5 =>
+        /^\s*discount\b/i.test(String(l5[0] || '')) && (parseFloat(l5[2]) || 0) > 0);
+      if (_wrongWay9) {
+        return this.setState({ qcErr: '“' + String(_wrongWay9[0]).trim() + '” is a discount but adds '
+          + fmtCur(parseFloat(_wrongWay9[2]) || 0) + ' — type it as a negative, e.g. -'
+          + (parseFloat(_wrongWay9[2]) || 0) });
+      }
       const _qminor = (n) => Math.round((parseFloat(n) || 0) * 100);
       const qSubtotalMinor = valid.reduce((s2, l) => s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])), 0);
       const qTaxedMinor = valid.reduce((s2, l) => _lineTaxed9(l) ? s2 + Math.round((parseFloat(l[1]) || 1) * _qminor(l[2])) : s2, 0);
       const qVatRateBp = Math.round(qcVatRate * 100);                        // 15 → 1500
       const qVatMinor = Math.round(qTaxedMinor * qVatRateBp / 10000);
       const qTotalMinor = qSubtotalMinor + qVatMinor;
+      // Discounting past zero. The stages would then bill negative amounts and the invoice raised
+      // on acceptance would be a credit note nobody asked for.
+      if (qTotalMinor < 0) {
+        return this.setState({ qcErr: 'The discounts come to more than the fees — this quotation totals '
+          + fmtCur(qTotalMinor / 100) });
+      }
       const total = Math.round(qTotalMinor / 100);   // whole units, for the lists that read `amount`
       const service = st.qcSubject || (valid[0][0] + (valid.length > 1 ? ' +' + (valid.length - 1) : ''));
       const _qcTermsClean = (Array.isArray(st.qcTerms) ? st.qcTerms : [])
@@ -49793,6 +49823,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       },
       // Always offered. Greying it from render-time state meant it looked disabled for exactly as
       // long as somebody was typing the row that would enable it — the refusal is a toast now.
+      // Seeded as a FEE because a discount almost always comes off the firm's OWN fee: a
+      // government fee is money collected and handed over, and discounting one means absorbing
+      // it out of pocket. One click on the chip says otherwise where that is really meant.
+      addQcDiscount: () => {
+        const h9 = _qcHarvest();
+        _qcEdit9(() => ({ qcLines: [...h9.lines, ['Discount', '1', '', 'prof', '', '']],
+          qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+      },
+      addQcDiscountHint: 'Add a discount line — type the amount as a negative, e.g. -2000',
       qcAddColor: '#7C00FF',
       qcAddCursor: 'pointer',
       addQcLineHint: 'Add another line',

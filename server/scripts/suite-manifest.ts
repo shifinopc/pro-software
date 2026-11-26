@@ -22,6 +22,7 @@
 
 /** Checks that must pass, named in the order the runner runs them (alphabetical). */
 export const EXPECTED: string[] = [
+  "discount-line-check",
   "auth-failure-check",
   "auth-limit-gate-check",
   "chain-docs-check",
