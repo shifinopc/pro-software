@@ -1582,7 +1582,13 @@ export async function chaseQuotations(): Promise<QuoteChaseResult> {
   const rules = await salesRules();
 
   // Only `sent`. A draft is not the client's problem yet, and accepted/rejected/invoiced are answers.
-  const quotes = await prisma.quotation.findMany({ where: { status: "sent" }, take: 1000 });
+  //
+  // AND NOT A SUPERSEDED ONE. Revising a quotation leaves the original at `sent` and marks it
+  // superseded — its status is a record of what happened to it, not a claim that it is still the
+  // offer. Without this the chaser nagged the deal's owner to ring the client about a price that
+  // had already been withdrawn and replaced, while the replacement sat in a drawer. The convert
+  // route and the console's own pending banner both already read `supersededAt` this way.
+  const quotes = await prisma.quotation.findMany({ where: { status: "sent", supersededAt: null }, take: 1000 });
 
   for (const q of quotes) {
     // Fall back to the issue date for rows written before sentAt existed. Stated rather than silent:
