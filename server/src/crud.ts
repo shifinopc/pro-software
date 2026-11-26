@@ -7,7 +7,7 @@ import { idleDaysOf } from "./lifecycle.js";
 import { homeCountry } from "./orgsettings.js";
 import { validate } from "./validate.js";
 import { normalizeDates } from "./dates.js";
-import { logActivity, logNotification } from "./auth.js";
+import { logActivity, logNotification, logAudit, clientIp } from "./auth.js";
 import { notifyInvoiceRaised, notifyAppointmentChanged, notifyAddonRejected } from "./notify.js";
 import { startDeliveryForQuotation } from "./delivery.js";
 import { recordQuotationStatus } from "./quotation-history.js";
@@ -424,6 +424,23 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
       if (modelName === "invoice" && created.status && created.status !== "draft") {
         notifyInvoiceRaised({ companyId: created.companyId, number: created.number, amount: created.amount, currency: created.currency, dueDate: created.dueDate });
       }
+      /**
+       * A FINANCIAL DOCUMENT RECORDS ITS OWN BIRTH.
+       *
+       * The audit knew a quotation had been revised, converted and approved but never that one had
+       * been CREATED, so the first line of every timeline was missing and a document typed by hand
+       * looked as though it had appeared on its own. Audited here rather than on the four screens
+       * that create them, for the reason the rest of this route exists.
+       */
+      if (modelName === "invoice" || modelName === "quotation") {
+        await logAudit({
+          action: `${modelName}.create`,
+          actorId: (req as any).auth?.sub ?? null,
+          target: created.id,
+          detail: [created.number, created.clientName, created.status].filter(Boolean).join(" · "),
+          ip: clientIp(req),
+        }).catch(() => {});
+      }
       res.status(201).json(redact(modelName, created));
     } catch (e: any) {
       fail(res, 400, e, `crud ${modelName}`);
@@ -635,6 +652,25 @@ export function crud(modelName: string, scope?: ScopeFn, include?: Record<string
         await recordQuotationStatus(updated.id, String(req.body.status),
           (req as any).auth?.keyName ?? (req as any).auth?.sub ?? null,
           (before as any).status ?? null);
+      }
+      /**
+       * AN INVOICE'S STATUS CHANGES WERE NOT WRITTEN DOWN ANYWHERE.
+       *
+       * A quotation has recordQuotationStatus above; an invoice has nothing of the kind, and the
+       * audit only ever held `invoice.approve` — one named route out of the several that move it.
+       * Voiding, reopening and a status edited through this route all passed in silence, so an
+       * invoice that went Unpaid → Void → Unpaid looked exactly like one that had never moved.
+       */
+      if (modelName === "invoice"
+        && String(req.body?.status ?? "").trim()
+        && String(req.body.status).toLowerCase() !== String((before as any).status ?? "").toLowerCase()) {
+        await logAudit({
+          action: "invoice.status",
+          actorId: (req as any).auth?.sub ?? null,
+          target: updated.id,
+          detail: `${(updated as any).number ?? ""}: ${(before as any).status ?? "?"} → ${req.body.status}`.trim(),
+          ip: clientIp(req),
+        }).catch(() => {});
       }
       if (modelName === "quotation"
         && String(req.body?.status ?? "").toLowerCase() === "sent"

@@ -12722,6 +12722,48 @@
     </div>
   </sc-if>
 
+  <!--
+    ONE DOCUMENT'S HISTORY — who did what to it, oldest at the bottom.
+
+    z-index 101, ABOVE the three document drawers, because every one of them opens it: a drawer is
+    where you ask the question and the answer has to land on top of the thing it is about.
+  -->
+  <sc-if value="{{ showHist }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeHist }}" style="position:fixed; inset:0; background:rgba(26,21,35,.46); backdrop-filter:blur(3px); z-index:101; display:flex; align-items:center; justify-content:center; padding:20px; animation:fadeUp .2s ease both;">
+      <div onClick="{{ stopClick }}" style="width:100%; max-width:560px; background:#fff; border-radius:18px; box-shadow:0 24px 64px rgba(38,7,77,.3); overflow:hidden; animation:fadeUp .24s cubic-bezier(.16,1,.3,1) both;">
+        <div style="padding:16px 18px 13px; border-bottom:1px solid #F0EDF6; display:flex; align-items:flex-start; gap:10px;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">History · {{ histTitle }}</div>
+            <div style="font-size:11px; color:#8C8899; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ histSub }}</div>
+          </div>
+          <span onClick="{{ closeHist }}" title="Close" style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; color:#8C8899; background:#F6F4FA; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="background:#EDEAF4; color:#4B4757;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span>
+        </div>
+        <div style="max-height:52vh; overflow-y:auto; padding:4px 18px 14px;">
+          <sc-if value="{{ histLoading }}" hint-placeholder-val="{{ false }}"><div style="padding:22px 0; text-align:center; font-size:11px; color:#A9A6B4;">Reading the record…</div></sc-if>
+          <sc-if value="{{ histEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:22px 0; text-align:center; font-size:11px; color:#A9A6B4;">Nothing has happened to this document yet.</div></sc-if>
+          <sc-if value="{{ histFailed }}" hint-placeholder-val="{{ false }}"><div style="padding:22px 0; text-align:center; font-size:11px; color:#C0353A;">The record could not be read. Try again in a moment.</div></sc-if>
+          <sc-for list="{{ histRows }}" as="h" hint-placeholder-count="3">
+            <div style="display:flex; gap:11px; padding:11px 0 0;">
+              <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; padding-top:3px;">
+                <span style="width:8px; height:8px; border-radius:99px; background:#7C00FF; flex-shrink:0;"></span>
+                <span style="flex:1; width:1px; background:#EDEBF2; margin-top:3px; min-height:14px;"></span>
+              </div>
+              <div style="min-width:0; flex:1; padding-bottom:4px;">
+                <div style="display:flex; align-items:baseline; gap:7px; flex-wrap:wrap;">
+                  <span style="font-size:12px; font-weight:700; color:#1A1523;">{{ h.label }}</span>
+                  <sc-if value="{{ h.hasOn }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:700; color:#6D5BD0; background:#F5EEFF; border:1px solid #E4D3FB; padding:1px 7px; border-radius:6px; white-space:nowrap;">{{ h.on }}</span></sc-if>
+                  <span style="font-size:10px; color:#A9A6B4; font-variant-numeric:tabular-nums;">{{ h.when }}</span>
+                </div>
+                <div style="font-size:11px; color:#4B4757; margin-top:2px;">by {{ h.by }}</div>
+                <sc-if value="{{ h.hasDetail }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#A9A6B4; margin-top:2px; word-break:break-word;">{{ h.detail }}</div></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ showRcView }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeRcView }}" style="position:fixed; inset:0; background:rgba(26,21,35,.42); backdrop-filter:blur(3px); z-index:100; display:flex; justify-content:flex-end;">
       <div onClick="{{ stopClick }}" data-hidescroll="true" style="width:100%; max-width:560px; height:100%; background:#fff; box-shadow:-18px 0 50px rgba(38,7,77,.2); padding:14px 17px; overflow-y:auto; animation:slideIn .22s cubic-bezier(.16,1,.3,1) both;">
@@ -12745,6 +12787,7 @@
           </div>
         </sc-if>
         <div style="display:flex; gap:9px; margin-top:12px; justify-content:flex-end;">
+          <button onClick="{{ rcHistory }}" title="Who recorded this receipt, and what it settled" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">History</button>
           <button onClick="{{ rcPrint }}" title="Print — or choose “Save as PDF” in the print dialog" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</button>
         </div>
       </div>
@@ -12829,6 +12872,7 @@
       <sc-if value="{{ qvCanSend }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvSend }}" style="background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">Send to client</button></sc-if>
       <sc-if value="{{ qvCanInvoice }}" hint-placeholder-val="{{ false }}"><button onClick="{{ qvInvoice }}" title="{{ qvInvoiceTitle }}" style="background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;">{{ qvInvoiceLabel }}</button></sc-if>
           <div style="flex:1;"></div>
+          <button onClick="{{ qvHistory }}" title="Who did what to this quotation, and when" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">History</button>
           <button onClick="{{ qvPrint }}" title="Print — or choose “Save as PDF” in the print dialog" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Print</button>
         </div>
       </div>
@@ -12847,11 +12891,13 @@
           <button onClick="{{ idDownloadPdf }}" title="Opens the print dialog — choose “Save as PDF” as the destination" style="flex:1; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:10px 0; border-radius:12px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Download PDF</button>
           <sc-if value="{{ idPayable }}" hint-placeholder-val="{{ false }}"><button onClick="{{ payInvDetail }}" style="flex:1.4; background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:10px 0; border-radius:12px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.96);">Record payment</button></sc-if>
         </div>
-        <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin-top:14px;">TIMELINE</div>
-        <div style="display:flex; flex-direction:column; gap:11px; margin-top:11px;">
-          <div style="display:flex; gap:11px;"><span style="width:8px; height:8px; border-radius:99px; background:#7C00FF; margin-top:5px;"></span><div><div style="font-size:11px; font-weight:600;">Invoice generated</div><div style="font-size:10px; color:#A9A6B4;">from workflow · {{ idDate }}</div></div></div>
-          <div style="display:flex; gap:11px;"><span style="width:8px; height:8px; border-radius:99px; background:#0284C7; margin-top:5px;"></span><div><div style="font-size:11px; font-weight:600;">Sent to client portal</div><div style="font-size:10px; color:#A9A6B4;">{{ idClient }}</div></div></div>
-        </div>
+        <!--
+          A HARDCODED TIMELINE WAS HERE. Two rows, printed for every invoice whatever had happened
+          to it: "Invoice generated — from workflow" on invoices typed by hand, and "Sent to client
+          portal" on invoices that had never been sent anywhere. It read as a record and was
+          decoration. The History button below opens the real one.
+        -->
+        <button onClick="{{ idHistory }}" title="Who did what to this invoice, and when" style="width:100%; margin-top:13px; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:10px 11px; border-radius:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg>History</button>
       </div>
     </div>
   </sc-if>
@@ -18392,7 +18438,7 @@ const MODAL_FLAGS = [
   'cslOpen',, 'cjtOpen',, 'showNsModal',, 'showApManage',, 'showBookModal',, 'showVoid',
   'showEmpEdit',, 'showSuspend',, 'showExtend',, 'showRecordPay',, 'showCorrect',, 'showScanDoc',, 'showLeadImport',
   'showEmpImport',, 'showEmpModal',, 'showThread',, 'showCredModal',, 'showCreateInv',, 'showCreateQuote',
-  'showRcView',, 'showQtView',, 'showInvDetail',, 'showDocList',, 'showCompRenew',, 'showCompComplete',, 'ermOpen',
+  'showRcView',, 'showQtView',, 'showInvDetail',, 'showDocList',, 'showHist',, 'showCompRenew',, 'showCompComplete',, 'ermOpen',
   'mdocOpen',, 'fpOpen',, 'crFormOpen',, 'showAddRecord',, 'showCompDetail',, 'showEditClient',
   'showCdCredModal',, 'showAddClient',, 'showAddCompanyModal',, 'showPayModal',, 'showMethodModal',, 'showEditProfile',
   'showRd',, 'showUploadModal',, 'showWizard',, 'showPlanUpgrade',, 'showAcceptAsk',, 'showQuote',
@@ -24436,6 +24482,52 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // The invoice a payment names, by either key — the same two-key rule the totals use.
     const _invOfPay = (p9) => (p9 && p9.invoiceId ? _invRawById.get(p9.invoiceId) : null)
       || (p9 && p9.invoiceNumber ? _invRawByNo.get(p9.invoiceNumber) : null) || null;
+    /**
+     * THE HISTORY OF ONE DOCUMENT, fetched on opening rather than held for all of them.
+     *
+     * A timeline is read occasionally and is expensive to assemble — it walks the audit table for
+     * every document in the chain — so it is not part of any list payload. Asked for once per
+     * opening, keyed by the document it belongs to, because renderVals runs on every keystroke
+     * anywhere in the console and an unkeyed fetch here would re-ask on each one.
+     */
+    this._openHistory = (kind9, id9, label9) => {
+      if (!kind9 || !id9) return;
+      this.setState({ histFor: { kind: kind9, id: id9, label: label9 || '' } });
+      if (this._histGot === kind9 + ':' + id9) return;
+      this._histGot = kind9 + ':' + id9;
+      const t9 = localStorage.getItem('stimespro:token');
+      fetch((this._apiBase || 'http://localhost:4100') + '/api/doc-history/' + kind9 + '/' + id9,
+        { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+        .then(r9 => (r9.ok ? r9.json() : null))
+        .then(v9 => this.setState({ histData: v9 ? { kind: kind9, id: id9, ...v9 } : { kind: kind9, id: id9, events: [], failed: true } }))
+        .catch(() => this.setState({ histData: { kind: kind9, id: id9, events: [], failed: true } }));
+    };
+    const _histFor9 = this.state.histFor || null;
+    const _histGot9 = this.state.histData || null;
+    const _histReady9 = !!(_histFor9 && _histGot9 && _histGot9.id === _histFor9.id && _histGot9.kind === _histFor9.kind);
+    const histApi = {
+      showHist: !!_histFor9,
+      closeHist: () => this.setState({ histFor: null }),
+      histTitle: _histFor9 ? ((_histReady9 && _histGot9.number) || _histFor9.label || 'History') : '',
+      histSub: _histReady9 ? (_histGot9.title || '') : 'Reading the record…',
+      histLoading: !!(_histFor9 && !_histReady9),
+      // A document whose timeline is empty is a real answer — nothing has happened to it yet — and
+      // a document whose timeline could not be READ is a different one. They must not look alike.
+      histEmpty: !!(_histReady9 && !(_histGot9.events || []).length && !_histGot9.failed),
+      histFailed: !!(_histReady9 && _histGot9.failed),
+      histRows: (_histReady9 ? (_histGot9.events || []) : []).slice().reverse().map(e9 => ({
+        label: e9.label || '—',
+        // Who, always said out loud: a timeline whose point is accountability must never be silent
+        // about it. A job with no person behind it says so rather than leaving a blank.
+        by: e9.by || 'System',
+        when: _dmy9(String(e9.at || '').slice(0, 10)) + ' · ' + String(e9.at || '').slice(11, 16),
+        detail: e9.detail || '',
+        hasDetail: !!e9.detail,
+        // The chain: an event on a document further along it is marked with which one.
+        on: e9.on || '',
+        hasOn: !!e9.on,
+      })),
+    };
     const payments = (Array.isArray(payData)
       // NEWEST FIRST, like the invoice and quotation lists. /api/payments returns rows in whatever
       // order the database hands back, so the receipts list was oldest-first by accident — and on a
@@ -24520,6 +24612,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         return !!_rcRow;
       })(),
       ...(_rcRow ? {
+        rcHistory: () => this._openHistory('payment', _rcRow.id, _rcRow.number || 'Receipt'),
         rcNo: _rcRow.number || ('RCP-' + String(_rcRow.id || '').slice(-6).toUpperCase()),
         rcClient: _rcRow.clientName || '—',
         rcSub: [_rcRow.invoiceNumber, _rcRow.date].filter(Boolean).join(' · ') || '—',
@@ -25737,7 +25830,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const invDetailRow = _invNo ? invoicesFull.find(v => v.no === _invNo) : null;
     const _CONTRACT_OPTS = ['Not recorded', 'Limited', 'Unlimited'];  // hoisted: the employee EDIT dialog reads it above where it used to be declared
     const financeApi = {
-      invoicesFull: invRows, invTabs, invChart, ...docListApi,
+      invoicesFull: invRows, invTabs, invChart, ...docListApi, ...histApi,
       invPageShown: _invShown9.length > 0,
       invPagerShown: _invPages9 > 1,
       invPageLabel: _invShown9.length
@@ -26455,6 +26548,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         idNo: invDetailRow.no, idClient: invDetailRow.client, idDesc: invDetailRow.desc, idAmount: invDetailRow.amount,
         idStatus: invDetailRow.status, idStBg: invDetailRow.stBg, idStColor: invDetailRow.stColor, idDate: invDetailRow.date,
         idPayable: invDetailRow.payable,
+        // The id, not the number: history joins on the id because numbers get reused.
+        idHistory: () => this._openHistory('invoice', invDetailRow.id, invDetailRow.no),
         closeInvDetail: () => { this._goRecord(this.state.active || 'Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
         payInvDetail: () => { invDetailRow.pay(); this._goRecord(this.state.active || 'Invoices', null); this.setState({ invDetail: null, routeRecord: null }); },
         // "Download PDF" had NO handler at all — it now runs the same print pipeline as the row's
@@ -50306,6 +50401,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         return !!qtViewRow;
       })(),
       ...(qtViewRow ? {
+        qvHistory: () => this._openHistory('quotation', qtViewRow.realId, qtViewRow.id),
         qvNo: qtViewRow.id, qvClient: qtViewRow.client, qvTitle: qtViewRow.title, qvAmount: qtViewRow.amount,
         qvStatus: qtViewRow.status, qvStBg: qtViewRow.stBg, qvStColor: qtViewRow.stColor, qvWhen: qtViewRow.when,
         qvCanEdit: qtViewRow.canEdit, qvCanApprove: qtViewRow.canApprove, qvCanSend: qtViewRow.canSend, qvCanInvoice: qtViewRow.canInvoice,

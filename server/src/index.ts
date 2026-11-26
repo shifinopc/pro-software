@@ -122,6 +122,7 @@ import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsetting
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
 import { planStages, figuresForLines, lineMinor } from "./stages.js";
 import { renameProductEverywhere } from "./productname.js";
+import { docHistory } from "./dochistory.js";
 import { clientMargins } from "./profitability.js";
 import {
   hashPassword, verifyPassword, NO_SUCH_USER_HASH, signToken, verifyToken, SESSION_MAX_DAYS,
@@ -3498,6 +3499,21 @@ app.get("/api/teams", requireAuth, requireStaff, async (req, res) => {
   if (kind && !TEAM_KINDS.includes(kind as any)) return res.status(400).json({ error: `"${kind}" is not a kind of team` });
   const on = String(req.query.on ?? "").trim() || todayDay();
   res.json(await teamViews({ kind: kind || undefined, on, includeInactive: String(req.query.all ?? "") === "1" }));
+});
+
+/**
+ * ONE DOCUMENT'S TIMELINE — see dochistory.ts for why it joins on the id and not the number.
+ *
+ * Read-only and staff-only. The same shape for all three kinds, because the three drawers ask it
+ * the same question and a per-kind response would be three renderers to keep in step.
+ */
+app.get("/api/doc-history/:kind/:id", requireAuth, requireStaff, async (req, res) => {
+  const kind = String(req.params.kind) as any;
+  if (!["quotation", "invoice", "payment"].includes(kind))
+    return res.status(400).json({ error: "History is kept for a quotation, an invoice or a receipt" });
+  const out = await docHistory(kind, String(req.params.id));
+  if (!out) return res.status(404).json({ error: "No such document" });
+  res.json(out);
 });
 
 app.get("/api/teams/:id/history", requireAuth, requireStaff, async (req, res) => {
