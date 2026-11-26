@@ -152,7 +152,11 @@ export const DEAL_FACTS: Array<{ name: string; note: string }> = [
   { name: "source", note: "Where the deal came from" },
   { name: "country", note: "The deal's country, or the client's" },
   { name: "value", note: "Deal value in major units - riyals, not halalas" },
-  { name: "hasQuotation", note: "yes / no" },
+  { name: "hasQuotation", note: "yes / no - whether a quotation is linked to the deal at all" },
+  { name: "quotationSent", note: "yes / no - the client has actually been sent it" },
+  { name: "quotationAccepted", note: "yes / no - they agreed, by accepting or by being invoiced" },
+  { name: "quotationStatus", note: "draft / approved / sent / accepted / rejected / invoiced" },
+  { name: "hasInvoice", note: "yes / no - a live invoice exists for this client" },
   { name: "lifecycle", note: "lead / prospect / client / lost / churned" },
   { name: "industry", note: "The client's industry" },
   { name: "city", note: "The client's city" },
@@ -199,6 +203,33 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
     : [null, null];
 
   /**
+   * HOW FAR THE PAPERWORK HAS ACTUALLY GOT.
+   *
+   * `hasQuotation` said only that a document exists, which is the one thing that stops being
+   * interesting the moment it does: the questions a pipeline gate needs to ask are whether the
+   * client has SEEN it, whether they AGREED, and whether they have been billed. Without these the
+   * board's later stages could not be gated on anything derivable, and the alternative — a person
+   * ticking "quotation sent" — is the second to-do list this module exists to avoid.
+   *
+   * Read from the quotation the deal links to, and from the client's invoices. One row each, and
+   * only when there is something to read.
+   */
+  const quote = deal?.quotationId
+    ? await prisma.quotation.findUnique({
+        where: { id: String(deal.quotationId) },
+        select: { status: true, sentAt: true },
+      }).catch(() => null)
+    : null;
+  const qStatus = String(quote?.status ?? "").trim().toLowerCase();
+  // AGREED COVERS BOTH DOORS. The console's "Accept & invoice" is one press that lands on
+  // `invoiced` without ever passing through `accepted`, so a gate testing `accepted` alone would
+  // refuse to let a deal be won precisely because it had been invoiced.
+  const agreed = ["accepted", "invoiced"].includes(qStatus);
+  const invoiced = company?.id
+    ? await prisma.invoice.count({ where: { companyId: company.id, NOT: { status: "void" } } }).catch(() => 0)
+    : 0;
+
+  /**
    * WHO WE ARE ACTUALLY TALKING TO — the deal's own contact, or failing that the client's.
    *
    * The fallback is not a convenience, it is the difference between a gate and a dead end.
@@ -243,6 +274,14 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
     /** Major units, so a rule reads "value gte 50000" rather than in halalas. */
     value: deal?.valueMinor != null ? Math.round(deal.valueMinor / 100) : 0,
     hasQuotation: deal?.quotationId ? "yes" : "no",
+    /** yes / no — the client has been sent it, not merely that it was drafted. */
+    quotationSent: (quote?.sentAt || ["sent", "accepted", "rejected", "invoiced", "changes_requested"].includes(qStatus)) ? "yes" : "no",
+    /** yes / no — the client agreed, by accepting it or by being invoiced off the back of it. */
+    quotationAccepted: agreed ? "yes" : "no",
+    /** The quotation's own status, for a rule that needs more than yes/no. */
+    quotationStatus: qStatus,
+    /** yes / no — a live invoice exists for this client. A void one is not a bill. */
+    hasInvoice: invoiced > 0 ? "yes" : "no",
     lifecycle: company?.lifecycle ?? "",
     // Real columns on Company, checked rather than assumed — an earlier draft of this listed a
     // `clientType` that does not exist, which would have made every rule testing it match nothing
