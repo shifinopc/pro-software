@@ -175,7 +175,7 @@ export const DEAL_FACTS: Array<{ name: string; note: string }> = [
   // so a rule could test the client's city and headcount but not which service the deal is for.
   // Blank until somebody picks one, which is exactly what makes it usable as a gate on Qualified —
   // a deal reaching Quoted without naming its product is a deal nobody can quote or deliver.
-  { name: "service", note: "The catalogue service this deal is selling, blank if nobody has picked one" },
+  { name: "product", note: "The product this deal is selling, blank if nobody has picked one" },
 ];
 
 /**
@@ -231,10 +231,10 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
       }).catch(() => []))
     : null);
 
-  // The catalogue entry this deal names, if any — looked up for its NAME, for the same reason the
-  // package is: a condition that reads an id is unreadable and does not survive a reinstall.
-  const service = deal?.serviceItemId
-    ? await prisma.serviceItem.findUnique({ where: { id: String(deal.serviceItemId) }, select: { name: true } }).catch(() => null)
+  // The product this deal names, if any — looked up for its NAME, for the same reason the package
+  // is: a condition that reads an id is unreadable and does not survive a reinstall.
+  const product = deal?.productId
+    ? await prisma.product.findUnique({ where: { id: String(deal.productId) }, select: { name: true } }).catch(() => null)
     : null;
 
   return {
@@ -262,9 +262,9 @@ export async function factsFor(deal: any, company: any): Promise<Record<string, 
     // client who only ever answers WhatsApp, which in this market is most of them.
     contactReach: str(live?.phone) || str(live?.whatsapp) || str(live?.email) || "",
     closeDate: deal?.expectedCloseDate ?? "",
-    // The NAME, not the id: a rule reads "service eq Business Setup", and an id in a condition is
-    // unreadable and environment-specific. Resolved from the catalogue the caller already loaded.
-    service: service?.name ?? "",
+    // The NAME, not the id: a rule reads "product eq Company Formation", and an id in a condition
+    // is unreadable and environment-specific.
+    product: product?.name ?? "",
     // THE ADMIN'S OWN FIELDS, if any exist. Whatever the Form Builder (or anything else) has put on
     // the client record is conditionable without a code change — which is the whole point of a rule
     // engine that a firm is supposed to configure for itself.

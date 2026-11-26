@@ -3783,10 +3783,11 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
       probabilityBp: b.probabilityBp == null || b.probabilityBp === "" ? null : Math.max(0, Math.min(10000, Number(b.probabilityBp))),
       stageId: stage.id, expectedCloseDate: b.expectedCloseDate || null,
       ownerId: b.ownerId || (req as any).auth?.sub || null, source: b.source || co.source || null,
-      // What the deal is selling. Both deal routes name their fields one by one rather than passing
-      // the body through, so a new column is invisible to them until it is listed here — the form
-      // sent it, the API accepted the request, and the value went nowhere.
-      serviceItemId: b.serviceItemId || null,
+      // What the deal is selling, in the sales side's own words. Both deal routes name their fields
+      // one by one rather than passing the body through, so a new column is invisible to them until
+      // it is listed here — the form sent it, the API accepted the request, and the value went
+      // nowhere, with a 201 to say everything was fine.
+      productId: b.productId || null,
       country, notes: b.notes || null, createdAt: now, stageAt: now,
     },
     include: { stage: true },
@@ -3838,7 +3839,7 @@ app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, a
       source: b.source === undefined ? undefined : (b.source || null),
       notes: b.notes === undefined ? undefined : (b.notes || null),
       // `undefined` leaves it alone, so a PUT that only moves a date cannot clear it.
-      serviceItemId: b.serviceItemId === undefined ? undefined : (b.serviceItemId || null),
+      productId: b.productId === undefined ? undefined : (b.productId || null),
       // Empty string means "back to derived" — an override somebody can take OFF again matters as
       // much as one they can put on. Anything not in the known set is refused rather than stored,
       // because a typo here would silently vanish a deal from every forecast bucket.
@@ -3981,6 +3982,31 @@ app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteR
  *
  * Accepting that quotation is what wins the deal; nobody has to remember to drag the card.
  */
+/**
+ * THE PRODUCT A DEAL NAMES, AS THE SERVICE THAT DELIVERS IT.
+ *
+ * Two vocabularies, both real: `Product` is what the firm sells and what the lead form has always
+ * asked for, `ServiceItem` is how a thing is delivered and carries the SLA and the workflow. The
+ * bridge is by NAME, which is the same exact-then-substring match startDeliveryForQuotation already
+ * applies to every line item — so a product called "Company Formation" finds the service of that
+ * name without anybody maintaining a mapping table.
+ *
+ * Returns null rather than guessing when nothing matches. Half of what this firm sells — VAT,
+ * auditing — has no service entry, and a wrong case opened on a near-miss is worse than no case:
+ * somebody works a process that was never agreed.
+ */
+async function serviceForProduct(productId: string | null | undefined): Promise<string | null> {
+  if (!productId) return null;
+  const p = await prisma.product.findUnique({ where: { id: productId }, select: { name: true } }).catch(() => null);
+  const want = String(p?.name ?? "").trim().toLowerCase();
+  if (!want) return null;
+  const services = await prisma.serviceItem.findMany({ where: { retired: false }, select: { id: true, name: true } });
+  const norm = (n: string) => n.trim().toLowerCase();
+  const hit = services.find(s => norm(s.name) === want)
+    ?? services.find(s => want.includes(norm(s.name)) || norm(s.name).includes(want));
+  return hit?.id ?? null;
+}
+
 app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true, company: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
@@ -4013,8 +4039,14 @@ app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWrite
       // WHAT THE DEAL SAID IT WAS SELLING, carried across. Asking for it again on the quotation is
       // asking the same question twice and getting a different answer half the time — and a
       // quotation that cannot name its service opens loose tasks on acceptance instead of the one
-      // case its workflow describes. The caller may still override it.
-      serviceItemId: b.serviceItemId ?? opp.serviceItemId ?? null,
+      // case its workflow describes.
+      //
+      // PRODUCT → SERVICE, by name. The deal speaks the sales vocabulary and delivery needs the
+      // operational one; the bridge is the same exact-then-substring match delivery already applies
+      // to every line item, so "Company Formation" the product finds "Company Formation" the
+      // service. A product with no service behind it — VAT, auditing — resolves to nothing and the
+      // quotation simply says nothing, which is the honest answer rather than a wrong case.
+      serviceItemId: b.serviceItemId ?? (await serviceForProduct(opp.productId)) ?? null,
     },
   });
   await prisma.opportunity.update({ where: { id: opp.id }, data: { quotationId: q.id } });

@@ -14875,7 +14875,7 @@
                 </div>
                 <sc-if value="{{ ddDlfSvcOpen }}" hint-placeholder-val="{{ false }}">
                   <div data-dd data-hidescroll="true" class="fm-dd">
-                    <sc-if value="{{ ddDlfSvcNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">Nothing in the catalogue matches that</div></sc-if>
+                    <sc-if value="{{ ddDlfSvcNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">No product matches that — they are set up in Sales Settings</div></sc-if>
                     <sc-for list="{{ ddDlfSvcRows }}" as="o" hint-placeholder-count="4">
                       <sc-if value="{{ o.isHeading }}" hint-placeholder-val="{{ false }}"><div class="fm-opt-head">{{ o.label }}</div></sc-if>
                       <sc-if value="{{ o.isOption }}" hint-placeholder-val="{{ true }}"><div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span><span style="font-size:9px; color:#A9A6B4; flex:0 0 auto;">{{ o.hint }}</span></div></sc-if>
@@ -20792,7 +20792,7 @@ class Component extends DCLogic {
      */
     this._openDealForm = (companyId, name) => this.setState({
       dealEdit: { id: null, companyId: companyId || '', title: name ? 'New business — ' + name : '',
-                  serviceItemId: '', value: '', prob: '', close: '', source: '', notes: '' },
+                  productId: '', value: '', prob: '', close: '', source: '', notes: '' },
       dlErr: '',
     });
 
@@ -42312,8 +42312,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   forecast: d.forecastCategory || '',
                   competitor: d.competitor || '',
                   // Carried into the form, or editing a deal to change its close date would save
-                  // the service back as null — the field is sent on every save.
-                  serviceItemId: d.serviceItemId || '',
+                  // the product back as null — the field is sent on every save.
+                  productId: d.productId || '',
                   locked: d.valueSource === 'quotation',
                 },
                 dlErr: '',
@@ -46816,21 +46816,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
        * The title is free text, so until now nothing downstream could tell a company formation from
        * an iqama renewal: the quotation had to be told all over again, accepting it opened loose
        * unassigned tasks instead of the one case the service's workflow describes, and the board
-       * could not answer "how many business setups are we working on".
+       * could not answer "how many company formations are we working on".
        *
-       * Keyed by ID like the client picker above, and for the same reason — two catalogue entries
-       * can share a name across countries. Retired entries are left out: picking one is a mis-click
-       * on a similar name far more often than a decision to sell something withdrawn.
+       * THE PRODUCT LIST, not the service catalogue. They are two vocabularies and this firm keeps
+       * both: products are what is sold — Company Formation, PRO, VAT, Auditing — and are what the
+       * lead form has always asked for, while the service catalogue is how work is delivered and
+       * carries SLAs and workflows. Showing the operational catalogue here asked a salesperson a
+       * question in somebody else's language, and listed "Mudad WPS" and "Qiwa Portal Licence
+       * Renewal" while omitting VAT and auditing, which this firm sells and has no service entry
+       * for. The product is resolved to a service by name when a quotation is raised.
+       *
+       * Keyed by ID like the client picker above, and for the same reason — two products can share
+       * a name across countries. Retired ones are left out: picking one is a mis-click on a similar
+       * name far more often than a decision to sell something withdrawn.
        */
       ...mkDdCombo('ddDlfSvc', [{
-        title: 'SERVICES',
-        options: (Array.isArray(this.state.serviceItemsData) ? this.state.serviceItemsData : [])
-          .filter(sv9 => sv9 && !sv9.retired)
-          .map(sv9 => ({ value: sv9.id, label: sv9.name, hint: [sv9.country, sv9.sla].filter(Boolean).join(' · ') })),
-      }], (_dl && _dl.serviceItemId) || '',
-        (v) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), serviceItemId: v }, dlErr: '' }),
-        'Search the service catalogue…'),
-      dlfSvcHint: 'What the client is buying. It carries onto the quotation and decides which case opens when they accept.',
+        title: 'PRODUCTS',
+        options: _productList.filter(pr9 => pr9 && !pr9.retired)
+          .map(pr9 => ({ value: pr9.id, label: pr9.name, hint: pr9.country || '' })),
+      }], (_dl && _dl.productId) || '',
+        (v) => this.setState({ dealEdit: { ...(this.state.dealEdit || {}), productId: v }, dlErr: '' }),
+        'What are they asking for?'),
+      dlfSvcHint: 'What the client is buying — the same list the lead form asks for. It carries onto the quotation and decides which case opens when they accept.',
       dlfTitle: (_dl && _dl.title) || '', dlfCompany: (_dl && _dl.companyId) || '',
       dlfValue: (_dl && _dl.value) || '', dlfProb: (_dl && _dl.prob) || '',
       dlfClose: (_dl && _dl.close) || '', dlfSource: (_dl && _dl.source) || '', dlfNotes: (_dl && _dl.notes) || '',
@@ -46880,7 +46887,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           probabilityBp: odds ? Math.round(Number(odds) * 100) : null,
           expectedCloseDate: f.close || null, source: f.source || null, notes: f.notes || null,
           // null, not '', when nothing is chosen: the column is nullable and '' is not an id.
-          serviceItemId: f.serviceItemId || null,
+          productId: f.productId || null,
           // '' round-trips as "derive from the odds" — the server maps anything unknown to null.
           forecastCategory: f.forecast || '',
           competitor: f.competitor || '',
