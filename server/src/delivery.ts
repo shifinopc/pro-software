@@ -139,17 +139,33 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   // either buys one or incorporates one, and the Business Setup case opens a lane for whichever it
   // is. Quoted alongside the setup — as a quotation naming both quite reasonably does — it was
   // breaking out as its own unassigned row beside the case that already contains it.
-  // ONE PROCESS, TWO NAMES FOR THE SALE. The firm runs a single Business Setup workflow; what the
-  // sales side calls it is "Company Formation", and either can be the thing quoted. So both are
-  // containers for the acquisition lane, and "Business Setup" still contains a formation line
-  // quoted beside it — a quotation naming the setup and its parts quite reasonably names both.
+  // ONE NAME, ONE PROCESS. Business Setup is what the firm sells and the only workflow it runs for
+  // it; an acquisition and a formation are LANES inside that case, not separate sales, and neither
+  // is in the service catalogue any more. Quoted as lines beside the setup — as a quotation naming
+  // the work quite reasonably does — they fold into the case rather than becoming rows of their own.
   const CONTAINS: Record<string, string[]> = {
     "business setup": ["company acquisition", "company formation"],
-    "company formation": ["company acquisition", "business setup"],
   };
-  const lineServices = lines.map(l => matchService(l.name, services)).filter(Boolean) as { name: string }[];
-  const absorbedBy = (svcName: string) => lineServices.find(other =>
-    (CONTAINS[other.name.trim().toLowerCase()] ?? []).includes(svcName.trim().toLowerCase()))?.name ?? null;
+  /**
+   * BY NAME, LENIENTLY, AND NOT ONLY BY CATALOGUE ENTRY.
+   *
+   * This used to absorb a line only when the line matched a SERVICE whose name was listed above.
+   * "Company Acquisition" has since been taken out of the catalogue — the firm does not sell it
+   * separately, it is a lane inside the setup — and that immediately broke the rule: a line called
+   * "Acquisition" matched no service, so it was classified as unmatched and became exactly the
+   * loose unassigned row with no due date that absorbing exists to prevent.
+   *
+   * So the contained side is compared the same lenient way matchService compares names — either
+   * containing the other — against the line's own words when the catalogue has nothing to say. The
+   * container side falls back the same way, so removing an entry can never silently un-absorb.
+   */
+  const nameLike = (a: string, b: string) => {
+    const x = String(a ?? "").trim().toLowerCase(), y = String(b ?? "").trim().toLowerCase();
+    return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+  };
+  const containers = lines.map(l => matchService(l.name, services)?.name ?? l.name);
+  const absorbedBy = (name: string) => containers.find(other =>
+    !nameLike(other, name) && (CONTAINS[other.trim().toLowerCase()] ?? []).some(c => nameLike(c, name))) ?? null;
 
   for (const line of lines) {
     // MONEY IS NOT WORK. "Professional Fees" and "Government Fees" are what the client pays, and the
@@ -159,9 +175,11 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     const svc = matchService(line.name, services);
     // Work another line on this quotation already contains - an acquisition inside a Business Setup.
     // Checked before the task is created, which is the whole point: no row, no note, no duplicate.
-    const contained = svc ? absorbedBy(svc.name) : null;
+    // The LINE's own name when the catalogue has no entry for it, so a service being removed cannot
+    // turn an absorbed lane back into a loose row.
+    const contained = absorbedBy(svc?.name ?? line.name);
     if (contained) {
-      out.absorbed.push(`${svc!.name} (already part of ${contained} on this quotation)`);
+      out.absorbed.push(`${svc?.name ?? line.name} (already part of ${contained} on this quotation)`);
       continue;
     }
     if (!svc) out.unmatched.push(line.name);
