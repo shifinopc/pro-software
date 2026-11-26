@@ -470,6 +470,41 @@ function workCertifiedBy(g: Graph, approvalNodeId: string): string[] {
 }
 
 // Evaluate a decision node's branches against the instance variables → returns a branch key ("else" if none match).
+/**
+ * CAPTURE TYPES WHOSE ANSWER IS NOT A STRING.
+ *
+ * `rows` is a repeating table — shareholders with a name, a number, an email and a percentage each,
+ * where the count is the client's business and not the template's. `files` is any number of
+ * attachments, each with the officer's own note saying what it is, for the pile of papers a deal
+ * brings that no checklist could have been written for in advance.
+ */
+export const ROWS = "rows";
+export const FILES = "files";
+
+/**
+ * IS THIS ANSWER ACTUALLY GIVEN?
+ *
+ * The test used to be `String(v).trim() !== ""`, which is right for every scalar and silently wrong
+ * for anything else. `String([])` is "" so an empty table reads as missing by luck; `String([{}])`
+ * is "[object Object]" so a table of EMPTY rows reads as answered, and a required field is
+ * satisfied by pressing "+ Add partner" and typing nothing. Money has had its own check for the
+ * same reason — an object is always truthy — and this is that check generalised rather than a
+ * third special case bolted on beside it.
+ */
+export function captureFilled(cap: any, v: any): boolean {
+  const t = String(cap?.type ?? "");
+  if (t === ROWS) {
+    return Array.isArray(v) && v.some(r => r && typeof r === "object"
+      && Object.values(r).some(x => String(x ?? "").trim() !== ""));
+  }
+  if (t === FILES) {
+    // A note on its own is not a document: the file is the answer, the note only says what it is.
+    return Array.isArray(v) && v.some(f => f && String(f.path ?? "").trim() !== "");
+  }
+  if (t === MONEY) return !!String((v && (v as any).amount) ?? "").trim();
+  return v !== undefined && v !== null && String(v).trim() !== "";
+}
+
 function evalDecision(node: Node, vars: Record<string, any>): string {
   const branches: any[] = Array.isArray(node.config?.branches) ? node.config.branches : [];
   for (const b of branches) {
@@ -1896,8 +1931,7 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
       // A step re-entered after a loop asks again, which is the correct behaviour anyway: it is being
       // re-entered precisely because the answer needs revisiting.
       const raw = supplied[cap.var];
-      const has = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
-      if (!has(raw)) missing.push(String(cap.label || cap.var));
+      if (!captureFilled(cap, raw)) missing.push(String(cap.label || cap.var));
     }
     if (missing.length) {
       throw new Error(missing.length === 1
@@ -1942,6 +1976,38 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
 
     // Cross-field rules, against the run's variables WITH this step's answers applied — a rule about
     // nationality and hiring type has to see both, whichever step supplied each of them.
+    /**
+     * A TABLE OR A FILE LIST IS STILL A FIELD, not a place to put arbitrary JSON.
+     *
+     * Scoping writes to declared variables stopped a step answering another step's questions; it
+     * says nothing about the SHAPE of its own answers. Without this, a `rows` capture accepts any
+     * object per row — unknown keys, nested objects, a megabyte of them — and all of it lands in the
+     * instance's variables, which every later step reads and the engine carries for the life of the
+     * run. Trimmed to the columns the template declares, and to a file's path, name and note.
+     */
+    for (const cap of caps0) {
+      if (!cap?.var) continue;
+      const t = String(cap.type ?? "");
+      const v = supplied[cap.var];
+      if (t === ROWS && Array.isArray(v)) {
+        const cols = (Array.isArray(cap.columns) ? cap.columns : []).map((c: any) => String(c?.var ?? "")).filter(Boolean);
+        supplied[cap.var] = v.slice(0, 50).map((r: any) => {
+          const out: Record<string, string> = {};
+          for (const c of cols) out[c] = String((r && r[c]) ?? "").slice(0, 300);
+          return out;
+          // Rows the officer added and left blank are dropped rather than stored: "+ Add partner"
+          // pressed twice is not two partners.
+        }).filter(r => Object.values(r).some(x => x.trim() !== ""));
+      } else if (t === FILES && Array.isArray(v)) {
+        supplied[cap.var] = v.slice(0, 25)
+          .filter((f: any) => f && String(f.path ?? "").trim() !== "")
+          .map((f: any) => ({
+            path: String(f.path).slice(0, 400),
+            name: String(f.name ?? "").slice(0, 200),
+            note: String(f.note ?? "").slice(0, 300),
+          }));
+      }
+    }
     const merged = { ...((inst.variables as any) ?? {}), ...supplied };
     // The completing node's rules, AND the rules of any node that owns one of the variables being
     // written. Scoping above means a variable can now only be written where it is declared, so this

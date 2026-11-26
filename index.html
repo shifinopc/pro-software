@@ -17319,6 +17319,61 @@
                   <!-- Seeded, not bound, and the value goes in the ATTRIBUTE: a textarea takes its
                        content from its children, and binding those re-renders the box on every
                        keystroke and puts the cursor back at the start. -->
+                  <!--
+                    A REPEATING TABLE. The number of shareholders is the client's business, not the
+                    template's, so the rows are added by the officer rather than counted out in
+                    advance. Seeded inputs, not bound ones, for the reason given above the textarea:
+                    a bound value re-renders the box on every keystroke and sends the cursor home.
+                    data-seed-val carries the row index so a removed row cannot leave its text behind
+                    in the row that takes its place.
+                  -->
+                  <sc-if value="{{ c.isRows }}" hint-placeholder-val="{{ false }}">
+                    <div>
+                      <sc-for list="{{ c.rowList }}" as="r" hint-placeholder-count="2">
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                          <span style="font-size:10px; font-weight:700; color:#A9A6B4; width:14px; flex-shrink:0;">{{ r.n }}</span>
+                          <sc-for list="{{ r.cells }}" as="cl" hint-placeholder-count="4">
+                            <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="flex:{{ cl.flex }}; min-width:0;">
+                          </sc-for>
+                          <span onClick="{{ r.remove }}" title="Remove this row" style="font-size:14px; color:#C0353A; cursor:pointer; padding:0 4px; flex-shrink:0;">&times;</span>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ c.rowsEmpty }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:10px; color:#A9A6B4; margin-bottom:6px;">Nothing added yet.</div>
+                      </sc-if>
+                      <div style="display:flex; align-items:center; gap:10px;">
+                        <span onClick="{{ c.rowAdd }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">+ Add</span>
+                        <sc-if value="{{ c.hasTotal }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:10px; font-weight:700; color:{{ c.totalColor }};">{{ c.totalLabel }}</span>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <!--
+                    ANY NUMBER OF DOCUMENTS, each with the officer's own note saying what it is. The
+                    checklist beside it is the right tool for documents a template can name in
+                    advance; this is for the ones it cannot, which on a company acquisition is most
+                    of them. Uploaded as a private document — outside the public folder, readable
+                    only through the authenticated route — because these are passports.
+                  -->
+                  <sc-if value="{{ c.isFiles }}" hint-placeholder-val="{{ false }}">
+                    <div>
+                      <sc-for list="{{ c.fileList }}" as="fl" hint-placeholder-count="2">
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                          <a href="{{ fl.href }}" target="_blank" rel="noopener" style="font-size:11px; font-weight:600; color:#7C00FF; text-decoration:none; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;">{{ fl.name }}</a>
+                          <input sc-camel-default-value="{{ fl.note }}" data-seed-val="{{ fl.note }}" onChange="{{ fl.setNote }}" placeholder="What is this document?" class="fm-inp" style="flex:1; min-width:0;">
+                          <span onClick="{{ fl.remove }}" title="Remove this document" style="font-size:14px; color:#C0353A; cursor:pointer; padding:0 4px; flex-shrink:0;">&times;</span>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ c.filesEmpty }}" hint-placeholder-val="{{ true }}">
+                        <div style="font-size:10px; color:#A9A6B4; margin-bottom:6px;">Nothing attached yet.</div>
+                      </sc-if>
+                      <label style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">
+                        + Attach document
+                        <input type="file" multiple accept=".png,.jpg,.jpeg,.svg,.webp,.pdf" onChange="{{ c.filePick }}" style="display:none;">
+                      </label>
+                    </div>
+                  </sc-if>
                   <sc-if value="{{ c.isArea }}" hint-placeholder-val="{{ false }}">
                     <textarea sc-camel-default-value="{{ c.value }}" data-seed-val="{{ c.value }}" onChange="{{ c.type }}" onBlur="{{ c.set }}" rows="4" class="fm-inp" style="resize:vertical; min-height:74px; font-family:inherit;"></textarea>
                   </sc-if>
@@ -40508,6 +40563,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const _capAnswered = (c) => {
         const v = cap[c.var];
         if (String(c.type) === 'money') return !!String((v && v.amount) == null ? '' : v.amount).trim();
+        // A TABLE OF EMPTY ROWS IS NOT AN ANSWER, and String([{}]) is "[object Object]" — truthy —
+        // so without this, pressing "+ Add partner" and typing nothing satisfies a required field
+        // here and is then refused by the server, which checks the same thing properly.
+        if (String(c.type) === 'rows') {
+          return Array.isArray(v) && v.some(r => r && Object.keys(r).some(k => String(r[k] ?? '').trim()));
+        }
+        // The FILE is the answer; a note with nothing attached to it is not.
+        if (String(c.type) === 'files') {
+          return Array.isArray(v) && v.some(f => f && String(f.path ?? '').trim());
+        }
         return !!String(v == null ? '' : v).trim();
       };
       // Across the whole run being filled, not just this step: pressing one button for four steps
@@ -40578,7 +40643,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // type since it was written and this form never looked for it, so "what was agreed on
           // the call" was a field you could not see the start of once you had typed a sentence.
           isArea: c.type === 'textarea',
-          isText: c.type !== 'select' && c.type !== 'date' && c.type !== 'money' && c.type !== 'textarea',
+          isRows: c.type === 'rows',
+          isFiles: c.type === 'files',
+          isText: ['select', 'date', 'money', 'textarea', 'rows', 'files'].indexOf(String(c.type)) < 0,
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
           // refused on completion, so the form should say so before the button is pressed.
           req: !(c.required === false || c.optional === true),
@@ -40611,6 +40678,96 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           }),
           type: _capType9(c.var, ''),
           set: (e) => { _clearRule(); _capDone9(c.var, ''); this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: e.target.value } } }); },
+          /**
+           * A REPEATING TABLE, and a pile of attachments.
+           *
+           * Both write through the same place every other field does — one object per step in
+           * wfCap — so nothing downstream has to know they are not strings. The value is an ARRAY
+           * here, which is why _capAnswered above grew a case for each: the engine refuses a table
+           * of empty rows and the button has to agree with it before it is pressed.
+           */
+          ...(() => {
+            const put9 = (next9) => {
+              _clearRule(); _capDone9(c.var, '');
+              this.setState({ wfCap: { ...wfCap, [selStep.id]: { ...cap, [c.var]: next9 } } });
+            };
+            const cols9 = (Array.isArray(c.columns) ? c.columns : []).filter(x9 => x9 && x9.var);
+            const list9 = Array.isArray(val) ? val : [];
+            return {
+              // ---- rows
+              rowCols: cols9.map(col9 => ({ label: col9.label || col9.var, flex: String(col9.flex || 1) })),
+              rowsEmpty: !list9.length,
+              rowAdd: () => put9([...list9, Object.fromEntries(cols9.map(col9 => [col9.var, '']))]),
+              rowList: list9.map((r9, i9) => ({
+                n: String(i9 + 1),
+                cells: cols9.map(col9 => ({
+                  value: String((r9 && r9[col9.var]) ?? ''),
+                  place: col9.label || col9.var,
+                  flex: String(col9.flex || 1),
+                  // A percentage column gets a numeric keypad; everything else is free text. The
+                  // total is NOT enforced here — a half-entered table would fight the officer — but
+                  // it is shown, which is what catches the 90% that should have been 100%.
+                  mode: String(col9.type || '') === 'number' ? 'numeric' : 'text',
+                  set: (e9) => put9(list9.map((x9, j9) => j9 === i9 ? { ...x9, [col9.var]: e9.target.value } : x9)),
+                })),
+                remove: () => put9(list9.filter((_x9, j9) => j9 !== i9)),
+              })),
+              // Shown only when a column asks to be totalled, because most tables have nothing to add up.
+              hasTotal: cols9.some(col9 => col9.total === true),
+              totalLabel: (() => {
+                const col9 = cols9.find(x9 => x9.total === true);
+                if (!col9) return '';
+                const sum9 = list9.reduce((a9, r9) => a9 + (Number(String((r9 && r9[col9.var]) ?? '').replace(/[^0-9.\-]/g, '')) || 0), 0);
+                const round9 = Math.round(sum9 * 100) / 100;
+                return (col9.label || col9.var) + ' total: ' + round9 + (col9.totalShouldBe != null ? ' of ' + col9.totalShouldBe : '');
+              })(),
+              totalColor: (() => {
+                const col9 = cols9.find(x9 => x9.total === true);
+                if (!col9 || col9.totalShouldBe == null) return '#A9A6B4';
+                const sum9 = Math.round(list9.reduce((a9, r9) => a9 + (Number(String((r9 && r9[col9.var]) ?? '').replace(/[^0-9.\-]/g, '')) || 0), 0) * 100) / 100;
+                return sum9 === Number(col9.totalShouldBe) ? '#0E9355' : '#B8860B';
+              })(),
+              // ---- files
+              fileList: list9.map((f9, i9) => ({
+                name: String((f9 && f9.name) || 'Attachment'),
+                note: String((f9 && f9.note) || ''),
+                href: String((f9 && f9.path) || ''),
+                setNote: (e9) => put9(list9.map((x9, j9) => j9 === i9 ? { ...x9, note: e9.target.value } : x9)),
+                remove: () => put9(list9.filter((_x9, j9) => j9 !== i9)),
+              })),
+              filesEmpty: !list9.length,
+              // Uploaded as a private document — stored outside the public folder and readable only
+              // through the authenticated route, because these are passports.
+              filePick: (e9) => {
+                const chosen9 = [...(e9.target.files || [])];
+                e9.target.value = '';
+                if (!chosen9.length) return;
+                const tok9 = localStorage.getItem('stimespro:token');
+                chosen9.forEach(f9 => {
+                  const rd9 = new FileReader();
+                  rd9.onerror = () => this.toast('Could not read ' + f9.name, 'error');
+                  rd9.onload = () => {
+                    fetch((this._apiBase || 'http://localhost:4100') + '/api/upload', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+                      body: JSON.stringify({ name: f9.name, data: String(rd9.result || ''), kind: 'document' }),
+                    })
+                      .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+                      .then(({ ok, j9 }) => {
+                        if (!ok || !j9.path) return this.toast((j9 && j9.error) || ('Could not upload ' + f9.name), 'error');
+                        // Read from state rather than the captured `list9`: several files chosen at
+                        // once each land in their own callback, and closing over the list as it was
+                        // would leave only the last of them.
+                        const cur9 = ((this.state.wfCap || {})[selStep.id] || {})[c.var];
+                        put9([...(Array.isArray(cur9) ? cur9 : []), { path: j9.path, name: j9.name || f9.name, note: '' }]);
+                      })
+                      .catch(() => this.toast('Server unreachable — ' + f9.name + ' was not uploaded', 'error'));
+                  };
+                  rd9.readAsDataURL(f9);
+                });
+              },
+            };
+          })(),
           // A money capture holds an object, so each box patches its own key rather than replacing
           // the answer. `paid` defaults to true: recording a fee you have just handed over is the
           // ordinary case, and defaulting to unpaid would mark every payment outstanding.
