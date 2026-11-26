@@ -167,6 +167,30 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   const absorbedBy = (name: string) => containers.find(other =>
     !nameLike(other, name) && (CONTAINS[other.trim().toLowerCase()] ?? []).some(c => nameLike(c, name))) ?? null;
 
+  /**
+   * WHAT EACH CASE HAS TO DELIVER, worked out BEFORE any task is made.
+   *
+   * Absorbing stopped a lane becoming its own unassigned row, and then threw the lane away. On a
+   * Saudi business setup that is the one fact the work turns on: a service company needs a parent
+   * acquired abroad, a trading company needs a parent and two shell companies, and WHERE is the
+   * whole question. The quotation said "Acquisition — India" and "Company Formation — India × 2",
+   * all of it absorbed, and the case the officer opened mentioned none of it.
+   *
+   * Computed up front because the container is usually the FIRST line — the service the quotation
+   * sells is unshifted above the rest — so by the time its task is created the lines that fold into
+   * it have not been seen yet.
+   */
+  const partsOf = new Map<string, string[]>();
+  for (const l of lines) {
+    if (l.kind === "prof" || l.kind === "gov") continue;
+    const nm = matchService(l.name, services)?.name ?? l.name;
+    const into = absorbedBy(nm);
+    if (!into) continue;
+    const list = partsOf.get(into) ?? [];
+    list.push(`${nm}${l.units > 1 ? ` × ${l.units}` : ""}${l.country ? ` in ${l.country}` : ""}`);
+    partsOf.set(into, list);
+  }
+
   for (const line of lines) {
     // MONEY IS NOT WORK. "Professional Fees" and "Government Fees" are what the client pays, and the
     // invoice already carries them; as tasks they were unassigned to-dos that no officer could do
@@ -188,7 +212,17 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
     // IN THE TITLE, not only in a variable. Whoever picks this up off a queue sees the title and
     // nothing else, and "Company Acquisition" without the country is not a job anybody can start.
     // Outside the per-unit loop: it is a property of the line, not of the copy being made.
-    const where = line.country ? ` — ${line.country}` : "";
+    /**
+     * A CONTAINER DOES NOT TAKE A COUNTRY, because the country is not its own.
+     *
+     * The firm's business setups happen in its own market; what sits abroad is the parent company
+     * and the shells, which are the lines FOLDING INTO this case. A country on the sale therefore
+     * reads as "the setup is there" — the case came out titled "Business Setup — India" and carried
+     * `country: India`, for a setup in Saudi whose PARENT is Indian. The parts carry the countries,
+     * and they are listed on the case below.
+     */
+    const parts = partsOf.get(svc?.name ?? line.name) ?? [];
+    const where = line.country && !parts.length ? ` — ${line.country}` : "";
     for (let i = 0; i < line.units; i++) {
       const suffix = line.units > 1 ? ` (${i + 1}/${line.units})` : "";
       const title = `${svc?.name ?? line.name}${where}${suffix} — ${q.clientName ?? "Client"}`;
@@ -216,7 +250,15 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
             title: `${svc.name}${where} — ${q.clientName ?? "Client"}`,
             companyId: q.companyId ?? null,
             clientName: q.clientName ?? null,
-            variables: { serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number, ...(line.country ? { country: line.country } : {}) },
+            variables: {
+              serviceId: svc.id, serviceName: svc.name, quotationId: q.id, quotationNumber: q.number,
+              // Only when it is the case's OWN country — see the note above the title.
+              ...(line.country && !parts.length ? { country: line.country } : {}),
+              // WHAT THIS CASE CONTAINS, in the officer's words rather than as a dropped line:
+              // "Acquisition in India; Company Formation × 2 in India". Read, not enforced — the
+              // officer decides what a structure needs; this says what was sold.
+              ...(parts.length ? { structure: parts.join("; ") } : {}),
+            },
             // `engineVariables`, NOT `variables`: callerVariables() drops every key beginning with
             // an underscore, because those are the engine's own. Passed as caller variables these
             // were accepted, silently discarded, and the run was then left with no record of why
