@@ -12333,11 +12333,18 @@
   <sc-if value="{{ showCreateInv }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeCreateInv }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:100; display:flex; align-items:center; justify-content:center; padding:15px; animation:fadeUp .2s ease both;">
       <div onClick="{{ stopClick }}" style="background:#fff; border-radius:20px; width:100%; max-width:860px; max-height:92vh; box-shadow:0 24px 64px rgba(38,7,77,.3); animation:popIn .25s cubic-bezier(.34,1.4,.64,1) both; display:flex; flex-direction:column; overflow:hidden;">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 17px; border-bottom:1px solid #F0EDF6;"><div><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ciHeadTitle }}</span><div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ ciHeadNo }} · live preview updates as you type</div></div><div onClick="{{ closeCreateInv }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; flex:1; min-height:0;">
-          <!-- form pane -->
-          <div data-hidescroll="true" style="overflow-y:auto; padding:13px 17px; border-right:1px solid #F0EDF6;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 17px; border-bottom:1px solid #F0EDF6;"><div><span style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700;">{{ ciHeadTitle }}</span><div style="font-size:10px; color:#A9A6B4; margin-top:1px;">{{ ciHeadNo }} · the document is on the row, under Open</div></div><div onClick="{{ closeCreateInv }}" style="width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#F3EFFA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div></div>
+        <div style="display:flex; flex:1; min-height:0;">
+          <!-- ONE PANE, TWO COLUMNS — the shape the quotation builder settled on.
+               THE LIVE PREVIEW IS GONE. It rendered the real document beside the form, which sounds
+               useful and cost half the width: the line items, the only part anybody edits, were
+               squeezed into a column too narrow for the fee and VAT chips this form now needs. The
+               document is one press away on the row, built by the same code, and the totals that
+               were the preview's real value are stated below the lines instead. -->
+          <div data-hidescroll="true" style="flex:1; min-width:0; overflow-y:auto; padding:13px 17px;">
             <sc-if value="{{ ciErr }}" hint-placeholder-val="{{ false }}"><div style="margin-bottom:12px; background:#FEECEC; border:1px solid #FBD5D5; border-radius:11px; padding:9px 13px; font-size:11px; font-weight:600; color:#C0353A;">{{ ciErr }}</div></sc-if>
+            <div style="display:grid; grid-template-columns:1fr 1.35fr; gap:20px; align-items:start;">
+            <div style="min-width:0;">
             <div style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">① CLIENT</div>
             <div style="position:relative; margin-top:7px;"><div data-dd onClick="{{ ddCiClientToggle }}" style="width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:10px 13px; font-size:12px; background:#FCFBFE; display:flex; align-items:center; gap:8px; cursor:pointer;"><span style="flex:1; color:{{ ciClientColor }};">{{ ciClientVal }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddCiClientOpen }}" hint-placeholder-val="{{ false }}"><div data-dd data-hidescroll="true" style="position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:12px; box-shadow:0 12px 32px rgba(38,7,77,.16); padding:5px; z-index:30;"><div style="padding:4px 4px 6px;"><input sc-camel-default-value="{{ ddCiClientQuery }}" data-seed-val="{{ ddCiClientQuery }}" onInput="{{ ddCiClientSetQuery }}" placeholder="{{ ddCiClientPlaceholder }}" style="width:100%; box-sizing:border-box; border:1px solid #EDEBF2; border-radius:8px; padding:7px 10px; font-size:11px; background:#FBFAFE; outline:none;"></div><sc-if value="{{ ddCiClientNoMatch }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 11px; font-size:11px; color:#A9A6B4;">No client matches that</div></sc-if><sc-for list="{{ ddCiClientOptions }}" as="o" hint-placeholder-count="5"><div onClick="{{ o.pick }}" style="padding:8px 11px; border-radius:8px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;" style-hover="background:#F7F3FD;">{{ o.label }}</div></sc-for></div></sc-if></div>
             <!-- Approved quotations for the selected client: one click copies the agreed lines in,
@@ -12389,7 +12396,10 @@
             </div>
             <sc-if value="{{ ciZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — no VAT will be charged and the document prints no VAT line. Only for genuinely exempt or zero-rated work.</div></sc-if>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SUBJECT / PROJECT</div><input sc-camel-default-value="{{ ciSubject }}" data-seed-val="{{ ciSubject }}" onBlur="{{ setCiSubject }}" placeholder="e.g. Work Visa Processing" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; background:#FCFBFE;"></div>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addCiLine }}" title="{{ addCiLineHint }}" style="font-size:11px; font-weight:700; color:{{ ciAddColor }}; cursor:{{ ciAddCursor }};">+ Add item</span></div>
+            <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ ciNotes }}" data-seed-val="{{ ciNotes }}" onBlur="{{ setCiNotes }}" placeholder="Printed on the invoice. Terms &amp; footer come from Print Layout." rows="4" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
+            </div>
+            <div style="min-width:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0;"><span style="font-size:10px; font-weight:700; color:#7C00FF; letter-spacing:.06em;">③ LINE ITEMS</span><span onClick="{{ addCiLine }}" title="{{ addCiLineHint }}" style="font-size:11px; font-weight:700; color:{{ ciAddColor }}; cursor:{{ ciAddCursor }};">+ Add item</span></div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:9px;">
               <sc-for list="{{ ciLineRows }}" as="l" hint-placeholder-count="1">
                 <div style="display:flex; gap:6px; align-items:center;">
@@ -12400,12 +12410,25 @@
                 </div>
               </sc-for>
             </div>
-            <div style="margin-top:10px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">NOTES</div><textarea sc-camel-default-value="{{ ciNotes }}" data-seed-val="{{ ciNotes }}" onBlur="{{ setCiNotes }}" placeholder="Printed on the invoice. Terms &amp; footer come from Print Layout." rows="2" style="margin-top:5px; width:100%; border:1px solid #DDD9E6; border-radius:11px; padding:9px 12px; font-size:11px; font-family:'Inter',sans-serif; background:#FCFBFE; resize:vertical;"></textarea></div>
-          </div>
-          <!-- preview pane — the REAL document, built by _docHtml exactly as it prints (see _paintCiPreview) -->
-          <div data-hidescroll="true" style="overflow-y:auto; background:#F6F4FB; padding:14px;">
-            <div data-ci-preview style="background:#fff; border-radius:12px; box-shadow:0 4px 18px rgba(38,7,77,.08); overflow:hidden; position:relative;"></div>
-            <div style="font-size:9px; color:#B9B5C4; margin-top:10px; text-align:center;">Exactly how it prints · Settings → Print Layout</div>
+            <!-- WHAT IT COMES TO. The preview used to carry these and nothing else did; losing it
+                 without stating them would have left the only figures on the form the per-line
+                 prices, with the person adding up the VAT in their head. -->
+            <div style="margin-top:11px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:10.5px; color:#6F6C7A;">Sub total</span>
+                <span style="font-size:11.5px; font-weight:700; color:#1A1523; font-variant-numeric:tabular-nums;">{{ ciSumGross }}</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-size:10.5px; color:#6F6C7A;">{{ ciSumVatLabel }}</span>
+                <span style="font-size:11.5px; font-weight:700; color:#1A1523; font-variant-numeric:tabular-nums;">{{ ciSumVat }}</span>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid #EDEBF2; padding-top:8px;">
+                <span style="font-size:10.5px; font-weight:700; color:#1A1523;">Grand total</span>
+                <span style="font-family:'Space Grotesk',sans-serif; font-size:14px; font-weight:700; color:#7C00FF;">{{ ciSumTotal }}</span>
+              </div>
+            </div>
+            </div>
+            </div>
           </div>
         </div>
         <div style="display:flex; gap:10px; padding:11px 17px; border-top:1px solid #F0EDF6; justify-content:flex-end; align-items:center;"><span style="flex:1; font-size:10px; color:#A9A6B4;">Saved as a draft — approve it to issue the invoice</span><button onClick="{{ closeCreateInv }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:9px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A9A6B4;">Cancel</button><button onClick="{{ submitInvDraft }}" style="background:#7C00FF; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 14px; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(124,0,255,.25);" style-hover="background:#6900D6;">{{ ciSaveLabel }}</button></div>
@@ -25411,11 +25434,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       payMonthCount: _payThisMonth ? _payThisMonth.length + (_payThisMonth.length === 1 ? ' payment' : ' payments') : (_authed ? 'Loading…' : '12 payments'),
       payYtd: _payThisYear ? fmtCur(_paySum(_payThisYear)) : (_authed ? '—' : 'AED 64,200'),
       payAvgDays: _payReal ? (_payAvg == null ? '—' : (Math.round(_payAvg * 10) / 10) + ' days') : (_authed ? '—' : '6.4 days'),
-      showCreateInv: (() => {
-        // Repaint the document preview after this render, so it tracks every keystroke.
-        if (this.state.createInv) { clearTimeout(this._ciPaint); this._ciPaint = setTimeout(() => this._paintDocInto('[data-ci-preview]', 'invoice', this._ciDoc), 60); }
-        return !!this.state.createInv;
-      })(),
+      // The live preview is gone from this dialog — see the note on the modal. `this._ciDoc` is
+      // still built above, because the Print and Download buttons on the row read it.
+      showCreateInv: !!this.state.createInv,
       // No client is preselected: the first company in the list is not a sensible default for a bill,
       // and a pre-filled name is exactly the kind of thing that gets saved without being read.
       openCreateInv: () => {
@@ -25509,6 +25530,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // the ZATCA QR, and it leaves no VAT line behind to notice it by. So it says so while it
       // is still a choice, rather than being discovered on a bill the client already holds.
       ciZeroVat: ciVatRate === 0,
+      // The figures the preview used to carry. Same arithmetic the save uses, so what is shown and
+      // what is stored cannot differ by a rounding.
+      ciSumGross: fmtCurAs(ciCur, ciSubtotalN),
+      ciSumVatLabel: 'VAT ' + ciVatRate + '%' + (ciVatRate > 0 && ciTaxedN > 0 && Math.abs(ciTaxedN - ciSubtotalN) > 0.004 ? ' on ' + fmtCurAs(ciCur, ciTaxedN) : ''),
+      ciSumVat: fmtCurAs(ciCur, ciVatN),
+      ciSumTotal: fmtCurAs(ciCur, ciGrandN),
       ciClientVal: this.state.ciClient || 'Select a client',
       ciClientColor: this.state.ciClient ? '#1A1523' : '#A9A6B4',
       ciSaveLabel: this.state.ciEditId ? 'Save changes' : 'Save',
