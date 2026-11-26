@@ -17341,6 +17341,23 @@
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:14px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 18px;">
               <div style="font-size:10px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
+              <!--
+                HANDING A STEP ON.
+
+                The record's own action bar carries Delegate and is gated to plain tasks, because on
+                a step it rendered between the heading and the form, above that form's own footer.
+                Gating it fixed the placement and removed the only way to delegate a workflow step —
+                while this half of the drawer goes on defining the picker, the reassign call and the
+                role-gate clear it performs, all of it unreachable.
+
+                Its own row, and OUTSIDE wdHasCaptures: a step with no fields to fill has no save bar
+                at all, and is just as likely to belong to somebody else.
+              -->
+              <sc-if value="{{ wdIsStep }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                  <button onClick="{{ toggleDelegate }}" title="Hand this step to somebody else — they can act on it whatever role they hold" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button>
+                </div>
+              </sc-if></sc-if>
               <!-- SAVE SITS ABOVE BOTH FOOTERS, not inside the "ready" one: a part-filled step is
                    the only kind worth saving, and that is exactly the step that cannot complete. -->
               <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
@@ -40662,7 +40679,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : remH < 0 ? Math.abs(Math.round(remH)) + 'h over SLA'
         : Math.round(remH) + 'h to SLA';
       drawerApi = {
-        showWorkDrawer: true, wdKind: selStep.kind, wdIsApproval: selStep.kind === 'approval',
+        showWorkDrawer: true, wdKind: selStep.kind, wdIsApproval: selStep.kind === 'approval', wdIsStep: true,
         wdTitle: selStep.title, wdClient: selStep.client, wdRelated: selStep.related, wdRole: selStep.role,
         // This step's documents, then the ones the later steps of the run collect — one list, so
         // the officer sees everything the single Complete button is going to need.
@@ -41027,7 +41044,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     } else if (selPlain) {
       const steps = ['To do', 'In progress', 'Done'];
       drawerApi = {
-        showWorkDrawer: true, wdKind: 'task', wdIsApproval: false, wdIsPlain: true,
+        showWorkDrawer: true, wdKind: 'task', wdIsApproval: false, wdIsPlain: true, wdIsStep: false,
         wdTitle: selPlain.title, wdClient: selPlain.client, wdRelated: selPlain.wf || selPlain.comp || selPlain.docType || '—', wdRole: selPlain.assignee,
         wdDue: selPlain.due, wdDueColor: selPlain.dueColor, wdPriority: selPlain.priority, wdPrBg: selPlain.prBg, wdPrColor: selPlain.prColor,
         wdDocType: selPlain.docType, wdDocShow: selPlain.docTypeShow, wdCompShow: selPlain.compShow, wdComp: selPlain.comp,

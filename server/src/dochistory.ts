@@ -32,14 +32,14 @@ export type DocEvent = {
 
 /** Audit actions worth printing, and what to call them. Anything absent is left out. */
 const LABEL: Record<string, string> = {
-  "quotation.create": "Created",
-  "quotation.revise": "Revised",
+  "quotation.create": "Quotation created",
+  "quotation.revise": "Revised into a new version",
   "quotation.convert": "Invoiced",
   "quotation.stage_invoice": "Stage invoice raised",
   "quotation.status": "Status changed",
   "proposal.generated": "Proposal generated",
   "proposal.emailed": "Proposal emailed",
-  "invoice.create": "Created",
+  "invoice.create": "Invoice created",
   "invoice.approve": "Approved",
   "invoice.correct": "Corrected",
   "invoice.void": "Voided",
@@ -69,6 +69,39 @@ async function namesFor(ids: string[]): Promise<Map<string, string>> {
 const mentions = (row: { target: string | null; detail: string | null }, id: string) =>
   String(row.target ?? "").includes(id) || String(row.detail ?? "").includes(id);
 
+/**
+ * THE ACTS THAT ARE KEYED BY NUMBER RATHER THAN BY ID.
+ *
+ * Most audit rows name the document's id, which is why this file joins on it. These three do not —
+ * `quotation.revise` writes `target = "QT-001-R1"` and `detail = "revises QT-001"`, and
+ * `proposal.generated` writes `target = "QT-001-R1 · shifin"`. Joining on the id alone therefore
+ * lost the two events that OPEN a quotation's story: that it was revised out of an earlier offer,
+ * and that a proposal was produced from it. A timeline starting at "Approved" reads as though the
+ * document appeared already agreed.
+ *
+ * Matched on a whole token so that "QT-001" does not claim "QT-001-R1"'s history: the boundary
+ * excludes the hyphen, which is what separates the revision suffix from the number it extends.
+ * Limited to these actions because a number is a weak key — anything that creates and deletes
+ * reuses one — and these are the only acts that carry nothing stronger.
+ */
+const NUMBER_KEYED = new Set(["quotation.revise", "proposal.generated", "proposal.emailed"]);
+
+const namesTheNumber = (row: { target: string | null; detail: string | null }, number: string) => {
+  // Scanned rather than matched with a regex: a document number is letters, digits and hyphens, so
+  // there is nothing to escape, and building a pattern out of stored data is how an injected bracket
+  // becomes a crash.
+  const edge = (c: string) => !/[A-Za-z0-9-]/.test(c);
+  const where = (hay: string) => {
+    for (let i = hay.indexOf(number); i >= 0; i = hay.indexOf(number, i + 1)) {
+      const before = i === 0 || edge(hay[i - 1]);
+      const after = i + number.length >= hay.length || edge(hay[i + number.length]);
+      if (before && after) return true;
+    }
+    return false;
+  };
+  return where(String(row.target ?? "")) || where(String(row.detail ?? ""));
+};
+
 export type DocKind = "quotation" | "invoice" | "payment";
 
 export async function docHistory(kind: DocKind, id: string): Promise<{
@@ -79,18 +112,21 @@ export async function docHistory(kind: DocKind, id: string): Promise<{
   // The document, and everything in its chain, so one pass over the audit covers all of it.
   let number: string | null = null;
   let title: string | null = null;
+  // The day the document was issued, used as a floor on the weakly-keyed matches below.
+  let issued: string | null = null;
   const ids = new Map<string, string | null>(); // id -> the document label to show against it
   let transitions: any[] = [];
 
   if (kind === "quotation") {
     const q = await prisma.quotation.findUnique({
       where: { id },
-      select: { id: true, number: true, clientName: true, service: true, history: true },
+      select: { id: true, number: true, clientName: true, service: true, history: true, date: true },
     });
     if (!q) return null;
     number = q.number;
     title = [q.clientName, q.service].filter(Boolean).join(" — ") || null;
     transitions = Array.isArray(q.history) ? (q.history as any[]).filter(Boolean) : [];
+    issued = (q as any).date ?? null;
     ids.set(q.id, null);
     const invs = await prisma.invoice.findMany({ where: { quotationId: q.id }, select: { id: true, number: true } });
     for (const v of invs) ids.set(v.id, v.number);
@@ -102,11 +138,12 @@ export async function docHistory(kind: DocKind, id: string): Promise<{
   } else if (kind === "invoice") {
     const v = await prisma.invoice.findUnique({
       where: { id },
-      select: { id: true, number: true, clientName: true, services: true, quotationId: true },
+      select: { id: true, number: true, clientName: true, services: true, quotationId: true, date: true },
     });
     if (!v) return null;
     number = v.number;
     title = [v.clientName, v.services].filter(Boolean).join(" — ") || null;
+    issued = (v as any).date ?? null;
     ids.set(v.id, null);
     // The quotation contributes the act that CREATED this invoice: "Invoiced" on a quotation is the
     // same moment as "raised" on the invoice it made, and the invoice has no record of its own.
@@ -119,11 +156,12 @@ export async function docHistory(kind: DocKind, id: string): Promise<{
   } else {
     const p = await prisma.payment.findUnique({
       where: { id },
-      select: { id: true, number: true, clientName: true, invoiceId: true, invoiceNumber: true },
+      select: { id: true, number: true, clientName: true, invoiceId: true, invoiceNumber: true, date: true },
     });
     if (!p) return null;
     number = p.number;
     title = [p.clientName, p.invoiceNumber ? "against " + p.invoiceNumber : ""].filter(Boolean).join(" — ") || null;
+    issued = (p as any).date ?? null;
     ids.set(p.id, null);
     // The bill this settled, and the quotation behind it: a receipt with one line on its timeline
     // answers nothing, and "what was this payment for" is the question somebody opening it has.
@@ -150,6 +188,33 @@ export async function docHistory(kind: DocKind, id: string): Promise<{
     for (const r of got) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
   }
 
+  // And the handful of acts that carry only a number — see NUMBER_KEYED. Asked for each number in
+  // the chain, so a quotation picks up the proposals generated from it AND the revision that made
+  // it, and the offer it replaced picks up the same revision from the other side.
+  for (const [k, label] of ids) {
+    const num = k === keys[0] ? number : label;
+    if (!num) continue;
+    const got = await prisma.audit.findMany({
+      where: { action: { in: [...NUMBER_KEYED] }, OR: [{ target: { contains: num } }, { detail: { contains: num } }] },
+      select: { id: true, action: true, actorId: true, actorEmail: true, target: true, detail: true, at: true },
+    });
+    for (const r of got) {
+      if (seen.has(r.id) || !namesTheNumber(r, num)) continue;
+      /**
+       * AN ACT ON A DOCUMENT CANNOT PREDATE THE DOCUMENT.
+       *
+       * The floor is what makes a number safe enough to join on at all. QT-001-R1's timeline picked
+       * up a `quotation.revise` from ten days before it existed, belonging to a different QT-001-R1
+       * that a test run created and deleted — so the drawer showed the quotation being revised
+       * twice, which on a document that genuinely can be revised twice is indistinguishable from
+       * the truth. Applied only to these matches: an id-keyed row needs no such help.
+       */
+      if (issued && String(r.at).slice(0, 10) < String(issued).slice(0, 10)) continue;
+      seen.add(r.id);
+      rows.push(r);
+    }
+  }
+
   const names = await namesFor(rows.map(r => r.actorId).filter(Boolean));
   const events: DocEvent[] = [];
   for (const r of rows) {
@@ -170,11 +235,25 @@ export async function docHistory(kind: DocKind, id: string): Promise<{
 
   // The quotation's own transitions, which exist nowhere in the audit: approved, sent, accepted and
   // rejected all go through the generic PUT or the portal, and none of them was ever audited.
+  //
+  // Worded as acts rather than as states. "Sent" does not say to whom, and "Accepted" on its own
+  // reads as an internal sign-off when it is the opposite — it is the client agreeing. Same wording
+  // the lead's own timeline uses, so one document does not describe the moment two ways.
+  const SAID: Record<string, string> = {
+    draft: "Back to draft",
+    approved: "Approved internally — ready to send",
+    sent: "Sent to the client",
+    accepted: "Accepted by the client",
+    rejected: "Rejected by the client",
+    changes_requested: "Client asked for changes",
+    invoiced: "Invoiced",
+  };
   for (const h of transitions) {
     if (!h || !h.at || !h.to) continue;
+    const to = String(h.to).trim().toLowerCase();
     events.push({
       at: String(h.at),
-      label: String(h.to).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()),
+      label: SAID[to] || String(h.to).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()),
       detail: h.from ? "from " + h.from : null,
       by: h.by || null,
       on: null,
