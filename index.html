@@ -12382,10 +12382,23 @@
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">ISSUED</div><input value="{{ qcIssued }}" onChange="{{ setQcIssued }}" type="date" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
               <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VALID UNTIL</div><input value="{{ qcValid }}" onChange="{{ setQcValid }}" type="date" min="{{ qcIssued }}" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
             </div>
-            <div style="display:flex; gap:10px; margin-top:10px;">
-              <div style="flex:1;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">VAT</div><div style="position:relative; margin-top:5px;"><div data-dd onClick="{{ ddQcVatToggle }}" style="border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE; cursor:pointer; display:flex; align-items:center; gap:8px;"><span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ ddQcVatVal }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div><sc-if value="{{ ddQcVatOpen }}" hint-placeholder-val="{{ false }}"><div data-dd style="position:absolute; top:calc(100% + 5px); left:0; right:0; background:#fff; border:1px solid #EDEBF2; border-radius:10px; box-shadow:0 10px 28px rgba(38,7,77,.16); padding:4px; z-index:30;"><sc-for list="{{ ddQcVatOptions }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.pick }}" style="padding:8px 10px; border-radius:7px; font-size:11px; font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }}; cursor:pointer;">{{ o.label }}</div></sc-for></div></sc-if></div></div>
+            <!-- THE RATE, WHICH IS NOT A CHOICE MADE PER QUOTATION.
+
+                 This was a picker offering "15%" and "0% — exempt", which made it the second
+                 control on this dialog answering "is there VAT", and the two could disagree: the
+                 lines each carry their own VAT/NO VAT chip now, and a document zero-rated here
+                 overrode every one of them with nothing on screen saying so.
+
+                 So the rate is stated, not chosen. Which lines it applies to is the chips' job,
+                 and a quotation where none of them are taxed charges no VAT and prints no VAT
+                 line — exactly what picking 0% used to do. An existing quotation raised at some
+                 other rate still SHOWS its own rate here, because the rate is frozen on the
+                 document and this line describes the document rather than the settings. -->
+            <div style="display:flex; align-items:center; gap:7px; margin-top:10px; background:#FBFAFE; border:1px solid #EDEBF2; border-radius:9px; padding:7px 10px;">
+              <span style="font-size:9px; font-weight:800; letter-spacing:.05em; color:#A9A6B4;">VAT</span>
+              <span style="font-size:11px; font-weight:700; color:#1A1523;">{{ qcVatRateLabel }}</span>
+              <span style="font-size:10px; color:#8C8899;">· per line, on the items marked VAT</span>
             </div>
-            <sc-if value="{{ qcZeroVat }}" hint-placeholder-val="{{ false }}"><div style="margin-top:7px; background:#FEF4E2; border:1px solid #F5E3B8; border-radius:9px; padding:7px 10px; font-size:10px; font-weight:600; color:#B8860B; line-height:1.5;">Zero-rated — no VAT will be charged and the document prints no VAT line. Only for genuinely exempt or zero-rated work.</div></sc-if>
             <div style="margin-top:12px;"><div style="font-size:9px; font-weight:700; color:#A9A6B4;">SERVICE / SUBJECT</div><input sc-camel-default-value="{{ qcSubject }}" data-seed-val="{{ qcSubject }}" onBlur="{{ setQcSubject }}" data-qcf="subject" maxlength="120" placeholder="e.g. Labour card renewal × 3" style="width:100%; margin-top:5px; border:1px solid #DDD9E6; border-radius:9px; padding:8px 10px; font-size:11px; background:#FCFBFE;"></div>
             <!-- WHAT THIS SELLS, as opposed to what it charges for. The subject above is written for
                  the client to read; this is the catalogue service that becomes one case when the
@@ -49493,11 +49506,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         this.setState({ qcClient: v, qcClientId: hit9 ? hit9.id : null, qcErr: '' });
       }, 'Search clients…'),
       qcClientVal: this.state.qcClient || qcDefaultClient,
-      ...mkDd('ddQcVat', QC_VAT_OPTS, qcVatSel, (v) => this.setState({ qcVat: v })),
-      ddQcVatVal: qcVatSel,
+      // A document raised at 0% before the per-line chips existed still reads 0 here, and
+      // calling that "KSA standard" would be the dialog contradicting the document.
+      qcVatRateLabel: qcVatRate + (qcVatRate === 0 ? '% — zero-rated' : '% — KSA standard'),
       // Same warning as the invoice dialog, and it matters more here: the invoice copies the
       // quotation's figures exactly, so a quotation saved zero-rated bills zero-rated.
-      qcZeroVat: qcVatRate === 0,
       qcAutoNo: _qcEditing ? (this.state.qcEditNo || qcAutoNo) : qcAutoNo,
       qcTitle: _qcEditing ? 'Edit quotation' : 'Create quotation',
       // The catalogue, as {value,label} so two services with the same name cannot be confused.
