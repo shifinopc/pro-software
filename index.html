@@ -12451,6 +12451,13 @@
                        Two states and one click, not a dropdown: a five-line quotation would have
                        carried five panels, and every line is one or the other. -->
                   <div onClick="{{ l.kindToggle }}" title="{{ l.kindHint }}" style="flex-shrink:0; width:42px; text-align:center; font-size:9px; font-weight:800; letter-spacing:.03em; padding:9px 0; border-radius:8px; cursor:pointer; background:{{ l.kindBg }}; color:{{ l.kindFg }}; border:1px solid {{ l.kindBd }};">{{ l.kindLabel }}</div>
+                  <!-- AND WHETHER IT IS TAXED.
+
+                       Beside the fee chip because they are the same kind of fact about the line and
+                       read together: a government fee passed on at cost is usually the one that is
+                       not taxed. A heavier border means somebody set it HERE rather than it coming
+                       from the line item's own setting. -->
+                  <div onClick="{{ l.vatToggle }}" title="{{ l.vatHint }}" style="flex-shrink:0; width:52px; text-align:center; font-size:9px; font-weight:800; letter-spacing:.03em; padding:9px 0; border-radius:8px; cursor:pointer; background:{{ l.vatBg }}; color:{{ l.vatFg }}; border:1px solid {{ l.vatBd }};">{{ l.vatLabel }}</div>
                   <div onClick="{{ l.remove }}" style="width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#FEECEC;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
                 </div>
                 <!-- WHERE THE COMPANY IS BOUGHT OR FORMED.
@@ -24932,8 +24939,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       const hit9 = list9.find(c9 => String(c9.name || '').trim().toLowerCase() === want9);
       return String((hit9 && hit9.vatTreatment) || 'standard');
     };
-    /** A COMPOSER line (an array: name, units, price, …) — is it taxed? */
-    const _lineTaxed9 = (l9) => _vatOfName9(l9 && l9[0]) === 'standard';
+    /** A COMPOSER line (an array: name, units, price, kind, country, vat) — is it taxed? */
+    // Index 5 is the per-line OVERRIDE, and it is empty on almost every line: the charge type is
+    // the firm's answer and re-deciding it per line is the exception, not the rule. Empty means
+    // "whatever the catalogue says", which is also what every line written before this said.
+    const _lineTaxed9 = (l9) => (String((l9 && l9[5]) || '').trim() || _vatOfName9(l9 && l9[0])) === 'standard';
     /** A SAVED item ({ name, units, price, vat }) — its frozen treatment wins over the catalogue. */
     const _itemVat9 = (it9) => String((it9 && it9.vat) || '').trim() || _vatOfName9(it9 && it9.name);
     /** What VAT is actually charged on, in minor units, out of saved items. */
@@ -48992,7 +49002,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // row simply stopped belonging to anybody, and every count by company quietly lost it.
       qcClientId: raw9.companyId || null,
       qcLines: (Array.isArray(raw9.items) && raw9.items.length ? raw9.items : [{ name: '', units: 1, price: '' }])
-        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || '')]),
+        .map(it9 => [it9.name || '', String(it9.units == null ? 1 : it9.units), String(it9.price == null ? '' : it9.price), _qcKindOf(it9.kind), String(it9.country || ''), String(it9.vat || '')]),
       // The schedule as stored. A quotation written before this existed has none, which is not the
       // same as an empty one and prints the same either way.
       qcTerms: (Array.isArray(raw9.milestones) ? raw9.milestones : [])
@@ -49070,9 +49080,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // fee is noise in a document that is read by people.
         items: valid.map(l5 => {
           const it5 = { name: String(l5[0]).trim(), units: parseFloat(l5[1]) || 1, price: parseFloat(l5[2]) || 0, kind: _qcKindOf(l5[3]) };
-          // Frozen like every other figure on the document. Absent means standard-rated.
-          const vt5 = _vatOfName9(it5.name);
-          if (vt5 !== 'standard') it5.vat = vt5;
+          // Frozen like every other figure on the document. Absent means standard-rated — which
+          // is why an OVERRIDE is written even when it says "standard": leaving it off a line
+          // whose charge type is untaxed hands the line back to the catalogue, and the one thing
+          // the author did say about it is the thing that gets lost.
+          const own5 = String(l5[5] || '').trim();
+          const vt5 = own5 || _vatOfName9(it5.name);
+          if (own5 || vt5 !== 'standard') it5.vat = vt5;
           if (_qcNeedsCountry9(it5.name) && String(l5[4] || '').trim()) it5.country = String(l5[4]).trim();
           return it5;
         }),
@@ -49542,6 +49556,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                     a[i][0] = o.name;
                     a[i][3] = _qcKindFromName9(o.name);
                     if (!_qcNeedsCountry9(o.name)) a[i][4] = '';
+                    // Same reasoning as the country: an override set against the PREVIOUS charge
+                    // is not an opinion about this one. Clearing it hands the line back to the
+                    // catalogue rather than silently carrying "no VAT" onto a taxable fee.
+                    a[i][5] = '';
                   }
                   return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes, openDd: null };
                 }),
@@ -49618,6 +49636,34 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             }),
           };
         })(),
+        // ── TAXED, OR NOT, ON THIS LINE ──────────────────────────────────────────────────
+        //
+        // The charge type answers this for the firm, so the chip SHOWS that answer until somebody
+        // disagrees with it — at which point the disagreement is frozen onto the line and the
+        // catalogue stops being consulted for it. Two states, matching Sales Settings exactly:
+        // inventing "zero-rated" and "exempt" here would be vocabulary nothing else in the system,
+        // the server's own figuresForLines included, knows how to read.
+        ...(() => {
+          const own9 = String(l[5] || '').trim();
+          const eff9 = own9 || _vatOfName9(l[0]);
+          const on9 = eff9 === 'standard';
+          return {
+            vatLabel: on9 ? 'VAT' : 'NO VAT',
+            vatBg: on9 ? '#F5EEFF' : '#FFF7E6',
+            vatFg: on9 ? '#5B21B6' : '#B4690E',
+            vatBd: own9 ? (on9 ? '#7C00FF' : '#D98E04') : (on9 ? '#E6D6FF' : '#F3D8A6'),
+            vatHint: (on9 ? 'VAT is charged on this line at the rate above.' : 'No VAT is charged on this line.')
+              + ' ' + (own9 ? 'Set on this line, overriding the item default.' : 'From the line item’s own setting — click to change it here only.'),
+            vatToggle: () => _qcEdit9(h => {
+              const a = h.lines.map(x => [...x]);
+              // Writing the opposite of what is in force, rather than toggling the override, so
+              // one click always flips what the reader can see. Leaving it empty on agreement
+              // would mean clicking twice to get off the catalogue's answer and back to it.
+              if (a[i]) a[i][5] = on9 ? 'outside' : 'standard';
+              return { qcLines: a, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes };
+            }),
+          };
+        })(),
         remove: () => _qcEdit9(h => ({ qcLines: h.lines.length > 1 ? h.lines.filter((_, j) => j !== i) : h.lines, qcTerms: h.terms, qcSubject: h.subject, qcNotes: h.notes })),
       })),
       // ── PAYMENT TERMS ────────────────────────────────────────────────────────────────────
@@ -49668,7 +49714,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         if (h9.lines.some(l9 => !String(l9[0]).trim() && !String(l9[2]).trim())) {
           return this.toast('Fill the empty line before adding another');
         }
-        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
+        _qcEdit9(() => ({ qcLines: [...h9.lines, ['', '1', '', 'prof', '', '']], qcTerms: h9.terms, qcSubject: h9.subject, qcNotes: h9.notes }));
       },
       // Always offered. Greying it from render-time state meant it looked disabled for exactly as
       // long as somebody was typing the row that would enable it — the refusal is a toast now.
