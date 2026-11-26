@@ -946,6 +946,15 @@
   .cl-table .cl-row:last-child{border-bottom:none;}
   .cl-table .cl-row:hover{background:#FBF8FF !important;box-shadow:inset 3px 0 0 #7C00FF;}
   .cl-stat:hover{background:#FCFAFF;}
+  /* THE CLIENTS TABLE'S OWN SCROLLING, which it has been asking for and never had.
+     The markup carries .cl-scroll / .cl-rows while every other table in the app states the same two
+     things inline — overflow:auto on the viewport, a min-width on the rows. Nothing ever defined
+     them, so on a phone the eleven columns collapsed into 390px: the minmax(0,...fr) tracks shrank
+     to nothing, the header labels drew on top of each other ("CCLIENTY", "INFRDEDURSYTAFF"), and the
+     client's NAME was squeezed out beside its own avatar. It looked correct on a desktop only
+     because the width happened to be there. */
+  .cl-scroll{overflow:auto;}
+  .cl-rows{min-width:1100px;}
   .cl-tabs::-webkit-scrollbar{display:none;}
   @media (max-width: 1100px){ .em-stats{grid-template-columns:repeat(3,minmax(0,1fr)) !important;} }
   @media (max-width: 640px){ .em-stats{grid-template-columns:repeat(2,minmax(0,1fr)) !important;} }
@@ -49392,6 +49401,25 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           (this._ldfSaving = false, this.setState({ ldForm: null, ldfErr: '', ldfBad: '', ldfBusy: false }));
           this.toast(String(f.name).trim() + ' added as a lead');
           this._crmReload();
+          /**
+           * A LEAD CAPTURED WITH ITS DETAILS IS ALREADY PAST ENQUIRY.
+           *
+           * ensureLeadDeal opens the deal server-side during this very POST, and the lead form has
+           * just collected the one thing the Enquiry gate asks for — a phone or an email. So the
+           * deal lands in Enquiry with its gate ALREADY satisfied, and the two triggers added with
+           * the nudge both miss it: this path writes its contact inside the company POST rather than
+           * through _saveContact, and nobody will make anyone primary. The deal then sits in Enquiry
+           * until a human notices, which is exactly the silence the nudge exists to break.
+           *
+           * The reload is NOT optional here and is not merely the nudge being careful: the deal was
+           * created a moment ago by the server, so dealsData is a stale array that already looks
+           * populated — the nudge's own one-shot retry only fires when it is missing entirely, and
+           * would find nothing for this company and give up quietly.
+           */
+          const newId9 = j && (j.id || (j.company && j.company.id));
+          if (newId9 && this._opReload) {
+            this._opReload('opportunities', 'dealsData', () => this._nudgeStageWhenGateClears(newId9, true));
+          }
         }).catch(() => (this._ldfSaving = false, this.setState({ ldfBusy: false, ldfErr: 'Server unreachable — nothing was saved' })));
       },
 
