@@ -494,8 +494,12 @@ export const FILES = "files";
 export function captureFilled(cap: any, v: any): boolean {
   const t = String(cap?.type ?? "");
   if (t === ROWS) {
-    return Array.isArray(v) && v.some(r => r && typeof r === "object"
-      && Object.values(r).some(x => String(x ?? "").trim() !== ""));
+    // A cell is a string, or — for a `file` column — { path, name }. The passport attached against
+    // a partner is as much an answer as their name typed beside it.
+    const cell = (x: any) => (x && typeof x === "object")
+      ? String((x as any).path ?? "").trim() !== ""
+      : String(x ?? "").trim() !== "";
+    return Array.isArray(v) && v.some(r => r && typeof r === "object" && Object.values(r).some(cell));
   }
   if (t === FILES) {
     // A note on its own is not a document: the file is the answer, the note only says what it is.
@@ -1995,14 +1999,29 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
       const t = String(cap.type ?? "");
       const v = supplied[cap.var];
       if (t === ROWS && Array.isArray(v)) {
-        const cols = (Array.isArray(cap.columns) ? cap.columns : []).map((c: any) => String(c?.var ?? "")).filter(Boolean);
+        const colDefs = (Array.isArray(cap.columns) ? cap.columns : []).filter((c: any) => c && c.var);
         supplied[cap.var] = v.slice(0, 50).map((r: any) => {
-          const out: Record<string, string> = {};
-          for (const c of cols) out[c] = String((r && r[c]) ?? "").slice(0, 300);
+          const out: Record<string, any> = {};
+          for (const col of colDefs) {
+            const key = String(col.var);
+            const raw = r && r[key];
+            // A FILE COLUMN KEEPS ITS SHAPE. String({path,name}) is "[object Object]", so trimming
+            // every cell the same way would turn an attached passport into that literal text and
+            // lose the file — the exact class of bug the typed emptiness check above exists for.
+            if (String(col.type) === "file") {
+              out[key] = (raw && typeof raw === "object" && String(raw.path ?? "").trim())
+                ? { path: String(raw.path).slice(0, 400), name: String(raw.name ?? "").slice(0, 200) }
+                : "";
+            } else {
+              out[key] = String(raw ?? "").slice(0, 300);
+            }
+          }
           return out;
           // Rows the officer added and left blank are dropped rather than stored: "+ Add partner"
           // pressed twice is not two partners.
-        }).filter(r => Object.values(r).some(x => x.trim() !== ""));
+        }).filter(r => Object.values(r).some(x => (x && typeof x === "object")
+          ? String((x as any).path ?? "").trim() !== ""
+          : String(x ?? "").trim() !== ""));
       } else if (t === FILES && Array.isArray(v)) {
         supplied[cap.var] = v.slice(0, 25)
           .filter((f: any) => f && String(f.path ?? "").trim() !== "")

@@ -46,9 +46,12 @@ const NODE = {
           { var: "mobile", label: "Mobile", flex: 1.4 },
           { var: "email", label: "Email", flex: 1.8 },
           { var: "share", label: "Share %", flex: 0.9, type: "number", total: true, totalShouldBe: 100 },
+          // THE PASSPORT AGAINST THE PERSON. A shared pile of scans and a list of names drift apart
+          // the moment a partner is removed or two are added at once, and nothing afterwards can say
+          // whose document is whose. Attached to the row instead, so the pair cannot come apart.
+          { var: "passport", label: "Passport", flex: 1.1, type: "file" },
         ],
       },
-      { var: "acqPassports", label: "Partner passports", type: "files" },
       { var: "acqCompanyName", label: "Company name wanted for the business", type: "text" },
       { var: "acqOtherDocs", label: "Other documents", type: "files", required: false },
     ],

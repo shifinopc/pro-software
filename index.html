@@ -17333,7 +17333,23 @@
                         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
                           <span style="font-size:10px; font-weight:700; color:#A9A6B4; width:14px; flex-shrink:0;">{{ r.n }}</span>
                           <sc-for list="{{ r.cells }}" as="cl" hint-placeholder-count="4">
-                            <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="flex:{{ cl.flex }}; min-width:0;">
+                            <sc-if value="{{ cl.isPlain }}" hint-placeholder-val="{{ true }}">
+                              <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="flex:{{ cl.flex }}; min-width:0;">
+                            </sc-if>
+                            <!-- A file column: the attach control until something is attached, then the
+                                 document itself with a way to swap it. -->
+                            <sc-if value="{{ cl.isFile }}" hint-placeholder-val="{{ false }}">
+                              <div style="flex:{{ cl.flex }}; min-width:0; display:flex; align-items:center; gap:5px;">
+                                <sc-if value="{{ cl.hasFile }}" hint-placeholder-val="{{ false }}">
+                                  <a href="{{ cl.fileHref }}" target="_blank" rel="noopener" style="font-size:10px; font-weight:700; color:#0E9355; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ cl.fileName }}</a>
+                                  <span onClick="{{ cl.clearFile }}" title="Remove this document" style="font-size:12px; color:#C0353A; cursor:pointer; flex-shrink:0;">&times;</span>
+                                </sc-if>
+                                <label style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">
+                                  {{ cl.place }}
+                                  <input type="file" accept=".png,.jpg,.jpeg,.svg,.webp,.pdf" onChange="{{ cl.pickFile }}" style="display:none;">
+                                </label>
+                              </div>
+                            </sc-if>
                           </sc-for>
                           <span onClick="{{ r.remove }}" title="Remove this row" style="font-size:14px; color:#C0353A; cursor:pointer; padding:0 4px; flex-shrink:0;">&times;</span>
                         </div>
@@ -40701,7 +40717,58 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               rowList: list9.map((r9, i9) => ({
                 n: String(i9 + 1),
                 cells: cols9.map(col9 => ({
-                  value: String((r9 && r9[col9.var]) ?? ''),
+                  // A FILE CELL IS NOT A STRING. Its value is { path, name }, so String() on it
+                  // would print "[object Object]" into the box — and the engine keeps the shape for
+                  // exactly that reason. The two render as different controls entirely.
+                  isFile: String(col9.type || '') === 'file',
+                  isPlain: String(col9.type || '') !== 'file',
+                  fileName: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    return (cv9 && typeof cv9 === 'object' && cv9.path) ? String(cv9.name || 'Attached') : '';
+                  })(),
+                  fileHref: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    return (cv9 && typeof cv9 === 'object') ? String(cv9.path || '') : '';
+                  })(),
+                  hasFile: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    return !!(cv9 && typeof cv9 === 'object' && String(cv9.path || '').trim());
+                  })(),
+                  // Attached against THIS partner, so the passport and the person cannot drift apart
+                  // the way a shared pile of scans and a list of names always eventually do.
+                  pickFile: (e9) => {
+                    const f9 = (e9.target.files || [])[0];
+                    e9.target.value = '';
+                    if (!f9) return;
+                    const tok9 = localStorage.getItem('stimespro:token');
+                    const rd9 = new FileReader();
+                    rd9.onerror = () => this.toast('Could not read ' + f9.name, 'error');
+                    rd9.onload = () => {
+                      fetch((this._apiBase || 'http://localhost:4100') + '/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+                        body: JSON.stringify({ name: f9.name, data: String(rd9.result || ''), kind: 'document' }),
+                      })
+                        .then(r0 => r0.json().catch(() => ({})).then(j9 => ({ ok: r0.ok, j9 })))
+                        .then(({ ok, j9 }) => {
+                          if (!ok || !j9.path) return this.toast((j9 && j9.error) || ('Could not upload ' + f9.name), 'error');
+                          // Re-read the rows from state: the upload is async and the officer may have
+                          // added or removed a row while it was in flight.
+                          const cur9 = ((this.state.wfCap || {})[selStep.id] || {})[c.var];
+                          const rows0 = Array.isArray(cur9) ? cur9 : list9;
+                          put9(rows0.map((x9, j0) => j0 === i9
+                            ? { ...x9, [col9.var]: { path: j9.path, name: j9.name || f9.name } }
+                            : x9));
+                        })
+                        .catch(() => this.toast('Server unreachable — ' + f9.name + ' was not uploaded', 'error'));
+                    };
+                    rd9.readAsDataURL(f9);
+                  },
+                  clearFile: () => put9(list9.map((x9, j0) => j0 === i9 ? { ...x9, [col9.var]: '' } : x9)),
+                  value: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    return (cv9 && typeof cv9 === 'object') ? '' : String(cv9 ?? '');
+                  })(),
                   place: col9.label || col9.var,
                   flex: String(col9.flex || 1),
                   // A percentage column gets a numeric keypad; everything else is free text. The
