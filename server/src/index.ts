@@ -3783,6 +3783,10 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
       probabilityBp: b.probabilityBp == null || b.probabilityBp === "" ? null : Math.max(0, Math.min(10000, Number(b.probabilityBp))),
       stageId: stage.id, expectedCloseDate: b.expectedCloseDate || null,
       ownerId: b.ownerId || (req as any).auth?.sub || null, source: b.source || co.source || null,
+      // What the deal is selling. Both deal routes name their fields one by one rather than passing
+      // the body through, so a new column is invisible to them until it is listed here — the form
+      // sent it, the API accepted the request, and the value went nowhere.
+      serviceItemId: b.serviceItemId || null,
       country, notes: b.notes || null, createdAt: now, stageAt: now,
     },
     include: { stage: true },
@@ -3833,6 +3837,8 @@ app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, a
       ownerId: b.ownerId === undefined ? undefined : (b.ownerId || null),
       source: b.source === undefined ? undefined : (b.source || null),
       notes: b.notes === undefined ? undefined : (b.notes || null),
+      // `undefined` leaves it alone, so a PUT that only moves a date cannot clear it.
+      serviceItemId: b.serviceItemId === undefined ? undefined : (b.serviceItemId || null),
       // Empty string means "back to derived" — an override somebody can take OFF again matters as
       // much as one they can put on. Anything not in the known set is refused rather than stored,
       // because a typo here would silently vanish a deal from every forecast bucket.
@@ -4004,6 +4010,11 @@ app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWrite
       subtotalMinor: figures.subtotalMinor, vatMinor: figures.vatMinor, totalMinor: figures.totalMinor, vatRateBp: figures.vatRateBp,
       status: "draft", date: businessToday(),
       validUntil: b.validUntil || null, notes: b.notes || null,
+      // WHAT THE DEAL SAID IT WAS SELLING, carried across. Asking for it again on the quotation is
+      // asking the same question twice and getting a different answer half the time — and a
+      // quotation that cannot name its service opens loose tasks on acceptance instead of the one
+      // case its workflow describes. The caller may still override it.
+      serviceItemId: b.serviceItemId ?? opp.serviceItemId ?? null,
     },
   });
   await prisma.opportunity.update({ where: { id: opp.id }, data: { quotationId: q.id } });

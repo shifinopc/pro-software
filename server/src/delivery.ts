@@ -135,7 +135,11 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
   // what reports the lines that folded into it. By name rather than by id: the templates are
   // installed per environment, so an id here would be right on this database and silently wrong on
   // the next one.
-  const CONTAINS: Record<string, string[]> = { "business setup": ["company acquisition"] };
+  // A formation is the other half of the same structure work: a setup that needs a foreign parent
+  // either buys one or incorporates one, and the Business Setup case opens a lane for whichever it
+  // is. Quoted alongside the setup — as a quotation naming both quite reasonably does — it was
+  // breaking out as its own unassigned row beside the case that already contains it.
+  const CONTAINS: Record<string, string[]> = { "business setup": ["company acquisition", "company formation"] };
   const lineServices = lines.map(l => matchService(l.name, services)).filter(Boolean) as { name: string }[];
   const absorbedBy = (svcName: string) => lineServices.find(other =>
     (CONTAINS[other.name.trim().toLowerCase()] ?? []).includes(svcName.trim().toLowerCase()))?.name ?? null;
