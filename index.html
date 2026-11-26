@@ -4262,15 +4262,19 @@
             <sc-for list="{{ qtTabs }}" as="t" hint-placeholder-count="7"><span onClick="{{ t.select }}" style="font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 10px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ t.label }} <span style="opacity:.55; font-size:10px;">{{ t.count }}</span></span></sc-for>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-            <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:1040px;">
-              <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 104px 300px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Quotation</span><span>Description</span><span>Client</span><span>Amount</span><span>Status</span><span></span></div>
+            <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:1180px;">
+              <div style="display:grid; grid-template-columns:104px 1.3fr 1fr 132px 104px 112px 118px 232px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Quotation</span><span>Description</span><span>Client</span><span>Amount</span><span>Status</span><span>Payment</span><span>Receipt</span><span></span></div>
               <sc-for list="{{ quotes }}" as="q" hint-placeholder-count="4">
-                <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 104px 300px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
+                <div style="display:grid; grid-template-columns:104px 1.3fr 1fr 132px 104px 112px 118px 232px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
                   <span onClick="{{ q.open }}" style="font-weight:700; color:#7C00FF; font-size:11px; cursor:pointer;">{{ q.id }}</span>
                   <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.title }}</div><div style="font-size:9px; color:#A9A6B4;">{{ q.when }}</div><sc-if value="{{ q.hasClientNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#B8860B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.clientNote }}</div></sc-if></div>
                   <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ q.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ q.client }}</span></div>
                   <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ q.amount }}</span><sc-if value="{{ q.hasValid }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#A9A6B4;">{{ q.validLabel }}</div></sc-if></div>
                   <span style="font-size:10px; font-weight:700; color:{{ q.stColor }}; background:{{ q.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;">{{ q.status }}</span>
+                  <!-- Whether the money arrived, and the receipt that proves it. Blank until there
+                       is an invoice to pay: before that the question has no meaning. -->
+                  <span style="font-size:10px; font-weight:700; color:{{ q.payStateColor }}; background:{{ q.payStateBg }}; padding:3px 10px; border-radius:99px; width:fit-content; white-space:nowrap;" title="{{ q.payStateNote }}">{{ q.payStateLabel }}</span>
+                  <span onClick="{{ q.openQtReceipt }}" title="{{ q.qtReceiptNote }}" style="font-weight:700; color:#0E9355; font-size:11px; cursor:pointer; width:fit-content; white-space:nowrap;" style-hover="text-decoration:underline;">{{ q.qtReceiptLabel }}</span>
                   <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
                     <sc-if value="{{ q.canEdit }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.edit }}" title="Edit — while it is a draft, approved, or sent back for changes" style="font-size:10px; font-weight:600; color:#4B4757; border:1px solid #DDD9E6; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#7C00FF; color:#7C00FF;">Edit</span></sc-if>
                     <sc-if value="{{ q.canApprove }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.approve }}" title="Sign this off internally — the client still cannot see it" style="font-size:10px; font-weight:700; color:#fff; background:#7C00FF; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="background:#6900D6;">Approve</span></sc-if>
@@ -4286,10 +4290,6 @@
                     <!-- And the other end of the chain. Without it the newest row looked like an
                          unrelated quotation that happened to have an -R1 on the end. -->
                     <sc-if value="{{ q.isRevision }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.revisesJump }}" title="{{ q.revisesNote }}" style="font-size:10px; font-weight:700; color:#6D5BD0; background:#F5EEFF; border:1px solid #E4D3FB; padding:5px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#EBDBFF;">{{ q.revisesLabel }}</span></sc-if>
-                    <!-- Whether the money arrived, and the receipt that proves it. Only once an
-                         invoice exists — before that there is nothing to have paid. -->
-                    <sc-if value="{{ q.hasPayState }}" hint-placeholder-val="{{ false }}"><span title="{{ q.payStateNote }}" style="font-size:10px; font-weight:700; color:{{ q.payStateColor }}; background:{{ q.payStateBg }}; border:1px solid {{ q.payStateBd }}; padding:5px 11px; border-radius:9px; white-space:nowrap;">{{ q.payStateLabel }}</span></sc-if>
-                    <sc-if value="{{ q.hasQtReceipt }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.openQtReceipt }}" title="{{ q.qtReceiptNote }}" style="font-size:10px; font-weight:700; color:#0E9355; background:#E7F8EF; border:1px solid #BFE9D3; padding:5px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#D6F2E3;">{{ q.qtReceiptLabel }}</span></sc-if>
                     <sc-if value="{{ q.hasInvoice }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.openInvoice }}" title="Open the invoice this quotation became" style="font-size:10px; font-weight:700; color:#0284C7; background:#E4F4FD; padding:6px 12px; border-radius:9px; cursor:pointer; white-space:nowrap;" style-hover="filter:brightness(.97);">{{ q.invoicedAs }} →</span></sc-if>
                     <sc-if value="{{ q.canProposal }}" hint-placeholder-val="{{ false }}"><span onClick="{{ q.proposal }}" title="{{ q.proposalTitle }}" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#7C00FF; background:#F5EEFF; border:1px solid #E4D3FB; border-radius:9px; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M9 15l2 2 4-4"></path></svg></span></sc-if>
                     <span onClick="{{ q.print }}" title="Print — or choose “Save as PDF” in the print dialog" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"></path></svg></span>
@@ -4787,20 +4787,18 @@
           <sc-for list="{{ invTabs }}" as="t" hint-placeholder-count="6"><span onClick="{{ t.select }}" style="font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; padding:6px 10px; border-radius:99px; cursor:pointer; box-shadow:{{ t.shadow }};">{{ t.label }} <span style="opacity:.6; font-size:10px;">{{ t.count }}</span></span></sc-for>
         </section>
         <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-          <div style="overflow-x:auto;"><div style="min-width:1080px;">
-            <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 118px 334px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Invoice</span><span>Description</span><span>Client</span><span>Amount</span><span>Status</span><span></span></div>
+          <div style="overflow-x:auto;"><div style="min-width:1180px;">
+            <div style="display:grid; grid-template-columns:104px 1.3fr 1fr 110px 132px 118px 118px 216px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Invoice</span><span>Description</span><span>Client</span><span>Quotation</span><span>Amount</span><span>Status</span><span>Receipt</span><span></span></div>
             <sc-for list="{{ invoicesFull }}" as="inv" hint-placeholder-count="6">
-              <div style="display:grid; grid-template-columns:104px 1.4fr 1.1fr 132px 118px 334px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
+              <div style="display:grid; grid-template-columns:104px 1.3fr 1fr 110px 132px 118px 118px 216px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
                 <span onClick="{{ inv.openDetail }}" style="font-weight:700; color:#7C00FF; font-size:11px; cursor:pointer;">{{ inv.no }}</span>
                 <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.desc }}</div><div style="font-size:9px; color:#A9A6B4;">issued {{ inv.date }}</div></div>
                 <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center;">{{ inv.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ inv.client }}</span></div>
+                <span onClick="{{ inv.openQuote }}" title="{{ inv.quoteNote }}" style="font-weight:700; color:#6D5BD0; font-size:11px; cursor:pointer; width:fit-content;" style-hover="text-decoration:underline;">{{ inv.quoteLabel }}</span>
                 <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ inv.amount }}</span><sc-if value="{{ inv.hasPart }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#0284C7; font-weight:600;">{{ inv.partLabel }}</div></sc-if><sc-if value="{{ inv.hasPromise }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#6D5BD0; font-weight:600;">{{ inv.promiseLabel }}</div></sc-if><sc-if value="{{ inv.isVoid }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px; color:#8C8899;">{{ inv.voidNote }}</div></sc-if></div>
                 <span style="font-size:10px; font-weight:700; color:{{ inv.stColor }}; background:{{ inv.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content; white-space:nowrap;">{{ inv.stLabel }}</span>
+                <span onClick="{{ inv.openReceipt }}" title="{{ inv.receiptNote }}" style="font-weight:700; color:#0E9355; font-size:11px; cursor:pointer; width:fit-content; white-space:nowrap;" style-hover="text-decoration:underline;">{{ inv.receiptLabel }}</span>
                 <div style="display:flex; gap:7px; justify-content:flex-end; align-items:center;">
-                  <!-- What this was priced on, and what settled it. Same chip language as the
-                       quotation row's revision chain, so one screen reads like the other. -->
-                  <sc-if value="{{ inv.hasQuote }}" hint-placeholder-val="{{ false }}"><span onClick="{{ inv.openQuote }}" title="{{ inv.quoteNote }}" style="font-size:10px; font-weight:700; color:#6D5BD0; background:#F5EEFF; border:1px solid #E4D3FB; padding:5px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#EBDBFF;">{{ inv.quoteLabel }}</span></sc-if>
-                  <sc-if value="{{ inv.hasReceipt }}" hint-placeholder-val="{{ false }}"><span onClick="{{ inv.openReceipt }}" title="{{ inv.receiptNote }}" style="font-size:10px; font-weight:700; color:#0E9355; background:#E7F8EF; border:1px solid #BFE9D3; padding:5px 11px; border-radius:9px; white-space:nowrap; cursor:pointer;" style-hover="background:#D6F2E3;">{{ inv.receiptLabel }}</span></sc-if>
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.pay }}" title="Record a payment against this invoice" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#fff; background:#12B76A; border:none; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="filter:brightness(.96);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></span></sc-if></sc-if>
                   <sc-if value="{{ inv.payable }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.extend }}" title="Agree a payment date — pauses chasing" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span></sc-if></sc-if>
                   <sc-if value="{{ inv.isDraft }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}"><span onClick="{{ inv.editDraft }}" title="Edit — only a draft can be changed" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:9px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg></span></sc-if></sc-if>
@@ -4941,12 +4939,13 @@
             <sc-for list="{{ payTabs }}" as="t" hint-placeholder-count="3"><span onClick="{{ t.select }}" style="font-size:11px; font-weight:600; color:{{ t.color }}; background:{{ t.bg }}; box-shadow:{{ t.shadow }}; padding:6px 10px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ t.label }} <span style="opacity:.55; font-size:10px;">{{ t.count }}</span></span></sc-for>
           </section>
           <section style="animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .1s both; background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); overflow:hidden;">
-            <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:960px;">
-              <div style="display:grid; grid-template-columns:118px 104px 1.1fr 1fr 128px 110px 140px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Receipt</span><span>Invoice</span><span>Received</span><span>Client</span><span>Amount</span><span>Method</span><span></span></div>
+            <div data-hidescroll="true" style="overflow-x:auto;"><div style="min-width:1180px;">
+              <div style="display:grid; grid-template-columns:118px 110px 110px 1fr 1fr 124px 104px 104px; gap:10px; padding:12px 14px 9px; font-size:10px; font-weight:700; color:#A9A6B4; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid #F0EDF6;"><span>Receipt</span><span>Invoice</span><span>Quotation</span><span>Received</span><span>Client</span><span>Amount</span><span>Method</span><span></span></div>
               <sc-for list="{{ payments }}" as="p" hint-placeholder-count="5">
-                <div style="display:grid; grid-template-columns:118px 104px 1.1fr 1fr 128px 110px 140px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
+                <div style="display:grid; grid-template-columns:118px 110px 110px 1fr 1fr 124px 104px 104px; gap:10px; align-items:center; padding:12px 14px; border-bottom:1px solid #FAF8FC; font-size:11px;" style-hover="background:#FAF7FE;">
                   <span style="font-weight:700; font-variant-numeric:tabular-nums; font-size:11px;">{{ p.receiptNo }}</span>
                   <span onClick="{{ p.openInvoice }}" title="Preview the invoice this settles" style="font-weight:700; color:#7C00FF; font-size:11px; cursor:pointer; width:fit-content;" style-hover="text-decoration:underline;">{{ p.invoiceNo }}</span>
+                  <span onClick="{{ p.openQuote }}" title="Preview the quotation this was priced on" style="font-weight:700; color:#6D5BD0; font-size:11px; cursor:pointer; width:fit-content;" style-hover="text-decoration:underline;">{{ p.quoteLabel }}</span>
                   <div style="min-width:0;"><div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.date }}</div><sc-if value="{{ p.hasRef }}" hint-placeholder-val="{{ true }}"><div style="font-size:9px; color:#A9A6B4;">{{ p.reference }}</div></sc-if></div>
                   <div style="display:flex; align-items:center; gap:8px; min-width:0;"><span style="width:22px; height:22px; border-radius:7px; background:#EEF0F5; color:#6F6C7A; font-size:8px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ p.initials }}</span><span style="color:#4B4757; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ p.client }}</span></div>
                   <div style="text-align:right;"><span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-variant-numeric:tabular-nums; color:#0E9355;">{{ p.amount }}</span></div>
@@ -24381,6 +24380,23 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         notes: p2.notes || '',
       };
     };
+    /**
+     * THE PAPER TRAIL, INDEXED ONCE: receipt → invoice → quotation.
+     *
+     * All three finance lists now show the documents either side of their own, so each needs the
+     * others by key. Declared here because the receipts list is the earliest reader and a const
+     * read above its own declaration throws — blanking the console, not just the row.
+     */
+    const _invRawById = new Map(), _invRawByNo = new Map();
+    for (const v9 of (Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [])) {
+      if (v9 && v9.id) _invRawById.set(v9.id, v9);
+      if (v9 && v9.number) _invRawByNo.set(v9.number, v9);
+    }
+    const _qtNoById = new Map((Array.isArray(this.state.quotationsData) ? this.state.quotationsData : [])
+      .map(q9 => [q9.id, q9.number]));
+    // The invoice a payment names, by either key — the same two-key rule the totals use.
+    const _invOfPay = (p9) => (p9 && p9.invoiceId ? _invRawById.get(p9.invoiceId) : null)
+      || (p9 && p9.invoiceNumber ? _invRawByNo.get(p9.invoiceNumber) : null) || null;
     const payments = (Array.isArray(payData)
       ? payData.map(p2 => [p2.date || '—', [p2.invoiceNumber || p2.reference || '—', p2.method || ''].filter(Boolean).join(' · '), p2.clientName || '—', fmtCur(_payTotal(p2)), 'Completed', p2])
       : (_authed ? [] : [
@@ -24396,6 +24412,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           receiptNo: (raw9 && raw9.number) || '—',
           // The invoice this receipt settles, in the SAME drawer the Invoices screen opens — it
           // paints the real document from docFor(), so there is no second preview to keep in step.
+          // Receipt → invoice → quotation, so the oldest document in the chain is one hop away
+          // rather than two screens away.
+          ...(() => {
+            const inv8 = _invOfPay(raw9);
+            const qno8 = inv8 && inv8.quotationId ? (_qtNoById.get(inv8.quotationId) || '') : '';
+            return {
+              hasQuote: !!qno8,
+              quoteLabel: qno8 || '—',
+              openQuote: () => { if (qno8) this.setState({ qtView: qno8 }); },
+            };
+          })(),
           openInvoice: () => {
             const no9 = raw9 && raw9.invoiceNumber;
             const have9 = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
@@ -25073,9 +25100,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // tabs cannot drift apart. The KEYS stay as they are — they are the filter and the tone lookup.
     const INV_WORD = { Paid: 'Fully paid', 'Part paid': 'Partially paid', Unpaid: 'Not paid' };
     const invWord = (k9) => INV_WORD[k9] || k9;
-    // Which quotation an invoice came from, for the chip that opens it.
-    const _qtNoById = new Map((Array.isArray(this.state.quotationsData) ? this.state.quotationsData : [])
-      .map(q9 => [q9.id, q9.number]));
+
     const INV_STATUS_MAP = { paid: 'Paid', overdue: 'Overdue', draft: 'Draft', pending: 'Unpaid', unpaid: 'Unpaid', void: 'Void' };
     const invData = this.state.invoicesData;
     const fmtInvDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(+dt) ? d : dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); };
@@ -25094,7 +25119,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ['INV-DRAFT', '—', 'Marina Hospitality', 'Company formation (draft)', 12500, 'Draft', null],
       ]));
     const _rpLabel = (v9) => v9.no + " · " + v9.client + " · " + (v9.hasPart ? v9.outstanding + " of " + v9.amount + " owed" : v9.amount);
-    const _invRawByNo = new Map((Array.isArray(invData) ? invData : []).map(v9 => [v9.number, v9]));
     const invoicesFull = invBase.map((r, i) => {
       let [no, date, client, desc, amount, status, id, cur] = r;
       // Settlement is decided from the PAYMENTS, exactly as the server does it — never from the
@@ -25131,7 +25155,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const one8 = rcs8[0] || null;
           return {
             hasQuote: !!qno8,
-            quoteLabel: qno8,
+            quoteLabel: qno8 || '—',
             quoteNote: qno8 ? 'Priced on ' + qno8 + ' — click to open it' : '',
             openQuote: () => { if (qno8) this.setState({ qtView: qno8 }); },
             hasReceipt: rcs8.length > 0,
@@ -25139,7 +25163,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // that the chip says how many rather than silently showing the first as if it were all.
             receiptLabel: one8
               ? (one8.number || 'Receipt') + (rcs8.length > 1 ? ' +' + (rcs8.length - 1) : '')
-              : '',
+              : '—',
             receiptNote: rcs8.length > 1
               ? rcs8.length + ' receipts settle this invoice — click to open the first'
               : 'Open the receipt for this invoice',
@@ -49319,18 +49343,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // dividing minor units, and a settled quotation must not read "Partially paid" for ever.
           const left8 = Math.round((want8 - paid8) * 100) / 100;
           const state8 = !invs8.length ? '' : (paid8 <= 0 ? 'Not paid' : (left8 <= 0 ? 'Fully paid' : 'Partially paid'));
-          const tone8 = { 'Fully paid': ['#E7F8EF', '#0E9355', '#BFE9D3'], 'Partially paid': ['#E4F4FD', '#0284C7', '#BEE3F5'], 'Not paid': ['#FEF4E2', '#B8860B', '#F2DFB5'] }[state8] || ['#F3F1F7', '#6F6C7A', '#E8E5EF'];
+          const tone8 = { 'Fully paid': ['#E7F8EF', '#0E9355', '#BFE9D3'], 'Partially paid': ['#E4F4FD', '#0284C7', '#BEE3F5'], 'Not paid': ['#FEF4E2', '#B8860B', '#F2DFB5'] }[state8] || ['transparent', '#C9C4D6', 'transparent'];
           const rcs8 = invs8.reduce((a8, v8) => a8.concat(_rcFor(v8.id, v8.number)), []);
           const one8 = rcs8[0] || null;
           return {
             hasPayState: !!state8,
-            payStateLabel: state8,
+            payStateLabel: state8 || '—',
             payStateBg: tone8[0], payStateColor: tone8[1], payStateBd: tone8[2],
             payStateNote: state8 === 'Partially paid'
               ? fmtCur(Math.max(0, left8)) + ' of ' + fmtCur(want8) + ' still to come'
               : (state8 === 'Fully paid' ? 'Settled in full — ' + fmtCur(paid8) + ' received' : 'Invoiced, nothing received yet'),
             hasQtReceipt: rcs8.length > 0,
-            qtReceiptLabel: one8 ? (one8.number || 'Receipt') + (rcs8.length > 1 ? ' +' + (rcs8.length - 1) : '') : '',
+            qtReceiptLabel: one8 ? (one8.number || 'Receipt') + (rcs8.length > 1 ? ' +' + (rcs8.length - 1) : '') : '—',
             qtReceiptNote: rcs8.length > 1
               ? rcs8.length + ' receipts received against this quotation — click to open the first'
               : 'Open the receipt',
