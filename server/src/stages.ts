@@ -136,11 +136,26 @@ export function planStages(items: Line[], milestones: any[], totalMinor: number)
       // Same remainder rule one level down, so the lines foot to the stage.
       const minor = i === source.length - 1 ? Math.max(0, want - allocated) : exact;
       allocated += minor;
-      // `price` here is ALREADY the discounted share, so the line's own discount must not travel
-      // with it — spreading the source line would hand the stage invoice a second deduction of
-      // money that has been deducted once.
-      return { ...l, disc: 0, units: 1, price: minor / 100 };
-    }).filter(l => Number(l.price) > 0);
+      /**
+       * THE LIST PRICE AND THE DISCOUNT, BOTH, ON THE STAGE'S LINE.
+       *
+       * `minor` is this stage's share of what the line is WORTH — already net of its discount,
+       * because baseMinor and the allocation above both work in lineMinor(). Writing that as the
+       * price and nothing else is arithmetically right and reads as a cheaper fee: the quotation
+       * said "50,000.00 less 375.94" and the invoice raised from it said "49,624.06", so the
+       * concession the client was given vanished between the two documents.
+       *
+       * So the share is split back into the two figures it came from. The discount travels as the
+       * SAME FRACTION of this line that is being billed, and the price is the net share plus it —
+       * which makes `lineMinor` of this line exactly `minor` again, by construction. Every total
+       * downstream is untouched; only the document can now show the subtraction.
+       *
+       * A line with nothing left to bill divides by zero, so that case carries no discount either.
+       */
+      const netOfLine = lineMinor(l);
+      const discShare = netOfLine > 0 ? Math.round((lineDiscMinor(l) * minor) / netOfLine) : 0;
+      return { ...l, units: 1, price: (minor + discShare) / 100, disc: discShare / 100 };
+    }).filter(l => lineMinor(l) > 0);
 
     return { index, label: String(m?.label ?? "").trim(), pct, basis, lines, subtotalMinor: want };
   });

@@ -125,11 +125,21 @@ async function discOnTheLine() {
   eq(st[1].subtotalMinor, 40000, "stage 2 — the remainder of it");
   eq(st[2].subtotalMinor, 50000, "stage 3 — the government fee, undiscounted");
   eq(st.reduce((a: number, x: any) => a + x.subtotalMinor, 0), d.subtotalMinor, "the stages foot to the quotation");
-  // THE ONE THAT WOULD HAVE COST MONEY. The stage's lines carry the source line's fields so the VAT
-  // travels; without clearing `disc` the stage invoice would deduct the discount a second time.
-  eq(st[0].lines.every((l: any) => !Number(l.disc)), true, "and no stage line carries the discount a second time");
+  /**
+   * THE ONE THAT WOULD COST MONEY: the discount must not be deducted twice.
+   *
+   * The stage line carries the LIST price and a proportional share of the discount, so the client's
+   * invoice shows the concession the quotation promised instead of a quietly cheaper fee. That is
+   * only safe while the two still net to the stage's share — which is the property asserted here,
+   * rather than "the discount is absent", which was how the first version achieved it.
+   */
+  const l0: any = st[0].lines[0];
+  eq(Math.round(Number(l0.price) * 100), 50000, "the stage line shows the LIST price");
+  eq(Math.round(Number(l0.disc) * 100), 10000, "and its share of the discount");
+  eq(lineMinor(l0), 40000, "which still net to the stage's share — not deducted twice");
   const stageFigures = await figuresForLines(st[0].lines as any, 1500);
   eq(stageFigures.subtotalMinor, 40000, "so the stage invoice bills what the stage says");
+  eq(stageFigures.vatMinor, 6000, "and taxes the discounted figure, not the list price");
 }
 
 main()
