@@ -11,6 +11,7 @@
  * that four places can bypass is a history nobody can trust.
  */
 import { prisma } from "./db.js";
+import { promoteOnInvoice } from "./pipeline.js";
 
 export type QuotationEvent = { at: string; from: string | null; to: string; by: string | null };
 
@@ -76,6 +77,20 @@ export async function recordQuotationStatus(
     const out = [...rows, { at: new Date().toISOString(), from: prev, to: next, by: await nameOf(by) }].slice(-40);
     await prisma.quotation.update({ where: { id }, data: { history: out as any } });
     await noteOnTheLead(id, q.companyId, q.number, next, out[out.length - 1].by);
+    /**
+     * A PROSPECT WHO HAS BEEN BILLED IS A CLIENT.
+     *
+     * Hooked HERE because this is the one function every writer of a quotation's status already
+     * comes through — staff through the generic PUT, the client through the portal, both convert
+     * paths, the stage invoices and the proposal email. The reason this function exists is that a
+     * history four places can bypass is a history nobody can trust; the same argument applies to a
+     * promotion four places could miss.
+     *
+     * Awaited rather than fired and forgotten, so the response that follows reports the record as
+     * it now is. promoteOnInvoice never throws and no-ops unless the company is a lead or a
+     * prospect, so a second invoice on the same client costs one read.
+     */
+    if (next.toLowerCase() === "invoiced") await promoteOnInvoice(q.companyId);
     return out;
   } catch (e) {
     console.error("could not record quotation history for", id, e);

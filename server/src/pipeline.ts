@@ -22,6 +22,7 @@ import { healthOf } from "./dealhealth.js";
 import { jobRules } from "./jobrules.js";
 import { lastContactMap, openFollowUps } from "./interactions.js";
 import { recordLifecycle } from "./lifecycle.js";
+import { ACTIVE_CLIENT, INDIVIDUAL } from "./validate.js";
 import type { Opportunity, PipelineStage } from "@prisma/client";
 
 export type DealStatus = "open" | "won" | "lost";
@@ -413,6 +414,63 @@ export async function boardFor(country: string | null, opts: { ownerId?: string 
  * this, and attributing it to whoever opened the deal would put a decision in their name that they
  * did not make. Never throws — a deal must not fail to open because the funnel bookkeeping did.
  */
+/**
+ * AND A CLIENT IS SOMEBODY WHO HAS BEEN BILLED.
+ *
+ * The other end of the ladder, and the half that was never automatic. `promoteOnDeal` below moves a
+ * lead to prospect when a deal opens; nothing moved a prospect to client, so the record only changed
+ * when somebody remembered to press "Won — turn into a client". Measured on this database: a client
+ * whose quotation was accepted, invoiced, scheduled and being delivered still read `prospect`, and
+ * the firm had 23 clients against 26 prospects.
+ *
+ * INVOICED, NOT ACCEPTED, and not won. Winning a deal is a judgement about a conversation; raising a
+ * bill is the firm asserting in writing that this is a paying client, and it is the point the
+ * process already treats as committed. Acceptance comes a moment earlier and can still be revised.
+ *
+ * THE CR IS WHAT THE WORK PRODUCES, so a real client can have none yet — a business setup exists to
+ * get them one. `crPending` says "being issued" rather than "missing", which is how the client
+ * screen and the agents already read it, and establishments.ts clears it when the CR is filed. An
+ * INDIVIDUAL gets no such flag: promising a certificate that is not coming is worse than silence.
+ *
+ * Recorded in LifecycleTransition with no `changedById` — nobody decided this, and attributing it
+ * to whoever pressed Invoice would put a decision in their name that they did not make. Never
+ * throws: a quotation must not fail to invoice because the funnel bookkeeping did.
+ */
+export async function promoteOnInvoice(
+  companyId: string | null | undefined,
+  db: any = prisma,
+): Promise<boolean> {
+  if (!companyId) return false;
+  try {
+    const co = await db.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, lifecycle: true, cr: true, crPending: true, companyType: true, createdAt: true },
+    });
+    // Only forward. A churned or lost record coming back is somebody's decision, not a side effect
+    // of a bill — and a client is already there.
+    if (!co || (co.lifecycle !== "lead" && co.lifecycle !== "prospect")) return false;
+    const at = new Date().toISOString();
+    await db.company.update({
+      where: { id: co.id },
+      data: {
+        lifecycle: ACTIVE_CLIENT,
+        ...(String(co.companyType ?? "") === INDIVIDUAL ? {} : { crPending: !co.cr }),
+        // Dated from the day they became a client, not the day the lead was typed in — the same
+        // rule the manual route applies, and only when nothing is there to overwrite.
+        createdAt: co.createdAt ?? at,
+      },
+    });
+    await recordLifecycle(db, {
+      companyId: co.id, from: co.lifecycle, to: ACTIVE_CLIENT, changedById: null, at,
+      reason: "A quotation was invoiced",
+    });
+    return true;
+  } catch (e) {
+    console.error("[pipeline] could not promote", companyId, "to client:", (e as any)?.message ?? e);
+    return false;
+  }
+}
+
 export async function promoteOnDeal(
   company: { id: string; lifecycle?: string | null },
   db: any = prisma,
