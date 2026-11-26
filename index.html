@@ -49131,10 +49131,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         },
         open: () => this.setState({ quoteOpen: id }),
         // Branded print (uploaded header/footer/watermark from Settings → Print Layout).
+        //
+        // THROUGH docFor(), the same builder the drawer previews — this had its own, assembled from
+        // the row's SUMMARY pairs, so what printed was a list of labels with no quantity, no unit
+        // price and no tax column, and "Subtotal" and "VAT" as though they were things bought. The
+        // preview and the print were two different documents, and the one the client receives was
+        // the worse of them. `quotes[i]` resolves at click time, which is the same way the invoice
+        // row has always done it.
         print: (ev9) => {
           ev9 && ev9.stopPropagation && ev9.stopPropagation();
-          const raw9 = (Array.isArray(qtData) ? qtData : []).find(q9 => q9.id === realId) || {};
-          this._printDocDirect('quotation', { no: id, client: raw9.clientName || title, date: raw9.date || '—', items: items.map(([n9, a9]) => ({ name: n9, amount: a9 })), total, notes: raw9.notes });
+          this._printDocDirect('quotation', quotes[i].docFor());
         } };
     });
     const qOpen = quoteDefs.find(q => q[0] === this.state.quoteOpen);
@@ -50305,11 +50311,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       qApprove: () => setQ('Accepted'),
       qReject: () => setQ('Rejected'),
       qChanges: () => setQ('Changes requested'),
-      // Was a dead <a href="#">. Prints the quotation through the shared letterhead pipeline.
+      // Was a dead <a href="#">. Prints the quotation through the shared letterhead pipeline — and
+      // through the row's own docFor(), for the reason given on the row's print above: a second
+      // assembly of the same document is a second document.
       qDownloadPdf: () => {
         if (!qOpen) return;
-        this._printDocDirect('quotation', { no: qOpen[0], client: qOpen[1], date: '—',
-          items: (qOpen[3] || []).map(([n9, a9]) => ({ name: n9, amount: a9 })), total: qOpen[4] });
+        const row9 = quotes.find(q9 => q9.id === qOpen[0]);
+        if (row9) this._printDocDirect('quotation', row9.docFor());
       },
     };
 
