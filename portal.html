@@ -2993,6 +2993,14 @@
           <div style="display:flex; justify-content:space-between; font-size:12px; padding:9px 0 7px;"><span style="font-weight:700;">Total</span><span style="font-family:'Space Grotesk',sans-serif; font-weight:700;">{{ qTotal }}</span></div>
         </div>
         <div style="font-size:10px; color:#A9A6B4; margin-top:9px;">Approving converts this to a tracked service · <span onClick="{{ qPrint }}" style="color:#7C00FF; font-weight:600; cursor:pointer;">Download PDF</span></div>
+        <!-- Said where the buttons would have been, because that is where the client is looking
+             for what to do next. -->
+        <sc-if value="{{ qSuperseded }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:flex-start; gap:9px; margin-top:11px; border:1px solid #E4D9FB; background:#FBF9FF; border-radius:12px; padding:11px 12px;">
+            <span style="width:20px; height:20px; border-radius:7px; background:#F5EEFF; color:#7C00FF; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"></path></svg></span>
+            <div style="font-size:11px; color:#4B4757; line-height:1.6;">{{ qSupersededNote }}</div>
+          </div>
+        </sc-if>
         <sc-if value="{{ qActionable }}" hint-placeholder-val="{{ true }}">
           <div style="display:flex; gap:8px; margin-top:11px;">
             <button onClick="{{ qApprove }}" style="flex:1.3; background:#12B76A; color:#fff; border:none; font-size:11px; font-weight:700; padding:10px 0; border-radius:99px; cursor:pointer; box-shadow:0 2px 8px rgba(18,183,106,.25);" style-hover="filter:brightness(.95);">Approve</button>
@@ -6407,7 +6415,27 @@ class Component extends DCLogic {
       qItems: qOpenRow ? ((Array.isArray(qOpenRow.items) && qOpenRow.items.length)
         ? qOpenRow.items.map(it9 => ({ label: it9.name + (Number(it9.units) > 1 ? ' × ' + it9.units : ''), amount: _qMoney((Number(it9.price) || 0) * (Number(it9.units) || 1)) }))
         : [{ label: qOpenRow.service || 'Professional services', amount: _qMoney(qOpenRow.amount) }]) : [],
-      qActionable: qOpenStatus === 'Pending',
+      /**
+       * A WITHDRAWN OFFER IS NOT AWAITING AN ANSWER.
+       *
+       * Revising leaves the original at `sent`, which reads here as "Pending", so a quotation the
+       * firm has already replaced sat in this portal with a live Approve button — at the old price.
+       * The server refuses it now, but a button that exists in order to fail is worse than no
+       * button: the client presses it, is told no, and does not know what to do instead.
+       *
+       * So the buttons give way to a line naming the replacement. `supersededAt` and the number of
+       * the document that replaced it are already on the row the portal fetched.
+       */
+      qSuperseded: !!(qOpenRow && qOpenRow.supersededAt),
+      qSupersededNote: (() => {
+        if (!qOpenRow || !qOpenRow.supersededAt) return '';
+        const by9 = (Array.isArray(this.state.quoteItems) ? this.state.quoteItems : [])
+          .find(x9 => x9 && x9.id === qOpenRow.supersededById);
+        return by9
+          ? 'This quotation has been replaced by ' + by9.number + '. Please review that one instead — it is in your list above.'
+          : 'This quotation has been replaced by a newer version. Please review the most recent one in your list above.';
+      })(),
+      qActionable: qOpenStatus === 'Pending' && !(qOpenRow && qOpenRow.supersededAt),
       qResolved: !!qOpen && qOpenStatus !== 'Pending',
       qResolvedMsg: qOpenStatus === 'Accepted' ? 'Approved ✓ — your PRO team has been notified' : qOpenStatus === 'Rejected' ? 'Rejected — your PRO team has been notified' : 'This quotation has already been invoiced',
       qResolvedBg: qOpenStatus === 'Accepted' ? '#E7F8EF' : qOpenStatus === 'Rejected' ? '#FEECEC' : '#E4F4FD',
