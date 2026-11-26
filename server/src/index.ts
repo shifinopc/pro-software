@@ -5867,8 +5867,35 @@ app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRo
  * professional fees do not carry the same tax, and splitting a blended total would give both the
  * average.
  */
-async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opts: { date?: string; isLast?: boolean } = {}) {
-  const figures = await figuresForLines(stage.lines, Number(q.vatRateBp ?? 0) || 0);
+/**
+ * WHICH STAGES AN INVOICE COVERS. One normally, several when it billed a whole moment.
+ *
+ * Its own function because three readers ask it — the schedule view, the refusal that stops a
+ * stage being billed twice, and the "is this the last one" test — and a merged invoice that one of
+ * them failed to understand would let the same stage be invoiced again.
+ */
+const coveredStages = (inv: { milestoneIndex: number | null; milestoneIndexes?: any }): number[] => {
+  const many = Array.isArray(inv.milestoneIndexes) ? inv.milestoneIndexes.map(Number).filter(Number.isInteger) : [];
+  if (many.length) return many;
+  return inv.milestoneIndex == null ? [] : [inv.milestoneIndex];
+};
+
+/**
+ * ONE BILL PER PAYMENT MOMENT, not per stage.
+ *
+ * A stage is one percentage of one fee kind, because that is what lets stage 4 carry no VAT while
+ * stage 3 carries 15% — the government fee is outside scope and the professional fee is not. But
+ * "50% on signing" of a quotation carrying both is TWO stages and ONE moment, and the client was
+ * getting two invoices for it on the same day, then two more when the licence came through.
+ *
+ * So the stages sharing a label are raised as one invoice. Their lines are concatenated, so each
+ * line still carries its own fee kind and VAT treatment and the tax stays right per line; the
+ * invoice records every index it covers.
+ */
+async function raiseStageInvoice(q: any, group: import("./stages.js").Stage[], opts: { date?: string; isLast?: boolean } = {}) {
+  const stage = group[0];
+  const lines = group.flatMap(st => st.lines);
+  const figures = await figuresForLines(lines, Number(q.vatRateBp ?? 0) || 0);
   /**
    * THE LAST STAGE TAKES THE REMAINDER OF THE TAX.
    *
@@ -5906,7 +5933,12 @@ async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opt
   // proposal's, because the schedule on the document and the label on the invoice raised from it
   // must not call the same fee two different things.
   const FEE_WORD: Record<string, string> = { prof: "Professional Fees", gov: "Government Fees", foreign: "Foreign Company Fees" };
-  const ofLabel = stage.basis && stage.basis !== "total" ? (FEE_WORD[stage.basis] ?? stage.basis) : "";
+  // Every share this bill is made of — "100% of Foreign Company Fees · 50% of Professional Fees"
+  // — so a merged invoice says what it merged rather than naming only its first stage.
+  const shares = group
+    .map(st => (st.pct && st.basis && st.basis !== "total" ? `${st.pct}% of ${FEE_WORD[st.basis] ?? st.basis}` : ""))
+    .filter(Boolean);
+  const ofLabel = shares.join(" · ");
   const services = [q.service, stage.label || `Stage ${stage.index + 1}`].filter(Boolean).join(" — ");
   return prisma.invoice.create({
     data: {
@@ -5915,10 +5947,13 @@ async function raiseStageInvoice(q: any, stage: import("./stages.js").Stage, opt
       totalMinor, vatRateBp: figures.vatRateBp,
       amount: Math.round(totalMinor / 100),
       status: "draft", date: today,
-      services, items: stage.lines as any, notes: q.notes ?? null,
+      services, items: lines as any, notes: q.notes ?? null,
       quotationId: q.id,
+      // The first of the group, so every reader that only ever asked "which stage is this" still
+      // gets an answer; the full set is beside it.
       milestoneIndex: stage.index,
-      milestoneLabel: [stage.label, ofLabel && stage.pct ? `${stage.pct}% of ${ofLabel}` : ""].filter(Boolean).join(" · ") || null,
+      milestoneIndexes: group.length > 1 ? (group.map(st => st.index) as any) : undefined,
+      milestoneLabel: [stage.label, ofLabel].filter(Boolean).join(" · ") || null,
     },
   });
 }
@@ -5936,9 +5971,12 @@ app.get("/api/quotations/:id/stages", requireAuth, requireStaff, async (req, res
   const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
   const raised = await prisma.invoice.findMany({
     where: { quotationId: q.id },
-    select: { id: true, number: true, status: true, milestoneIndex: true, totalMinor: true, amount: true },
+    select: { id: true, number: true, status: true, milestoneIndex: true, milestoneIndexes: true, totalMinor: true, amount: true },
   });
-  const byIndex = new Map(raised.filter(i => i.milestoneIndex != null).map(i => [i.milestoneIndex as number, i]));
+  // EVERY index the invoice covers, so both halves of a merged moment show the bill that paid for
+  // them rather than one showing "not raised yet" beside its own invoice.
+  const byIndex = new Map<number, any>();
+  for (const i of raised) for (const ix of coveredStages(i as any)) byIndex.set(ix, i);
   res.json({
     hasSchedule: stages.length > 0,
     // A quotation with no schedule bills as one invoice, which is what every one of them did before
@@ -5968,10 +6006,10 @@ app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWr
   const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
   if (!stages.length) return res.status(409).json({ error: `${q.number} has no payment schedule — it bills as one invoice` });
 
-  const raised = await prisma.invoice.findMany({ where: { quotationId: q.id }, select: { milestoneIndex: true, number: true } });
+  const raised = await prisma.invoice.findMany({ where: { quotationId: q.id }, select: { milestoneIndex: true, milestoneIndexes: true, number: true } });
   if (raised.some(i => i.milestoneIndex == null))
     return res.status(409).json({ error: `${q.number} was already invoiced in full as ${raised.find(i => i.milestoneIndex == null)!.number}` });
-  const done = new Set(raised.map(i => i.milestoneIndex));
+  const done = new Set<number>(raised.flatMap(i => coveredStages(i as any)));
   const wanted = req.body?.index != null ? Number(req.body.index) : stages.find(st => !done.has(st.index))?.index;
   if (wanted == null) return res.status(409).json({ error: `Every stage of ${q.number} has been invoiced` });
   if (done.has(wanted)) return res.status(409).json({ error: `Stage ${wanted + 1} of ${q.number} is already invoiced` });
@@ -5981,12 +6019,28 @@ app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWr
     return res.status(400).json({ error: `"${stage.label || `Stage ${wanted + 1}`}" bills nothing on this quotation — it is a percentage of a fee the quotation does not carry` });
 
   /**
+   * THE WHOLE MOMENT, not just the stage that was asked for.
+   *
+   * Every unraised stage carrying the same wording is billed together: "50% on signing" of a
+   * quotation with professional and foreign company fees is two stages and one payment. Matched on
+   * the trimmed label, and only when there IS a label — two unlabelled stages are not evidence of
+   * anything, and merging them would be a guess about the firm's own terms.
+   */
+  const label = String(stage.label ?? "").trim();
+  const group = label
+    ? stages.filter(st => !done.has(st.index) && st.subtotalMinor > 0 && String(st.label ?? "").trim() === label)
+    : [stage];
+  // The asked-for stage leads, so the invoice is numbered and labelled from it.
+  group.sort((x, y) => (x.index === wanted ? -1 : y.index === wanted ? 1 : x.index - y.index));
+  /**
    * IS THIS THE ONE THAT FINISHES THE SCHEDULE? Not "is it stage N" — a stage can be raised out of
    * order through this route's own `index`, and a stage that bills nothing is never raised at all.
-   * The question is whether anything billable would still be outstanding afterwards.
+   * The question is whether anything billable would still be outstanding afterwards — which now
+   * means after the whole GROUP, not after one stage of it.
    */
-  const isLast = !stages.some(st => st.index !== wanted && !done.has(st.index) && st.subtotalMinor > 0);
-  const invoice = await raiseStageInvoice(q, stage, { isLast });
+  const inGroup = new Set(group.map(st => st.index));
+  const isLast = !stages.some(st => !inGroup.has(st.index) && !done.has(st.index) && st.subtotalMinor > 0);
+  const invoice = await raiseStageInvoice(q, group, { isLast });
   logActivity({ type: "finance", message: `${invoice.number} raised for ${q.number} — ${stage.label || `stage ${wanted + 1}`}`, user: (req as any).auth?.email });
   await logAudit({ action: "quotation.stage_invoice", actorId: a?.sub, target: `${q.number} → ${invoice.number}`, detail: `stage ${wanted + 1}: ${stage.label}`, ip: clientIp(req) });
   res.status(201).json({ invoice, stage: { index: stage.index, label: stage.label, of: stages.length } });
@@ -6039,8 +6093,13 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const billable = stages.filter(st => st.subtotalMinor > 0);
   if (billable.length) {
     const first = billable[0];
-    // The first stage is also the last when the schedule has only one billable stage on it.
-    const staged = await raiseStageInvoice(q, first, { date: today, isLast: billable.length === 1 });
+    // THE WHOLE FIRST MOMENT, for the same reason /stages/next bills one: "50% on signing" across
+    // two fee kinds is one payment and must not arrive as two invoices on the same day.
+    const firstLabel = String(first.label ?? "").trim();
+    const firstGroup = firstLabel
+      ? billable.filter(st => String(st.label ?? "").trim() === firstLabel)
+      : [first];
+    const staged = await raiseStageInvoice(q, firstGroup, { date: today, isLast: firstGroup.length === billable.length });
     await prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } });
     await recordQuotationStatus(q.id, "invoiced", a?.email ?? a?.sub ?? "Staff", st);
     // The same delivery the single-invoice path owes, for the same reason: three line items are
@@ -6052,7 +6111,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     }
     logActivity({ type: "finance", message: `Invoice ${staged.number} raised from quotation ${q.number} — ${first.label || "stage 1"} of ${stages.length} stage(s)${q.clientName ? ` — ${q.clientName}` : ""}` });
     await logAudit({ action: "quotation.convert", actorId: a.sub, target: q.id, detail: `${q.number} → ${staged.number} · stage 1 of ${stages.length}: ${first.label}${stagedDelivery?.tasks?.length ? ` · ${stagedDelivery.tasks.length} job(s) opened` : ""}` });
-    return res.status(201).json({ invoice: staged, accepted: st === "sent", delivery: stagedDelivery, stage: { index: first.index, of: stages.length, label: first.label } });
+    return res.status(201).json({ invoice: staged, accepted: st === "sent", delivery: stagedDelivery, stage: { index: first.index, of: stages.length, covers: firstGroup.length, label: first.label } });
   }
 
   const number = await nextInvoiceNumber();

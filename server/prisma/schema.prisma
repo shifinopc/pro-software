@@ -811,6 +811,17 @@ model Invoice {
   /// been raised yet" answerable without comparing money. The label is copied because the schedule
   /// can be renegotiated on a later revision and this invoice must keep saying what it was for.
   milestoneIndex Int?
+  /// EVERY STAGE THIS INVOICE BILLS, when it bills more than one.
+  ///
+  /// A payment moment and a stage are not the same thing. "50% on signing" of a quotation carrying
+  /// professional AND foreign company fees is two stages — one per fee kind, because a stage bills
+  /// the LINES of its kind and that is what keeps the VAT right — but it is one moment, and the
+  /// client should get one bill for it. So the stages sharing a label are raised together, and the
+  /// invoice records all of their indexes; `milestoneIndex` keeps the first, for every reader that
+  /// only ever asked "which stage is this".
+  ///
+  /// Null on an invoice covering a single stage, which is most of them.
+  milestoneIndexes Json?
   milestoneLabel String?
   /// CORRECTION CHAIN — the same shape as the one on Quotation, deliberately, so a reader who knows
   /// one knows the other.
