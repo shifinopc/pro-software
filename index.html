@@ -17329,29 +17329,44 @@
                   -->
                   <sc-if value="{{ c.isRows }}" hint-placeholder-val="{{ false }}">
                     <div>
+                      <!-- THE COLUMN NAMES, once. Every text column carries its own name as a
+                           placeholder, which disappears the moment anything is typed, and a file
+                           column has no placeholder at all — its control says "Attach", which is
+                           what it DOES rather than what it is. With five columns the table needs a
+                           header to stay readable either way. The leading and trailing spacers match
+                           the row's index number and remove button so the two line up. -->
+                      <sc-if value="{{ c.rowsAny }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:grid; grid-template-columns:{{ c.gridCols }}; gap:6px; align-items:center; margin-bottom:4px;">
+                          <span></span>
+                          <sc-for list="{{ c.rowCols }}" as="hc" hint-placeholder-count="4">
+                            <span style="min-width:0; font-size:9px; font-weight:800; letter-spacing:.05em; color:#A9A6B4; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ hc.label }}</span>
+                          </sc-for>
+                          <span></span>
+                        </div>
+                      </sc-if>
                       <sc-for list="{{ c.rowList }}" as="r" hint-placeholder-count="2">
-                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
-                          <span style="font-size:10px; font-weight:700; color:#A9A6B4; width:14px; flex-shrink:0;">{{ r.n }}</span>
+                        <div style="display:grid; grid-template-columns:{{ c.gridCols }}; gap:6px; align-items:center; margin-bottom:6px;">
+                          <span style="font-size:10px; font-weight:700; color:#A9A6B4;">{{ r.n }}</span>
                           <sc-for list="{{ r.cells }}" as="cl" hint-placeholder-count="4">
                             <sc-if value="{{ cl.isPlain }}" hint-placeholder-val="{{ true }}">
-                              <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="flex:{{ cl.flex }}; min-width:0;">
+                              <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="min-width:0;">
                             </sc-if>
                             <!-- A file column: the attach control until something is attached, then the
                                  document itself with a way to swap it. -->
                             <sc-if value="{{ cl.isFile }}" hint-placeholder-val="{{ false }}">
-                              <div style="flex:{{ cl.flex }}; min-width:0; display:flex; align-items:center; gap:5px;">
+                              <div style="min-width:0; display:flex; align-items:center;">
                                 <sc-if value="{{ cl.hasFile }}" hint-placeholder-val="{{ false }}">
-                                  <a href="{{ cl.fileHref }}" target="_blank" rel="noopener" style="font-size:10px; font-weight:700; color:#0E9355; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ cl.fileName }}</a>
-                                  <span onClick="{{ cl.clearFile }}" title="Remove this document" style="font-size:12px; color:#C0353A; cursor:pointer; flex-shrink:0;">&times;</span>
+                                  <a href="{{ cl.fileHref }}" target="_blank" rel="noopener" style="font-size:10px; font-weight:700; color:#0E9355; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:5px;">{{ cl.fileName }}</a>
+                                  <span onClick="{{ cl.clearFile }}" title="Remove this document" style="font-size:12px; color:#C0353A; cursor:pointer; flex-shrink:0; margin-right:5px;">&times;</span>
                                 </sc-if>
-                                <label style="font-size:10px; font-weight:700; color:#7C00FF; cursor:pointer; white-space:nowrap;">
-                                  {{ cl.place }}
+                                <label title="{{ cl.attachTitle }}" style="font-size:10px; font-weight:700; color:#4B4757; background:#fff; border:1px solid #DDD9E6; border-radius:8px; padding:5px 9px; cursor:pointer; white-space:nowrap; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">
+                                  {{ cl.attachLabel }}
                                   <input type="file" accept=".png,.jpg,.jpeg,.svg,.webp,.pdf" onChange="{{ cl.pickFile }}" style="display:none;">
                                 </label>
                               </div>
                             </sc-if>
                           </sc-for>
-                          <span onClick="{{ r.remove }}" title="Remove this row" style="font-size:14px; color:#C0353A; cursor:pointer; padding:0 4px; flex-shrink:0;">&times;</span>
+                          <span onClick="{{ r.remove }}" title="Remove this row" style="font-size:14px; color:#C0353A; cursor:pointer; text-align:center;">&times;</span>
                         </div>
                       </sc-for>
                       <sc-if value="{{ c.rowsEmpty }}" hint-placeholder-val="{{ true }}">
@@ -40713,6 +40728,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               // ---- rows
               rowCols: cols9.map(col9 => ({ label: col9.label || col9.var, flex: String(col9.flex || 1) })),
               rowsEmpty: !list9.length,
+              rowsAny: list9.length > 0,
+              // ONE COLUMN SPEC, shared by the header and every row. Flex could not keep them
+              // aligned: an <input> contributes an intrinsic width that a <span> does not, so the
+              // same grow factors resolved to different widths and the Passport header sat 16px left
+              // of its own Attach button. A grid track sizes from the track, not from its contents.
+              gridCols: '14px ' + cols9.map(col9 => String(col9.flex || 1) + 'fr').join(' ') + ' 16px',
               rowAdd: () => put9([...list9, Object.fromEntries(cols9.map(col9 => [col9.var, '']))]),
               rowList: list9.map((r9, i9) => ({
                 n: String(i9 + 1),
@@ -40765,6 +40786,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                     rd9.readAsDataURL(f9);
                   },
                   clearFile: () => put9(list9.map((x9, j0) => j0 === i9 ? { ...x9, [col9.var]: '' } : x9)),
+                  // The control says what it does; the COLUMN says what the field is, and the title
+                  // carries that so the two are not competing for the same few pixels.
+                  attachLabel: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    return (cv9 && typeof cv9 === 'object' && String(cv9.path || '').trim()) ? 'Replace' : 'Attach';
+                  })(),
+                  attachTitle: (() => {
+                    const cv9 = r9 && r9[col9.var];
+                    const what9 = col9.label || col9.var;
+                    return (cv9 && typeof cv9 === 'object' && String(cv9.path || '').trim())
+                      ? 'Replace the ' + String(what9).toLowerCase()
+                      : 'Attach the ' + String(what9).toLowerCase() + ' for this row';
+                  })(),
                   value: (() => {
                     const cv9 = r9 && r9[col9.var];
                     return (cv9 && typeof cv9 === 'object') ? '' : String(cv9 ?? '');
