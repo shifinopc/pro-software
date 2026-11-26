@@ -2050,7 +2050,7 @@ function asAtFor(period?: string): string {
  * assigned to you makes its client yours to see, whatever the client record says.
  */
 async function salesCompanyIds(req: any, on?: string): Promise<string[] | null> {
-  if (!["sales", "pro_officer"].includes(String(req.auth?.role ?? ""))) return null;
+  if (req.auth?.role !== "sales") return null;
   // The caller's own book — or their TEAM's, when they lead one. Without this, a sales lead (who
   // per the firm's model owns no clients themselves) would be clamped to companies they personally
   // own: an empty set, which the report machinery correctly treats as "sees nothing". The lead's
@@ -2062,8 +2062,34 @@ async function salesCompanyIds(req: any, on?: string): Promise<string[] | null> 
   // figures even though the owner filter still counted them. Two scopings of one report disagreeing
   // is worse than either being wrong on its own — the total is short and nothing looks broken.
   const vis = await visibleUserIds(req.auth, on);
-  // A firm-wide visibility answer means no clamp at all, whatever the role: an admin who also
-  // happened to be a pro_officer must not be narrowed by the branch above.
+  if (vis.ids === null) return null;
+  const owners = vis.ids.length ? vis.ids : [req.auth.sub];
+  const mine = await prisma.company.findMany({ where: { ownerId: { in: owners } }, select: { id: true } });
+  return mine.map(c => c.id);
+}
+
+/**
+ * THE CLIENTS WHOSE DEALS A CALLER MAY SEE — a narrower question than whose CLIENTS they may see.
+ *
+ * The firm's rule, stated plainly: every officer may see every client and every lead, and an
+ * officer's PIPELINE is their own. Those are two different boundaries and one function cannot carry
+ * both — which is exactly the mistake this splits. Adding pro_officer to salesCompanyIds scoped the
+ * pipeline correctly and took the client's own record with it: measured on live, Navas could see all
+ * 215 clients in the lists while a client he opened showed 30 of 210 contacts and 50 of 155
+ * interactions. A client you can see whose history you cannot is worse than either rule on its own.
+ *
+ * So this clamps the deal surfaces — the board, the deals, their checklists, follow-ups and the
+ * sales numbers built from them — and salesCompanyIds goes back to meaning what its name says.
+ *
+ * SCOPED ON THE DEAL'S OWNER AS WELL AS THE CLIENT'S, because 53 of 53 deals name an owner and only
+ * 41 of 215 clients do: clamping on Company.ownerId alone would hide a deal from the person it is
+ * assigned to, whenever nobody got round to naming an owner on the client.
+ */
+async function dealCompanyIds(req: any, on?: string): Promise<string[] | null> {
+  if (!["sales", "pro_officer"].includes(String(req.auth?.role ?? ""))) return null;
+  const vis = await visibleUserIds(req.auth, on);
+  // A firm-wide answer means no clamp at all, whatever the role: an admin who also holds
+  // pro_officer must not be narrowed by the role test above.
   if (vis.ids === null) return null;
   const owners = vis.ids.length ? vis.ids : [req.auth.sub];
   const [byClient, byDeal] = await Promise.all([
@@ -2708,7 +2734,7 @@ app.get("/api/activities", requireAuth, requireStaff, requireReadRole("super_adm
 // Undated, unlike sales-report. This screen answers "where are we NOW", so the as-at date is today
 // and there is no period to pick — every figure that is about a month says so in its own name.
 app.get("/api/crm-dashboard", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   const vis = await visibleUserIds((req as any).auth);
   // WHOSE TARGET, decided by the SAME rule the Performance report uses — the firm's, or the one
   // team you lead, or your own. Resolved here rather than inside the dashboard module so there is
@@ -2783,7 +2809,7 @@ app.get("/api/sales-report", requireAuth, requireStaff, requireReadRole("super_a
   // to today because a membership question about the future has no honest answer — nobody's leaving
   // date has been typed in yet — so the current team is the best available truth for a live period.
   const on = asAtFor(period);
-  const scoped = await salesCompanyIds(req as any, on);
+  const scoped = await dealCompanyIds(req as any, on);
   const vis = await visibleUserIds((req as any).auth, on);
   const asked = String(req.query.ownerId ?? "").trim() || null;
   const ownerId = vis.ids === null ? asked : (asked && vis.ids.includes(asked) ? asked : null);
@@ -3099,7 +3125,7 @@ app.put("/api/users/:id/commission-rate", requireAuth, requireStaff, requireWrit
 });
 
 app.get("/api/targets-forecast", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   const stages = await prisma.pipelineStage.findMany({ select: { id: true, isWon: true, isLost: true } });
   const wonIds = new Set(stages.filter(s => s.isWon).map(s => s.id));
   const lostIds = new Set(stages.filter(s => s.isLost).map(s => s.id));
@@ -3318,7 +3344,7 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
   });
   if (!deal) return res.status(404).json({ error: "No such deal" });
   // Same scoping as every other sales read: a salesperson sees their own book and nobody else's.
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && deal.companyId && !scoped.includes(deal.companyId)) return res.status(403).json({ error: "Not one of your clients" });
 
   const stages = await stagesFor(await homeCountry());
@@ -3433,7 +3459,7 @@ app.get("/api/opportunities/:id/detail", requireAuth, requireStaff, requireReadR
 app.get("/api/opportunities/:id/checklist", requireAuth, requireStaff, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
   const company = await prisma.company.findUnique({ where: { id: opp.companyId } });
   res.json(await summaryFor(opp, company, opp.stage));
@@ -3449,7 +3475,7 @@ app.get("/api/opportunities/:id/checklist", requireAuth, requireStaff, async (re
 app.post("/api/opportunities/:id/checklist", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
 
   const key = String((req.body ?? {}).key ?? "").trim();
@@ -3656,7 +3682,7 @@ app.get("/api/interactions", requireAuth, requireStaff, requireReadRole("super_a
 
 /** What is owed today, overdue first. The one screen a salesperson opens in the morning. */
 app.get("/api/follow-ups", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   const mine = String(req.query.mine ?? "") === "1" ? (req as any).auth?.sub : null;
   res.json(await openFollowUps({ companyIds: scoped, ownerId: mine, on: String(req.query.on ?? "").trim() || undefined }));
 });
@@ -3816,7 +3842,7 @@ app.put("/api/pipeline-stages", requireAuth, requireStaff, requireWriteRole, asy
 
 app.get("/api/pipeline", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   const country = String(req.query.country ?? "").trim() || (await homeCountry());
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   const board = await boardFor(country, { companyIds: scoped, ownerId: String(req.query.ownerId ?? "").trim() || null });
   // Quotations out with no answer. Counted here rather than on the board's own cards because a
   // quotation can exist without a deal behind it, and money already quoted and then forgotten is
@@ -3840,7 +3866,7 @@ app.get("/api/pipeline", requireAuth, requireStaff, requireReadRole("super_admin
 });
 
 app.get("/api/opportunities", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   const where: any = {};
   if (scoped) where.companyId = { in: scoped };
   if (req.query.companyId) where.companyId = String(req.query.companyId);
@@ -3853,7 +3879,7 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
   if (!String(b.title ?? "").trim()) return res.status(400).json({ error: "Give it a title — a pipeline of untitled deals cannot be read" });
   const co = await prisma.company.findUnique({ where: { id: String(b.companyId ?? "") } });
   if (!co) return res.status(404).json({ error: "Pick the company this is for" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
   // Pursuing a company already written off is a contradiction that would sit in the pipeline
   // forever. Reopen it on the Leads screen first — that is one press, and it says what happened.
@@ -3896,7 +3922,7 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
 app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const before = await prisma.opportunity.findUnique({ where: { id: req.params.id } });
   if (!before) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(before.companyId)) return res.status(403).json({ error: "Not one of your clients" });
   const b = req.body ?? {};
   /**
@@ -3954,7 +3980,7 @@ app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, a
 app.post("/api/opportunities/:id/move", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
 
   const to = await prisma.pipelineStage.findUnique({ where: { id: String((req.body ?? {}).stageId ?? "") } });
@@ -4103,7 +4129,7 @@ async function serviceForProduct(productId: string | null | undefined): Promise<
 app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id }, include: { stage: true, company: true } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
   if (opp.quotationId) {
     const existing = await prisma.quotation.findUnique({ where: { id: opp.quotationId } });
@@ -4150,7 +4176,7 @@ app.post("/api/opportunities/:id/quote", requireAuth, requireStaff, requireWrite
 app.delete("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const opp = await prisma.opportunity.findUnique({ where: { id: req.params.id } });
   if (!opp) return res.status(404).json({ error: "Deal not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(opp.companyId)) return res.status(403).json({ error: "Not one of your clients" });
   // A deal that HAPPENED is not deleted — move it to the lost column, which keeps it in the loss
   // report. Deleting would quietly improve the win rate, which is the one number this is for.
@@ -4176,7 +4202,7 @@ app.delete("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole
 app.post("/api/companies/:id/open-deal", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const co = await prisma.company.findUnique({ where: { id: req.params.id } });
   if (!co) return res.status(404).json({ error: "Company not found" });
-  const scoped = await salesCompanyIds(req as any);
+  const scoped = await dealCompanyIds(req as any);
   if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
   const out = await openDealFor(co, {
     title: (req.body ?? {}).title,
