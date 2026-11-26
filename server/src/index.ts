@@ -5656,6 +5656,11 @@ app.post("/api/service-requests/:id/reject", requireAuth, requireStaff, requireW
 app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   const q = await prisma.quotation.findUnique({ where: { id: req.params.id } });
   if (!q) return res.status(404).json({ error: "Quotation not found" });
+  // Who is writing this version. The token carries an id, so the name is looked up once here
+  // rather than stored as an id the document would have to resolve every time it is read.
+  const who = (await prisma.user.findUnique({
+    where: { id: String((req as any).auth?.sub ?? "") }, select: { name: true, email: true },
+  }).catch(() => null));
 
   const st = String(q.status).toLowerCase();
   // Nothing to preserve yet: a quotation the client has never seen should be corrected in place
@@ -5699,8 +5704,29 @@ app.post("/api/quotations/:id/revise", requireAuth, requireStaff, requireWriteRo
         amount: q.amount, subtotalMinor: q.subtotalMinor, vatMinor: q.vatMinor,
         totalMinor: q.totalMinor, vatRateBp: q.vatRateBp, items: q.items ?? undefined,
         notes: q.notes, validUntil: q.validUntil,
+        /**
+         * THE REST OF THE OFFER, which was being dropped.
+         *
+         * A revision copied the money and nothing else, so QT-343-R1 arrived with the lines but
+         * no PAYMENT SCHEDULE: the stages somebody had written — "50% on signing, the rest on the
+         * licence" — were gone, and the revision silently became "the full amount on signing".
+         * Nobody is told; the terms simply are not on the new document.
+         *
+         * `serviceItemId` the same, and it matters more since the composer stopped asking for it:
+         * what the quotation DELIVERS has no control on the dialog any more, so a revision that
+         * dropped it could never get it back, and accepting the revision would schedule no work.
+         *
+         * `templateId` is which proposal template prints it — a property of the offer, not of the
+         * version.
+         */
+        milestones: q.milestones ?? undefined,
+        serviceItemId: q.serviceItemId,
+        templateId: q.templateId,
         // NOT copied: sentAt (this one has not been sent) and clientNote (what they said about the
-        // OLD offer belongs to the old offer).
+        // OLD offer belongs to the old offer). `createdBy` is whoever pressed Revise, below —
+        // carrying the original author over would credit them with a document they never wrote.
+        createdById: (req as any).auth?.sub ?? null,
+        createdByName: who?.name ?? who?.email ?? null,
         status: "draft", date: today, revisesId: q.id,
       },
     });
