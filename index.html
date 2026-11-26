@@ -17340,35 +17340,33 @@
                than scrolling away above it. -->
           <sc-if value="{{ wdCanCompleteStep }}" hint-placeholder-val="{{ true }}">
             <div style="position:sticky; bottom:0; z-index:2; margin-top:14px; background:#fff; border-top:1px solid #F0EDF6; padding:13px 0 18px;">
-              <div style="font-size:10px; font-weight:600; color:{{ wdSlaColor }};">⏱ {{ wdFootNote }}</div>
+              <div style="font-size:10px; font-weight:600; color:{{ wdSlaColor }}; margin-bottom:2px;">⏱ {{ wdFootNote }}</div>
               <!--
-                HANDING A STEP ON.
+                ONE ROW OF SECONDARY ACTIONS, then the primary.
 
-                The record's own action bar carries Delegate and is gated to plain tasks, because on
-                a step it rendered between the heading and the form, above that form's own footer.
-                Gating it fixed the placement and removed the only way to delegate a workflow step —
-                while this half of the drawer goes on defining the picker, the reassign call and the
-                role-gate clear it performs, all of it unreachable.
+                This footer had grown four stacked rows — the deadline note, Delegate on a line of
+                its own, Save on another, and the full-width complete button under all of it — so a
+                step that could not yet complete showed three separate places to press before the
+                one that mattered. They are one row now: what you do INSTEAD of completing on the
+                left and right, and the thing you came to do across the bottom.
 
-                Its own row, and OUTSIDE wdHasCaptures: a step with no fields to fill has no save bar
-                at all, and is just as likely to belong to somebody else.
+                Save and Delegate are gated independently because they answer to different things —
+                a step with no fields has nothing to save and is still somebody else's to do — and
+                Delegate is pushed right by its own margin rather than by a spacer, so it sits at the
+                edge whether or not Save is beside it.
               -->
-              <sc-if value="{{ wdIsStep }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}">
-                <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                  <button onClick="{{ toggleDelegate }}" title="Hand this step to somebody else — they can act on it whatever role they hold" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button>
-                </div>
-              </sc-if></sc-if>
-              <!-- SAVE SITS ABOVE BOTH FOOTERS, not inside the "ready" one: a part-filled step is
-                   the only kind worth saving, and that is exactly the step that cannot complete. -->
-              <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
-                <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+              <div style="display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
                   <button onClick="{{ saveStepDraft }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Save for later</button>
-                  <sc-if value="{{ wdSaving }}" hint-placeholder-val="{{ false }}">
-                    <span style="font-size:10px; color:#A9A6B4;">Saving…</span>
-                  </sc-if>
-                  <span style="font-size:10px; color:#A9A6B4;">{{ wdSavedNote }}</span>
-                </div>
-              </sc-if>
+                </sc-if>
+                <sc-if value="{{ wdSaving }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:10px; color:#A9A6B4;">Saving…</span>
+                </sc-if>
+                <span style="font-size:10px; color:#A9A6B4;">{{ wdSavedNote }}</span>
+                <sc-if value="{{ wdIsStep }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ canWriteTasks }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ toggleDelegate }}" title="Hand this step to somebody else — they can act on it whatever role they hold" style="margin-left:auto; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer;" style-hover="border-color:#7C00FF; color:#7C00FF;">Delegate</button>
+                </sc-if></sc-if>
+              </div>
               <!-- TWO BUTTONS UNDER sc-if, not one with a bound colour. A mostly-static style
                    attribute is hoisted into a generated class and stops re-evaluating, so the
                    background froze at whatever it was on first render — grey for ever, however much
