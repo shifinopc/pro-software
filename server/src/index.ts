@@ -4566,6 +4566,15 @@ app.post("/api/invoices/:id/correct", requireAuth, requireStaff, requireWriteRol
           // The links the original carried. Losing them would leave the quotation looking uninvoiced
           // and the add-on looking unpaid.
           quotationId: inv.quotationId, addonServiceId: inv.addonServiceId,
+          // WHICH PAYMENT STAGE THIS BILLS, carried over — and it is not cosmetic.
+          //
+          // /stages/next reads every invoice raised against the quotation and refuses outright if
+          // any of them has a NULL index, because a null means "the whole quotation was invoiced".
+          // A replacement that arrived without the index therefore read as a whole-quotation bill:
+          // revising stage 1 of a five-stage schedule answered "already invoiced in full" and the
+          // four remaining stages could never be raised again. The /stages view had the same
+          // reading, showing the correction as the whole bill.
+          milestoneIndex: inv.milestoneIndex, milestoneLabel: inv.milestoneLabel,
           status: "draft",
           revisesId: inv.id,
         },

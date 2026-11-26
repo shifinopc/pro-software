@@ -152,6 +152,28 @@ async function main() {
   expect(one.body.invoice.totalMinor, 575000, "the whole amount");
   expect((await call("POST", `/api/quotations/${plain.id}/stages/next`, {})).status, 409, "asking for a stage");
 
+  /**
+   * CORRECTING A STAGE INVOICE MUST NOT CANCEL THE REST OF THE SCHEDULE.
+   *
+   * /stages/next refuses outright if ANY invoice against the quotation has a null milestoneIndex,
+   * because a null means "the whole quotation was invoiced in full". The correction route carried
+   * the figures, the dates, the lines and the links but not the stage — so the replacement read as
+   * a whole-quotation bill, and correcting stage 1 of a five-stage schedule answered "already
+   * invoiced in full" for ever after. Measured before the fix: stage 2 refused with 409 and the
+   * schedule view named the correction as the whole bill.
+   */
+  console.log("\ncorrecting a stage invoice keeps its stage");
+  const toFix = await prisma.invoice.findFirst({ where: { quotationId: q.id, milestoneIndex: 1 } });
+  await prisma.invoice.update({ where: { id: toFix!.id }, data: { status: "unpaid" } });
+  const corrected = await call("POST", `/api/invoices/${toFix!.id}/correct`, { reason: "ZZ check — wrong figure" });
+  expect(corrected.status, 200, "the correction");
+  const replacement = await prisma.invoice.findFirst({ where: { revisesId: toFix!.id } });
+  expect(replacement?.milestoneIndex, 1, "the replacement is still stage 2");
+  expect(replacement?.milestoneLabel, toFix!.milestoneLabel, "and still says what it is for");
+  // The reading that made it matter: no invoice against this quotation claims to be the whole of it.
+  const reread = await call("GET", `/api/quotations/${q.id}/stages`);
+  expect(reread.body?.whole ?? null, null, "and no invoice reads as the whole quotation");
+
   console.log("\nwhat the console reads");
   const view = await call("GET", `/api/quotations/${q.id}/stages`);
   expect(view.status, 200, "the schedule");
