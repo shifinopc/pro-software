@@ -24393,10 +24393,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // A receipt for a payment, on the same letterhead as the invoice it settles. The invoice gives
     // the total and what is still owed — a receipt that shows only the amount taken tells the client
     // nothing about where they now stand.
+    // EVERY loaded payment, not the receipts screen's slice — see the note on _rcRow below.
+    const _payEvery9 = Array.isArray(this.state.paymentsData) ? this.state.paymentsData : [];
     this._receiptFor = (p2) => {
       const invs9 = Array.isArray(this.state.invoicesData) ? this.state.invoicesData : [];
       const inv9 = invs9.find(v9 => v9.id === p2.invoiceId) || invs9.find(v9 => v9.number === p2.invoiceNumber) || null;
-      const paid9 = payData.filter(x9 => (p2.invoiceId && x9.invoiceId === p2.invoiceId) || (!p2.invoiceId && p2.invoiceNumber && x9.invoiceNumber === p2.invoiceNumber))
+      const paid9 = _payEvery9.filter(x9 => (p2.invoiceId && x9.invoiceId === p2.invoiceId) || (!p2.invoiceId && p2.invoiceNumber && x9.invoiceNumber === p2.invoiceNumber))
         .reduce((a9, x9) => a9 + _payTotal(x9), 0);
       const owed9 = inv9 ? Math.max(0, _docTotal(inv9) - paid9) : 0;
       return {
@@ -24496,7 +24498,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     }));
     const payChart = sixMonthBars(_payAll);
     // ---- View a receipt (the document, in a drawer) ----
-    const _rcRow = this.state.rcView ? _payAll.find(x9 => x9.id === this.state.rcView) : null;
+    /**
+     * THE RECEIPT DRAWER IS NOT A RECEIPTS-SCREEN FEATURE, so it must not read the receipts
+     * screen's data.
+     *
+     * `payData` is _srcOn9(paymentsData, ['Receipts']) — null unless the Receipts screen is the one
+     * on show, which is a sound saving for a list nobody is looking at. `_payAll` inherits that, so
+     * resolving the drawer's row through it meant rcView could only ever find a receipt WHILE ON
+     * the receipts screen. Clicking a receipt number on the invoice list, or in the list behind a
+     * status chip, set the state and opened nothing: no error, no drawer, nothing to debug from.
+     *
+     * The drawer is a top-level overlay reachable from three screens, so it resolves against the
+     * loaded data itself. Same for _receiptFor below, which reads the other payments on the invoice
+     * to print the balance — off-screen that was not merely empty but null, so printing a receipt
+     * from the invoice list would have thrown on .filter once the drawer could open at all.
+     */
+    const _rcRow = this.state.rcView ? _payEvery9.find(x9 => x9.id === this.state.rcView) : null;
     const receiptViewApi = {
       showRcView: (() => {
         if (_rcRow) { clearTimeout(this._rcPaint); this._rcPaint = setTimeout(() => this._paintDocInto('[data-rc-preview]', 'receipt', this._receiptFor(_rcRow)), 60); }
