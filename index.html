@@ -21271,6 +21271,40 @@ class Component extends DCLogic {
           this._quoteDeal(s9.dealId, s9.title, s9.stageId);
         },
       },
+      /**
+       * WHICH PRODUCT is a choice from a list, not a line of text — so it is an action too.
+       *
+       * A text box here would let somebody type "comapny formation" and satisfy a gate with a
+       * product this firm does not sell, and the fact reads the product's NAME, so the typo would
+       * then travel into every rule that tests it. The deal editor already carries the house
+       * product picker (ddDlfSvc), keyed by id and filtered to what is not retired, so this opens
+       * that rather than growing a second picker inside this dialog.
+       */
+      product: {
+        label: 'Pick what they are buying…',
+        note: 'Opens the deal so you can choose the product. Save it and drag the card again — or take the prompt that offers the move.',
+        run: (s9) => {
+          // The deal's own values, so opening the editor to set ONE field does not blank the rest:
+          // the save sends every field on the form.
+          const cols9 = ((this.state.pipelineData || {}).columns) || [];
+          let d9 = null;
+          for (const c9 of cols9) { const h9 = (c9.deals || []).find(x9 => x9.id === s9.dealId); if (h9) { d9 = h9; break; } }
+          if (!d9) return;
+          this.setState({
+            fixMissing: null, fixErr: '', fixSaving: false,
+            dealEdit: {
+              id: d9.id, companyId: d9.companyId, title: d9.title,
+              // Same rule as the board's own Edit: a quotation-derived figure is not an estimate to
+              // retype, and `locked` is what stops the form offering to overwrite it.
+              value: d9.valueSource === 'estimate' && d9.valueMinor != null ? String(d9.valueMinor / 100) : '',
+              close: d9.expectedCloseDate || '', source: d9.source || '', notes: d9.notes || '',
+              productId: d9.productId || '',
+              locked: d9.valueSource === 'quotation',
+            },
+            dlErr: '',
+          });
+        },
+      },
     };
     /**
      * Open the form that answers a refused move.

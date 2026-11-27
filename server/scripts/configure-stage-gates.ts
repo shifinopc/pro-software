@@ -37,9 +37,19 @@ const GATES: Record<string, Item[]> = {
   // lead form already, so this gates nothing a salesperson has not been asked for anyway.
   Enquiry: [
     { key: "reachable", label: "A way to contact them", required: true, source: "field", field: "contactReach" },
-    // NOT the product. `product` reads Opportunity.productId, which is days old and set on 1 of 47
-    // deals — gating on it would refuse 46 and teach everybody that the gate is something you waive.
-    // Worth revisiting once the lead form has been writing it for a while.
+    /**
+     * WHAT THEY ARE BUYING. Added on the firm's instruction after the reach item on its own turned
+     * out to gate nothing anybody could feel: it was already satisfied on 7 of the 8 deals sitting
+     * in Enquiry, so a card dragged to Qualified just went.
+     *
+     * This one refuses ALL of them, which was the reason it was left out the first time — a gate
+     * that stops every deal in its column usually becomes a gate everybody waives. It is in now
+     * because the refusal is answerable in the moment: `product` is wired into _FIX_ACTIONS in the
+     * console, so the refusal offers the deal's own product picker rather than only naming the
+     * field. A blocker you can clear from the dialog that raised it is a prompt; one you cannot is
+     * the wall that teaches the habit.
+     */
+    { key: "product", label: "What they are buying", required: true, source: "field", field: "product" },
   ],
   // → Quoted: the column claims a quotation exists, so it must.
   Qualified: [
