@@ -179,6 +179,18 @@ export async function lifecycleAnalytics(scope: { companyIds?: string[] | null }
  * gets its own line rather than being dropped: until every lead enters the pipeline, "no deal
  * yet" is the most common status there is, and hiding it would make the board look complete.
  */
+/** One lead, as the spreadsheet prints it. */
+export type LeadLine = {
+  name: string; owner: string; lifecycle: string; stage: string;
+  deal: string; valueMinor: number | null; currency: string;
+  source: string; campaign: string; city: string; phone: string; email: string;
+  /** What the period did to it — the movement this lead was counted in, in words. */
+  movement: string;
+  firstSeen: string; lastContact: string; nextFollowUp: string;
+  /** Days since anybody logged anything. The column that finds the forgotten ones. */
+  idleDays: number | null;
+};
+
 async function openLeadsByStage(companyIds: string[]): Promise<{ rows: { name: string; count: number }[]; byStage: Map<string, string[]> }> {
   const open = await prisma.company.findMany({
     where: { id: { in: companyIds }, lifecycle: { in: ["lead", "prospect"] } },
@@ -257,11 +269,21 @@ export async function leadStatusReport(opts: {
    * disagree with the total it was opened from. `owner` is a user id, or "unassigned".
    */
   detailFor?: { owner: string | null; bucket: string } | null;
+  /**
+   * EVERY LEAD, ONE ROW EACH — not just the counts.
+   *
+   * The report was five numbers per salesperson and a stage tally, which answers "how many" and
+   * nothing else: the firm could not see which lead was where, who owned it, or when anybody last
+   * spoke to it. Built from the same pass as the counts, so a lead in this list and the number it
+   * was counted in can never disagree.
+   */
+  includeLeads?: boolean;
 }): Promise<{
   rows: LeadStatusRow[];
   totals: Omit<LeadStatusRow, "ownerId" | "owner">;
   stages: { name: string; count: number }[];
   detail?: { id: string; name: string; owner: string; stage: string }[];
+  leads?: LeadLine[];
   from: string; to: string; since: string | null;
 }> {
   const { from, to } = opts;
@@ -306,11 +328,19 @@ export async function leadStatusReport(opts: {
     // "all" is the TOTAL row — every owner, including the unassigned.
     if (want.owner === "all" || (want.owner === "unassigned" ? owner === null : owner === want.owner)) picked.add(companyId);
   };
+  // What the period did to each company, in the order it did it — the words the per-lead sheet
+  // prints. Recorded HERE, where the counting happens, so a lead that reads "Became a client"
+  // is by construction one of the companies in that column's figure.
+  const moved = new Map<string, string[]>();
+  const MOVE_WORD: Record<string, string> = {
+    newLeads: "New lead", toProspect: "Became a prospect", toClient: "Became a client", lost: "Lost",
+  };
   const once = (companyId: string, bucket: keyof LeadStatusRow & ("newLeads" | "toProspect" | "toClient" | "lost")) => {
     const key = `${companyId}|${bucket}`;
     if (seen.has(key)) return;
     seen.add(key);
     line(ownerOf.get(companyId) ?? null)[bucket]++;
+    moved.set(companyId, [...(moved.get(companyId) ?? []), MOVE_WORD[bucket]]);
     wanted(companyId, bucket);
   };
 
@@ -378,5 +408,103 @@ export async function leadStatusReport(opts: {
     }));
   }
 
-  return { rows: out, totals, stages: byStage.rows, detail, from, to, since: first?.changedAt.slice(0, 10) ?? null };
+  /**
+   * THE LEAD-LEVEL SHEET.
+   *
+   * WHICH LEADS: every company the report counted anywhere — the ones that moved inside the
+   * period, and the ones still open at the end of it. Exactly the union of the numbers above, so
+   * the two sheets add up to each other by construction rather than by a second query agreeing.
+   *
+   * `stage` prefers what the company has BECOME over where its card sits: a client whose old deal
+   * is still in Quoted is a client, and printing "Quoted" beside it is how a report gets argued
+   * with instead of read.
+   */
+  let leads: LeadLine[] | undefined;
+  if (opts.includeLeads) {
+    const want2 = new Set<string>([...moved.keys()]);
+    for (const [companyId, state] of stateAtEnd) if (state === "lead" || state === "prospect") want2.add(companyId);
+    const ids2 = [...want2];
+    const [cos2, deals2, lastInts, nextFus] = await Promise.all([
+      prisma.company.findMany({
+        where: { id: { in: ids2 } },
+        select: {
+          id: true, name: true, lifecycle: true, ownerId: true, source: true, campaign: true,
+          city: true, phone: true, email: true, createdAt: true,
+        },
+      }),
+      prisma.opportunity.findMany({
+        where: { companyId: { in: ids2 } },
+        select: { companyId: true, title: true, valueMinor: true, currency: true, stageAt: true, stage: { select: { name: true, sort: true } } },
+        orderBy: { stageAt: "asc" },   // ascending: the last write per company wins below
+      }),
+      prisma.interaction.findMany({
+        where: { companyId: { in: ids2 } },
+        select: { companyId: true, at: true, kind: true },
+        orderBy: { at: "asc" },
+      }),
+      prisma.interaction.findMany({
+        where: { companyId: { in: ids2 }, nextActionAt: { not: null }, nextActionDoneAt: null, cancelledAt: null },
+        select: { companyId: true, nextAction: true, nextActionAt: true },
+        orderBy: { nextActionAt: "desc" },  // descending: the soonest wins below
+      }),
+    ]);
+    // WHEN IT FIRST APPEARED. `Company.createdAt` is empty on everything that arrived by import —
+    // all 200 leads in this database — so the lifecycle history answers it instead: the first
+    // transition is the day the record entered the ladder. Printing a blank column would be
+    // technically true and useless.
+    const firstSeenOf = new Map<string, string>();
+    for (const t of rows) if (!firstSeenOf.has(t.companyId)) firstSeenOf.set(t.companyId, t.changedAt.slice(0, 10));
+    const dealOf = new Map(deals2.map(d => [d.companyId, d]));
+    const lastOf = new Map(lastInts.map(i => [i.companyId, i]));
+    const nextOf = new Map(nextFus.map(i => [i.companyId, i]));
+    const todayDay = new Date().toISOString().slice(0, 10);
+    const LIFE: Record<string, string> = { lead: "Lead", prospect: "Prospect", client: "Client", lost: "Lost" };
+
+    leads = cos2.map(c => {
+      const d = dealOf.get(c.id);
+      const last = lastOf.get(c.id);
+      const next = nextOf.get(c.id);
+      const lastDay = last ? String(last.at).slice(0, 10) : "";
+      return {
+        name: c.name,
+        owner: c.ownerId ? (nameOf.get(c.ownerId) ?? "Someone who has left") : "Unassigned",
+        lifecycle: LIFE[String(c.lifecycle)] ?? String(c.lifecycle ?? ""),
+        stage: c.lifecycle === "client" ? "Client"
+          : c.lifecycle === "lost" ? "Lost"
+          : (d?.stage?.name ?? "No deal yet"),
+        deal: d?.title ?? "",
+        valueMinor: d?.valueMinor ?? null,
+        currency: d?.currency ?? "",
+        source: c.source ?? "",
+        campaign: c.campaign ?? "",
+        city: c.city ?? "",
+        phone: c.phone ?? "",
+        email: c.email ?? "",
+        // Blank, not "No change": the column is a list of what happened, and a word in every cell
+        // of it would make the ones that did move harder to find.
+        movement: (moved.get(c.id) ?? []).join(" → "),
+        firstSeen: String(c.createdAt ?? "").slice(0, 10) || (firstSeenOf.get(c.id) ?? ""),
+        lastContact: lastDay,
+        nextFollowUp: next ? `${String(next.nextActionAt).slice(0, 10)} · ${next.nextAction ?? ""}`.trim() : "",
+        // Null rather than a big number when nobody has EVER logged anything: "never contacted"
+        // and "contacted 400 days ago" are different problems and the sheet should not merge them.
+        idleDays: lastDay ? Math.max(0, Math.round((Date.parse(todayDay) - Date.parse(lastDay)) / 86400000)) : null,
+      };
+    }).sort((a, b) =>
+      /**
+       * THE PERIOD FIRST, THEN THE SILENCE.
+       *
+       * Everything that MOVED in the range sits at the top, because that is what the report is
+       * about and a reader opening it should land on it. Under that, the longest silence first.
+       *
+       * Never-contacted goes LAST, not first, however neglected it is: this database holds 150-odd
+       * imported leads nobody has ever rung, and putting them above everything buries the twenty
+       * rows the month actually produced under a wall of empty ones.
+       */
+      (a.movement ? 0 : 1) - (b.movement ? 0 : 1)
+      || (b.idleDays ?? -1) - (a.idleDays ?? -1)
+      || a.name.localeCompare(b.name));
+  }
+
+  return { rows: out, totals, stages: byStage.rows, detail, leads, from, to, since: first?.changedAt.slice(0, 10) ?? null };
 }

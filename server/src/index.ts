@@ -20,6 +20,7 @@ import { addContact, editContact, setPrimaryContact, removeContact, syncPrimaryC
 import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFollowUp, openDealFor, dealForAddonRequest, closeAddonDeal, recordTransition, stageAnalytics, promoteOnDeal } from "./pipeline.js";
 import { crmDashboard } from "./crmdashboard.js";
 import { recordLifecycle, lifecycleAnalytics, campaignPerformance, leadStatusReport } from "./lifecycle.js";
+import { leadStatusWorkbook } from "./leadworkbook.js";
 import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
 import { openFollowUps, historyFor, logInteraction, closeFollowUp, reopenFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
 import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
@@ -5154,6 +5155,17 @@ app.get("/api/reports/lead-status", requireAuth, requireStaff, requireReadRole("
   } catch (e: any) { return fail(res, 400, e, "reports.lead-status"); }
 });
 
+/**
+ * THE LEAD REPORT AS A WORKBOOK — the leads first, the counts second.
+ *
+ * It used to be one sheet of five numbers per salesperson and a stage tally. That answers "how
+ * many" and nothing else: opened by the firm, it could not say which lead was where, who owned it,
+ * or when anybody last spoke to it — so the file was accurate and unusable.
+ *
+ * Sheet 1 is every lead the report counted, one row each, longest silence first. Sheet 2 is the
+ * summary that used to be the whole file. Both come from ONE call to leadStatusReport, so the rows
+ * and the totals cannot drift.
+ */
 app.get("/api/reports/lead-status.xlsx", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   try {
     const { from, to } = reportRange(req);
@@ -5162,34 +5174,9 @@ app.get("/api/reports/lead-status.xlsx", requireAuth, requireStaff, requireReadR
       companyIds: await salesCompanyIds(req as any),
       source: String(req.query.source ?? "").trim() || null,
       campaign: String(req.query.campaign ?? "").trim() || null,
+      includeLeads: true,
     });
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(`Leads ${from} to ${to}`.slice(0, 31));
-    ws.columns = [
-      { header: "Salesperson", key: "owner", width: 32 },
-      { header: "New leads", key: "newLeads", width: 12 },
-      { header: "Moved to prospect", key: "toProspect", width: 20 },
-      { header: "Became clients", key: "toClient", width: 16 },
-      { header: "Lost", key: "lost", width: 10 },
-      { header: "Still open", key: "openAtEnd", width: 12 },
-    ];
-    ws.getRow(1).font = { bold: true };
-    rep.rows.forEach(r => ws.addRow(r));
-    ws.addRow([]);
-    ws.addRow({ owner: "TOTAL", ...rep.totals }).font = { bold: true };
-    // The period and the caveats travel WITH the file: a sheet pasted into an email loses its
-    // name, and a count with no period and no definitions on it is a number nobody can check.
-    // Where the open leads stand, under the per-person table rather than on a second sheet: it is
-    // five rows, and a tab nobody opens is a figure nobody reads.
-    if (rep.stages.length) {
-      ws.addRow([]);
-      ws.addRow(["OPEN LEADS BY STAGE (as at today)"]).font = { bold: true };
-      rep.stages.forEach(st => ws.addRow({ owner: st.name, newLeads: st.count }));
-    }
-    ws.addRow([]);
-    ws.addRow([`${from} to ${to} inclusive. Each company counted once per column. "Still open" is its state as at ${to}.`]);
-    ws.addRow([`Credited to the client's current owner.${rep.since ? ` Lifecycle history begins ${rep.since}.` : ""}`]);
+    const wb = await leadStatusWorkbook(rep, from, to);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="lead-status-${from}-to-${to}.xlsx"`);
     await wb.xlsx.write(res);
