@@ -20259,9 +20259,27 @@ class Component extends DCLogic {
       // The resolved matrix, from the server. Presets used to live only in this file, so the
       // screen could draw a grid the backend had never heard of — which is exactly how it ended
       // up showing 11 modules while the enforcement knew 12.
+      /**
+       * A RE-READ THAT CHANGES NOTHING MUST NOT RE-RENDER.
+       *
+       * Every save re-reads this, and the answer is almost always identical to what the screen
+       * already has: the tick was applied optimistically and the server's merge agrees with it.
+       * setState all the same, and the console re-runs every binding it owns — which on the
+       * permissions screen is the pause somebody feels after unticking a box.
+       *
+       * Compared as text rather than field by field: the payload is a few kB of plain JSON with no
+       * ordering of its own to go wrong, and one stringify is a rounding error against the render
+       * it prevents. When the server HAS changed something — somebody else editing, or a preset
+       * the client did not predict — the compare fails and the screen updates exactly as before.
+       */
       this._loadPerms = () => this._bootFetch('/api/permissions', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
-        .then(v => { if (v && v.modules) this.setState({ permsApi: v }); })
+        .then(v => {
+          if (!v || !v.modules) return;
+          let same9 = false;
+          try { same9 = JSON.stringify(v) === JSON.stringify(this.state.permsApi); } catch (e9) { same9 = false; }
+          if (!same9) this.setState({ permsApi: v });
+        })
         .catch(() => {});
       this._loadPerms();
       // What the grid covers, asked of the router. Failure is silent and the panel simply does not
@@ -22821,6 +22839,9 @@ class Component extends DCLogic {
         const t2 = localStorage.getItem('stimespro:token');
         fetch(API + '/api/settings/perms', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify(grid) })
           .then(r => {
+            // The re-read is kept — the server's merge is what governs — but it now only re-renders
+            // when it actually disagrees with the screen. The toast is the one deliberate render
+            // per burst: a permission changing silently is worse than a frame of work.
             if (r.ok) { this.toast('Permissions saved'); return this._loadPerms && this._loadPerms(); }
             // A non-admin used to get NOTHING here: the tick moved, the save 403'd, and the screen
             // said nothing at all.
