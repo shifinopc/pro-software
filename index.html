@@ -22708,7 +22708,22 @@ class Component extends DCLogic {
           // when the network is slow it holds the splash a moment longer instead of showing zeros.
           return r.json()
             .then(j => (this._firstPaintReady || Promise.resolve()).then(() => j))
-            .then(j => this.setState({ auth: j && j.mustChangePassword ? 'change' : 'in' }))
+            .then(j => {
+              /**
+               * A FORCED PASSWORD CHANGE BELONGS TO THE PERSON WHOSE PASSWORD IT IS.
+               *
+               * While viewing as somebody, the token IS theirs — so an admin who reloads the page
+               * mid-view was handed "Set a new password", for an account whose temporary password
+               * they do not know and must not replace. Typing one would overwrite a real user's
+               * credential from a session that exists only to look.
+               *
+               * Read from the marker rather than from state: this runs during boot, before the
+               * banner's own state is restored.
+               */
+              let viewing9 = false;
+              try { viewing9 = !!localStorage.getItem('stimespro:tokenOrig'); } catch (e9) { viewing9 = false; }
+              this.setState({ auth: (j && j.mustChangePassword && !viewing9) ? 'change' : 'in' });
+            })
             .catch(() => this.setState({ auth: 'in' }));
         })
         // A NETWORK FAILURE MUST NOT LEAVE PEOPLE ON THE SPLASH. Before the splash existed this
@@ -23299,6 +23314,15 @@ class Component extends DCLogic {
       // Agents was filed under Compliance, which gave every PRO officer the screen that configures
       // the models. It is an administrator's screen and now reads as one.
       'Agents': 'Organisation',
+      // IN THE MENU, MISSING FROM THIS MAP — which means no permission could hide them and they
+      // showed for every role, the same hole Sales Dashboard and Activities were in.
+      //
+      // Renewals is the documents-due list, drawn from the same data `Documents` already governs.
+      // Departments edits /api/settings/departments, which the server governs as Organisation, so
+      // the menu item was offering a screen whose every write the API would refuse — visible to an
+      // accountant, useless to them, and confusing precisely because it looked available.
+      'Renewals': 'Documents',
+      'Departments': 'Organisation',
     };
     const _myPerm = (this.state.permsApi && this.state.permsApi.mine && this.state.permsApi.mine.grid) || null;
     const _navHidden = (() => {
