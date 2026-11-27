@@ -9325,6 +9325,23 @@
                     </sc-for>
                   </div>
                   <button onClick="{{ openCrNew }}" style="margin-top:10px; width:100%; background:#F5EEFF; color:#7C00FF; border:none; font-size:11px; font-weight:700; padding:9px 0; border-radius:99px; cursor:pointer;" style-hover="background:#EBDBFF;">+ Create role</button>
+                  <!-- ── One person, when the role is not the whole answer ──────────────────────
+                       Under the roles rather than on a screen of their own: it is the same grid
+                       asked about a different subject, and two screens would become two ideas of
+                       what a permission is. -->
+                  <div style="font-size:10px; font-weight:700; color:#A9A6B4; letter-spacing:.06em; margin:16px 0 4px;">OR ONE PERSON</div>
+                  <div style="font-size:10px; color:#A9A6B4; line-height:1.45; margin-bottom:8px;">Exceptions to their role. Use a role where you can — an exception that is not exceptional is a role waiting to be created.</div>
+                  <div style="display:flex; flex-direction:column; gap:5px; max-height:240px; overflow-y:auto;">
+                    <sc-for list="{{ permPeople }}" as="p" hint-placeholder-count="4">
+                      <div onClick="{{ p.select }}" style="padding:8px 10px; border-radius:10px; background:{{ p.bg }}; border:1px solid {{ p.border }}; cursor:pointer;" style-hover="border-color:#F0C24B;">
+                        <div style="font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ p.name }}</div>
+                        <div style="font-size:9.5px; color:#A9A6B4; margin-top:2px;">{{ p.role }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <sc-if value="{{ permPersonOn }}" hint-placeholder-val="{{ false }}">
+                    <span onClick="{{ permPersonClear }}" style="display:block; margin-top:9px; text-align:center; font-size:10px; font-weight:700; color:#6F6C7A; cursor:pointer;">← back to roles</span>
+                  </sc-if>
                 </div>
                 <div style="background:#fff; border:1px solid #EDEBF2; border-radius:18px; box-shadow:0 1px 2px rgba(38,7,77,.04); padding:14px 15px;">
                   <div style="display:flex; align-items:center; gap:10px;"><span style="font-family:'Space Grotesk',sans-serif; font-size:13px; font-weight:700;">Permissions matrix</span><span style="width:8px; height:8px; border-radius:99px; background:{{ roleDescColor }};"></span><span style="font-size:11px; font-weight:700; color:#4B4757;">{{ setRoleSel }}</span></div>
@@ -38830,10 +38847,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       this._saveRoles && this._saveRoles(next);
       this.toast('Role deleted');
     };
+    /**
+     * A PERSON can be selected instead of a role, and then the same matrix edits their EXCEPTIONS.
+     *
+     * The roles answer "what does an accountant do"; this answers "and what about this one". Both
+     * are the same grid because they are the same question asked of a different subject — a second
+     * screen would have been a second idea of what a permission looks like.
+     */
+    const _pmPerson9 = this.state.permPerson || null;
     const setRoles = roleDefs.map(([label, desc, color, builtIn, id]) => ({
-      label, desc, color, builtIn, active: setRoleSel === label,
-      bg: setRoleSel === label ? '#F5EEFF' : '#fff', border: setRoleSel === label ? '#C9A2FF' : '#EDEBF2',
-      select: () => this.setState({ setRole: label }),
+      label, desc, color, builtIn, active: !_pmPerson9 && setRoleSel === label,
+      bg: (!_pmPerson9 && setRoleSel === label) ? '#F5EEFF' : '#fff',
+      border: (!_pmPerson9 && setRoleSel === label) ? '#C9A2FF' : '#EDEBF2',
+      select: () => this.setState({ setRole: label, permPerson: null }),
       canDelete: !builtIn, del: (e) => { if (e && e.stopPropagation) e.stopPropagation(); deleteCustomRole(id, label); },
     }));
     const roleDesc = (roleDefs.find(r => r[0] === setRoleSel) || roleDefs[2]);
@@ -38898,6 +38924,31 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // The server's resolved row for the role being edited. Falls back to the local presets only
     // while the payload is in flight.
     const _pmRow = (_pmApi && _pmApi.roles && _pmApi.roles[setRoleSel]) || null;
+    /**
+     * EDITING A PERSON: their role's row underneath, their own exceptions on top.
+     *
+     * `permPersonData` is what GET /api/users/:id/permissions answered — base (the role as the
+     * server resolves it) and overrides (only the cells that differ). Held separately from the
+     * role grid so that leaving the person leaves no trace on it.
+     */
+    const _ppData9 = (_pmPerson9 && this.state.permPersonData && this.state.permPersonData.id === _pmPerson9.id)
+      ? this.state.permPersonData : null;
+    const _ppBase9 = (_ppData9 && _ppData9.base) || null;
+    const _ppOver9 = (_ppData9 && _ppData9.overrides) || {};
+    const _ppSave9 = (next9) => {
+      clearTimeout(this._ppT);
+      this._ppT = setTimeout(() => {
+        const tok9 = localStorage.getItem('stimespro:token');
+        fetch((this._apiBase || 'http://localhost:4100') + '/api/users/' + _pmPerson9.id + '/permissions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+          body: JSON.stringify(next9),
+        })
+          .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+          .then(({ ok, j9 }) => this.toast(ok ? 'Exceptions saved for ' + _pmPerson9.name : ((j9 && j9.error) || 'Could not save'), ok ? 'ok' : 'error'))
+          .catch(() => this.toast('Server unreachable', 'error'));
+      }, 600);
+    };
     // ── GROUPED BY THE MENU THE MODULE GOVERNS ──────────────────────────────────────────────────
     //
     // Twelve module names in a flat list ask somebody to already know what a module is. "Compliance"
@@ -38971,17 +39022,47 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // Nothing of this kind exists in this module — no route to enforce it against.
           const notHere = !!_modActs9 && Array.isArray(_modActs9[mod]) && _modActs9[mod].indexOf(act) < 0;
           const dead = appendLocked || notHere;
+          const cell9 = mod + '|' + act;
+          // EDITING A PERSON — their role underneath, their exception on top, and the cell says
+          // which it is showing.
+          const roleSays9 = _ppBase9 ? !!_ppBase9[cell9] : false;
+          const overridden9 = !!_pmPerson9 && typeof _ppOver9[cell9] === 'boolean';
           const on = dead ? false
-            : _pmRow ? !!_pmRow[mod + '|' + act]
+            : _pmPerson9 ? (overridden9 ? !!_ppOver9[cell9] : roleSays9)
+            : _pmRow ? !!_pmRow[cell9]
             : (grid[key] != null ? grid[key] : !!preset[ai]);
-          const locked = setRoleSel === 'Super Admin' || dead;
+          const locked = (!_pmPerson9 && setRoleSel === 'Super Admin') || dead
+            || (!!_pmPerson9 && (_pmPerson9.role === 'super_admin' || !_ppBase9));
           return { act, on, locked,
             title: appendLocked ? 'The audit trail is append-only — nothing may change it'
               : notHere ? 'Nothing in ' + mod + ' can be ' + (act === 'Approve' ? 'approved' : act.toLowerCase() + 'd') + ' — there is no such action here'
+              : overridden9 ? 'Exception for ' + _pmPerson9.name + ' — their role says ' + (roleSays9 ? 'yes' : 'no') + '. Click to put it back.'
+              : _pmPerson9 ? 'From the ' + (_pmPerson9.label || 'role') + ' role. Click to make an exception.'
               : (on ? act + ' is granted' : act + ' is not granted'),
-            cellBg: on ? '#7C00FF' : (dead ? '#F3F1F7' : '#fff'), cellBorder: on ? '#7C00FF' : '#DDD9E6', cursor: locked ? 'not-allowed' : 'pointer',
+            // An exception is AMBER, whichever way it goes: the colour says "somebody decided this
+            // for this person", which is the thing a reader has to be able to find on a grid of
+            // 168 identical squares. Purple remains "this is what the role says".
+            cellBg: on ? (overridden9 ? '#B7791F' : '#7C00FF') : (dead ? '#F3F1F7' : '#fff'),
+            cellBorder: on ? (overridden9 ? '#B7791F' : '#7C00FF') : (overridden9 ? '#B7791F' : '#DDD9E6'),
+            cursor: locked ? 'not-allowed' : 'pointer',
             toggle: () => {
               if (locked) return;
+              /**
+               * A PERSON'S CELL STORES THE EXCEPTION, OR REMOVES IT.
+               *
+               * Toggling to what the role already says DELETES the override rather than writing it
+               * as an identical value — otherwise an exception that agrees with the role would sit
+               * there invisibly and silently stop tracking it the day the role changed, which is
+               * the whole failure this design is built to avoid.
+               */
+              if (_pmPerson9) {
+                const want9 = !on;
+                const next9 = { ..._ppOver9 };
+                if (want9 === roleSays9) delete next9[cell9]; else next9[cell9] = want9;
+                this.setState({ permPersonData: { ..._ppData9, overrides: next9 } });
+                _ppSave9(next9);
+                return;
+              }
               const ng = { ...grid, [key]: !on };
               /**
                * ONE setState, not two.
@@ -40044,7 +40125,46 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         bg: n9 === _usrPage9 ? '#7C00FF' : '#fff',
         color: n9 === _usrPage9 ? '#fff' : '#6F6C7A',
         pick: () => this.setState({ usrPage: n9 }),
-      })), setRoleSel, roleDesc0: roleDesc[1], roleDescColor: roleDesc[2],
+      })),
+      // The heading names whoever is being edited — a person's exceptions and a role's grid look
+      // identical otherwise, and editing the wrong one is not a mistake anybody notices.
+      setRoleSel: _pmPerson9 ? _pmPerson9.name : setRoleSel,
+      roleDesc0: _pmPerson9
+        ? (_ppData9
+            ? ('Exceptions only · everything else follows the ' + (_pmPerson9.label || 'role') + ' role'
+               + (Object.keys(_ppOver9).length ? ' · ' + Object.keys(_ppOver9).length + ' exception' + (Object.keys(_ppOver9).length === 1 ? '' : 's') : ''))
+            : 'Loading this person…')
+        : roleDesc[1],
+      roleDescColor: _pmPerson9 ? '#B7791F' : roleDesc[2],
+      /**
+       * THE PEOPLE, under the roles.
+       *
+       * Staff only — a portal user is a client and is not governed by this grid at all — and the
+       * super admin is left out: an exception on the root account could only take something away.
+       */
+      permPeople: (Array.isArray(this.state.usersData) ? this.state.usersData : [])
+        .filter(u9 => u9 && u9.type !== 'portal' && u9.roleId !== 'super_admin')
+        .map(u9 => {
+          const on9 = !!_pmPerson9 && _pmPerson9.id === u9.id;
+          return {
+            name: u9.name || u9.email,
+            role: ROLE_LABELS[u9.roleId] || u9.roleId || '—',
+            active: on9,
+            bg: on9 ? '#FFF6E5' : '#fff', border: on9 ? '#F0C24B' : '#EDEBF2',
+            // Loaded on SELECT, not for all of them up front: one request when somebody asks,
+            // rather than a request per member of staff on every settings visit.
+            select: () => {
+              this.setState({ permPerson: { id: u9.id, name: u9.name || u9.email, role: u9.roleId, label: ROLE_LABELS[u9.roleId] || u9.roleId }, permPersonData: null });
+              const tok9 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/users/' + u9.id + '/permissions', { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
+                .then(r9 => (r9.ok ? r9.json() : null))
+                .then(j9 => { if (j9 && j9.id) this.setState({ permPersonData: j9 }); })
+                .catch(() => this.toast('Could not load those permissions', 'error'));
+            },
+          };
+        }),
+      permPersonOn: !!_pmPerson9,
+      permPersonClear: () => this.setState({ permPerson: null, permPersonData: null }),
       settingsChrome: !actIsBuilder, settingsGridCols: actIsBuilder ? '1fr' : '210px 1fr',
       permMatrix, permRows, permActions,
       // What the grid covers, counted from the router. Drawn only when the answer arrived: a

@@ -241,11 +241,13 @@ const APPEND_ONLY: Partial<Record<PermModule, PermAction[]>> = {
 export const presetFor = (label: string, mod: PermModule): number[] =>
   TUNE[label]?.[mod] ?? PRESET[label] ?? [1, 0, 0, 0, 0, 0];
 
+/** How long either cache is trusted. One number, so the grid and the exceptions never age apart. */
+const CACHE_MS = 30000;
 let _cache: { at: number; grid: Record<string, boolean>; labels: Record<string, string>; bases: Record<string, string> } | null = null;
 
 /** Stored overrides + the custom-role id→label map, cached briefly (same 30s as role resolution). */
 async function load() {
-  if (_cache && Date.now() - _cache.at < 30000) return _cache;
+  if (_cache && Date.now() - _cache.at < CACHE_MS) return _cache;
   const labels: Record<string, string> = { ...ROLE_LABEL };
   // A custom role inherits its BASE role's defaults for any cell nobody has set. Without this a
   // role built on Admin would fall to the bare [View] default and lock its holders out of work
@@ -280,8 +282,38 @@ async function load() {
   return _cache;
 }
 
+/**
+ * ONE PERSON'S EXCEPTIONS, cached beside the grid and for the same reason: this is read on every
+ * request that the matrix governs, and a database round trip per request to answer "nothing
+ * special about you" — which is the answer for almost everybody — is a tax on the whole app.
+ *
+ * Keyed by user, holding only the deltas their row carries. An empty object is a real answer and
+ * is cached as such; the absence of a key means "not looked up yet".
+ */
+let _ovCache: { at: number; byUser: Record<string, Record<string, boolean>> } | null = null;
+
+async function overridesFor(userId: string | undefined): Promise<Record<string, boolean>> {
+  if (!userId) return {};
+  if (_ovCache && Date.now() - _ovCache.at < CACHE_MS && _ovCache.byUser[userId]) return _ovCache.byUser[userId];
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { permOverrides: true } });
+    const v = u?.permOverrides as any;
+    const out: Record<string, boolean> = {};
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const [k, b] of Object.entries(v)) if (typeof b === "boolean") out[k] = b;
+    }
+    if (!_ovCache || Date.now() - _ovCache.at >= CACHE_MS) _ovCache = { at: Date.now(), byUser: {} };
+    _ovCache.byUser[userId] = out;
+    return out;
+  } catch {
+    // Same rule as the grid: a blip must not widen anybody's access. No overrides is the role's own
+    // answer, which is the safe side of the only direction this can be wrong in.
+    return {};
+  }
+}
+
 /** Drop the cache so an admin's change takes effect on the next request, not in half a minute. */
-export const invalidatePermissions = () => { _cache = null; };
+export const invalidatePermissions = () => { _cache = null; _ovCache = null; };
 
 export async function labelForRole(roleId: string | undefined): Promise<string | null> {
   if (!roleId) return null;
@@ -293,7 +325,7 @@ export async function labelForRole(roleId: string | undefined): Promise<string |
  * May this role do this? Unknown roles are refused rather than defaulted — a role nobody has
  * described is not one to hand permissions to.
  */
-export async function can(roleId: string | undefined, mod: PermModule, act: PermAction): Promise<boolean> {
+export async function can(roleId: string | undefined, mod: PermModule, act: PermAction, userId?: string): Promise<boolean> {
   if (!roleId) return false;
   // APPEND-ONLY FIRST, AND THAT ORDER IS THE POINT. These two were the other way round, so the root
   // account was handed every action before the lock was consulted — a super admin could delete
@@ -302,6 +334,20 @@ export async function can(roleId: string | undefined, mod: PermModule, act: Perm
   // trail is that the most powerful account cannot edit it either.
   if ((APPEND_ONLY[mod] ?? []).includes(act)) return false;        // rule 4
   if (roleId === "super_admin") return true;                       // rule 1
+  /**
+   * THE PERSON'S OWN EXCEPTIONS, over their role and under the two rules above.
+   *
+   * Under append-only, because an exception for one person is not a reason to let the audit trail
+   * be edited. Under super admin, because withholding something from the root account would make
+   * it possible to lock the building from inside it.
+   *
+   * A `false` override is as real as a `true` one: "this accountant, not the receipts" is the same
+   * kind of fact as "this one, also the approvals", and a system that can only widen forces the
+   * other case to be solved by inventing a role per person.
+   */
+  const ov = await overridesFor(userId);
+  const ovKey = `${mod}|${act}`;
+  if (typeof ov[ovKey] === "boolean") return ov[ovKey];
   const { grid, labels, bases } = await load();
   const label = labels[roleId];
   if (!label) return false;
@@ -331,6 +377,29 @@ export async function gridFor(label: string): Promise<Record<string, boolean>> {
         : typeof grid[key] === "boolean" ? grid[key]
         : !!presetFor(label, mod)[ACTIONS.indexOf(act)];
     }
+  }
+  return out;
+}
+
+/**
+ * The grid one PERSON actually has: their role's, with their own exceptions applied.
+ *
+ * What the console reads for `mine`, so the sidebar hides exactly what the server will refuse. The
+ * role grid on its own was right for everybody until the first exception existed.
+ */
+export async function gridForUser(label: string, userId: string | undefined): Promise<Record<string, boolean>> {
+  const base = await gridFor(label);
+  const ov = await overridesFor(userId);
+  if (!Object.keys(ov).length) return base;
+  const out = { ...base };
+  for (const [k, v] of Object.entries(ov)) {
+    const [mod, act] = k.split("|");
+    // An override naming a module or action this build does not know is ignored rather than
+    // written through: the grid is drawn from MODULES × ACTIONS and a stray key would be invisible.
+    if (!MODULES.includes(mod as PermModule) || !ACTIONS.includes(act as PermAction)) continue;
+    if ((APPEND_ONLY[mod as PermModule] ?? []).includes(act as PermAction)) continue;
+    if (label === "Super Admin") continue;
+    out[k] = v;
   }
   return out;
 }

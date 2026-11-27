@@ -293,11 +293,13 @@ export function requireStaff(req: Request, res: Response, next: NextFunction) {
   const need = permFor(req.method, full);
   if (!need) return next();
   (req as any).perm = need;   // remembered so requireWriteRole knows this route was already judged
-  can(a?.role, need.module, need.action)
+  // `a.sub` so the check can see this person's own exceptions. The 168 staff routes all come
+  // through here, so the override layer lands everywhere at once or nowhere.
+  can(a?.role, need.module, need.action, a?.sub)
     .then(ok => ok ? next() : res.status(403).json({
       // Names the cell, so the answer to "why can't I" is on screen instead of in a log somebody
       // has to be asked for.
-      error: `Your role does not have ${need.action} access to ${need.module}`,
+      error: `You do not have ${need.action} access to ${need.module}`,
       module: need.module, action: need.action,
     }))
     // Never fail open. A permission check that cannot run is a refusal, not an allowance.

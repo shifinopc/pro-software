@@ -105,7 +105,8 @@ import { clientReportPdf } from "./client-report-pdf.js";
 import { masterDataPdf, type MasterDataRow } from "./master-data-pdf.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
-import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
+import { Prisma } from "@prisma/client";
+import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, gridForUser, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invitations.js";
@@ -9827,8 +9828,65 @@ app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
      * request to answer a question with one possible answer is work for nobody.
      */
     moduleActions: (moduleActionsCache ??= coverageOf(((app as any)._router?.stack ?? [])).actions),
-    mine: { label: mineLabel, grid: mineLabel ? roles[mineLabel] ?? await gridFor(mineLabel) : {} },
+    // The PERSON's grid, not their role's: the sidebar has to hide exactly what the server will
+    // refuse, and from the first exception onwards those are two different things.
+    mine: { label: mineLabel, grid: mineLabel ? await gridForUser(mineLabel, (req as any).auth?.sub) : {} },
   });
+});
+
+/**
+ * ONE PERSON'S EXCEPTIONS — read and written as a DELTA against their role.
+ *
+ * `base` comes back with them so the screen can show what the role already says and mark only the
+ * cells that differ. Writing the whole resolved grid instead would freeze that person's access at
+ * today's role definition, which is the failure this whole shape exists to avoid.
+ */
+app.get("/api/users/:id/permissions", requireAuth, requireStaff, async (req, res) => {
+  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true, type: true, permOverrides: true } });
+  if (!u) return res.status(404).json({ error: "No such user" });
+  const label = await labelForRole(u.roleId);
+  res.json({
+    id: u.id, name: u.name, role: u.roleId, label,
+    base: label ? await gridFor(label) : {},
+    overrides: (u.permOverrides && typeof u.permOverrides === "object" && !Array.isArray(u.permOverrides)) ? u.permOverrides : {},
+  });
+});
+
+app.put("/api/users/:id/permissions", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  // Changing what somebody may do is itself an administrative act: the same permission that lets
+  // you edit the person, not merely a write role.
+  if (!(await can((req as any).auth?.role, "Users & Roles", "Edit", (req as any).auth?.sub))) {
+    return res.status(403).json({ error: "Only an administrator can change a person's permissions" });
+  }
+  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true } });
+  if (!u) return res.status(404).json({ error: "No such user" });
+  // The root account is not exception-able: an override on it could only ever take something away,
+  // and locking the building from inside it is the one failure with no way back.
+  if (u.roleId === "super_admin") return res.status(403).json({ error: "The super admin's access is not an exception anybody may edit" });
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const clean: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (typeof v !== "boolean") continue;
+    const [mod, act] = String(k).split("|");
+    // Refused, not stored quietly: a key the grid cannot draw is one nobody could ever see or undo.
+    if (!(MODULES as readonly string[]).includes(mod) || !(ACTIONS as readonly string[]).includes(act)) {
+      return res.status(400).json({ error: `"${k}" is not a module and action this system has` });
+    }
+    clean[`${mod}|${act}`] = v;
+  }
+  // Prisma.DbNull rather than null: on a Json column `null` is the JSON value null, which would
+  // store the string "null" where "no exceptions" is meant.
+  await prisma.user.update({
+    where: { id: u.id },
+    data: { permOverrides: Object.keys(clean).length ? (clean as any) : Prisma.DbNull },
+  });
+  invalidatePermissions();
+  await logAudit({
+    action: "user.permissions", actorId: (req as any).auth?.sub, target: u.id,
+    detail: `${u.name}: ${Object.keys(clean).length ? Object.entries(clean).map(([k, v]) => (v ? "+" : "-") + k).join(" ") : "exceptions cleared"}`,
+  });
+  res.json({ ok: true, overrides: clean });
 });
 
 /**

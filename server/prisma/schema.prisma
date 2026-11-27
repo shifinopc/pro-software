@@ -867,6 +867,17 @@ model User {
   email              String  @unique
   passwordHash       String?
   roleId             String  @default("admin")
+  /// WHAT THIS PERSON MAY DO THAT THEIR ROLE DOES NOT SAY — the exceptions, and only the exceptions.
+  ///
+  ///   { "Invoices|Approve": true, "Clients|Delete": false }
+  ///
+  /// A per-user COPY of the whole grid was the other option and it is a trap: the day somebody
+  /// widens the Accountant role, every accountant gets it except the ones holding a private copy,
+  /// and nobody can see why. Storing the delta means a role change still reaches them.
+  ///
+  /// Null or empty for almost everybody, which is the point — an exception that is not exceptional
+  /// is a role waiting to be created.
+  permOverrides      Json?
   status             String  @default("active")
   lastActive         String?
   type               String  @default("staff") // staff | portal
