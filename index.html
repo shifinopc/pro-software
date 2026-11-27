@@ -17638,7 +17638,7 @@
                 <span style="font-size:11px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.module }}</span>
                 <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="6">
                   <div style="display:flex; justify-content:center;">
-                    <div onClick="{{ c.pick }}" title="{{ c.title }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.bg }}; border:1.5px solid {{ c.bd }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
+                    <div data-permcell onClick="{{ c.pick }}" title="{{ c.title }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.bg }}; border:1.5px solid {{ c.bd }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
                       <sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if>
                     </div>
                   </div>
@@ -38956,11 +38956,32 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                  */
                 pick: (e9) => {
                   if (dead9) return;
-                  const want9 = !on9;
+                  /**
+                   * READ THE CELL'S STATE NOW, NOT AS IT WAS DRAWN.
+                   *
+                   * `on9` is captured when the row is built, and these clicks deliberately do not
+                   * re-render — so after the first one it is stale, the second click computes the
+                   * same target again, and the cell will not come back off. Unticking simply did
+                   * nothing. The live answer is the overrides object, which every click mutates;
+                   * `roleSays9` is safe to close over because the roles cannot change without a
+                   * render.
+                   */
+                  const nowOn9 = (typeof over9[k9] === 'boolean') ? over9[k9] : roleSays9;
+                  const want9 = !nowOn9;
                   if (want9 === roleSays9) delete over9[k9]; else over9[k9] = want9;
-                  const el9 = e9 && e9.currentTarget;
+                  /**
+                   * THE CELL, whatever the click actually landed on.
+                   *
+                   * `currentTarget` is only the element the handler is bound to while the event is
+                   * being dispatched, and a click on the tick SVG inside the cell reports the svg
+                   * as `target`. Painting either of those instead of the cell would leave the box
+                   * unchanged and read as "the click did nothing". `data-permcell` is on the box,
+                   * so `closest` finds it from anywhere inside.
+                   */
+                  let el9 = e9 && (e9.currentTarget || e9.target);
+                  if (el9 && el9.closest) el9 = el9.closest('[data-permcell]') || el9;
                   if (el9) {
-                    const ex2 = typeof over9[k9] === 'boolean';
+                    const ex2 = want9 !== roleSays9;
                     el9.style.background = want9 ? (ex2 ? '#B7791F' : '#7C00FF') : '#fff';
                     el9.style.borderColor = want9 ? (ex2 ? '#B7791F' : '#7C00FF') : (ex2 ? '#B7791F' : '#DDD9E6');
                     el9.innerHTML = want9
