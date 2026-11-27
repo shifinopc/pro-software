@@ -39204,7 +39204,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         : list9.slice(0, 4).join(', ') + ' +' + (list9.length - 4) + ' more';
     };
 
-    const permMatrix = permModuleList.map(mod => {
+    /**
+     * BUILT ONLY WHEN IT IS ON SCREEN.
+     *
+     * 28 modules × 6 actions is 168 cell objects, each with a closure, a tooltip and four colour
+     * strings — and it was rebuilt on EVERY state change anywhere in the console, including while
+     * the Users tab was showing and the matrix was not. With the per-person modal open that is two
+     * of these grids being built for one click on one checkbox, which is the lag.
+     *
+     * The flag, not the rows: `permRows` below still returns a list, so the markup is unchanged
+     * and an empty one simply draws nothing. Same shape as `_crmOn9`, which this file already uses
+     * to keep the sales screens out of every other screen's render.
+     */
+    const _pmOn9 = _onScreen9(['Settings']) && setTab === 'Permissions';
+    const permMatrix = !_pmOn9 ? [] : permModuleList.map(mod => {
       const preset = (permTune[setRoleSel] && permTune[setRoleSel][mod]) || permPreset[setRoleSel] || [1,0,0,0,0,0];
       return {
         isSection: false, isModule: true, title: '',
