@@ -17628,7 +17628,15 @@
              it is simply not editable in two places.
              STAFF ONLY. A client signing into the portal is not in a team and never will be. -->
         <sc-if value="{{ euIsStaff }}" hint-placeholder-val="{{ true }}">
-        <div style="margin-top:10px;"><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">TEAM</div>
+        <div style="margin-top:10px;"><div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">ALSO ACTS AS</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:7px;">
+            <sc-for list="{{ euExtraRoles }}" as="x" hint-placeholder-count="4">
+              <span onClick="{{ x.pick }}" style="font-size:11px; font-weight:600; color:{{ x.color }}; background:{{ x.bg }}; border:1px solid {{ x.bd }}; padding:6px 11px; border-radius:99px; cursor:pointer;">{{ x.label }}</span>
+            </sc-for>
+          </div>
+          <div style="font-size:10px; color:#A9A6B4; margin-top:6px; line-height:1.45;">{{ euExtraNote }}</div>
+          <div style="height:14px;"></div>
+          <div style="font-size:10px; font-weight:700; color:#8C8899; letter-spacing:.04em;">TEAM</div>
           <div style="width:100%; border:1px solid #EDEBF2; border-radius:11px; padding:10px 13px; font-size:12px; color:#1A1523; background:#F7F5FB; margin-top:6px;">{{ euTeamLine }}</div>
           <div style="font-size:9px; color:#A9A6B4; margin-top:5px; line-height:1.5;">Managed in {{ euTeamWhere }}. A team lead sees their team's work on the Performance screens and can hand steps to them — it changes what the lead can see, never what anybody may do.</div>
         </div>
@@ -38559,15 +38567,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const role = ROLE_LABELS[u.roleId] || u.roleId || '—';
           const status = u.status ? u.status[0].toUpperCase() + u.status.slice(1) : 'Active';
           const type = u.type === 'portal' ? 'Portal' : 'Staff';
-          return [u.name || u.email, u.email, role, status, type, u.lastActive || '—', AV_COLORS[i % AV_COLORS.length], u.id];
+          return [u.name || u.email, u.email, role, status, type, u.lastActive || '—', AV_COLORS[i % AV_COLORS.length], u.id, u.extraRoles];
         })
       : (_authed ? [] : [
         ['Rashid Al Mansoori', 'rashid@stimespro.ae', 'Super Admin', 'Active', 'Staff', 'now', '#26074D', null],
         ['Aisha Rahman', 'aisha@stimespro.ae', 'PRO Officer', 'Active', 'Staff', '12 min ago', '#7C00FF', null],
         ['Sara Khan', 'sara@stimespro.ae', 'Accountant', 'Active', 'Staff', 'Yesterday', '#0284C7', null],
-      ])).map(([name, email, role, status, type, lastActive, avBg, id]) => {
+      ])).map(([name, email, role, status, type, lastActive, avBg, id, extraRoles]) => {
       const sc = status === 'Active' ? ['#0E9355', '#E7F8EF'] : status === 'Invited' ? ['#B8860B', '#FEF4E2'] : ['#8C8899', '#F3F1F7'];
-      return { name, email, role, status, type, lastActive, avBg, id, stColor: sc[0], stBg: sc[1],
+      return { name, email, role, status, type, lastActive, avBg, id, extraRoles, stColor: sc[0], stBg: sc[1],
         typeColor: type === 'Staff' ? '#7C00FF' : '#0284C7', typeBg: type === 'Staff' ? '#F3E8FF' : '#E4F4FD',
         initials: name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() };
     });
@@ -38587,7 +38595,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         canAct: !!u.id && !isSelf && u.role !== 'Super Admin',
         canEdit: !!u.id && u.role !== 'Super Admin',
         edit: () => {
-          this.setState({ euOpen: true, euId: u.id, euName: u.name, euEmail: u.email, euRole: u.role, euType: u.type === 'Portal' ? 'Portal (client)' : 'Staff', euStatus: (u.status === 'Active') ? 'Active' : 'Inactive', euErr: '' });
+          this.setState({ euOpen: true, euId: u.id, euName: u.name, euEmail: u.email, euRole: u.role, euType: u.type === 'Portal' ? 'Portal (client)' : 'Staff', euStatus: (u.status === 'Active') ? 'Active' : 'Inactive', euErr: '',
+            // The other hats, as ids — the dropdown above speaks labels, these do not need to.
+            euExtra: Array.isArray(u.extraRoles) ? u.extraRoles.slice() : [] });
         },
         statusActionLabel: active ? 'Suspend' : 'Activate',
         statusActionColor: active ? '#B8860B' : '#0E9355',
@@ -38751,6 +38761,34 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         return t9.name + (t9.leadName ? ' · lead ' + t9.leadName : ' · no lead');
       })(),
       euTeamWhere: (this.state.euRole === 'Sales') ? 'Sales → Teams' : 'Operations → Teams',
+      /**
+       * ALSO ACTS AS — the second desk somebody covers.
+       *
+       * Chips, not a second dropdown: the question is "which of these as well", and a dropdown
+       * that has to be opened once per answer hides how many have been given. The PRIMARY role is
+       * not among them — it is the field above, it is what their token carries, and offering it
+       * here would invite somebody to pick the same role twice and wonder which one counted.
+       *
+       * Only ADDS. A person may do what any of their roles may do, so there is no order to resolve
+       * and no way for two roles to disagree.
+       */
+      euExtraRoles: Object.keys(_EU_LABEL_TO_ID)
+        .filter(l9 => l9 !== 'Super Admin' && l9 !== (this.state.euRole || 'PRO Officer'))
+        .map(l9 => {
+          const id9 = _EU_LABEL_TO_ID[l9];
+          const on9 = (this.state.euExtra || []).indexOf(id9) >= 0;
+          return {
+            label: l9, on: on9,
+            color: on9 ? '#fff' : '#6F6C7A', bg: on9 ? '#7C00FF' : '#fff', bd: on9 ? '#7C00FF' : '#DDD9E6',
+            pick: () => {
+              const cur9 = this.state.euExtra || [];
+              this.setState({ euExtra: on9 ? cur9.filter(x9 => x9 !== id9) : [...cur9, id9], euErr: '' });
+            },
+          };
+        }),
+      euExtraNote: (this.state.euExtra || []).length
+        ? 'They can do anything these roles can, as well as their own. Work addressed to these roles reaches them too.'
+        : 'Only if they cover a second desk. Someone who permanently does two jobs is a role waiting to be created.',
       submitEditUser: () => {
         const st = this.state;
         if (!(st.euName || '').trim()) return this.setState({ euErr: 'Full name is required' });
@@ -38760,7 +38798,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // No team field in this body on purpose. Membership is written by the teams API, which is the
         // only place that knows to CLOSE the previous row rather than overwrite it — a dated history
         // that a second writer can edit in place is not a history.
-        const body = { name: st.euName.trim(), roleId: _EU_LABEL_TO_ID[st.euRole || 'PRO Officer'] || 'pro_officer', type: isPortal9 ? 'portal' : 'staff', status: (st.euStatus || 'Active').toLowerCase() };
+        const primary9 = _EU_LABEL_TO_ID[st.euRole || 'PRO Officer'] || 'pro_officer';
+        const body = { name: st.euName.trim(), roleId: primary9, type: isPortal9 ? 'portal' : 'staff', status: (st.euStatus || 'Active').toLowerCase(),
+          // A portal user is a client and is not governed by the staff grid at all, so the chips
+          // go with the type. The primary is filtered out in case it was picked before the role
+          // above was changed to it.
+          extraRoles: isPortal9 ? [] : ((st.euExtra || []).filter(r9 => r9 !== primary9)) };
         fetch(API + '/api/users/' + st.euId, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: 'Bearer ' + tok } : {}) }, body: JSON.stringify(body) })
           .then(r => { if (!r.ok) return r.json().then(j => { throw new Error(j.error || 'HTTP ' + r.status); }); return r.json(); })
           .then(() => { this.setState({ euOpen: false }); this.toast('User updated'); this._reloadUsers(); })

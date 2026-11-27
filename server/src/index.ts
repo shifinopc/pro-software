@@ -106,7 +106,7 @@ import { masterDataPdf, type MasterDataRow } from "./master-data-pdf.js";
 import { mountBoot } from "./boot.js";
 import { toIsoDate, DateValueError, businessToday, setBusinessZone, normalizeDates } from "./dates.js";
 import { Prisma } from "@prisma/client";
-import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, gridForUser, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
+import { MODULES, ACTIONS, coverageOf, ROLE_LABEL, gridFor, gridForUser, customRoleIds, labelForRole, invalidatePermissions, customRoleLabels, can } from "./permissions.js";
 import { sendMail, getEmailConfig, verifyEmail, mailHealth } from "./mailer.js";
 import { renderEmail, emailContext, orgName, esc as escEmail } from "./emailshell.js";
 import { sendInvitation, provisionPortalLogin, type InviteResult } from "./invitations.js";
@@ -1451,6 +1451,30 @@ app.use("/api/users", requireAuth, requireStaff, async (req: any, res, next) => 
       await logAudit({ action: "role.root.refused", actorId: req.auth?.sub, target: String(req.body?.email ?? req.path),
                        detail: "attempt to grant super_admin", ip: clientIp(req) });
       return res.status(403).json({ error: "Super Admin is the root account and cannot be granted." });
+    }
+    /**
+     * THE OTHER HATS, CHECKED HERE because this is where a users-write is already judged.
+     *
+     * Refused rather than filtered: a list that quietly drops what it does not like leaves an
+     * admin looking at a role they believe they granted. Root is impossible by the same rule as
+     * `roleId` above, and an unknown id is a mistake worth saying out loud.
+     */
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, "extraRoles")) {
+      const raw = req.body.extraRoles;
+      if (raw != null && !Array.isArray(raw)) return res.status(400).json({ error: "extraRoles must be a list of role ids" });
+      const ids: string[] = Array.isArray(raw) ? raw.map(String) : [];
+      if (ids.includes(ROOT_ROLE)) {
+        await logAudit({ action: "role.root.refused", actorId: req.auth?.sub, target: String(req.path),
+                         detail: "attempt to grant super_admin as an extra role", ip: clientIp(req) });
+        return res.status(403).json({ error: "Super Admin is the root account and cannot be granted." });
+      }
+      const known = new Set<string>([...Object.keys(ROLE_LABEL), ...(await customRoleIds())]);
+      const bad = ids.find(r => !known.has(r));
+      if (bad) return res.status(400).json({ error: `"${bad}" is not a role this system has` });
+      // An EMPTY LIST, not null. This body goes through the generic CRUD straight into Prisma, and
+      // a bare null on a Json column is rejected there — it wants Prisma.DbNull, which this body
+      // cannot carry. `[]` and null mean the same thing to every reader of this field.
+      req.body.extraRoles = ids.length ? [...new Set(ids)] : [];
     }
     // `req.path` is relative to the mount, so "/<id>" or "/<id>/status"; a bare POST gives "/".
     const id = String(req.path || "/").split("/")[1] || "";
@@ -9834,68 +9858,6 @@ app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
   });
 });
 
-/**
- * ONE PERSON'S EXCEPTIONS — read and written as a DELTA against their role.
- *
- * `base` comes back with them so the screen can show what the role already says and mark only the
- * cells that differ. Writing the whole resolved grid instead would freeze that person's access at
- * today's role definition, which is the failure this whole shape exists to avoid.
- */
-app.get("/api/users/:id/permissions", requireAuth, requireStaff, async (req, res) => {
-  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true, type: true, permOverrides: true } });
-  if (!u) return res.status(404).json({ error: "No such user" });
-  const label = await labelForRole(u.roleId);
-  res.json({
-    id: u.id, name: u.name, role: u.roleId, label,
-    base: label ? await gridFor(label) : {},
-    overrides: (u.permOverrides && typeof u.permOverrides === "object" && !Array.isArray(u.permOverrides)) ? u.permOverrides : {},
-  });
-});
-
-app.put("/api/users/:id/permissions", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
-  // Changing what somebody may do is itself an administrative act: the same permission that lets
-  // you edit the person, not merely a write role.
-  if (!(await can((req as any).auth?.role, "Users & Roles", "Edit", (req as any).auth?.sub))) {
-    return res.status(403).json({ error: "Only an administrator can change a person's permissions" });
-  }
-  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true } });
-  if (!u) return res.status(404).json({ error: "No such user" });
-  // The root account is not exception-able: an override on it could only ever take something away,
-  // and locking the building from inside it is the one failure with no way back.
-  if (u.roleId === "super_admin") return res.status(403).json({ error: "The super admin's access is not an exception anybody may edit" });
-
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  const clean: Record<string, boolean> = {};
-  for (const [k, v] of Object.entries(body)) {
-    if (typeof v !== "boolean") continue;
-    const [mod, act] = String(k).split("|");
-    // Refused, not stored quietly: a key the grid cannot draw is one nobody could ever see or undo.
-    if (!(MODULES as readonly string[]).includes(mod) || !(ACTIONS as readonly string[]).includes(act)) {
-      return res.status(400).json({ error: `"${k}" is not a module and action this system has` });
-    }
-    clean[`${mod}|${act}`] = v;
-  }
-  // Prisma.DbNull rather than null: on a Json column `null` is the JSON value null, which would
-  // store the string "null" where "no exceptions" is meant.
-  await prisma.user.update({
-    where: { id: u.id },
-    data: { permOverrides: Object.keys(clean).length ? (clean as any) : Prisma.DbNull },
-  });
-  invalidatePermissions();
-  await logAudit({
-    action: "user.permissions", actorId: (req as any).auth?.sub, target: u.id,
-    detail: `${u.name}: ${Object.keys(clean).length ? Object.entries(clean).map(([k, v]) => (v ? "+" : "-") + k).join(" ") : "exceptions cleared"}`,
-  });
-  res.json({ ok: true, overrides: clean });
-});
-
-/**
- * WHAT THE PERMISSIONS GRID GOVERNS, AND WHAT IT DOES NOT.
- *
- * Asked of the router itself, not of a maintained list — a list of what we think we registered
- * drifts from what we registered, and drifts silently. A route no module governs keeps the
- * hardcoded gate it always had, which is safe but invisible; this is what makes it visible.
- */
 app.get("/api/permissions/coverage", requireAuth, requireStaff, async (_req, res) => {
   res.json(coverageOf(((app as any)._router?.stack ?? [])));
 });

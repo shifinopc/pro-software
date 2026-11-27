@@ -2907,6 +2907,18 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
   // scope=personal → strictly "my work": only steps for my role or assigned to me by name.
   // Default (broad) is used by the Approvals queue: admins see everything + unassigned open work is visible.
   const personal = req.query.scope === "personal";
+  /**
+   * EVERY ROLE THIS PERSON HOLDS, not just the one on their token.
+   *
+   * A step is addressed to a role, so somebody covering a second desk has to receive that desk's
+   * queue or the second role is only half granted: they could open the work but would never be
+   * shown it. Read from their own row — the token carries the primary role alone, and reissuing
+   * tokens to change a queue would mean signing everybody out.
+   */
+  const myRoles = new Set<string>([String(a.role ?? "")]);
+  for (const r of (Array.isArray((me as any)?.extraRoles) ? (me as any).extraRoles : [])) {
+    if (r && String(r) !== "super_admin") myRoles.add(String(r));
+  }
   const mine = tasks.filter(t =>
     // THE ROLE CLAUSE IS FOR THE QUEUE, NOT FOR THE RECORD.
     //
@@ -2920,7 +2932,7 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
     (wantDone
       ? ((t.completedBy && me?.name && t.completedBy === me.name) ||
          (t.assignee && me?.name && t.assignee === me.name))
-      : (t.assigneeRole && t.assigneeRole === a.role) ||
+      : (t.assigneeRole && myRoles.has(t.assigneeRole)) ||
         (t.assignee && me?.name && t.assignee === me.name)) ||
     // Oversight only widens the QUEUE. On the completed view it would answer "everything the firm
     // has closed" to someone asking what they themselves got through, which is a different question

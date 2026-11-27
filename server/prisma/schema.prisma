@@ -867,17 +867,24 @@ model User {
   email              String  @unique
   passwordHash       String?
   roleId             String  @default("admin")
-  /// WHAT THIS PERSON MAY DO THAT THEIR ROLE DOES NOT SAY — the exceptions, and only the exceptions.
+  /// UNUSED, and kept only because dropping it is a destructive schema change: the API entrypoint
+  /// runs a plain `prisma db push`, which refuses those without --accept-data-loss and would leave
+  /// the container unable to start.
   ///
-  ///   { "Invoices|Approve": true, "Clients|Delete": false }
-  ///
-  /// A per-user COPY of the whole grid was the other option and it is a trap: the day somebody
-  /// widens the Accountant role, every accountant gets it except the ones holding a private copy,
-  /// and nobody can see why. Storing the delta means a role change still reaches them.
-  ///
-  /// Null or empty for almost everybody, which is the point — an exception that is not exceptional
-  /// is a role waiting to be created.
+  /// It held per-user permission EXCEPTIONS for a day. The firm chose a second role over an
+  /// exception list — see `extraRoles` below — and nothing reads this. Remove it with a one-off
+  /// push by hand, not by deleting the line and deploying.
   permOverrides      Json?
+  /// THE OTHER HATS THIS PERSON WEARS — role ids, beyond `roleId` above.
+  ///
+  /// `roleId` stays the PRIMARY role and nothing about it changes: it is what the token carries,
+  /// what every `auth.role ===` in the server compares, and what a workflow step means when it is
+  /// addressed to a role. These only ADD — a person is allowed what any of their roles allows —
+  /// so there is no question of two roles disagreeing and no order to resolve them in.
+  ///
+  /// Empty for almost everybody. Somebody who permanently does two jobs is a role waiting to be
+  /// created; this is for the person who covers a second desk as well as their own.
+  extraRoles         Json?
   status             String  @default("active")
   lastActive         String?
   type               String  @default("staff") // staff | portal

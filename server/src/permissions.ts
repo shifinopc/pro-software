@@ -283,37 +283,46 @@ async function load() {
 }
 
 /**
- * ONE PERSON'S EXCEPTIONS, cached beside the grid and for the same reason: this is read on every
- * request that the matrix governs, and a database round trip per request to answer "nothing
- * special about you" — which is the answer for almost everybody — is a tax on the whole app.
+ * THE OTHER ROLES A PERSON HOLDS, cached beside the grid and for the same reason: this is read on
+ * every request the matrix governs, and a database round trip to answer "just the one, like
+ * everybody else" is a tax on the whole app.
  *
- * Keyed by user, holding only the deltas their row carries. An empty object is a real answer and
- * is cached as such; the absence of a key means "not looked up yet".
+ * An empty list is a real answer and is cached as such; a missing key means "not looked up yet".
  */
-let _ovCache: { at: number; byUser: Record<string, Record<string, boolean>> } | null = null;
+let _extraCache: { at: number; byUser: Record<string, string[]> } | null = null;
 
-async function overridesFor(userId: string | undefined): Promise<Record<string, boolean>> {
-  if (!userId) return {};
-  if (_ovCache && Date.now() - _ovCache.at < CACHE_MS && _ovCache.byUser[userId]) return _ovCache.byUser[userId];
+async function extraRolesFor(userId: string | undefined): Promise<string[]> {
+  if (!userId) return [];
+  if (_extraCache && Date.now() - _extraCache.at < CACHE_MS && _extraCache.byUser[userId]) return _extraCache.byUser[userId];
   try {
-    const u = await prisma.user.findUnique({ where: { id: userId }, select: { permOverrides: true } });
-    const v = u?.permOverrides as any;
-    const out: Record<string, boolean> = {};
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      for (const [k, b] of Object.entries(v)) if (typeof b === "boolean") out[k] = b;
-    }
-    if (!_ovCache || Date.now() - _ovCache.at >= CACHE_MS) _ovCache = { at: Date.now(), byUser: {} };
-    _ovCache.byUser[userId] = out;
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { extraRoles: true } });
+    const v = u?.extraRoles as any;
+    // ROOT IS NEVER AN EXTRA ROLE. Granting it here would be a way around the root-account guard on
+    // /api/users, which is the one door this has to stay shut.
+    const out = Array.isArray(v) ? v.map(String).filter(r => r && r !== "super_admin") : [];
+    if (!_extraCache || Date.now() - _extraCache.at >= CACHE_MS) _extraCache = { at: Date.now(), byUser: {} };
+    _extraCache.byUser[userId] = out;
     return out;
   } catch {
-    // Same rule as the grid: a blip must not widen anybody's access. No overrides is the role's own
-    // answer, which is the safe side of the only direction this can be wrong in.
-    return {};
+    // A blip must not widen anybody's access: their primary role alone is the safe answer.
+    return [];
   }
 }
 
+/** What one role says, with no notion of the person — the body of the old can(). */
+async function roleCan(roleId: string, mod: PermModule, act: PermAction): Promise<boolean> {
+  if (roleId === "super_admin") return true;
+  const { grid, labels, bases } = await load();
+  const label = labels[roleId];
+  if (!label) return false;
+  const key = `${label}|${mod}|${act}`;
+  if (typeof grid[key] === "boolean") return grid[key];
+  const fallback = PRESET[label] ? label : (bases[roleId] ?? label);
+  return !!presetFor(fallback, mod)[ACTIONS.indexOf(act)];
+}
+
 /** Drop the cache so an admin's change takes effect on the next request, not in half a minute. */
-export const invalidatePermissions = () => { _cache = null; _ovCache = null; };
+export const invalidatePermissions = () => { _cache = null; _extraCache = null; };
 
 export async function labelForRole(roleId: string | undefined): Promise<string | null> {
   if (!roleId) return null;
@@ -334,27 +343,28 @@ export async function can(roleId: string | undefined, mod: PermModule, act: Perm
   // trail is that the most powerful account cannot edit it either.
   if ((APPEND_ONLY[mod] ?? []).includes(act)) return false;        // rule 4
   if (roleId === "super_admin") return true;                       // rule 1
+  if (await roleCan(roleId, mod, act)) return true;
   /**
-   * THE PERSON'S OWN EXCEPTIONS, over their role and under the two rules above.
+   * AND THE OTHER HATS THEY WEAR.
    *
-   * Under append-only, because an exception for one person is not a reason to let the audit trail
-   * be edited. Under super admin, because withholding something from the root account would make
-   * it possible to lock the building from inside it.
+   * Only ever widens: a second role can allow what the first does not, and nothing a second role
+   * lacks can take away what the first grants. That is what makes "which role wins" a question
+   * nobody has to answer — and it is why append-only and the root rule sit ABOVE this, where no
+   * combination of roles can reach them.
    *
-   * A `false` override is as real as a `true` one: "this accountant, not the receipts" is the same
-   * kind of fact as "this one, also the approvals", and a system that can only widen forces the
-   * other case to be solved by inventing a role per person.
+   * Asked only after the primary role has refused, so the usual case — one role, like almost
+   * everybody — costs one lookup of a cached list and no extra work at all.
    */
-  const ov = await overridesFor(userId);
-  const ovKey = `${mod}|${act}`;
-  if (typeof ov[ovKey] === "boolean") return ov[ovKey];
-  const { grid, labels, bases } = await load();
-  const label = labels[roleId];
-  if (!label) return false;
-  const key = `${label}|${mod}|${act}`;
-  if (typeof grid[key] === "boolean") return grid[key];
-  const fallback = PRESET[label] ? label : (bases[roleId] ?? label);
-  return !!presetFor(fallback, mod)[ACTIONS.indexOf(act)];
+  for (const r of await extraRolesFor(userId)) {
+    if (await roleCan(r, mod, act)) return true;
+  }
+  return false;
+}
+
+/** Every role ID the system knows — the built-ins are keys of ROLE_LABEL, these are the rest. */
+export async function customRoleIds(): Promise<string[]> {
+  const { labels } = await load();
+  return Object.keys(labels).filter(id => !(id in ROLE_LABEL));
 }
 
 /** Every custom role's label, so the screen lists the roles the server actually knows about. */
@@ -382,24 +392,23 @@ export async function gridFor(label: string): Promise<Record<string, boolean>> {
 }
 
 /**
- * The grid one PERSON actually has: their role's, with their own exceptions applied.
+ * The grid one PERSON actually has: every role they hold, merged.
  *
- * What the console reads for `mine`, so the sidebar hides exactly what the server will refuse. The
- * role grid on its own was right for everybody until the first exception existed.
+ * What the console reads for `mine`, so the sidebar shows exactly what the server will allow. The
+ * primary role's grid on its own was right for everybody until somebody wore a second hat.
  */
 export async function gridForUser(label: string, userId: string | undefined): Promise<Record<string, boolean>> {
   const base = await gridFor(label);
-  const ov = await overridesFor(userId);
-  if (!Object.keys(ov).length) return base;
+  const extra = await extraRolesFor(userId);
+  if (!extra.length) return base;
+  const { labels } = await load();
   const out = { ...base };
-  for (const [k, v] of Object.entries(ov)) {
-    const [mod, act] = k.split("|");
-    // An override naming a module or action this build does not know is ignored rather than
-    // written through: the grid is drawn from MODULES × ACTIONS and a stray key would be invisible.
-    if (!MODULES.includes(mod as PermModule) || !ACTIONS.includes(act as PermAction)) continue;
-    if ((APPEND_ONLY[mod as PermModule] ?? []).includes(act as PermAction)) continue;
-    if (label === "Super Admin") continue;
-    out[k] = v;
+  for (const r of extra) {
+    const l = labels[r];
+    if (!l) continue;
+    const g = await gridFor(l);
+    // Union, cell by cell, in the same direction can() resolves them: a yes anywhere is a yes.
+    for (const k of Object.keys(out)) if (g[k]) out[k] = true;
   }
   return out;
 }
