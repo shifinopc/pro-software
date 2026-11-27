@@ -6399,7 +6399,6 @@
                 <span onClick="{{ w.pick }}" style="font-size:11px; font-weight:{{ w.weight }}; color:{{ w.color }}; background:{{ w.bg }}; padding:5px 10px; border-radius:99px; box-shadow:{{ w.shadow }}; cursor:pointer;">{{ w.label }}</span>
               </sc-for>
             </div>
-            <span onClick="{{ fuToggleAuto }}" style="font-size:11px; font-weight:600; color:{{ fuAutoColor }}; background:{{ fuAutoBg }}; border:1px solid {{ fuAutoBd }}; padding:7px 11px; border-radius:99px; cursor:pointer;">{{ fuAutoLabel }}</span>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <button onClick="{{ fuLog }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Log contact</button>
             </sc-if>
@@ -45193,18 +45192,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           bg: on9 ? '#F5EEFF' : '#fff', bd: on9 ? '#DDD1F5' : '#DDD9E6',
         };
       }),
-      // Named by what is being held back. On this data the stage rules have written five entries
-      // for every one a person wrote, so this is off by default and the label says what turning
-      // it on would add rather than leaving the list quietly short.
-      fuAutoLabel: this.state.fuAuto ? 'Hide automatic' : 'Show automatic',
-      fuAutoColor: this.state.fuAuto ? '#7C00FF' : '#6F6C7A',
-      fuAutoBg: this.state.fuAuto ? '#F5EEFF' : '#fff',
-      fuAutoBd: this.state.fuAuto ? '#DDD1F5' : '#DDD9E6',
-      fuToggleAuto: () => {
-        const v9 = !this.state.fuAuto;
-        this.setState({ fuAuto: v9 });
-        if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { auto: v9 });
-      },
+      /**
+       * NO "SHOW AUTOMATIC" CONTROL.
+       *
+       * Every automatic entry on this data is a stage-change note — "Moved to Quoted", 135 of
+       * them against 20 things a person logged. They are not contact with anybody, and the deal
+       * already carries its own stage history, so the button's whole effect was to bury a
+       * morning's work under the machine's. The route still takes `auto=1` if the trail is ever
+       * wanted here.
+       *
+       * It never applied to the QUEUE, and still does not: a follow-up a stage rule booked is
+       * owed by a person and shows with its `automatic` badge regardless.
+       */
       // Two scopes, not three. "Team" is not a third thing: the server already narrows a sales user
       // to their own book or their team's, so the wider tab IS that scope — and labelling it "Team"
       // would be wrong for an admin, who sees the firm. It says what the caller can actually see.
