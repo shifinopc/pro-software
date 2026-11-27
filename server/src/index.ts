@@ -21,6 +21,7 @@ import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFol
 import { crmDashboard } from "./crmdashboard.js";
 import { recordLifecycle, lifecycleAnalytics, campaignPerformance, leadStatusReport } from "./lifecycle.js";
 import { leadStatusWorkbook } from "./leadworkbook.js";
+import { clientWorkWorkbook } from "./clientworkbook.js";
 import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
 import { openFollowUps, historyFor, logInteraction, closeFollowUp, reopenFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
 import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
@@ -5103,27 +5104,21 @@ app.get("/api/reports/client-work/:companyId/summary", requireAuth, requireStaff
   } catch (e: any) { return fail(res, 400, e, "reports.client-work.summary"); }
 });
 
-/** The same rows as a workbook, the way leads and employees already export. */
+/**
+ * The same period as a workbook — the items on one sheet, the counts on the other.
+ *
+ * It was the counts alone, which is the shape the lead report was in before it was rebuilt: a
+ * client asking "what did you actually do for us" cannot be answered with "4 · 11 · 1 · 3".
+ */
 app.get("/api/reports/client-work.xlsx", requireAuth, requireStaff, async (req, res) => {
   try {
     const { from, to } = reportRange(req);
-    const rows = await clientWork({ from, to, companyId: req.query.companyId ? String(req.query.companyId) : null });
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(`Work ${from} to ${to}`.slice(0, 31));
-    ws.columns = [
-      { header: "Client", key: "client", width: 42 },
-      { header: "Tasks completed", key: "tasks", width: 18 },
-      { header: "Workflow steps completed", key: "steps", width: 26 },
-      { header: "Cases closed", key: "casesClosed", width: 16 },
-      { header: "Open now", key: "openNow", width: 12 },
-    ];
-    ws.getRow(1).font = { bold: true };
-    rows.forEach(r => ws.addRow(r));
-    // The dates are in the file as well as the filename: a sheet pasted into an email loses its
-    // name, and a count with no period on it is a number nobody can check.
-    ws.addRow([]);
-    ws.addRow([`Completed between ${from} and ${to} inclusive · "Open now" is as at ${new Date().toISOString().slice(0, 10)}`]);
+    const companyId = req.query.companyId ? String(req.query.companyId) : null;
+    const [rows, items] = await Promise.all([
+      clientWork({ from, to, companyId }),
+      clientWorkItems({ from, to, companyId }),
+    ]);
+    const wb = await clientWorkWorkbook(rows, items, from, to);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="client-work-${from}-to-${to}.xlsx"`);
     await wb.xlsx.write(res);
@@ -9796,6 +9791,7 @@ const SETTINGS_PROTECTED = new Set(["email"]); // has secrets — use /api/email
  * `mine` is the caller's own row, so the console can hide what they cannot open instead of letting
  * them walk into a 403.
  */
+let moduleActionsCache: Record<string, string[]> | null = null;
 app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
   const labels = [...new Set([...Object.values(ROLE_LABEL), ...(await customRoleLabels())])];
   const roles: Record<string, Record<string, boolean>> = {};
@@ -9803,6 +9799,15 @@ app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
   const mineLabel = await labelForRole((req as any).auth?.role);
   res.json({
     modules: MODULES, actions: ACTIONS, roles,
+    /**
+     * WHICH OF THE SIX EACH MODULE ACTUALLY HAS. Asked of the router, so the matrix stops drawing
+     * a tick that can be set, saved and enforced against nothing — Dashboard had an Approve box
+     * and there is nothing on the dashboard to approve.
+     *
+     * Computed once per process: the router does not change after boot, and walking it on every
+     * request to answer a question with one possible answer is work for nobody.
+     */
+    moduleActions: (moduleActionsCache ??= coverageOf(((app as any)._router?.stack ?? [])).actions),
     mine: { label: mineLabel, grid: mineLabel ? roles[mineLabel] ?? await gridFor(mineLabel) : {} },
   });
 });

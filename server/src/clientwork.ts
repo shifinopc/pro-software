@@ -36,6 +36,9 @@ export interface ClientWorkRow {
 
 export interface ClientWorkItem {
   kind: "task" | "step";
+  /** Who it was for. Blank only on a row whose client has since been deleted. */
+  companyId?: string | null;
+  client?: string;
   title: string;
   completedAt: string;
   by: string | null;
@@ -115,19 +118,47 @@ export async function clientWork(opts: { from: string; to: string; companyId?: s
 }
 
 /** The individual items behind one client's row — what to show when somebody asks "which ones?". */
-export async function clientWorkItems(opts: { from: string; to: string; companyId: string }): Promise<ClientWorkItem[]> {
+export async function clientWorkItems(opts: { from: string; to: string; companyId?: string | null }): Promise<ClientWorkItem[]> {
   const range = bounds(opts.from, opts.to);
+  /**
+   * `companyId` is OPTIONAL now — without it this is every client's work, which is what the
+   * workbook's first sheet is. The counts answer "how much"; only the items answer "what", and the
+   * export carried the counts alone: "Al-Ghamdi Group · 4 · 11 · 1 · 3" tells a reader nothing
+   * they can take to the client it is about.
+   */
+  const scope = opts.companyId ? { companyId: opts.companyId } : { companyId: { not: null } };
   const tasks = await prisma.task.findMany({
-    where: { companyId: opts.companyId, status: "done", completedAt: range },
-    select: { title: true, completedAt: true, completedBy: true },
+    where: { ...scope, status: "done", completedAt: range },
+    select: { title: true, completedAt: true, completedBy: true, companyId: true },
   });
   const steps = await prisma.workflowTask.findMany({
-    where: { completedAt: range, status: { in: ["done", "approved"] }, instance: { companyId: opts.companyId } },
-    select: { title: true, completedAt: true, completedBy: true, instance: { select: { title: true } } },
+    where: {
+      completedAt: range, status: { in: ["done", "approved"] },
+      instance: opts.companyId ? { companyId: opts.companyId } : { companyId: { not: null } },
+    },
+    select: { title: true, completedAt: true, completedBy: true, instance: { select: { title: true, companyId: true, clientName: true } } },
   });
+  // Named once, here, rather than per row: a lookup per item is a query per item.
+  const ids = [...new Set([
+    ...tasks.map(t => t.companyId).filter(Boolean) as string[],
+    ...steps.map(s => s.instance?.companyId).filter(Boolean) as string[],
+  ])];
+  const named = ids.length
+    ? await prisma.company.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
+    : [];
+  const nameOf = new Map(named.map(c => [c.id, c.name]));
+
   return [
-    ...tasks.map(t => ({ kind: "task" as const, title: t.title, completedAt: t.completedAt!, by: t.completedBy ?? null, caseTitle: null })),
-    ...steps.map(s => ({ kind: "step" as const, title: s.title, completedAt: s.completedAt!, by: s.completedBy ?? null, caseTitle: s.instance?.title ?? null })),
+    ...tasks.map(t => ({
+      kind: "task" as const, title: t.title, completedAt: t.completedAt!, by: t.completedBy ?? null, caseTitle: null,
+      companyId: t.companyId ?? null, client: t.companyId ? (nameOf.get(t.companyId) ?? "(deleted client)") : "",
+    })),
+    ...steps.map(s => ({
+      kind: "step" as const, title: s.title, completedAt: s.completedAt!, by: s.completedBy ?? null,
+      caseTitle: s.instance?.title ?? null,
+      companyId: s.instance?.companyId ?? null,
+      client: s.instance?.companyId ? (nameOf.get(s.instance.companyId) ?? s.instance.clientName ?? "(deleted client)") : "",
+    })),
   ].sort((a, b) => String(a.completedAt).localeCompare(String(b.completedAt)));
 }
 

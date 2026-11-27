@@ -488,6 +488,8 @@ const isExempt = (path: string) =>
  * registered, and drifts silently.
  */
 export type Coverage = {
+  /** Which of the six actions each module actually has routes for — see coverageOf. */
+  actions: Record<PermModule, PermAction[]>;
   modules: Array<{ module: PermModule; routes: number }>;
   ungoverned: string[];
   exempt: number;
@@ -538,6 +540,7 @@ function mountPathOf(layer: any): string {
 export function coverageOf(stack: any[]): Coverage {
   const seen = new Set<string>();
   const paths: string[] = [];
+  const verbs = new Map<PermModule, Set<PermAction>>();
   /**
    * Where `requireAuth` is mounted. `app.use("/api/x", requireAuth, …)` registers it as its own
    * layer against that path rather than as a parent of the handler, so the only way to tell whether
@@ -559,6 +562,27 @@ export function coverageOf(stack: any[]): Coverage {
       if (typeof p === "string") {
         const full = (prefix + (p === "/" ? "" : p)) || p;
         if (!full.startsWith("/api")) continue;
+        /**
+         * WHICH ACTIONS THIS MODULE ACTUALLY HAS.
+         *
+         * Collected BEFORE the dedup below, because the dedup is by path and the verbs are the
+         * whole point: /api/companies/:id is one path and two actions. The matrix was drawing six
+         * checkboxes for every module whether or not the module had anything of that kind to
+         * govern, so Dashboard offered Approve and Delete — a tick that could be set, saved and
+         * enforced against nothing at all.
+         */
+        if (!isExempt(full)) {
+          const mod0 = moduleOf(full);
+          if (mod0) {
+            for (const verb of Object.keys(layer.route?.methods ?? {})) {
+              if (verb === "_all") continue;
+              const act = actionOf(verb, full);
+              const set = verbs.get(mod0) ?? new Set<PermAction>();
+              set.add(act);
+              verbs.set(mod0, set);
+            }
+          }
+        }
         // One entry per path: the same path registered for GET and PUT is one thing to govern, and
         // counting it twice would overstate how much of the app each module covers.
         if (seen.has(full)) continue;
@@ -595,6 +619,19 @@ export function coverageOf(stack: any[]): Coverage {
     }
   }
   return {
+    /**
+     * The action vocabulary, per module — what the permission matrix is allowed to offer.
+     *
+     * View is always in it, whatever the routes say: View is what makes the screen appear in the
+     * sidebar at all, and a module with no GET route still has a menu item to grant or withhold.
+     * Export likewise, because several exports are built in the browser from data already fetched
+     * and have no route of their own to be counted — greying those would take away something that
+     * works. Create / Edit / Approve / Delete are offered only where a route exists to enforce them.
+     */
+    actions: Object.fromEntries(MODULES.map(m => {
+      const got = verbs.get(m) ?? new Set<PermAction>();
+      return [m, ACTIONS.filter(a => a === "View" || a === "Export" || got.has(a))];
+    })) as Record<PermModule, PermAction[]>,
     modules: MODULES.map(m => ({ module: m, routes: counts.get(m) ?? 0 })),
     openPaths: openPaths.sort(),
     ungoverned: ungoverned.sort(),

@@ -9340,7 +9340,7 @@
                         <span style="min-width:0;"><span style="display:block; font-size:11px; font-weight:600;">{{ m.module }}</span><span style="display:block; font-size:10px; color:#A9A6B4; margin-top:2px; line-height:1.35;">{{ m.screens }}</span></span>
                         <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="6">
                           <div style="display:flex; justify-content:center;">
-                            <div onClick="{{ c.toggle }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.cellBg }}; border:1.5px solid {{ c.cellBorder }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
+                            <div onClick="{{ c.toggle }}" title="{{ c.title }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.cellBg }}; border:1.5px solid {{ c.cellBorder }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
                               <sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if>
                             </div>
                           </div>
@@ -38818,6 +38818,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // audit entries. Those cells are forced OFF and locked so the permission model can't grant a
     // mutation the backend would never honor (SOX / ISO 27001 / GDPR expectation).
     const APPEND_ONLY_LOCKED = { 'Activity Log': ['Create', 'Edit', 'Approve', 'Delete'] };
+    /**
+     * WHAT EACH MODULE ACTUALLY HAS TO GOVERN.
+     *
+     * The grid drew all six boxes for every module, so the Dashboard offered an Approve tick and
+     * there is nothing on the dashboard to approve: it could be set, saved, and enforced against
+     * no route in the product. Only three modules have an Approve route at all — Approvals,
+     * Clients and Invoices — and the other twenty-five were quietly inviting somebody to grant a
+     * permission that means nothing.
+     *
+     * The list comes from the SERVER, derived from its own router rather than from a table
+     * maintained here: a list of what we think we registered drifts from what we registered, and
+     * drifts silently. While the payload is in flight nothing is greyed — all six show, exactly as
+     * before — because a grid that greys boxes for a second and then un-greys them looks broken.
+     */
+    const _modActs9 = (_pmApi && _pmApi.moduleActions) || null;
     // The server's resolved row for the role being edited. Falls back to the local presets only
     // while the payload is in flight.
     const _pmRow = (_pmApi && _pmApi.roles && _pmApi.roles[setRoleSel]) || null;
@@ -38891,19 +38906,35 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         cells: permActions.map((act, ai) => {
           const key = setRoleSel + '|' + mod + '|' + act;
           const appendLocked = (APPEND_ONLY_LOCKED[mod] || []).includes(act);
-          const on = appendLocked ? false
+          // Nothing of this kind exists in this module — no route to enforce it against.
+          const notHere = !!_modActs9 && Array.isArray(_modActs9[mod]) && _modActs9[mod].indexOf(act) < 0;
+          const dead = appendLocked || notHere;
+          const on = dead ? false
             : _pmRow ? !!_pmRow[mod + '|' + act]
             : (grid[key] != null ? grid[key] : !!preset[ai]);
-          const locked = setRoleSel === 'Super Admin' || appendLocked;
+          const locked = setRoleSel === 'Super Admin' || dead;
           return { act, on, locked,
-            cellBg: on ? '#7C00FF' : (appendLocked ? '#F3F1F7' : '#fff'), cellBorder: on ? '#7C00FF' : '#DDD9E6', cursor: locked ? 'not-allowed' : 'pointer',
+            title: appendLocked ? 'The audit trail is append-only — nothing may change it'
+              : notHere ? 'Nothing in ' + mod + ' can be ' + (act === 'Approve' ? 'approved' : act.toLowerCase() + 'd') + ' — there is no such action here'
+              : (on ? act + ' is granted' : act + ' is not granted'),
+            cellBg: on ? '#7C00FF' : (dead ? '#F3F1F7' : '#fff'), cellBorder: on ? '#7C00FF' : '#DDD9E6', cursor: locked ? 'not-allowed' : 'pointer',
             toggle: () => {
               if (locked) return;
               const ng = { ...grid, [key]: !on };
-              this.setState({ permGrid: ng });
-              // Optimistic locally, then re-read: the server merges the change with its presets and
-              // its answer is the one that governs, so the ticks must come back from it.
-              if (_pmRow) this.setState({ permsApi: { ..._pmApi, roles: { ..._pmApi.roles, [setRoleSel]: { ..._pmRow, [mod + '|' + act]: !on } } } });
+              /**
+               * ONE setState, not two.
+               *
+               * Each one re-runs the whole console's bindings, and this screen was paying for two
+               * on every tick — the grid, then the server-shaped mirror of it — which is why a
+               * checkbox felt slow. They are one object now. The save itself is debounced and was
+               * never the delay: it fires 600ms after the last click, not on each one.
+               *
+               * Optimistic, then re-read: the server merges the change with its presets and its
+               * answer is the one that governs, so the ticks still come back from it.
+               */
+              this.setState(_pmRow
+                ? { permGrid: ng, permsApi: { ..._pmApi, roles: { ..._pmApi.roles, [setRoleSel]: { ..._pmRow, [mod + '|' + act]: !on } } } }
+                : { permGrid: ng });
               this._savePerms && this._savePerms(ng);
             } };
         }),
