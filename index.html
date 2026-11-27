@@ -21524,7 +21524,11 @@ class Component extends DCLogic {
         note: 'Opens the quotation builder for this client, seeded from the deal. The card moves on its own once the quotation is saved.',
         run: (s9) => {
           // Closed first: the composer is a dialog too, and two stacked over the board is a maze.
-          this.setState({ fixMissing: null, fixErr: '', fixSaving: false });
+          // The CHECKLIST goes with it. This dialog can now be opened from there as well, and that
+          // one sits at z-118 while the composer sits at 100 — so the composer opened underneath
+          // it, visible, greyed and unusable. One dialog at a time is the rule; this is it being
+          // kept rather than restated.
+          this.setState({ fixMissing: null, fixErr: '', fixSaving: false, clkDeal: null, clkData: null });
           this._quoteDeal(s9.dealId, s9.title, s9.stageId);
         },
       },
@@ -21548,7 +21552,10 @@ class Component extends DCLogic {
           for (const c9 of cols9) { const h9 = (c9.deals || []).find(x9 => x9.id === s9.dealId); if (h9) { d9 = h9; break; } }
           if (!d9) return;
           this.setState({
-            fixMissing: null, fixErr: '', fixSaving: false,
+            // And the checklist, if that is where this was opened from: the deal editor and the
+            // checklist dialog both sit at z-118, so the editor lost on DOM order and opened
+            // behind it.
+            fixMissing: null, fixErr: '', fixSaving: false, clkDeal: null, clkData: null,
             dealEdit: {
               id: d9.id, companyId: d9.companyId, title: d9.title,
               // Same rule as the board's own Edit: a quotation-derived figure is not an estimate to
