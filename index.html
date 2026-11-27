@@ -14746,7 +14746,8 @@
        which reads as a screen that cannot make its mind up. -->
   <sc-if value="{{ ddOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ ddClose }}" style="position:fixed; inset:0; background:rgba(26,21,35,.45); backdrop-filter:blur(4px); z-index:120; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
-      <div onClick="{{ ddStop }}" data-dd-panel="1" style="width:min(480px,100%); background:#fff; height:100%; overflow-y:auto; padding:14px 15px 19px; box-shadow:-24px 0 60px rgba(38,7,77,.25); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
+      <div onClick="{{ ddStop }}" data-dd-panel="1" data-resize="deal" style="position:relative; width:{{ dlPanelW }}; background:#fff; height:100%; overflow-y:auto; padding:14px 15px 19px; box-shadow:-24px 0 60px rgba(38,7,77,.25); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
+        <div data-resize-grip title="Drag to resize — this width is remembered" style="position:absolute; left:0; top:0; bottom:0; width:7px; cursor:col-resize; z-index:5; background:transparent;" style-hover="background:#EFE7FB;"></div>
 
         <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
           <div style="min-width:0;">
@@ -16895,7 +16896,12 @@
          The backdrop keeps its dimming and loses the blur, for the same reason: a queue you cannot
          read is a queue that is still covered up. Same shell as the deal drawer above. -->
     <div onClick="{{ closeWorkDrawer }}" style="position:fixed; inset:0; background:rgba(26,21,35,.38); z-index:100; display:flex; justify-content:flex-end; animation:fadeUp .2s ease both;">
-      <div onClick="{{ stopClick }}" data-wd="true" data-hidescroll="true" class="fm-modal" style="width:min(620px,100%); height:100%; max-height:100%; background:#fff; box-shadow:-24px 0 60px rgba(38,7,77,.28); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
+      <!-- RESIZABLE, and the width is kept. A step with four repeating tables on it needs more
+           room than a step with two fields, and which of those somebody works on all day is their
+           business rather than this file's. Dragged once, remembered — per browser profile, which
+           is the closest thing to "per user" that costs no round trip and no column. -->
+      <div onClick="{{ stopClick }}" data-wd="true" data-resize="wd" data-hidescroll="true" class="fm-modal" style="position:relative; width:{{ wdPanelW }}; height:100%; max-height:100%; background:#fff; box-shadow:-24px 0 60px rgba(38,7,77,.28); animation:drawerIn .28s cubic-bezier(.16,1,.3,1) both;">
+        <div data-resize-grip title="Drag to resize — this width is remembered" style="position:absolute; left:0; top:0; bottom:0; width:7px; cursor:col-resize; z-index:5; background:transparent;" style-hover="background:#EFE7FB;"></div>
         <div style="border-bottom:1px solid #F0EDF6; padding:12px 17px 12px; flex-shrink:0;">
           <!-- The toolbar the handoff specifies. The back chevron closes the sheet, which is what it
                means here; the link button copies this task's own URL, which the drawer already has
@@ -19598,6 +19604,55 @@ class Component extends DCLogic {
       if (s.fuMenu && !has('[data-pop]')) this.setState({ fuMenu: null });
     };
     document.addEventListener('mousedown', this._ddClose);
+
+    /**
+     * ── DRAG A DRAWER WIDER, AND IT STAYS THAT WAY ──────────────────────────────────────────
+     *
+     * Delegated at the document, like the workflow canvas drag above and for the same reason:
+     * this runtime rebuilds the panels, so a listener bound to the grip would be thrown away on
+     * the next render.
+     *
+     * The width is written straight to the element while dragging and only committed to state on
+     * release. A setState per mousemove would re-run every binding in the console sixty times a
+     * second — and a style write is the one direct DOM change that is safe here, because the next
+     * render recomputes the same value rather than finding a node it did not create.
+     *
+     * Remembered in localStorage, per panel. That is per browser profile, which is the closest
+     * thing to "per user" that costs neither a round trip nor a column — and it is the right
+     * scope anyway: the same person on a laptop and a 27-inch screen does not want one answer.
+     */
+    this._panelKey = (k9) => 'stimespro:panelW:' + k9;
+    this._panelMin = 380;
+    this._panelMax = () => Math.max(this._panelMin, window.innerWidth - 80);
+    this._resizeDown = (e9) => {
+      const grip9 = e9.target && e9.target.closest && e9.target.closest('[data-resize-grip]');
+      if (!grip9) return;
+      const panel9 = grip9.closest('[data-resize]');
+      if (!panel9) return;
+      e9.preventDefault();                       // or the drag selects the text underneath
+      const key9 = panel9.dataset.resize;
+      const startX9 = e9.clientX;
+      const startW9 = panel9.getBoundingClientRect().width;
+      // The drawer is docked RIGHT, so dragging left makes it wider.
+      const move9 = (m9) => {
+        const want9 = Math.round(Math.min(this._panelMax(), Math.max(this._panelMin, startW9 + (startX9 - m9.clientX))));
+        panel9.style.width = want9 + 'px';
+      };
+      const up9 = () => {
+        document.removeEventListener('mousemove', move9);
+        document.removeEventListener('mouseup', up9);
+        document.body.style.userSelect = '';
+        const final9 = Math.round(panel9.getBoundingClientRect().width);
+        try { localStorage.setItem(this._panelKey(key9), String(final9)); } catch (err9) {}
+        // State last, so the bound width agrees with the element. Without it the next render
+        // would snap the panel back to the old value — the drag would look undone.
+        this.setState({ panelW: { ...(this.state.panelW || {}), [key9]: final9 } });
+      };
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', move9);
+      document.addEventListener('mouseup', up9);
+    };
+    document.addEventListener('mousedown', this._resizeDown);
 
     // ── Drag a workflow step onto another to reorder ─────────────────────
     // Delegated at the document, not bound per node: this runtime has no drag bindings (it wires
@@ -24277,6 +24332,26 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // compared inside ONE page load, which is the only comparison this machine's timings survive.
     const _onScreen9 = (names9) => (typeof window !== 'undefined' && window.__gateOff)
       || names9.indexOf(this.state.active) >= 0;
+    /**
+     * A DRAWER'S REMEMBERED WIDTH, or the design's default when nobody has set one.
+     *
+     * Read from localStorage ONCE per page rather than on every render — this runs inside the
+     * binding function, and a storage read sixty times a second to answer the same question is
+     * the kind of thing that makes a console feel slow. State wins once a drag has committed,
+     * because that is the fresher of the two.
+     */
+    if (!this._panelWSeed) {
+      this._panelWSeed = {};
+      for (const k9 of ['wd', 'deal']) {
+        try { this._panelWSeed[k9] = Number(localStorage.getItem('stimespro:panelW:' + k9)) || 0; } catch (e9) { this._panelWSeed[k9] = 0; }
+      }
+    }
+    const _panelW9 = (key9, dflt9) => {
+      const n9 = Math.round(((this.state.panelW || {})[key9]) || this._panelWSeed[key9] || 0);
+      // Still `min(…, 100%)`, so a width saved on a wide screen cannot push the panel off a narrow
+      // one — the stored number is a preference, not a promise.
+      return n9 >= 360 ? 'min(' + n9 + 'px,100%)' : dflt9;
+    };
     // `[]` for a list the screen walks; `null` for a source whose own "not loaded" value is null,
     // because that is the shape its block already branches on.
     const _rowsOn9 = (rows9, names9) => (_onScreen9(names9) && Array.isArray(rows9)) ? rows9 : [];
@@ -53817,6 +53892,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         bg: (i + 1) * 10 <= score ? 'linear-gradient(90deg,#9B3DFF,#7C00FF)' : (i * 10 < score ? '#D9C2FA' : '#F0EDF6'),
       })),
       showFab: this.props.showFab ?? true,
+      // The two drawers' widths, each remembered separately: a task step and a deal are not the
+      // same amount of reading.
+      wdPanelW: _panelW9('wd', 'min(620px,100%)'),
+      dlPanelW: _panelW9('deal', 'min(480px,100%)'),
     };
     // A dialog is up, so whatever is behind it can wait — see MODAL_FLAGS.
     _out.scrFrozen = MODAL_FLAGS.some(f => _out[f]);
