@@ -640,6 +640,8 @@ export async function closeAddonDeal(
     opportunityId: deal.id, fromStageId: deal.stageId, toStageId: stage.id,
     at: now, lostReason: outcome.won ? null : outcome.reason ?? null,
   });
+  // The third way a deal closes, and it was missing the same call as the second.
+  await applyStageFollowUp(deal, stage, null).catch(() => {});
   return closed;
 }
 
@@ -725,6 +727,11 @@ export async function winOpportunityForQuotation(quotationId: string) {
   // movedById null: the client accepting a quotation is the system winning the deal, not a person
   // dragging a card.
   await recordTransition(prisma, { opportunityId: opp.id, fromStageId: opp.stageId, toStageId: wonStage.id, at: now });
+  // RETIRE THE CHASE. Entering a terminal stage books nothing and clears what the last stage
+  // booked — but only the console's drag was calling this, so a deal won by the client accepting
+  // the quotation kept "Chase for a decision on the quotation" standing against a client who had
+  // just agreed. Same call as the drag makes, for the same reason.
+  await applyStageFollowUp(opp, wonStage, null).catch(() => {});
   return won;
 }
 
