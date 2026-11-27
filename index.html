@@ -15239,14 +15239,20 @@
                   <sc-if value="{{ r.hasUnit }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#8C8899;">{{ r.unit }}</span></sc-if>
                 </div>
               </sc-if>
-              <!-- A choice, answered here rather than behind a link to another dialog. -->
+              <!-- A choice, answered here rather than behind a link to another dialog — and in
+                   the house picker, not a browser dropdown. Every other list in this console is
+                   this shape; a native select reads as a different application. -->
               <sc-if value="{{ r.isPick }}" hint-placeholder-val="{{ false }}">
-                <select sc-camel-default-value="{{ r.value }}" data-seed-val="{{ r.value }}" onChange="{{ r.set }}" class="fm-inp" style="width:100%; margin-top:6px; cursor:pointer;">
-                  <option value="">{{ r.placeholder }}</option>
-                  <sc-for list="{{ r.opts }}" as="op" hint-placeholder-count="4">
-                    <option value="{{ op.v }}">{{ op.o }}</option>
-                  </sc-for>
-                </select>
+                <div class="fm-selwrap" style="margin-top:6px;">
+                  <div data-dd data-open="{{ r.pickOpen }}" onClick="{{ r.pickToggle }}" class="fm-inp fm-sel" style="color:{{ r.pickColor }};"><span>{{ r.pickLabel }}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                  <sc-if value="{{ r.pickOpen }}" hint-placeholder-val="{{ false }}">
+                    <div data-dd data-hidescroll="true" class="fm-dd">
+                      <sc-for list="{{ r.opts }}" as="op" hint-placeholder-count="4">
+                        <div onClick="{{ op.pick }}" class="fm-opt" style="font-weight:{{ op.weight }}; color:{{ op.color }}; background:{{ op.bg }};"><span>{{ op.o }}</span></div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
               </sc-if>
               <sc-if value="{{ r.cannotFill }}" hint-placeholder-val="{{ false }}">
                 <div style="margin-top:6px; border:1px dashed #DDD9E6; border-radius:11px; padding:10px 12px; font-size:11px; color:#6F6C7A; background:#FBFAFE; line-height:1.5;">{{ r.where }}</div>
@@ -17438,13 +17444,20 @@
                             <sc-if value="{{ cl.isPlain }}" hint-placeholder-val="{{ true }}">
                               <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="min-width:0;">
                             </sc-if>
+                            <!-- The house picker inside a table cell. A browser dropdown works and
+                                 reads as a different application, which on a form people fill in
+                                 twenty times is the difference somebody notices. -->
                             <sc-if value="{{ cl.isPick }}" hint-placeholder-val="{{ false }}">
-                              <select sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" class="fm-inp" style="min-width:0; cursor:pointer;">
-                                <option value="">{{ cl.place }}</option>
-                                <sc-for list="{{ cl.opts }}" as="op" hint-placeholder-count="3">
-                                  <option value="{{ op.o }}">{{ op.o }}</option>
-                                </sc-for>
-                              </select>
+                              <div class="fm-selwrap" style="min-width:0;">
+                                <div data-dd data-open="{{ cl.pickOpen }}" onClick="{{ cl.pickToggle }}" class="fm-inp fm-sel" style="min-width:0; color:{{ cl.pickColor }};"><span>{{ cl.pickLabel }}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8899" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+                                <sc-if value="{{ cl.pickOpen }}" hint-placeholder-val="{{ false }}">
+                                  <div data-dd data-hidescroll="true" class="fm-dd">
+                                    <sc-for list="{{ cl.opts }}" as="op" hint-placeholder-count="3">
+                                      <div onClick="{{ op.pick }}" class="fm-opt" style="font-weight:{{ op.weight }}; color:{{ op.color }}; background:{{ op.bg }};"><span>{{ op.o }}</span></div>
+                                    </sc-for>
+                                  </div>
+                                </sc-if>
+                              </div>
                             </sc-if>
                             <!-- A file column: the attach control until something is attached, then the
                                  document itself with a way to swap it. -->
@@ -41571,7 +41584,32 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   // console where that is the smaller control rather than the lazier one.
                   isPick: String(col9.type || '') === 'select',
                   isPlain: ['file', 'select'].indexOf(String(col9.type || '')) < 0,
-                  opts: (Array.isArray(col9.options) ? col9.options : []).map(o9 => ({ o: String(o9) })),
+                  /**
+                   * Keyed by capture, ROW and column, so twenty rows of the same table do not
+                   * share one open flag and all drop their lists together. `openDd` is the
+                   * console's single "which list is open" slot, which is also what gives this the
+                   * outside-click close and the placement logic for free.
+                   */
+                  pickOpen: this.state.openDd === ('rowpick:' + c.var + ':' + i9 + ':' + col9.var),
+                  pickToggle: () => {
+                    const k0 = 'rowpick:' + c.var + ':' + i9 + ':' + col9.var;
+                    this.setState({ openDd: this.state.openDd === k0 ? null : k0 });
+                  },
+                  pickLabel: String((r9 && r9[col9.var]) || '') || (col9.label || col9.var),
+                  pickColor: String((r9 && r9[col9.var]) || '') ? '#1A1523' : '#B4AFC4',
+                  opts: (Array.isArray(col9.options) ? col9.options : []).map(o9 => {
+                    const on9 = String((r9 && r9[col9.var]) || '') === String(o9);
+                    return {
+                      o: String(o9),
+                      weight: on9 ? 700 : 500,
+                      color: on9 ? '#7C00FF' : '#1A1523',
+                      bg: on9 ? '#F7F3FD' : 'transparent',
+                      pick: () => {
+                        put9(list9.map((x9, j9) => j9 === i9 ? { ...x9, [col9.var]: String(o9) } : x9));
+                        this.setState({ openDd: null });
+                      },
+                    };
+                  }),
                   fileName: (() => {
                     const cv9 = r9 && r9[col9.var];
                     return (cv9 && typeof cv9 === 'object' && cv9.path) ? String(cv9.name || 'Attached') : '';
@@ -47780,9 +47818,43 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               // The product list, live from the catalogue and minus anything retired: picking a
               // withdrawn product is a mis-click on a similar name far more often than a decision.
               isPick: pick9,
+              /**
+               * The house picker's own state, keyed by FIELD so two pickers on one dialog cannot
+               * share an open flag. `openDd` is the console's single "which list is open" slot —
+               * the same one every other picker uses, which is also what makes the outside-click
+               * handler and _placeDropdowns work here without a line of their own.
+               */
+              pickOpen: pick9 && this.state.openDd === ('fix:' + b9.field),
+              pickToggle: () => this.setState({ openDd: this.state.openDd === ('fix:' + b9.field) ? null : ('fix:' + b9.field) }),
+              pickLabel: (() => {
+                if (!pick9) return '';
+                const cur9 = String(((_fx9 && _fx9.vals) || {})[b9.field] ?? '');
+                const hit9 = (Array.isArray(this.state.productsData) ? this.state.productsData : []).find(pr9 => pr9.id === cur9);
+                return hit9 ? hit9.name : (f9.label || 'Choose one');
+              })(),
+              // Grey while it is still the placeholder, which is how the rest of the console says
+              // "nothing chosen yet" — a bound colour would not re-patch reliably, so the value is
+              // computed once here and the markup only reads it.
+              pickColor: String(((_fx9 && _fx9.vals) || {})[b9.field] ?? '') ? '#1A1523' : '#B4AFC4',
               opts: !pick9 ? [] : (Array.isArray(this.state.productsData) ? this.state.productsData : [])
                 .filter(pr9 => pr9 && !pr9.retired)
-                .map(pr9 => ({ v: pr9.id, o: pr9.name })),
+                .map(pr9 => {
+                  const on9 = String(((_fx9 && _fx9.vals) || {})[b9.field] ?? '') === pr9.id;
+                  return {
+                    v: pr9.id, o: pr9.name,
+                    weight: on9 ? 700 : 500,
+                    color: on9 ? '#7C00FF' : '#1A1523',
+                    bg: on9 ? '#F7F3FD' : 'transparent',
+                    pick: () => {
+                      const cur9 = this.state.fixMissing;
+                      if (!cur9) return;
+                      this.setState({
+                        fixMissing: { ...cur9, vals: { ...(cur9.vals || {}), [b9.field]: pr9.id } },
+                        fixErr: '', openDd: null,
+                      });
+                    },
+                  };
+                }),
               // The stage's own wording for the item, not the field's — the person configured the
               // list and that is what they will be looking for.
               label: b9.label || (f9 && f9.label) || b9.key,
