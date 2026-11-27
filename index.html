@@ -6426,6 +6426,9 @@
                 <span onClick="{{ w.pick }}" style="font-size:11px; font-weight:{{ w.weight }}; color:{{ w.color }}; background:{{ w.bg }}; padding:5px 10px; border-radius:99px; box-shadow:{{ w.shadow }}; cursor:pointer;">{{ w.label }}</span>
               </sc-for>
             </div>
+            <sc-if value="{{ fuFiltered }}" hint-placeholder-val="{{ false }}">
+              <span onClick="{{ fuClearFilters }}" title="These are remembered between visits" style="font-size:10.5px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:6px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#FBEBCD;">Filtered · clear</span>
+            </sc-if>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <button onClick="{{ fuLog }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Log contact</button>
             </sc-if>
@@ -45992,6 +45995,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
        * Every one of them reloads from the server rather than filtering what is in hand — the
        * read is capped, so filtering locally would quietly search only the most recent 300 rows.
        */
+      /**
+       * THE SAME WAY OUT THE TASK LIST HAS.
+       *
+       * These survive a refresh now, so the queue can open narrowed by a decision somebody made
+       * last week. The pills do say so, but one press that undoes all of them is what makes a
+       * remembered filter safe rather than a trap.
+       *
+       * The window is part of it: 14 days is the default, and a queue left on 7 is a queue
+       * quietly hiding a fortnight of logged work.
+       */
+      fuFiltered: !!(this.state.fuKind) || !!this.state.fuMine || (this.state.fuDays ?? 14) !== 14,
+      fuClearFilters: () => {
+        this._rememberFilter('fuKind', null);
+        this._rememberFilter('fuMine', null);
+        this._rememberFilter('fuDays', null);
+        this.setState({ fuKind: '', fuMine: false, fuDays: 14 });
+        if (this._loadFollowUps) this._loadFollowUps(false, { days: 14, kind: '', auto: false });
+      },
       fuWindows: [7, 14, 30, 90].map(d9 => {
         const on9 = (this.state.fuDays ?? 14) === d9;
         return {
