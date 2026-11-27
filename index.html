@@ -38869,9 +38869,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const data9 = (open9 && this.state.upData && this.state.upData.id === open9.id) ? this.state.upData : null;
         const base9 = (data9 && data9.base) || {};
         const over9 = (data9 && data9.overrides) || {};
-        const mods9 = (_pmApi && _pmApi.modules) || [];
-        const acts9 = (_pmApi && _pmApi.actions) || ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
-        const vocab9 = (_pmApi && _pmApi.moduleActions) || null;
+        /**
+         * READ FROM STATE, NOT FROM `_pmApi`.
+         *
+         * That const is declared with the permissions MATRIX, hundreds of lines below this block,
+         * and `const` is not hoisted for use: reading it here threw "Cannot access '_pmApi' before
+         * initialization", which in this runtime takes the whole screen rather than one section.
+         * The same bag of values, read where it actually lives, has no ordering to get wrong.
+         */
+        const api9 = this.state.permsApi || null;
+        const mods9 = (api9 && api9.modules) || [];
+        const acts9 = (api9 && api9.actions) || ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
+        const vocab9 = (api9 && api9.moduleActions) || null;
         const save9 = (next9) => {
           clearTimeout(this._upT);
           this._upT = setTimeout(() => {
