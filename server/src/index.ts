@@ -8332,7 +8332,26 @@ app.get("/api/proposal-templates", requireAuth, requireStaff, async (_req, res) 
   res.json(await prisma.proposalTemplate.findMany({ where: { active: true }, orderBy: { createdAt: "desc" } }));
 });
 
-app.post("/api/proposal-templates", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
+/**
+ * THE TEMPLATE LIBRARY IS NOT THE PROPOSAL.
+ *
+ * Reading the templates is Quotations work — the quotation screens load the list to decide whether
+ * "Generate proposal" can be offered and which template to use, so every role that may quote must
+ * be able to read it. UPLOADING and DELETING them is not: it is configuration of the document the
+ * firm sends out, and an accountant was being offered it because the whole path hangs under
+ * Quotations and they may quote.
+ *
+ * So the three writes ask for Organisation instead — the module that already governs every other
+ * Configure screen, and the one the menu item now sits under. Guarded here rather than by moving
+ * the path in MODULE_OF, because that is per-path and would take the LIST away with it.
+ */
+async function requireTemplateAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const role = (req as any).auth?.role;
+  if (await can(role, "Organisation", "Edit")) return next();
+  return res.status(403).json({ error: "Only an administrator can change the proposal templates" });
+}
+
+app.post("/api/proposal-templates", requireAuth, requireStaff, requireWriteRole, requireHuman, requireTemplateAdmin, async (req, res) => {
   try {
     const name = String(req.body?.name ?? "").trim();
     const data = String(req.body?.data ?? "");
@@ -8381,7 +8400,7 @@ function parseAppliesTo(v: unknown): string[] {
 }
 
 /** Rename a template, say what it is for, or make it the default. The file itself never changes. */
-app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, requireTemplateAdmin, async (req, res) => {
   const t = await prisma.proposalTemplate.findUnique({ where: { id: req.params.id } });
   if (!t) return res.status(404).json({ error: "Not found" });
   const data: any = {};
@@ -8425,7 +8444,7 @@ app.put("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRo
   res.json(row);
 });
 
-app.delete("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, requireHuman, async (req, res) => {
+app.delete("/api/proposal-templates/:id", requireAuth, requireStaff, requireWriteRole, requireHuman, requireTemplateAdmin, async (req, res) => {
   const t = await prisma.proposalTemplate.findUnique({ where: { id: req.params.id } });
   if (!t) return res.status(404).json({ error: "Not found" });
   // Retired, not erased: a quotation already sent names this template, and the document it produced
