@@ -18849,6 +18849,22 @@ class Component extends DCLogic {
       //
       // Our own promotion is marked rather than trusting `fixed` alone, so a panel that genuinely
       // declares `fixed` in its own markup is still left to its markup.
+      /**
+       * A PANEL WE PROMOTED, EVEN IF IT HAS LOST ITS MARK.
+       *
+       * `ddFixed` is written beside `style.position = 'fixed'` further down, and this guard trusted
+       * it absolutely. The two can come apart: the runtime rewrites a node's attributes between
+       * renders, so the dataset can be wiped while the inline style survives — and from that
+       * moment the panel fails this test, is skipped by every later pass, and keeps NO height cap
+       * at all. Measured in that state: a 234px list in a 560px window hanging 59px below the
+       * bottom of the screen, with maxScrollTop 0 — nothing to scroll, and the last rows simply
+       * unreachable. Which is what "the dropdown never scrolls to the end" is.
+       *
+       * So an inline `fixed` is taken as OUR doing and re-adopted rather than abandoned. A panel
+       * that genuinely declares `fixed` in its stylesheet is untouched — `style.position` is the
+       * inline value, which only this function writes.
+       */
+      if (cs.position === 'fixed' && dd.dataset.ddFixed !== '1' && dd.style.position === 'fixed') dd.dataset.ddFixed = '1';
       if (cs.position !== 'absolute' && !(cs.position === 'fixed' && dd.dataset.ddFixed === '1')) continue;
       // NOT ON SCREEN — forget that we placed it. `getClientRects()` is empty for a node that is
       // display:none or detached, and unlike `offsetParent` it answers the same way for a panel we
