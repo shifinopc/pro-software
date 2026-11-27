@@ -15239,6 +15239,15 @@
                   <sc-if value="{{ r.hasUnit }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; font-weight:700; color:#8C8899;">{{ r.unit }}</span></sc-if>
                 </div>
               </sc-if>
+              <!-- A choice, answered here rather than behind a link to another dialog. -->
+              <sc-if value="{{ r.isPick }}" hint-placeholder-val="{{ false }}">
+                <select sc-camel-default-value="{{ r.value }}" data-seed-val="{{ r.value }}" onChange="{{ r.set }}" class="fm-inp" style="width:100%; margin-top:6px; cursor:pointer;">
+                  <option value="">{{ r.placeholder }}</option>
+                  <sc-for list="{{ r.opts }}" as="op" hint-placeholder-count="4">
+                    <option value="{{ op.v }}">{{ op.o }}</option>
+                  </sc-for>
+                </select>
+              </sc-if>
               <sc-if value="{{ r.cannotFill }}" hint-placeholder-val="{{ false }}">
                 <div style="margin-top:6px; border:1px dashed #DDD9E6; border-radius:11px; padding:10px 12px; font-size:11px; color:#6F6C7A; background:#FBFAFE; line-height:1.5;">{{ r.where }}</div>
               </sc-if>
@@ -21506,6 +21515,18 @@ class Component extends DCLogic {
       city:         { label: 'City', kind: 'text', to: 'company', hint: '' },
       industry:     { label: 'Industry', kind: 'text', to: 'company', hint: '' },
       employees:    { label: 'Headcount', kind: 'number', to: 'company', hint: '' },
+      /**
+       * WHICH PRODUCT — a choice from a list, answered HERE.
+       *
+       * It was an action that opened the deal editor, and that made a dialog whose entire content
+       * was a link to another dialog: close this, open that, find the field, save, come back. The
+       * list is six items; it belongs in the box.
+       *
+       * A list rather than free text because the fact reads the product's NAME — typed freely,
+       * "comapny formation" would satisfy the gate with something the firm does not sell.
+       */
+      product:      { label: 'What they are buying', kind: 'select', to: 'deal',
+                      hint: 'What this deal is for. The gate reads it, and so does every report that groups by product.' },
     };
     /**
      * SOME MISSING THINGS ARE NOT A BOX TO TYPE IN — they are a job to do.
@@ -21530,43 +21551,6 @@ class Component extends DCLogic {
           // kept rather than restated.
           this.setState({ fixMissing: null, fixErr: '', fixSaving: false, clkDeal: null, clkData: null });
           this._quoteDeal(s9.dealId, s9.title, s9.stageId);
-        },
-      },
-      /**
-       * WHICH PRODUCT is a choice from a list, not a line of text — so it is an action too.
-       *
-       * A text box here would let somebody type "comapny formation" and satisfy a gate with a
-       * product this firm does not sell, and the fact reads the product's NAME, so the typo would
-       * then travel into every rule that tests it. The deal editor already carries the house
-       * product picker (ddDlfSvc), keyed by id and filtered to what is not retired, so this opens
-       * that rather than growing a second picker inside this dialog.
-       */
-      product: {
-        label: 'Pick what they are buying…',
-        note: 'Opens the deal so you can choose the product. Save it and drag the card again — or take the prompt that offers the move.',
-        run: (s9) => {
-          // The deal's own values, so opening the editor to set ONE field does not blank the rest:
-          // the save sends every field on the form.
-          const cols9 = ((this.state.pipelineData || {}).columns) || [];
-          let d9 = null;
-          for (const c9 of cols9) { const h9 = (c9.deals || []).find(x9 => x9.id === s9.dealId); if (h9) { d9 = h9; break; } }
-          if (!d9) return;
-          this.setState({
-            // And the checklist, if that is where this was opened from: the deal editor and the
-            // checklist dialog both sit at z-118, so the editor lost on DOM order and opened
-            // behind it.
-            fixMissing: null, fixErr: '', fixSaving: false, clkDeal: null, clkData: null,
-            dealEdit: {
-              id: d9.id, companyId: d9.companyId, title: d9.title,
-              // Same rule as the board's own Edit: a quotation-derived figure is not an estimate to
-              // retype, and `locked` is what stops the form offering to overwrite it.
-              value: d9.valueSource === 'estimate' && d9.valueMinor != null ? String(d9.valueMinor / 100) : '',
-              close: d9.expectedCloseDate || '', source: d9.source || '', notes: d9.notes || '',
-              productId: d9.productId || '',
-              locked: d9.valueSource === 'quotation',
-            },
-            dlErr: '',
-          });
         },
       },
     };
@@ -21599,6 +21583,9 @@ class Component extends DCLogic {
           f.to === 'contact' ? String((ct && ct[f.as || b.field]) || '')
           : b.field === 'value' ? (deal && deal.valueMinor != null ? String(deal.valueMinor / 100) : '')
           : b.field === 'closeDate' ? String((deal && deal.expectedCloseDate) || '')
+          // The picker is keyed by id, so it opens on what the deal already carries rather than
+          // blank beside a deal that has a product.
+          : b.field === 'product' ? String((deal && deal.productId) || '')
           : String((deal && deal[b.field]) || '');
       }
       this.setState({
@@ -21637,6 +21624,10 @@ class Component extends DCLogic {
         if (f.to === 'deal') {
           if (b.field === 'value') deal.valueMinor = Math.round(Number(raw) * 100);
           else if (b.field === 'closeDate') deal.expectedCloseDate = raw;
+          // The picker hands back an ID; the column is `productId` and the FACT the gate reads is
+          // the product's name, resolved from it on the server. Writing `product` would create a
+          // field nothing reads.
+          else if (b.field === 'product') deal.productId = raw;
           else deal[b.field] = raw;
         } else if (f.to === 'company') {
           company[b.field] = f.kind === 'number' ? Number(raw) : raw;
@@ -47783,12 +47774,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                 hasUnit: false, unit: '', where: '',
               };
             }
+            const pick9 = !!f9 && f9.kind === 'select';
             return {
               isAction: false, actionLabel: '', act: () => {},
+              // The product list, live from the catalogue and minus anything retired: picking a
+              // withdrawn product is a mis-click on a similar name far more often than a decision.
+              isPick: pick9,
+              opts: !pick9 ? [] : (Array.isArray(this.state.productsData) ? this.state.productsData : [])
+                .filter(pr9 => pr9 && !pr9.retired)
+                .map(pr9 => ({ v: pr9.id, o: pr9.name })),
               // The stage's own wording for the item, not the field's — the person configured the
               // list and that is what they will be looking for.
               label: b9.label || (f9 && f9.label) || b9.key,
-              canFill: !!f9, cannotFill: !f9,
+              canFill: !!f9 && !pick9, cannotFill: !f9,
               type: f9 && f9.kind === 'date' ? 'date' : f9 && f9.kind === 'number' ? 'number' : 'text',
               placeholder: (f9 && f9.label) || '',
               value: String(((_fx9 && _fx9.vals) || {})[b9.field] ?? ''),
