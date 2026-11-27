@@ -5881,6 +5881,22 @@
                   <span onClick="{{ v.pick }}" style="font-size:11px; font-weight:{{ v.weight }}; color:{{ v.color }}; background:{{ v.bg }}; padding:5px 13px; border-radius:99px; box-shadow:{{ v.shadow }}; cursor:pointer;">{{ v.label }}</span>
                 </sc-for>
               </div>
+              <!-- WHICH ORDER, inside every column. Beside the view switch because it is the same
+                   kind of question: how this board is drawn, not which deals are on it. -->
+              <div class="pill-selwrap" style="flex-shrink:0;">
+                <div data-dd data-open="{{ ddPipSortOpen }}" onClick="{{ ddPipSortToggle }}" class="pill-sel">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11M3 12h8M3 18h5M17 5v14l4-4"></path></svg>
+                  <span>{{ ddPipSortLabel }}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+                </div>
+                <sc-if value="{{ ddPipSortOpen }}" hint-placeholder-val="{{ false }}">
+                  <div data-dd data-hidescroll="true" class="pill-dd">
+                    <sc-for list="{{ ddPipSortOptions }}" as="o" hint-placeholder-count="4">
+                      <div onClick="{{ o.pick }}" class="fm-opt" style="font-weight:{{ o.weight }}; color:{{ o.color }}; background:{{ o.bg }};"><span>{{ o.label }}</span></div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
             </div>
           </div>
 
@@ -43955,6 +43971,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // ── Pipeline ──
     const _pipe = _crmOn9 ? (this.state.pipelineData || null) : null;
     const _pipeCols = (_pipe && _pipe.columns) || [];
+    // Which order the cards sit in, inside every column. Declared beside the columns themselves
+    // rather than in the bindings block, because the shaper below reads it.
+    const _pipSort9 = this.state.pipSort || (() => {
+      try { return localStorage.getItem('stimespro:filter:pipSort') || 'newest'; } catch (e9) { return 'newest'; }
+    })();
     const _stages = Array.isArray(this.state.stagesData) ? this.state.stagesData : [];
     const _dl = this.state.dealEdit || null;
     const _dm = this.state.dealMove || null;
@@ -48614,6 +48635,42 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // Same rule as the follow-up queue's scope tabs: a control whose wider setting is not wider
       // for this role is a promise the server will refuse.
       pipShowScope: _meRole !== 'pro_officer',
+      ...(() => {
+        const OPTS9 = [
+          ['newest', 'Newest first'],
+          ['closing', 'Closing soonest'],
+          ['value', 'Biggest value'],
+          ['quiet', 'Longest quiet'],
+        ];
+        /**
+         * Read here, not from the board's own `_pipSort9`: that const belongs to the block that
+         * builds the columns, and these bindings are assembled in a different one — reaching
+         * across threw "_pipSort9 is not defined" and took the screen with it. Same expression,
+         * no shared local.
+         */
+        const want9 = this.state.pipSort || (() => {
+          try { return localStorage.getItem('stimespro:filter:pipSort') || 'newest'; } catch (e9) { return 'newest'; }
+        })();
+        const cur9 = OPTS9.some(o9 => o9[0] === want9) ? want9 : 'newest';
+        const open9 = this.state.openDd === 'pipSort';
+        return {
+          ddPipSortOpen: open9,
+          ddPipSortToggle: () => this.setState({ openDd: open9 ? null : 'pipSort' }),
+          ddPipSortLabel: (OPTS9.find(o9 => o9[0] === cur9) || OPTS9[0])[1],
+          ddPipSortOptions: OPTS9.map(([v9, label9]) => {
+            const on9 = v9 === cur9;
+            return {
+              label: label9,
+              weight: on9 ? 700 : 500,
+              color: on9 ? '#7C00FF' : '#1A1523',
+              bg: on9 ? '#F7F3FD' : 'transparent',
+              // Remembered like every other filter on this screen — an order somebody chose for a
+              // reason is a preference, not a one-off.
+              pick: () => { this._rememberFilter('pipSort', v9); this.setState({ pipSort: v9, openDd: null }); },
+            };
+          }),
+        };
+      })(),
       pipMineColor: this.state.pipMine ? '#fff' : '#6F6C7A',
       pipMineBg: this.state.pipMine ? '#7C00FF' : 'transparent',
       pipAllColor: this.state.pipMine ? '#6F6C7A' : '#fff',
@@ -48733,6 +48790,36 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       })(),
       pipColumns: _pipeCols.map(col => {
         const term = col.stage.isWon || col.stage.isLost;
+        /**
+         * ORDERED INSIDE EACH COLUMN, the same way in all of them.
+         *
+         * One order for the board rather than a control per column: the question "biggest first"
+         * is asked of the board, and six independent sorts is six states to remember and a
+         * column that disagrees with its neighbour for no reason anybody can see.
+         *
+         * The server sends newest-first, which is the default here and the only one that needs no
+         * explanation. Everything else reads the fields already on the card — nothing is fetched
+         * to sort, so this costs a comparison per deal and no round trip.
+         */
+        const _byDate9 = (x9) => Date.parse(String(x9 || '').slice(0, 10) || '') || 0;
+        const sorted9 = [...col.deals].sort((a9, b9) => {
+          if (_pipSort9 === 'value') return (b9.valueMinor ?? -1) - (a9.valueMinor ?? -1);
+          if (_pipSort9 === 'quiet') {
+            // Never contacted sorts to the very top: it is a worse fact than a long gap, not a
+            // longer one, and folding it in as a big number would bury it among the merely slow.
+            const qa9 = a9.lastContactAt ? _byDate9(a9.lastContactAt) : 0;
+            const qb9 = b9.lastContactAt ? _byDate9(b9.lastContactAt) : 0;
+            return qa9 - qb9;
+          }
+          if (_pipSort9 === 'closing') {
+            // A deal with no close date has not been committed to, so it goes last rather than
+            // first — an empty date is not "due today".
+            const ca9 = _byDate9(a9.expectedCloseDate) || Infinity;
+            const cb9 = _byDate9(b9.expectedCloseDate) || Infinity;
+            return ca9 - cb9;
+          }
+          return 0;
+        });
         return {
           name: col.stage.name,
           color: col.stage.color || (col.stage.isWon ? '#0E9355' : col.stage.isLost ? '#C0353A' : '#7C00FF'),
@@ -48752,7 +48839,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           dropId: canWrite ? col.stage.id : '',
           // Only under the first column, and only for somebody who may write.
           canAdd: canWrite && _openCols.length > 0 && col.stage.id === _openCols[0].stage.id,
-          deals: col.deals.map(d => _shapeDeal9(d, col)),
+          deals: sorted9.map(d => _shapeDeal9(d, col)),
         };
       }),
 
