@@ -3897,6 +3897,16 @@
             <span onClick="{{ toggleSelAll }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; margin-left:auto;" style-hover="text-decoration:underline;">Select all</span>
             <span onClick="{{ toggleArchivedView }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ taskArchiveLabel }}</span>
           </section>
+          <!-- WHICH KIND OF WORK. Its own row rather than beside the status pills: with eleven
+               workflows the two together wrap into a block that pushes the list below the fold,
+               and these are read as two different questions anyway. -->
+          <sc-if value="{{ tlWfShow }}" hint-placeholder-val="{{ false }}">
+            <section style="display:flex; flex-wrap:wrap; gap:7px; align-items:center; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .08s both;">
+              <sc-for list="{{ tlWfChips }}" as="w" hint-placeholder-count="4">
+                <span onClick="{{ w.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; color:{{ w.color }}; background:{{ w.bg }}; border:1px solid {{ w.border }}; padding:5px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ w.label }}<span style="font-size:9.5px; font-weight:700; opacity:.65;">{{ w.count }}</span></span>
+              </sc-for>
+            </section>
+          </sc-if>
           <sc-if value="{{ taskAnySel }}" hint-placeholder-val="{{ false }}">
             <section style="animation:fadeUp .2s ease both; display:flex; align-items:center; gap:12px; background:#26074D; color:#fff; border-radius:14px; padding:11px 12px;">
               <span style="font-size:11px; font-weight:700;">{{ taskSelected }} selected</span>
@@ -32932,7 +32942,27 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     const tasksSubtitle = _clientScope
       ? (_clientScope + " · every officer's tasks for this client. My Tasks shows only yours")
       : "Every officer's tasks across all clients · My Tasks shows only yours";
-    const tasks = visibleTasks.filter(t => tFilter === 'All' || t.status === tFilter);
+    /**
+     * WHICH KIND OF WORK — the same filter My Tasks has, on the list that needs it more.
+     *
+     * My Tasks is one officer's queue; this is every officer's, so it is the longer list and the
+     * one where "show me only the iqama renewals" is actually asked. Built from `wf`, which the
+     * run rows already carry from their instance, with the plain tasks gathered under one chip.
+     *
+     * Counted over `visibleTasks` — before the status tabs narrow it — so the numbers do not
+     * change under the reader when they press "In progress", which would make the two controls
+     * look like they were fighting.
+     */
+    const _tlWfKey9 = (t9) => t9.wf || '(plain tasks)';
+    const _tlWfCounts9 = {};
+    visibleTasks.forEach(t9 => { const k9 = _tlWfKey9(t9); _tlWfCounts9[k9] = (_tlWfCounts9[k9] || 0) + 1; });
+    const _tlWfKeys9 = Object.keys(_tlWfCounts9).sort((x9, y9) =>
+      x9 === '(plain tasks)' ? 1 : y9 === '(plain tasks)' ? -1 : x9.localeCompare(y9));
+    // A chip naming a workflow that has since left the list would hide everything and look broken.
+    const _tlWfPick9 = (this.state.tlWf && _tlWfCounts9[this.state.tlWf]) ? this.state.tlWf : null;
+    const tasks = visibleTasks
+      .filter(t => tFilter === 'All' || t.status === tFilter)
+      .filter(t => !_tlWfPick9 || _tlWfKey9(t) === _tlWfPick9);
     const taskTabs = ['All', 'To do', 'In progress', 'Blocked', 'Done'].map(k => ({
       label: k, select: () => this.setState({ taskFilter: k }),
       color: tFilter === k ? '#7C00FF' : '#8C8899', bg: tFilter === k ? '#fff' : 'transparent',
@@ -33061,6 +33091,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     ].filter(Boolean);
     const tasksApi = {
       tasks, taskTabs, tasksEmpty: tasks.length === 0, taskGroups, tasksSubtitle,
+      // Shown only when there is a choice to make: one kind of work and the filter is decoration.
+      tlWfShow: _tlWfKeys9.length > 1,
+      tlWfChips: [{ key: null, label: 'Everything', n: visibleTasks.length }]
+        .concat(_tlWfKeys9.map(k9 => ({ key: k9, label: k9 === '(plain tasks)' ? 'Tasks' : k9, n: _tlWfCounts9[k9] })))
+        .map(c9 => {
+          const on9 = (c9.key || null) === _tlWfPick9;
+          return {
+            label: c9.label, count: String(c9.n),
+            color: on9 ? '#7C00FF' : '#6F6C7A',
+            bg: on9 ? '#F5EEFF' : '#fff',
+            border: on9 ? '#D9C6F5' : '#EDEBF2',
+            // Pressing the live one clears it, so the filter has a way out that is not "find the
+            // Everything chip".
+            pick: () => this.setState({ tlWf: on9 ? null : c9.key, taskSel: [] }),
+          };
+        }),
       taskArchivedView: showArchived,
       taskArchiveLabel: showArchived ? '← Back to active' : 'View archived',
       toggleArchivedView: () => this.setState({ taskArchived: !showArchived }),
