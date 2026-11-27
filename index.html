@@ -17638,8 +17638,14 @@
                 <span style="font-size:11px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ m.module }}</span>
                 <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="6">
                   <div style="display:flex; justify-content:center;">
+                    <!-- THE TICK IS ALWAYS HERE, shown or hidden by opacity rather than by an
+                         sc-if. A click paints this cell directly to stay instant, and adding or
+                         removing a child behind the runtime's back breaks its own bookkeeping:
+                         the next patch tried to insertBefore a node it still believed was there
+                         and took the whole screen down with it. Changing an existing node's style
+                         is safe — the next render simply recomputes the same value. -->
                     <div data-permcell onClick="{{ c.pick }}" title="{{ c.title }}" style="width:22px; height:22px; border-radius:7px; background:{{ c.bg }}; border:1.5px solid {{ c.bd }}; display:flex; align-items:center; justify-content:center; cursor:{{ c.cursor }};">
-                      <sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></sc-if>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:{{ c.tick }};"><path d="M20 6L9 17l-5-5"></path></svg>
                     </div>
                   </div>
                 </sc-for>
@@ -38969,6 +38975,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               const dead9 = !!vocab9 && Array.isArray(vocab9[m9]) && vocab9[m9].indexOf(a9) < 0;
               return {
                 on: on9 && !dead9,
+                tick: (on9 && !dead9) ? '1' : '0',
                 bg: dead9 ? '#F3F1F7' : (on9 ? (ex9 ? '#B7791F' : '#7C00FF') : '#fff'),
                 bd: dead9 ? '#EDEBF2' : (on9 ? (ex9 ? '#B7791F' : '#7C00FF') : (ex9 ? '#B7791F' : '#DDD9E6')),
                 cursor: dead9 ? 'not-allowed' : 'pointer',
@@ -39023,9 +39030,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                     const ex2 = want9 !== roleSays9;
                     el9.style.background = want9 ? (ex2 ? '#B7791F' : '#7C00FF') : '#fff';
                     el9.style.borderColor = want9 ? (ex2 ? '#B7791F' : '#7C00FF') : (ex2 ? '#B7791F' : '#DDD9E6');
-                    el9.innerHTML = want9
-                      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>'
-                      : '';
+                    const tick9 = el9.querySelector('svg');
+                    if (tick9) tick9.style.opacity = want9 ? '1' : '0';
                   }
                 },
               };
