@@ -23598,10 +23598,21 @@ class Component extends DCLogic {
         color: on ? '#7C00FF' : '#6F6C7A',
       };
     };
+    /**
+     * THE RAIL'S TWO SECTIONS, BY WHICH GROUP IT IS — not by where it landed after filtering.
+     *
+     * Sliced at 3 of the FILTERED list, an accountant with Sales and Operations hidden got Finance
+     * promoted into MAIN and an OTHERS heading with nothing under it: a label floating over empty
+     * space, which reads as a menu that failed to load rather than one with nothing left to show.
+     *
+     * So membership is decided on the full list — Overview, Sales and Operations are MAIN for
+     * everybody — and a section with no groups left is not drawn at all.
+     */
+    const MAIN_TITLES9 = groupsAll.slice(0, 3).map(g9 => g9[0]);
     const railGroups = [
-      { title: 'MAIN', items: groups.slice(0, 3).map(mkRail) },
-      { title: 'OTHERS', items: groups.slice(3).map(mkRail) },
-    ];
+      { title: 'MAIN', items: groups.filter(g9 => MAIN_TITLES9.indexOf(g9[0]) >= 0).map(mkRail) },
+      { title: 'OTHERS', items: groups.filter(g9 => MAIN_TITLES9.indexOf(g9[0]) < 0).map(mkRail) },
+    ].filter(s9 => s9.items.length);
     const activeDef = groups.find(g => g[0] === activeGroup) || groups[0];
     const panelGroups = [{
       title: activeDef[0],
