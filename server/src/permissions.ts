@@ -291,6 +291,36 @@ async function load() {
  */
 let _extraCache: { at: number; byUser: Record<string, string[]> } | null = null;
 
+/**
+ * ONE PERSON'S EXCEPTIONS, cached the same way and for the same reason: read on every request the
+ * matrix governs, and a round trip to answer "nothing special about you" — the answer for almost
+ * everybody — is a tax on the whole app.
+ *
+ * Only the deltas their row carries. An empty object is a real answer and is cached as such; a
+ * missing key means "not looked up yet".
+ */
+let _ovCache: { at: number; byUser: Record<string, Record<string, boolean>> } | null = null;
+
+async function overridesFor(userId: string | undefined): Promise<Record<string, boolean>> {
+  if (!userId) return {};
+  if (_ovCache && Date.now() - _ovCache.at < CACHE_MS && _ovCache.byUser[userId]) return _ovCache.byUser[userId];
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { permOverrides: true } });
+    const v = u?.permOverrides as any;
+    const out: Record<string, boolean> = {};
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const [k, b] of Object.entries(v)) if (typeof b === "boolean") out[k] = b;
+    }
+    if (!_ovCache || Date.now() - _ovCache.at >= CACHE_MS) _ovCache = { at: Date.now(), byUser: {} };
+    _ovCache.byUser[userId] = out;
+    return out;
+  } catch {
+    // A blip must not widen access: no exceptions is the roles' own answer, which is the safe side
+    // of the only direction this can be wrong in.
+    return {};
+  }
+}
+
 async function extraRolesFor(userId: string | undefined): Promise<string[]> {
   if (!userId) return [];
   if (_extraCache && Date.now() - _extraCache.at < CACHE_MS && _extraCache.byUser[userId]) return _extraCache.byUser[userId];
@@ -322,7 +352,7 @@ async function roleCan(roleId: string, mod: PermModule, act: PermAction): Promis
 }
 
 /** Drop the cache so an admin's change takes effect on the next request, not in half a minute. */
-export const invalidatePermissions = () => { _cache = null; _extraCache = null; };
+export const invalidatePermissions = () => { _cache = null; _extraCache = null; _ovCache = null; };
 
 export async function labelForRole(roleId: string | undefined): Promise<string | null> {
   if (!roleId) return null;
@@ -343,6 +373,19 @@ export async function can(roleId: string | undefined, mod: PermModule, act: Perm
   // trail is that the most powerful account cannot edit it either.
   if ((APPEND_ONLY[mod] ?? []).includes(act)) return false;        // rule 4
   if (roleId === "super_admin") return true;                       // rule 1
+  /**
+   * THE PERSON'S OWN EXCEPTIONS, above every role they hold and below the two rules above.
+   *
+   * Above the roles because that is what an exception IS: "this accountant, not the receipts" has
+   * to beat what Accountant says, or it is not an exception at all — and a `false` has to beat a
+   * second role's `true` as well, or granting somebody a second hat would silently undo a
+   * withdrawal nobody revisited.
+   *
+   * Below append-only and the root rule, where no exception can reach them.
+   */
+  const ov = await overridesFor(userId);
+  const ovKey = `${mod}|${act}`;
+  if (typeof ov[ovKey] === "boolean") return ov[ovKey];
   if (await roleCan(roleId, mod, act)) return true;
   /**
    * AND THE OTHER HATS THEY WEAR.
@@ -400,7 +443,8 @@ export async function gridFor(label: string): Promise<Record<string, boolean>> {
 export async function gridForUser(label: string, userId: string | undefined): Promise<Record<string, boolean>> {
   const base = await gridFor(label);
   const extra = await extraRolesFor(userId);
-  if (!extra.length) return base;
+  const ov = await overridesFor(userId);
+  if (!extra.length && !Object.keys(ov).length) return base;
   const { labels } = await load();
   const out = { ...base };
   for (const r of extra) {
@@ -409,6 +453,14 @@ export async function gridForUser(label: string, userId: string | undefined): Pr
     const g = await gridFor(l);
     // Union, cell by cell, in the same direction can() resolves them: a yes anywhere is a yes.
     for (const k of Object.keys(out)) if (g[k]) out[k] = true;
+  }
+  // And the exceptions over the top, in the same order can() resolves them.
+  for (const [k, v] of Object.entries(ov)) {
+    const [mod, act] = k.split("|");
+    if (!MODULES.includes(mod as PermModule) || !ACTIONS.includes(act as PermAction)) continue;
+    if ((APPEND_ONLY[mod as PermModule] ?? []).includes(act as PermAction)) continue;
+    if (label === "Super Admin") continue;
+    out[k] = v;
   }
   return out;
 }

@@ -9858,6 +9858,74 @@ app.get("/api/permissions", requireAuth, requireStaff, async (req, res) => {
   });
 });
 
+/**
+ * ONE PERSON'S EXCEPTIONS — read and written as a DELTA against their role.
+ *
+ * `base` comes back with them so the screen can show what the role already says and mark only the
+ * cells that differ. Writing the whole resolved grid instead would freeze that person's access at
+ * today's role definition, which is the failure this whole shape exists to avoid.
+ */
+app.get("/api/users/:id/permissions", requireAuth, requireStaff, async (req, res) => {
+  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true, type: true, permOverrides: true, extraRoles: true } });
+  if (!u) return res.status(404).json({ error: "No such user" });
+  const label = await labelForRole(u.roleId);
+  /**
+   * `base` is every role they hold, merged — what the exceptions are exceptions TO. The primary
+   * role's grid alone would mark a cell as an exception when it is really their second role
+   * talking, and the modal would offer to "remove" something it never granted.
+   */
+  const extra = (Array.isArray(u.extraRoles) ? u.extraRoles.map(String) : []).filter(r => r !== "super_admin");
+  const base: Record<string, boolean> = label ? await gridFor(label) : {};
+  for (const r of extra) {
+    const l = await labelForRole(r);
+    if (!l) continue;
+    const g = await gridFor(l);
+    for (const k of Object.keys(base)) if (g[k]) base[k] = true;
+  }
+  res.json({
+    id: u.id, name: u.name, role: u.roleId, label,
+    roles: [label, ...(await Promise.all(extra.map(r => labelForRole(r))))].filter(Boolean),
+    base,
+    overrides: (u.permOverrides && typeof u.permOverrides === "object" && !Array.isArray(u.permOverrides)) ? u.permOverrides : {},
+  });
+});
+
+app.put("/api/users/:id/permissions", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  // Changing what somebody may do is itself an administrative act: the same permission that lets
+  // you edit the person, not merely a write role.
+  if (!(await can((req as any).auth?.role, "Users & Roles", "Edit", (req as any).auth?.sub))) {
+    return res.status(403).json({ error: "Only an administrator can change a person's permissions" });
+  }
+  const u = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, roleId: true } });
+  if (!u) return res.status(404).json({ error: "No such user" });
+  // The root account is not exception-able: an override on it could only ever take something away,
+  // and locking the building from inside it is the one failure with no way back.
+  if (u.roleId === "super_admin") return res.status(403).json({ error: "The super admin's access is not an exception anybody may edit" });
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const clean: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (typeof v !== "boolean") continue;
+    const [mod, act] = String(k).split("|");
+    // Refused, not stored quietly: a key the grid cannot draw is one nobody could ever see or undo.
+    if (!(MODULES as readonly string[]).includes(mod) || !(ACTIONS as readonly string[]).includes(act)) {
+      return res.status(400).json({ error: `"${k}" is not a module and action this system has` });
+    }
+    clean[`${mod}|${act}`] = v;
+  }
+  // Prisma.DbNull rather than null: on a Json column `null` is the JSON value null, which would
+  // store the string "null" where "no exceptions" is meant.
+  await prisma.user.update({
+    where: { id: u.id },
+    data: { permOverrides: Object.keys(clean).length ? (clean as any) : Prisma.DbNull },
+  });
+  invalidatePermissions();
+  await logAudit({
+    action: "user.permissions", actorId: (req as any).auth?.sub, target: u.id,
+    detail: `${u.name}: ${Object.keys(clean).length ? Object.entries(clean).map(([k, v]) => (v ? "+" : "-") + k).join(" ") : "exceptions cleared"}`,
+  });
+  res.json({ ok: true, overrides: clean });
+});
 app.get("/api/permissions/coverage", requireAuth, requireStaff, async (_req, res) => {
   res.json(coverageOf(((app as any)._router?.stack ?? [])));
 });
