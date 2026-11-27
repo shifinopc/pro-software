@@ -3902,6 +3902,9 @@
                 <span onClick="{{ w.pick }}" style="display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:600; color:{{ w.color }}; background:{{ w.bg }}; border:1px solid {{ w.border }}; padding:5px 13px; border-radius:99px; cursor:pointer;" style-hover="border-color:#C9A2FF;">{{ w.label }}<span style="font-size:9.5px; font-weight:700; opacity:.65;">{{ w.count }}</span></span>
               </sc-for>
             </sc-if>
+            <sc-if value="{{ tlFiltered }}" hint-placeholder-val="{{ false }}">
+              <span onClick="{{ tlClearFilters }}" title="These are remembered between visits" style="font-size:10.5px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:5px 11px; border-radius:99px; cursor:pointer; margin-left:auto;" style-hover="background:#FBEBCD;">Filtered · clear</span>
+            </sc-if>
             <span onClick="{{ toggleSelAll }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer; margin-left:auto;" style-hover="text-decoration:underline;">Select all</span>
             <span onClick="{{ toggleArchivedView }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;" style-hover="text-decoration:underline;">{{ taskArchiveLabel }}</span>
           </section>
@@ -18888,7 +18891,42 @@ const SCREEN_PATH = /^\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?(?:\/([a-z0-9-]+))?\/?$/;
 const CLIENT_TABS = ['Overview', 'Contacts', 'Package', 'Employees', 'Credentials', 'Documents', 'Notes & Files', 'Activity'];
 
 class Component extends DCLogic {
+  /**
+   * THE FILTERS SOMEBODY LEFT A SCREEN ON.
+   *
+   * Read here, in the initial state, rather than restored after mount: the first fetch on several
+   * of these screens carries the filter with it, so a restore that arrives a tick later would ask
+   * the server the wrong question and then ask again.
+   *
+   * localStorage, so it is per person per machine — the same officer on the office desktop and a
+   * laptop at a ministry counter is usually filtering for different reasons, and a stored
+   * preference that follows them between the two is a setting they have to keep correcting.
+   *
+   * Every read is wrapped: a private window, cleared site data or a blocked store all throw here,
+   * and a console that refuses to start because it could not remember a tab is worse than one
+   * that starts on "All".
+   */
+  static _rememberedFilters() {
+    const out = {};
+    const get = (k) => { try { return localStorage.getItem('stimespro:filter:' + k); } catch (e) { return null; } };
+    const STATUS = ['All', 'To do', 'In progress', 'Blocked', 'Done'];
+    const tf = get('taskFilter');
+    if (tf && STATUS.indexOf(tf) >= 0) out.taskFilter = tf;
+    const wf = get('tlWf');
+    if (wf) out.tlWf = wf;
+    const fk = get('fuKind');
+    if (fk) out.fuKind = fk;
+    const fd = Number(get('fuDays'));
+    if ([7, 14, 30, 90].indexOf(fd) >= 0) out.fuDays = fd;
+    // Booleans are stored as '1'/'0' rather than JSON, so a half-written value reads as false
+    // instead of throwing.
+    if (get('fuMine') === '1') out.fuMine = true;
+    if (get('pipMine') === '1') out.pipMine = true;
+    return out;
+  }
+
   state = { active: 'Dashboard', prefs: { email: true, whatsapp: true, renewals: true, statement: false },
+    ...Component._rememberedFilters(),
     ticketModal: false, tSubject: '', tDesc: '', tCategory: 'Visa & Immigration',
     bookModal: false, bType: '', bDay: '21', bSlot: '9:30 AM', booked: [],
     // 'booting' until we know. This used to start at 'in', so the console painted itself the
@@ -19635,6 +19673,16 @@ class Component extends DCLogic {
     // Close any open custom dropdown when the pointer goes down outside it. Toggles and menus are
     // tagged data-dd (bulk-marked), so a mousedown inside either is ignored and only true
     // outside-clicks dismiss it — mousedown (not click) so an open menu's option still receives its click.
+    /**
+     * Remember a filter. One writer, so no call site invents its own key or its own shape —
+     * `_rememberedFilters` above reads exactly what this writes.
+     */
+    this._rememberFilter = (key9, val9) => {
+      try {
+        if (val9 === null || val9 === undefined || val9 === '') localStorage.removeItem('stimespro:filter:' + key9);
+        else localStorage.setItem('stimespro:filter:' + key9, val9 === true ? '1' : val9 === false ? '0' : String(val9));
+      } catch (e9) { /* private window, blocked store — the screen still works, it just forgets */ }
+    };
     this._ddClose = (e) => {
       const t = e.target;
       const has = (sel) => t && t.closest && t.closest(sel);
@@ -33000,7 +33048,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       .filter(t => tFilter === 'All' || t.status === tFilter)
       .filter(t => !_tlWfPick9 || _tlWfKey9(t) === _tlWfPick9);
     const taskTabs = ['All', 'To do', 'In progress', 'Blocked', 'Done'].map(k => ({
-      label: k, select: () => this.setState({ taskFilter: k }),
+      label: k, select: () => { this._rememberFilter('taskFilter', k); this.setState({ taskFilter: k }); },
       color: tFilter === k ? '#7C00FF' : '#8C8899', bg: tFilter === k ? '#fff' : 'transparent',
       shadow: tFilter === k ? '0 1px 3px rgba(38,7,77,.08)' : 'none',
     }));
@@ -33127,6 +33175,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     ].filter(Boolean);
     const tasksApi = {
       tasks, taskTabs, tasksEmpty: tasks.length === 0, taskGroups, tasksSubtitle,
+      /**
+       * A REMEMBERED FILTER NEEDS A WAY OUT.
+       *
+       * These now survive a refresh, which is the point — and the cost is that somebody can open
+       * a screen tomorrow, see four rows where there were forty, and not know why. The chips
+       * themselves say so if you read them; this says it in one place and undoes all of it in one
+       * press. Only drawn when something is actually narrowing the list.
+       */
+      tlFiltered: tFilter !== 'All' || !!_tlWfPick9,
+      tlClearFilters: () => {
+        this._rememberFilter('taskFilter', null);
+        this._rememberFilter('tlWf', null);
+        this.setState({ taskFilter: 'All', tlWf: null, taskSel: [] });
+      },
       // Shown only when there is a choice to make: one kind of work and the filter is decoration.
       tlWfShow: _tlWfKeys9.length > 1,
       tlWfChips: [{ key: null, label: 'Everything', n: visibleTasks.length }]
@@ -33140,7 +33202,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             border: on9 ? '#D9C6F5' : '#EDEBF2',
             // Pressing the live one clears it, so the filter has a way out that is not "find the
             // Everything chip".
-            pick: () => this.setState({ tlWf: on9 ? null : c9.key, taskSel: [] }),
+            pick: () => { const v9 = on9 ? null : c9.key; this._rememberFilter('tlWf', v9); this.setState({ tlWf: v9, taskSel: [] }); },
           };
         }),
       taskArchivedView: showArchived,
@@ -45934,7 +45996,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const on9 = (this.state.fuDays ?? 14) === d9;
         return {
           label: d9 + ' days',
-          pick: () => { this.setState({ fuDays: d9 }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { days: d9 }); },
+          pick: () => { this._rememberFilter('fuDays', d9); this.setState({ fuDays: d9 }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { days: d9 }); },
           weight: on9 ? '700' : '500', color: on9 ? '#7C00FF' : '#6F6C7A',
           bg: on9 ? '#fff' : 'transparent', shadow: on9 ? '0 1px 3px rgba(38,7,77,.12)' : 'none',
         };
@@ -45946,7 +46008,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const on9 = (this.state.fuKind ?? '') === c9.k;
         return {
           label: c9.label,
-          pick: () => { this.setState({ fuKind: c9.k }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { kind: c9.k }); },
+          pick: () => { this._rememberFilter('fuKind', c9.k); this.setState({ fuKind: c9.k }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { kind: c9.k }); },
           weight: on9 ? '700' : '500', color: on9 ? '#7C00FF' : '#6F6C7A',
           bg: on9 ? '#F5EEFF' : '#fff', bd: on9 ? '#DDD1F5' : '#DDD9E6',
         };
@@ -45985,7 +46047,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const on = !!this.state.fuMine === mine;
         return {
           label,
-          pick: () => { this.setState({ fuMine: mine }); if (this._loadFollowUps) this._loadFollowUps(mine); },
+          pick: () => { this._rememberFilter('fuMine', mine); this.setState({ fuMine: mine }); if (this._loadFollowUps) this._loadFollowUps(mine); },
           weight: on ? '700' : '500',
           color: on ? '#7C00FF' : '#6F6C7A',
           bg: on ? '#fff' : 'transparent',
@@ -48535,8 +48597,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       pipMineBg: this.state.pipMine ? '#7C00FF' : 'transparent',
       pipAllColor: this.state.pipMine ? '#6F6C7A' : '#fff',
       pipAllBg: this.state.pipMine ? 'transparent' : '#7C00FF',
-      pipPickMine: () => { this.setState({ pipMine: true }); if (this._loadPipeline) this._loadPipeline(true); },
-      pipPickAll: () => { this.setState({ pipMine: false }); if (this._loadPipeline) this._loadPipeline(false); },
+      pipPickMine: () => { this._rememberFilter('pipMine', true); this.setState({ pipMine: true }); if (this._loadPipeline) this._loadPipeline(true); },
+      pipPickAll: () => { this._rememberFilter('pipMine', false); this.setState({ pipMine: false }); if (this._loadPipeline) this._loadPipeline(false); },
       pipAdd: () => this._openDealForm(),
       pipGoSettings: () => this.setState({ active: 'Sales Settings', activeGroup: 'Configure' }),
       pipStats: [
