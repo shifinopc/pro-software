@@ -6377,11 +6377,15 @@
             <h1 style="margin:4px 0 0; font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; letter-spacing:-.01em;">Follow-ups</h1>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
-              <sc-for list="{{ fuScopes }}" as="t" hint-placeholder-count="2">
-                <span onClick="{{ t.pick }}" style="font-size:11px; font-weight:{{ t.weight }}; color:{{ t.color }}; background:{{ t.bg }}; padding:5px 10px; border-radius:99px; box-shadow:{{ t.shadow }}; cursor:pointer;">{{ t.label }}</span>
-              </sc-for>
-            </div>
+            <!-- Hidden for a PRO officer: the queue is already only his, so "Everyone" and "Mine"
+                 are two words for one list and the wider tab promises a view he does not have. -->
+            <sc-if value="{{ fuShowScopes }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
+                <sc-for list="{{ fuScopes }}" as="t" hint-placeholder-count="2">
+                  <span onClick="{{ t.pick }}" style="font-size:11px; font-weight:{{ t.weight }}; color:{{ t.color }}; background:{{ t.bg }}; padding:5px 10px; border-radius:99px; box-shadow:{{ t.shadow }}; cursor:pointer;">{{ t.label }}</span>
+                </sc-for>
+              </div>
+            </sc-if>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <button onClick="{{ fuLog }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Log contact</button>
             </sc-if>
@@ -45059,6 +45063,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // Two scopes, not three. "Team" is not a third thing: the server already narrows a sales user
       // to their own book or their team's, so the wider tab IS that scope — and labelling it "Team"
       // would be wrong for an admin, who sees the firm. It says what the caller can actually see.
+      /**
+       * A PRO OFFICER GETS NO SCOPE TABS.
+       *
+       * His queue is clamped to the clients and deals he owns, so the tab labelled "Everyone" does
+       * not show everyone — it shows his own book, and pressing it to look for the firm's work and
+       * getting his own back reads as a broken screen rather than as a rule.
+       *
+       * It is the WIDE tab that is kept, not the narrow one: it is every commitment on his
+       * clients, including ones a colleague logged against them, and those are still his to chase.
+       * "Mine" would have hidden them — the narrower of two views neither of which is the firm's.
+       *
+       * Sales keeps both, because for a sales lead the wide tab IS a wider list — their team's —
+       * and admins keep both because theirs is the firm.
+       */
+      fuShowScopes: _meRole !== 'pro_officer',
       fuScopes: [[false, _meRole === 'sales' ? 'My team' : 'Everyone'], [true, 'Mine']].map(([mine, label]) => {
         const on = !!this.state.fuMine === mine;
         return {
