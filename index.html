@@ -21666,6 +21666,17 @@ class Component extends DCLogic {
           // the retry is worth making.
           if (this._crmReload) this._crmReload();
           this.setState({ fixMissing: null, fixSaving: false, fixErr: '' });
+          /**
+           * NO STAGE MEANS NOBODY ASKED TO MOVE.
+           *
+           * Opened from a refused move, this retries it — that is the whole point. Opened from the
+           * checklist, it was filling a gap while looking at it, and moving the deal because
+           * somebody typed a product would be the screen taking a decision of its own.
+           */
+          if (!s.stageId) {
+            this.toast('Saved');
+            return this._clkReload ? this._clkReload() : null;
+          }
           return this._moveDeal(s.dealId, s.stageId);
         })
         .catch((e) => this.setState({ fixSaving: false, fixErr: String((e && e.message) || 'That did not save') }));
@@ -47679,6 +47690,17 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const _clkD9 = this.state.clkData || null;
         const _items9 = (_clkD9 && Array.isArray(_clkD9.items)) ? _clkD9.items : [];
 
+        // Re-read the checklist. Used after the fill dialog writes a field this list derives from:
+        // the item ticks itself from the record, so the dialog has to ask the record again.
+        const _clkReload9 = () => {
+          const API = this._apiBase || 'http://localhost:4100';
+          const tok = localStorage.getItem('stimespro:token');
+          return fetch(API + '/api/opportunities/' + _clk9.id + '/checklist', { headers: tok ? { Authorization: 'Bearer ' + tok } : {} })
+            .then(r => (r.ok ? r.json() : null))
+            .then(v => { if (v) this.setState({ clkData: v }); })
+            .catch(() => {});
+        };
+        this._clkReload = _clkReload9;
         const _clkSend9 = (path, body) => {
           const API = this._apiBase || 'http://localhost:4100';
           const tok = localStorage.getItem('stimespro:token');
@@ -47714,10 +47736,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
 
         return {
           fixOpen: !!_fx9,
-          fixTitle: _fx9 ? 'Before it goes to ' + (_fx9.toName || 'the next stage') : '',
+          // The heading says what this dialog is FOR, and that differs by where it was opened.
+          fixTitle: !_fx9 ? '' : (_fx9.stageId ? 'Before it goes to ' + (_fx9.toName || 'the next stage') : 'Fill this in'),
           // Says WHICH deal, because this can be opened from a drag on a board of forty cards and
           // "this deal" is no answer to "which one".
-          fixSub: _fx9 ? _fx9.title + ' · ' + (_fx9.fromName || 'this stage') + ' asks for these first' : '',
+          fixSub: !_fx9 ? '' : (_fx9.stageId
+            ? _fx9.title + ' · ' + (_fx9.fromName || 'this stage') + ' asks for these first'
+            : _fx9.title + ' · it ticks itself once this is on the record'),
           fixErr: this.state.fixErr || '',
           fixErrShow: !!this.state.fixErr,
           fixClose: () => this.setState({ fixMissing: null, fixErr: '', fixSaving: false }),
@@ -47729,15 +47754,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // refused again by the same server rule that opened this dialog. A button that cannot
           // do what it says is worse than no button.
           fixSave: () => { if (_fxCanSave9) this._saveFixMissing(); },
-          fixSaveLabel: _fxSaving9 ? 'Saving…' : 'Save and move',
+          fixSaveLabel: _fxSaving9 ? 'Saving…' : (_fx9 && _fx9.stageId ? 'Save and move' : 'Save'),
           fixSaveBg: !_fxCanSave9 ? '#EDEBF2' : _fxSaving9 ? '#C9A2FF' : '#7C00FF',
           fixSaveFg: !_fxCanSave9 ? '#A9A6B4' : '#fff',
           fixSaveCursor: !_fxCanSave9 ? 'not-allowed' : _fxSaving9 ? 'default' : 'pointer',
           // Disabled says "not yet"; it does not say why. The tooltip does, because the reason is
           // the whole content of the dialog above it and does not need repeating in the footer.
-          fixSaveTitle: _fxCanSave9
-            ? 'Saves what you have filled in, then moves the card'
-            : 'Nothing on this dialog to fill in — do the step above and the card moves on its own',
+          fixSaveTitle: !_fxCanSave9
+            ? 'Nothing on this dialog to fill in — do the step above and the card moves on its own'
+            : (_fx9 && _fx9.stageId ? 'Saves what you have filled in, then moves the card' : 'Saves it to the record the checklist reads'),
           fixRows: ((_fx9 && _fx9.blockers) || []).map((b9) => {
             const a9 = this._FIX_ACTIONS[b9.field];
             const f9 = a9 ? null : this._FIX_FIELDS[b9.field];
@@ -47815,6 +47840,26 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   return this.toast(i.label + ' ticks itself once the ' + (i.docType || 'document') + ' is recorded against the client.', 'error');
                 }
                 if (isField) {
+                  /**
+                   * OFFER THE BOX, don't just explain where it is.
+                   *
+                   * This item is derived — it ticks itself from the record — so the tick is not a
+                   * control. But "fill it in on the deal and this ticks itself" is an instruction
+                   * to go somewhere else and come back, which is the kind of refusal people learn
+                   * to route around. The same fill dialog the refused MOVE already opens does the
+                   * job here: one field, saved to the right record, and the item ticks itself.
+                   *
+                   * No stage is passed, because nothing is being moved — this is filling a gap
+                   * while looking at it. Only offered for a field the dialog knows the home of;
+                   * anything else still says where to go, which is better than a box that writes
+                   * to the wrong record.
+                   */
+                  const home9 = i.field && (this._FIX_FIELDS[i.field] || this._FIX_ACTIONS[i.field]);
+                  if (home9) {
+                    return this._openFixMissing(_clk9.id, null, [{
+                      key: i.key, label: i.label, source: 'field', docType: i.docType || null, field: i.field,
+                    }]);
+                  }
                   return this.toast(i.label + ' is read from the deal — fill it in there and this ticks itself.', 'error');
                 }
                 _clkSend9('/checklist', { key: i.key, done: !i.done });
