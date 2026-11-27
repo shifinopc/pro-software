@@ -3684,7 +3684,13 @@ app.get("/api/interactions", requireAuth, requireStaff, requireReadRole("super_a
 app.get("/api/follow-ups", requireAuth, requireStaff, requireReadRole("super_admin", "admin", "pro_officer", "sales"), async (req, res) => {
   const scoped = await dealCompanyIds(req as any);
   const mine = String(req.query.mine ?? "") === "1" ? (req as any).auth?.sub : null;
-  res.json(await openFollowUps({ companyIds: scoped, ownerId: mine, on: String(req.query.on ?? "").trim() || undefined }));
+  res.json(await openFollowUps({
+    companyIds: scoped, ownerId: mine,
+    on: String(req.query.on ?? "").trim() || undefined,
+    // The screen asks for the dated-but-not-yet-due rows through the SAME scoped read, rather than
+    // deriving them from the interaction log, which no officer's scope applies to.
+    ahead: String(req.query.ahead ?? "") === "1",
+  }));
 });
 
 app.post("/api/interactions", requireAuth, requireStaff, requireWriteRole, async (req, res) => {

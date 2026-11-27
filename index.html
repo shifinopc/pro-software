@@ -20532,7 +20532,9 @@ class Component extends DCLogic {
         .catch(() => {});
       this._loadTeams();
       // `mine` is passed in rather than read from state, so a chip press cannot race a stale closure.
-      this._loadFollowUps = (mine) => this._bootFetch('/api/follow-ups' + (mine ? '?mine=1' : ''), { headers: hdr })
+      // `ahead=1` — the screen's "Coming up" list is part of this read, not a second one built out
+      // of the unscoped interaction log.
+      this._loadFollowUps = (mine) => this._bootFetch('/api/follow-ups?ahead=1' + (mine ? '&mine=1' : ''), { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
         .then(v => { if (Array.isArray(v)) this.setState({ followUpsData: v }); })
         .catch(() => {});
@@ -43381,7 +43383,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // siblings rather than drifting into two people's ideas of what a report looks like.
 
     // ── Follow-ups and the contact log ──
-    const _fu = _crmRows9(this.state.followUpsData);
+    /**
+     * BOTH HALVES OF THE QUEUE COME FROM THE SCOPED READ.
+     *
+     * "Coming up" used to be filtered out of `_ints` — the whole interaction log — which is
+     * firm-wide on purpose: a client's contact history belongs to everyone who can see the client.
+     * Applied to a commitment it meant a PRO officer's queue showed his own overdue work and then
+     * everybody else's future work underneath it. The route now returns the dated rows too, under
+     * the same ownership filter, and the split into owed/not-yet-owed happens here on one list.
+     */
+    const _fuSrv9 = _crmRows9(this.state.followUpsData);
+    const _fuToday9 = new Date().toISOString().slice(0, 10);
+    const _fu = _fuSrv9.filter(f => String(f.nextActionAt ?? '').slice(0, 10) <= _fuToday9);
     const _ints = _crmRows9(this.state.interactionsData);
     const _ig = this.state.intLog || null;
     const _KIND_LABEL9 = { call: 'Call', meeting: 'Meeting', email: 'Email', whatsapp: 'WhatsApp', note: 'Note', site_visit: 'Site visit' };
@@ -43390,8 +43403,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // It used to sit a hundred lines further down, which was fine while nothing above referenced
     // it — and a TDZ throw the moment something did. const is not hoisted for use, and in this
     // runtime that throw takes the whole screen, not just the section that made the mistake.
-    const _later9 = _ints
-      .filter(i => i.nextActionAt && !i.nextActionDoneAt && String(i.nextActionAt).slice(0, 10) > _todayISO9)
+    const _later9 = _fuSrv9
+      .filter(i => String(i.nextActionAt ?? '').slice(0, 10) > _todayISO9)
       .sort((a, b) => String(a.nextActionAt).localeCompare(String(b.nextActionAt)));
 
     /**

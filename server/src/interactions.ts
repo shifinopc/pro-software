@@ -33,8 +33,14 @@ export { today };
  *
  * `on` defaults to today, so the queue answers "what do I owe someone by the end of today" — which
  * includes everything overdue, because a call missed on Thursday is not less owed on Friday.
+ *
+ * `ahead` ALSO returns what is dated but not yet due. The Follow-ups screen shows a "Coming up"
+ * list, and it used to build that list itself out of the whole interaction log — which carries no
+ * ownership filter, because a client's contact history is visible to everyone by design. The
+ * result was a queue whose top half obeyed the officer's scope and whose bottom half quietly did
+ * not. Future rows are a question for the same query, not a second source.
  */
-export async function openFollowUps(opts: { on?: string; ownerId?: string | null; companyIds?: string[] | null } = {}) {
+export async function openFollowUps(opts: { on?: string; ownerId?: string | null; companyIds?: string[] | null; ahead?: boolean } = {}) {
   const on = opts.on ?? today();
   // `nextActionAt` holds either a bare day ("2026-08-05") or a full ISO instant, depending on where
   // it was written. The high sentinel makes the string comparison catch both for the same day —
@@ -42,7 +48,10 @@ export async function openFollowUps(opts: { on?: string; ownerId?: string | null
   // only appear the morning after, which is precisely when it is too late to be useful.
   // Cancelled is excluded alongside done: an abandoned commitment is not owed, and leaving it in
   // the queue would be the whole reason people were closing them as "done" instead.
-  const where: any = { nextActionAt: { not: null, lte: on + "￿" }, nextActionDoneAt: null, cancelledAt: null };
+  const where: any = {
+    nextActionAt: opts.ahead ? { not: null } : { not: null, lte: on + "￿" },
+    nextActionDoneAt: null, cancelledAt: null,
+  };
   if (opts.ownerId) where.ownerId = opts.ownerId;
   if (opts.companyIds) where.companyId = { in: opts.companyIds };
 
