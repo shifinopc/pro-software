@@ -6392,10 +6392,26 @@
                 </sc-for>
               </div>
             </sc-if>
+            <!-- The window governs the LOGGED half only — the owed half is never windowed, or a
+                 call promised in October would vanish from today's queue. -->
+            <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px;">
+              <sc-for list="{{ fuWindows }}" as="w" hint-placeholder-count="4">
+                <span onClick="{{ w.pick }}" style="font-size:11px; font-weight:{{ w.weight }}; color:{{ w.color }}; background:{{ w.bg }}; padding:5px 10px; border-radius:99px; box-shadow:{{ w.shadow }}; cursor:pointer;">{{ w.label }}</span>
+              </sc-for>
+            </div>
+            <span onClick="{{ fuToggleAuto }}" style="font-size:11px; font-weight:600; color:{{ fuAutoColor }}; background:{{ fuAutoBg }}; border:1px solid {{ fuAutoBd }}; padding:7px 11px; border-radius:99px; cursor:pointer;">{{ fuAutoLabel }}</span>
             <sc-if value="{{ canWrite }}" hint-placeholder-val="{{ true }}">
               <button onClick="{{ fuLog }}" style="background:#1A1523; color:#fff; border:none; font-size:11px; font-weight:600; padding:9px 12px; border-radius:99px; cursor:pointer; box-shadow:0 6px 18px -6px rgba(26,21,35,.5);" style-hover="background:#2B2438;">+ Log contact</button>
             </sc-if>
           </div>
+        </section>
+
+        <!-- Kind on its own row: six chips and the controls above would wrap into a block that
+             pushes the queue itself below the fold on a laptop. -->
+        <section style="display:flex; gap:6px; flex-wrap:wrap; animation:fadeUp .55s cubic-bezier(.16,1,.3,1) .02s both;">
+          <sc-for list="{{ fuKindChips }}" as="c" hint-placeholder-count="7">
+            <span onClick="{{ c.pick }}" style="font-size:11px; font-weight:{{ c.weight }}; color:{{ c.color }}; background:{{ c.bg }}; border:1px solid {{ c.bd }}; padding:6px 11px; border-radius:99px; cursor:pointer;">{{ c.label }}</span>
+          </sc-for>
         </section>
 
         <!-- The shape of the day, before the list of it. A queue that opens on forty rows makes
@@ -20542,12 +20558,28 @@ class Component extends DCLogic {
         .catch(() => {});
       this._loadTeams();
       // `mine` is passed in rather than read from state, so a chip press cannot race a stale closure.
-      // `ahead=1` — the screen's "Coming up" list is part of this read, not a second one built out
-      // of the unscoped interaction log.
-      this._loadFollowUps = (mine) => this._bootFetch('/api/follow-ups?ahead=1' + (mine ? '&mine=1' : ''), { headers: hdr })
-        .then(r => (r.ok ? r.json() : null))
-        .then(v => { if (Array.isArray(v)) this.setState({ followUpsData: v }); })
-        .catch(() => {});
+      /**
+       * ONE READ FOR THE WHOLE TIMELINE.
+       *
+       * `ahead=1` brings the dated-but-not-yet-due rows and `history=<days>` what already
+       * happened — the screen that used to be Activities. Both through this route, because it is
+       * the one with the ownership rule on it; built from two routes, the halves disagreed about
+       * whose work they were showing.
+       */
+      this._loadFollowUps = (mine, opts) => {
+        const o9 = opts || {};
+        const days9 = o9.days ?? this.state.fuDays ?? 14;
+        const kind9 = o9.kind ?? this.state.fuKind ?? '';
+        const auto9 = o9.auto ?? this.state.fuAuto ?? false;
+        const qs9 = '/api/follow-ups?ahead=1&history=' + days9
+          + (kind9 ? '&kind=' + encodeURIComponent(kind9) : '')
+          + (auto9 ? '&auto=1' : '')
+          + (mine ? '&mine=1' : '');
+        return this._bootFetch(qs9, { headers: hdr })
+          .then(r => (r.ok ? r.json() : null))
+          .then(v => { if (Array.isArray(v)) this.setState({ followUpsData: v }); })
+          .catch(() => {});
+      };
       this._loadFollowUps(this.state.fuMine);
       this._loadInteractions = () => this._bootFetch('/api/interactions', { headers: hdr })
         .then(r => (r.ok ? r.json() : null))
@@ -23439,7 +23471,7 @@ class Component extends DCLogic {
       // Ordered to follow the life of a deal: the board first because it is what people open, then
       // the lead that becomes one, then what is owed on it, then what has actually been done. It read
       // Pipeline → Follow-ups → Leads before, which put the commitment before the thing it is about.
-      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Activities', I.refresh], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers], ['Lead Report', I.fileText]]],
+      ['Sales', I.stamp, [['Sales Dashboard', I.grid], ['Pipeline', I.layers, _dealCount], ['Leads', I.buoy, _leadCount], ['Follow-ups', I.clock, _overdueCount], ['Contacts', I.users], ['Inbox', I.buoy], ['Sales Teams', I.users], ['Targets & Forecast', I.layers], ['Lead Report', I.fileText]]],
       ['Operations', I.check, [['My Tasks', I.check], ['Task List', I.fileText], ['Approvals', I.check], ['SLA Monitor', I.shield], ['Requests Queue', I.buoy], ['Government Centers', I.building], ['Appointments', I.calendar], ['Courier', I.card], ['PRO Teams', I.users], ['Team Performance', I.layers], ['Client Report', I.fileText]]],
       ['Clients & Compliance', I.building, [['Clients', I.building], ['Compliance', I.folder], ['Documents', I.folder], ['Employees', I.users], ['Renewals', I.refresh]]],
       // Ordered to follow the money: quote → invoice → payment → reporting.
@@ -43402,8 +43434,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      * everybody else's future work underneath it. The route now returns the dated rows too, under
      * the same ownership filter, and the split into owed/not-yet-owed happens here on one list.
      */
-    const _fuSrv9 = _crmRows9(this.state.followUpsData);
+    const _fuAllSrv9 = _crmRows9(this.state.followUpsData);
     const _fuToday9 = new Date().toISOString().slice(0, 10);
+    // `owed` is the server's own word for which half of the timeline a row belongs to. Derived
+    // here from the dates it would be a second opinion, and the two would disagree the day one of
+    // them was changed.
+    const _fuSrv9 = _fuAllSrv9.filter(f => f.owed !== false);
+    const _fuPast9 = _fuAllSrv9.filter(f => f.owed === false);
     const _fu = _fuSrv9.filter(f => String(f.nextActionAt ?? '').slice(0, 10) <= _fuToday9);
     const _ints = _crmRows9(this.state.interactionsData);
     const _ig = this.state.intLog || null;
@@ -43451,9 +43488,24 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      */
     const _fuIds9 = new Set(_fu.map(f => f.id));
     const _fuAll9 = [..._fu, ..._later9.filter(i => !_fuIds9.has(i.id))];
-    const _fuShaped9 = _fuAll9.map(f => ({
+    /**
+     * THE SAME ROW, OWED OR DONE.
+     *
+     * The history half used to be its own screen with its own row, which is why a call you had
+     * made looked like a different kind of object from the identical call you had not. One shape,
+     * one timeline: what changes for a finished row is the date it is filed under, the colour of
+     * its chip, and that it carries no buttons — there is nothing left to do to it.
+     */
+    const _fuShape9 = (f) => {
+      const past9 = f.owed === false;
+      // Owed rows are filed by WHEN THEY ARE DUE and done ones by WHEN THEY HAPPENED. Reading both
+      // off one field would put a call made last Tuesday under the date of the call it booked.
+      const day9 = String((past9 ? f.at : f.nextActionAt) ?? '').slice(0, 10);
+      return {
+        past: past9,
+        day: day9,
         // Kept so the grouped queue can split on it without re-deriving what the server already said.
-        isOverdue: !!f.overdue,
+        isOverdue: !past9 && !!f.overdue,
         auto: !!f.auto,
         kindIcon: _FU_KIND_ICON9[f.kind] || I.clock,
         kindBg: (_FU_KIND_TONE9[f.kind] || ['#F3F1F7', '#6F6C7A'])[0],
@@ -43461,11 +43513,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         owner: f.ownerId ? (_userName9(f.ownerId) || 'Unassigned') : 'Unassigned',
         initials: _fuInitials9(f.ownerId ? _userName9(f.ownerId) : ''),
         avBg: _FU_AV9[Math.abs(String(f.ownerId || '').split('').reduce((n, c) => n + c.charCodeAt(0), 0)) % _FU_AV9.length],
-        action: f.nextAction,
+        // A finished row is titled by what was SAID, not by what was promised: its promise is the
+        // row above it in the timeline. Falls back to the commitment, then to the kind, so a bare
+        // logged call with no note is still a line of text rather than a blank.
+        action: past9 ? (f.summary || f.outcome || f.nextAction || (_KIND_LABEL9[f.kind] || f.kind)) : f.nextAction,
         // Three states, not two. Everything that was not late used to read "today", which for a
         // follow-up dated next Friday is simply false.
-        isLater: !f.overdue && String(f.nextActionAt).slice(0, 10) > _todayISO9,
-        due: f.overdue
+        isLater: !past9 && !f.overdue && String(f.nextActionAt).slice(0, 10) > _todayISO9,
+        due: past9
+          ? (() => {
+              const d = new Date(day9 + 'T00:00:00');
+              return isNaN(d) ? day9 : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            })()
+          : f.overdue
           ? (f.daysLate === 1 ? '1 day late' : f.daysLate + ' days late')
           : String(f.nextActionAt).slice(0, 10) > _todayISO9
             // Day and month, worked out here rather than through one of this file's date helpers:
@@ -43503,16 +43563,20 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           },
           snErr: '',
         }),
-        dueColor: f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#B7791F'),
-        dueBg: f.overdue ? '#FEECEC' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#E4F4FD' : '#FFF6E5'),
-        stripe: f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#F0C24B'),
+        // Grey for what is done. The colours on this screen mean urgency, and nothing that has
+        // already happened is urgent — a finished call in amber would read as work.
+        dueColor: past9 ? '#8C8899' : f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#B7791F'),
+        dueBg: past9 ? '#F3F1F7' : f.overdue ? '#FEECEC' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#E4F4FD' : '#FFF6E5'),
+        stripe: past9 ? '#DDD9E6' : f.overdue ? '#C0353A' : (String(f.nextActionAt).slice(0, 10) > _todayISO9 ? '#0284C7' : '#F0C24B'),
         who: (f.company && f.company.name) || '—',
         context: [
           f.opportunity ? f.opportunity.title : null,
           (_KIND_LABEL9[f.kind] || f.kind) + ' on ' + String(f.at).slice(0, 10),
           f.summary,
         ].filter(Boolean).join(' · '),
-        canAct: canWrite,
+        // Nothing is owed on a finished row, so it carries no buttons — four controls that all
+        // mean "do this again" would be an invitation to re-open history.
+        canAct: canWrite && !past9,
         done: () => this._closeFollowUp(f.id, f.nextAction),
         // Opening the log dialog PRE-LOADED with what this follow-up was about, and carrying its id
         // so saving closes it. Logging the call and then hunting for the entry to tick off is the
@@ -43525,9 +43589,19 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           },
           igErr: '',
         }),
-    }));
-    // Dated but not yet due, from the full log — /api/follow-ups deliberately returns only what is
-    // owed BY today, so "coming up" is worked out here from the same rows the timeline reads.
+      };
+    };
+    const _fuShaped9 = _fuAll9.map(_fuShape9);
+    /**
+     * What already happened, newest first — the half that used to be the Activities screen.
+     *
+     * `at` can be in the FUTURE on these: somebody logging a meeting they have arranged for next
+     * week writes it with that date. Those are not history and not a commitment either, so they
+     * get their own band at the top of the past half rather than being filed under a day that has
+     * not come.
+     */
+    const _pastShaped9 = _fuPast9.map(_fuShape9)
+      .sort((a, b) => String(b.day).localeCompare(String(a.day)));
 
     // ── The two wording lists ──
     //
@@ -45029,7 +45103,10 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
 
       // ── Follow-ups ──
       // ── the shape of the day ──
-      fuHasAny: _fu.length > 0,
+      // The whole timeline, not just the owed half: a day with nothing outstanding but four calls
+      // logged is not an empty screen, and painting the "all clear" card over them would hide
+      // the work somebody just did.
+      fuHasAny: (_fuShaped9.length + _pastShaped9.length) > 0,
       fuStats: (() => {
         const late = _fu.filter(f => f.overdue);
         const todayN = _fu.length - late.length;
@@ -45051,21 +45128,83 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         ];
       })(),
       // Only when the list spans more than one person — on "Mine" every avatar would be the same.
-      fuShowOwners: new Set(_fu.map(f => f.ownerId || '')).size > 1,
+      fuShowOwners: new Set([..._fuShaped9, ..._pastShaped9].map(f => f.owner || '')).size > 1,
+      /**
+       * ONE TIMELINE, OWED ABOVE AND DONE BELOW.
+       *
+       * The bands run from the latest thing you promised down through today and on into what has
+       * already happened, which is the merge: Activities was never a different list, it was this
+       * list read from the other end. The colour drains out of the bands as they pass today —
+       * urgency belongs to work that is still owed.
+       */
       fuGroups: (() => {
+        const yest9 = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const late = _fuShaped9.filter(f => f.isOverdue);
         const now = _fuShaped9.filter(f => !f.isOverdue && !f.isLater);
         const soon = _fuShaped9.filter(f => f.isLater);
+        // Logged against a date that has not arrived — a meeting already in the diary. Neither
+        // owed nor history, and filing it under "Today" would backdate it.
+        const booked = _pastShaped9.filter(f => f.day > _todayISO9);
+        const pToday = _pastShaped9.filter(f => f.day === _todayISO9);
+        const pYest = _pastShaped9.filter(f => f.day === yest9);
+        const pEarlier = _pastShaped9.filter(f => f.day < yest9);
         return [
           { key: 'late', label: 'Overdue', color: '#C0353A', bg: '#FEECEC', rows: late, note: 'Promised before today' },
           { key: 'today', label: 'Due today', color: '#B7791F', bg: '#FFF6E5', rows: now, note: 'Promised for today' },
           // Same card, same rows, a cooler band. It is not a different kind of thing — it is the
           // same commitment, further away — and the tint is what says so without a second heading.
           { key: 'soon', label: 'Coming up', color: '#0284C7', bg: '#E4F4FD', rows: soon, note: 'Dated, not yet due' },
+          { key: 'booked', label: 'In the diary', color: '#6F6C7A', bg: '#F7F5FB', rows: booked, note: 'Logged for a date ahead' },
+          { key: 'pToday', label: 'Done today', color: '#0E9355', bg: '#F0FAF4', rows: pToday, note: 'Already handled' },
+          { key: 'pYest', label: 'Yesterday', color: '#6F6C7A', bg: '#F7F5FB', rows: pYest, note: 'What was logged' },
+          { key: 'pEarlier', label: 'Earlier', color: '#6F6C7A', bg: '#F7F5FB', rows: pEarlier, note: 'What was logged' },
         ].filter(g => g.rows.length).map(g => ({ ...g, count: String(g.rows.length) }));
       })(),
 
       fuRows: _fuShaped9,
+      /**
+       * THE FILTERS THAT CAME ACROSS FROM ACTIVITIES.
+       *
+       * They govern the HISTORY half only, and say so in their labels: the window is "logged in
+       * the last 14 days", not a window on the queue. A commitment made in October is owed today
+       * and must never fall out of a list because somebody narrowed a date range.
+       *
+       * Every one of them reloads from the server rather than filtering what is in hand — the
+       * read is capped, so filtering locally would quietly search only the most recent 300 rows.
+       */
+      fuWindows: [7, 14, 30, 90].map(d9 => {
+        const on9 = (this.state.fuDays ?? 14) === d9;
+        return {
+          label: d9 + ' days',
+          pick: () => { this.setState({ fuDays: d9 }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { days: d9 }); },
+          weight: on9 ? '700' : '500', color: on9 ? '#7C00FF' : '#6F6C7A',
+          bg: on9 ? '#fff' : 'transparent', shadow: on9 ? '0 1px 3px rgba(38,7,77,.12)' : 'none',
+        };
+      }),
+      fuKindChips: [{ k: '', label: 'All kinds' }].concat(
+        [['call', 'Calls'], ['meeting', 'Meetings'], ['email', 'Email'], ['whatsapp', 'WhatsApp'], ['note', 'Notes'], ['site_visit', 'Site visits']]
+          .map(([k, label]) => ({ k, label }))
+      ).map(c9 => {
+        const on9 = (this.state.fuKind ?? '') === c9.k;
+        return {
+          label: c9.label,
+          pick: () => { this.setState({ fuKind: c9.k }); if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { kind: c9.k }); },
+          weight: on9 ? '700' : '500', color: on9 ? '#7C00FF' : '#6F6C7A',
+          bg: on9 ? '#F5EEFF' : '#fff', bd: on9 ? '#DDD1F5' : '#DDD9E6',
+        };
+      }),
+      // Named by what is being held back. On this data the stage rules have written five entries
+      // for every one a person wrote, so this is off by default and the label says what turning
+      // it on would add rather than leaving the list quietly short.
+      fuAutoLabel: this.state.fuAuto ? 'Hide automatic' : 'Show automatic',
+      fuAutoColor: this.state.fuAuto ? '#7C00FF' : '#6F6C7A',
+      fuAutoBg: this.state.fuAuto ? '#F5EEFF' : '#fff',
+      fuAutoBd: this.state.fuAuto ? '#DDD1F5' : '#DDD9E6',
+      fuToggleAuto: () => {
+        const v9 = !this.state.fuAuto;
+        this.setState({ fuAuto: v9 });
+        if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine, { auto: v9 });
+      },
       // Two scopes, not three. "Team" is not a third thing: the server already narrows a sales user
       // to their own book or their team's, so the wider tab IS that scope — and labelling it "Team"
       // would be wrong for an admin, who sees the firm. It says what the caller can actually see.
@@ -45176,11 +45315,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         };
       })(),
 
-      fuEmpty: _fu.length === 0,
-      fuEmptyTitle: _ints.length ? 'Nothing owed today' : 'Nothing logged yet',
+      // Empty means the WHOLE window is empty — nothing owed and nothing logged in it. With only
+      // the owed half counted, a screen showing a morning's work also showed "nothing to do".
+      fuEmpty: (_fuShaped9.length + _pastShaped9.length) === 0,
+      fuEmptyTitle: _ints.length ? 'Nothing here' : 'Nothing logged yet',
       fuEmptyBody: _ints.length
-        ? 'Everything with a date on it is either done or still ahead. Anything overdue would be at the top of this list.'
-        : 'Log a call, a meeting or a note against a client, and anything you promise to do next appears here on the day it is due.',
+        ? 'Nothing is owed, and nothing was logged in this window. Widen it, or turn on the automatic entries, and anything there will appear.'
+        : 'Log a call, a meeting or a note against a client, and it appears here — with anything you promise to do next sitting above it until it is done.',
       // `pickCompany` is set at OPEN time and never recomputed. The flag used to be "there is no
       // company on the draft yet", which meant the field deleted itself the instant you chose one —
       // so you could not read back, let alone correct, the single answer the dialog most needs.

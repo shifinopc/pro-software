@@ -40,7 +40,27 @@ export { today };
  * result was a queue whose top half obeyed the officer's scope and whose bottom half quietly did
  * not. Future rows are a question for the same query, not a second source.
  */
-export async function openFollowUps(opts: { on?: string; ownerId?: string | null; companyIds?: string[] | null; ahead?: boolean } = {}) {
+export async function openFollowUps(opts: {
+  on?: string; ownerId?: string | null; companyIds?: string[] | null; ahead?: boolean;
+  /**
+   * `history` ALSO returns what already happened, this many days back — the entries that used to
+   * be a second screen called Activities.
+   *
+   * One query rather than two screens, because the two had different ownership rules and the
+   * difference was invisible: a PRO officer's commitments are his own, while the contact log is
+   * firm-wide like the client records it belongs to. Merged, there is one rule — this one — and a
+   * row that is owed and a row that is done are the same row at two points on one timeline.
+   *
+   * Rows still OPEN are never repeated here: they are returned by the query above and excluded
+   * from this one by id, or every outstanding follow-up would appear twice, once as a debt and
+   * once as the conversation that created it.
+   */
+  history?: number;
+  /** Restrict both halves to these kinds; empty or absent means all of them. */
+  kinds?: string[] | null;
+  /** Include the rows a stage rule wrote. Off by default — they outnumber the human ones. */
+  includeAuto?: boolean;
+} = {}) {
   const on = opts.on ?? today();
   // `nextActionAt` holds either a bare day ("2026-08-05") or a full ISO instant, depending on where
   // it was written. The high sentinel makes the string comparison catch both for the same day —
@@ -54,6 +74,13 @@ export async function openFollowUps(opts: { on?: string; ownerId?: string | null
   };
   if (opts.ownerId) where.ownerId = opts.ownerId;
   if (opts.companyIds) where.companyId = { in: opts.companyIds };
+  // Applied to BOTH halves below, from one place: a kind chip that filtered the log and not the
+  // queue would make the same row appear and disappear depending on whether it was still owed.
+  const kinds = (opts.kinds ?? []).filter(k => (KINDS as readonly string[]).includes(k));
+  if (kinds.length) where.kind = { in: kinds };
+  // `includeAuto` is deliberately NOT applied here. It belongs to the history half, where the
+  // question is what people did and the machine's notes drown it. A commitment a stage rule booked
+  // is still a commitment somebody owes, and hiding it from the queue would hide the work.
 
   const rows = await prisma.interaction.findMany({
     where,
@@ -67,11 +94,13 @@ export async function openFollowUps(opts: { on?: string; ownerId?: string | null
 
   // A commitment to a company nobody is pursuing any more is not work. Filtered here rather than in
   // the query so the reason is readable: `lost` companies and closed deals are done with.
-  return rows
+  const owed = rows
     .filter(r => r.company.lifecycle !== "lost")
     .filter(r => !r.opportunity || !(r.opportunity.stage.isWon || r.opportunity.stage.isLost))
     .map(r => ({
       ...r,
+      /** Which half of the timeline this belongs to. The screen reads nothing else to decide. */
+      owed: true,
       overdue: dayOf(r.nextActionAt) < on,
       /** Whole days late, so a screen can say "3 days" rather than making the reader subtract. */
       daysLate: Math.max(0, Math.round((Date.parse(on) - Date.parse(dayOf(r.nextActionAt))) / 86400000)),
@@ -82,6 +111,38 @@ export async function openFollowUps(opts: { on?: string; ownerId?: string | null
        */
       owedDays: Math.max(0, Math.round((Date.parse(on) - Date.parse(dayOf(r.snoozedFrom ?? r.nextActionAt))) / 86400000)),
     }));
+
+  if (!opts.history) return owed;
+
+  /**
+   * AND WHAT ALREADY HAPPENED.
+   *
+   * Ordered by `at` — when it happened — not by when it was typed, so Thursday's call logged on
+   * Monday sits in Thursday. A client that has since been lost is NOT filtered out the way the
+   * queue filters it: nothing is owed to them, but the conversation did happen, and a log that
+   * quietly drops the history of every dead client is a log that cannot answer what went wrong.
+   */
+  const since = new Date(Date.parse(on) - opts.history * 86_400_000).toISOString().slice(0, 10);
+  const pastWhere: any = { at: { gte: since }, id: { notIn: owed.map(r => r.id) } };
+  if (opts.ownerId) pastWhere.ownerId = opts.ownerId;
+  if (opts.companyIds) pastWhere.companyId = { in: opts.companyIds };
+  if (kinds.length) pastWhere.kind = { in: kinds };
+  if (!opts.includeAuto) pastWhere.auto = false;
+
+  const pastRows = await prisma.interaction.findMany({
+    where: pastWhere,
+    include: {
+      company: { select: { id: true, name: true, lifecycle: true } },
+      opportunity: { include: { stage: true } },
+    },
+    orderBy: [{ at: "desc" }, { id: "desc" }],
+    take: 300,
+  });
+
+  return [
+    ...owed,
+    ...pastRows.map(r => ({ ...r, owed: false, overdue: false, daysLate: 0, owedDays: 0 })),
+  ];
 }
 
 /**

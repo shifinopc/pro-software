@@ -3690,6 +3690,11 @@ app.get("/api/follow-ups", requireAuth, requireStaff, requireReadRole("super_adm
     // The screen asks for the dated-but-not-yet-due rows through the SAME scoped read, rather than
     // deriving them from the interaction log, which no officer's scope applies to.
     ahead: String(req.query.ahead ?? "") === "1",
+    // And for what already happened, which used to be the Activities screen. One read, so the
+    // whole timeline obeys one ownership rule.
+    history: Math.max(0, Math.min(365, Number(req.query.history ?? 0) || 0)),
+    kinds: String(req.query.kind ?? "").trim() ? [String(req.query.kind).trim()] : null,
+    includeAuto: String(req.query.auto ?? "") === "1",
   }));
 });
 
