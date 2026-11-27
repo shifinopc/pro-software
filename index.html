@@ -17399,6 +17399,14 @@
                             <sc-if value="{{ cl.isPlain }}" hint-placeholder-val="{{ true }}">
                               <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="min-width:0;">
                             </sc-if>
+                            <sc-if value="{{ cl.isPick }}" hint-placeholder-val="{{ false }}">
+                              <select sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" class="fm-inp" style="min-width:0; cursor:pointer;">
+                                <option value="">{{ cl.place }}</option>
+                                <sc-for list="{{ cl.opts }}" as="op" hint-placeholder-count="3">
+                                  <option value="{{ op.o }}">{{ op.o }}</option>
+                                </sc-for>
+                              </select>
+                            </sc-if>
                             <!-- A file column: the attach control until something is attached, then the
                                  document itself with a way to swap it. -->
                             <sc-if value="{{ cl.isFile }}" hint-placeholder-val="{{ false }}">
@@ -40370,6 +40378,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // WHAT WAS TYPED LAST TIME AND NOT FINISHED. The form starts from this when it has
           // nothing of its own, which is what makes "Save for later" survive a refresh, a different
           // machine, and somebody else opening the step.
+          // THE RUN'S OWN ANSWERS SO FAR. Already sent with every step (my-work carries the
+          // instance's variables so a row can name who it is about); read here so a capture can
+          // say `fromVar` and open already filled with something an earlier step established —
+          // the parent company's name, which the officer typed two steps ago and should not be
+          // asked to remember, let alone spell the same way twice.
+          runVars: (t2.instance && t2.instance.variables && typeof t2.instance.variables === 'object') ? t2.instance.variables : {},
           draftAnswers: (t2.draftAnswers && typeof t2.draftAnswers === 'object') ? t2.draftAnswers : null,
           draftSavedAt: t2.draftSavedAt || null,
           onApprove: t2.nodeType === 'approval' ? 'Approve' : undefined, onReject: t2.nodeType === 'approval' ? 'Reject' : undefined,
@@ -40585,8 +40599,28 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       // WHERE THE FORM STARTS: what is in hand this session, else what was saved against the step.
       // Only as a starting point - the moment anything is typed, `wfCap` exists and wins, so a
       // stale draft can never overwrite what somebody is doing now.
+      /**
+       * WHAT THE RUN ALREADY KNOWS, as the starting value.
+       *
+       * A capture may declare `fromVar: "acqCompanyName"`, and an untouched form then opens with
+       * what that earlier step recorded. Only while the box is EMPTY and only before anything is
+       * typed — a draft, or a value the officer has changed, always wins, or correcting a
+       * prefilled name would be undone by the next render.
+       */
+      const _capSeed9 = (() => {
+        const vars9 = (selStep.runVars && typeof selStep.runVars === 'object') ? selStep.runVars : {};
+        const out9 = {};
+        for (const c9 of (selStep.captures || [])) {
+          if (!c9 || !c9.fromVar) continue;
+          const v9 = vars9[c9.fromVar];
+          if (v9 != null && String(v9).trim()) out9[c9.var] = String(v9);
+        }
+        return out9;
+      })();
       const _capRaw9 = wfCap[selStep.id]
-        || ((selStep.draftAnswers && typeof selStep.draftAnswers === 'object') ? selStep.draftAnswers : {});
+        || (selStep.draftAnswers && typeof selStep.draftAnswers === 'object'
+            ? { ..._capSeed9, ...selStep.draftAnswers }
+            : _capSeed9);
       /**
        * TEXT TYPED BUT NOT YET COMMITTED.
        *
@@ -40938,7 +40972,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   // would print "[object Object]" into the box — and the engine keeps the shape for
                   // exactly that reason. The two render as different controls entirely.
                   isFile: String(col9.type || '') === 'file',
-                  isPlain: String(col9.type || '') !== 'file',
+                  // A THIRD CELL SHAPE. "Which organisation", "what kind of owner" are answers
+                  // from a list, and typed free they come back as four spellings of one thing that
+                  // nothing downstream can group. The chips a top-level select uses do not fit a
+                  // grid cell, so inside a row it is a plain dropdown — the one place in this
+                  // console where that is the smaller control rather than the lazier one.
+                  isPick: String(col9.type || '') === 'select',
+                  isPlain: ['file', 'select'].indexOf(String(col9.type || '')) < 0,
+                  opts: (Array.isArray(col9.options) ? col9.options : []).map(o9 => ({ o: String(o9) })),
                   fileName: (() => {
                     const cv9 = r9 && r9[col9.var];
                     return (cv9 && typeof cv9 === 'object' && cv9.path) ? String(cv9.name || 'Attached') : '';
