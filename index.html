@@ -18863,6 +18863,11 @@ class Component extends DCLogic {
       // Our own promotion is marked rather than trusting `fixed` alone, so a panel that genuinely
       // declares `fixed` in its own markup is still left to its markup.
       if (cs.position !== 'absolute' && !(cs.position === 'fixed' && dd.dataset.ddFixed === '1')) continue;
+      // NOT ON SCREEN — forget that we placed it. `getClientRects()` is empty for a node that is
+      // display:none or detached, and unlike `offsetParent` it answers the same way for a panel we
+      // promoted to `fixed`. This is what makes the scroll reset below "once per opening" rather
+      // than "once ever" when the runtime reuses the node instead of replacing it.
+      if (!dd.getClientRects().length) { delete dd.dataset.ddShown; continue; }
       // EACH PANEL'S OWN CEILING, not one number for all of them.
       //
       // These declare anything from 190px to 260px — `.fm-dd` caps at 210, `.pill-dd` at 260, and
@@ -19038,6 +19043,25 @@ class Component extends DCLogic {
         if (fit > 0) dd.style.maxHeight = Math.round(fit) + 'px';
       }
       dd.classList.toggle('dd-scrolls', overflows);
+      /**
+       * A PANEL OPENS AT THE TOP OF ITS LIST.
+       *
+       * This runtime patches the DOM in place rather than replacing it, so a panel that was
+       * scrolled when it closed is still scrolled when it reopens — with its first row sliced by
+       * the cap and nothing on screen to say the list starts above it. Worse, the position it
+       * keeps was measured against the PREVIOUS cap: reopen it in a shorter space and the panel
+       * can sit past its own new bottom, which is the "cannot reach the end of the list" this was
+       * reported as.
+       *
+       * Reset once per opening, not on every pass — `ddShown` marks a panel this function has
+       * already placed while it has been open, and is cleared when it goes. Resetting every pass
+       * would drag the list back to the top under somebody mid-scroll, which is worse than the
+       * bug.
+       */
+      if (dd.dataset.ddShown !== '1') {
+        dd.dataset.ddShown = '1';
+        if (dd.scrollTop) dd.scrollTop = 0;
+      }
       if (inBox) {
         // Opening upward: the panel hangs from its own height, which is only known now.
         if (up) {
