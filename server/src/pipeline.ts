@@ -672,7 +672,10 @@ export async function applyStageFollowUp(opp: Opportunity, stage: PipelineStage,
   // when the new stage has no rule of its own.
   await db.interaction.updateMany({
     where: { opportunityId: opp.id, auto: true, nextActionAt: { not: null }, nextActionDoneAt: null },
-    data: { nextActionDoneAt: now },
+    // "retired", not done: nobody made this call, the deal simply left the stage that booked it.
+    // Recorded as a completion it flattered every completion rate in the system by exactly the
+    // number of times anybody moved a card.
+    data: { nextActionDoneAt: now, doneKind: "retired" },
   });
 
   if (stage.isWon || stage.isLost) return null;

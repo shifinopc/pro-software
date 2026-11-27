@@ -6482,15 +6482,26 @@
                        the fact that decides which button you press, so it belongs with them. -->
                   <span style="flex-shrink:0; font-size:9px; font-weight:700; color:{{ f.dueColor }}; background:{{ f.dueBg }}; padding:3px 10px; border-radius:99px; white-space:nowrap;">{{ f.due }}</span>
                   <sc-if value="{{ f.canAct }}" hint-placeholder-val="{{ true }}">
-                    <!-- Four icons, not four words. At this width the labels wrapped onto a second
-                         line and pushed the row taller than the thing it describes; and these four
-                         are the same four on every row, so they are learned once and then aimed at.
-                         Each keeps its full label in the tooltip. -->
-                    <div style="display:flex; gap:6px; flex-shrink:0;">
-                      <span onClick="{{ f.done }}" title="Mark this done" style="width:30px; height:30px; border-radius:9px; background:#E7F8EF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#D3F1E1;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E9355" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
-                      <span onClick="{{ f.snooze }}" title="Push this back to another date" style="width:30px; height:30px; border-radius:9px; background:#F5EEFF; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EBDBFF;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C00FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
-                      <span onClick="{{ f.cancel }}" title="Cancel this follow-up" style="width:30px; height:30px; border-radius:9px; background:#FEECEC; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#FBDADA;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C0353A" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></span>
-                      <span onClick="{{ f.logNext }}" title="Log what happened and book the next one" style="width:30px; height:30px; border-radius:9px; background:#F3F1F7; display:flex; align-items:center; justify-content:center; cursor:pointer;" style-hover="background:#EAE7F0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 0 1-.9-3.8 8.4 8.4 0 0 1 8.4-9 8.4 8.4 0 0 1 8.6 8.3z"></path></svg></span>
+                    <!-- ONE PRIMARY ACTION, and it is the one that leaves a record.
+                         There were four icons, two of which closed the follow-up: a bare tick that
+                         recorded nothing sat a thumb's width from a red cancel that demands a
+                         written reason, and the tick was the easiest thing on the row. So the
+                         conversation-logger is promoted and given a word, and the three exceptions
+                         move into a menu where they can be read rather than aimed at. -->
+                    <div style="position:relative; flex-shrink:0; display:flex; gap:6px; align-items:center;">
+                      <span onClick="{{ f.logNext }}" title="Record what happened, and book the next step" style="font-size:11px; font-weight:700; color:#7C00FF; background:#F5EEFF; border:1px solid #E4D7FA; padding:7px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;" style-hover="background:#EBDBFF;">Log it</span>
+                      <span data-pop onClick="{{ f.menuToggle }}" title="Other ways to close this" style="width:30px; height:30px; border-radius:9px; background:{{ f.menuBg }}; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" style-hover="background:#EAE7F0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6F6C7A" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></span>
+                      <sc-if value="{{ f.menuOpen }}" hint-placeholder-val="{{ false }}">
+                        <div data-pop style="position:absolute; top:calc(100% + 6px); right:0; width:212px; background:#fff; border:1px solid #EDEBF2; border-radius:13px; box-shadow:0 16px 48px rgba(38,7,77,.16); padding:6px; z-index:60; animation:popIn .16s ease both;">
+                          <div onClick="{{ f.snooze }}" style="font-size:11px; font-weight:600; color:#4B4757; padding:8px 10px; border-radius:9px; cursor:pointer;" style-hover="background:#F5EEFF;">Push it back…</div>
+                          <div onClick="{{ f.cancel }}" style="font-size:11px; font-weight:600; color:#C0353A; padding:8px 10px; border-radius:9px; cursor:pointer;" style-hover="background:#FEECEC;">Cancel it…</div>
+                          <div style="height:1px; background:#F0EDF6; margin:4px 2px;"></div>
+                          <!-- Kept, because "called, no answer" is real and demanding a paragraph
+                               for it is how a queue stops being used. Worded so it says what it
+                               records, and one step further from the mouse than it was. -->
+                          <div onClick="{{ f.done }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:8px 10px; border-radius:9px; cursor:pointer;" style-hover="background:#F3F1F7;">Done, nothing to note</div>
+                        </div>
+                      </sc-if>
                     </div>
                   </sc-if>
                 </div>
@@ -16746,6 +16757,9 @@
     <div onClick="{{ dismissToast }}" style="position:fixed; bottom:26px; left:50%; transform:translateX(-50%); z-index:200; display:flex; align-items:center; gap:11px; background:#1A1523; color:#fff; padding:12px 12px; border-radius:13px; box-shadow:0 12px 34px rgba(26,21,35,.35); animation:toastIn .3s cubic-bezier(.16,1,.3,1) both; cursor:pointer;">
       <span style="width:22px; height:22px; border-radius:99px; background:{{ toastIconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path data-dcattr-d="{{ toastIcon }}"></path></svg></span>
       <span style="font-size:12px; font-weight:600;">{{ toastText }}</span>
+      <sc-if value="{{ toastHasAction }}" hint-placeholder-val="{{ false }}">
+        <span onClick="{{ toastActionRun }}" style="font-size:11px; font-weight:700; color:#1A1523; background:#fff; padding:6px 11px; border-radius:99px; cursor:pointer; margin-left:3px;">{{ toastActionLabel }}</span>
+      </sc-if>
     </div>
   </sc-if>
 
@@ -19479,6 +19493,9 @@ class Component extends DCLogic {
       if ((s.calOpen || s.notifPop || s.clientFilterOpen || s.userMenu) && !has('[data-pop]')) {
         this.setState({ calOpen: false, notifPop: false, clientFilterOpen: false, userMenu: false });
       }
+      // The follow-up row's "other ways to close this" menu rides the same rule. Its id lives in
+      // one slot rather than a flag per row, so this one line closes whichever is open.
+      if (s.fuMenu && !has('[data-pop]')) this.setState({ fuMenu: null });
     };
     document.addEventListener('mousedown', this._ddClose);
 
@@ -21555,15 +21572,33 @@ class Component extends DCLogic {
           if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine);
           if (this._loadInteractions) this._loadInteractions();
         };
-        if (closesId) return this._crmFetch('/api/interactions/' + closesId + '/done', { method: 'POST' }).then(after).then(() => true);
+        // `logged`, because this close carries evidence: the entry just written says what happened.
+        // The bare tick sends `bare`, and the completion report can finally tell them apart.
+        if (closesId) return this._crmFetch('/api/interactions/' + closesId + '/done', { method: 'POST', body: JSON.stringify({ kind: 'logged' }) }).then(after).then(() => true);
         after();
         return true;
       })
       .catch(() => { this.setState({ igErr: 'Server unreachable — nothing was saved' }); return false; });
-    this._closeFollowUp = (id, what) => this._crmFetch('/api/interactions/' + id + '/done', { method: 'POST' })
+    /**
+     * Tick it off with nothing recorded — the exception, not the normal path.
+     *
+     * Sent as `bare` so the completion report can say what the rate is made of, and offered back
+     * for a few seconds: this was irreversible, and the control used to sit beside a red cancel.
+     */
+    this._closeFollowUp = (id, what) => this._crmFetch('/api/interactions/' + id + '/done', { method: 'POST', body: JSON.stringify({ kind: 'bare' }) })
       .then(({ ok, j }) => {
         if (!ok) return this.toast((j && j.error) || 'Could not close that', 'error');
-        this.toast((what || 'Follow-up') + ' — done');
+        this.toast((what || 'Follow-up') + ' — done', 'ok', { label: 'Undo', run: () => this._reopenFollowUp(id) });
+        if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine);
+        if (this._loadInteractions) this._loadInteractions();
+      })
+      .catch(() => this.toast('Server unreachable — nothing changed', 'error'));
+    // Puts it back in the queue on the date it was always due — not today. A commitment does not
+    // become less late because somebody un-ticked it.
+    this._reopenFollowUp = (id) => this._crmFetch('/api/interactions/' + id + '/reopen', { method: 'POST' })
+      .then(({ ok, j }) => {
+        if (!ok) return this.toast((j && j.error) || 'Could not undo that', 'error');
+        this.toast('Back in the queue');
         if (this._loadFollowUps) this._loadFollowUps(this.state.fuMine);
         if (this._loadInteractions) this._loadInteractions();
       })
@@ -22790,16 +22825,25 @@ class Component extends DCLogic {
   // Toasts carry a tone so a failure never renders under a green tick. Callers may pass one
   // explicitly ('error' | 'warn' | 'ok'); otherwise it is inferred from the wording, which keeps
   // every existing this.toast('Could not …') call honest without touching the call site.
-  toast(msg, tone) {
+  /**
+   * `action` puts a single button in the toast — "Undo", and nothing else so far.
+   *
+   * It exists because completing a follow-up could not be undone anywhere in the system, and the
+   * remedy people reach for is logging a fake interaction, which corrupts the contact log to fix
+   * the queue. A few seconds of undo is cheaper than a confirmation dialog on every tick.
+   */
+  toast(msg, tone, action) {
     // Guessing the tone from prose is only safe for words that cannot appear in a success message.
     // "first" used to be on this list, so "…first step is in My Tasks" — a successful workflow
     // start — was shown as a red failure. Same trap for "required" and "rejected", which appear in
     // perfectly good confirmations ("Quotation rejected"). Anything ambiguous now passes `tone`
     // explicitly at the call site instead.
     const t = tone || (/\b(cannot|can't|could not|couldn't|unable|failed|error|unreachable|denied|refused|not allowed|no permission)\b/i.test(String(msg)) ? 'error' : 'ok');
-    this.setState({ toast: msg, toastTone: t });
+    this.setState({ toast: msg, toastTone: t, toastAction: action || null });
     clearTimeout(this._tt);
-    this._tt = setTimeout(() => this.setState({ toast: null }), t === 'error' ? 4200 : 2600);
+    // A toast carrying an action stays up longer: 2.6s is enough to read "done" and not enough to
+    // notice a mistake and reach for the button.
+    this._tt = setTimeout(() => this.setState({ toast: null, toastAction: null }), t === 'error' ? 4200 : action ? 7000 : 2600);
   }
   renderVals() {
 
@@ -43550,10 +43594,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         snoozeReason: f.snoozeReason || '',
         snoozeReasonShown: !!f.snoozeReason,
         cancel: () => this.setState({
+          fuMenu: null,
           fuDropFor: { id: f.id, action: f.nextAction, who: (f.company && f.company.name) || '', reason: '' },
           fuDropErr: '',
         }),
         snooze: () => this.setState({
+          fuMenu: null,
           snOpen: {
             id: f.id, action: f.nextAction, who: (f.company && f.company.name) || '',
             due: String(f.nextActionAt).slice(0, 10), count: f.snoozeCount || 0,
@@ -43573,10 +43619,15 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           (_KIND_LABEL9[f.kind] || f.kind) + ' on ' + String(f.at).slice(0, 10),
           f.summary,
         ].filter(Boolean).join(' · '),
-        // Nothing is owed on a finished row, so it carries no buttons — four controls that all
-        // mean "do this again" would be an invitation to re-open history.
+        // Nothing is owed on a finished row, so it carries no buttons — controls that all mean
+        // "do this again" would be an invitation to re-open history.
         canAct: canWrite && !past9,
-        done: () => this._closeFollowUp(f.id, f.nextAction),
+        // The menu is keyed by ROW ID in one state slot, so opening a second closes the first.
+        // A flag per row would let two menus hang open over each other.
+        menuOpen: this.state.fuMenu === f.id,
+        menuBg: this.state.fuMenu === f.id ? '#EAE7F0' : '#F3F1F7',
+        menuToggle: () => this.setState({ fuMenu: this.state.fuMenu === f.id ? null : f.id }),
+        done: () => { this.setState({ fuMenu: null }); this._closeFollowUp(f.id, f.nextAction); },
         // Opening the log dialog PRE-LOADED with what this follow-up was about, and carrying its id
         // so saving closes it. Logging the call and then hunting for the entry to tick off is the
         // step people skip, which is what leaves a queue full of finished work.
@@ -53202,7 +53253,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       thrSubTotal: String(thrSubTotal), thrCompTotal: String(thrCompTotal), thrPct: String(thrPct),
       thrChips, thrRangeLabel, thrTotalLabel,
       companyFields, employees: employeesAll, ...empScreenApi, ...empPageApi, invoicesFull, payments: payments.filter(p9 => payFilter === "All" || p9.via === payFilter), payTabs, payChart, ...receiptViewApi, tickets, ticketsEmpty, notifGroups, downloads, prefs, weekDays, renewalRows,
-      toastText: this.state.toast || false, dismissToast: () => this.setState({ toast: null }),
+      toastText: this.state.toast || false, dismissToast: () => this.setState({ toast: null, toastAction: null }),
+      toastHasAction: !!this.state.toastAction,
+      toastActionLabel: (this.state.toastAction || {}).label || '',
+      toastActionRun: () => {
+        const a9 = this.state.toastAction;
+        this.setState({ toast: null, toastAction: null });
+        if (a9 && a9.run) a9.run();
+      },
       toastIconBg: this.state.toastTone === 'error' ? '#E5484D' : this.state.toastTone === 'warn' ? '#F59E0B' : '#12B76A',
       toastIcon: this.state.toastTone === 'error' ? 'M18 6L6 18M6 6l12 12'
         : this.state.toastTone === 'warn' ? 'M12 8v5M12 17h.01'

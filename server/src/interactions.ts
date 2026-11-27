@@ -293,7 +293,7 @@ export async function followUpCompletion(opts: {
   const rows = await prisma.interaction.findMany({
     where,
     select: {
-      id: true, ownerId: true, nextActionAt: true, nextActionDoneAt: true,
+      id: true, ownerId: true, nextActionAt: true, nextActionDoneAt: true, doneKind: true,
       cancelledAt: true, snoozedFrom: true, snoozeCount: true,
     },
     take: 20000,
@@ -308,6 +308,22 @@ export async function followUpCompletion(opts: {
   const tally = (set: typeof due) => {
     const completed = set.filter(r => r.nextActionDoneAt);
     const onTime = completed.filter(r => dayOf(r.nextActionDoneAt) <= dayOf(r.snoozedFrom ?? r.nextActionAt));
+    /**
+     * THREE WAYS A COMMITMENT GETS COMPLETED, and they are not the same achievement.
+     *
+     *   logged   somebody recorded what happened — the contact log carries the evidence
+     *   bare     somebody ticked it with nothing to add
+     *   retired  a stage move closed it; nobody made the call
+     *
+     * All three still count in `completed`, because the rate has to mean "cleared" or it stops
+     * being comparable to last month. Split out beside it so the figure can be READ: a rate of
+     * 90% that is nine-tenths retirements is a board being tidied, not a queue being worked.
+     *
+     * `doneKind` is null on everything closed before the column existed. Those land in `unrecorded`
+     * rather than being assumed to be either — the difference was not recorded, so the report does
+     * not invent it.
+     */
+    const kindOf = (k: string) => completed.filter(r => r.doneKind === k).length;
     const cancelled = set.filter(r => !r.nextActionDoneAt && r.cancelledAt);
     const open = set.filter(r => !r.nextActionDoneAt && !r.cancelledAt);
     const n = set.length;
@@ -315,6 +331,10 @@ export async function followUpCompletion(opts: {
       due: n,
       completed: completed.length,
       completedOnTime: onTime.length,
+      withRecord: kindOf("logged"),
+      ticked: kindOf("bare"),
+      retired: kindOf("retired"),
+      unrecorded: completed.filter(r => !r.doneKind).length,
       cancelled: cancelled.length,
       open: open.length,
       /** How many were pushed at least once — the effort the two rates above cannot show. */
@@ -474,7 +494,13 @@ export async function cancelFollowUp(id: string, reason: string) {
   });
 }
 
-export async function closeFollowUp(id: string) {
+/**
+ * `kind` says HOW it was closed, and the completion report reads it rather than counting every
+ * closure as the same success. The click is not gated — friction on the commonest action is how a
+ * queue stops being used — the NUMBER is: a tick and a recorded conversation stop being the same
+ * fact. See `doneKind` on the model.
+ */
+export async function closeFollowUp(id: string, kind: "logged" | "bare" | "retired" = "bare") {
   const row = await prisma.interaction.findUnique({ where: { id } });
   if (!row) throw new Error("No such entry");
   if (!row.nextActionAt) throw new Error("That entry has no follow-up to close");
@@ -482,5 +508,27 @@ export async function closeFollowUp(id: string) {
   // derived state — the whole reason there is no `status` column — would have no single answer.
   if (row.cancelledAt) throw new Error("That follow-up was cancelled — it cannot also be completed");
   if (row.nextActionDoneAt) return row;
-  return prisma.interaction.update({ where: { id }, data: { nextActionDoneAt: new Date().toISOString() } });
+  return prisma.interaction.update({
+    where: { id },
+    data: { nextActionDoneAt: new Date().toISOString(), doneKind: kind },
+  });
+}
+
+/**
+ * PUT IT BACK.
+ *
+ * There was no way to undo a completion anywhere in the system, and the tick sits a thumb's width
+ * from the red cancel button. A mis-click rewrote what happened and the only remedy was to log a
+ * fake interaction — which corrupts the contact log to fix the queue.
+ *
+ * Only a completion can be undone. A CANCELLATION carries a written reason and is a decision
+ * somebody recorded; re-opening it here would quietly discard that reason, so it refuses and says
+ * where to go instead.
+ */
+export async function reopenFollowUp(id: string) {
+  const row = await prisma.interaction.findUnique({ where: { id } });
+  if (!row) throw new Error("No such entry");
+  if (row.cancelledAt) throw new Error("That follow-up was cancelled, not completed — log a new one rather than undoing the reason it was dropped");
+  if (!row.nextActionDoneAt) return row;
+  return prisma.interaction.update({ where: { id }, data: { nextActionDoneAt: null, doneKind: null } });
 }

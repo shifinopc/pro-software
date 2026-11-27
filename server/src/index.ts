@@ -21,7 +21,7 @@ import { stagesFor, validateStages, boardFor, withMoney, statusOf, applyStageFol
 import { crmDashboard } from "./crmdashboard.js";
 import { recordLifecycle, lifecycleAnalytics, campaignPerformance, leadStatusReport } from "./lifecycle.js";
 import { mountWhatsAppWebhook } from "./whatsapp-webhook.js";
-import { openFollowUps, historyFor, logInteraction, closeFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
+import { openFollowUps, historyFor, logInteraction, closeFollowUp, reopenFollowUp, lastContactMap, activityFeed, activityCounts, rescheduleFollowUp, cancelFollowUp, followUpCompletion, KIND_LABEL, dayOf } from "./interactions.js";
 import { salesReport, periodsWithActivity, periodRange, currentPeriod } from "./salesreport.js";
 import { opsReport, opsPeriodsWithActivity } from "./opsreport.js";
 import { setupCheck } from "./setupcheck.js";
@@ -3739,7 +3739,24 @@ app.post("/api/interactions/:id/done", requireAuth, requireStaff, requireWriteRo
   if (!row) return res.status(404).json({ error: "Entry not found" });
   const scoped = await salesCompanyIds(req as any);
   if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
-  try { res.json(await closeFollowUp(row.id)); }
+  // "logged" when the console closed it as part of recording what happened, "bare" when somebody
+  // ticked it with nothing to add. The caller says which, because only the caller knows.
+  const kind = String((req.body ?? {}).kind ?? "") === "logged" ? "logged" : "bare";
+  try { res.json(await closeFollowUp(row.id, kind)); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * Undo a completion. Same permission as closing one — if you could tick it you can untick it, and
+ * anything stricter would leave a mis-click standing because the person who made it has to go and
+ * find somebody senior.
+ */
+app.post("/api/interactions/:id/reopen", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  const row = await prisma.interaction.findUnique({ where: { id: req.params.id } });
+  if (!row) return res.status(404).json({ error: "Entry not found" });
+  const scoped = await salesCompanyIds(req as any);
+  if (scoped && !scoped.includes(row.companyId)) return res.status(403).json({ error: "Not one of your clients" });
+  try { res.json(await reopenFollowUp(row.id)); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
