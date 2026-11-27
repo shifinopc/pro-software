@@ -17651,14 +17651,15 @@
             <span style="display:flex; align-items:center; gap:5px;"><span style="width:12px; height:12px; border-radius:4px; background:#B7791F;"></span>exception for this person</span>
             <span style="display:flex; align-items:center; gap:5px;"><span style="width:12px; height:12px; border-radius:4px; background:#F3F1F7; border:1px solid #EDEBF2;"></span>no such action here</span>
           </div>
-          <div style="margin-top:9px; font-size:10px; color:#A9A6B4; line-height:1.5;">Saved as you click, and only the differences are stored — so widening a role later still reaches this person. No role is created and nobody else is affected.</div>
+          <div style="margin-top:9px; font-size:10px; color:#A9A6B4; line-height:1.5;">Nothing is saved until you press Save &amp; close. Only the differences are stored, so widening a role later still reaches this person — no role is created and nobody else is affected.</div>
         </div>
         <div class="fm-foot" style="justify-content:space-between; align-items:center;">
           <sc-if value="{{ upHasAny }}" hint-placeholder-val="{{ false }}">
             <span onClick="{{ upReset }}" style="font-size:11px; font-weight:700; color:#B7791F; background:#FFF6E5; padding:9px 12px; border-radius:99px; cursor:pointer;" style-hover="background:#FBEBCD;">Clear all exceptions</span>
           </sc-if>
           <span style="flex:1;"></span>
-          <span onClick="{{ upClose }}" style="font-size:12px; font-weight:700; color:#fff; background:#1A1523; padding:10px 17px; border-radius:99px; cursor:pointer;">Done</span>
+          <span onClick="{{ upClose }}" style="font-size:11px; font-weight:600; color:#6F6C7A; padding:10px 12px; border-radius:99px; cursor:pointer; margin-right:4px;" style-hover="background:#F3EFFA;">Cancel</span>
+          <span onClick="{{ upDone }}" style="font-size:12px; font-weight:700; color:#fff; background:#1A1523; padding:10px 17px; border-radius:99px; cursor:pointer;" style-hover="background:#2B2438;">{{ upDoneLabel }}</span>
         </div>
       </div>
     </div>
@@ -38692,7 +38693,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const tok9 = localStorage.getItem('stimespro:token');
           fetch((this._apiBase || 'http://localhost:4100') + '/api/users/' + u.id + '/permissions', { headers: tok9 ? { Authorization: 'Bearer ' + tok9 } : {} })
             .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
-            .then(({ ok, j9 }) => ok && j9.id ? this.setState({ upData: j9 }) : this.setState({ upErr: (j9 && j9.error) || 'Could not load their permissions' }))
+            .then(({ ok, j9 }) => ok && j9.id
+              // `loaded` is a frozen copy of what the server had. `overrides` is the live object
+              // the cells mutate, so comparing the two is what "has anything changed" means.
+              ? this.setState({ upData: { ...j9, loaded: JSON.parse(JSON.stringify(j9.overrides || {})) } })
+              : this.setState({ upErr: (j9 && j9.error) || 'Could not load their permissions' }))
             .catch(() => this.setState({ upErr: 'Server unreachable' }));
         },
         del: () => this._userDelete && this._userDelete(u.id, u.name),
@@ -38881,21 +38886,39 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         const mods9 = (api9 && api9.modules) || [];
         const acts9 = (api9 && api9.actions) || ['View', 'Create', 'Edit', 'Approve', 'Delete', 'Export'];
         const vocab9 = (api9 && api9.moduleActions) || null;
-        const save9 = (next9) => {
-          clearTimeout(this._upT);
-          this._upT = setTimeout(() => {
-            const tok9 = localStorage.getItem('stimespro:token');
-            fetch((this._apiBase || 'http://localhost:4100') + '/api/users/' + open9.id + '/permissions', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
-              body: JSON.stringify(next9),
+        /**
+         * SAVED WHEN DONE IS PRESSED, not while somebody is still deciding.
+         *
+         * It used to go out on a debounce after every tick, which meant a grid half-way through
+         * being changed was already the truth on the server — and there was no way to change your
+         * mind. One press, one write, one audit line.
+         */
+        const save9 = () => {
+          const tok9 = localStorage.getItem('stimespro:token');
+          this.setState({ upSaving: true, upErr: '' });
+          return fetch((this._apiBase || 'http://localhost:4100') + '/api/users/' + open9.id + '/permissions', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...(tok9 ? { Authorization: 'Bearer ' + tok9 } : {}) },
+            body: JSON.stringify(over9),
+          })
+            .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+            .then(({ ok, j9 }) => {
+              if (!ok) { this.setState({ upSaving: false, upErr: (j9 && j9.error) || 'Could not save' }); return false; }
+              this.setState({ upOpen: null, upData: null, upSaving: false, upErr: '' });
+              this.toast('Permissions saved for ' + (open9.name || 'them'));
+              return true;
             })
-              .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
-              .then(({ ok, j9 }) => { if (!ok) this.setState({ upErr: (j9 && j9.error) || 'Could not save' }); })
-              .catch(() => this.setState({ upErr: 'Server unreachable — nothing was saved' }));
-          }, 500);
+            .catch(() => { this.setState({ upSaving: false, upErr: 'Server unreachable — nothing was saved' }); return false; });
         };
         const count9 = Object.keys(over9).length;
+        /**
+         * "HAS ANYTHING CHANGED" IS ASKED WHEN THE BUTTON IS PRESSED, never at render time.
+         *
+         * The cells mutate `over9` without re-rendering — that is what made them instant — so a
+         * flag computed up here would be stale from the first click onwards, and Done would close
+         * without saving the very changes it was pressed for. It is a function, called late.
+         */
+        const dirtyNow9 = () => !!data9 && JSON.stringify(over9) !== JSON.stringify(data9.loaded || {});
         return {
           upShow: !!open9,
           upName: (open9 && open9.name) || '',
@@ -38909,16 +38932,32 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           upHasAny: count9 > 0,
           // Everything back to what the roles say, in one press — the way out of a grid somebody
           // has been clicking around in.
-          // The one action that DOES re-render, and should: it changes every cell at once, which
-          // is the case a full redraw is for.
+          // The one action that re-renders, and should: it changes every cell at once, which is
+          // what a full redraw is for. Still only on the screen until Done.
           upReset: () => {
             if (!data9) return;
             this.setState({ upData: { ...data9, overrides: {} }, upErr: '' });
-            save9({});
           },
-          // Closing reconciles the subtitle and anything else reading the count, once, when the
-          // cost cannot be felt.
-          upClose: () => this.setState({ upOpen: null, upData: null, upErr: '' }),
+          upSaving: !!this.state.upSaving,
+          // One label whatever the state: it always ends the dialog, and it writes when there is
+          // something to write. A label that changed would need a render to change it.
+          upDoneLabel: this.state.upSaving ? 'Saving…' : 'Save & close',
+          upDone: () => {
+            if (this.state.upSaving) return;
+            if (!dirtyNow9()) return this.setState({ upOpen: null, upData: null, upErr: '' });
+            save9();
+          },
+          /**
+           * Closing with the X or the backdrop THROWS THE CHANGES AWAY, and says so first.
+           *
+           * Without the ask it is the same gesture as Done with the opposite result, which is how
+           * somebody loses ten minutes of ticking to a mis-click on the overlay.
+           */
+          upClose: () => {
+            if (!dirtyNow9()) return this.setState({ upOpen: null, upData: null, upErr: '' });
+            this._confirm('Discard these changes?', { body: 'Nothing has been saved yet. Press Save & close instead to keep them.', danger: true, okLabel: 'Discard' })
+              .then(ok9 => { if (ok9) this.setState({ upOpen: null, upData: null, upErr: '' }); });
+          },
           upRows: !data9 ? [] : mods9.map(m9 => ({
             module: m9,
             cells: acts9.map(a9 => {
@@ -38988,7 +39027,6 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                       ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>'
                       : '';
                   }
-                  save9({ ...over9 });
                 },
               };
             }),
