@@ -6000,6 +6000,16 @@
                           <span style="margin-left:auto; font-size:8.5px; color:#B4AFC4; white-space:nowrap;">{{ d.closesLabel }}</span>
                         </sc-if>
                       </div>
+                      <!-- HOW LONG NOBODY HAS SPOKEN TO THEM. The health stripe already knows —
+                           "no contact for 34 days" is one of its reasons — but a reason inside a
+                           tooltip is read by nobody scanning forty cards. Shown only once the
+                           silence is worth remarking on, so a board of active deals stays clean. -->
+                      <sc-if value="{{ d.quietShow }}" hint-placeholder-val="{{ false }}">
+                        <div title="{{ d.quietTitle }}" style="display:inline-flex; align-items:center; gap:4px; margin-top:6px; font-size:8.5px; font-weight:700; color:{{ d.quietColor }}; background:{{ d.quietBg }}; padding:2px 8px; border-radius:99px;">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+                          {{ d.quietLabel }}
+                        </div>
+                      </sc-if>
                       <!-- The odds, drawn rather than written. Five cards reading "40%" is a column
                            nobody reads twice; five bars of different lengths is read at a glance.
                            Grey and empty when a deal carries no odds, which is its own answer. -->
@@ -43907,6 +43917,43 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               hlShow: !!(d.health && d.health.severity > 0),
               hlWhy: (d.health && d.health.reasons.length) ? d.health.reasons.join(' · ') : 'nothing outstanding',
               hlDays: d.health && d.health.daysInStage != null ? d.health.daysInStage + 'd' : '—',
+              /**
+               * SILENCE, ON THE FACE OF THE CARD.
+               *
+               * `lastContactAt` comes with every deal already — the server reads it for the health
+               * verdict — and it was only ever visible inside that verdict's tooltip. A reason
+               * nobody hovers is a reason nobody acts on.
+               *
+               * Shown from a FORTNIGHT, not from day one: a board where every card wears a chip
+               * has told the reader nothing. Amber at two weeks and red at a month, the same
+               * thresholds the follow-up queue uses, so "going quiet" means one thing in this
+               * product rather than two.
+               */
+              ...(() => {
+                const at9 = d.lastContactAt ? String(d.lastContactAt).slice(0, 10) : '';
+                // Today computed here rather than read from `_todayISO9`: that const is declared
+                // with another screen's block further down, and a const read before its
+                // declaration blanks the whole console. This shaper is called from several
+                // places, so it must not depend on where it sits in the file.
+                const today9 = new Date().toISOString().slice(0, 10);
+                const days9 = at9
+                  ? Math.max(0, Math.round((Date.parse(today9) - Date.parse(at9)) / 86400000))
+                  : null;
+                // Never contacted at all is its own fact, and a worse one than a long gap — it is
+                // not folded into a number that would read as "a very long time".
+                const never9 = !at9;
+                const show9 = never9 || (days9 != null && days9 >= 14);
+                const hot9 = never9 || (days9 != null && days9 >= 30);
+                return {
+                  quietShow: show9,
+                  quietLabel: never9 ? 'never contacted' : 'quiet ' + days9 + 'd',
+                  quietTitle: never9
+                    ? 'Nothing has ever been logged against this client'
+                    : 'Last contact ' + at9,
+                  quietColor: hot9 ? '#C0353A' : '#B7791F',
+                  quietBg: hot9 ? '#FEECEC' : '#FFF6E5',
+                };
+              })(),
               // ── What the board's card shows, beyond what the list and table need ──
               // The company is the headline and the deal is the subtitle, which is the design's
               // ordering and the right way round: a board is scanned for WHO, and half these deals
