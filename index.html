@@ -5857,9 +5857,15 @@
                    are asked in the same breath and the design keeps them in one pill with a hairline
                    between — two separate pills read as two unrelated filters. -->
               <div style="display:flex; gap:2px; background:#F3EFFA; border-radius:99px; padding:3px; width:fit-content;">
-                <span onClick="{{ pipPickMine }}" style="font-size:11px; font-weight:600; color:{{ pipMineColor }}; background:{{ pipMineBg }}; padding:5px 10px; border-radius:99px; cursor:pointer;">My pipeline</span>
-                <span onClick="{{ pipPickAll }}" style="font-size:11px; font-weight:600; color:{{ pipAllColor }}; background:{{ pipAllBg }}; padding:5px 10px; border-radius:99px; cursor:pointer;">Whole team</span>
-                <span style="width:1px; background:#DDD9E6; margin:2px 6px;"></span>
+                <!-- WHOSE BOARD is not a question a PRO officer has. The board is clamped to his
+                     own deals, so "Whole team" shows the same cards as "My pipeline" — and the
+                     hairline goes with them, or the pill opens on a divider with nothing before
+                     it. The view switcher after it stays: which view is still his to choose. -->
+                <sc-if value="{{ pipShowScope }}" hint-placeholder-val="{{ true }}">
+                  <span onClick="{{ pipPickMine }}" style="font-size:11px; font-weight:600; color:{{ pipMineColor }}; background:{{ pipMineBg }}; padding:5px 10px; border-radius:99px; cursor:pointer;">My pipeline</span>
+                  <span onClick="{{ pipPickAll }}" style="font-size:11px; font-weight:600; color:{{ pipAllColor }}; background:{{ pipAllBg }}; padding:5px 10px; border-radius:99px; cursor:pointer;">Whole team</span>
+                  <span style="width:1px; background:#DDD9E6; margin:2px 6px;"></span>
+                </sc-if>
                 <sc-for list="{{ pipViews }}" as="v" hint-placeholder-count="3">
                   <span onClick="{{ v.pick }}" style="font-size:11px; font-weight:{{ v.weight }}; color:{{ v.color }}; background:{{ v.bg }}; padding:5px 13px; border-radius:99px; box-shadow:{{ v.shadow }}; cursor:pointer;">{{ v.label }}</span>
                 </sc-for>
@@ -47548,6 +47554,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       pipCanAdd: canWrite && _pipeCols.length > 0,
       // Narrows the board to the caller's own deals. The route already accepts ownerId and clamps
       // it to what the caller may see, so this can only ever be narrower than "whole team".
+      // Same rule as the follow-up queue's scope tabs: a control whose wider setting is not wider
+      // for this role is a promise the server will refuse.
+      pipShowScope: _meRole !== 'pro_officer',
       pipMineColor: this.state.pipMine ? '#fff' : '#6F6C7A',
       pipMineBg: this.state.pipMine ? '#7C00FF' : 'transparent',
       pipAllColor: this.state.pipMine ? '#6F6C7A' : '#fff',
