@@ -21916,6 +21916,39 @@ class Component extends DCLogic {
      * Lands as a DRAFT, deliberately: quoting is not sending, and a document that goes out the
      * moment somebody presses a button on a board is one nobody has read.
      */
+    /**
+     * THE SCHEDULE THIS KIND OF WORK IS SOLD ON, FOUND RATHER THAN RETYPED.
+     *
+     * The firm configures payment terms once, as named sets, and ties a set to the kind of work
+     * through the proposal template: the business-setup template says `appliesTo: ["business
+     * setup"]` and points at "Business setup — 50/30/20". Every piece of that existed and nothing
+     * joined it up — the composer opened with an empty schedule and a picker, so a quotation went
+     * out with no terms unless somebody remembered to apply the set by hand. QT-002 is one: two
+     * fee lines, `milestones: null`, and a client asked for the whole amount on signing.
+     *
+     * Matched on the deal's PRODUCT, which is the only thing at this point that says what is
+     * being sold. Found by the same keywords the proposal picker already matches on, so the terms
+     * and the document a client receives cannot disagree about what this kind of work is.
+     *
+     * A SUGGESTION, NOT A LOCK: it seeds the panel, and the picker beside it still replaces the
+     * lot. No match means an empty schedule, as before — guessing a payment schedule is worse
+     * than asking for one.
+     */
+    this._termsForProduct = (productId9) => {
+      const prods9 = Array.isArray(this.state.productsData) ? this.state.productsData : [];
+      const name9 = String((prods9.find(x9 => x9.id === productId9) || {}).name || '').trim().toLowerCase();
+      if (!name9) return null;
+      const tpls9 = Array.isArray(this.state.propTemplates) ? this.state.propTemplates : [];
+      const hit9 = tpls9.find(t9 => (Array.isArray(t9.appliesTo) ? t9.appliesTo : [])
+        .some(a9 => { const k9 = String(a9 || '').trim().toLowerCase(); return !!k9 && (name9.includes(k9) || k9.includes(name9)); }));
+      const setId9 = hit9 && hit9.termSetId;
+      if (!setId9) return null;
+      const sets9 = ((this.state.payTermSets || {}).sets) || [];
+      const set9 = Array.isArray(sets9) ? sets9.find(x9 => x9 && x9.id === setId9) : null;
+      const rows9 = (set9 && Array.isArray(set9.rows)) ? set9.rows : [];
+      if (!rows9.length) return null;
+      return rows9.map(r9 => [String(r9.label == null ? '' : r9.label), String(r9.pct == null ? '' : r9.pct), String(r9.basis || 'prof')]);
+    };
     this._quoteDeal = (id, title, thenMoveStageId) => {
       const cols = ((this.state.pipelineData || {}).columns) || [];
       let deal = null;
@@ -21935,6 +21968,8 @@ class Component extends DCLogic {
           // they were being quoted for.
           qcLines: [[deal.title || title || '', '1', price9]],
           qcDealId: id,
+          // Seeded from what this kind of work is sold on — see _termsForProduct.
+          ...(this._termsForProduct(deal.productId) ? { qcTerms: this._termsForProduct(deal.productId) } : {}),
           // The move this quotation was opened in order to make possible. Retried after saving —
           // never assumed, because the stage may ask for more than the quotation.
           qcThenMove: thenMoveStageId || null,
