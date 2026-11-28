@@ -725,6 +725,48 @@ export async function runFrontier(inst: any, g: Graph, frontier: string[]) {
       // client was never billed, with nothing on screen to say a step had been dropped.
       // Renaming the stored type would have quietly rewritten templates already saved; accepting every
       // spelling fixes the existing ones too.
+      /**
+       * THE PAYMENT STAGE THE TERMS TIE TO THIS MOMENT.
+       *
+       * The quotation the client signed says "100% of Government Fees upon approval of the MISA
+       * Licence". The schedule has always known that and nobody could act on it: stages were
+       * raised by hand because they fall due when something happens in the real world — and a
+       * step called "MISA licence approved" IS that thing happening.
+       *
+       * `moment` is the stage wording to bill, in the firm s own words. Matched the way a moment
+       * is grouped everywhere else, so the 30% of professional fees and the 100% of government
+       * fees that share it arrive as ONE invoice, as they would by hand.
+       *
+       * A DRAFT, like every other invoice here. The engine decides WHEN the money is due; a
+       * person still decides it is right before the client ever sees it.
+       *
+       * Never fatal and never twice: the run carries on if there is no quotation, no matching
+       * stage, or it has already been billed, and says which in the log.
+       */
+      case "stage_invoice": {
+        const c = node.config ?? {};
+        const moment = String(c.moment ?? node.label ?? "").trim();
+        const qid = String(vars.quotationId ?? "").trim();
+        try {
+          if (!qid) await log("stage_invoice_skipped", nodeId, "this run is not linked to a quotation");
+          else if (!moment) await log("stage_invoice_skipped", nodeId, "the step does not say which payment moment to bill");
+          else {
+            const { raiseMomentInvoice } = await import("./stageinvoice.js");
+            const out = await raiseMomentInvoice(qid, moment);
+            if (out.raised) {
+              await log("stage_invoice", nodeId, `${out.raised.number} · ${out.quotation} · ${moment} · SAR ${(Number(out.raised.totalMinor ?? 0) / 100).toFixed(2)}`);
+              logActivity({ type: "finance", message: `Draft invoice ${out.raised.number} raised by ${inst.title} — ${moment}` });
+            } else {
+              await log("stage_invoice_skipped", nodeId, String(out.reason ?? "nothing to bill"));
+            }
+          }
+        } catch (e: any) {
+          await log("stage_invoice_failed", nodeId, String(e?.message ?? e));
+        }
+        queue.push(...nextTargets(g, nodeId));
+        break;
+      }
+
       case "charge_fee":
       case "invoice":
       case "create_invoice":
@@ -2260,7 +2302,23 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
         for (const cap of caps1) {
           if (String(cap?.purpose ?? "")) continue;
           const raw = (opts.variables ?? {})[cap.var];
-          if (raw !== undefined && raw !== null && String(raw).trim() !== "") custom[cap.fieldId || cap.var] = raw;
+          if (raw === undefined || raw === null) continue;
+          /**
+           * THE DOCUMENT ITSELF, not a note about it.
+           *
+           * A step could record a licence number and an expiry against the client s document and
+           * leave the scan on the workflow step, where only somebody reading that run would ever
+           * find it. The viewer reads a document s file from `customData.filePath`, so an
+           * attachment captured here lands there and the licence opens from Compliance like any
+           * other document. The first file wins: `filePath` holds one, and these fields are
+           * capped at one.
+           */
+          if (Array.isArray(raw)) {
+            const first = raw.find((f: any) => f && typeof f.path === "string" && f.path.startsWith("/"));
+            if (first) { custom.filePath = first.path; if (first.name) custom.filePathName = first.name; }
+            continue;
+          }
+          if (String(raw).trim() !== "") custom[cap.fieldId || cap.var] = raw;
         }
 
         const lead = dt1?.leadDays ?? 30;
