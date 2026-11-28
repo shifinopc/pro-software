@@ -3488,6 +3488,19 @@ export function stepChain(g: Graph, fromNodeId: string): Node[] {
     const a = (cur.config ?? {}) as any, b = (next.config ?? {}) as any;
     if (String(b.assigneeRole ?? "") !== String(a.assigneeRole ?? "")) break;
     if (String(b.assignee ?? "") !== String(a.assignee ?? "")) break;
+    /**
+     * A STEP CAN ASK FOR A SCREEN OF ITS OWN.
+     *
+     * Chaining is right for four short steps that are one visit to one file. It is wrong for a
+     * step that is a form in itself: the acquisition KYC asks for every owner, manager and
+     * beneficial owner, and folding it under the partners step gave the officer one sheet with
+     * two headings, two sets of required rows, and a Complete button that refused until both were
+     * done. The step before it could no longer be finished on its own.
+     *
+     * Set on the NODE, so it is a property of that piece of work rather than a rule about
+     * workflows in general — every other chain in the product is unaffected.
+     */
+    if ((b as any).ownScreen) break;
     // DOCUMENTS NO LONGER END IT. They used to, because a document is received against a task and
     // the later steps' tasks do not exist yet — so there was nowhere to put a tick. The form holds
     // them instead and `complete-chain` writes each step's ticks onto its task at the moment the
