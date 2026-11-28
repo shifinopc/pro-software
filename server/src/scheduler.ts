@@ -14,6 +14,7 @@ import { mailHealth, pruneMailLog } from "./mailer.js";
 import { triggerRenewals, checkWorkforceBands, checkFollowUps, raiseRenewalDeals, chaseQuotations, checkIdleLeads, escalateSla, watchStatutory, renewSubscriptions, resumeParkedTasks, chaseOverdueInvoices, remindUnapprovedDrafts, assignOrphanTasks, startPeriodicRuns
 } from "./jobs.js";
 import { resumeDueDelays } from "./workflow.js";
+import { sweepPaidGates } from "./advance-gate.js";
 import { captureWorkforceSnapshots } from "./workforce.js";
 import { businessToday } from "./dates.js";
 
@@ -219,6 +220,17 @@ async function tickOnce(source: "boot" | "timer" | "manual" = "timer") {
       action: "cron.statutory_breached",
       target: `${statutory.breached} deadline(s) passed`,
       detail: [`source=${source}`, statutory.raised.join("; ")].filter(Boolean).join(" · ").slice(0, 900),
+    });
+  }
+
+  // A gate whose money arrived before the gate asked to be opened by money. The receipt is the
+  // real trigger; this catches a template edited mid-run — see advance-gate.ts.
+  const paidGates = await safely("paidgates", sweepPaidGates);
+  if (Array.isArray(paidGates) && paidGates.length) {
+    await logAudit({
+      action: "cron.gates_released",
+      target: `${paidGates.length} gate(s) opened by payments already received`,
+      detail: [`source=${source}`, paidGates.map(g => g.title).join("; ")].filter(Boolean).join(" · ").slice(0, 900),
     });
   }
 

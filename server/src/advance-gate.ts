@@ -96,3 +96,45 @@ export async function releaseAdvanceGates(invoiceId: string, receiptNumber?: str
     return out;
   }
 }
+
+/**
+ * THE SAME RELEASE, ASKED AGAIN LATER.
+ *
+ * `releaseAdvanceGates` fires on the receipt, which is the right trigger and the only one — until
+ * the gate did not ask to be settled by money AT THE MOMENT the money arrived. That is not a
+ * hypothetical: a template edited while a case is running, a step inserted today and paid an hour
+ * ago, an invoice marked paid by some other route. The payment never comes again, so the gate sits
+ * open for ever with nothing left to establish and a person eventually clicks it.
+ *
+ * So the tick asks once more. Cheap: it does nothing at all unless an approval is actually waiting,
+ * and it defers to the same function for the decision, so there is one rule about when money opens
+ * a gate rather than two that can disagree.
+ */
+export async function sweepPaidGates(): Promise<GateRelease[]> {
+  const out: GateRelease[] = [];
+  try {
+    const waiting = await prisma.workflowTask.findMany({
+      where: { status: "active", nodeType: "approval" },
+      select: { instanceId: true },
+    });
+    if (!waiting.length) return out;
+    const instanceIds = [...new Set(waiting.map(w => w.instanceId))];
+    // The quotation each case came from — the same link delivery wrote, and the same one
+    // releaseAdvanceGates walks in the other direction.
+    const links = await prisma.task.findMany({
+      where: { workflowInstanceId: { in: instanceIds }, NOT: { quotationId: null } },
+      select: { quotationId: true },
+    });
+    const quotationIds = [...new Set(links.map(l => l.quotationId!).filter(Boolean))];
+    if (!quotationIds.length) return out;
+    const invoices = await prisma.invoice.findMany({
+      where: { quotationId: { in: quotationIds }, status: "paid" },
+      select: { id: true },
+    });
+    for (const inv of invoices) out.push(...await releaseAdvanceGates(inv.id, null, null));
+    return out;
+  } catch (e) {
+    console.error("[advance-gate] sweep failed:", (e as any)?.message ?? e);
+    return out;
+  }
+}
