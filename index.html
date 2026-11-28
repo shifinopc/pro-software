@@ -21655,6 +21655,24 @@ class Component extends DCLogic {
       const ct = (Array.isArray(this.state.contactsData) ? this.state.contactsData : [])
         .filter(c => c.companyId === (deal && deal.companyId) && !c.archived)
         .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))[0] || null;
+      /**
+       * A CONTACT FIELD HAS TO LAND ON A PERSON, and a client with nobody on record has no person
+       * for it to land on. Enquiry asks for "a way to contact them" and not for a name, so on a
+       * client with no contacts the dialog offered one box, and saving it refused: a phone number
+       * on its own cannot create a contact. The dialog could not be completed by any means — worse
+       * than the refusal it exists to answer.
+       *
+       * So when there is no contact yet, the name is asked for beside whatever was blocked. Added
+       * to the blocker list rather than special-cased in the markup, so the row renders, prefills
+       * and saves through the paths every other field already uses.
+       */
+      const want = blockers.slice();
+      if (!ct
+        && want.some(b => ((this._FIX_FIELDS[b.field] || {}).to === 'contact'))
+        && !want.some(b => b.field === 'contact')) {
+        want.unshift({ key: 'contactName', field: 'contact', label: 'Who you are dealing with', source: 'field' });
+      }
+      blockers = want;
       const vals = {};
       for (const b of blockers) {
         const f = this._FIX_FIELDS[b.field];
@@ -47868,10 +47886,23 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // again by the rule that opened this dialog.
         const _fxCanSave9 = ((_fx9 && _fx9.blockers) || [])
           .some(b9 => !this._FIX_ACTIONS[b9.field] && !!this._FIX_FIELDS[b9.field]);
+        /**
+         * TYPING MUST NOT RE-RENDER THE CONSOLE.
+         *
+         * This used to setState per keystroke, and one setState is one pass over a renderVals of
+         * ~25,000 lines — so the box ran a frame or two behind the keyboard while every other
+         * field on the screen felt instant. The input is a real input: it keeps the text on its
+         * own, and the value is read back out of this same object at save time, so writing into
+         * it without a render loses nothing.
+         *
+         * The one render left is clearing a refusal that is on screen — once, not per character.
+         */
         const _fxSet9 = (field9) => (e) => {
           const cur9 = this.state.fixMissing;
           if (!cur9) return;
-          this.setState({ fixMissing: { ...cur9, vals: { ...(cur9.vals || {}), [field9]: e.target.value } }, fixErr: '' });
+          if (!cur9.vals) cur9.vals = {};
+          cur9.vals[field9] = e.target.value;
+          if (this.state.fixErr) this.setState({ fixErr: '' });
         };
 
         return {
