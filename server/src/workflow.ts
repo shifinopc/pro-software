@@ -3005,6 +3005,13 @@ R.get("/my-work", requireAuth, requireStaff, async (req, res) => {
     const subject = String(v.applicant ?? v.employee ?? v.person ?? "").trim() || null;
     return { ...t, outcomes: outcomesFor(t),
              instance: inst ? { id: inst.id, title: inst.title, clientName: inst.clientName, subject,
+                                // THE RUN'S OWN ANSWERS, not just the one name read out of them.
+                                // A capture can say `fromVar` and open already filled with what an
+                                // earlier step recorded — the approved trade name, which MISA
+                                // compares against the reservation character by character. This
+                                // route read `variables` to pull out `subject` and then dropped the
+                                // rest, so every such box opened empty and the officer retyped it.
+                                variables: v,
                                 templateId: inst.templateId, workflow: inst.template?.name ?? null } : undefined };
   }));
 });
