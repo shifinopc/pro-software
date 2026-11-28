@@ -1311,6 +1311,32 @@ export async function runFrontier(inst: any, g: Graph, frontier: string[]) {
             checklistState: await preTickFromRequest(vars.requestId, items),
             requireVerification: !!c.requireVerification,
             captures: await resolveCaptures(c, vars),
+            /**
+             * A TABLE THAT OPENS WITH WHAT THE CLIENT ALREADY HAS.
+             *
+             * The credentials step asks for every portal account created during the setup — and
+             * MISA was created three steps earlier, by the step that applied for the licence.
+             * Asking for it again invites a second row for one account, or a password typed from
+             * memory that does not match the one in the vault.
+             *
+             * So the table opens with the logins the client already holds: portal, username and
+             * expiry, and NO PASSWORD — a password is never sent back out of the vault to a form.
+             * A row left with an empty password is skipped on completion, so what is already
+             * saved stays exactly as it is unless somebody deliberately types a new one.
+             */
+            draftAnswers: await (async () => {
+              const seedVar = String((c as any).seedCredentials ?? "").trim();
+              if (!seedVar || !inst.companyId) return undefined;
+              try {
+                const held = await prisma.siteCredential.findMany({
+                  where: { companyId: inst.companyId },
+                  select: { label: true, username: true, nafathId: true, expiryDate: true },
+                  orderBy: { label: "asc" },
+                });
+                if (!held.length) return undefined;
+                return { [seedVar]: held.map(h => ({ portal: h.label, username: h.username || h.nafathId || "", password: "", expiry: h.expiryDate || "" })) } as any;
+              } catch { return undefined; }
+            })(),
             createdAt: nowISO(),
             // The clocks the law is running on this step, alongside the one this office set itself.
             // Computed from what the run knows NOW; a step whose starting date has not been captured
@@ -2251,9 +2277,31 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
    * run log rather than refusing work that has actually happened.
    */
   try {
-    const credVar = String((getNode(g, task.nodeId)?.config as any)?.writesCredentials ?? "").trim();
-    const rows = credVar ? (opts.variables ?? {})[credVar] : null;
-    if (credVar && Array.isArray(rows) && inst.companyId) {
+    const cfg9: any = getNode(g, task.nodeId)?.config ?? {};
+    const credVar = String(cfg9.writesCredentials ?? "").trim();
+    /**
+     * ONE NAMED LOGIN, from a step that is not a table.
+     *
+     * The MISA step creates the MISA portal account while it is applying for the licence — one
+     * account, asked for in plain fields beside the application details rather than in a table of
+     * one row. `writesCredential` names which fields hold it, and it lands in the same vault the
+     * table writes to, so the credentials step later opens with it already there.
+     */
+    const one9 = cfg9.writesCredential;
+    const supplied9 = (opts.variables ?? {}) as Record<string, any>;
+    const rows = credVar
+      ? supplied9[credVar]
+      : (one9 && one9.label
+          ? [{
+              portal: String(one9.label),
+              username: String(supplied9[String(one9.nafathVar ?? "")] ?? "").trim() === "Yes"
+                ? supplied9[String(one9.nafathIdVar ?? "")]
+                : supplied9[String(one9.userVar ?? "")],
+              password: supplied9[String(one9.passVar ?? "")],
+              expiry: one9.expiryVar ? supplied9[String(one9.expiryVar)] : "",
+            }]
+          : null);
+    if ((credVar || one9) && Array.isArray(rows) && inst.companyId) {
       const { encrypt } = await import("./auth.js");
       const { portalUrl, isNafath } = await import("./portals.js");
       let wrote = 0, updated = 0;
