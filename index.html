@@ -41875,7 +41875,16 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // hoisted into a generated class and stops re-evaluating, so a bound border would freeze
           // at whatever it was on first render. An element that appears and disappears cannot.
           ruleErr: _ruleFields.indexOf(c.var) >= 0,
-          isSelect: c.type === 'select', isDate: c.type === 'date', isMoney: c.type === 'money',
+          /**
+           * A FIELD WITH CHOICES IS A CHOICE, whether or not it says `type: select`.
+           *
+           * One list that feeds this drawer infers the type from `options` and another does not,
+           * so the same step drew Paid / Unpaid as two chips from My Tasks and as an empty text
+           * box from the Task List — the officer typing into it would have put free text where a
+           * rule reads an exact word. Decided here instead, where every screen passes through.
+           */
+          isSelect: c.type === 'select' || (!c.type && !!c.options),
+          isDate: c.type === 'date', isMoney: c.type === 'money',
           // A capture declared `textarea` rendered as a one-line box: the builder has offered the
           // type since it was written and this form never looked for it, so "what was agreed on
           // the call" was a field you could not see the start of once you had typed a sentence.
@@ -41884,7 +41893,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           isFiles: c.type === 'files',
           // A capture carried in from an earlier step can be LOCKED: shown as the record it is,
           // not offered as a question this step gets to answer again.
-          isText: !c.readOnly && ['select', 'date', 'money', 'textarea', 'rows', 'files'].indexOf(String(c.type)) < 0,
+          isText: !c.readOnly && !c.options && ['select', 'date', 'money', 'textarea', 'rows', 'files'].indexOf(String(c.type)) < 0,
           isLocked: !!c.readOnly,
           lockNote: c.fromVar ? 'from an earlier step' : 'not editable here',
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
