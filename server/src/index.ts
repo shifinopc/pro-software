@@ -4803,6 +4803,10 @@ app.post("/api/invoices/:id/correct", requireAuth, requireStaff, requireWriteRol
           // four remaining stages could never be raised again. The /stages view had the same
           // reading, showing the correction as the whole bill.
           milestoneIndex: inv.milestoneIndex, milestoneLabel: inv.milestoneLabel,
+          // AND EVERY OTHER INDEX IT COVERED. A merged moment is one invoice over several
+          // stages; carrying only the lead one left the rest looking unbilled on the
+          // replacement, and raisable a second time now that a void no longer holds them.
+          milestoneIndexes: (inv as any).milestoneIndexes ?? undefined,
           status: "draft",
           revisesId: inv.id,
         },
@@ -6083,8 +6087,19 @@ app.get("/api/quotations/:id/stages", requireAuth, requireStaff, async (req, res
   if (!q) return res.status(404).json({ error: "Quotation not found" });
   const totalMinor = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
   const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
+  /**
+   * A VOIDED INVOICE DOES NOT HOLD ITS STAGE.
+   *
+   * Voiding says the bill never happened — the client owes nothing and nothing was delivered
+   * against it. Counting it as raised left the stage permanently spent: the schedule showed the
+   * cancelled number beside it and offered no way to bill that money again, so the work could only
+   * be invoiced by hand, off the schedule, with nothing linking it to the quotation.
+   *
+   * A CORRECTION is not this case. It voids and replaces in one act, and the replacement carries
+   * the same indexes (above), so the stage stays covered by the live document.
+   */
   const raised = await prisma.invoice.findMany({
-    where: { quotationId: q.id },
+    where: { quotationId: q.id, status: { not: "void" } },
     select: { id: true, number: true, status: true, milestoneIndex: true, milestoneIndexes: true, totalMinor: true, amount: true },
   });
   // EVERY index the invoice covers, so both halves of a merged moment show the bill that paid for
@@ -6120,7 +6135,8 @@ app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWr
   const stages = planStages((q.items as any) ?? [], (q.milestones as any) ?? [], totalMinor);
   if (!stages.length) return res.status(409).json({ error: `${q.number} has no payment schedule — it bills as one invoice` });
 
-  const raised = await prisma.invoice.findMany({ where: { quotationId: q.id }, select: { milestoneIndex: true, milestoneIndexes: true, number: true } });
+  // Voided bills never happened — see the /stages view for why they must not hold a stage.
+  const raised = await prisma.invoice.findMany({ where: { quotationId: q.id, status: { not: "void" } }, select: { milestoneIndex: true, milestoneIndexes: true, number: true } });
   if (raised.some(i => i.milestoneIndex == null))
     return res.status(409).json({ error: `${q.number} was already invoiced in full as ${raised.find(i => i.milestoneIndex == null)!.number}` });
   const done = new Set<number>(raised.flatMap(i => coveredStages(i as any)));
@@ -6187,7 +6203,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
   const qGross = q.totalMinor != null ? Number(q.totalMinor) : Math.round((Number(q.amount) || 0) * 100);
   if (!(qGross > 0)) return res.status(400).json({ error: "That quotation has no amount to invoice" });
   // Belt and braces: the status check above can't see an invoice raised before `invoiced` was set.
-  const already = await prisma.invoice.findFirst({ where: { quotationId: q.id } });
+  const already = await prisma.invoice.findFirst({ where: { quotationId: q.id, status: { not: "void" } } });
   if (already) return res.status(409).json({ error: `${q.number} was already invoiced as ${already.number}` });
 
   /**
