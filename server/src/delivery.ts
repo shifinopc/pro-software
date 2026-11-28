@@ -258,6 +258,19 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
               // "Acquisition in India; Company Formation × 2 in India". Read, not enforced — the
               // officer decides what a structure needs; this says what was sold.
               ...(parts.length ? { structure: parts.join("; ") } : {}),
+              /**
+               * TRADING OR SERVICE — the one fact the rest of the case turns on.
+               *
+               * A setup that INCORPORATES companies abroad is a trading structure: the parent sits
+               * over shell companies, and the officer has to collect each shell's registration and
+               * constitution. A setup that only ACQUIRES a parent is service-based and has no
+               * shells at all. Both arrive as the same workflow, and until now the only record of
+               * which was the sentence in `structure` — readable by a person, matched by nothing.
+               *
+               * Derived from the lines, where the answer already is: the quotation said whether it
+               * sold a formation. A step can then ask for the shells only when there are some.
+               */
+              ...(parts.length ? { setupKind: parts.some(x => /formation/i.test(x)) ? "trading" : "service" } : {}),
             },
             // `engineVariables`, NOT `variables`: callerVariables() drops every key beginning with
             // an underscore, because those are the engine's own. Passed as caller variables these
