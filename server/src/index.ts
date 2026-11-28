@@ -4715,6 +4715,29 @@ app.post("/api/invoices/:id/void", requireAuth, requireStaff, requireWriteRole, 
   }
   // Stop it chasing: the ladder rungs and any arrangement are meaningless once it's cancelled.
   await prisma.notification.deleteMany({ where: { dedupeKey: { startsWith: `dunning:${inv.id}:` } } });
+
+  /**
+   * AND THE QUOTATION IS NOT "INVOICED" ANY MORE.
+   *
+   * Voiding the only bill raised from a quotation left it flagged invoiced with nothing invoiced:
+   * the badge said one thing, the Invoiced column said "Not invoiced", and both controls that
+   * could bill it were hidden — Invoice because the status said it was done, and the per-stage
+   * Raise because it only appears once a stage has been raised. The work could then only be
+   * billed by hand, off the schedule.
+   *
+   * Back to `accepted`, never to `sent`: the client did accept it, and `sent` is what makes
+   * /convert run the delivery, which already ran when the cancelled invoice was raised.
+   */
+  if (inv.quotationId) {
+    const live = await prisma.invoice.count({ where: { quotationId: inv.quotationId, status: { not: "void" }, id: { not: inv.id } } });
+    if (!live) {
+      const q = await prisma.quotation.findUnique({ where: { id: inv.quotationId }, select: { status: true } });
+      if (q && String(q.status).toLowerCase() === "invoiced") {
+        await prisma.quotation.update({ where: { id: inv.quotationId }, data: { status: "accepted" } });
+        await recordQuotationStatus(inv.quotationId, "accepted", a?.email ?? a?.sub ?? "Staff", "invoiced");
+      }
+    }
+  }
   logActivity({ type: "finance", message: `Invoice ${inv.number} voided — ${reason}`, user: me?.name ?? "Staff" });
   await logAudit({ action: "invoice.void", actorId: a.sub, target: inv.id, detail: `${inv.number} · ${inv.currency} ${inv.amount} · ${reason}` });
   res.json({ invoice, addonRemoved });
