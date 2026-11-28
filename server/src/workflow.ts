@@ -2232,6 +2232,61 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
     });
   }
 
+  /**
+   * THE LOGINS THIS STEP CREATED, INTO THE CLIENT'S VAULT.
+   *
+   * A setup ends with a dozen government accounts, and they were typed into the credential screen
+   * afterwards — by whoever remembered, from whatever they could still find. The step that creates
+   * them is the only moment every one of them is in front of somebody, so that is where they are
+   * recorded.
+   *
+   * ENCRYPTED THE SAME WAY the credential screen encrypts them, because this writes to the same
+   * table the vault reads, and a row the vault cannot decrypt is worse than no row.
+   *
+   * NOT A SECOND COPY. A portal the client already has a login for is updated rather than added
+   * again: two rows called "Qiwa" with different passwords is the thing a vault exists to prevent,
+   * and the newer one is the one the officer just used.
+   *
+   * Never fatal: the step is done either way, and a credential that did not save says so in the
+   * run log rather than refusing work that has actually happened.
+   */
+  try {
+    const credVar = String((getNode(g, task.nodeId)?.config as any)?.writesCredentials ?? "").trim();
+    const rows = credVar ? (opts.variables ?? {})[credVar] : null;
+    if (credVar && Array.isArray(rows) && inst.companyId) {
+      const { encrypt } = await import("./auth.js");
+      const { portalUrl, isNafath } = await import("./portals.js");
+      let wrote = 0, updated = 0;
+      for (const r of rows as any[]) {
+        const label = String(r?.portal ?? "").trim();
+        const secret = String(r?.password ?? "").trim();
+        const who = String(r?.username ?? "").trim();
+        // A row with no portal is an empty line somebody left behind; one with no password is a
+        // note, not a credential, and the vault would show a login nobody can use.
+        if (!label || !secret) continue;
+        const nafath = isNafath(label);
+        const data: any = {
+          label, url: portalUrl(label), username: nafath ? null : (who || null),
+          nafath, nafathId: nafath ? (who || null) : null,
+          password: encrypt(secret),
+          expiryDate: String(r?.expiry ?? "").trim() || null,
+          notes: `Created during ${inst.title}`,
+        };
+        const existing = await prisma.siteCredential.findFirst({ where: { companyId: inst.companyId, label } });
+        if (existing) { await prisma.siteCredential.update({ where: { id: existing.id }, data }); updated++; }
+        else { await prisma.siteCredential.create({ data: { ...data, companyId: inst.companyId } }); wrote++; }
+      }
+      if (wrote || updated) {
+        await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "credentials.saved",
+          detail: `${wrote} added, ${updated} updated in the client's vault`, actor: opts.actor ?? "engine", at: nowISO() } }).catch(() => {});
+      }
+    }
+  } catch (e: any) {
+    await prisma.workflowLog.create({ data: { instanceId: inst.id, nodeId: task.nodeId, action: "credentials.failed",
+      detail: String(e?.message ?? e), actor: "engine", at: nowISO() } }).catch(() => {});
+  }
+
+
   // Write what was captured onto the DOCUMENT this step is about.
   //
   // Run variables are flat, so they cannot hold two documents at once: a passport step and an Iqama
@@ -3560,7 +3615,18 @@ R.post("/tasks/:id/complete", requireAuth, requireStaff, async (req, res) => {
     // already reads. Never let this call omit the id — that is the identity the control runs on.
     const inst = await completeTask(req.params.id, { actor: me?.name ?? a.sub, actorId: a.sub, outcome, checklist, variables });
     await logAudit({ action: "workflow.task_complete", actorId: a.sub, target: `${task.title} (${task.id})`, detail: outcome ?? undefined });
-    res.json(inst);
+    /**
+     * WHAT THE SCREEN SHOULD OFFER NEXT.
+     *
+     * A step that just created a dozen government logins is the one moment somebody wants the
+     * credential sheet — before the officer closes the case and the next person has to go looking.
+     * The step says so in its own config and the response carries it, so the console asks rather
+     * than the officer remembering. Declining changes nothing: the run has already moved on.
+     */
+    const offer = inst ? String((await prisma.workflowTemplate.findUnique({ where: { id: inst.templateId }, select: { graph: true } })
+      .then(t => (t?.graph as any)?.nodes?.find((n: any) => n.id === task.nodeId)?.config?.offerAfterComplete)
+      .catch(() => null)) ?? "") : "";
+    res.json(offer && inst ? { ...(inst as any), offerAfterComplete: offer, companyId: inst.companyId } : inst);
   } catch (e: any) {
     // `fields` rides along only on a cross-field refusal, and the console uses it to mark the boxes
     // in question. Every other failure keeps the plain shape it has always had.
