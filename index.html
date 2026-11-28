@@ -17527,7 +17527,12 @@
                       <sc-for list="{{ c.fileList }}" as="fl" hint-placeholder-count="2">
                         <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
                           <a href="{{ fl.href }}" target="_blank" rel="noopener" style="font-size:11px; font-weight:600; color:#7C00FF; text-decoration:none; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-shrink:0;">{{ fl.name }}</a>
-                          <input sc-camel-default-value="{{ fl.note }}" data-seed-val="{{ fl.note }}" onChange="{{ fl.setNote }}" placeholder="What is this document?" class="fm-inp" style="flex:1; min-width:0;">
+                          <sc-if value="{{ fl.showNote }}" hint-placeholder-val="{{ true }}">
+                            <input sc-camel-default-value="{{ fl.note }}" data-seed-val="{{ fl.note }}" onChange="{{ fl.setNote }}" placeholder="What is this document?" class="fm-inp" style="flex:1; min-width:0;">
+                          </sc-if>
+                          <sc-if value="{{ fl.noNote }}" hint-placeholder-val="{{ false }}">
+                            <span style="flex:1; min-width:0;"></span>
+                          </sc-if>
                           <span onClick="{{ fl.remove }}" title="Remove this document" style="font-size:14px; color:#C0353A; cursor:pointer; padding:0 4px; flex-shrink:0;">&times;</span>
                         </div>
                       </sc-for>
@@ -41832,6 +41837,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               // ---- files
               fileList: list9.map((f9, i9) => ({
                 name: String((f9 && f9.name) || 'Attachment'),
+                /**
+                 * THE BOX ASKING WHAT THE FILE IS, only where the answer is not already known.
+                 * "Other documents" cannot name what is coming, so each file has to say for
+                 * itself. A field headed "Audit report and financial statement" already has,
+                 * and asking again beside it invites the officer to type the heading back.
+                 */
+                showNote: c.describe !== false,
+                noNote: c.describe === false,
                 note: String((f9 && f9.note) || ''),
                 href: String((f9 && f9.path) || ''),
                 setNote: (e9) => put9(list9.map((x9, j9) => j9 === i9 ? { ...x9, note: e9.target.value } : x9)),
