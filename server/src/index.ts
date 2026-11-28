@@ -4034,6 +4034,31 @@ app.put("/api/opportunities/:id", requireAuth, requireStaff, requireWriteRole, a
     },
     include: { stage: true },
   });
+  /**
+   * A QUOTATION LINKED TO A DEAL INHERITS WHAT THE DEAL SELLS.
+   *
+   * `/opportunities/:id/quote` resolves the deal's PRODUCT to a service-catalogue entry and stores
+   * it on the quotation, because that is the one field delivery reads to open a single case with a
+   * workflow instead of a loose task per line. But that route is now the FALLBACK: the board opens
+   * the composer, which saves through POST /api/quotations and then links the deal with this PUT —
+   * and the composer has never carried the service. So every quotation raised the normal way
+   * stored `serviceItemId: null`, and accepting it opened an unassigned to-do per line with no
+   * process behind it. On this database that is every quotation: 0 of them name their service.
+   *
+   * Filled HERE because this is where the link is made, whichever screen made it. Only when the
+   * quotation does not already say — an explicit answer always wins — and never fatal: the deal is
+   * linked either way, and a quotation that cannot name its service is the state we are leaving,
+   * not a reason to refuse the link.
+   */
+  if (b.quotationId && updated.productId) {
+    try {
+      const q9 = await prisma.quotation.findUnique({ where: { id: String(b.quotationId) }, select: { id: true, serviceItemId: true } });
+      if (q9 && !q9.serviceItemId) {
+        const svc9 = await serviceForProduct(updated.productId);
+        if (svc9) await prisma.quotation.update({ where: { id: q9.id }, data: { serviceItemId: svc9 } });
+      }
+    } catch (e: any) { console.error("[deals] could not carry the service onto the quotation:", e?.message ?? e); }
+  }
   res.json(await withMoney(updated as any));
 });
 
