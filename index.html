@@ -21509,6 +21509,18 @@ class Component extends DCLogic {
       this.setState({ dealEdit: null, dlErr: '' });
       this.toast(id ? 'Deal updated' : 'Deal opened');
       if (this._loadPipeline) this._loadPipeline();
+      /**
+       * A LEAD WITH A DEAL ON IT IS A PROSPECT — and the Leads list was the last to know.
+       *
+       * The server promotes it the moment the deal is opened (promoteOnDeal), so the row still
+       * read "Lead" while the toast said the deal was open. It came right on the next refresh,
+       * which is the worst kind of right: the person who opened the deal reads the old stage,
+       * doubts the save, and opens a second one.
+       *
+       * Only on CREATE. An edit changes no lifecycle, and re-reading 184 leads to change a close
+       * date is a cost with no answer.
+       */
+      if (!id && this._loadLeads) this._loadLeads();
       if (this._loadCrmDash) this._loadCrmDash({ month: this.state.cdMonth, mine: this.state.cdMine });
       return true;
     }).catch(() => { this.setState({ dlErr: 'Server unreachable — nothing was saved' }); return false; });
@@ -21537,6 +21549,9 @@ class Component extends DCLogic {
       this.setState({ dealMove: null, dmErr: '' });
       this.toast(j.status === 'won' ? 'Deal won' : j.status === 'lost' ? 'Deal marked lost' : 'Moved to ' + (j.stage && j.stage.name));
       if (this._loadPipeline) this._loadPipeline();
+      // WON promotes the client, LOST writes the lead off — both change the lifecycle the Leads
+      // screen shows, by the same argument as opening one.
+      if (this._loadLeads) this._loadLeads();
       return true;
     }).catch(() => { this.setState({ dmErr: 'Server unreachable — nothing changed' }); return false; });
     /**
