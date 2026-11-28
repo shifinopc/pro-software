@@ -1996,9 +1996,19 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
         const cond = cap.showIf;
         let vis = true;
         if (cond?.var) {
-          const want = String(cond.equals ?? "");
+          /**
+           * `equals` for one answer, `in` for several.
+           *
+           * A field can belong to two of three shapes — the parent company documents are asked
+           * of a service and a trading setup and not of a plain one — and `equals` could only
+           * say one. The alternative was a second variable meaning "not plain", which is the
+           * same fact written twice and drifting from the first time something changes.
+           */
           const got = String(eff[cond.var] ?? "");
-          vis = want ? got === want : !!got;
+          const list = cond.in == null ? null
+            : (Array.isArray(cond.in) ? cond.in : String(cond.in).split(",")).map((x: any) => String(x).trim().toLowerCase()).filter(Boolean);
+          const want = String(cond.equals ?? "");
+          vis = list ? list.includes(got.toLowerCase()) : (want ? got === want : !!got);
         }
         appliesMap[String(cap.var)] = vis;
         eff[String(cap.var)] = vis ? String(supplied[cap.var] ?? "") : "";

@@ -41795,9 +41795,12 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const cond = c.showIf;
           let vis = true;
           if (cond && cond.var) {
-            const want = String(cond.equals == null ? '' : cond.equals);
+            // `equals` for one answer, `in` for several — the server reads it the same way.
             const got = String(eff[cond.var] == null ? '' : eff[cond.var]);
-            vis = want ? got === want : !!got;
+            const list = cond.in == null ? null
+              : (Array.isArray(cond.in) ? cond.in : String(cond.in).split(',')).map(x => String(x).trim().toLowerCase()).filter(Boolean);
+            const want = String(cond.equals == null ? '' : cond.equals);
+            vis = list ? list.indexOf(got.toLowerCase()) >= 0 : (want ? got === want : !!got);
           }
           shown[c.var] = vis;
           eff[c.var] = vis ? (cap[c.var] == null ? '' : cap[c.var]) : '';
