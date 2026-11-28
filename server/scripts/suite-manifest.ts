@@ -22,6 +22,9 @@
 
 /** Checks that must pass, named in the order the runner runs them (alphabetical). */
 export const EXPECTED: string[] = [
+  // The engine, the validator and the builder each declare the node types; this is what stops
+  // them drifting again — see the check itself for the day they did.
+  "node-types-check.ts",
   "discount-line-check",
   "auth-failure-check",
   "auth-limit-gate-check",

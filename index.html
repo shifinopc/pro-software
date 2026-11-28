@@ -9095,6 +9095,27 @@
                  edit here reaches the next run, not the ones in flight. That is right by default and
                  wrong when the edit is a correction, and only the person who made it knows which this
                  was — so it is offered, never done automatically. -->
+            <!-- A case standing where the flow no longer leads. Different from the banner below: that one
+                 is about a task asking an old version of its own questions, this one is about the task
+                 being on the wrong step entirely — what inserting a step does to every run already past
+                 the join. Offered, never automatic: three live cases are not a save button's decision. -->
+            <sc-if value="{{ wfMisShow }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFF4F3; border:1px solid #F6CFCB; border-radius:14px; padding:13px 11px; margin-bottom:11px;">
+                <div style="font-size:11px; font-weight:700; color:#A3342C;">{{ wfMisTitle }}</div>
+                <div style="font-size:11px; color:#7A4A45; line-height:1.55; margin-top:6px;">{{ wfMisBody }}</div>
+                <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px;">
+                  <sc-for list="{{ wfMisRuns }}" as="m" hint-placeholder-count="2">
+                    <div style="font-size:11px; color:#4B4757;">· {{ m.line }}</div>
+                  </sc-for>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                  <sc-if value="{{ wfMisCanMove }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ wfMisApply }}" style="background:#A3342C; color:#fff; border:none; font-size:11px; font-weight:700; padding:8px 11px; border-radius:99px; cursor:pointer;" style-hover="background:#862923;">{{ wfMisBtn }}</button>
+                  </sc-if>
+                  <button onClick="{{ wfMisDismiss }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:600; padding:8px 11px; border-radius:99px; cursor:pointer;" style-hover="border-color:#A3342C;">Leave them where they are</button>
+                </div>
+              </div>
+            </sc-if>
             <sc-if value="{{ wfStaleShow }}" hint-placeholder-val="{{ false }}">
               <div style="background:#FEF9EF; border:1px solid #F6E3BC; border-radius:14px; padding:13px 11px; margin-bottom:12px;">
                 <div style="font-size:11px; font-weight:700; color:#8A6D1F;">{{ wfStaleTitle }}</div>
@@ -36984,7 +37005,13 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
     // fan-out and the gate that waits for it were both drawn as "Task": the engine writes
     // `parallel_split` / `parallel_join` and this map only knew the palette's own `split` / `join`.
     // Adding them to the meta table alone did nothing, because the lookup never got that far.
-    const WF_TYPE_MAP = { start: 'trigger', trigger: 'trigger', task: 'task', approval: 'approval', decision: 'decision', branch: 'decision', notify: 'notify', notification: 'notify', issue_document: 'doc', document: 'doc', charge_fee: 'invoice', invoice: 'invoice', courier: 'courier', dispatch: 'courier', delay: 'delay', webhook: 'webhook', end: 'end', parallel_split: 'split', split: 'split', parallel_join: 'join', join: 'join' };
+    // ENGINE TYPE → WHAT THE CANVAS CALLS IT. Every type the engine executes needs an entry: a
+    // type missing here falls through to 'task', so a step that raises invoices was drawn, and
+    // described, as an ordinary task somebody had to do. scripts/node-types-check.ts fails when
+    // the engine learns a type this map has not.
+    const WF_TYPE_MAP = { start: 'trigger', trigger: 'trigger', task: 'task', approval: 'approval', decision: 'decision', branch: 'decision', notify: 'notify', notification: 'notify', issue_document: 'doc', document: 'doc', charge_fee: 'invoice', invoice: 'invoice', courier: 'courier', dispatch: 'courier', delay: 'delay', webhook: 'webhook', end: 'end', parallel_split: 'split', split: 'split', parallel_join: 'join', join: 'join',
+      draft_invoice: 'invoice', create_invoice: 'invoice', stage_invoice: 'stage_invoice',
+      api: 'webhook', prereq_gate: 'decision' };
     const graphToFlow = (graph) => {
       if (!graph || !Array.isArray(graph.nodes) || !graph.nodes.length) return null;
       const ns = [...graph.nodes];
@@ -37137,6 +37164,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
             // Which open tasks are still on an older version of a step. Carried with the template id
             // they belong to, so a banner left over from another workflow cannot act on this one.
             wfStale: Array.isArray(j.staleTasks) && j.staleTasks.length ? { tplId, steps: j.staleTasks } : null,
+            // Runs standing where the flow no longer leads — what INSERTING a step does to
+            // every case already past the join. Carried with the template id, like the above.
+            wfMisrouted: Array.isArray(j.misrouted) && j.misrouted.length ? { tplId, runs: j.misrouted } : null,
             wfStaleBusy: false })).catch(() => {}); this.toast('Workflow saved'); this._reloadWorkflows && this._reloadWorkflows(); } else r.json().then(j => this.toast(j.error || 'Could not save', 'error')).catch(() => this.toast('Could not save')); })
         .catch(() => this.toast('Server unreachable'));
     };
@@ -38553,10 +38583,53 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
       ...wfConnApi,
       wfNodes, wfToolbar, wfConnections, wfSaveFlow,
       ...(() => {
+        const ms = this.state.wfMisrouted;
+        const msRuns = ms && Array.isArray(ms.runs) ? ms.runs : [];
+        const msMove = msRuns.filter(r => !r.touched);
+        const msHeld = msRuns.filter(r => r.touched);
         const st = this.state.wfStale;
         const steps = st && Array.isArray(st.steps) ? st.steps : [];
         const total = steps.reduce((n, x) => n + (x.count || 0), 0);
         return {
+          /**
+           * A SECOND BANNER, FOR A DIFFERENT PROBLEM.
+           *
+           * The one below says a task is asking an old version of its own questions. This one says
+           * the task is on the wrong STEP: a run that passed the join before a step was inserted
+           * walks straight past it, silently, and the only sign is somebody asking why they are
+           * looking at the wrong screen.
+           *
+           * Moving is offered, never automatic — three live cases are not the save button's
+           * decision — and a task somebody has typed into is listed as held rather than moved.
+           */
+          wfMisShow: msRuns.length > 0,
+          wfMisTitle: msRuns.length === 1
+            ? '1 case is on a step this flow no longer leads to'
+            : msRuns.length + ' cases are on a step this flow no longer leads to',
+          wfMisBody: 'A case takes its next step from the flow as it stood when the step before it finished, so one that passed this point earlier never saw the change. Moving a case lets the engine continue from the right step — raising anything the new path raises on the way.',
+          wfMisRuns: msRuns.map(r => ({ line: r.instanceTitle + ' — on "' + r.onLabel + '", should be "' + r.shouldBeLabel + '"' + (r.touched ? ' · someone has typed into it, so it stays' : '') })),
+          wfMisBtn: this.state.wfMisBusy ? 'Moving…' : (msMove.length === 1 ? 'Move that case' : 'Move those ' + msMove.length + ' cases'),
+          wfMisCanMove: msMove.length > 0,
+          wfMisDismiss: () => this.setState({ wfMisrouted: null }),
+          wfMisApply: () => {
+            if (!ms || !ms.tplId || this.state.wfMisBusy || !msMove.length) return;
+            this.setState({ wfMisBusy: true });
+            const tok8 = localStorage.getItem('stimespro:token');
+            fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/templates/' + ms.tplId + '/resync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(tok8 ? { Authorization: 'Bearer ' + tok8 } : {}) },
+              body: JSON.stringify({ taskIds: msMove.map(r => r.taskId) }),
+            })
+              .then(r8 => r8.json().catch(() => ({})).then(j8 => ({ ok: r8.ok, j8 })))
+              .then(({ ok, j8 }) => {
+                if (!ok) return this.setState({ wfMisBusy: false }, () => this.toast((j8 && j8.error) || 'Could not move those cases', 'error'));
+                const n8 = (j8.moved || []).length, h8 = (j8.held || []).length;
+                this.setState({ wfMisrouted: null, wfMisBusy: false });
+                this.toast(n8 + (n8 === 1 ? ' case moved' : ' cases moved') + (h8 ? ', ' + h8 + ' left alone — somebody is working on them' : ''));
+                this._afterWorkChanged && this._afterWorkChanged();
+              })
+              .catch(() => this.setState({ wfMisBusy: false }, () => this.toast('Server unreachable — nothing was moved', 'error')));
+          },
           wfStaleShow: total > 0,
           wfStaleTitle: total === 1
             ? '1 task already open still shows the old version'

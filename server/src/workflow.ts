@@ -2824,6 +2824,112 @@ async function openTasksOf(templateId: string) {
   });
 }
 
+/**
+ * A RUN STANDING WHERE THE FLOW NO LONGER LEADS.
+ *
+ * `staleOpenTasks` above answers "is this task asking the step's current questions?". This answers
+ * a different one that cost a whole afternoon: "is this task even on the right step?".
+ *
+ * A task is created from the graph AS IT WAS when the step before it finished. Insert a step
+ * between A and B afterwards and every run already past A walks straight to B — the new step is
+ * skipped, silently, and the only sign is somebody saying "why am I seeing this screen". It
+ * happened six times in one afternoon of editing a live template, and each time the repair was the
+ * same by hand: delete the task that should not exist and let the engine run from the node that
+ * should.
+ *
+ * WHAT IT COMPARES. Not the whole history — only the step the run LAST FINISHED. Ask the current
+ * graph where that step leads now; if the answer is not where the run is standing, it is
+ * misrouted. An approval is asked with the outcome it was given, because approve and reject lead
+ * to different places and guessing would re-route a rejection down the approval path.
+ *
+ * WHAT IT REFUSES. A task somebody has typed into is reported and never moved: a draft is work,
+ * and no amount of template tidying is worth throwing it away. The caller sees it in the plan with
+ * `touched: true` and can go and ask the person.
+ */
+export type Misrouted = {
+  instanceId: string; instanceTitle: string;
+  taskId: string; on: string; onLabel: string;
+  shouldBe: string; shouldBeLabel: string;
+  after: string; afterLabel: string;
+  touched: boolean;
+};
+
+export async function misroutedOpenTasks(templateId: string): Promise<Misrouted[]> {
+  const insts = await prisma.workflowInstance.findMany({
+    where: { templateId, status: "running" },
+    select: { id: true, title: true, templateId: true },
+  });
+  if (!insts.length) return [];
+  const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId }, select: { graph: true } });
+  const g = asGraph(tpl?.graph);
+  const label = (id: string) => String((g.nodes ?? []).find((n: any) => String(n.id) === String(id))?.label ?? id);
+  const out: Misrouted[] = [];
+
+  for (const inst of insts) {
+    const tasks = await prisma.workflowTask.findMany({
+      where: { instanceId: inst.id },
+      select: { id: true, nodeId: true, nodeType: true, status: true, completedAt: true, draftAnswers: true, checklistState: true },
+    });
+    const active = tasks.filter(t => t.status === "active");
+    if (!active.length) continue;
+    // The step this run last finished, and how. Approvals lead two ways, so the outcome decides
+    // which — a rejection re-routed down the approval path would be worse than leaving it alone.
+    const done = tasks
+      .filter(t => t.status !== "active" && t.completedAt)
+      .sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)))[0];
+    if (!done?.nodeId) continue;
+    const key = done.nodeType === "approval" ? (done.status === "rejected" ? "reject" : "approve") : null;
+    const expected = nextTargets(g, done.nodeId, key);
+    if (!expected.length) continue;
+    // Parallel work is normal: only a task on NONE of the expected targets is misrouted.
+    for (const t of active) {
+      if (!t.nodeId || expected.includes(t.nodeId)) continue;
+      // And only when the step it is on is not somewhere the graph could legitimately have put it:
+      // a run re-entered after a loop sits on a node its predecessor does not point at.
+      if ((g.edges ?? []).some((e: any) => e.to === t.nodeId && e.from !== done.nodeId)) {
+        const reachable = (g.edges ?? []).some((e: any) => e.from === done.nodeId && e.to === t.nodeId);
+        if (reachable) continue;
+      }
+      out.push({
+        instanceId: inst.id, instanceTitle: String(inst.title ?? ""),
+        taskId: t.id, on: String(t.nodeId), onLabel: label(String(t.nodeId)),
+        shouldBe: expected[0], shouldBeLabel: label(expected[0]),
+        after: String(done.nodeId), afterLabel: label(String(done.nodeId)),
+        touched: !!((t.draftAnswers && Object.keys(t.draftAnswers as any).length) ||
+                    (t.checklistState && Object.keys(t.checklistState as any).length)),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Move them, by letting the ENGINE do it rather than rewriting the row.
+ *
+ * The task that should not exist is removed and the frontier is run from the node that should —
+ * so an automatic step on the new path executes exactly as it would have: an invoice is raised, a
+ * document is filed, a gate opens. Re-pointing the row by hand would have skipped all of that and
+ * left a run that looks right and has not done what it claims.
+ */
+export async function moveMisrouted(templateId: string, taskIds?: string[]): Promise<{ moved: Misrouted[]; held: Misrouted[] }> {
+  const plan = await misroutedOpenTasks(templateId);
+  const want = plan.filter(m => (!taskIds || taskIds.includes(m.taskId)));
+  const moved: Misrouted[] = [], held: Misrouted[] = [];
+  for (const m of want) {
+    if (m.touched) { held.push(m); continue; }
+    const inst = await prisma.workflowInstance.findUnique({ where: { id: m.instanceId } });
+    const tpl = await prisma.workflowTemplate.findUnique({ where: { id: templateId }, select: { graph: true } });
+    if (!inst || !tpl) { held.push(m); continue; }
+    await prisma.workflowTask.delete({ where: { id: m.taskId } });
+    await prisma.workflowLog.create({ data: { instanceId: m.instanceId, nodeId: m.on, action: "step.misrouted_moved",
+      actor: "engine", at: nowISO(),
+      detail: `The flow changed after this run passed "${m.afterLabel}": it was standing on "${m.onLabel}" and now goes to "${m.shouldBeLabel}".` } }).catch(() => {});
+    await runFrontier(inst, asGraph(tpl.graph), [m.shouldBe]);
+    moved.push(m);
+  }
+  return { moved, held };
+}
+
 R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
   try {
     const { name, description, trigger, triggerConfig, entityType, graph, active, version, country, queueWork } = req.body ?? {};
@@ -2886,8 +2992,12 @@ R.put("/templates/:id", requireAuth, requireStaff, requireWriteRole, async (req,
     // not acted on: whether work in flight should change under the person doing it is a judgement
     // about that particular edit, and only the person making the edit can make it.
     const stale = staleOpenTasks(t.graph, await openTasksOf(t.id));
+    // And `misrouted`: runs standing on a step this flow no longer leads to, which is what
+    // INSERTING a step does to every case already past the join. Reported for the same reason —
+    // moving three live cases is the editor's decision, not the save button's.
+    const misrouted = await misroutedOpenTasks(t.id).catch(() => []);
     res.json({ ...t, validation: [...validateGraph(t.graph, t), ...(await validateReferences(t.graph, t))],
-               staleTasks: stale.map(({ taskIds, ...rest }) => rest) });
+               staleTasks: stale.map(({ taskIds, ...rest }) => rest), misrouted });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 /**
@@ -2926,6 +3036,32 @@ R.post("/templates/:id/repoint", requireAuth, requireStaff, requireWriteRole, as
       detail: `${t.name}: ${updated} open task(s) on ${stale.map(e => `"${e.label}"`).join(", ")}` });
     logActivity({ type: "task", message: `${updated} open task(s) updated to the current version of ${t.name}` });
     res.json({ updated, steps: stale.map(({ taskIds, ...rest }) => rest) });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * WHICH RUNS THE FLOW NO LONGER LEADS TO WHERE THEY ARE STANDING — and moving them.
+ *
+ * GET plans, POST does it. Two calls rather than one, because the answer to "shall I move three
+ * live cases?" belongs to a person and not to the save button: a step inserted by mistake would
+ * otherwise re-route every run in the building before anybody noticed.
+ */
+R.get("/templates/:id/resync", requireAuth, requireStaff, async (req, res) => {
+  try { res.json({ misrouted: await misroutedOpenTasks(String(req.params.id)) }); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+R.post("/templates/:id/resync", requireAuth, requireStaff, requireWriteRole, async (req, res) => {
+  try {
+    const ids: string[] | undefined = Array.isArray(req.body?.taskIds) && req.body.taskIds.length
+      ? req.body.taskIds.map(String) : undefined;
+    const { moved, held } = await moveMisrouted(String(req.params.id), ids);
+    if (moved.length) {
+      await logAudit({ action: "workflow.resync_runs", actorId: (req as any).auth?.sub,
+        detail: moved.map(m => `${m.instanceTitle}: "${m.onLabel}" → "${m.shouldBeLabel}"`).join("; ").slice(0, 900) });
+      logActivity({ type: "task", message: `${moved.length} case(s) moved onto the step the flow now leads to`, user: (req as any).auth?.email });
+    }
+    res.json({ moved, held });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
