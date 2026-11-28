@@ -4705,6 +4705,7 @@
                     <span style="display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; color:{{ f.stColor }}; background:{{ f.stBg }}; padding:3px 10px; border-radius:99px; width:fit-content;"><span style="width:5px; height:5px; border-radius:99px; background:{{ f.stColor }};"></span>{{ f.status }}</span>
                     <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
                       <sc-if value="{{ f.hasFile }}" hint-placeholder-val="{{ true }}"><span onClick="{{ f.preview }}" title="Preview the file" class="row-ic" style-hover="background:#F3EBFF; color:#7C00FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></span><span onClick="{{ f.download }}" title="Download the file" class="row-ic" style-hover="background:#F3EBFF; color:#7C00FF;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg></span></sc-if>
+                      <sc-for list="{{ f.extras }}" as="xf" hint-placeholder-count="0"><span onClick="{{ xf.open }}" title="Open this copy" style="font-size:9.5px; font-weight:700; color:#7C00FF; background:#F3EBFF; padding:3px 8px; border-radius:99px; cursor:pointer; white-space:nowrap;">{{ xf.label }}</span></sc-for>
                       <sc-if value="{{ f.noFile }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px; color:#B9B6C4;">No file</span></sc-if>
                     </div>
                   </div>
@@ -24773,8 +24774,21 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           const f9 = String(cd9.filePath || cd9.file || '');
           const has9 = f9.startsWith('/');
           const nm9 = cd9.fileName || ((d9.docType || 'Document') + (d9.docNumber ? ' ' + d9.docNumber : '') + (/\.pdf$/i.test(f9) ? '.pdf' : ''));
-          return { name: (d9.docType || 'Document') + (d9.person ? ' — ' + d9.person : '') + (d9.docNumber ? ' · ' + d9.docNumber : ''), meta: [_dxScopeName ? '' : _dxCoName(d9.companyId), _docFmtExp(d9.expiryDate), d9.issuingAuthority || ''].filter(Boolean).join(' · ') || '—', status: t9[0], stBg: t9[1], stColor: t9[2],
-            hasFile: has9, noFile: !has9, preview: () => has9 && this._openFile(f9, nm9), download: () => has9 && this._downloadFile(f9, nm9) };
+            /**
+             * THE OTHER COPIES. A Commercial Registration is one certificate and two files — the
+             * English and the Arabic — and a client asking for their CR wants whichever they were
+             * asked for. The record holds one `filePath`, so the rest are listed beside it,
+             * labelled with the field that collected them.
+             */
+            const extras9 = (Array.isArray(cd9.extraFiles) ? cd9.extraFiles : [])
+              .filter(x9 => x9 && typeof x9.path === "string" && x9.path.startsWith("/"))
+              .map(x9 => ({
+                label: String(x9.label || "File").replace(/\s*\(.*\)\s*$/, "").slice(0, 22),
+                open: () => this._openFile(String(x9.path), String(x9.name || x9.label || "File")),
+              }));
+            return { name: (d9.docType || "Document") + (d9.person ? " — " + d9.person : "") + (d9.docNumber ? " · " + d9.docNumber : ""), meta: [_dxScopeName ? "" : _dxCoName(d9.companyId), _docFmtExp(d9.expiryDate), d9.issuingAuthority || ""].filter(Boolean).join(" · ") || "—", status: t9[0], stBg: t9[1], stColor: t9[2],
+              hasFile: has9, noFile: !has9 && !extras9.length, extras: extras9,
+              preview: () => has9 && this._openFile(f9, nm9), download: () => has9 && this._downloadFile(f9, nm9) };
     };
     const folderFiles = (_docsReal
       ? _docsReal.filter(d9 => _docCatOf(d9) === docFolder && _dxPass(d9)).map(_dxRow)

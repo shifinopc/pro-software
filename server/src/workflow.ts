@@ -2315,7 +2315,25 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
            */
           if (Array.isArray(raw)) {
             const first = raw.find((f: any) => f && typeof f.path === "string" && f.path.startsWith("/"));
-            if (first) { custom.filePath = first.path; if (first.name) custom.filePathName = first.name; }
+            if (first) {
+              /**
+               * THE FIRST FILE IS THE DOCUMENT; THE REST TRAVEL WITH IT.
+               *
+               * A document row holds one `filePath`, which is right — a Commercial Registration
+               * IS one certificate. But the same step collects the Arabic copy of it, and a
+               * client asked for their CR wants whichever language they were asked for. Dropping
+               * it would leave the only copy on a workflow run nobody outside this office opens.
+               *
+               * So every file field after the first is listed beside it, labelled with the field
+               * that collected it, and the document screen offers them under the main one.
+               */
+              if (!custom.filePath) { custom.filePath = first.path; if (first.name) custom.filePathName = first.name; }
+              else {
+                const extras = Array.isArray(custom.extraFiles) ? custom.extraFiles.filter((x: any) => x && x.path !== first.path) : [];
+                extras.push({ label: String(cap.label || cap.var), path: first.path, name: first.name ?? null });
+                custom.extraFiles = extras;
+              }
+            }
             continue;
           }
           if (String(raw).trim() !== "") custom[cap.fieldId || cap.var] = raw;
