@@ -41623,10 +41623,25 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           // String(): the builder writes options as a comma string, but a template loaded from
           // anywhere else can hold an array — and an array here used to throw and white-screen the
           // whole page, not just this field. String(['yes','no']) is 'yes,no', so both shapes work.
-          options: String(c.options || '').split(',').map(o => o.trim()).filter(Boolean).map(o => {
+          /**
+           * THE CHOICES CAN BE THE ANSWERS TO ANOTHER FIELD.
+           *
+           * `optionsFrom: { var, column }` reads a rows capture on this same step — five names
+           * typed into the table become the five choices for "which one came back approved".
+           * Typed again into a text box they come back as four spellings of one thing, and the
+           * approved name is the one that goes on the licence.
+           *
+           * Not title-cased, unlike a fixed option: these are the officer's own words, and
+           * "Stimes Innovations IT Services LLC" is not a label to tidy up.
+           */
+          options: (c.optionsFrom && c.optionsFrom.var
+            ? [...new Set((Array.isArray(cap[c.optionsFrom.var]) ? cap[c.optionsFrom.var] : [])
+                .map(r9 => String(((r9 || {})[c.optionsFrom.column || 'name']) ?? '').trim()).filter(Boolean))]
+            : String(c.options || '').split(',').map(o => o.trim()).filter(Boolean)
+          ).map(o => {
             const on = String(val) === String(o);
             return {
-              o: _capWords(o),
+              o: c.optionsFrom ? o : _capWords(o),
               bg: on ? '#7C00FF' : '#fff',
               color: on ? '#fff' : '#4B4757',
               border: on ? '#7C00FF' : '#DDD9E6',
