@@ -270,7 +270,13 @@ export async function startDeliveryForQuotation(quotationId: string, opts: { act
                * Derived from the lines, where the answer already is: the quotation said whether it
                * sold a formation. A step can then ask for the shells only when there are some.
                */
-              ...(parts.length ? { setupKind: parts.some(x => /formation/i.test(x)) ? "trading" : "service" } : {}),
+              // THREE SHAPES, AND ONLY THREE — the firm sells no others:
+              //   plain    · no acquisition and no formation: a Saudi company, no foreign parent
+              //   service  · an acquisition: a foreign parent is bought
+              //   trading  · an acquisition AND a formation: a parent over shell companies
+              // Always written, including "plain", because a case with no value is a case the
+              // steps cannot tell apart from one that started before any of this existed.
+              setupKind: !parts.length ? "plain" : (parts.some(x => /formation/i.test(x)) ? "trading" : "service"),
             },
             // `engineVariables`, NOT `variables`: callerVariables() drops every key beginning with
             // an underscore, because those are the engine's own. Passed as caller variables these
