@@ -186,3 +186,37 @@ export async function figuresForLines(lines: Line[], vatRateBp: number) {
   const totalMinor = subtotalMinor + vatMinor;
   return { subtotalMinor, taxedMinor, vatMinor, totalMinor, vatRateBp, amount: Math.round(totalMinor / 100) };
 }
+
+/**
+ * ARE TWO STAGES THE SAME MOMENT?
+ *
+ * A stage is billed together with every other unraised stage at the same moment, because "upon
+ * signing" across two fee kinds is one payment and must not reach the client as two invoices on
+ * one day. That was decided on the label being the SAME SENTENCE — and the firm writes the fee
+ * into the sentence when it helps the client read the terms:
+ *
+ *     Upon signing of the agreement — foreign company acquisition / incorporation   100% foreign
+ *     Upon signing of the agreement                                                  50% prof
+ *
+ * One moment, two sentences, so the first invoice billed the foreign fee alone and the client was
+ * asked for the professional half separately. The suffix after the dash names the FEE, which the
+ * stage already carries in `basis`; it is not a different event.
+ *
+ * So a suffixed stage joins the bare one of the same head. Deliberately NOT head-to-head: two
+ * stages written "— part 1" and "— part 2" are two payments the firm has spelled out, and merging
+ * those would bill a client money their own terms put at a later date.
+ *
+ * shortcut: the separator is a dash with spaces around it; a firm writing the fee in brackets or
+ * after a colon still gets two invoices. Widen the separator when one of them asks.
+ */
+const momentHead = (label: unknown) => String(label ?? "").trim().replace(/\s+[—–-]\s+.*$/, "").trim();
+
+export function sameMoment(a: unknown, b: unknown): boolean {
+  const A = String(a ?? "").trim().toLowerCase(), B = String(b ?? "").trim().toLowerCase();
+  if (!A || !B) return A === B;
+  if (A === B) return true;
+  const ha = momentHead(A), hb = momentHead(B);
+  if (ha !== hb) return false;
+  // One of the two must BE the bare moment, so two different suffixes never merge into each other.
+  return A === ha || B === hb;
+}

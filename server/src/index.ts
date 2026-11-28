@@ -123,7 +123,7 @@ import { workforceAll, workforceFor, recordBand, workforceHistory } from "./work
 import { buildPack, listPacks, readPack, savePack, planInstall, applyInstall, installedPacks, planUninstall, applyUninstall, planUpgrade, applyUpgrade } from "./packs.js";
 import { homeCountry, homeCurrency, homeMarket, orgTimezone } from "./orgsettings.js";
 import { figuresFromAmount, dueMinor, paidMinor } from "./money.js";
-import { planStages, figuresForLines, lineMinor } from "./stages.js";
+import { planStages, figuresForLines, lineMinor, sameMoment } from "./stages.js";
 import { renameProductEverywhere } from "./productname.js";
 import { docHistory } from "./dochistory.js";
 import { clientMargins } from "./profitability.js";
@@ -6142,7 +6142,7 @@ app.post("/api/quotations/:id/stages/next", requireAuth, requireStaff, requireWr
    */
   const label = String(stage.label ?? "").trim();
   const group = label
-    ? stages.filter(st => !done.has(st.index) && st.subtotalMinor > 0 && String(st.label ?? "").trim() === label)
+    ? stages.filter(st => !done.has(st.index) && st.subtotalMinor > 0 && sameMoment(st.label, label))
     : [stage];
   // The asked-for stage leads, so the invoice is numbered and labelled from it.
   group.sort((x, y) => (x.index === wanted ? -1 : y.index === wanted ? 1 : x.index - y.index));
@@ -6211,7 +6211,7 @@ app.post("/api/quotations/:id/convert", requireAuth, requireStaff, requireWriteR
     // two fee kinds is one payment and must not arrive as two invoices on the same day.
     const firstLabel = String(first.label ?? "").trim();
     const firstGroup = firstLabel
-      ? billable.filter(st => String(st.label ?? "").trim() === firstLabel)
+      ? billable.filter(st => sameMoment(st.label, firstLabel))
       : [first];
     const staged = await raiseStageInvoice(q, firstGroup, { date: today, isLast: firstGroup.length === billable.length });
     await prisma.quotation.update({ where: { id: q.id }, data: { status: "invoiced" } });
