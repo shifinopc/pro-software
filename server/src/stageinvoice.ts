@@ -126,8 +126,17 @@ export async function raiseMomentInvoice(quotationId: string, moment: string) {
   });
   if (raised.some(i => i.milestoneIndex == null)) return { raised: null as any, reason: `${q.number} was invoiced in full` };
   const done = new Set<number>(raised.flatMap(i => coveredStages(i as any)));
-  const group = stages.filter(st => st.subtotalMinor > 0 && sameMoment(st.label, moment));
-  if (!group.length) return { raised: null as any, reason: `no billable stage reads "${moment}"` };
+  /**
+   * `*` MEANS WHATEVER IS LEFT.
+   *
+   * The last step of a setup does not bill a named moment — it bills the balance, whatever stages
+   * the schedule still has outstanding. Naming the final moment would work until a quotation
+   * worded it differently, and then the run would finish with money unbilled and nothing saying
+   * so. "Everything not yet invoiced" is the fact the step actually knows.
+   */
+  const everything = String(moment).trim() === "*";
+  const group = stages.filter(st => st.subtotalMinor > 0 && (everything || sameMoment(st.label, moment)));
+  if (!group.length) return { raised: null as any, reason: everything ? "nothing left to bill" : `no billable stage reads "${moment}"` };
   const left = group.filter(st => !done.has(st.index));
   if (!left.length) return { raised: null as any, reason: "already invoiced" };
   const inGroup = new Set(left.map(st => st.index));
