@@ -1942,6 +1942,20 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
       const raw = supplied[cap.var];
       if (!captureFilled(cap, raw)) missing.push(String(cap.label || cap.var));
     }
+    /**
+     * A TABLE'S CEILING, enforced where it counts. `maxRows` exists because some tables count
+     * something the outside world limits — the Ministry takes five candidate names — so a sixth
+     * row is a submission that will be rejected. The form stops it being typed; this stops it
+     * arriving any other way, which is the half that actually holds.
+     */
+    for (const cap of caps0) {
+      const max = Number(cap?.maxRows);
+      if (!cap?.var || !(max > 0) || String(cap.type) !== "rows") continue;
+      const rows = supplied[cap.var];
+      if (Array.isArray(rows) && rows.length > max) {
+        throw new Error(`${cap.label || cap.var}: at most ${max} can be entered — there are ${rows.length}`);
+      }
+    }
     if (missing.length) {
       throw new Error(missing.length === 1
         ? `${missing[0]} is required to complete this step`

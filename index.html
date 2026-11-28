@@ -17503,7 +17503,12 @@
                         <div style="font-size:10px; color:#A9A6B4; margin-bottom:6px;">Nothing added yet.</div>
                       </sc-if>
                       <div style="display:flex; align-items:center; gap:10px;">
-                        <span onClick="{{ c.rowAdd }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">+ Add</span>
+                        <sc-if value="{{ c.rowCanAdd }}" hint-placeholder-val="{{ true }}">
+                          <span onClick="{{ c.rowAdd }}" style="font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">+ Add</span>
+                        </sc-if>
+                        <sc-if value="{{ c.rowAtCap }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:10px; font-weight:700; color:#A9A6B4;">{{ c.rowCapNote }}</span>
+                        </sc-if>
                         <sc-if value="{{ c.hasTotal }}" hint-placeholder-val="{{ false }}">
                           <span style="font-size:10px; font-weight:700; color:{{ c.totalColor }};">{{ c.totalLabel }}</span>
                         </sc-if>
@@ -41668,7 +41673,22 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               // same grow factors resolved to different widths and the Passport header sat 16px left
               // of its own Attach button. A grid track sizes from the track, not from its contents.
               gridCols: '14px ' + cols9.map(col9 => String(col9.flex || 1) + 'fr').join(' ') + ' 16px',
-              rowAdd: () => put9([...list9, Object.fromEntries(cols9.map(col9 => [col9.var, '']))]),
+              /**
+               * A TABLE CAN HAVE A CEILING, because some of them count something the outside
+               * world limits: the Ministry takes at most five candidate names, so a sixth row is
+               * not data, it is a submission that will be rejected. At the cap the Add link is
+               * replaced by the count rather than left sitting there doing nothing — a link that
+               * silently refuses reads as a broken screen.
+               *
+               * The server checks it too; this is only the half that stops it being typed.
+               */
+              rowCanAdd: !(Number(c.maxRows) > 0) || list9.length < Number(c.maxRows),
+              rowAtCap: Number(c.maxRows) > 0 && list9.length >= Number(c.maxRows),
+              rowCapNote: Number(c.maxRows) > 0 ? (list9.length + ' of ' + Number(c.maxRows) + ' — the most that can be requested') : '',
+              rowAdd: () => {
+                if (Number(c.maxRows) > 0 && list9.length >= Number(c.maxRows)) return;
+                put9([...list9, Object.fromEntries(cols9.map(col9 => [col9.var, '']))]);
+              },
               rowList: list9.map((r9, i9) => ({
                 n: String(i9 + 1),
                 cells: cols9.map(col9 => ({
