@@ -37542,7 +37542,18 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         selBorder: (this.state.wfSelNode == null ? 1 : this.state.wfSelNode) === i ? '#7C00FF' : p[1],
         select: () => this.setState({ wfSelNode: i }) };
     });
-    const gEdges = gEdgesRaw.map(([from, to, label]) => {
+    /**
+     * A WIRE TO A STEP THAT IS NOT THERE IS NOT DRAWN — it does not take the screen down.
+     *
+     * An edge can outlive its node: a step deleted by one edit, a graph written by a script, a
+     * half-applied import. This read gMap[to].left regardless, so one stale wire threw inside
+     * renderVals and the whole console came up as a red box — on the Workflow Builder, which is
+     * the one screen somebody would open to fix it.
+     *
+     * Skipped instead. The validator already reports a graph's own problems in words; this
+     * refuses to make them fatal.
+     */
+    const gEdges = gEdgesRaw.filter(([from, to]) => gMap[from] && gMap[to]).map(([from, to, label]) => {
       const a = gMap[from], b = gMap[to];
       const x1 = a.left + GW, y1 = a.top + GH / 2, x2 = b.left, y2 = b.top + GH / 2;
       const cx = Math.abs(x2 - x1) * 0.5;
