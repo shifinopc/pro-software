@@ -1843,6 +1843,20 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
       if (declared.has(k) || ENGINE_KEYS.has(k)) supplied[k] = v;
       else foreign.push(k);
     }
+    /**
+     * A LOCKED FIELD IS NOT THIS STEP S TO CHANGE.
+     *
+     * `readOnly` with `fromVar` means the answer was given earlier and is only SHOWN here — the
+     * approved trade name, which MISA compares against the reservation. The form draws it as text
+     * rather than a box, so a different value can only arrive from a stale screen or a crafted
+     * request. The earlier answer wins. Not refused: it is not the officer s mistake, and quietly
+     * taking the new one is how a run ends up disagreeing with itself.
+     */
+    for (const cap of caps0) {
+      if (!cap?.var || !cap.readOnly || !cap.fromVar) continue;
+      const held = (inst?.variables as any)?.[String(cap.fromVar)];
+      if (held !== undefined && held !== null && String(held).trim() !== "") supplied[String(cap.var)] = held;
+    }
     if (foreign.length) {
       // REFUSED OUT LOUD, not dropped quietly.
       //

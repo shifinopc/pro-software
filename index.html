@@ -17431,6 +17431,17 @@
                   <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ true }}">
                     <input sc-camel-default-value="{{ c.value }}" data-seed-val="{{ c.value }}" onChange="{{ c.type }}" onBlur="{{ c.set }}" class="fm-inp">
                   </sc-if>
+                  <!-- AN ANSWER THAT IS NOT THIS STEP S TO GIVE. Shown, not asked: the approved trade name was
+                       decided two steps ago and MISA reads it against the reservation character by character, so
+                       the box is the record of that decision rather than a place to retype it. A separate element
+                       rather than a bound `readonly`, because a mostly-static attribute gets hoisted into a class
+                       and stops re-evaluating — the field would lock or unlock at random. -->
+                  <sc-if value="{{ c.isLocked }}" hint-placeholder-val="{{ false }}">
+                    <div class="fm-inp" style="background:#F3F1F7; color:#4B4757; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                      <span>{{ c.value }}</span>
+                      <span style="font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#A9A6B4; white-space:nowrap;">{{ c.lockNote }}</span>
+                    </div>
+                  </sc-if>
                   <!-- Seeded, not bound, and the value goes in the ATTRIBUTE: a textarea takes its
                        content from its children, and binding those re-renders the box on every
                        keystroke and puts the cursor back at the start. -->
@@ -41631,7 +41642,11 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           isArea: c.type === 'textarea',
           isRows: c.type === 'rows',
           isFiles: c.type === 'files',
-          isText: ['select', 'date', 'money', 'textarea', 'rows', 'files'].indexOf(String(c.type)) < 0,
+          // A capture carried in from an earlier step can be LOCKED: shown as the record it is,
+          // not offered as a question this step gets to answer again.
+          isText: !c.readOnly && ['select', 'date', 'money', 'textarea', 'rows', 'files'].indexOf(String(c.type)) < 0,
+          isLocked: !!c.readOnly,
+          lockNote: c.fromVar ? 'from an earlier step' : 'not editable here',
           // The engine's own rule, said out loud: required unless the step opted out. A blank one is
           // refused on completion, so the form should say so before the button is pressed.
           req: !(c.required === false || c.optional === true),
