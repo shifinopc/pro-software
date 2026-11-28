@@ -17474,6 +17474,12 @@
                         <div style="display:grid; grid-template-columns:{{ c.gridCols }}; gap:6px; align-items:center; margin-bottom:6px;">
                           <span style="font-size:10px; font-weight:700; color:#A9A6B4;">{{ r.n }}</span>
                           <sc-for list="{{ r.cells }}" as="cl" hint-placeholder-count="4">
+                            <!-- A DATE CELL. The plain box took dd-mm-yyyy by hand, which is a format rule in a
+                                 placeholder and two officers typing it differently. A real date input fits: the
+                                 column is sized for it, and the browser does the calendar and the validation. -->
+                            <sc-if value="{{ cl.isDate }}" hint-placeholder-val="{{ false }}">
+                              <input type="date" sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" class="fm-inp" style="min-width:0;">
+                            </sc-if>
                             <sc-if value="{{ cl.isPlain }}" hint-placeholder-val="{{ true }}">
                               <input sc-camel-default-value="{{ cl.value }}" data-seed-val="{{ cl.value }}" onChange="{{ cl.set }}" placeholder="{{ cl.place }}" inputmode="{{ cl.mode }}" class="fm-inp" style="min-width:0;">
                             </sc-if>
@@ -41748,7 +41754,8 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
                   // grid cell, so inside a row it is a plain dropdown — the one place in this
                   // console where that is the smaller control rather than the lazier one.
                   isPick: String(col9.type || '') === 'select',
-                  isPlain: ['file', 'select'].indexOf(String(col9.type || '')) < 0,
+                  isDate: String(col9.type || '') === 'date',
+                  isPlain: ['file', 'select', 'date'].indexOf(String(col9.type || '')) < 0,
                   /**
                    * Keyed by capture, ROW and column, so twenty rows of the same table do not
                    * share one open flag and all drop their lists together. `openDd` is the
