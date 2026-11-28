@@ -17587,6 +17587,15 @@
                 <sc-if value="{{ wdHasCaptures }}" hint-placeholder-val="{{ false }}">
                   <button onClick="{{ saveStepDraft }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Save for later</button>
                 </sc-if>
+                <!-- THE SAME QUESTIONS AS A SHEET. Offered only on a step with enough of them to be worth it:
+                     two boxes are faster to type than to export, send, fill and import. -->
+                <sc-if value="{{ wdHasSheet }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ wdSheetOut }}" title="{{ wdSheetOutTitle }}" style="background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">Export sheet</button>
+                  <label title="{{ wdSheetInTitle }}" style="display:inline-flex; align-items:center; background:#fff; color:#4B4757; border:1px solid #DDD9E6; font-size:11px; font-weight:700; padding:9px 14px; border-radius:99px; cursor:pointer; flex-shrink:0;" style-hover="border-color:#7C00FF; color:#7C00FF;">
+                    {{ wdSheetInLabel }}
+                    <input type="file" accept=".xlsx" onChange="{{ wdSheetIn }}" style="display:none;">
+                  </label>
+                </sc-if>
                 <sc-if value="{{ wdSaving }}" hint-placeholder-val="{{ false }}">
                   <span style="font-size:10px; color:#A9A6B4;">Saving…</span>
                 </sc-if>
@@ -42218,6 +42227,74 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           return 'Complete blocked — required docs not ' + (notReceived ? 'received' : 'verified');
         })(),
         wdCaptures: _allCaps9, wdHasCaptures: _allCaps9.length > 0,
+        /**
+         * THE STEP AS A SHEET — exported for the client to fill in, imported back when they do.
+         *
+         * Offered on a step with three or more questions that can travel: two boxes are faster to
+         * type than to export, send, fill in and import, and a button nobody should press is
+         * still a button everybody reads. Files and tables cannot travel in a spreadsheet, so
+         * they are not counted and not exported — the attachment stays an attachment.
+         *
+         * The IMPORT FILLS THE FORM, it does not save and it does not complete: an imported sheet
+         * is somebody handing over a filled page, not a decision. The officer looks at it, then
+         * presses Save for later or Complete as they would have anyway.
+         */
+        ...(() => {
+          const able9 = (selStep.captures || []).filter(c9 => c9 && c9.var && ['files', 'rows'].indexOf(String(c9.type)) < 0);
+          const busy9 = this.state.wdSheetBusy === selStep.id;
+          return {
+            wdHasSheet: able9.length >= 3,
+            wdSheetOutTitle: 'Download these ' + able9.length + ' questions as a spreadsheet to send out',
+            wdSheetInTitle: 'Read a filled-in copy back into this form — nothing is saved until you press Save or Complete',
+            wdSheetInLabel: busy9 ? 'Reading…' : 'Import filled sheet',
+            wdSheetOut: () => {
+              const t9 = localStorage.getItem('stimespro:token');
+              fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/sheet', { headers: t9 ? { Authorization: 'Bearer ' + t9 } : {} })
+                .then(r9 => r9.ok ? r9.blob().then(b9 => ({ ok: true, b9, cd: r9.headers.get('content-disposition') || '' })) : r9.json().catch(() => ({})).then(j9 => ({ ok: false, j9 })))
+                .then(({ ok, b9, cd, j9 }) => {
+                  if (!ok) return this.toast((j9 && j9.error) || 'Could not build the sheet', 'error');
+                  const m9 = /filename="([^"]+)"/.exec(cd);
+                  const url9 = URL.createObjectURL(b9);
+                  const a9 = document.createElement('a');
+                  a9.href = url9; a9.download = (m9 && m9[1]) || 'details.xlsx';
+                  document.body.appendChild(a9); a9.click(); a9.remove();
+                  setTimeout(() => URL.revokeObjectURL(url9), 4000);
+                })
+                .catch(() => this.toast('Server unreachable — nothing was downloaded', 'error'));
+            },
+            wdSheetIn: (e9) => {
+              const f9 = (e9.target.files || [])[0];
+              e9.target.value = '';
+              if (!f9) return;
+              this.setState({ wdSheetBusy: selStep.id });
+              const rd9 = new FileReader();
+              rd9.onerror = () => this.setState({ wdSheetBusy: null }, () => this.toast('Could not read that file', 'error'));
+              rd9.onload = () => {
+                const t9 = localStorage.getItem('stimespro:token');
+                fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/sheet', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', ...(t9 ? { Authorization: 'Bearer ' + t9 } : {}) },
+                  body: JSON.stringify({ data: String(rd9.result || '') }) })
+                  .then(r9 => r9.json().catch(() => ({})).then(j9 => ({ ok: r9.ok, j9 })))
+                  .then(({ ok, j9 }) => {
+                    this.setState({ wdSheetBusy: null });
+                    if (!ok) return this.toast((j9 && j9.error && String(j9.error).slice(0, 200)) || 'Could not read that sheet', 'error');
+                    // Typed-but-uncommitted keystrokes are dropped for the fields the sheet
+                    // answers: the import is the newer answer, and a stale buffer would overwrite
+                    // it on the next render.
+                    Object.keys(j9.answers || {}).forEach(k9 => { delete this._capPend[selStep.id + '|' + k9]; });
+                    const cur9 = (this.state.wfCap || {})[selStep.id] || {};
+                    this.setState({
+                      wfCap: { ...(this.state.wfCap || {}), [selStep.id]: { ...cur9, ...j9.answers } },
+                      wdFillN: (this.state.wdFillN || 0) + 1,
+                    });
+                    this.toast(j9.filled + ' of ' + j9.of + ' filled in from the sheet — check them, then save');
+                  })
+                  .catch(() => { this.setState({ wdSheetBusy: null }); this.toast('Server unreachable — nothing was read', 'error'); });
+              };
+              rd9.readAsDataURL(f9);
+            },
+          };
+        })(),
         wdRuleErrShow: !!_ruleErr,
         wdRuleMsgs: _ruleErr ? (_ruleErr.rules || []).map(r => ({ text: r.message })) : [],
         // A workflow step has its own next step — the graph decides it — so there is nothing to

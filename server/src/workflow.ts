@@ -3909,3 +3909,144 @@ R.post("/tasks/:id/reassign", requireAuth, requireStaff, async (req, res) => {
     res.json(t);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
+
+/**
+ * A STEP AS A SHEET — out to the client, and back in filled.
+ *
+ * The MISA application asks for nine things, and the answers live with the client, not the
+ * officer. Dictated down the phone they arrive as a near-miss of a trade name the Ministry will
+ * compare character by character. So the step can be exported as the questions it asks, sent out,
+ * filled in and imported back.
+ *
+ * ONLY WHAT THE STEP ALREADY ASKS. The sheet is built from the task's own captures, so a step
+ * edited tomorrow exports tomorrow's questions and nothing has to be kept in step by hand. A file
+ * field cannot travel in a spreadsheet and is left out of both directions.
+ *
+ * THE KEY TRAVELS IN THE SHEET, in a column of its own. Matching on the label would break the
+ * moment somebody renamed a field or translated a heading — and the import would then silently
+ * drop that answer rather than refusing, which is the worst of the available failures.
+ */
+const sheetFields = (task: any) =>
+  (Array.isArray(task?.captures) ? task.captures : [])
+    .filter((c: any) => c && c.var && String(c.type) !== "files" && String(c.type) !== "rows");
+
+export async function buildStepSheet(task: any, answers: Record<string, any>, runTitle = "run") {
+  {
+    const fields = sheetFields(task);
+    if (!fields.length) throw new Error("This step has no questions that can travel in a sheet");
+
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "STIMES PRO";
+    const name = String(task.title || "Details");
+    // Excel refuses a sheet name over 31 characters or carrying : \ / ? * [ ]
+    const ws = wb.addWorksheet(name.replace(/[:\/?*[\]]/g, " ").slice(0, 31));
+    ws.columns = [{ width: 46 }, { width: 44 }, { width: 22 }];
+    ws.getRow(1).values = ["Field", "Your answer", "Do not edit"];
+    ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    for (let c = 1; c <= 3; c++) ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C00FF" } };
+    fields.forEach((f: any, i: number) => {
+      const r = ws.getRow(i + 2);
+      const cur = answers[f.var];
+      r.values = [
+        String(f.label || f.var) + (f.required === false || f.optional === true ? "" : " *"),
+        cur == null || typeof cur === "object" ? "" : String(cur),
+        String(f.var),
+      ];
+      r.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFBF8FF" } };
+      r.getCell(3).font = { color: { argb: "FFB4AFC4" }, size: 8 };
+      // The choices, where there are any — a free-typed "yes " does not match "Yes".
+      const opts = Array.isArray(f.options) ? f.options : String(f.options ?? "").split(",").map(x => x.trim()).filter(Boolean);
+      if (opts.length) r.getCell(2).dataValidation = { type: "list", allowBlank: true, formulae: [`"${opts.join(",")}"`] };
+    });
+    const note = ws.getRow(fields.length + 3);
+    note.getCell(1).value = "Fill in column B only. The third column is how the answers are read back in — leave it alone.";
+    note.getCell(1).font = { italic: true, size: 9, color: { argb: "FF6F6C7A" } };
+
+    const buf = await wb.xlsx.writeBuffer();
+    const file = `${name.replace(/[^\w -]+/g, "")} — ${runTitle}`.slice(0, 80).trim();
+    return { buf: Buffer.from(buf as ArrayBuffer), file: `${file}.xlsx` };
+  }
+}
+
+R.get("/tasks/:id/sheet", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const inst = await prisma.workflowInstance.findUnique({ where: { id: task.instanceId }, select: { title: true, variables: true } });
+    const answers = { ...((inst?.variables ?? {}) as Record<string, any>), ...((task.draftAnswers ?? {}) as Record<string, any>) };
+    const { buf, file } = await buildStepSheet(task, answers, inst?.title ?? "run");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${file}"`);
+    res.end(buf);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+/**
+ * The same sheet, read back. Returns the answers for the FORM to show — it does not save them and
+ * it does not complete anything: an import is somebody handing over a filled page, not a decision,
+ * and the officer checks it before it becomes the record.
+ */
+export async function readStepSheet(task: any, buf: Buffer) {
+  {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    try { await wb.xlsx.load(buf as any); }
+    catch { throw new Error("That file is not a readable .xlsx — export the sheet again and fill in that copy"); }
+    const ws = wb.worksheets[0];
+    if (!ws) throw new Error("That workbook has no sheets");
+
+    const known = new Map(sheetFields(task).map((f: any) => [String(f.var), f]));
+    const answers: Record<string, string> = {};
+    const unknown: string[] = [];
+    const text = (v: any): string => {
+      if (v == null) return "";
+      if (typeof v === "object") {
+        if (v.text != null) return String(v.text);
+        if (Array.isArray(v.richText)) return v.richText.map((t: any) => t.text).join("");
+        if (v.result != null) return String(v.result);
+        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        return "";
+      }
+      return String(v);
+    };
+    ws.eachRow((row, n) => {
+      if (n === 1) return;
+      const key = text(row.getCell(3).value).trim();
+      if (!key) return;
+      const val = text(row.getCell(2).value).trim();
+      if (!known.has(key)) { unknown.push(key); return; }
+      if (val) answers[key] = val;
+    });
+    if (!Object.keys(answers).length) {
+      throw new Error(unknown.length
+        ? "Nothing in that sheet matches this step — it looks like the sheet for a different step"
+        : "That sheet has no answers filled in");
+    }
+    // A choice field takes one of ITS choices, whatever the sheet says. Corrected where the only
+    // difference is case or spacing, refused where it is a different word — accepting it would put
+    // a value into the run that no rule and no report can read.
+    const bad: string[] = [];
+    for (const [k, v] of Object.entries(answers)) {
+      const f: any = known.get(k);
+      const opts = Array.isArray(f.options) ? f.options : String(f.options ?? "").split(",").map((x: string) => x.trim()).filter(Boolean);
+      if (!opts.length) continue;
+      const hit = opts.find((o: string) => o.toLowerCase() === v.toLowerCase());
+      if (hit) answers[k] = hit; else bad.push(`${f.label || k}: "${v}" is not one of ${opts.join(" / ")}`);
+    }
+    if (bad.length) throw new Error(bad.join("; "));
+    return { answers, filled: Object.keys(answers).length, of: known.size, ignored: unknown.length };
+  }
+}
+
+R.post("/tasks/:id/sheet", requireAuth, requireStaff, async (req, res) => {
+  try {
+    const task = await prisma.workflowTask.findUnique({ where: { id: req.params.id } });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+    const data = String((req.body ?? {}).data ?? "");
+    if (!data) return res.status(400).json({ error: "No file was sent" });
+    const buf = Buffer.from(data.replace(/^data:[^;]+;base64,/, ""), "base64");
+    if (!buf.length || buf.length > 4 * 1024 * 1024) return res.status(400).json({ error: "The sheet must be under 4 MB" });
+    res.json(await readStepSheet(task, buf));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
