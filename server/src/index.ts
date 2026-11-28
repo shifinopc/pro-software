@@ -3935,7 +3935,12 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
   const co = await prisma.company.findUnique({ where: { id: String(b.companyId ?? "") } });
   if (!co) return res.status(404).json({ error: "Pick the company this is for" });
   const scoped = await dealCompanyIds(req as any);
-  if (scoped && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
+  // AN UNCLAIMED LEAD IS NOT SOMEONE ELSE'S. The clamp is "companies you own, plus ones you already
+  // have a deal on" — a lead nobody owns is in neither half, so every sales and PRO user could SEE
+  // it on the Leads screen (that list is scoped differently) and none of them could open a deal on
+  // it. Claiming an unclaimed lead is the point of the screen, so only an owner blocks it; the
+  // creator becomes the owner below, which is what puts it inside their scope from then on.
+  if (scoped && co.ownerId && !scoped.includes(co.id)) return res.status(403).json({ error: "Not one of your clients" });
   // Pursuing a company already written off is a contradiction that would sit in the pipeline
   // forever. Reopen it on the Leads screen first — that is one press, and it says what happened.
   if (co.lifecycle === "lost") return res.status(409).json({ error: `${co.name} is marked lost. Reopen it before adding a deal.` });
@@ -3970,6 +3975,12 @@ app.post("/api/opportunities", requireAuth, requireStaff, requireWriteRole, asyn
   // A lead with a deal on it is a prospect. The same rule openDealFor applies, applied here too:
   // this is the route the board's own "+ New deal" uses, and it is the one people actually press.
   await promoteOnDeal(co);
+  // And it stops reading "Unassigned" the moment someone starts working it. Only when nobody owned
+  // it: this must never move a lead off the person it was assigned to.
+  if (!co.ownerId && created.ownerId) {
+    await prisma.company.update({ where: { id: co.id }, data: { ownerId: created.ownerId } })
+      .catch(e => console.error("[deals] could not claim unassigned lead", co.id, e?.message ?? e));
+  }
   logActivity({ type: "sales", message: `Deal opened: ${created.title} (${co.name})`, user: (req as any).auth?.email });
   res.status(201).json(await withMoney(created as any));
 });
