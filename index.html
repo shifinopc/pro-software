@@ -17539,10 +17539,12 @@
                       <sc-if value="{{ c.filesEmpty }}" hint-placeholder-val="{{ true }}">
                         <div style="font-size:10px; color:#A9A6B4; margin-bottom:6px;">Nothing attached yet.</div>
                       </sc-if>
-                      <label style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">
-                        + Attach document
-                        <input type="file" multiple accept=".png,.jpg,.jpeg,.svg,.webp,.pdf" onChange="{{ c.filePick }}" style="display:none;">
-                      </label>
+                      <sc-if value="{{ c.fileCanAdd }}" hint-placeholder-val="{{ true }}">
+                        <label style="display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#7C00FF; cursor:pointer;">
+                          + Attach document
+                          <input type="file" multiple accept=".png,.jpg,.jpeg,.svg,.webp,.pdf" onChange="{{ c.filePick }}" style="display:none;">
+                        </label>
+                      </sc-if>
                     </div>
                   </sc-if>
                   <sc-if value="{{ c.isArea }}" hint-placeholder-val="{{ false }}">
@@ -41853,10 +41855,29 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
               filesEmpty: !list9.length,
               // Uploaded as a private document — stored outside the public folder and readable only
               // through the authenticated route, because these are passports.
+              /**
+               * ONE FILE PER TYPE, where that is what the type means. A company registration is
+               * one certificate; three of them under one heading is somebody's mistake, not a
+               * record. `maxFiles` hides the attach link once the slot is full and trims a
+               * multi-select down to what fits — the browser's picker takes several whatever the
+               * field wants, so refusing silently would look like the upload failing.
+               */
+              fileCanAdd: !(Number(c.maxFiles) > 0) || list9.length < Number(c.maxFiles),
               filePick: (e9) => {
-                const chosen9 = [...(e9.target.files || [])];
+                const cap9 = Number(c.maxFiles) > 0 ? Number(c.maxFiles) : 0;
+                let chosen9 = [...(e9.target.files || [])];
                 e9.target.value = '';
                 if (!chosen9.length) return;
+                if (cap9) {
+                  const room9 = Math.max(0, cap9 - list9.length);
+                  if (chosen9.length > room9) {
+                    this.toast(room9 === 0
+                      ? 'Remove the attached file first — this takes one document'
+                      : 'This takes ' + cap9 + ' document' + (cap9 === 1 ? '' : 's') + ' — the rest were not attached', 'error');
+                    chosen9 = chosen9.slice(0, room9);
+                  }
+                  if (!chosen9.length) return;
+                }
                 const tok9 = localStorage.getItem('stimespro:token');
                 chosen9.forEach(f9 => {
                   const rd9 = new FileReader();

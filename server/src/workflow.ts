@@ -1956,6 +1956,16 @@ export async function completeTask(taskId: string, opts: { actor?: string; actor
         throw new Error(`${cap.label || cap.var}: at most ${max} can be entered — there are ${rows.length}`);
       }
     }
+    // And the same for attachments: a field that means ONE document — a company registration
+    // certificate — must not quietly accept three because they arrived through another route.
+    for (const cap of caps0) {
+      const max = Number(cap?.maxFiles);
+      if (!cap?.var || !(max > 0) || String(cap.type) !== "files") continue;
+      const files = supplied[cap.var];
+      if (Array.isArray(files) && files.length > max) {
+        throw new Error(`${cap.label || cap.var}: ${max} document${max === 1 ? "" : "s"} only — there are ${files.length}`);
+      }
+    }
     if (missing.length) {
       throw new Error(missing.length === 1
         ? `${missing[0]} is required to complete this step`
