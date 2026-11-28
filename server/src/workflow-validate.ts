@@ -24,6 +24,11 @@ export const ENGINE_NODE_TYPES = new Set([
   "webhook", "api",
   "issue_document",
   "draft_invoice", "charge_fee", "invoice", "create_invoice",
+  // The one that bills a PAYMENT STAGE of the quotation rather than a fixed fee. Added to the
+  // engine and not here, so the builder told the firm in red that the step which had just raised
+  // a real invoice would be skipped — a validator that is wrong about the engine is worse than no
+  // validator, because the next genuine error is read as another false alarm.
+  "stage_invoice",
   "courier", "dispatch",
   "delay",
   "parallel_split", "split", "parallel_join", "join",
