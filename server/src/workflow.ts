@@ -3984,7 +3984,18 @@ R.get("/tasks/:id/sheet", requireAuth, requireStaff, async (req, res) => {
     const answers = { ...((inst?.variables ?? {}) as Record<string, any>), ...((task.draftAnswers ?? {}) as Record<string, any>) };
     const { buf, file } = await buildStepSheet(task, answers, inst?.title ?? "run");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${file}"`);
+    /**
+     * A HEADER IS LATIN-1. The run title carries an em dash, and an Arabic client name carries a
+     * great deal more. Node refuses the whole response rather than mangling it, so the download
+     * failed with "Invalid character in header content" and nothing said which character.
+     *
+     * The plain `filename` is stripped to ASCII for anything that only reads that; the real name
+     * travels in `filename*` as RFC 5987 UTF-8, which every current browser prefers.
+     */
+    const QUOTE = String.fromCharCode(34), SLASH = String.fromCharCode(92);
+    const ascii = Array.from(file).map(ch => { const n = ch.charCodeAt(0); return (n >= 32 && n <= 126 && ch !== QUOTE && ch !== SLASH) ? ch : "-"; }).join("").replace(/-{2,}/g, "-").trim() || "details.xlsx";
+    res.setHeader("Content-Disposition",
+      `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file)}`);
     res.end(buf);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
