@@ -22560,6 +22560,27 @@ class Component extends DCLogic {
         .then(v => { if (Array.isArray(v)) this.setState(key === 'documentsData' ? this._docsState(v) : { [key]: v }, typeof after === 'function' ? after : undefined); })
         .catch(() => {});
     };
+    /**
+     * EVERYTHING A FINISHED STEP CAN HAVE CHANGED — not just the queue it came out of.
+     *
+     * Completing a step reloaded `my-work` and nothing else. But a step files a document, raises
+     * an invoice, saves a credential and closes a plain task, and every one of those screens went
+     * on showing the copy it had at page load. The officer completed the step, saw the queue
+     * update, went to Documents, found nothing, and pressed refresh — which is the only reason it
+     * ever appeared. A screen that is right only after a refresh is a screen nobody can trust.
+     *
+     * ONLY WHAT IS ALREADY LOADED. A key that is not an array in state belongs to a screen this
+     * session has never opened, and fetching it would pull a few hundred documents to update a
+     * list nobody is looking at. It loads with the screen, already fresh.
+     */
+    this._afterWorkChanged = () => {
+      const have = (k) => Array.isArray(this.state[k]);
+      this._opReload('workflow/my-work', 'myWorkData');
+      if (have('tasksData')) this._opReload('tasks', 'tasksData');
+      if (have('documentsData')) this._opReload('documents', 'documentsData');
+      if (have('invoicesData')) this._opReload('invoices', 'invoicesData');
+      if (have('wfInstancesData')) this._opReload('workflow/instances', 'wfInstancesData');
+    };
     // Persist one checklist item action (receive/unreceive/verify/reject) to the workflow engine.
     this._chkPersist = (stepId, itemKey, action, note) => {
       const t2 = localStorage.getItem('stimespro:token');
@@ -33811,6 +33832,9 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
         // what moves it out of the queue honestly instead of leaving a stale clickable row behind.
         this._reloadMyWork && this._reloadMyWork();
         this._reloadTasks && this._reloadTasks();
+        // And whatever the decision set in motion: an approved gate can raise an invoice and open
+        // the next step, neither of which is in the queue this screen reads.
+        this._afterWorkChanged && this._afterWorkChanged();
         this._load && this._load('/api/service-requests', 'serviceRequestsData', (v9) => this.setState({ serviceRequestsData: v9 }));
       }).catch(() => _revert('Server unreachable — the decision was not saved'));
     };
@@ -41080,7 +41104,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
      */
     this._afterStepDone = (instanceId9, doneId9, inst9) => {
       const close9 = () => { this._capPend = {}; this._goRecord(this.state.active, null); this.setState({ workRow: null, routeRecord: null, wdAdvancing: false, wdAdvancingLast: false }); };
-      if (!instanceId9) { this._opReload('workflow/my-work', 'myWorkData'); return close9(); }
+      if (!instanceId9) { this._afterWorkChanged(); return close9(); }
       // DOES THE RUN HAVE ANYWHERE TO GO? The same question the button just answered by calling
       // itself "Complete task". Asked again here because the overlay must not promise a next step
       // that does not exist — it sat there saying "Opening the next step" for 2.7 seconds at the
@@ -41119,14 +41143,14 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           this.setState({ wdAdvancing: true, wdAdvancingLast: false, wdHandover: to9 });
           // The queue still has to be re-read — the finished step must leave it — but nothing waits
           // on the answer, because what comes back is not this officer's work any more.
-          this._opReload('workflow/my-work', 'myWorkData');
+          this._afterWorkChanged();
           return setTimeout(() => { this.setState({ wdHandover: '' }); close9(); }, 1900);
         }
         if (!open9.length) {
           // Nothing open anywhere: the run is finished. Said plainly instead of looking for a step
           // that cannot exist, which is what "Opening the next step…" then silence used to mean.
           this.setState({ wdAdvancing: true, wdAdvancingLast: true, wdHandover: '' });
-          this._opReload('workflow/my-work', 'myWorkData');
+          this._afterWorkChanged();
           return setTimeout(close9, 1500);
         }
       }
@@ -42557,7 +42581,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           if (selStep._real) {
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ outcome: 'approve' }) })
-              .then(r2 => r2.ok ? (this.toast('Approved — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not approve', 'error')))
+              .then(r2 => r2.ok ? (this.toast('Approved — workflow advanced'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._afterWorkChanged()) : r2.json().then(j2 => this.toast(j2.error || 'Could not approve', 'error')))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'approved' }, workRow: null });
         },
@@ -42565,7 +42589,7 @@ const _unpaidSum = _dInv ? _dInv.filter(v2 => ['pending', 'overdue', 'unpaid'].i
           if (selStep._real) {
             const t2 = localStorage.getItem('stimespro:token');
             fetch((this._apiBase || 'http://localhost:4100') + '/api/workflow/tasks/' + selStep.id + '/complete', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(t2 ? { Authorization: 'Bearer ' + t2 } : {}) }, body: JSON.stringify({ outcome: 'reject' }) })
-              .then(r2 => r2.ok ? (this.toast('Rejected'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._opReload('workflow/my-work', 'myWorkData')) : r2.json().then(j2 => this.toast(j2.error || 'Could not reject', 'error')))
+              .then(r2 => r2.ok ? (this.toast('Rejected'), (this._goRecord(this.state.active, null), this.setState({ workRow: null, routeRecord: null })), this._afterWorkChanged()) : r2.json().then(j2 => this.toast(j2.error || 'Could not reject', 'error')))
               .catch(() => this.toast('Server unreachable'));
           } else this.setState({ wfDone: { ...wfDone, [selStep.id]: 'rejected' }, workRow: null });
         },
